@@ -1803,6 +1803,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Images to open.</translation>
     </message>
     <message>
+        <source>Combinación de colores: system, light o dark (se guarda).</source>
+        <translation>Color scheme: system, light or dark (saved).</translation>
+    </message>
+    <message>
         <source>px</source>
         <translation>px</translation>
     </message>

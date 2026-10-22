@@ -490,6 +490,8 @@ void Canvas::setAppearance(bool dropShadow, const QColor& border, int checkerBri
 {
     m_dropShadow = dropShadow;
     m_border = border;
+    if (m_border.isValid())
+        m_border.setAlpha(255);
     const int light = std::clamp(checkerBrightness, 0, 255);
     const int dark = std::max(0, light - 51);
     m_checker = QPixmap::fromImage(Raster::checkerboard(8, QColor(light, light, light), QColor(dark, dark, dark)));

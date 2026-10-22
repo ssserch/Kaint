@@ -1,6 +1,7 @@
 #include "app/Theme.h"
 
 #include <QApplication>
+#include <QFontDatabase>
 #include <QIcon>
 #include <QStyle>
 #include <QStyleFactory>
@@ -10,16 +11,8 @@ namespace Theme {
 namespace {
 
 QString g_systemIconTheme;
-QString g_systemStyle;
 Scheme g_current = Scheme::System;
-
-QString paletteStyle()
-{
-    for (const QString& key : QStyleFactory::keys())
-        if (key.compare(QLatin1String("Breeze"), Qt::CaseInsensitive) == 0)
-            return key;
-    return QStringLiteral("Fusion");
-}
+Scheme g_start = Scheme::System;
 
 QColor rgb(int r, int g, int b) { return QColor(r, g, b); }
 
@@ -28,8 +21,6 @@ QColor rgb(int r, int g, int b) { return QColor(r, g, b); }
 void captureSystemDefaults()
 {
     g_systemIconTheme = QIcon::themeName();
-    if (QApplication::style())
-        g_systemStyle = QApplication::style()->name();
 }
 
 QPalette breezePalette(bool dark)
@@ -78,26 +69,34 @@ QPalette breezePalette(bool dark)
     return p;
 }
 
-QString styleFor(Scheme scheme)
+void prepare(Scheme scheme)
 {
-    return scheme == Scheme::System ? g_systemStyle : paletteStyle();
+    g_start = scheme;
+    if (scheme == Scheme::System)
+        return;
+    // Sin la configuración del escritorio (estilo, paleta, cambios de tema de
+    // Plasma) y con Fusion, que pinta siempre con la paleta de Kaint.
+    QApplication::setDesktopSettingsAware(false);
+    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
 }
 
 void initStyle(Scheme scheme)
 {
     if (g_systemIconTheme.isEmpty())
         captureSystemDefaults();
-    const QString name = styleFor(scheme);
-    if (name.isEmpty() || QApplication::style()->name().compare(name, Qt::CaseInsensitive) == 0)
+    if (scheme == Scheme::System)
         return;
-    if (QStyle* style = QStyleFactory::create(name))
-        QApplication::setStyle(style);
+    if (QApplication::style()->name().compare(QLatin1String("fusion"), Qt::CaseInsensitive) != 0)
+        QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    // Sin la configuración del escritorio, la fuente es la de Qt: se usa la del sistema.
+    QApplication::setFont(QFontDatabase::systemFont(QFontDatabase::GeneralFont));
 }
 
 bool needsRestart(Scheme scheme)
 {
-    const QString name = styleFor(scheme);
-    return !name.isEmpty() && QApplication::style()->name().compare(name, Qt::CaseInsensitive) != 0;
+    // Entre el esquema del sistema y uno propio cambia el estilo; entre claro y
+    // oscuro solo la paleta, que se aplica al momento.
+    return (scheme == Scheme::System) != (g_start == Scheme::System);
 }
 
 void apply(Scheme scheme)

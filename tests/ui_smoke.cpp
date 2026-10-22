@@ -7,6 +7,7 @@
 #include "app/DiscordPresence.h"
 #include "app/Icons.h"
 #include "app/MainWindow.h"
+#include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
 #include "app/dialogs/EffectDialog.h"
@@ -234,6 +235,30 @@ static void testTransformBox()
     CHECK(box.pivotMoved());
     box.set(QRectF(0, 0, 40, 40), QTransform());
     CHECK(!box.pivotMoved() && near(box.pivot(), QPointF(20, 20)));
+}
+
+// Esquemas de colores: claro y oscuro usan la paleta Breeze, y pasar del esquema del sistema a
+// uno propio pide reiniciar. El fondo del lienzo siempre es opaco (un color translúcido dejaba
+// rastros en modo claro).
+static void testTheme()
+{
+    CHECK(!Theme::needsRestart(Theme::Scheme::System));
+    CHECK(Theme::needsRestart(Theme::Scheme::Light) && Theme::needsRestart(Theme::Scheme::Dark));
+    Theme::apply(Theme::Scheme::Light);
+    CHECK(Theme::current() == Theme::Scheme::Light && !Theme::isDark());
+    CHECK(QApplication::palette().color(QPalette::Window) == Theme::breezePalette(false).color(QPalette::Window));
+    CHECK(QApplication::palette().color(QPalette::WindowText).lightness() < 128);
+    Theme::apply(Theme::Scheme::Dark);
+    CHECK(Theme::current() == Theme::Scheme::Dark && Theme::isDark());
+    CHECK(QApplication::palette().color(QPalette::WindowText).lightness() > 128);
+    Theme::apply(Theme::Scheme::System);
+    CHECK(Theme::current() == Theme::Scheme::System);
+
+    Canvas canvas;
+    canvas.resize(120, 90);
+    canvas.setAppearance(false, QColor(10, 20, 30, 0), 255);
+    const QColor corner = canvas.viewport()->grab().toImage().pixelColor(3, 3);
+    CHECK(corner.alpha() == 255 && corner.red() == 10 && corner.green() == 20 && corner.blue() == 30);
 }
 
 int main(int argc, char** argv)
@@ -767,6 +792,7 @@ int main(int argc, char** argv)
     }
     testDiscordPresence();
     testTransformBox();
+    testTheme();
 
     // Impresión: la imagen se dibuja centrada en la página (aquí, en un PDF).
     {

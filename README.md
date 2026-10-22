@@ -24,8 +24,10 @@ mismos efectos y una interfaz que se le parece mucho.
 - **Complementos**: los suyos propios (.so) y muchos complementos de Paint.NET (.dll).
 - **Formas personalizadas** de Paint.NET (.xaml).
 - En inglés (predeterminado) y en español: *Settings > User Interface > Language*.
-- Tema del sistema, claro u oscuro, con los iconos de Breeze. Un tema claro u oscuro
-  propio usa el estilo Breeze (o Fusion) y se aplica del todo al reiniciar Kaint.
+- Tema del sistema, claro u oscuro, con los iconos de Breeze. El claro y el oscuro no
+  dependen del tema de Plasma (usan el estilo Fusion con la paleta de Breeze); pasar del
+  tema del sistema a uno propio, o al revés, se completa al reiniciar Kaint. También se
+  puede elegir al abrirlo: `kaint --color-scheme system|light|dark` (se guarda).
 - Rich Presence de Discord opcional.
 
 ## Instalar

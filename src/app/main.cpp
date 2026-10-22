@@ -6,14 +6,45 @@
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
+#include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QImageReader>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QSettings>
 #include <QTranslator>
+
+#include <algorithm>
+
+namespace {
+
+// Esquema de colores guardado o el de --color-scheme (system, light o dark), que
+// también se guarda: así se puede recuperar el tema sin abrir la configuración.
+Theme::Scheme startupScheme(int argc, char** argv)
+{
+    QSettings settings(QStringLiteral("Kaint"), QStringLiteral("Kaint"));
+    settings.beginGroup(QStringLiteral("settings"));
+    for (int i = 1; i < argc; ++i) {
+        QString arg = QString::fromLocal8Bit(argv[i]);
+        if (arg == QLatin1String("--color-scheme") && i + 1 < argc)
+            arg += QLatin1Char('=') + QString::fromLocal8Bit(argv[i + 1]);
+        if (!arg.startsWith(QLatin1String("--color-scheme=")))
+            continue;
+        const QString value = arg.section(QLatin1Char('='), 1);
+        const int scheme = value == QLatin1String("light") ? 1 : value == QLatin1String("dark") ? 2 : 0;
+        settings.setValue(QStringLiteral("colorScheme"), scheme);
+    }
+    return Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 2));
+}
+
+} // namespace
 
 int main(int argc, char** argv)
 {
+    // Antes de crear la aplicación: con un esquema propio, el escritorio no debe
+    // imponer su estilo ni su paleta.
+    const Theme::Scheme scheme = startupScheme(argc, argv);
+    Theme::prepare(scheme);
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Kaint"));
     QApplication::setOrganizationName(QStringLiteral("Kaint"));
@@ -41,12 +72,15 @@ int main(int argc, char** argv)
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("archivos"), QObject::tr("Imágenes que abrir."),
                                  QStringLiteral("[archivos...]"));
+    parser.addOption(QCommandLineOption(QStringLiteral("color-scheme"),
+                                        QObject::tr("Combinación de colores: system, light o dark (se guarda)."),
+                                        QStringLiteral("scheme")));
     parser.process(app);
 
     AppState::instance()->load();
     Theme::captureSystemDefaults();
-    Theme::initStyle(Theme::Scheme(AppSettings::load().colorScheme));
-    Theme::apply(Theme::Scheme(AppSettings::load().colorScheme));
+    Theme::initStyle(scheme);
+    Theme::apply(scheme);
     PluginManager::instance()->scan();
 
     MainWindow window;

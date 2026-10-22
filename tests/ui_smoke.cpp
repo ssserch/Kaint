@@ -10,6 +10,7 @@
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
+#include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/TaskDialog.h"
@@ -17,6 +18,7 @@
 #include "app/panels/ToolsPanel.h"
 #include "app/tools/ToolManager.h"
 #include "app/tools/TransformBox.h"
+#include "app/widgets/WaveLabel.h"
 #include "core/CustomShapes.h"
 #include "core/Document.h"
 #include "core/plugins/PluginManager.h"
@@ -239,13 +241,10 @@ static void testTransformBox()
 }
 
 // Temas: claro y oscuro de Paint.NET, el personalizado (colores propios, JSON, imagen de fondo),
-// la detección del modo oscuro de Plasma y cuándo hace falta reiniciar. El fondo del lienzo
-// siempre es opaco (un color translúcido dejaba rastros).
+// la detección del modo oscuro de Plasma y el tema de KDE sin reiniciar (leído de kdeglobals). El
+// fondo del lienzo siempre es opaco (un color translúcido dejaba rastros).
 static void testTheme()
 {
-    CHECK(!Theme::needsRestart(Theme::Scheme::System) && !Theme::needsRestart(Theme::Scheme::Dark));
-    CHECK(!Theme::needsRestart(Theme::Scheme::Custom) && Theme::needsRestart(Theme::Scheme::Kde));
-
     Theme::apply(Theme::Scheme::Light);
     CHECK(Theme::current() == Theme::Scheme::Light && !Theme::isDark());
     CHECK(QApplication::palette().color(QPalette::Window) == Theme::preset(false).window);
@@ -298,6 +297,31 @@ static void testTheme()
     writeKde("239,240,241", "BreezeLight");
     Theme::notifier()->systemSettingChanged();
     CHECK(!Theme::systemPrefersDark() && !Theme::isDark());
+    {
+        // Solo el nombre del esquema (sección [General], que QSettings lee sin grupo).
+        QFile f(config.filePath(QStringLiteral("kdeglobals")));
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            f.write("[General]\nColorScheme=BreezeDark\n");
+    }
+    Theme::notifier()->systemSettingChanged();
+    CHECK(Theme::systemPrefersDark());
+
+    // Tema de KDE desde otro tema: colores y acento de Plasma al momento, sin hoja de estilo.
+    {
+        QFile f(config.filePath(QStringLiteral("kdeglobals")));
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            f.write("[Colors:Window]\nBackgroundNormal=41,44,48\nForegroundNormal=252,252,252\n\n"
+                    "[Colors:View]\nBackgroundNormal=27,30,32\n\n[General]\nAccentColor=46,160,67\n\n"
+                    "[KDE]\nwidgetStyle=Fusion\n");
+    }
+    Theme::apply(Theme::Scheme::Kde);
+    CHECK(qApp->styleSheet().isEmpty() && Theme::current() == Theme::Scheme::Kde);
+    CHECK(QApplication::palette().color(QPalette::Window) == QColor(41, 44, 48));
+    CHECK(QApplication::palette().color(QPalette::Base) == QColor(27, 30, 32));
+    CHECK(QApplication::palette().color(QPalette::Highlight) == QColor(46, 160, 67));
+    CHECK(Theme::isDark() && Theme::active().panelTitle == QColor(46, 160, 67));
+    Theme::apply(Theme::Scheme::Light);
+    CHECK(!qApp->styleSheet().isEmpty() && !Theme::isDark());
     for (const auto& [name, value] : {std::pair{"XDG_CONFIG_HOME", oldConfig}, std::pair{"XDG_CURRENT_DESKTOP", oldDesktop}}) {
         if (value.isEmpty())
             qunsetenv(name);
@@ -846,6 +870,25 @@ int main(int argc, char** argv)
     testDiscordPresence();
     testTransformBox();
     testTheme();
+
+    // Acerca de: la firma enlaza a la web del autor y su ola se mueve.
+    {
+        AboutDialog about(QStringLiteral("Acerca de Kaint"), QStringLiteral("<h3>Kaint</h3><p><a href=\"x\">x</a></p>"), &w);
+        about.show();
+        settle();
+        auto* wave = about.findChild<WaveLabel*>();
+        CHECK(wave && wave->url() == QUrl(QStringLiteral("https://ssserch.com")) && wave->isVisible());
+        if (wave) {
+            const qreal before = wave->phase();
+            QElapsedTimer clock;
+            clock.start();
+            while (clock.elapsed() < 200)
+                QApplication::processEvents(QEventLoop::AllEvents, 20);
+            CHECK(wave->phase() != before);
+        }
+        if (!outDir.isEmpty())
+            about.grab().save(QDir(outDir).filePath(QStringLiteral("acerca.png")));
+    }
 
     // Impresión: la imagen se dibuja centrada en la página (aquí, en un PDF).
     {

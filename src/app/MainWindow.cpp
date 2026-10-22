@@ -8,6 +8,7 @@
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
 #include "app/DiscordPresence.h"
+#include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/ImageDialogs.h"
@@ -204,11 +205,8 @@ MainWindow::MainWindow()
     applySettings();
     applyThemeLayout();
     connect(Theme::notifier(), &Theme::Notifier::changed, this, &MainWindow::applyThemeLayout);
-    // Algunos estilos del escritorio (tema de KDE) vuelven translúcida la ventana; Kaint la
-    // pinta opaca y con translucidez quedaban rastros.
     ensurePolished();
-    setAttribute(Qt::WA_TranslucentBackground, false);
-    setAttribute(Qt::WA_NoSystemBackground, false);
+    keepOpaque();
 
     rebuildRecentMenu();
     updateActions();
@@ -446,17 +444,19 @@ void MainWindow::createActions()
     A["updates"] = makeAction(tr("&Buscar actualizaciones..."), {"update-none", "system-software-update"}, {},
                               [this] { checkForUpdates(true); });
     A["about"] = makeAction(tr("&Acerca de Kaint"), {"help-about"}, {}, [this] {
-        QMessageBox::about(this, tr("Acerca de Kaint"),
-                           tr("<h3>Kaint %1</h3>"
-                              "<p>Editor de imágenes al estilo Paint.NET, hecho para KDE Plasma y Wayland "
-                              "con C++20 y Qt %2.</p>"
-                              "<p>Recrea el comportamiento de Paint.NET (la versión 3.36 es la última de código "
-                              "abierto): capas con 14 modos de fusión, historial ilimitado, selecciones, "
-                              "herramientas editables, más de 50 efectos y ajustes con vista previa, "
-                              "complementos y proyectos en formato abierto OpenRaster (.ora).</p>"
-                              "<p><a href=\"%3\">%3</a></p>")
-                               .arg(QStringLiteral(KAINT_VERSION), QString::fromLatin1(qVersion()),
-                                    QStringLiteral(KAINT_REPOSITORY)));
+        AboutDialog dlg(tr("Acerca de Kaint"),
+                        tr("<h3>Kaint %1</h3>"
+                           "<p>Editor de imágenes al estilo Paint.NET, hecho para KDE Plasma y Wayland "
+                           "con C++20 y Qt %2.</p>"
+                           "<p>Recrea el comportamiento de Paint.NET (la versión 3.36 es la última de código "
+                           "abierto): capas con 14 modos de fusión, historial ilimitado, selecciones, "
+                           "herramientas editables, más de 50 efectos y ajustes con vista previa, "
+                           "complementos y proyectos en formato abierto OpenRaster (.ora).</p>"
+                           "<p><a href=\"%3\">%3</a></p>")
+                            .arg(QStringLiteral(KAINT_VERSION), QString::fromLatin1(qVersion()),
+                                 QStringLiteral(KAINT_REPOSITORY)),
+                        this);
+        dlg.exec();
     });
     A["aboutQt"] = makeAction(tr("Acerca de &Qt"), {"help-about"}, {}, [] { QApplication::aboutQt(); });
 
@@ -2289,6 +2289,21 @@ void MainWindow::showSettings(SettingsDialog::Page page)
         applySettings();
     });
     dlg.exec();
+}
+
+void MainWindow::keepOpaque()
+{
+    // Algunos estilos del escritorio (tema de KDE) vuelven translúcida la ventana; Kaint la
+    // pinta opaca y con translucidez quedaban rastros.
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    setAttribute(Qt::WA_NoSystemBackground, false);
+}
+
+void MainWindow::changeEvent(QEvent* e)
+{
+    if (e->type() == QEvent::StyleChange)
+        keepOpaque();
+    QMainWindow::changeEvent(e);
 }
 
 void MainWindow::applyThemeLayout()

@@ -102,10 +102,12 @@ add_library(kaintui STATIC
     src/app/widgets/EffectControls.cpp
     src/app/widgets/FlowLayout.cpp
     src/app/widgets/FontChooser.cpp
+    src/app/widgets/WaveLabel.cpp
     src/app/panels/ColorsPanel.cpp
     src/app/panels/HistoryPanel.cpp
     src/app/panels/LayersPanel.cpp
     src/app/panels/ToolsPanel.cpp
+    src/app/dialogs/AboutDialog.cpp
     src/app/dialogs/DialogExec.cpp
     src/app/dialogs/EffectDialog.cpp
     src/app/dialogs/ImageDialogs.cpp

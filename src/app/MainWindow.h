@@ -54,6 +54,7 @@ public:
     void startupChecks();
 
 protected:
+    void changeEvent(QEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* e) override;
     void dragEnterEvent(QDragEnterEvent* e) override;
@@ -155,6 +156,7 @@ private:
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
     void applyThemeLayout();
+    void keepOpaque();
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();

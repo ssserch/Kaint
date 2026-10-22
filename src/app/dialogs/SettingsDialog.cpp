@@ -273,7 +273,7 @@ QWidget* SettingsDialog::createInterfacePage()
     page.layout->addWidget(restartNote);
     const QString startLanguage = m_settings.language;
     auto updateNote = [this, restartNote, startLanguage] {
-        const bool restart = m_settings.language != startLanguage || Theme::needsRestart(Theme::Scheme(m_settings.colorScheme));
+        const bool restart = m_settings.language != startLanguage;
         restartNote->setText(restart ? tr("Reinicia Kaint para aplicar del todo estos cambios.") : QString());
         restartNote->setVisible(restart);
     };

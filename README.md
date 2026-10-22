@@ -63,8 +63,10 @@ Se eligen en *Configuración > Interfaz de usuario > Tema*:
 | Personalizado | **Personalizar…** abre el editor: modo base (claro u oscuro), 18 colores (acento, barras, ventanas flotantes, selección, fondo del lienzo...), imagen de fondo del lienzo (mosaico, centrada, estirada, ajustada o rellenar, con opacidad), tamaño de los iconos, estilo de los botones de las barras, espaciado, redondeo de las esquinas, opacidad de las ventanas translúcidas, fuente y tema de iconos. Se puede importar y exportar como `.json`. |
 
 Todos menos KDE ignoran la configuración del escritorio y se dibujan igual en cualquier
-sistema. Pasar al tema KDE, o salir de él, se completa al reiniciar Kaint; los demás cambian
-al momento. El tema también se puede elegir al abrir Kaint (y se guarda):
+sistema. Los cambios de tema se ven al momento; si Kaint se abrió con otro tema, el de KDE se
+arma con la configuración de Plasma (estilo, colores, acento e iconos) y al volver a abrir Kaint
+usa además la integración completa de Plasma (por ejemplo, sus diálogos de archivos). El tema
+también se puede elegir al abrir Kaint (y se guarda):
 `kaint --color-scheme system|light|dark|kde|custom`.
 
 ## Complementos

@@ -16,8 +16,8 @@ class QPainter;
 // claro u oscuro según el escritorio). "KDE" usa el estilo y los colores reales de Plasma.
 // "Personalizado" parte de claro u oscuro y deja cambiar colores, fondo del lienzo y diseño.
 // Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y una hoja de
-// estilo; eso se decide antes de crear la aplicación, así que entrar o salir de KDE se completa
-// al reiniciar.
+// estilo. Eso se decide antes de crear la aplicación: si Kaint arrancó con otro tema, el de KDE
+// se arma leyendo la configuración de Plasma (estilo, colores, acento e iconos).
 namespace Theme {
 
 enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4 };
@@ -94,7 +94,6 @@ void apply(Scheme scheme);
 // Cambia el tema personalizado (se ve al momento si es el activo).
 void setCustom(const Spec& custom);
 Spec custom();
-bool needsRestart(Scheme scheme);
 Scheme current();
 // Tema efectivo; con KDE se deduce de la paleta del sistema.
 Spec active();

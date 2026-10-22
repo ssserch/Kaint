@@ -126,7 +126,7 @@ std::vector<Contribution> areaWeights(int srcN, int dstN)
 
 // --- Conversión de gamma -----------------------------------------------------
 
-constexpr int kOne = 16320; // 255 * 64: precisión del búfer intermedio
+constexpr int kOne = 16320;
 
 const std::array<int, 256>& toLinearLut()
 {
@@ -240,7 +240,7 @@ QImage separable(const QImage& src, QSize size, const std::vector<Contribution>&
 
 QImage nearest(const QImage& src, QSize size)
 {
-    QImage dst(size, src.format()); // copia píxeles: sirve para cualquier formato
+    QImage dst(size, src.format());
     const ConstPixels in(src);
     const Pixels out(dst);
     const double fx = double(src.width()) / size.width();
@@ -279,16 +279,12 @@ QImage scale(const QImage& source, QSize size, Method method, bool gammaCorrect)
 {
     if (source.isNull() || size.isEmpty())
         return {};
-    // El resultado tiene el formato de entrada: alfa directo para las capas.
     const bool straight = !isPremultiplied(source);
     const QImage::Format outFormat = straight ? kLayerFormat : kPremulFormat;
     if (size == source.size())
         return source.convertToFormat(outFormat).copy();
-    // El vecino más cercano copia píxeles y no necesita premultiplicar.
     if (method == Method::NearestNeighbor)
         return nearest(source.convertToFormat(outFormat), size);
-    // Los filtros promedian en premultiplicado (el color de los píxeles
-    // transparentes no debe contar).
     const QImage src = Raster::premultiplied(source);
     auto result = [&](const QImage& premul) { return straight ? Raster::unpremultiplied(premul) : premul; };
 
@@ -378,11 +374,10 @@ QRgb sampleBilinearTransparent(const ConstPixels& src, double x, double y)
 
 namespace {
 
-// Imagen en luz lineal con alfa premultiplicado (float), para interpolar con
-// gamma corregida.
+// Imagen en luz lineal con alfa premultiplicado (float), para interpolar con gamma corregida.
 struct LinearImage {
     int w = 0, h = 0;
-    std::vector<float> px; // r, g, b, a
+    std::vector<float> px;
 
     explicit LinearImage(const QImage& premul)
         : w(premul.width())
@@ -482,7 +477,6 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
                            .intersected(transform.mapRect(QRectF(source.rect())).toAlignedRect().adjusted(-2, -2, 2, 2));
     if (area.isEmpty())
         return;
-    // Se muestrea en premultiplicado; el destino puede ser una capa (alfa directo).
     const QImage src = source.convertToFormat(kPremulFormat);
     const bool dstPremul = isPremultiplied(dst);
     if (gammaCorrect && interpolation != Interpolation::NearestNeighbor) {

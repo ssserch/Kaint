@@ -31,8 +31,8 @@ void renderGlow(const RenderArgs& a)
 
 void renderRedEye(const RenderArgs& a)
 {
-    // UnaryPixelOps.RedEyeRemove de Paint.NET. Paint.NET 5 tiene un solo
-    // control, "Fuerza": 3 equivale a la tolerancia 70 y la saturación 90 %.
+    // UnaryPixelOps.RedEyeRemove de Paint.NET. Paint.NET 5 tiene un solo control, "Fuerza": 3
+    // equivale a la tolerancia 70 y la saturación 90 %.
     const double force = dval(a.values, "force");
     const int tolerance = int(std::lround(100 - 10 * force));
     const double strength = std::clamp(1.2 - 0.1 * force, 0.0, 1.0);
@@ -51,8 +51,8 @@ void renderRedEye(const RenderArgs& a)
 
 void renderSharpen(const RenderArgs& a)
 {
-    // SharpenEffect de Paint.NET: se aleja de la mediana local. Con Umbral
-    // solo se refuerzan las diferencias mayores (no el ruido de zonas lisas).
+    // SharpenEffect de Paint.NET: se aleja de la mediana local. Con Umbral solo se refuerzan
+    // las diferencias mayores (no el ruido de zonas lisas).
     const int threshold = int(std::lround(dval(a.values, "threshold") * 2.55));
     localHistogram(a, std::max(1, int(std::lround(dval(a.values, "amount")))), [threshold](QRgb c, const LocalHistogram& h) {
         const QRgb median = histogramPercentile(h, 50);
@@ -160,7 +160,6 @@ void renderDropShadow(const RenderArgs& a)
     const int blur = int(std::lround(dval(a.values, "radius")));
     const double distanceF = dval(a.values, "distance");
     const int distance = int(std::ceil(distanceF));
-    // Ángulo como en Paint.NET (positivo = antihorario): −45° es abajo a la derecha.
     const double ang = -dval(a.values, "angle") * M_PI / 180.0;
     const QPoint offset(int(std::lround(std::cos(ang) * distanceF)), int(std::lround(std::sin(ang) * distanceF)));
     const QColor color = cval(a.values, "color");

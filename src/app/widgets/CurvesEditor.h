@@ -14,7 +14,6 @@ public:
     explicit CurveGraph(QWidget* parent = nullptr);
     void setValue(const CurvesValue& v);
     const CurvesValue& value() const { return m_value; }
-    // Canal que se edita y los que lo siguen (RGB con varias casillas marcadas).
     void setChannels(int channel, const QList<int>& followers);
     QSize sizeHint() const override { return {260, 260}; }
     bool hasHeightForWidth() const override { return true; }
@@ -43,15 +42,14 @@ private:
     int m_drag = -1;
 };
 
-// Editor de curvas de Paint.NET: luminosidad o RGB, con casillas para editar
-// a la vez los canales rojo, verde y azul que estén marcados.
+// Editor de curvas de Paint.NET: luminosidad o RGB, con casillas para editar a la vez los
+// canales rojo, verde y azul que estén marcados.
 class CurvesEditor : public QWidget {
     Q_OBJECT
 public:
     explicit CurvesEditor(QWidget* parent = nullptr);
     void setValue(const CurvesValue& v);
     CurvesValue value() const;
-    // Botones que el diálogo pone junto a Aceptar/Cancelar (Restablecer).
     QList<class QPushButton*> dialogButtons() const { return {m_reset}; }
 
 signals:

@@ -58,8 +58,7 @@ void Ruler::paintEvent(QPaintEvent*)
 
     const bool horiz = m_orientation == Qt::Horizontal;
     const double ppu = pixelsPerUnit(m_canvas->unit(), doc->dpi());
-    const double scale = m_canvas->scale() * ppu; // píxeles de pantalla por unidad
-    // Coordenada de pantalla (dentro de la regla) de una posición de imagen.
+    const double scale = m_canvas->scale() * ppu;
     const QPoint offset = m_canvas->viewport()->mapTo(parentWidget(), QPoint(0, 0)) - pos();
     auto toRuler = [&](double imagePx) {
         const QPointF v = m_canvas->imageToView(QPointF(imagePx, imagePx));

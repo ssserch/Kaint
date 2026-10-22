@@ -67,10 +67,9 @@ void AngleChooser::setFromPos(const QPointF& pos, bool snap)
     const QPointF d = pos - QRectF(rect()).center();
     if (d.isNull())
         return;
-    double deg = std::atan2(-d.y(), d.x()) * 180.0 / M_PI; // -180..180
+    double deg = std::atan2(-d.y(), d.x()) * 180.0 / M_PI;
     if (snap)
         deg = std::round(deg / 15.0) * 15.0;
-    // Lleva el ángulo al intervalo del parámetro (p. ej. 0..360).
     while (deg < m_min)
         deg += 360;
     while (deg > m_max)
@@ -270,7 +269,6 @@ void HistogramView::paintEvent(QPaintEvent*)
         if (!m_shown[size_t(c)])
             continue;
         QPainterPath path;
-        // Escala con raíz para que se vean también los valores pequeños.
         auto level = [&](int i) { return std::sqrt(double(m_hist[size_t(c)][size_t(i)]) / double(peak)); };
         if (!m_vertical) {
             path.moveTo(r.bottomLeft());
@@ -278,7 +276,6 @@ void HistogramView::paintEvent(QPaintEvent*)
                 path.lineTo(r.left() + r.width() * i / 255.0, r.bottom() - level(i) * r.height());
             path.lineTo(r.bottomRight());
         } else {
-            // El 0 abajo; la base es el lado que da a las barras de niveles.
             const double base = m_towardsRight ? r.left() : r.right();
             const double dir = m_towardsRight ? 1 : -1;
             path.moveTo(base, r.bottom());
@@ -367,7 +364,6 @@ void LevelsGradient::paintEvent(QPaintEvent*)
         p.setPen(QPen(palette().color(QPalette::WindowText), 1));
         p.setBrush(QColor::fromRgbF(float(t), float(t), float(t)));
         if (m_vertical) {
-            // Un triángulo a cada lado de la barra, apuntando hacia ella.
             p.drawPolygon(QPolygonF{QPointF(b.left() - 1, x), QPointF(0.5, x - 5), QPointF(0.5, x + 5)});
             p.drawPolygon(QPolygonF{QPointF(b.right() + 1, x), QPointF(width() - 0.5, x - 5), QPointF(width() - 0.5, x + 5)});
         } else {
@@ -395,7 +391,6 @@ void LevelsGradient::mouseMoveEvent(QMouseEvent* e)
     if (m_drag < 0)
         return;
     double v = valueAt(e->position());
-    // Los tiradores no se cruzan.
     if (m_drag > 0)
         v = std::max(v, m_values[m_drag - 1] + 1);
     if (m_drag < m_values.size() - 1)
@@ -433,8 +428,8 @@ LevelsEditor::LevelsEditor(QWidget* parent)
     m_gamma->setSingleStep(0.1);
     m_gamma->setValue(1);
 
-    // Disposición vertical de Paint.NET 5: histograma de entrada | entrada |
-    // salida | histograma de salida, con el blanco arriba y el negro abajo.
+    // Disposición vertical de Paint.NET 5: histograma de entrada | entrada | salida |
+    // histograma de salida, con el blanco arriba y el negro abajo.
     m_inHist->setVertical(true, false);
     m_outHist->setVertical(true, true);
     m_inBar->setVertical(true);
@@ -463,7 +458,6 @@ LevelsEditor::LevelsEditor(QWidget* parent)
     grid->addWidget(title(tr("Entrada")), 0, 1, 1, 2);
     grid->addWidget(title(tr("Salida")), 0, 3, 1, 2);
     grid->addWidget(title(tr("Histograma de salida")), 0, 5);
-    // Columnas: histograma, valores de entrada, barra de entrada, barra de salida, valores de salida, histograma.
     grid->addWidget(m_inHist, 1, 0, 7, 1);
     grid->addWidget(m_inHigh, 1, 1);
     grid->addWidget(m_swatches[0], 2, 1);
@@ -517,7 +511,6 @@ LevelsEditor::LevelsEditor(QWidget* parent)
         else if (i == 2)
             m_outHigh->setValue(int(std::lround(v)));
         else {
-            // Posición del gris = negro + (blanco - negro) · 0,5^gamma (como Paint.NET).
             const double lo = m_outLow->value(), hi = m_outHigh->value();
             const double t = std::clamp((v - lo) / std::max(1.0, hi - lo), 0.001, 0.999);
             m_gamma->setValue(std::clamp(std::log(t) / std::log(0.5), 0.1, 10.0));
@@ -574,7 +567,6 @@ void LevelsEditor::edit(F f)
 void LevelsEditor::syncControls()
 {
     const QList<int> chans = channels();
-    // Con varios canales se muestra la media, como hace Paint.NET.
     auto avg = [&](const auto& arr) {
         if (chans.isEmpty())
             return double(arr[0]);
@@ -599,7 +591,6 @@ void LevelsEditor::syncControls()
     const std::array<bool, 3> shown{m_checks[0]->isChecked(), m_checks[1]->isChecked(), m_checks[2]->isChecked()};
     m_inHist->setChannels(shown);
     m_outHist->setChannels(shown);
-    // Color de cada valor en los canales marcados.
     auto swatch = [&](QFrame* f, int v) {
         QPalette pal = f->palette();
         pal.setColor(QPalette::Window, QColor(shown[0] ? v : 0, shown[1] ? v : 0, shown[2] ? v : 0));
@@ -616,7 +607,6 @@ void LevelsEditor::refreshOutputHistogram()
 {
     if (m_source.isNull())
         return;
-    // Histograma del resultado sobre una versión reducida (rápido al arrastrar).
     QImage small = m_source.copy(m_rect.intersected(m_source.rect()));
     if (small.width() > 256 || small.height() > 256)
         small = small.scaled(256, 256, Qt::KeepAspectRatio, Qt::FastTransformation);
@@ -666,7 +656,6 @@ void RollBallControl::paintEvent(QPaintEvent*)
     const QPointF c = center();
     const qreal r = radius();
     const QPalette pal = palette();
-    // Esfera sombreada con los colores del tema.
     QRadialGradient shade(c - QPointF(r * 0.35, r * 0.35), r * 1.4);
     shade.setColorAt(0, pal.color(QPalette::Midlight));
     shade.setColorAt(1, pal.color(QPalette::Mid));
@@ -674,8 +663,8 @@ void RollBallControl::paintEvent(QPaintEvent*)
     p.setBrush(shade);
     p.drawEllipse(c, r, r);
 
-    // Rotación del globo: la misma que aplica Giro y zum a la imagen
-    // (girar, inclinar hacia la dirección). Se mira desde el polo (+z).
+    // Rotación del globo: la misma que aplica Giro y zum a la imagen (girar, inclinar hacia la
+    // dirección). Se mira desde el polo (+z).
     const double deg = M_PI / 180.0;
     const double a = m_value.x() * deg, dir = m_value.y() * deg, tilt = m_value.z() * deg;
     auto rotZ = [](double& x, double& y, double t) {
@@ -702,7 +691,6 @@ void RollBallControl::paintEvent(QPaintEvent*)
         p.setPen(QPen(visible ? front : back, visible ? 1.0 : 0.8));
         p.drawLine(c + QPointF(u[0], u[1]) * r, c + QPointF(v[0], v[1]) * r);
     };
-    // Paralelos alrededor del polo y meridianos.
     for (int polar = 15; polar <= 90; polar += 15) {
         const double t = polar * deg;
         std::array<double, 3> prev{};
@@ -725,7 +713,6 @@ void RollBallControl::paintEvent(QPaintEvent*)
             prev = q;
         }
     }
-    // Polo (centro de la imagen) marcado con el color de resalte.
     const auto pole = transform(0, 0, 1);
     p.setPen(QPen(pal.color(QPalette::Highlight), 2));
     p.setBrush(pal.color(QPalette::Highlight));
@@ -746,7 +733,6 @@ void RollBallControl::mouseMoveEvent(QMouseEvent* e)
     if (!(e->buttons() & (Qt::LeftButton | Qt::RightButton)))
         return;
     if (m_rotating) {
-        // Girar: cambio del ángulo del puntero alrededor del centro.
         const QPointF c = center();
         const double before = std::atan2(m_last.y() - c.y(), m_last.x() - c.x());
         const double now = std::atan2(e->position().y() - c.y(), e->position().x() - c.x());
@@ -766,9 +752,8 @@ void RollBallControl::mouseMoveEvent(QMouseEvent* e)
 
 void RollBallControl::dragTo(const QPointF& pos)
 {
-    // La distancia al centro es la inclinación y el ángulo, su dirección: el
-    // polo del globo (el centro de la imagen) queda bajo el puntero. Con la
-    // rotación del globo, el polo se desplaza 90° antes de la dirección.
+    // La distancia al centro es la inclinación y el ángulo, su dirección: el polo del globo
+    // (el centro de la imagen) queda bajo el puntero.
     const QPointF v = (pos - center()) / radius();
     const double len = std::min(1.0, std::hypot(v.x(), v.y()));
     const double tilt = std::min(m_maxTilt, std::asin(len) * 180.0 / M_PI);

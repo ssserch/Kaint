@@ -2,8 +2,8 @@
 
 #include <QWidget>
 
-// Deslizador con aspecto de barra de progreso y el valor escrito encima,
-// como los de la barra de opciones de Paint.NET 5 (Dureza, Tolerancia...).
+// Deslizador con aspecto de barra de progreso y el valor escrito encima, como los de la barra
+// de opciones de Paint.NET 5 (Dureza, Tolerancia...).
 class BarSlider : public QWidget {
     Q_OBJECT
 public:

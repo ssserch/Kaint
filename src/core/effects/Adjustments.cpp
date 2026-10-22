@@ -79,7 +79,6 @@ void renderCurves(const RenderArgs& a)
 {
     const CurvesValue cv = a.values.value(QStringLiteral("curves")).value<CurvesValue>();
     if (cv.mode == CurvesValue::Luminosity) {
-        // LuminosityCurve de Paint.NET: desplaza los tres canales lo mismo.
         const Lut lum = cv.lut(0);
         mapStraight(a, [&](QRgb c) {
             const int i = intensity(c);
@@ -102,8 +101,8 @@ void renderExposure(const RenderArgs& a)
 
 std::any prepareLocalLuminance(const QImage& src, const QRect& roi, const ParamValues& v, const EffectContext&)
 {
-    // Luminosidad media del entorno de cada píxel. El radio va en % del lado
-    // mayor de la zona (1,25 por defecto, como Paint.NET).
+    // Luminosidad media del entorno de cada píxel. El radio va en % del lado mayor de la zona
+    // (1,25 por defecto, como Paint.NET).
     std::atomic_bool never{false};
     const int px = std::max(1, int(std::lround(dval(v, "radius") / 100.0 * std::max(roi.width(), roi.height()))));
     return tentBlur(src, roi, px, never);
@@ -129,23 +128,19 @@ void renderHighlightsShadows(const RenderArgs& a)
             const QRgb u = qUnpremultiply(s[x]);
             const double local = intensityF(qUnpremultiply(b[x - a.roi.left()]));
             const double localLin = toLinear(int(std::lround(local * 255)));
-            // El peso depende de lo oscuro o claro que sea el entorno.
             const double wShadow = std::pow(1.0 - local, 2.0);
             const double wHighlight = std::pow(local, 2.0);
             const double wMid = 4.0 * local * (1.0 - local);
             auto ch = [&](int c) {
                 double l = toLinear(c);
-                // Sombras: + aclara las zonas oscuras, − las oscurece.
                 if (shadows > 0)
                     l += (1 - l) * shadows * 1.5 * wShadow * (1 - l);
                 else
                     l *= 1.0 + shadows * wShadow;
-                // Iluminaciones: + aclara las zonas claras, − las recupera.
                 if (highlights > 0)
                     l += (1 - l) * highlights * wHighlight;
                 else
                     l *= 1.0 + highlights * 0.75 * wHighlight;
-                // Claridad: contraste local en los tonos medios.
                 l += clarity * (l - localLin) * wMid;
                 return toSrgb(std::clamp(l, 0.0, 1.0));
             };
@@ -247,8 +242,6 @@ void renderPosterize(const RenderArgs& a)
 void renderSepia(const RenderArgs& a)
 {
     // Desaturar + Niveles con gamma (R 0,8 / G 1,0 / B 1,2), como Paint.NET.
-    // Intensidad 50 (la predeterminada de Paint.NET 5) = el sepia clásico;
-    // por debajo se mezcla con el original y por encima el tono es más fuerte.
     const double k = ival(a.values, "intensity") / 50.0;
     LevelsValue lv;
     lv.gamma = {std::pow(0.8, std::max(1.0, k)), 1.0, std::pow(1.2, std::max(1.0, k))};
@@ -264,7 +257,6 @@ void renderTemperatureTint(const RenderArgs& a)
 {
     const double t = ival(a.values, "temperature") / 100.0;
     const double tint = ival(a.values, "tint") / 100.0;
-    // Ganancias en luz lineal: cálido = más rojo y menos azul; tinte = verde/magenta.
     const double gr = 1.0 + 0.35 * t + 0.10 * tint;
     const double gg = 1.0 - 0.25 * tint;
     const double gb = 1.0 - 0.35 * t + 0.10 * tint;
@@ -283,7 +275,6 @@ void renderTemperatureTint(const RenderArgs& a)
 void registerAdjustments(QList<const Effect*>& list)
 {
     using P = EffectParam;
-    // Casi todos los ajustes son píxel a píxel: trabajan con alfa directo.
     auto add = [&](SimpleEffect::Def def, bool straight = true) {
         def.straight = straight;
         list.append(new SimpleEffect(std::move(def)));
@@ -299,7 +290,6 @@ void registerAdjustments(QList<const Effect*>& list)
           P::integer("contrast", QObject::tr("Contraste"), -100, 100, 0)},
          renderBrightnessContrast});
     add({"curves", QObject::tr("Curvas"), {}, "adjustcurves", key("Ctrl+Shift+M"), {P::curves("curves")}, renderCurves});
-    // Paint.NET 5 no pone título al único deslizador de Exposición.
     add({"exposure", QObject::tr("Exposición"), {}, "brightness-high", {},
          {P::real("exposure", QString(), -5, 5, 0, 2)}, renderExposure});
     add({"highlightsshadows", QObject::tr("Iluminaciones y sombras"), {}, "contrast", {},
@@ -308,7 +298,7 @@ void registerAdjustments(QList<const Effect*>& list)
           P::integer("clarity", QObject::tr("Claridad"), -100, 100, 0),
           P::real("radius", QObject::tr("Radio"), 0.25, 20, 1.25, 2)},
          renderHighlightsShadows, prepareLocalLuminance},
-        false); // usa un desenfoque del entorno: en premultiplicado
+        false);
     {
         P hue = P::integer("hue", QObject::tr("Matiz"), -180, 180, 0);
         hue.gradient = {QColor(0, 255, 255), QColor(0, 0, 255), QColor(255, 0, 255), QColor(255, 0, 0),
@@ -326,7 +316,6 @@ void registerAdjustments(QList<const Effect*>& list)
          renderInvert});
     add({"levels", QObject::tr("Niveles"), {}, "adjustlevels", key("Ctrl+L"), {P::levels("levels")}, renderLevels});
     {
-        // Cada canal con su casilla en el título, como Paint.NET 5.
         auto channel = [](const char* key, const char* on, const QString& label) {
             P p = P::integer(key, label, 2, 64, 16).linked("linked");
             p.enableKey = QString::fromLatin1(on);

@@ -34,8 +34,8 @@ const BlendInfo kBlendTable[] = {
     {BlendMode::Overwrite, "svg:src"},
 };
 
-// Funciones F(A, B) de Paint.NET sobre colores sin premultiplicar (0..255).
-// A = fondo, B = capa superior.
+// Funciones F(A, B) de Paint.NET sobre colores sin premultiplicar (0..255). A = fondo, B =
+// capa superior.
 inline int fNormal(int, int b) { return b; }
 inline int fMultiply(int a, int b) { return (a * b + 127) / 255; }
 inline int fAdditive(int a, int b) { return std::min(255, a + b); }
@@ -73,7 +73,6 @@ void blendRowGeneric(QRgb* d, const QRgb* s, int n, int opacity)
             continue;
         }
         const QRgb du = qUnpremultiply(dp);
-        // Fórmula generalizada: x = ab, y = a - ab, z = b - ab (en 0..255).
         const int x = (da * sb + 127) / 255;
         const int y = da - x;
         const int z = sb - x;
@@ -86,9 +85,8 @@ void blendRowGeneric(QRgb* d, const QRgb* s, int n, int opacity)
     }
 }
 
-// Destino con alfa directo (capas): la misma fórmula, pero el resultado se
-// divide por el alfa total (UserBlendOps de Paint.NET). Donde la fuente es
-// transparente el destino no se toca, así conserva su color.
+// Destino con alfa directo (capas): la misma fórmula, pero el resultado se divide por el alfa
+// total (UserBlendOps de Paint.NET).
 template <int (*F)(int, int), bool SrcPremul>
 void blendRowStraight(QRgb* d, const QRgb* s, int n, int opacity)
 {
@@ -107,7 +105,6 @@ void blendRowStraight(QRgb* d, const QRgb* s, int n, int opacity)
             continue;
         }
         if (F == fNormal && da == 255) {
-            // Caso más frecuente (pintar sobre un fondo opaco): una interpolación.
             const int ia = 255 - sb;
             auto mix = [&](int A, int B) { return (A * ia + B * sb + 127) / 255; };
             d[i] = qRgba(mix(qRed(dp), qRed(su)), mix(qGreen(dp), qGreen(su)), mix(qBlue(dp), qBlue(su)), 255);
@@ -285,7 +282,6 @@ void blendImage(QImage& dst, QPoint at, const QImage& src, const QRect& srcRect,
 {
     if (opacity <= 0)
         return;
-    // Recorta la región a ambas imágenes.
     QRect s = srcRect.intersected(src.rect());
     QRect d(at + (s.topLeft() - srcRect.topLeft()), s.size());
     const QRect clipped = d.intersected(dst.rect());
@@ -299,8 +295,6 @@ void blendImage(QImage& dst, QPoint at, const QImage& src, const QRect& srcRect,
     const bool srcPremul = isPremultiplied(src);
     RowFn fn = nullptr;
     if (dstPremul) {
-        // Caché de pantalla: QPainter compone (y convierte la fuente con alfa
-        // directo) en los modos que coinciden con los de Paint.NET.
         QPainter::CompositionMode cm;
         if (painterMode(mode, &cm)) {
             QPainter p(&dst);

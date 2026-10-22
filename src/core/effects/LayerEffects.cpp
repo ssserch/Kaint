@@ -1,5 +1,5 @@
-// Capas > Rotar/Zoom: giro, inclinación con perspectiva, desplazamiento y
-// zoom de la capa, con mosaico opcional para rellenar lo que queda fuera.
+// Capas > Rotar/Zoom: giro, inclinación con perspectiva, desplazamiento y zoom de la capa, con
+// mosaico opcional para rellenar lo que queda fuera.
 
 #include "core/effects/EffectUtils.h"
 
@@ -12,8 +12,8 @@ namespace {
 
 void renderRotateZoom(const RenderArgs& a)
 {
-    // Rotación y giro: ángulo, dirección de la inclinación e inclinación
-    // (de -90 a 90°; en ±90 el plano se vería de canto, así que se limita).
+    // Rotación y giro: ángulo, dirección de la inclinación e inclinación (de -90 a 90°; en ±90
+    // el plano se vería de canto, así que se limita).
     const QVector3D rotation = a.values.value(QStringLiteral("rotation")).value<QVector3D>();
     const double angle = rotation.x();
     const double direction = rotation.y();
@@ -75,7 +75,6 @@ void renderRotateZoom(const RenderArgs& a)
 void registerLayerEffects(QList<const Effect*>& list)
 {
     using P = EffectParam;
-    // Mismo orden y textos que el diálogo Giro y zum de Paint.NET 5.
     SimpleEffect::Def def{"rotatezoom", QObject::tr("Giro y zum"), catLayer(), "transform-rotate",
                           QKeySequence(QStringLiteral("Ctrl+Shift+Z")),
                           {P::rollBall("rotation", QObject::tr("Rotación y giro")),

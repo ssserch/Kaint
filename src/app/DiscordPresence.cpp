@@ -85,8 +85,8 @@ QString DiscordPresence::effectiveClientId() const
 
 QStringList DiscordPresence::socketPaths()
 {
-    // Igual que la biblioteca oficial: XDG_RUNTIME_DIR (o TMPDIR, /tmp) y las
-    // carpetas de las versiones Flatpak y Snap de Discord.
+    // Igual que la biblioteca oficial: XDG_RUNTIME_DIR (o TMPDIR, /tmp) y las carpetas de las
+    // versiones Flatpak y Snap de Discord.
     QStringList bases;
     for (const char* var : {"XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"}) {
         const QString v = qEnvironmentVariable(var);
@@ -234,7 +234,6 @@ void DiscordPresence::connectToDiscord()
     }
     connect(m_socket, &QLocalSocket::readyRead, this, &DiscordPresence::onReadyRead);
     connect(m_socket, &QLocalSocket::disconnected, this, [this] {
-        // Discord se cerró: se vuelve a intentar más tarde.
         if (m_socket) {
             m_socket->deleteLater();
             m_socket = nullptr;
@@ -259,7 +258,6 @@ void DiscordPresence::disconnectFromDiscord()
     m_socket = nullptr;
     socket->disconnect(this);
     if (m_ready && socket->state() == QLocalSocket::ConnectedState) {
-        // Se borra la actividad antes de cerrar.
         socket->write(frame(Close, QJsonObject{}));
         socket->flush();
         socket->waitForBytesWritten(200);
@@ -276,7 +274,6 @@ void DiscordPresence::onReadyRead()
         return;
     m_buffer += m_socket->readAll();
     while (m_buffer.size() >= 8) {
-        // data_ptr() en vez de constData(): evita un falso aviso de -Warray-bounds.
         const auto* head = reinterpret_cast<const uchar*>(m_buffer.data_ptr().data());
         auto le32 = [head](int at) {
             return quint32(head[at]) | quint32(head[at + 1]) << 8 | quint32(head[at + 2]) << 16 | quint32(head[at + 3]) << 24;
@@ -308,7 +305,6 @@ void DiscordPresence::handleFrame(int opcode, const QByteArray& data)
         }
         break;
     case Close:
-        // P. ej. "Invalid Client ID": no tiene sentido reintentar enseguida.
         setStatus(Status::Error, msg.value(QStringLiteral("message")).toString());
         disconnectFromDiscord();
         m_retry.start(m_retry.interval() * 4);

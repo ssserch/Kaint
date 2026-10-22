@@ -73,7 +73,6 @@ QFont TextTool::font() const
 {
     const ToolSettings& s = AppState::instance()->tools();
     QFont f = s.fontFamily.isEmpty() ? QGuiApplication::font() : QFont(s.fontFamily);
-    // Puntos a la resolución de la imagen o "Fijo (96 PPP)" como Paint.NET 3.x.
     const double dpi = (s.fontMetric == FontMetric::Points && document()) ? document()->dpi() : 96.0;
     f.setPixelSize(std::max(1, int(std::lround(s.fontSize * dpi / 72.0))));
     f.setBold(s.bold);
@@ -122,7 +121,6 @@ QPoint TextTool::positionAt(const QPointF& p) const
     const int line = std::clamp(int(std::floor((p.y() - m_pos.y()) / fm.lineSpacing())), 0, int(m_lines.size()) - 1);
     const QString& s = m_lines[line];
     const qreal x = p.x() - lineLeft(fm, s);
-    // Columna cuyo borde queda más cerca del punto.
     int best = 0;
     qreal bestDist = std::abs(x);
     for (int c = 1; c <= s.size(); ++c) {
@@ -141,13 +139,11 @@ void TextTool::mousePress(const ToolEvent& e)
     if (!doc || !doc->activeLayer())
         return;
     if (m_edit.isActive()) {
-        // Tirador o botón derecho: mover el texto sin terminarlo.
         if (e.button == Qt::RightButton || Handles::hit(e.viewPos, moveIcon(), 11)) {
             m_dragging = true;
             m_grab = e.pos;
             return;
         }
-        // Clic dentro del texto (con un margen del alto de la letra): mover el cursor.
         const qreal margin = QFontMetricsF(font()).height();
         if (e.button == Qt::LeftButton && m_bounds.adjusted(-margin, -margin, margin, margin).contains(e.pos)) {
             const QPoint at = positionAt(e.pos);
@@ -303,7 +299,7 @@ bool TextTool::keyPress(QKeyEvent* e)
         touch();
         return true;
     case Qt::Key_Tab:
-        return true; // no cambia el foco mientras se escribe
+        return true;
     case Qt::Key_V:
         if (ctrl) {
             insertText(QGuiApplication::clipboard()->text());

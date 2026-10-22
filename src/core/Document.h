@@ -8,9 +8,7 @@
 #include <QObject>
 #include <QUndoStack>
 
-// Documento: pila de capas (índice 0 = fondo), selección, historial propio y
-// ruta del archivo. Los métodos de modificación "crudos" no registran nada en
-// el historial: los usan los comandos de Commands.h.
+// Documento: pila de capas (índice 0 = fondo), selección, historial propio y ruta del archivo.
 class Document : public QObject {
     Q_OBJECT
 public:
@@ -23,13 +21,13 @@ public:
     QSize size() const { return m_size; }
     QRect rect() const { return QRect(QPoint(0, 0), m_size); }
 
-    // Resolución en puntos por pulgada: convierte píxeles en pulgadas o
-    // centímetros (reglas, barra de estado, impresión). Paint.NET usa 96.
+    // Resolución en puntos por pulgada: convierte píxeles en pulgadas o centímetros (reglas,
+    // barra de estado, impresión). Paint.NET usa 96.
     double dpi() const { return m_dpi; }
     void setDpi(double dpi);
 
-    // Perfil de color de la imagen (Imagen > Perfil de colores). Por defecto
-    // sRGB; los archivos con otro perfil lo conservan al guardar.
+    // Perfil de color de la imagen (Imagen > Perfil de colores). Por defecto sRGB; los
+    // archivos con otro perfil lo conservan al guardar.
     QColorSpace colorSpace() const { return m_colorSpace; }
     void setColorSpace(const QColorSpace& space);
 
@@ -55,21 +53,19 @@ public:
     const Selection& selection() const { return m_selection; }
     void setSelection(const Selection& selection);
 
-    // Vista previa de efectos: sustituye temporalmente la imagen de una capa
-    // al componer, sin tocar los datos reales.
+    // Vista previa de efectos: sustituye temporalmente la imagen de una capa al componer, sin
+    // tocar los datos reales.
     void setPreview(const Layer* layer, const QImage& image);
     void clearPreview();
     bool hasPreview() const { return m_previewLayer != nullptr; }
 
     // Compone las capas visibles en 'target' (premultiplicado) dentro de 'rect'.
     void renderComposite(QImage& target, const QRect& rect) const;
-    // Imagen acoplada con alfa directo (kLayerFormat).
     QImage flattened() const;
 
     QUndoStack* undoStack() const { return m_undo; }
 
     QString filePath() const { return m_filePath; }
-    // GIF abierto: repeticiones de la animación (se proponen al guardar).
     int gifLoops() const { return m_gifLoops; }
     void setGifLoops(int loops) { m_gifLoops = loops; }
     void setFilePath(const QString& path);

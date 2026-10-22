@@ -11,13 +11,7 @@
 
 enum class SelectionMode { Replace, Union, Exclude, Intersect, Xor };
 
-// Selección del documento. Una selección vacía significa "sin selección":
-// las herramientas y efectos actúan sobre todo el lienzo (como Paint.NET).
-//
-// Internamente puede ser vectorial (rectángulo, elipse, lazo: se guarda el
-// QPainterPath para dibujar un contorno suave) o por máscara (varita mágica
-// y combinaciones con ella). La máscara Alpha8 siempre está disponible y se
-// calcula al construir, así que la clase es segura de leer desde hilos.
+// Selección del documento.
 class Selection {
 public:
     Selection() = default;
@@ -39,8 +33,8 @@ public:
     // Contorno de una selección por máscara, como segmentos entre píxeles.
     const QVector<QLineF>& outline() const;
 
-    // Geometría en el formato JSON de Paint.NET (Edición > Copiar selección):
-    // {"polygonList": ["x1,y1,x2,y2,...", ...]}
+    // Geometría en el formato JSON de Paint.NET (Edición > Copiar selección): {"polygonList":
+    // ["x1,y1,x2,y2,...", ...]}
     QString toJson() const;
     static Selection fromJson(const QString& json, QSize canvas, bool* ok = nullptr);
 

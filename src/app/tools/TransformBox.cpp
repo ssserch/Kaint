@@ -77,8 +77,6 @@ TransformBox::Mode TransformBox::hit(const QPointF& viewPos, const QTransform& i
             return Mode::Scale;
         }
     }
-    // Fuera del cuadro pero cerca de su borde se gira, como en Paint.NET; en
-    // cualquier otro sitio (dentro, lejos o con el icono de cuatro flechas) se mueve.
     if (!in && distanceToOutline(poly, viewPos) <= kRotateBand)
         return Mode::Rotate;
     return Mode::Translate;
@@ -113,7 +111,6 @@ QTransform TransformBox::update(const QPointF& pos, Qt::KeyboardModifiers mods)
     }
     case Mode::Translate: {
         QPointF d = pos - m_startPos;
-        // Sin giro ni escala fraccionaria se mueve en píxeles enteros (nítido).
         d = QPointF(std::round(d.x()), std::round(d.y()));
         m_transform = m_start * QTransform::fromTranslate(d.x(), d.y());
         break;
@@ -147,13 +144,11 @@ QTransform TransformBox::update(const QPointF& pos, Qt::KeyboardModifiers mods)
         if (axes.y() != 0 && std::abs(h.y() - anchor.y()) > 1e-9)
             sy = (l.y() - anchor.y()) / (h.y() - anchor.y());
         if (mods & Qt::ShiftModifier) {
-            // Mayús: conserva la proporción.
             const double s = Handles::isCorner(m_handle) ? std::max(std::abs(sx), std::abs(sy))
                                                          : (axes.x() != 0 ? std::abs(sx) : std::abs(sy));
             sx = (axes.x() != 0 && sx < 0 ? -1 : 1) * s;
             sy = (axes.y() != 0 && sy < 0 ? -1 : 1) * s;
         }
-        // Evita escalas nulas que harían la transformación no invertible.
         if (std::abs(sx) < 1e-3)
             sx = sx < 0 ? -1e-3 : 1e-3;
         if (std::abs(sy) < 1e-3)
@@ -176,7 +171,6 @@ void TransformBox::draw(QPainter& p, const QTransform& imageToView, bool handles
         return;
     for (int i = 0; i < 8; ++i)
         Handles::draw(p, toView.map(Handles::boxHandle(m_rect, i)), Handles::Shape::Circle);
-    // Punto central: la cruz gira con el cuadro (indica la inclinación).
     Handles::drawPivot(p, toView.map(m_localPivot), rotationDegrees());
     if (pivotMoved())
         Handles::draw(p, resetButtonView(imageToView), Handles::Shape::ResetPivot);

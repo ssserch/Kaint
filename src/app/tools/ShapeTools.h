@@ -8,14 +8,12 @@
 #include <array>
 #include <functional>
 
-// Dibuja una geometría vectorial dos veces (con colores y como cobertura)
-// y la compone en la capa; así funcionan las tramas y "Sobrescribir".
+// Dibuja una geometría vectorial dos veces (con colores y como cobertura) y la compone en la
+// capa; así funcionan las tramas y "Sobrescribir".
 using VectorDrawFn = std::function<void(QPainter& p, bool coverage)>;
 void renderVector(LayerEdit& edit, const QRect& region, const VectorDrawFn& draw);
 
-// Línea/Curva: tras dibujarla quedan cuatro nodos editables. Recta, spline
-// cúbica o Bézier según la barra; mover con el icono o las flechas, girar
-// con el botón derecho (Mayús: 15°). Teclas , . / cambian remates y estilo.
+// Línea/Curva: tras dibujarla quedan cuatro nodos editables.
 class LineTool : public Tool {
     Q_OBJECT
 public:

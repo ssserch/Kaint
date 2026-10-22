@@ -12,10 +12,8 @@ class QSpinBox;
 class QToolButton;
 class QVBoxLayout;
 
-// Ventana Colores de Paint.NET: muestras principal/secundario, rueda de tono,
-// brillo y paleta (32 colores; 96 en la vista ampliada) con "Añadir color" y
-// el menú de paletas. "Más »" añade a la derecha los deslizadores RGB, HSV,
-// opacidad y el valor hexadecimal.
+// Ventana Colores de Paint.NET: muestras principal/secundario, rueda de tono, brillo y paleta
+// (32 colores; 96 en la vista ampliada) con "Añadir color" y el menú de paletas.
 class ColorsPanel : public QWidget {
     Q_OBJECT
 public:

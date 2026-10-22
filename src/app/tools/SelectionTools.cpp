@@ -82,8 +82,6 @@ void SelectToolBase::paintOverlay(QPainter& p)
         return;
     p.save();
     const QTransform t = canvas()->imageToViewTransform();
-    // Trazo continuo claro y discontinuo con el color de resalte: se distingue
-    // de las "hormigas" blancas y negras de la selección resultante.
     QPen under(Qt::white, 0);
     QPen dashes(QApplication::palette().color(QPalette::Highlight).darker(140), 0, Qt::CustomDashLine);
     dashes.setDashPattern({3, 3});
@@ -123,9 +121,9 @@ bool SelectToolBase::plainReplace(Qt::KeyboardModifiers modifiers) const
 
 void SelectToolBase::done(const QString& text, const QString& icon, Qt::KeyboardModifiers modifiers)
 {
-    // Tabla de verdad de SelectionTool.Done() de Paint.NET: un clic (o un
-    // arrastre de menos de 50 ms) en modo reemplazar anula la selección; en
-    // los otros modos simplemente no cambia nada.
+    // Tabla de verdad de SelectionTool.Done() de Paint.NET: un clic (o un arrastre de menos de
+    // 50 ms) en modo reemplazar anula la selección; en los otros modos simplemente no cambia
+    // nada.
     const bool tooQuick = m_timer.elapsed() <= 50;
     const bool append = m_mode != SelectionMode::Replace;
     if (append) {
@@ -161,7 +159,6 @@ QRectF ShapeSelectTool::currentRect(const QPointF& endIn, Qt::KeyboardModifiers 
     const ToolSettings& s = AppState::instance()->tools();
     QPointF end = snapped(endIn);
     if (!ellipse() && s.rectMode == RectSelectMode::FixedSize) {
-        // Tamaño fijo: el rectángulo sigue al puntero y no se sale del lienzo.
         const QSizeF size(std::max(1.0, s.fixedWidth), std::max(1.0, s.fixedHeight));
         QPointF tl = end - QPointF(size.width() / 2, size.height() / 2);
         const QSize canvas = document()->size();
@@ -207,7 +204,6 @@ void ShapeSelectTool::mouseMove(const ToolEvent& e)
     if (!m_active)
         return;
     if (m_moveOrigin) {
-        // Con los dos botones pulsados se desplaza la forma entera.
         const QPointF d = e.pos - m_originGrab;
         m_start += QPointF(std::round(d.x()), std::round(d.y()));
         m_originGrab += QPointF(std::round(d.x()), std::round(d.y()));
@@ -223,7 +219,7 @@ void ShapeSelectTool::mouseMove(const ToolEvent& e)
     else
         path.addRect(r.intersected(QRectF(document()->rect())));
     if (path.isEmpty()) {
-        preview(Selection()); // fuera del lienzo: no queda nada seleccionado
+        preview(Selection());
         showStatus(r);
         return;
     }

@@ -30,7 +30,6 @@ void draw(QPainter& p, const QPointF& c, Shape shape)
         p.drawLine(c - QPointF(0, 4), c + QPointF(0, 4));
         break;
     case Shape::ResetPivot: {
-        // Rombo azul con la flecha de "volver", como el de Paint.NET.
         p.translate(c);
         p.rotate(45);
         p.setPen(QPen(dark, 1));
@@ -46,7 +45,6 @@ void draw(QPainter& p, const QPointF& c, Shape shape)
         break;
     }
     case Shape::Move: {
-        // Cuadrado blanco con cuatro flechas, como el de Paint.NET.
         const QRectF box(c - QPointF(9, 9), QSizeF(18, 18));
         p.setPen(QPen(dark, 1));
         p.setBrush(light);

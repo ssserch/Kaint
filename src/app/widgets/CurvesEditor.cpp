@@ -154,7 +154,6 @@ void CurveGraph::mouseMoveEvent(QMouseEvent* e)
         return;
     auto& pts = m_value.points[size_t(m_channel)];
     QPointF v = toValue(e->position());
-    // Cada punto queda entre sus vecinos para que la curva siga siendo una función.
     const qreal lo = m_drag > 0 ? pts[m_drag - 1].x() + 1 : 0;
     const qreal hi = m_drag < pts.size() - 1 ? pts[m_drag + 1].x() - 1 : 255;
     v.setX(std::clamp(v.x(), lo, hi));
@@ -253,7 +252,6 @@ void CurvesEditor::updateChannel()
         checked << 2;
     if (m_blue->isChecked())
         checked << 3;
-    // Sin ninguna casilla marcada no se edita nada útil: se muestra el rojo.
     m_graph->setChannels(checked.isEmpty() ? 1 : checked.first(), checked);
 }
 

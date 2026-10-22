@@ -35,8 +35,8 @@ enum class ToolId {
 };
 
 struct ToolEvent {
-    QPointF pos;      // coordenadas de imagen (continuas)
-    QPointF viewPos;  // coordenadas del widget
+    QPointF pos;
+    QPointF viewPos;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons;
     Qt::KeyboardModifiers modifiers;
@@ -48,7 +48,6 @@ struct ToolEvent {
 class Tool : public QObject {
     Q_OBJECT
 public:
-    // Grupos de opciones que la barra de opciones muestra para cada herramienta.
     enum Option : quint32 {
         OptBrushSize = 1u << 0,
         OptHardness = 1u << 1,
@@ -77,10 +76,10 @@ public:
         OptCornerRadius = 1u << 24,
         OptInterpolation = 1u << 25,
         OptRecolorSampling = 1u << 26,
-        OptLineCaps = 1u << 27,   // remates de línea (flechas)
-        OptSampleSize = 1u << 28, // tamaño de la muestra del selector de color
-        OptAfterSelect = 1u << 29, // herramientas de selección: después de seleccionar, pasar a...
-        OptGamma = 1u << 30,       // Mover píxeles: gamma corregido o ignorar gamma
+        OptLineCaps = 1u << 27,
+        OptSampleSize = 1u << 28,
+        OptAfterSelect = 1u << 29,
+        OptGamma = 1u << 30,
     };
 
     explicit Tool(QObject* parent = nullptr) : QObject(parent) {}
@@ -100,18 +99,15 @@ public:
     virtual void mousePress(const ToolEvent&) {}
     virtual void mouseMove(const ToolEvent&) {}
     virtual void mouseRelease(const ToolEvent&) {}
-    // Segundo botón pulsado o soltado mientras se arrastra con el primero
-    // (p. ej. mover la selección mientras se dibuja, como en Paint.NET).
     virtual void extraButton(const ToolEvent&, bool /*pressed*/) {}
     virtual bool keyPress(QKeyEvent*) { return false; }
     virtual void inputMethod(QInputMethodEvent*) {}
-    virtual bool wantsKeyboard() const { return false; } // la herramienta Texto está escribiendo
+    virtual bool wantsKeyboard() const { return false; }
     virtual QRectF inputCursorRect() const { return {}; }
 
     // Dibujo de ayudas sobre el lienzo, en coordenadas del widget.
     virtual void paintOverlay(QPainter&) {}
     virtual QCursor cursor() const { return Qt::CrossCursor; }
-    // Diámetro (en píxeles de imagen) del círculo que sigue al ratón; 0 = ninguno.
     virtual qreal brushOutlineDiameter() const { return 0; }
 
     // Tiñe de azul el interior de la selección (herramientas de selección).
@@ -119,7 +115,6 @@ public:
 
     // Termina la operación en curso (botón "Terminar", Intro, cambio de herramienta...).
     virtual void finish() {}
-    // Hay algo editable pendiente de terminar (forma, texto, relleno...).
     virtual bool isBusy() const { return false; }
 
 signals:

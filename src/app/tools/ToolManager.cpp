@@ -36,8 +36,6 @@ ToolManager::ToolManager(Canvas* canvas, QObject* parent)
             connect(picker, &ColorPickerTool::switchToPencilRequested, this, [this] { select(ToolId::Pencil); });
         }
         if (auto* selector = qobject_cast<SelectToolBase*>(t)) {
-            // "Después de seleccionar" (barra de opciones; por defecto no se cambia).
-            // Se cambia al volver al bucle de eventos, fuera del manejador del ratón.
             connect(selector, &SelectToolBase::selectionFinished, this, [this, selector] {
                 const AfterSelect after = AppState::instance()->tools().afterSelect;
                 if (after == AfterSelect::DoNotSwitch)
@@ -49,7 +47,6 @@ ToolManager::ToolManager(Canvas* canvas, QObject* parent)
             });
         }
     }
-    // Calidad de selección (suavizada / pixelada) para todas las herramientas.
     auto syncQuality = [] { Raster::setSelectionAntialias(AppState::instance()->tools().selectionAntialias); };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, syncQuality);
     syncQuality();

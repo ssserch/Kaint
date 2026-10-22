@@ -12,8 +12,8 @@ class QDoubleSpinBox;
 class QLabel;
 class QSpinBox;
 
-// Selector circular de ángulo (AngleChooserControl de Paint.NET): arrastrar
-// fija el ángulo; Mayús lo ajusta de 15 en 15°.
+// Selector circular de ángulo (AngleChooserControl de Paint.NET): arrastrar fija el ángulo;
+// Mayús lo ajusta de 15 en 15°.
 class AngleChooser : public QWidget {
     Q_OBJECT
 public:
@@ -38,8 +38,8 @@ private:
     double m_value = 0;
 };
 
-// Selector de centro/desplazamiento sobre una miniatura de la imagen
-// (PanControl de Paint.NET). El valor va de -1 a 1 en cada eje.
+// Selector de centro/desplazamiento sobre una miniatura de la imagen (PanControl de
+// Paint.NET). El valor va de -1 a 1 en cada eje.
 class PanControl : public QWidget {
     Q_OBJECT
 public:
@@ -65,14 +65,12 @@ private:
     QPointF m_value;
 };
 
-// Globo de "Rotación y giro" (control RollBallAndSliders de Paint.NET):
-// muestra en 3D el ángulo y la inclinación. Arrastrar con el botón izquierdo
-// inclina el globo hacia el puntero; con el derecho (o con Mayús) lo gira.
+// Globo de "Rotación y giro" (control RollBallAndSliders de Paint.NET): muestra en 3D el
+// ángulo y la inclinación.
 class RollBallControl : public QWidget {
     Q_OBJECT
 public:
     explicit RollBallControl(double maxTilt, QWidget* parent = nullptr);
-    // x = ángulo, y = dirección de la inclinación, z = inclinación (grados).
     QVector3D value() const { return m_value; }
     void setValue(const QVector3D& v);
     QSize sizeHint() const override { return {96, 96}; }
@@ -123,8 +121,6 @@ public:
     explicit HistogramView(QWidget* parent = nullptr);
     void setImage(const QImage& image, const QRect& rect);
     void setChannels(const std::array<bool, 3>& shown);
-    // Vertical (Niveles de Paint.NET): el 0 abajo y las barras crecen hacia
-    // la izquierda (o hacia la derecha con 'towardsRight').
     void setVertical(bool vertical, bool towardsRight);
     QSize sizeHint() const override { return m_vertical ? QSize(90, 256) : QSize(256, 90); }
 
@@ -143,10 +139,9 @@ class LevelsGradient : public QWidget {
     Q_OBJECT
 public:
     LevelsGradient(int handles, QWidget* parent = nullptr);
-    void setValues(const QList<double>& values); // 0..255 cada uno
+    void setValues(const QList<double>& values);
     QList<double> values() const { return m_values; }
     void setTint(const QColor& c);
-    // Vertical: el blanco arriba y los tiradores a los lados (Paint.NET 5).
     void setVertical(bool vertical);
     QSize sizeHint() const override { return m_vertical ? QSize(30, 256) : QSize(256, 26); }
 
@@ -161,7 +156,7 @@ protected:
 
 private:
     QRectF barRect() const;
-    double xFor(double v) const; // posición a lo largo de la barra (x u y)
+    double xFor(double v) const;
     double valueAt(const QPointF& p) const;
 
     QList<double> m_values;
@@ -170,9 +165,9 @@ private:
     bool m_vertical = false;
 };
 
-// Editor de Niveles de Paint.NET: histogramas de entrada y salida, entrada
-// negro/blanco, salida negro/gris(gamma)/blanco, Automático, Restablecer y
-// casillas R, G, B para elegir qué canales se ajustan.
+// Editor de Niveles de Paint.NET: histogramas de entrada y salida, entrada negro/blanco,
+// salida negro/gris(gamma)/blanco, Automático, Restablecer y casillas R, G, B para elegir qué
+// canales se ajustan.
 class LevelsEditor : public QWidget {
     Q_OBJECT
 public:
@@ -180,7 +175,6 @@ public:
     void setSource(const QImage& image, const QRect& rect);
     void setValue(const LevelsValue& v);
     LevelsValue value() const { return m_value; }
-    // Botones que el diálogo pone junto a Aceptar/Cancelar (Automático, Restablecer).
     QList<class QPushButton*> dialogButtons() const { return {m_auto, m_reset}; }
 
 signals:
@@ -206,7 +200,6 @@ private:
     QDoubleSpinBox* m_gamma;
     QSpinBox* m_outHigh;
     std::array<QCheckBox*, 3> m_checks{};
-    // Muestras del color de cada valor: entrada blanco/negro, salida blanco/gris/negro.
     std::array<class QFrame*, 5> m_swatches{};
     class QPushButton* m_auto;
     class QPushButton* m_reset;

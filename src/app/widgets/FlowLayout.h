@@ -3,9 +3,8 @@
 #include <QLayout>
 #include <QList>
 
-// Diseño que coloca los elementos en fila y pasa a la siguiente cuando no
-// caben (como el ejemplo "Flow Layout" de Qt). Lo usan las secciones de
-// opciones de Configuración > Herramientas.
+// Diseño que coloca los elementos en fila y pasa a la siguiente cuando no caben (como el
+// ejemplo "Flow Layout" de Qt).
 class FlowLayout : public QLayout {
 public:
     explicit FlowLayout(QWidget* parent = nullptr, int hSpacing = 6, int vSpacing = 4);

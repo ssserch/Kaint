@@ -112,7 +112,6 @@ bool HistoryPanel::eventFilter(QObject* obj, QEvent* e)
         auto* me = static_cast<QMouseEvent*>(e);
         QUndoStack* stack = m_group->activeStack();
         const QModelIndex index = m_view->indexAt(me->position().toPoint());
-        // Clic en el paso actual: lo deshace (como el historial de Paint.NET).
         if (stack && index.isValid() && me->button() == Qt::LeftButton && index.row() == stack->index()
             && stack->index() > 0) {
             stack->setIndex(stack->index() - 1);

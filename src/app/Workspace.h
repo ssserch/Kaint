@@ -7,20 +7,15 @@ class QLabel;
 class QToolButton;
 class Canvas;
 
-// Contenido de panel que decide su propio tamaño al redimensionarlo (la
-// rejilla de herramientas encaja sus columnas). 'proposed' es el tamaño del
-// contenido que resultaría del arrastre y 'changed' los ejes arrastrados.
+// Contenido de panel que decide su propio tamaño al redimensionarlo (la rejilla de
+// herramientas encaja sus columnas).
 class PanelContent {
 public:
     virtual ~PanelContent() = default;
     virtual QSize fitSize(QSize proposed, Qt::Orientations changed) const = 0;
 };
 
-// Panel flotante dentro del área de trabajo (Herramientas, Historial, Capas,
-// Colores). Son widgets hijos y no ventanas: en Wayland una aplicación no
-// puede colocar sus propias ventanas, y así los paneles se comportan como en
-// Paint.NET (se arrastran por el título, se anclan a la esquina más cercana
-// y cambian de tamaño arrastrando cualquiera de sus bordes).
+// Panel flotante dentro del área de trabajo (Herramientas, Historial, Capas, Colores).
 class FloatingPanel : public QFrame {
     Q_OBJECT
 public:
@@ -37,11 +32,8 @@ public:
 
     void saveState() const;
     void restoreState(Corner defaultCorner, QPoint defaultOffset, QSize defaultSize);
-    // Vuelve a la posición y el tamaño iniciales (Ventana > Restablecer).
     void resetToDefault();
-    // Translúcido mientras el puntero no está encima (opción de Paint.NET).
     void setTranslucent(bool on);
-    // Ajusta el tamaño a lo que pide el contenido (p. ej. tras un cambio de tema).
     void fitToContent();
 
     // Grosor del borde que se puede arrastrar para cambiar el tamaño.
@@ -64,23 +56,21 @@ private:
     void updateAnchorFromGeometry();
     Qt::Edges edgesAt(const QPoint& pos) const;
     void updateEdgeCursor(Qt::Edges edges);
-    // Aplica el ajuste del contenido a una geometría propuesta, manteniendo
-    // fijos los bordes que no se arrastran.
     QRect constrained(const QRect& proposed, Qt::Edges edges) const;
     QSize chromeSize() const;
     void updateTitleText();
 
     QString m_id;
     QString m_fullTitle;
-    QWidget* m_titleBar;
-    QLabel* m_title;
-    QToolButton* m_close;
-    QWidget* m_content;
+    QWidget* m_titleBar = nullptr;
+    QLabel* m_title = nullptr;
+    QToolButton* m_close = nullptr;
+    QWidget* m_content = nullptr;
     Corner m_corner = TopLeft;
     QPoint m_offset;
     bool m_dragging = false;
     bool m_resizable = true;
-    Qt::Edges m_resizeEdges;   // bordes que se están arrastrando
+    Qt::Edges m_resizeEdges;
     QPoint m_pressGlobal;
     QRect m_pressGeometry;
     QPoint m_dragOffset;

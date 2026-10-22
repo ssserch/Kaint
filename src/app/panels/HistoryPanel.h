@@ -7,9 +7,8 @@ class QUndoGroup;
 class QUndoView;
 class Document;
 
-// Ventana Historial: lista de pasos; un clic salta a ese punto y hacer clic
-// en el paso actual lo deshace (y otra vez lo rehace), como en Paint.NET.
-// Botones: al principio, deshacer, rehacer y al final.
+// Ventana Historial: lista de pasos; un clic salta a ese punto y hacer clic en el paso actual
+// lo deshace (y otra vez lo rehace), como en Paint.NET.
 class HistoryPanel : public QWidget {
     Q_OBJECT
 public:
@@ -17,7 +16,6 @@ public:
     void setDocument(Document* doc);
 
 signals:
-    // Se emite antes de que la lista salte a otro paso (para terminar la herramienta).
     void aboutToJump();
 
 protected:

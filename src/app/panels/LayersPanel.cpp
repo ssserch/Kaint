@@ -71,7 +71,6 @@ public:
     bool editorEvent(QEvent* e, QAbstractItemModel*, const QStyleOptionViewItem& option, const QModelIndex& index) override
     {
         if (e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseButtonDblClick) {
-            // La casilla no selecciona la capa ni abre sus propiedades.
             auto* me = static_cast<QMouseEvent*>(e);
             if (checkRect(option.rect).adjusted(-4, -4, 4, 4).contains(me->position().toPoint()))
                 return true;
@@ -105,8 +104,6 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
     m_list->setFrameShape(QFrame::NoFrame);
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setUniformItemSizes(true);
-    // Arrastrar y soltar para reordenar: se detecta a mano y se hace con un
-    // comando del historial en lugar del movimiento interno de la lista.
     m_list->viewport()->installEventFilter(this);
 
     auto* buttons = new QHBoxLayout;

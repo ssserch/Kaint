@@ -50,10 +50,7 @@ public:
 
     void openFiles(const QStringList& paths);
     void newDefaultDocument();
-    // Sin archivos en la línea de órdenes: la sesión anterior (si está
-    // activado en Configuración) o una imagen nueva.
     void restoreSessionOrNew();
-    // Comprobaciones al arrancar (actualizaciones), después de mostrar la ventana.
     void startupChecks();
 
 protected:
@@ -63,7 +60,6 @@ protected:
     void dropEvent(QDropEvent* e) override;
 
 private:
-    // Construcción de la interfaz
     QAction* makeAction(const QString& text, std::initializer_list<const char*> icons, const QKeySequence& key,
                         std::function<void()> fn, QList<QAction*>* group = nullptr);
     void createTopRow();
@@ -117,8 +113,7 @@ private:
     QImage clipboardImage() const;
     bool ensureCanvasFits(const QImage& image, const QString& title, bool importing = false);
 
-    // Imagen
-    // 'dpi' > 0 cambia también la resolución del documento.
+    // Imagen 'dpi' > 0 cambia también la resolución del documento.
     void transformDocument(const QString& text, const QString& icon, QSize newSize,
                            const std::function<QImage(const QImage&, int)>& fn, double dpi = 0);
     void cropToSelection();
@@ -160,7 +155,6 @@ private:
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
     void setUnit(int unit);
-    // Comprueba si hay una versión más nueva en el repositorio de GitHub.
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();
     PresenceInfo presenceInfo() const;
@@ -189,7 +183,6 @@ private:
     QMenu* m_adjustmentsMenu = nullptr;
     QMenu* m_effectsMenu = nullptr;
     QList<QAction*> m_effectActions;
-    // Submenús de Efectos: se borran enteros (con su menuAction) al reconstruir.
     QList<QMenu*> m_effectSubmenus;
     QWidget* m_cornerButtons = nullptr;
     class QHBoxLayout* m_cornerLayout = nullptr;
@@ -210,7 +203,7 @@ private:
 
     const Effect* m_lastEffect = nullptr;
     QHash<QString, ParamValues> m_effectValues;
-    QHash<QString, ImageIO::SaveOptions> m_saveOptions; // por extensión
+    QHash<QString, ImageIO::SaveOptions> m_saveOptions;
     QString m_lastDir;
 
     QTimer m_thumbTimer;
@@ -220,5 +213,5 @@ private:
     std::unique_ptr<QPrinter> m_printer;
     bool m_printActualSize = false;
     QTimer m_presenceTimer;
-    int m_toolBeforeEraser = -1; // herramienta a la que volver al dejar el extremo borrador
+    int m_toolBeforeEraser = -1;
 };

@@ -10,8 +10,8 @@ namespace {
 
 constexpr int kTableSize = 16384;
 
-// Tabla de la curva normal de AddNoiseEffect: un índice aleatorio uniforme
-// da un valor con distribución gaussiana.
+// Tabla de la curva normal de AddNoiseEffect: un índice aleatorio uniforme da un valor con
+// distribución gaussiana.
 const std::vector<int>& normalLookup()
 {
     static const std::vector<int> lookup = [] {
@@ -85,7 +85,6 @@ void renderReduceNoise(const RenderArgs& a)
 {
     const double strength = dval(a.values, "strength");
     localHistogram(a, ival(a.values, "radius"), [&](QRgb c, const LocalHistogram& h) {
-        // Percentil del color dentro de su entorno (GetPercentileOfColor).
         int rc = 0, gc = 0, bc = 0;
         for (int i = 0; i < qRed(c); ++i)
             rc += h.r[i];

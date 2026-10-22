@@ -48,7 +48,6 @@ void BarSlider::paintEvent(QPaintEvent*)
     const QString text = QString::number(m_value) + m_suffix;
     p.setPen(pal.color(QPalette::Text));
     p.drawText(r.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
-    // El texto sobre la parte rellena se pinta con el color de resaltado.
     p.save();
     p.setClipRect(filled);
     p.setPen(pal.color(QPalette::HighlightedText));

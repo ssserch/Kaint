@@ -6,10 +6,9 @@
 #include <QElapsedTimer>
 #include <QPolygonF>
 
-// Base común de las selecciones, con las combinaciones de Paint.NET:
-//   Ctrl + izq.: unión · Alt + izq.: restar · Ctrl + der.: XOR (invertir)
-//   Alt + der.: intersección · sin teclas: el modo de la barra.
-// Mientras se arrastra, pulsar el otro botón permite mover la forma.
+// Base común de las selecciones, con las combinaciones de Paint.NET: Ctrl + izq.: unión · Alt
+// + izq.: restar · Ctrl + der.: XOR (invertir) Alt + der.: intersección · sin teclas: el modo
+// de la barra.
 class SelectToolBase : public Tool {
     Q_OBJECT
 public:
@@ -17,33 +16,25 @@ public:
     quint32 options() const override { return OptSelectionMode | OptAfterSelect | OptSelectionQuality; }
     bool highlightSelection() const override { return true; }
     void deactivate() override;
-    // En los modos que combinan (unión, intersección...) dibuja la forma entera
-    // que se arrastra, también la parte que no queda seleccionada.
     void paintOverlay(QPainter& p) override;
 
 signals:
-    // Se terminó una selección nueva en modo Reemplazar y sin Ctrl/Alt
-    // (la ventana puede cambiar entonces a la herramienta Mover selección).
     void selectionFinished();
 
 protected:
     SelectionMode modeFor(const ToolEvent& e) const;
     void begin(const ToolEvent& e);
     void preview(const Selection& shape);
-    // Al soltar: anula la selección si fue un clic (o muy rápido) o la registra.
     void done(const QString& text, const QString& icon, Qt::KeyboardModifiers modifiers);
-    // Sin modificadores de combinación (Ctrl/Alt) y en modo Reemplazar.
     bool plainReplace(Qt::KeyboardModifiers modifiers) const;
     void commit(const QString& text, const QString& icon);
     void showStatus(const QRectF& r);
-    // La selección nueva no sale del lienzo (como Paint.NET); solo al mover
-    // píxeles o la selección puede quedar contorno fuera.
     static QPainterPath clippedToCanvas(const QPainterPath& path, QSize canvas);
 
     bool m_active = false;
     bool m_dragged = false;
     Selection m_before;
-    Selection m_shape; // forma que se arrastra, si el modo combina
+    Selection m_shape;
     SelectionMode m_mode = SelectionMode::Replace;
     QElapsedTimer m_timer;
 };
@@ -116,8 +107,8 @@ private:
     QPointF m_last;
 };
 
-// Varita mágica editable: hasta terminar se puede cambiar la tolerancia,
-// el modo de inundación o el muestreo y arrastrar el punto de origen.
+// Varita mágica editable: hasta terminar se puede cambiar la tolerancia, el modo de inundación
+// o el muestreo y arrastrar el punto de origen.
 class MagicWandTool : public SelectToolBase {
     Q_OBJECT
 public:

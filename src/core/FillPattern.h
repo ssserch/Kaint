@@ -2,8 +2,8 @@
 
 #include <QString>
 
-// Estilos de relleno de Paint.NET: color sólido o una trama de 8x8 que usa
-// el color principal (bits a 1) y el secundario (bits a 0).
+// Estilos de relleno de Paint.NET: color sólido o una trama de 8x8 que usa el color principal
+// (bits a 1) y el secundario (bits a 0).
 namespace FillPattern {
 
 constexpr int Solid = 0;

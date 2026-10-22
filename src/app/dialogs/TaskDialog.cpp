@@ -65,7 +65,7 @@ int TaskDialog::addChoice(const QIcon& icon, const QString& title, const QString
     auto* button = new QCommandLinkButton(title, description, this);
     button->setIcon(icon);
     button->setIconSize(QSize(16, 16));
-    button->setMinimumWidth(440); // como en Paint.NET: la descripción en una o dos líneas
+    button->setMinimumWidth(440);
     button->setObjectName(QStringLiteral("choice%1").arg(index));
     if (isDefault) {
         button->setDefault(true);

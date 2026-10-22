@@ -21,10 +21,9 @@ class QRadioButton;
 class QSlider;
 class QSpinBox;
 
-// Tamaño como en los diálogos de Paint.NET: por porcentaje o absoluto,
-// "Mantener la relación de aspecto", tamaño en píxeles y tamaño de
-// impresión (resolución en píxeles/pulgada o píxeles/cm y ancho/alto en
-// pulgadas o centímetros).
+// Tamaño como en los diálogos de Paint.NET: por porcentaje o absoluto, "Mantener la relación
+// de aspecto", tamaño en píxeles y tamaño de impresión (resolución en píxeles/pulgada o
+// píxeles/cm y ancho/alto en pulgadas o centímetros).
 class SizeEditor : public QWidget {
     Q_OBJECT
 public:
@@ -44,7 +43,7 @@ private:
     void onResolution();
     void updateMode();
     void syncPrint();
-    double unitPixels() const; // píxeles por unidad de impresión
+    double unitPixels() const;
 
     QSize m_original;
     double m_aspect;
@@ -126,10 +125,9 @@ private:
     QSpinBox* m_opacity;
 };
 
-// Imagen > Perfil de colores (Paint.NET 5): muestra el perfil actual y deja
-// elegir otro de la lista o de un archivo .icc para convertir los colores
-// (los píxeles cambian, el aspecto se mantiene) o asignarlo (solo cambia la
-// interpretación de los mismos píxeles).
+// Imagen > Perfil de colores (Paint.NET 5): muestra el perfil actual y deja elegir otro de la
+// lista o de un archivo .icc para convertir los colores (los píxeles cambian, el aspecto se
+// mantiene) o asignarlo (solo cambia la interpretación de los mismos píxeles).
 class ColorProfileDialog : public QDialog {
     Q_OBJECT
 public:
@@ -157,14 +155,13 @@ class QLabel;
 class QSpinBox;
 class QTreeWidget;
 
-// Imagen > Animación: la duración de cada fotograma de un GIF (cada capa
-// visible, la de abajo primero) con una vista previa que se reproduce. Las
-// duraciones se guardan en el nombre de las capas ("Fotograma 1 (100ms)").
+// Imagen > Animación: la duración de cada fotograma de un GIF (cada capa visible, la de abajo
+// primero) con una vista previa que se reproduce. Las duraciones se guardan en el nombre de
+// las capas ("Fotograma 1 (100ms)").
 class AnimationDialog : public QDialog {
     Q_OBJECT
 public:
     AnimationDialog(const QList<LayerPtr>& layers, int defaultDelay, QWidget* parent = nullptr);
-    // Nombre nuevo de cada capa (índice de capa -> nombre) que cambió.
     QHash<int, QString> renamedLayers() const;
 
 private:
@@ -172,7 +169,7 @@ private:
     void step();
 
     QList<LayerPtr> m_layers;
-    QList<int> m_frameLayers; // capa de cada fotograma
+    QList<int> m_frameLayers;
     QList<QSpinBox*> m_delays;
     QTreeWidget* m_list;
     QLabel* m_preview;

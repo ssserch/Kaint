@@ -6,10 +6,9 @@
 
 class QVBoxLayout;
 
-// Diálogo de decisión como los de Paint.NET 5 ("Cambios no guardados",
-// "Pegar"): miniatura de la imagen, el texto de la pregunta y una opción
-// grande por respuesta, con título y descripción. choose() lo muestra y
-// devuelve el índice de la opción elegida (-1 si se cierra sin elegir).
+// Diálogo de decisión como los de Paint.NET 5 ("Cambios no guardados", "Pegar"): miniatura de
+// la imagen, el texto de la pregunta y una opción grande por respuesta, con título y
+// descripción.
 class TaskDialog : public QDialog {
     Q_OBJECT
 public:

@@ -11,8 +11,8 @@ namespace RenderBlend {
 
 QStringList names()
 {
-    // Tal cual los muestra Paint.NET 5.1 en español (incluido el segundo
-    // "Superponer", que es Diferencia).
+    // Tal cual los muestra Paint.NET 5.1 en español (incluido el segundo "Superponer", que es
+    // Diferencia).
     return {QObject::tr("Sobre (Normal)"), QObject::tr("Por debajo"), QObject::tr("Sobrescribir"),
             QObject::tr("Multiplicar"), QObject::tr("Pantalla"), QObject::tr("Oscurecer"), QObject::tr("Aclarar"),
             QObject::tr("Disolver"), QObject::tr("Sobreexposición de color"), QObject::tr("Subexposición lineal"),
@@ -135,11 +135,9 @@ void compose(QImage& base, const QImage& top, int mode)
                 const float ab = qAlpha(bs) / 255.f, as = qAlpha(ts) / 255.f;
                 const C3 cb{qRed(bs) / 255.f, qGreen(bs) / 255.f, qBlue(bs) / 255.f};
                 const C3 cs{qRed(ts) / 255.f, qGreen(ts) / 255.f, qBlue(ts) / 255.f};
-                // Resultado premultiplicado (pr, pg, pb, ao).
                 float ao = as + ab - as * ab;
                 C3 p{0, 0, 0};
                 auto composite = [&](const C3& mixed) {
-                    // W3C: cs·(1−ab) + cb·(1−as) + as·ab·B(cb, cs).
                     p = {cs.r * as * (1 - ab) + cb.r * ab * (1 - as) + as * ab * mixed.r,
                          cs.g * as * (1 - ab) + cb.g * ab * (1 - as) + as * ab * mixed.g,
                          cs.b * as * (1 - ab) + cb.b * ab * (1 - as) + as * ab * mixed.b};
@@ -176,7 +174,6 @@ void compose(QImage& base, const QImage& top, int mode)
                          std::min(1.f, cs.b * as + cb.b * ab)};
                     break;
                 case MaskInvert:
-                    // Invierte el fondo donde hay fuente.
                     ao = ab;
                     p = {(ab - cb.r * ab) * as + cb.r * ab * (1 - as), (ab - cb.g * ab) * as + cb.g * ab * (1 - as),
                          (ab - cb.b * ab) * as + cb.b * ab * (1 - as)};
@@ -184,7 +181,6 @@ void compose(QImage& base, const QImage& top, int mode)
                 case XorComposite: porterDuff(1 - ab, 1 - as), ao = as * (1 - ab) + ab * (1 - as); break;
                 case Xor8:
                 case Xor16: {
-                    // O exclusivo bit a bit de los colores (8 o 16 bits por canal).
                     auto bits = [&](float b, float s) {
                         if (mode == Xor8)
                             return float(int(std::lround(b * 255)) ^ int(std::lround(s * 255))) / 255.f;

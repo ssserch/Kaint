@@ -9,7 +9,6 @@ namespace fx {
 
 namespace {
 
-
 void renderBulge(const RenderArgs& a)
 {
     const double amt = dval(a.values, "amount");
@@ -30,8 +29,8 @@ void renderBulge(const RenderArgs& a)
 
 void renderCrystalize(const RenderArgs& a)
 {
-    // Diagrama de Voronoi: un punto aleatorio por celda de la rejilla; cada
-    // píxel toma el color del punto más cercano.
+    // Diagrama de Voronoi: un punto aleatorio por celda de la rejilla; cada píxel toma el
+    // color del punto más cercano.
     const int cell = std::max(2, ival(a.values, "cell"));
     const uint32_t seed = uint32_t(ival(a.values, "seed"));
     const auto aa = rgssOffsets(ival(a.values, "quality"));
@@ -81,7 +80,6 @@ void renderDents(const RenderArgs& a)
     const double maxDetail = std::floor(std::log(scaleR) / std::log(0.5));
     if (detail > maxDetail && maxDetail >= 1.0)
         detail = maxDetail;
-    // Ángulo: gira el campo de abolladuras.
     const double rot = dval(a.values, "angle") * M_PI / 180.0;
     const double cr = std::cos(rot), sr = std::sin(rot);
     WarpSetup setup;
@@ -145,7 +143,6 @@ void morphPass(const QImage& inImg, QImage& outImg, int radius, bool horizontal,
                 dq.clear();
                 int next = 0;
                 for (int i = 0; i < n; ++i) {
-                    // Ventana [i - r, i + r]
                     while (next < n && next <= i + radius) {
                         const int v = values[size_t(next)];
                         while (!dq.empty() && (dilate ? values[size_t(dq.back())] <= v : values[size_t(dq.back())] >= v))
@@ -180,7 +177,6 @@ void renderMorphology(const RenderArgs& a)
         const QRgb* s = res.row(y - big.top());
         QRgb* d = out.row(y);
         for (int x = a.roi.left(); x <= a.roi.right(); ++x) {
-            // En premultiplicado cada color puede superar al alfa tras max/min.
             const QRgb p = s[x - big.left()];
             const int al = qAlpha(p);
             d[x] = qRgba(std::min(al, qRed(p)), std::min(al, qGreen(p)), std::min(al, qBlue(p)), al);
@@ -190,8 +186,8 @@ void renderMorphology(const RenderArgs& a)
 
 void renderPixelate(const RenderArgs& a)
 {
-    // Paint.NET 5: la rejilla pasa por el ancla; cada celda toma un color
-    // (reducir a escala) y luego se amplía con el filtro elegido.
+    // Paint.NET 5: la rejilla pasa por el ancla; cada celda toma un color (reducir a escala) y
+    // luego se amplía con el filtro elegido.
     const int s = std::max(1, ival(a.values, "cell"));
     const QPointF anchor = pval(a.values, "anchor");
     const int down = ival(a.values, "down");
@@ -200,7 +196,6 @@ void renderPixelate(const RenderArgs& a)
     const double ay = a.roi.top() + a.roi.height() * (1 + anchor.y()) / 2;
     const int ox = int(std::floor(std::fmod(ax, double(s)))), oy = int(std::floor(std::fmod(ay, double(s))));
     const ConstPixels in(a.src);
-    // Celdas que tocan la zona (con una de margen para interpolar).
     const int c0 = int(std::floor(double(a.roi.left() - ox) / s)) - 1;
     const int r0 = int(std::floor(double(a.roi.top() - oy) / s)) - 1;
     const int c1 = int(std::floor(double(a.roi.right() - ox) / s)) + 1;
@@ -216,18 +211,18 @@ void renderPixelate(const RenderArgs& a)
                 if (!cell.isEmpty()) {
                     const float cx = float(left + s / 2.0), cy = float(top + s / 2.0);
                     switch (down) {
-                    case 3: // Bicúbico: muestras cerca del centro
-                    case 4: { // Bilineal
+                    case 3:
+                    case 4: {
                         const float d = down == 3 ? float(s) / 4 : 0;
                         const QRgb q[4] = {sampleBilinear(in, cx - d, cy - d), sampleBilinear(in, cx + d, cy - d),
                                            sampleBilinear(in, cx - d, cy + d), sampleBilinear(in, cx + d, cy + d)};
                         color = average(q, 4);
                         break;
                     }
-                    case 5: // Vecino más próximo
+                    case 5:
                         color = in.clamped(int(cx), int(cy));
                         break;
-                    default: { // Anisotrópico, bicúbico de alta calidad, multimuestra: media de la celda
+                    default: {
                         quint64 sum[4] = {0, 0, 0, 0};
                         for (int y = cell.top(); y <= cell.bottom(); ++y)
                             for (int x = cell.left(); x <= cell.right(); ++x) {
@@ -254,9 +249,8 @@ void renderPixelate(const RenderArgs& a)
     forRows(a, [&](int y) {
         QRgb* d = out.row(y);
         for (int x = a.roi.left(); x <= a.roi.right(); ++x) {
-            // Posición en celdas (el centro de la celda c está en c + 0,5).
             const double fx = double(x + 0.5 - ox) / s - c0, fy = double(y + 0.5 - oy) / s - r0;
-            if (up == 2) { // Vecino más próximo: celdas lisas
+            if (up == 2) {
                 d[x] = cellAt(int(std::floor(fx)), int(std::floor(fy)));
                 continue;
             }
@@ -264,14 +258,13 @@ void renderPixelate(const RenderArgs& a)
             const int ix = int(std::floor(gx)), iy = int(std::floor(gy));
             const double tx = gx - ix, ty = gy - iy;
             double acc[4] = {0, 0, 0, 0}, total = 0;
-            const int reach = up == 0 ? 2 : 1; // bicúbico usa 4×4 celdas
+            const int reach = up == 0 ? 2 : 1;
             for (int j = 1 - reach; j <= reach; ++j)
                 for (int i = 1 - reach; i <= reach; ++i) {
                     auto weight = [&](double t) {
                         t = std::abs(t);
                         if (up == 1)
                             return std::max(0.0, 1 - t);
-                        // Catmull-Rom
                         return t < 1 ? 1.5 * t * t * t - 2.5 * t * t + 1
                                      : (t < 2 ? -0.5 * t * t * t + 2.5 * t * t - 4 * t + 2 : 0);
                     };

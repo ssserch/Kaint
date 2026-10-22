@@ -4,6 +4,7 @@
 #include "core/effects/EffectUtils.h"
 #include "core/plugins/PdnBridge.h"
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QJsonArray>
 
@@ -44,7 +45,7 @@ QString PdnEffect::kaintCategory(const QString& subMenu)
         {QStringLiteral("Photo"), fx::catPhoto()},       {QStringLiteral("Render"), fx::catRender()},
         {QStringLiteral("Stylize"), fx::catStylize()},
     };
-    return english.value(subMenu, subMenu);
+    return english.value(subMenu, QCoreApplication::translate("QObject", subMenu.toUtf8().constData()));
 }
 
 PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const QJsonObject& d)
@@ -67,7 +68,7 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
     for (const QJsonValue& v : d.value(QStringLiteral("params")).toArray()) {
         const QJsonObject o = v.toObject();
         if (o.value(QStringLiteral("hidden")).toBool())
-            continue; // sin control: el complemento usa su valor por defecto
+            continue;
         const QString key = o.value(QStringLiteral("name")).toString();
         const QString label = o.value(QStringLiteral("label")).toString();
         const QString type = o.value(QStringLiteral("type")).toString();
@@ -83,7 +84,6 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
                 p = EffectParam::seed(label);
                 p.key = key;
             } else if (control == QLatin1String("ColorWheel")) {
-                // Paint.NET guarda el color en un Int32: RGB, o ARGB si el rango lo admite.
                 const bool alpha = min < 0 || max > 0xffffff;
                 m_colorAlpha.insert(key, alpha);
                 p = EffectParam::color(key, label, EffectParam::ColorDefault::Primary);
@@ -120,11 +120,9 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
                                   o.value(QStringLiteral("multiline")).toBool());
             p.max = o.value(QStringLiteral("maxLength")).toDouble();
         } else {
-            continue; // tipo sin control en Kaint (imágenes...)
+            continue;
         }
         p.description = o.value(QStringLiteral("description")).toString();
-        // Deslizadores de matiz de Paint.NET: el degradado del círculo cromático
-        // (centrado en el rojo con HueCentered).
         const QString style = o.value(QStringLiteral("sliderStyle")).toString();
         if (style.startsWith(QLatin1String("Hue")) || style == QLatin1String("SaturationHue")) {
             const bool centered = style == QLatin1String("HueCentered");
@@ -269,7 +267,6 @@ void NativeEffect::render(const RenderArgs& a) const
     KaintImage dst{a.dst.width(), a.dst.height(), int(a.dst.bytesPerLine()), a.dst.bits()};
     volatile int cancelled = 0;
     std::atomic<qint64> done{0};
-    // Franjas en paralelo; la cancelación se comprueba entre franjas.
     parallelRows(a.roi.top(), a.roi.bottom() + 1, [&](int y0, int y1) {
         if (a.cancel) {
             cancelled = 1;

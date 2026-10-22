@@ -4,9 +4,7 @@
 #include <QDialogButtonBox>
 #include <QPushButton>
 
-// Botones Aceptar/Cancelar propios. Los estándar de QDialogButtonBox se
-// "retraducen" a los textos de Qt cuando algún complemento instala un
-// traductor (p. ej. los formatos de imagen de KDE) y volverían al inglés.
+// Botones Aceptar/Cancelar propios.
 inline QDialogButtonBox* okCancelButtons(QDialog* dlg)
 {
     auto* box = new QDialogButtonBox(dlg);

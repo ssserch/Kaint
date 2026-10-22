@@ -19,8 +19,8 @@
 
 namespace {
 
-// Extensión en minúsculas y con los alias unificados (.jpe/.jfif -> jpg,
-// .tif -> tiff, .heif -> heic...), como las agrupa Paint.NET.
+// Extensión en minúsculas y con los alias unificados (.jpe/.jfif -> jpg, .tif -> tiff, .heif
+// -> heic...), como las agrupa Paint.NET.
 QString suffixOf(const QString& path)
 {
     const QString s = QFileInfo(path).suffix().toLower();
@@ -46,45 +46,45 @@ QByteArray writerFormat(const QString& suffix)
 }
 
 struct FormatInfo {
-    const char* suffix;   // formato de Qt (o de Kaint) que lo lee o escribe
+    const char* suffix;
     const char* label;
-    const char* patterns; // extensiones, como en Paint.NET
+    const char* patterns;
 };
 
-// Tipos de los diálogos Abrir y Guardar como, en el orden de Paint.NET.
-// Solo aparecen los que el sistema puede leer o escribir.
+// Tipos de los diálogos Abrir y Guardar como, en el orden de Paint.NET. Solo aparecen los que
+// el sistema puede leer o escribir.
 const FormatInfo kOpenFormats[] = {
-    {"pdn", "Paint.NET", "*.pdn"},
-    {"ora", "OpenRaster", "*.ora"},
-    {"png", "PNG", "*.png"},
-    {"jpg", "JPEG", "*.jpg *.jpeg *.jpe *.jfif *.exif"},
-    {"jxl", "JPEG XL", "*.jxl"},
-    {"avif", "AV1 (AVIF)", "*.avif"},
-    {"heic", "HEIC", "*.heic *.heif *.hif"},
-    {"webp", "WebP", "*.webp"},
-    {"dds", "Superficie de DirectDraw (DDS)", "*.dds"},
-    {"tiff", "TIFF", "*.tiff *.tif"},
-    {"gif", "GIF", "*.gif"},
-    {"bmp", "BMP", "*.bmp *.dib *.rle"},
-    {"tga", "TGA", "*.tga"},
-    {"jxr", "JPEG XR", "*.jxr *.wdp *.wmp"},
-    {"ico", "Icono de Windows", "*.ico"},
+    {"pdn", QT_TRANSLATE_NOOP("QObject", "Paint.NET"), "*.pdn"},
+    {"ora", QT_TRANSLATE_NOOP("QObject", "OpenRaster"), "*.ora"},
+    {"png", QT_TRANSLATE_NOOP("QObject", "PNG"), "*.png"},
+    {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif *.exif"},
+    {"jxl", QT_TRANSLATE_NOOP("QObject", "JPEG XL"), "*.jxl"},
+    {"avif", QT_TRANSLATE_NOOP("QObject", "AV1 (AVIF)"), "*.avif"},
+    {"heic", QT_TRANSLATE_NOOP("QObject", "HEIC"), "*.heic *.heif *.hif"},
+    {"webp", QT_TRANSLATE_NOOP("QObject", "WebP"), "*.webp"},
+    {"dds", QT_TRANSLATE_NOOP("QObject", "Superficie de DirectDraw (DDS)"), "*.dds"},
+    {"tiff", QT_TRANSLATE_NOOP("QObject", "TIFF"), "*.tiff *.tif"},
+    {"gif", QT_TRANSLATE_NOOP("QObject", "GIF"), "*.gif"},
+    {"bmp", QT_TRANSLATE_NOOP("QObject", "BMP"), "*.bmp *.dib *.rle"},
+    {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
+    {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.wmp"},
+    {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
 };
 
 const FormatInfo kSaveFormats[] = {
-    {"ora", "OpenRaster con capas", "*.ora"},
-    {"png", "PNG", "*.png"},
-    {"jpg", "JPEG", "*.jpg *.jpeg *.jpe *.jfif"},
-    {"jxl", "JPEG XL", "*.jxl"},
-    {"avif", "AV1 (AVIF)", "*.avif"},
-    {"heic", "HEIC", "*.heic *.heif"},
-    {"webp", "WebP", "*.webp"},
-    {"dds", "Superficie de DirectDraw (DDS)", "*.dds"},
-    {"tiff", "TIFF", "*.tiff *.tif"},
-    {"gif", "GIF", "*.gif"},
-    {"bmp", "BMP", "*.bmp"},
-    {"tga", "TGA", "*.tga"},
-    {"ico", "Icono de Windows", "*.ico"},
+    {"ora", QT_TRANSLATE_NOOP("QObject", "OpenRaster con capas"), "*.ora"},
+    {"png", QT_TRANSLATE_NOOP("QObject", "PNG"), "*.png"},
+    {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif"},
+    {"jxl", QT_TRANSLATE_NOOP("QObject", "JPEG XL"), "*.jxl"},
+    {"avif", QT_TRANSLATE_NOOP("QObject", "AV1 (AVIF)"), "*.avif"},
+    {"heic", QT_TRANSLATE_NOOP("QObject", "HEIC"), "*.heic *.heif"},
+    {"webp", QT_TRANSLATE_NOOP("QObject", "WebP"), "*.webp"},
+    {"dds", QT_TRANSLATE_NOOP("QObject", "Superficie de DirectDraw (DDS)"), "*.dds"},
+    {"tiff", QT_TRANSLATE_NOOP("QObject", "TIFF"), "*.tiff *.tif"},
+    {"gif", QT_TRANSLATE_NOOP("QObject", "GIF"), "*.gif"},
+    {"bmp", QT_TRANSLATE_NOOP("QObject", "BMP"), "*.bmp"},
+    {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
+    {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
 };
 
 // Formatos que escribe Kaint sin depender de los complementos de Qt.
@@ -113,7 +113,6 @@ QStringList supportedReadSuffixes()
 {
     QStringList list{QStringLiteral("ora"), QStringLiteral("pdn")};
     for (const QByteArray& f : QImageReader::supportedImageFormats()) {
-        // Los alias (jpeg, tif, heif...) cuentan como su formato.
         const QString s = suffixOf(QStringLiteral("x.") + QString::fromLatin1(f));
         if (!list.contains(s))
             list.append(s);
@@ -132,7 +131,6 @@ QString openFilter()
         all << patterns;
         filters << QStringLiteral("%1 (%2)").arg(QObject::tr(f.label), patterns);
     }
-    // El resto de lo que lee Qt (XPM, PBM...) entra en "Todos los tipos de imagen".
     for (const QString& s : readable) {
         const QString pattern = QStringLiteral("*.%1").arg(s);
         if (!all.join(QLatin1Char(' ')).split(QLatin1Char(' ')).contains(pattern))
@@ -204,7 +202,6 @@ Document* load(const QString& path, QString* error)
     } else if (suffixOf(path) == QLatin1String("pdn")) {
         doc = Pdn::load(path, error);
     } else if (isAnimation(path)) {
-        // GIF: cada fotograma en una capa, con su duración en el nombre.
         const Gif::Animation anim = Gif::read(path, error);
         if (anim.frames.isEmpty())
             return nullptr;
@@ -221,14 +218,13 @@ Document* load(const QString& path, QString* error)
         }
         doc->setGifLoops(anim.loops);
     } else if (isIcon(path) || suffixOf(path) == QLatin1String("cur")) {
-        // Icono: la imagen más grande de las que trae.
         const QImage image = Ico::readLargest(path, error);
         if (image.isNull())
             return nullptr;
         doc = Document::createFromImage(image, QObject::tr("Fondo"));
     } else {
         QImageReader reader(path);
-        reader.setAutoTransform(true); // respeta la orientación EXIF
+        reader.setAutoTransform(true);
         const QImage image = reader.read();
         if (image.isNull()) {
             if (error)
@@ -270,7 +266,6 @@ QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool tran
     // Paleta óptima con el mismo cuantificador que el efecto Cuantificar.
     const Effect* quantize = Effects::find(QStringLiteral("quantize"));
     QImage img = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    // Transparencia binaria según el umbral.
     for (int y = 0; y < img.height(); ++y) {
         QRgb* row = reinterpret_cast<QRgb*>(img.scanLine(y));
         for (int x = 0; x < img.width(); ++x) {
@@ -297,11 +292,9 @@ QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool tran
         const std::atomic_bool never{false};
         img = Effects::apply(*quantize, img, Selection(), v, EffectContext(), never);
     }
-    // Con 256 colores o menos Qt crea la tabla exacta.
     QImage indexed = img.convertToFormat(transparent ? QImage::Format_ARGB32 : QImage::Format_RGB32)
                          .convertToFormat(QImage::Format_Indexed8, Qt::ThresholdDither | Qt::AvoidDither);
     if (transparentSlot && !transparent && indexed.colorCount() < 256) {
-        // Entrada transparente sin usar (GIF: el fotograma se borra al pasar al siguiente).
         QList<QRgb> table = indexed.colorTable();
         table << 0u;
         indexed.setColorTable(table);
@@ -324,7 +317,6 @@ QImage prepare(const QImage& flattened, const QString& path, const SaveOptions& 
     if (depth == 8)
         return toIndexed8(flattened, options.dither, options.alphaThreshold);
     if (depth == 24) {
-        // Sin transparencia: se compone sobre blanco como hace Paint.NET.
         QImage opaque(flattened.size(), QImage::Format_RGB32);
         opaque.fill(Qt::white);
         QPainter p(&opaque);
@@ -356,7 +348,7 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
     if (supportsQuality(path))
         writer.setQuality(options.quality);
     if (format == QLatin1String("tiff"))
-        writer.setCompression(1); // LZW
+        writer.setCompression(1);
     if (!writer.write(prepared)) {
         if (error)
             *error = writer.errorString();
@@ -385,7 +377,6 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
     const int dpm = int(std::round(doc->dpi() / 0.0254));
     image.setDotsPerMeterX(dpm);
     image.setDotsPerMeterY(dpm);
-    // Se incrusta el perfil si no es sRGB (los visores asumen sRGB sin perfil).
     if (doc->colorSpace().isValid() && doc->colorSpace() != QColorSpace(QColorSpace::SRgb))
         image.setColorSpace(doc->colorSpace());
     data = encode(image, path, options, error);

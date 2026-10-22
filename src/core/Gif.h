@@ -5,20 +5,19 @@
 #include <QList>
 #include <QString>
 
-// GIF animados: cada fotograma es una capa (la de abajo es el primero, como
-// en GIMP y los complementos de animación de Paint.NET) y su duración va en
-// el nombre de la capa, "Fotograma 1 (100ms)", el mismo convenio de GIMP.
-// Qt lee GIF pero no los escribe: el codificador (LZW) es propio.
+// GIF animados: cada fotograma es una capa (la de abajo es el primero, como en GIMP y los
+// complementos de animación de Paint.NET) y su duración va en el nombre de la capa, "Fotograma
+// 1 (100ms)", el mismo convenio de GIMP.
 namespace Gif {
 
 struct Frame {
-    QImage image;     // alfa directo, del tamaño del lienzo
+    QImage image;
     int delayMs = 100;
 };
 
 struct Animation {
     QList<Frame> frames;
-    int loops = 0;    // 0 = repetir siempre; n = repetir n veces más; -1 = sin repetición
+    int loops = 0;
 };
 
 // Lee todos los fotogramas ya compuestos (con su duración).
@@ -26,11 +25,11 @@ Animation read(const QString& path, QString* error);
 
 struct Options {
     int loops = 0;
-    int dither = 7;          // 0..8, como al guardar con 8 bits
+    int dither = 7;
     int alphaThreshold = 128;
 };
-// Codifica los fotogramas con una paleta propia por fotograma (hasta 255
-// colores y uno transparente).
+// Codifica los fotogramas con una paleta propia por fotograma (hasta 255 colores y uno
+// transparente).
 QByteArray encode(const QList<Frame>& frames, const Options& options, QString* error);
 
 // Duración escrita en el nombre de una capa ("(120ms)"); 'fallback' si no hay.
@@ -47,8 +46,8 @@ namespace Ico {
 
 // Tamaños estándar (en píxeles) de un icono.
 const QList<int>& standardSizes();
-// Un icono con la imagen en cada tamaño de 'sizes' (cuadrada, centrada). El
-// de 256 va comprimido en PNG y el resto como mapa de bits de 32 bits.
+// Un icono con la imagen en cada tamaño de 'sizes' (cuadrada, centrada). El de 256 va
+// comprimido en PNG y el resto como mapa de bits de 32 bits.
 QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error);
 // La imagen más grande del archivo.
 QImage readLargest(const QString& path, QString* error);

@@ -3,8 +3,8 @@
 #include "app/tools/Tool.h"
 #include "core/LayerEdit.h"
 
-// Bote de pintura editable: hasta terminar se pueden cambiar la tolerancia,
-// los colores, la trama o el modo, y arrastrar el punto de origen.
+// Bote de pintura editable: hasta terminar se pueden cambiar la tolerancia, los colores, la
+// trama o el modo, y arrastrar el punto de origen.
 class PaintBucketTool : public Tool {
     Q_OBJECT
 public:

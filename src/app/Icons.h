@@ -9,12 +9,12 @@
 
 namespace Icons {
 
-// Asegura que se encuentran los temas de iconos del sistema (Breeze) aunque
-// no haya un tema de plataforma de KDE cargado (otros escritorios, pruebas).
+// Asegura que se encuentran los temas de iconos del sistema (Breeze) aunque no haya un tema de
+// plataforma de KDE cargado (otros escritorios, pruebas).
 void setupTheme();
 
-// Icono de herramienta: el de img/tools/<nombre>.svg|png si se incluyó al
-// compilar (iconos al estilo Paint.NET) o, si no, el del tema.
+// Icono de herramienta: el de img/tools/<nombre>.svg|png si se incluyó al compilar (iconos al
+// estilo Paint.NET) o, si no, el del tema.
 QIcon tool(const QString& name, const QIcon& fallback);
 
 // Primer icono disponible del tema del sistema (Breeze en KDE).

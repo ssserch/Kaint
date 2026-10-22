@@ -136,11 +136,9 @@ void ColorPickerTool::pick(const ToolEvent& e, Qt::MouseButton button)
             AppState::instance()->setPrimary(c);
     };
     if (area.width() * area.height() == 1 && !pm) {
-        // Un solo píxel de la capa: su color exacto, aunque sea transparente.
         setColor(QColor::fromRgba(src.pixel(area.topLeft())));
         return;
     }
-    // Media en premultiplicado: la capa tiene alfa directo y la imagen combinada no.
     qint64 r = 0, g = 0, b = 0, a = 0;
     for (int y = area.top(); y <= area.bottom(); ++y) {
         const QRgb* row = reinterpret_cast<const QRgb*>(src.constScanLine(y));

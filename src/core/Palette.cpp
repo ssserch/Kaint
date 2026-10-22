@@ -22,7 +22,6 @@ QList<QColor> defaultColors()
     QList<QColor> colors;
     for (uint32_t c : rgb)
         colors.append(QColor::fromRgba(0xff000000u | c));
-    // Las últimas 32 entradas son las 32 primeras al 50 % de opacidad.
     for (int i = 0; i < 32; ++i)
         colors.append(QColor::fromRgba(0x80000000u | rgb[i]));
     return colors;
@@ -43,7 +42,6 @@ QList<QColor> parse(const QString& text)
         const uint v = line.toUInt(&ok, 16);
         if (!ok)
             continue;
-        // Se aceptan aarrggbb y también rrggbb (opaco).
         colors.append(QColor::fromRgba(line.size() <= 6 ? (0xff000000u | v) : v));
         if (colors.size() == kColorCount)
             break;

@@ -190,8 +190,8 @@ void Document::renderComposite(QImage& target, const QRect& area) const
 
 QImage Document::flattened() const
 {
-    // Una sola capa visible, opaca y Normal: sus píxeles tal cual (así abrir y
-    // guardar un PNG conserva también el color de los píxeles transparentes).
+    // Una sola capa visible, opaca y Normal: sus píxeles tal cual (así abrir y guardar un PNG
+    // conserva también el color de los píxeles transparentes).
     if (m_layers.size() == 1 && !m_previewLayer) {
         const LayerProps& p = m_layers.first()->props;
         if (p.visible && p.opacity == 255 && p.blend == BlendMode::Normal)

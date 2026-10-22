@@ -19,8 +19,8 @@ Weights directionalWeights(double angleDeg, double center)
     return w;
 }
 
-// Convolución 3x3 sobre colores directos; en los bordes se omiten las filas
-// y columnas que quedan fuera, como en Paint.NET.
+// Convolución 3x3 sobre colores directos; en los bordes se omiten las filas y columnas que
+// quedan fuera, como en Paint.NET.
 void colorDifference(const RenderArgs& a, const Weights& w)
 {
     const QImage straight = a.src.convertToFormat(QImage::Format_ARGB32);
@@ -43,9 +43,9 @@ void colorDifference(const RenderArgs& a, const Weights& w)
     });
 }
 
-// Detección de bordes de Paint.NET 5: magnitud del gradiente (Sobel, Prewitt
-// o Scharr) de cada canal, opcionalmente sobre un desenfoque previo, en negro
-// o sobre la imagen ("Bordes superpuestos").
+// Detección de bordes de Paint.NET 5: magnitud del gradiente (Sobel, Prewitt o Scharr) de cada
+// canal, opcionalmente sobre un desenfoque previo, en negro o sobre la imagen ("Bordes
+// superpuestos").
 void renderEdgeDetect(const RenderArgs& a)
 {
     const double strength = dval(a.values, "intensity");
@@ -63,7 +63,6 @@ void renderEdgeDetect(const RenderArgs& a)
     const ConstPixels in(straight);
     const ConstPixels orig(a.src);
     const Pixels out(a.dst);
-    // Pesos de la fila central y de las de los lados de cada operador.
     const double center = algorithm == 2 ? 10 : (algorithm == 1 ? 1 : 2);
     const double side = algorithm == 2 ? 3 : 1;
     const double norm = 1.0 / ((center + 2 * side) * 255.0);
@@ -85,7 +84,6 @@ void renderEdgeDetect(const RenderArgs& a)
             const QRgb o = qUnpremultiply(orig.at(x, y));
             QRgb result;
             if (overlay) {
-                // Los bordes se suman (trama) sobre la imagen original.
                 auto screen = [&](int base, double e) { return clamp255(int(std::lround(255 - (255 - base) * (1 - e)))); };
                 result = qRgba(screen(qRed(o), mag[0]), screen(qGreen(o), mag[1]), screen(qBlue(o), mag[2]), qAlpha(o));
             } else {

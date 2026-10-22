@@ -133,7 +133,6 @@ QWidget* ToolOptionsEditor::steppers(QWidget* inner, const std::function<void(in
     l->setSpacing(1);
     auto button = [&](int dir, const QString& tip) {
         auto* b = new QToolButton(w);
-        // Dibujado: en algunos temas "list-remove" es una X roja.
         b->setIcon(Icons::stepper(dir > 0));
         b->setAutoRaise(true);
         b->setAutoRepeat(true);
@@ -151,7 +150,8 @@ QWidget* ToolOptionsEditor::steppers(QWidget* inner, const std::function<void(in
 QComboBox* ToolOptionsEditor::numberCombo(const QList<double>& presets, double min, double max, int decimals,
                                           const std::function<void(double)>& set)
 {
-    // Como en Paint.NET: se escribe el número o se elige de la lista (sin flechas de caja numérica).
+    // Como en Paint.NET: se escribe el número o se elige de la lista (sin flechas de caja
+    // numérica).
     auto* c = new QComboBox(m_parent);
     c->setEditable(true);
     c->setInsertPolicy(QComboBox::NoInsert);
@@ -237,7 +237,6 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
         for (ShapeType t : shapes)
             m_shape->addChoice(Icons::shape(t), shapeName(t), int(t));
     }
-    // Formas personalizadas (.xaml de Paint.NET) en ~/.local/share/Kaint/Shapes.
     const QList<CustomShapes::Shape>& custom = CustomShapes::all();
     if (!custom.isEmpty())
         m_shape->addSection(tr("Formas personalizadas"));
@@ -320,8 +319,8 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
                     {m_dash, Tool::OptDash},
                     {m_endCap, Tool::OptLineCaps}});
 
-    // --- Selección --------------------------------------------------------
-    // Modo de selección: cinco botones (Paint.NET 5), con las combinaciones de teclas.
+    // --- Selección -------------------------------------------------------- Modo de
+    // selección: cinco botones (Paint.NET 5), con las combinaciones de teclas.
     auto [modesBox, modesLayout] = buttonRow();
     m_selectionModes = new QButtonGroup(this);
     const QList<std::pair<SelectionMode, QString>> modes{
@@ -365,7 +364,6 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_fixedHeight = makeFixed(&ToolSettings::fixedHeight);
     m_fixedWidth->setToolTip(tr("Ancho"));
     m_fixedHeight->setToolTip(tr("Alto"));
-    // Solo con Proporción o Tamaño fijo, como en Paint.NET.
     add(QStringLiteral("rectSize"), Tool::OptRectMode, Select,
         {label(tr("Ancho:")), m_fixedWidth, label(tr("Alto:")), m_fixedHeight});
 
@@ -615,7 +613,6 @@ void ToolOptionsEditor::sync()
 {
     const ToolSettings& s = m_model->tools();
     auto setNumber = [](QComboBox* c, double v, int decimals) {
-        // No se toca el texto mientras se escribe (perdería el cursor).
         const QString text = numberText(v, decimals);
         if (c->lineEdit()->hasFocus() || c->currentText() == text)
             return;
@@ -737,7 +734,7 @@ ToolOptionsBar::ToolOptionsBar(ToolManager* manager, QWidget* parent)
         QAction* a = menu->addAction(t->icon(), t->name());
         a->setShortcut(t->shortcut());
         a->setShortcutVisibleInContextMenu(true);
-        a->setShortcutContext(Qt::WidgetShortcut); // los atajos reales los gestiona la ventana
+        a->setShortcutContext(Qt::WidgetShortcut);
         connect(a, &QAction::triggered, this, [manager, t] { manager->select(t->id()); });
     }
     m_toolButton->setMenu(menu);
@@ -786,8 +783,8 @@ void ToolOptionsBar::onToolChanged(Tool* tool)
     m_toolButton->setToolTip(tool->name());
     const quint32 opts = tool->options();
 
-    // Orden de Paint.NET para esta herramienta; los grupos que no figuran
-    // (o todos, si no hay orden) van detrás con su separador.
+    // Orden de Paint.NET para esta herramienta; los grupos que no figuran (o todos, si no hay
+    // orden) van detrás con su separador.
     QStringList tokens = order(tool->id());
     for (const BarGroup& g : std::as_const(m_groups))
         if (!tokens.contains(g.key))
@@ -799,7 +796,6 @@ void ToolOptionsBar::onToolChanged(Tool* tool)
         for (const Shown& s : std::as_const(g.items))
             s.action->setVisible(false);
     }
-    // Se colocan al final de la barra en el orden pedido (insertAction mueve la acción).
     bool pendingSeparator = true;
     for (const QString& token : std::as_const(tokens)) {
         if (token == QLatin1String("|")) {
@@ -834,8 +830,8 @@ void ToolOptionsBar::onToolChanged(Tool* tool)
 
 void ToolOptionsBar::updateDependent()
 {
-    // Grupos que dependen de otra opción (sin mover nada de sitio: así no se
-    // interrumpe un arrastre en curso en otro control).
+    // Grupos que dependen de otra opción (sin mover nada de sitio: así no se interrumpe un
+    // arrastre en curso en otro control).
     const ToolSettings& s = AppState::instance()->tools();
     const quint32 opts = m_manager->current() ? m_manager->current()->options() : 0;
     for (const BarGroup& g : std::as_const(m_groups)) {
@@ -877,8 +873,6 @@ ToolOptionsPanel::ToolOptionsPanel(ToolSettingsModel* model, QWidget* parent)
         flows.append(flow);
     }
     for (const ToolOptionsEditor::Group& g : editor->groups()) {
-        // Cada etiqueta va junto a su control; el resto de controles puede
-        // pasar a la fila siguiente si no cabe.
         FlowLayout* flow = flows.value(g.section, flows.last());
         QWidget* pendingLabel = nullptr;
         for (const ToolOptionsEditor::Item& item : g.items) {

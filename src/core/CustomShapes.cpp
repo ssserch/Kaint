@@ -49,7 +49,6 @@ public:
         skip();
         return m_i < m_s.size() && m_s[m_i].isLetter() ? m_s[m_i++] : QChar();
     }
-    // Número con signo, decimales y exponente; nullopt si no hay.
     std::optional<double> number()
     {
         if (!atNumber())
@@ -91,8 +90,8 @@ double angleBetween(QPointF u, QPointF v)
     return std::atan2(u.x() * v.y() - u.y() * v.x(), u.x() * v.x() + u.y() * v.y());
 }
 
-// Arco elíptico de WPF/SVG (por sus extremos) convertido en curvas de Bézier.
-// 'clockwise' es el sentido horario en pantalla (y hacia abajo).
+// Arco elíptico de WPF/SVG (por sus extremos) convertido en curvas de Bézier. 'clockwise' es
+// el sentido horario en pantalla (y hacia abajo).
 void arcTo(QPainterPath& path, QPointF from, double rx, double ry, double angleDeg, bool largeArc, bool clockwise,
            QPointF to)
 {
@@ -140,9 +139,8 @@ void arcTo(QPainterPath& path, QPointF from, double rx, double ry, double angleD
     }
 }
 
-// Contornos con la orientación de WPF: los exteriores en un sentido y los
-// agujeros en el contrario. Las operaciones booleanas de Qt no la garantizan y,
-// dentro de un GeometryGroup con regla Nonzero, un agujero se rellenaría.
+// Contornos con la orientación de WPF: los exteriores en un sentido y los agujeros en el
+// contrario.
 QPainterPath oriented(const QPainterPath& path)
 {
     const QList<QPolygonF> polys = path.toSubpathPolygons();
@@ -160,7 +158,7 @@ QPainterPath oriented(const QPainterPath& path)
     for (qsizetype i = 0; i < polys.size(); ++i) {
         if (polys[i].size() < 3)
             continue;
-        int depth = 0; // contornos que lo rodean
+        int depth = 0;
         for (qsizetype j = 0; j < polys.size(); ++j)
             if (j != i && polys[j].containsPoint(polys[i].first(), Qt::OddEvenFill))
                 ++depth;
@@ -190,7 +188,7 @@ void curveThrough(QPainterPath& path, QPointF start, const QList<QPointF>& point
 QPainterPath parsePathMarkup(const QString& data, bool* ok)
 {
     QPainterPath path;
-    path.setFillRule(Qt::OddEvenFill); // WPF: EvenOdd salvo "F1"
+    path.setFillRule(Qt::OddEvenFill);
     MarkupReader r(data);
     bool good = true;
     QPointF cur, start, lastCtrl;
@@ -238,7 +236,6 @@ QPainterPath parsePathMarkup(const QString& data, bool* ok)
                 break;
             path.moveTo(p);
             cur = start = p;
-            // Las parejas siguientes son líneas.
             cmd = rel ? QLatin1Char('l') : QLatin1Char('L');
             break;
         }
@@ -313,7 +310,7 @@ QPainterPath parsePathMarkup(const QString& data, bool* ok)
             path.closeSubpath();
             cur = start;
             if (r.atNumber())
-                good = false; // números sueltos tras Z: no se repite el cierre
+                good = false;
             break;
         default:
             good = false;
@@ -331,9 +328,9 @@ namespace {
 // --- XAML -------------------------------------------------------------------------
 
 struct Node {
-    QString name; // nombre local: "PathFigure" o, en una propiedad, "PathFigure.Segments"
+    QString name;
     QHash<QString, QString> attrs;
-    std::vector<Node> children; // vector: admite el tipo aún incompleto
+    std::vector<Node> children;
 };
 
 bool readTree(QXmlStreamReader& xml, Node& root)
@@ -346,8 +343,6 @@ bool readTree(QXmlStreamReader& xml, Node& root)
             n.name = xml.name().toString();
             for (const QXmlStreamAttribute& a : xml.attributes())
                 n.attrs.insert(a.name().toString(), a.value().toString().trimmed());
-            // Solo se añaden hijos al elemento abierto más profundo: los
-            // punteros a sus antecesores siguen siendo válidos.
             if (stack.isEmpty()) {
                 root = n;
                 stack.append(&root);
@@ -404,9 +399,9 @@ class Builder {
 public:
     QString error;
 
-    // Elementos hijos que no son propiedades (p. ej. los PathFigure de un
-    // PathGeometry), también dentro de su propiedad de contenido o de una
-    // colección (PathFigureCollection, GeometryCollection...).
+    // Elementos hijos que no son propiedades (p. ej. los PathFigure de un PathGeometry),
+    // también dentro de su propiedad de contenido o de una colección (PathFigureCollection,
+    // GeometryCollection...).
     static QList<const Node*> items(const Node& n, const QString& contentProperty)
     {
         QList<const Node*> list;
@@ -499,7 +494,6 @@ public:
 
     static Qt::FillRule fillRule(const Node& n)
     {
-        // En WPF la regla predeterminada es EvenOdd.
         return n.attrs.value(QStringLiteral("FillRule")) == QLatin1String("Nonzero") ? Qt::WindingFill : Qt::OddEvenFill;
     }
 
@@ -646,7 +640,6 @@ bool parse(const QByteArray& xaml, Shape* shape, QString* error)
     } else if (auto g = b.geometryProperty(root, QStringLiteral("Geometry"))) {
         path = *g;
     } else {
-        // La geometría como contenido directo del elemento.
         const QList<const Node*> content = Builder::items(root, QStringLiteral("Geometry"));
         if (content.isEmpty()) {
             if (error)

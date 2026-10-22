@@ -112,16 +112,14 @@ void ColorWheel::pickAt(const QPointF& pos, Qt::KeyboardModifiers mods)
     qreal sat = std::min(1.0, std::hypot(d.x(), d.y()) / radius);
     const bool ctrl = mods & Qt::ControlModifier, alt = mods & Qt::AltModifier, shift = mods & Qt::ShiftModifier;
     if (ctrl)
-        sat = m_pressColor.hsvSaturationF(); // solo el tono, en el mismo radio
+        sat = m_pressColor.hsvSaturationF();
     if (alt && !ctrl)
-        hue = hueOf(m_pressColor); // solo la saturación, en el mismo radio del círculo
+        hue = hueOf(m_pressColor);
     if (shift) {
-        // Radios cada 15°.
         hue = std::round(hue * 24.0) / 24.0;
         if (hue >= 1)
             hue -= 1;
     }
-    // Si el color es casi negro, elegir en la rueda no cambiaría nada visible.
     const qreal value = m_color.valueF() < 0.02 ? 1.0 : m_color.valueF();
     m_color = QColor::fromHsvF(float(hue), float(sat), float(value), m_color.alphaF());
     update();
@@ -312,7 +310,6 @@ void ColorSwatches::paintEvent(QPaintEvent*)
         p.setBrush(Qt::NoBrush);
         p.drawRect(r.adjusted(0.5, 0.5, -0.5, -0.5));
         if (active) {
-            // Muesca triangular en la esquina inferior izquierda (ranura activa).
             const QPolygonF notch{r.bottomLeft() + QPointF(1, -1), r.bottomLeft() + QPointF(1, -12),
                                   r.bottomLeft() + QPointF(12, -1)};
             p.setRenderHint(QPainter::Antialiasing);

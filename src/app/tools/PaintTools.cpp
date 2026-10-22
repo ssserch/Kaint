@@ -90,7 +90,6 @@ StrokeParams EraserTool::params(const ToolEvent& e) const
 {
     StrokeParams p = baseParams();
     p.kind = StrokeKind::Erase;
-    // Como en Paint.NET, la opacidad del color usado es la fuerza de la goma.
     const AppState* app = AppState::instance();
     p.color = e.button == Qt::RightButton ? app->secondary() : app->primary();
     return p;
@@ -141,7 +140,6 @@ bool CloneStampTool::canStart(const ToolEvent& e)
         repaint();
         return false;
     }
-    // El origen deja de valer si su capa ya no existe o es de otro documento.
     const LayerPtr src = m_sourceLayer.lock();
     if (m_hasSource && (m_sourceDoc != doc || !src || doc->indexOf(src.get()) < 0)) {
         m_hasSource = false;
@@ -150,7 +148,6 @@ bool CloneStampTool::canStart(const ToolEvent& e)
     if (!m_hasSource)
         return false;
     if (!m_hasOffset) {
-        // Modo alineado: el desplazamiento se fija en el primer trazo.
         const QPointF d = m_source - e.pos;
         m_offset = QPoint(int(std::round(d.x())), int(std::round(d.y())));
         m_hasOffset = true;
@@ -164,7 +161,6 @@ StrokeParams CloneStampTool::params(const ToolEvent& e) const
     p.kind = StrokeKind::Clone;
     p.blend = AppState::instance()->tools().blend;
     p.cloneOffset = m_offset;
-    // La opacidad del color principal (o del secundario con clic derecho) regula la copia.
     p.color = e.button == Qt::RightButton ? AppState::instance()->secondary() : AppState::instance()->primary();
     const LayerPtr src = m_sourceLayer.lock();
     if (src && document() && src != document()->activeLayerPtr())
@@ -214,7 +210,6 @@ StrokeParams RecolorTool::params(const ToolEvent& e) const
     p.kind = StrokeKind::Recolor;
     p.tolerance = app->tools().tolerance / 100.0;
     p.toleranceStraight = app->tools().toleranceStraight;
-    // "Muestrear una vez": reemplaza el color que había bajo el primer clic.
     p.recolorSampleOnce = app->tools().recolorSampling == RecolorSampling::Once;
     const bool secondary = e.button == Qt::RightButton;
     p.color = secondary ? app->secondary() : app->primary();

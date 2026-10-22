@@ -69,7 +69,7 @@ namespace Kaint.PdnHost
                 }
                 catch (Exception ex)
                 {
-                    Send(Error("Petición no válida: " + ex.Message));
+                    Send(Error(L("Petición no válida: ", "Invalid request: ") + ex.Message));
                     continue;
                 }
                 string cmd = Json.Str(request, "cmd", "");
@@ -124,7 +124,7 @@ namespace Kaint.PdnHost
                     Send(ShowDialog(request));
                     break;
                 default:
-                    Send(Error("Orden desconocida: " + cmd));
+                    Send(Error(L("Orden desconocida: ", "Unknown command: ") + cmd));
                     break;
             }
         }
@@ -136,6 +136,14 @@ namespace Kaint.PdnHost
             Dictionary<string, object> r = new Dictionary<string, object>();
             r["ok"] = true;
             return r;
+        }
+
+        // Idioma de los mensajes: el de Kaint, que lo pasa en KAINT_LANG.
+        private static readonly bool Spanish = Environment.GetEnvironmentVariable("KAINT_LANG") == "es";
+
+        private static string L(string es, string en)
+        {
+            return Spanish ? es : en;
         }
 
         private static Dictionary<string, object> Error(string message)
@@ -165,9 +173,12 @@ namespace Kaint.PdnHost
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KAINT_PDN_DEBUG")))
                 Console.Error.WriteLine(ex.ToString());
             if (ex is DllNotFoundException && ex.Message.Contains("gdiplus"))
-                return "Falta libgdiplus (System.Drawing). Instala el paquete libgdiplus.";
+                return L("Falta libgdiplus (System.Drawing). Instala el paquete libgdiplus.",
+                         "libgdiplus (System.Drawing) is missing. Install the libgdiplus package.");
             if (ex is InvalidProgramException || ex is MissingMethodException)
-                return "Usa partes de Paint.NET que la capa de compatibilidad no tiene (" + ex.Message.Split('\n')[0].Trim() + ").";
+                return L("Usa partes de Paint.NET que la capa de compatibilidad no tiene (",
+                         "It uses parts of Paint.NET that the compatibility layer does not have (")
+                       + ex.Message.Split('\n')[0].Trim() + ").";
             return ex.GetType().Name + ": " + ex.Message;
         }
 
@@ -320,7 +331,8 @@ namespace Kaint.PdnHost
                 }
             }
             if (usesPdn5)
-                return "Usa la API de efectos de Paint.NET 5 (Direct2D/GPU), que no existe fuera de Windows.";
+                return L("Usa la API de efectos de Paint.NET 5 (Direct2D/GPU), que no existe fuera de Windows.",
+                         "It uses the Paint.NET 5 effects API (Direct2D/GPU), which does not exist outside Windows.");
             // Los de .NET moderno con la API clásica (Paint.NET 4.3 y 4.4) se
             // intentan: mono resuelve casi todo con ModernEquivalent y sus fachadas.
             if (usesModernRuntime && isPlugin)
@@ -347,7 +359,7 @@ namespace Kaint.PdnHost
             catch (BadImageFormatException)
             {
                 result["library"] = true;
-                errors.Add("No es un ensamblado .NET.");
+                errors.Add(L("No es un ensamblado .NET.", "It is not a .NET assembly."));
                 return result;
             }
 
@@ -787,7 +799,8 @@ namespace Kaint.PdnHost
             Rectangle bounds = new Rectangle(0, 0, width, height);
             Rectangle roi = Rectangle.Intersect(bounds, RectFrom(request, "roi", bounds));
             if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
-                return Error("El diálogo de este complemento usa WinForms y necesita X11 (XWayland).");
+                return Error(L("El diálogo de este complemento usa WinForms y necesita X11 (XWayland).",
+                               "This plugin's dialog uses WinForms and needs X11 (XWayland)."));
 
             using (SharedPixels pixels = new SharedPixels(Json.Str(request, "shm"), width, height))
             {
@@ -801,7 +814,7 @@ namespace Kaint.PdnHost
                 using (EffectConfigDialog dialog = effect.CreateConfigDialog())
                 {
                     if (dialog == null)
-                        return Error("El complemento no tiene diálogo.");
+                        return Error(L("El complemento no tiene diálogo.", "The plugin has no dialog."));
                     dialog.Effect = effect;
                     dialog.EffectSourceSurface = pixels.Source;
                     dialog.Selection = new PdnRegion(roi);

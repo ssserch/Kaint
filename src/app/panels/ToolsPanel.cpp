@@ -62,7 +62,7 @@ int ToolsPanel::columnsFor(int width) const
 
 QSize ToolsPanel::sizeHint() const
 {
-    return sizeFor(2); // dos columnas, como Paint.NET
+    return sizeFor(2);
 }
 
 QSize ToolsPanel::minimumSizeHint() const
@@ -75,12 +75,10 @@ QSize ToolsPanel::fitSize(QSize proposed, Qt::Orientations changed) const
 {
     const int n = std::max<int>(1, int(m_buttons.size()));
     if (changed == Qt::Vertical) {
-        // Al estirar en vertical, caben más filas y hacen falta menos columnas.
         const int ch = cell().height() + kSpacing;
         const int rows = std::clamp((proposed.height() - 2 * kMargin + kSpacing) / ch, 1, n);
         return sizeFor((n + rows - 1) / rows);
     }
-    // El ancho manda: tantas columnas como quepan y el alto justo.
     return sizeFor(columnsFor(proposed.width()));
 }
 

@@ -35,7 +35,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Tipo de compilación" FORCE)
 endif()
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport Network LinguistTools)
 find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -169,8 +169,22 @@ list(LENGTH KAINT_TOOL_ICONS KAINT_TOOL_ICON_COUNT)
 message(STATUS "Kaint: iconos de la aplicación en PNG: ${KAINT_ICON_PNG_SIZES}; iconos de herramientas: ${KAINT_TOOL_ICON_COUNT}")
 qt_add_resources(kaintui kaint_icons PREFIX "/kaint" FILES ${KAINT_ICON_RESOURCES})
 
+
 qt_add_executable(kaint src/app/main.cpp)
 target_link_libraries(kaint PRIVATE kaintui)
+
+# Las cabeceras también tienen textos traducibles: lupdate tiene que verlas.
+file(GLOB_RECURSE KAINT_CORE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.h")
+file(GLOB_RECURSE KAINT_UI_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/app/*.h")
+target_sources(kaintcore PRIVATE ${KAINT_CORE_HEADERS})
+target_sources(kaintui PRIVATE ${KAINT_UI_HEADERS})
+
+# Traducciones: el código está en español y translations/ tiene las demás
+# (el inglés es el idioma predeterminado). Se compilan dentro del programa en
+# :/i18n. Para actualizar los .ts tras cambiar textos: cmake --build build -t update_translations
+file(GLOB KAINT_TS_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/translations/*.ts")
+qt_add_translations(TARGETS kaintui SOURCE_TARGETS kaintcore kaintui kaint TS_FILES ${KAINT_TS_FILES}
+                    RESOURCE_PREFIX "/i18n" LUPDATE_OPTIONS -no-obsolete -locations none)
 
 # ---------------------------------------------------------------------------
 # Capa de compatibilidad con los complementos de Paint.NET (opcional).

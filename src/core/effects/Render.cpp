@@ -197,7 +197,6 @@ void renderTurbulence(const RenderArgs& a)
     const int octaves = ival(a.values, "octaves");
     const double period = dval(a.values, "period");
     const double roughness = 0.5;
-    // Tamaño: el ruido se repite cada 'size' píxeles (4096 por defecto).
     const double size = std::max(1, ival(a.values, "size"));
     const bool fractalSum = ival(a.values, "noise") == 0;
     const uint8_t seed = uint8_t(ival(a.values, "seed"));
@@ -235,7 +234,6 @@ void registerRender(QList<const Effect*>& list)
     using P = EffectParam;
     auto add = [&](SimpleEffect::Def def) { list.append(new SimpleEffect(std::move(def))); };
     {
-        // Paint.NET 5: pestañas Nubes y Colores.
         QList<P> params{P::integer("scale", QObject::tr("Escala"), 2, 1000, 250),
                         P::real("power", QObject::tr("Aspereza"), 0, 1, 0.5, 2), renderBlendParam(RenderBlend::Over),
                         P::seed(), P::color("color1", QObject::tr("Color 1"), P::ColorDefault::Primary),

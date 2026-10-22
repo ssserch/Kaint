@@ -11,7 +11,6 @@ void LayerEdit::begin(Document* doc, LayerPtr layer)
     m_doc = doc;
     m_layer = std::move(layer);
     m_before = m_layer->image;
-    // Fuerza una copia propia ahora para que 'm_before' quede intacto.
     m_layer->image.detach();
 }
 

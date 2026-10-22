@@ -13,10 +13,10 @@ class Effect;
 
 // Información de un complemento (Configuración > Complementos).
 struct PluginInfo {
-    QString id;          // ruta absoluta del archivo: identifica el complemento
-    QString file;        // nombre del archivo
+    QString id;
+    QString file;
     QString name;
-    QString kind;        // "Kaint" (biblioteca .so nativa) o "Paint.NET" (ensamblado .NET)
+    QString kind;
     QString version;
     QString author;
     QString copyright;
@@ -24,19 +24,13 @@ struct PluginInfo {
     QString description;
     bool enabled = false;
     bool loaded = false;
-    bool pending = false; // todavía se está examinando (Paint.NET)
-    QStringList effects;  // nombres de los efectos que añade
-    QStringList errors;   // problemas al cargarlo
+    bool pending = false;
+    QStringList effects;
+    QStringList errors;
 };
 
-// Busca, carga y descarga los complementos de efectos:
-//   · Bibliotecas .so con la API C de Kaint (KaintPlugin.h).
-//   · Ensamblados .dll de Paint.NET, a través del puente .NET (kaint-pdn-host).
-// Los efectos cargados se añaden a Effects::all() y aparecen en los menús.
-//
-// Los ensamblados de Paint.NET se examinan una vez en segundo plano y la
-// descripción se guarda en caché (~/.cache/Kaint), así que al arrancar no
-// hace falta iniciar mono: el proceso auxiliar arranca al usar un efecto.
+// Busca, carga y descarga los complementos de efectos: · Bibliotecas .so con la API C de Kaint
+// (KaintPlugin.h).
 class PluginManager : public QObject {
     Q_OBJECT
 public:
@@ -45,13 +39,10 @@ public:
 
     // Carpetas donde se buscan complementos.
     QStringList searchPaths() const;
-    QString userPath() const; // ~/.local/share/Kaint/Effects
+    QString userPath() const;
 
-    // Copia complementos (.so o .dll, y sus bibliotecas de apoyo) a la carpeta
-    // del usuario. Con 'replace' sustituye los que ya existan; si no, los omite.
-    // Devuelve las rutas copiadas; los fallos van a 'errors'.
+    // Copia complementos (.so o .dll, y sus bibliotecas de apoyo) a la carpeta del usuario.
     QStringList install(const QStringList& files, bool replace, QStringList* errors = nullptr);
-    // Archivos de 'files' que ya están en la carpeta del usuario.
     QStringList installedAlready(const QStringList& files) const;
 
     // Busca los complementos y carga los activados. Se puede volver a llamar.
@@ -61,9 +52,7 @@ public:
 
     // Pruebas: sustituye las carpetas de búsqueda y la caché.
     void setPathsForTesting(const QStringList& userPaths, const QString& cacheFile);
-    // Espera a que termine el examen en segundo plano (pruebas).
     void waitForInspection();
-    // Detiene el examen en segundo plano y el proceso auxiliar (al salir).
     void shutdown();
 
 signals:
@@ -90,7 +79,7 @@ private:
     void saveCache() const;
 
     QList<PluginInfo> m_plugins;
-    QHash<QString, QString> m_roots; // id -> carpeta de búsqueda donde se encontró
+    QHash<QString, QString> m_roots;
     QStringList m_testUserPaths;
     QString m_testCache;
     bool m_testing = false;
@@ -101,5 +90,5 @@ private:
     std::thread m_inspector;
     std::atomic_bool m_stopInspection{false};
     std::atomic_bool m_inspecting{false};
-    QStringList m_queued; // pendientes de examinar cuando acabe el examen en curso
+    QStringList m_queued;
 };

@@ -116,7 +116,6 @@ ToolSettings AppState::toolDefaults() const
     t.underline = num("underline", t.underline);
     t.strikeout = num("strikeout", t.strikeout);
     t.textAlign = TextAlign(num("textAlign", int(t.textAlign)));
-    // "fillPattern": las tramas de Paint.NET (la clave "fill" era la lista anterior).
     t.fill = std::clamp(num("fillPattern", t.fill), 0, FillPattern::count() - 1);
     t.dash = Qt::PenStyle(num("dash", int(t.dash)));
     t.cornerRadius = num("cornerRadius", t.cornerRadius);
@@ -128,7 +127,6 @@ ToolSettings AppState::toolDefaults() const
     t.gradientRepeat = GradientRepeat(num("gradientRepeat", int(t.gradientRepeat)));
     t.pickerSize = num("pickerSize", t.pickerSize);
     t.pickerAfter = PickerAfter(num("pickerAfter", int(t.pickerAfter)));
-    // El balde y la varita comparten la toma de muestras; el selector de color tiene la suya.
     t.sampleImage = num("floodSampleImage", t.sampleImage);
     t.pickerSampleImage = num("pickerSampleImage", t.pickerSampleImage);
     t.recolorSampling = RecolorSampling(num("recolorSampling", int(t.recolorSampling)));
@@ -236,7 +234,6 @@ QIcon AppState::recentThumbnail(const QString& path)
         return *it;
     QImage thumb(thumbnailCachePath(path));
     if (thumb.isNull() && QFileInfo::exists(path)) {
-        // Se genera leyendo la imagen reducida (o la miniatura de un .ora).
         QImage img;
         if (QFileInfo(path).suffix().compare(QLatin1String("ora"), Qt::CaseInsensitive) == 0) {
             img = Ora::readThumbnail(path);
@@ -291,8 +288,8 @@ void AppState::save() const
     s.setValue(QStringLiteral("colors/palette"), Palette::serialize(m_palette));
     s.setValue(QStringLiteral("recentFiles"), m_recent);
 
-    // Las opciones de las herramientas no se guardan al salir: al arrancar se
-    // usan los valores predeterminados (Configuración > Herramientas).
+    // Las opciones de las herramientas no se guardan al salir: al arrancar se usan los valores
+    // predeterminados (Configuración > Herramientas).
 }
 
 // ---------------------------------------------------------------------------
@@ -375,7 +372,6 @@ QPainterPath shapePath(ShapeType type, const QRectF& rect, double cornerRadius)
         return p;
     };
     auto regular = [&](int n, double startDeg, double innerRatio) {
-        // Polígono (innerRatio = 0) o estrella inscritos en la elipse del rectángulo.
         QPolygonF poly;
         const int count = innerRatio > 0 ? n * 2 : n;
         for (int i = 0; i < count; ++i) {
@@ -483,7 +479,7 @@ QPainterPath shapePath(ShapeType type, const QRectF& rect, double cornerRadius)
         p.cubicTo(at(1.0, 0.0), at(0.5, 0.0), at(0.5, 0.25));
         p.closeSubpath();
         break;
-    case ShapeType::Custom: // sin archivo: rectángulo (ver toolShapePath)
+    case ShapeType::Custom:
         p.addRect(r);
         break;
     }

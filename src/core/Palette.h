@@ -5,9 +5,8 @@
 #include <QString>
 #include <QStringList>
 
-// Paletas de 96 colores en el formato de texto de Paint.NET: un color por
-// línea en hexadecimal aarrggbb y comentarios que empiezan por ';'.
-// Los archivos .txt de paletas de Paint.NET se pueden usar tal cual.
+// Paletas de 96 colores en el formato de texto de Paint.NET: un color por línea en hexadecimal
+// aarrggbb y comentarios que empiezan por ';'.
 namespace Palette {
 
 constexpr int kColorCount = 96;
@@ -21,6 +20,6 @@ bool save(const QList<QColor>& colors, const QString& path, QString* error = nul
 
 // Carpeta de paletas del usuario (~/.local/share/Kaint/Palettes).
 QString userFolder();
-QStringList available(); // nombres (sin extensión) de las paletas de la carpeta
+QStringList available();
 
 } // namespace Palette

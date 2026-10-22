@@ -43,7 +43,7 @@ struct ClassInfo {
     QString name;
     QStringList members;
     std::vector<int> binaryTypes;
-    std::vector<QVariant> extra; // tipo primitivo de cada miembro (si lo es)
+    std::vector<QVariant> extra;
 };
 
 class ParseError {
@@ -73,7 +73,6 @@ public:
     }
 
     qsizetype position() const { return m_pos; }
-    // MemoryBlock en el orden en que aparecen (el de sus datos diferidos).
     const std::vector<std::shared_ptr<Object>>& memoryBlocks() const { return m_blocks; }
 
     Value deref(const Value& v) const
@@ -103,7 +102,7 @@ private:
         T v;
         std::memcpy(&v, m_data.constData() + m_pos, sizeof(T));
         m_pos += sizeof(T);
-        return v; // little endian, como x86 y ARM
+        return v;
     }
     QString string()
     {
@@ -126,7 +125,7 @@ private:
         case 1: return {bool(u8())};
         case 2: return {qint64(u8())};
         case 3: return {QString(QChar(u8()))};
-        case 5: return {string()}; // Decimal (como texto)
+        case 5: return {string()};
         case 6: return {read<double>()};
         case 7: return {qint64(read<qint16>())};
         case 8: return {qint64(read<qint32>())};
@@ -153,10 +152,10 @@ private:
         for (int i = 0; i < count; ++i) {
             switch (c.binaryTypes[size_t(i)]) {
             case 0:
-            case 7: c.extra[size_t(i)] = int(u8()); break; // primitivo / matriz de primitivos
-            case 3: string(); break;                     // clase del sistema
+            case 7: c.extra[size_t(i)] = int(u8()); break;
+            case 3: string(); break;
             case 4:
-                string(); // clase y biblioteca
+                string();
                 read<qint32>();
                 break;
             default: break;
@@ -203,17 +202,17 @@ private:
     {
         const int type = u8();
         switch (type) {
-        case 0: // SerializedStreamHeader
+        case 0:
             m_root = read<qint32>();
             read<qint32>();
             read<qint32>();
             read<qint32>();
             return {};
-        case 12: // BinaryLibrary
+        case 12:
             read<qint32>();
             string();
             return record();
-        case 1: { // ClassWithId
+        case 1: {
             const int id = read<qint32>();
             const int meta = read<qint32>();
             const auto it = m_classes.find(meta);
@@ -223,8 +222,8 @@ private:
             m_classes.insert(id, c);
             return {objectFrom(id, c)};
         }
-        case 4:   // SystemClassWithMembersAndTypes
-        case 5: { // ClassWithMembersAndTypes
+        case 4:
+        case 5: {
             const int id = read<qint32>();
             ClassInfo c;
             c.name = string();
@@ -233,17 +232,17 @@ private:
                 c.members << string();
             memberTypes(c, count);
             if (type == 5)
-                read<qint32>(); // biblioteca
+                read<qint32>();
             m_classes.insert(id, c);
             return {objectFrom(id, c)};
         }
-        case 6: { // BinaryObjectString
+        case 6: {
             const int id = read<qint32>();
             const Value v{string()};
             m_objects.insert(id, v);
             return v;
         }
-        case 7: { // BinaryArray
+        case 7: {
             const int id = read<qint32>();
             const int arrayType = u8();
             const int rank = read<qint32>();
@@ -272,7 +271,7 @@ private:
             }
             return {objectArray(id, count)};
         }
-        case 8: { // MemberPrimitiveTyped
+        case 8: {
             const int t = u8();
             return primitive(t);
         }
@@ -281,7 +280,7 @@ private:
         case 11: m_end = true; return {};
         case 13: m_nulls = u8(); return {};
         case 14: m_nulls = read<qint32>(); return {};
-        case 15: { // ArraySinglePrimitive
+        case 15: {
             const int id = read<qint32>();
             const int count = read<qint32>();
             const int t = u8();
@@ -298,8 +297,8 @@ private:
             m_objects.insert(id, Value{arr});
             return {arr};
         }
-        case 16:   // ArraySingleObject
-        case 17: { // ArraySingleString
+        case 16:
+        case 17: {
             const int id = read<qint32>();
             const int count = read<qint32>();
             return {objectArray(id, count)};
@@ -386,8 +385,8 @@ quint32 bigEndian32(const QByteArray& d, qsizetype pos)
     return (quint32(p[0]) << 24) | (quint32(p[1]) << 16) | (quint32(p[2]) << 8) | quint32(p[3]);
 }
 
-// Datos diferidos de un MemoryBlock: versión (0 = gzip, 1 = sin comprimir),
-// tamaño de bloque y los bloques numerados, en cualquier orden.
+// Datos diferidos de un MemoryBlock: versión (0 = gzip, 1 = sin comprimir), tamaño de bloque y
+// los bloques numerados, en cualquier orden.
 QByteArray readDeferred(const QByteArray& d, qsizetype& pos, qint64 length)
 {
     if (pos + 5 > d.size())
@@ -453,7 +452,6 @@ BlendMode blendFromPdn(const Nrbf& n, const std::shared_ptr<Object>& layer, cons
         if (i >= 0 && i < qint64(std::size(modes)))
             return modes[i];
     }
-    // Paint.NET 3: el tipo de BitmapLayerProperties.blendOp (UserBlendOps+XBlendOp).
     const auto bitmapProps = asObject(n, member(n, layer, "properties"));
     if (const auto op = asObject(n, member(n, bitmapProps, "blendOp"))) {
         static const QHash<QString, BlendMode> names{
@@ -515,7 +513,6 @@ Document* load(const QString& path, QString* error)
         if (uchar(data[pos]) == 0x00 && uchar(data[pos + 1]) == 0x01) {
             pos += 2;
         } else if (uchar(data[pos]) == 0x1f && uchar(data[pos + 1]) == 0x8b) {
-            // Paint.NET 2.0 y anteriores: todo comprimido con gzip.
             data = gunzip(data.constData() + pos, data.size() - pos, 0);
             if (data.isEmpty())
                 throw ParseError(QObject::tr("No se pudo descomprimir el archivo."));
@@ -533,7 +530,6 @@ Document* load(const QString& path, QString* error)
         if (width <= 0 || height <= 0 || qint64(width) * height > (qint64(1) << 31))
             throw ParseError(QObject::tr("Tamaño de imagen no válido."));
 
-        // Píxeles diferidos de cada MemoryBlock, en orden de aparición.
         qsizetype deferredPos = nrbf.position();
         QHash<int, QByteArray> pixels;
         for (const auto& block : nrbf.memoryBlocks()) {
@@ -570,7 +566,6 @@ Document* load(const QString& path, QString* error)
             const QByteArray& px = pixels[block->id];
             if (w != width || h != height || stride < w * 4 || qint64(stride) * h > px.size())
                 throw ParseError(QObject::tr("Las dimensiones de una capa no coinciden con las de la imagen."));
-            // ColorBgra de Paint.NET = alfa directo en BGRA: el formato de las capas de Kaint.
             QImage image(w, h, kLayerFormat);
             for (int y = 0; y < h; ++y)
                 std::memcpy(image.scanLine(y), px.constData() + qsizetype(y) * stride, size_t(w) * 4);

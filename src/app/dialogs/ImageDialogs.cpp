@@ -121,7 +121,6 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
     connect(m_printHeight, &QDoubleSpinBox::valueChanged, this, [this] { onPrint(false); });
     connect(m_resolution, &QDoubleSpinBox::valueChanged, this, &SizeEditor::onResolution);
     connect(m_resolutionUnit, &QComboBox::currentIndexChanged, this, [this](int unit) {
-        // Cambiar la unidad convierte el número, no la resolución real.
         m_updating = true;
         m_resolution->setValue(unit == 1 ? m_resolution->value() / 2.54 : m_resolution->value() * 2.54);
         m_updating = false;
@@ -137,7 +136,7 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
 
 double SizeEditor::unitPixels() const
 {
-    return m_resolution->value(); // píxeles por pulgada o por centímetro
+    return m_resolution->value();
 }
 
 double SizeEditor::dpi() const
@@ -218,7 +217,6 @@ void SizeEditor::onPrint(bool widthChanged)
     if (m_updating)
         return;
     m_updating = true;
-    // El tamaño de impresión cambia los píxeles con la resolución actual.
     if (widthChanged)
         m_width->setValue(std::clamp(int(std::lround(m_printWidth->value() * unitPixels())), 1, kMaxSide));
     else
@@ -231,8 +229,6 @@ void SizeEditor::onResolution()
 {
     if (m_updating)
         return;
-    // Como Paint.NET: con la relación de aspecto fija, cambiar la resolución
-    // mantiene el tamaño de impresión y recalcula los píxeles.
     if (m_keepAspect->isChecked() && !(m_byPercent && m_byPercent->isChecked())) {
         const double pw = m_printWidth->value();
         m_updating = true;

@@ -18,13 +18,11 @@ public:
 
     void select(ToolId id);
     void selectPrevious();
-    // Atajos de una letra: si varias herramientas comparten tecla, alterna
-    // entre ellas (con Mayús, en sentido contrario, como Paint.NET).
     void activateShortcut(const QKeySequence& key, bool reverse = false);
     QList<QKeySequence> shortcuts() const;
 
-    // Configuración > Herramientas: al terminar una selección se pasa a la
-    // herramienta Mover selección (Paint.NET no lo hace; activado por defecto).
+    // Configuración > Herramientas: al terminar una selección se pasa a la herramienta Mover
+    // selección (Paint.NET no lo hace; activado por defecto).
 
 signals:
     void toolChanged(Tool* tool);

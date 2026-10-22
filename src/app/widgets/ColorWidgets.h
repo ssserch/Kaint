@@ -5,10 +5,7 @@
 #include <QList>
 #include <QWidget>
 
-// Rueda de tono/saturación (el brillo va en un deslizador aparte). Como en
-// Paint.NET: clic izquierdo = ranura activa, derecho = inactiva; Ctrl cambia
-// solo el tono, Alt solo la saturación, Mayús ajusta a los radios y
-// Ctrl+Mayús gira el tono de 15 en 15°.
+// Rueda de tono/saturación (el brillo va en un deslizador aparte).
 class ColorWheel : public QWidget {
     Q_OBJECT
 public:
@@ -34,7 +31,7 @@ private:
     QRectF wheelRect() const;
 
     QColor m_color;
-    QColor m_pressColor; // color al empezar a arrastrar (para Ctrl/Alt)
+    QColor m_pressColor;
     Qt::MouseButton m_button = Qt::NoButton;
     QImage m_wheel;
 };
@@ -69,9 +66,8 @@ private:
     QColor m_color;
 };
 
-// Cuadros de color principal y secundario superpuestos, con los botones de
-// intercambiar (X) y restablecer a blanco y negro. La muesca indica la
-// ranura activa (C la alterna).
+// Cuadros de color principal y secundario superpuestos, con los botones de intercambiar (X) y
+// restablecer a blanco y negro.
 class ColorSwatches : public QWidget {
     Q_OBJECT
 public:
@@ -104,9 +100,8 @@ private:
     bool m_editingSecondary = false;
 };
 
-// Paleta de 96 colores (32 con la ventana reducida): clic izquierdo = ranura
-// activa, derecho = inactiva. En modo "añadir color" el clic sustituye la
-// muestra por el color activo y el marco parpadea.
+// Paleta de 96 colores (32 con la ventana reducida): clic izquierdo = ranura activa, derecho =
+// inactiva.
 class PaletteWidget : public QWidget {
     Q_OBJECT
 public:

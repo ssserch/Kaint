@@ -5,8 +5,8 @@
 #include <thread>
 #include <vector>
 
-// Reparte el rango [begin, end) en bloques de 'grain' filas entre todos los
-// núcleos. fn(y0, y1) debe ser segura para ejecutarse en paralelo.
+// Reparte el rango [begin, end) en bloques de 'grain' filas entre todos los núcleos. fn(y0,
+// y1) debe ser segura para ejecutarse en paralelo.
 template <typename Fn>
 void parallelRows(int begin, int end, Fn&& fn, int grain = 8)
 {

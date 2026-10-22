@@ -21,7 +21,7 @@ enum class ShapeType {
     Arrow, NotchedArrow, PentagonArrow, ChevronArrow,
     RectCallout, RoundedRectCallout, EllipseCallout, CloudCallout,
     LightningBolt, CheckMark, Multiply, Gear, Heart,
-    Custom, // forma personalizada de Paint.NET (.xaml): ToolSettings::customShape
+    Custom,
 };
 enum class ShapeStyle { Outline, Fill, OutlineFill };
 enum class CurveType { Straight, Spline, Bezier };
@@ -33,27 +33,27 @@ enum class FontMetric { Points, Fixed96 };
 enum class TextRendering { Smooth, SharpModern, SharpClassic };
 enum class PickerAfter { DoNotSwitch, PreviousTool, Pencil };
 enum class RecolorSampling { Once, SecondaryColor };
-// Herramientas de selección: qué hacer al terminar una selección (por
-// defecto nada, como Paint.NET).
+// Herramientas de selección: qué hacer al terminar una selección (por defecto nada, como
+// Paint.NET).
 enum class AfterSelect { DoNotSwitch, MoveSelection, MovePixels };
 
-// Opciones de las herramientas, compartidas entre todas ellas igual que en
-// Paint.NET (el ancho del pincel es el mismo para pincel, goma, formas...).
+// Opciones de las herramientas, compartidas entre todas ellas igual que en Paint.NET (el ancho
+// del pincel es el mismo para pincel, goma, formas...).
 struct ToolSettings {
     double brushSize = 10;
     int hardness = 75;
-    int spacing = 15;            // % del ancho entre toques del pincel
-    bool smoothing = true;       // suavizado del recorrido
+    int spacing = 15;
+    bool smoothing = true;
     bool antialias = true;
-    bool selectionAntialias = true; // calidad de selección: suavizada o pixelada
+    bool selectionAntialias = true;
     bool pressure = true;
     BlendMode blend = BlendMode::Normal;
-    int fill = 0;                // FillPattern
+    int fill = 0;
     int tolerance = 50;
-    bool toleranceStraight = false; // modo alfa de la tolerancia: premultiplicado o directo
+    bool toleranceStraight = false;
     bool floodGlobal = false;
-    bool sampleImage = false;       // balde y varita mágica (comparten la opción, como Paint.NET)
-    bool pickerSampleImage = false; // selector de color: la suya propia
+    bool sampleImage = false;
+    bool pickerSampleImage = false;
     SelectionMode selectionMode = SelectionMode::Replace;
     RectSelectMode rectMode = RectSelectMode::Normal;
     double fixedWidth = 4;
@@ -62,7 +62,7 @@ struct ToolSettings {
     GradientRepeat gradientRepeat = GradientRepeat::None;
     bool gradientTransparency = false;
     ShapeType shape = ShapeType::Rectangle;
-    QString customShape;         // archivo de la forma personalizada (ShapeType::Custom)
+    QString customShape;
     ShapeStyle shapeStyle = ShapeStyle::Outline;
     int cornerRadius = 20;
     Qt::PenStyle dash = Qt::SolidLine;
@@ -82,7 +82,7 @@ struct ToolSettings {
     PickerAfter pickerAfter = PickerAfter::DoNotSwitch;
     RecolorSampling recolorSampling = RecolorSampling::SecondaryColor;
     Resample::Interpolation moveInterpolation = Resample::Interpolation::Bicubic;
-    bool moveGamma = true;       // Mover píxeles: interpolar en luz lineal (Gamma corregido)
+    bool moveGamma = true;
     AfterSelect afterSelect = AfterSelect::DoNotSwitch;
 };
 
@@ -97,7 +97,6 @@ public:
     void setSecondary(const QColor& c);
     void swapColors();
     void resetColors();
-    // Ranura de color activa en la ventana Colores (tecla C).
     bool secondaryActive() const { return m_secondaryActive; }
     void setSecondaryActive(bool secondary);
     QColor activeColor() const { return m_secondaryActive ? m_secondary : m_primary; }
@@ -109,7 +108,6 @@ public:
     void setPaletteColor(int index, const QColor& c);
 
     const ToolSettings& tools() const { return m_tools; }
-    // Modifica las opciones y avisa a todos los interesados.
     template <typename F>
     void updateTools(F f)
     {
@@ -117,15 +115,12 @@ public:
         emit toolSettingsChanged();
     }
     void resetTools();
-    // Valores predeterminados de la barra de herramientas (Configuración >
-    // Herramientas): como en Paint.NET, son los que tiene al arrancar.
     ToolSettings toolDefaults() const;
     void setToolDefaults(const ToolSettings& defaults);
 
     QStringList recentFiles() const { return m_recent; }
     void addRecentFile(const QString& path, const QImage& thumbnail = QImage());
     void clearRecentFiles();
-    // Miniatura de un archivo reciente (se guarda en la caché de miniaturas).
     QIcon recentThumbnail(const QString& path);
 
     void load();
@@ -155,8 +150,8 @@ QString shapeName(ShapeType type);
 const QList<ShapeType>& allShapes();
 // Grupos del menú de formas (Básicas, Polígonos y estrellas, Flechas, Bocadillos, Símbolos).
 QList<std::pair<QString, QList<ShapeType>>> shapeGroups();
-// La forma elegida en la barra (integrada o personalizada) y su nombre. Si el
-// archivo de la personalizada ya no está, se usa el rectángulo.
+// La forma elegida en la barra (integrada o personalizada) y su nombre. Si el archivo de la
+// personalizada ya no está, se usa el rectángulo.
 QPainterPath toolShapePath(const ToolSettings& s, const QRectF& r);
 QString toolShapeName(const ToolSettings& s);
 // A / Mayús+A: forma siguiente o anterior, también entre las personalizadas.

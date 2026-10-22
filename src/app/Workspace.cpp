@@ -23,10 +23,10 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     setFrameShadow(QFrame::Raised);
     setAutoFillBackground(true);
     setBackgroundRole(QPalette::Window);
-    setMouseTracking(true); // cursor de cambio de tamaño en los bordes
+    setMouseTracking(true);
 
-    // Cabecera con el color de resalte del tema, como la de Paint.NET (que
-    // usa el color de acento de Windows).
+    // Cabecera con el color de resalte del tema, como la de Paint.NET (que usa el color de
+    // acento de Windows).
     m_titleBar = new QWidget(this);
     m_titleBar->setObjectName(QStringLiteral("FloatingPanelTitle"));
     m_titleBar->setAutoFillBackground(true);
@@ -58,8 +58,8 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     titleLayout->addWidget(m_title, 1);
     titleLayout->addWidget(m_close);
 
-    // La cabecera se coloca a mano (de borde a borde); el contenido deja un
-    // margen alrededor que sirve para arrastrar y cambiar el tamaño.
+    // La cabecera se coloca a mano (de borde a borde); el contenido deja un margen alrededor
+    // que sirve para arrastrar y cambiar el tamaño.
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(0);
     layout->addWidget(content, 1);
@@ -87,7 +87,6 @@ bool FloatingPanel::event(QEvent* e)
     case QEvent::Polish:
     case QEvent::StyleChange:
     case QEvent::FontChange: {
-        // El diseño ya empieza dentro del marco; la cabecera ocupa la parte de arriba.
         const int titleHeight = m_titleBar->sizeHint().height();
         layout()->setContentsMargins(kBorder - frameWidth(), titleHeight + 2, kBorder - frameWidth(),
                                      kBorder - frameWidth());
@@ -141,7 +140,7 @@ Qt::Edges FloatingPanel::edgesAt(const QPoint& pos) const
     if (!m_resizable)
         return {};
     const int b = kBorder;
-    const int corner = 3 * b; // las esquinas se atrapan con más facilidad
+    const int corner = 3 * b;
     Qt::Edges e;
     if (pos.x() < b)
         e |= Qt::LeftEdge;
@@ -171,7 +170,6 @@ void FloatingPanel::updateEdgeCursor(Qt::Edges edges)
     const bool horizontal = edges & (Qt::LeftEdge | Qt::RightEdge);
     const bool vertical = edges & (Qt::TopEdge | Qt::BottomEdge);
     if (horizontal && vertical) {
-        // "\" en las esquinas superior izquierda e inferior derecha, "/" en las otras.
         const bool falling = bool(edges & Qt::LeftEdge) == bool(edges & Qt::TopEdge);
         setCursor(falling ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor);
     } else if (horizontal) {
@@ -181,7 +179,6 @@ void FloatingPanel::updateEdgeCursor(Qt::Edges edges)
     } else {
         unsetCursor();
     }
-    // La cabecera tiene su propio cursor (mover) salvo en su franja de borde.
     if (edges)
         m_titleBar->setCursor(cursor());
     else
@@ -212,7 +209,6 @@ QRect FloatingPanel::constrained(const QRect& proposed, Qt::Edges edges) const
             changed |= Qt::Vertical;
         size = fit->fitSize(size - chrome, changed) + chrome;
     }
-    // Los bordes que no se arrastran no se mueven.
     if (edges & Qt::LeftEdge)
         g.setLeft(g.right() - size.width() + 1);
     else
@@ -285,7 +281,6 @@ bool FloatingPanel::eventFilter(QObject* obj, QEvent* e)
     if (obj == m_title && e->type() == QEvent::Resize)
         updateTitleText();
     if (obj == m_content) {
-        // Al entrar en el contenido se recupera el cursor normal.
         if (e->type() == QEvent::Enter && !m_resizeEdges)
             updateEdgeCursor({});
         return QFrame::eventFilter(obj, e);
@@ -354,8 +349,6 @@ void FloatingPanel::resizeEvent(QResizeEvent* e)
     QFrame::resizeEvent(e);
     const int fw = frameWidth();
     m_titleBar->setGeometry(fw, fw, width() - 2 * fw, m_titleBar->sizeHint().height());
-    // Un cambio de tamaño por código (p. ej. "Más >>" en Colores) conserva la
-    // esquina anclada; el del usuario recalcula el ancla al soltar.
     if (!m_dragging && !m_resizeEdges)
         reposition();
 }
@@ -376,7 +369,7 @@ void FloatingPanel::restoreState(Corner defaultCorner, QPoint defaultOffset, QSi
     m_defaultCorner = defaultCorner;
     m_defaultOffset = defaultOffset;
     m_defaultSize = defaultSize;
-    ensurePolished(); // márgenes de la cabecera calculados antes de medir
+    ensurePolished();
     QSettings s;
     s.beginGroup(QStringLiteral("panels/") + m_id);
     QSize size = s.value(QStringLiteral("size")).toSize();
@@ -409,7 +402,7 @@ void FloatingPanel::setTranslucent(bool on)
         m_opacity->setOpacity(underMouse() ? 1.0 : 0.75);
         setGraphicsEffect(m_opacity);
     } else if (!on && m_opacity) {
-        setGraphicsEffect(nullptr); // destruye el efecto
+        setGraphicsEffect(nullptr);
         m_opacity = nullptr;
     }
 }

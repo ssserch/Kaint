@@ -10,27 +10,25 @@ enum class StrokeKind { Paint, Erase, Clone, Recolor };
 struct StrokeParams {
     StrokeKind kind = StrokeKind::Paint;
     qreal diameter = 10;
-    qreal hardness = 0.75;     // 0..1
-    qreal spacing = 0.15;      // fracción del diámetro entre toques
+    qreal hardness = 0.75;
+    qreal spacing = 0.15;
     bool antialias = true;
-    bool pressureSize = true;  // la presión de la tableta modula el tamaño
-    bool pixelExact = false;   // lápiz: píxeles enteros sin suavizado
-    bool smoothing = false;    // suaviza el recorrido del puntero
+    bool pressureSize = true;
+    bool pixelExact = false;
+    bool smoothing = false;
     BlendMode blend = BlendMode::Normal;
-    int fill = 0;              // FillPattern
-    // Color del trazo. Su opacidad también regula la goma y el tampón, como en Paint.NET.
+    int fill = 0;
     QColor color = Qt::black;
-    QColor background = Qt::white; // segundo color de las tramas / color a reemplazar (recolorear)
-    QPoint cloneOffset;        // desplazamiento origen - destino del tampón
-    QImage cloneSource;        // capa de origen del tampón (vacía = la misma capa)
-    qreal tolerance = 0.5;     // recolorear
+    QColor background = Qt::white;
+    QPoint cloneOffset;
+    QImage cloneSource;
+    qreal tolerance = 0.5;
     bool toleranceStraight = false;
-    bool recolorSampleOnce = false; // recolorear el color del primer clic
+    bool recolorSampleOnce = false;
 };
 
-// Trazo con máscara de cobertura: cada "toque" del pincel guarda el máximo
-// en una máscara Alpha8 y la capa se recalcula como original + color * máscara.
-// Así un color semitransparente no se acumula en las zonas solapadas.
+// Trazo con máscara de cobertura: cada "toque" del pincel guarda el máximo en una máscara
+// Alpha8 y la capa se recalcula como original + color * máscara.
 class StrokeEngine {
 public:
     void begin(Document* doc, LayerPtr layer, const StrokeParams& params);
@@ -54,9 +52,9 @@ private:
     QImage m_mask;
     QRect m_total;
     QPointF m_last;
-    QPointF m_target; // posición suavizada
-    QPointF m_raw;    // última posición real del puntero
+    QPointF m_target;
+    QPointF m_raw;
     qreal m_lastPressure = 1.0;
-    qreal m_carry = 0; // distancia acumulada desde el último toque
-    QRgb m_recolorTarget = 0; // color a reemplazar, sin premultiplicar
+    qreal m_carry = 0;
+    QRgb m_recolorTarget = 0;
 };

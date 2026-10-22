@@ -23,7 +23,9 @@ mismos efectos y una interfaz que se le parece mucho.
   **.pdn** de Paint.NET 3, 4 y 5 con sus capas.
 - **Complementos**: los suyos propios (.so) y muchos complementos de Paint.NET (.dll).
 - **Formas personalizadas** de Paint.NET (.xaml).
-- Tema del sistema, claro u oscuro, con los iconos de Breeze.
+- En inglés (predeterminado) y en español: *Settings > User Interface > Language*.
+- Tema del sistema, claro u oscuro, con los iconos de Breeze. Un tema claro u oscuro
+  propio usa el estilo Breeze (o Fusion) y se aplica del todo al reiniciar Kaint.
 - Rich Presence de Discord opcional.
 
 ## Instalar
@@ -31,7 +33,7 @@ mismos efectos y una interfaz que se le parece mucho.
 En Arch Linux:
 
 ```bash
-sudo pacman -S --needed gcc cmake ninja qt6-base qt6-wayland qt6-svg zlib breeze-icons
+sudo pacman -S --needed gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons
 # Opcionales: más formatos, diálogos de Qt traducidos y complementos de Paint.NET
 sudo pacman -S --needed qt6-imageformats kimageformats qt6-translations mono libgdiplus
 
@@ -104,6 +106,11 @@ tu aplicación de Discord en `client_id` de `discord.json`.
 | `src/pdnbridge/` | Capa de compatibilidad con los complementos de Paint.NET (C#, mono). |
 | `examples/` | Complemento nativo y formas personalizadas de ejemplo. |
 | `tests/` | Pruebas del núcleo y prueba de la interfaz sin pantalla. |
+| `translations/` | Traducciones (inglés). |
+
+Los textos del código están en español y `translations/kaint_en.ts` tiene la traducción
+al inglés (se compila dentro del programa). Tras cambiar textos, actualiza el `.ts` con
+`cmake --build build -t update_translations` y tradúcelo con Qt Linguist.
 
 `version.json` guarda la versión y el repositorio que consulta *Configuración >
 Actualizaciones*. La opción de CMake `KAINT_PDN_BRIDGE` (activada por defecto) compila la

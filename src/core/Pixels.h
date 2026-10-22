@@ -7,9 +7,7 @@
 #include <cmath>
 #include <cstdint>
 
-// Accesos crudos a los píxeles. Se obtienen los punteros una sola vez para
-// que los hilos de trabajo no llamen a QImage::scanLine() (que no es
-// seguro en paralelo porque puede intentar separar los datos compartidos).
+// Accesos crudos a los píxeles.
 
 struct ConstPixels {
     const uchar* bits = nullptr;
@@ -74,9 +72,8 @@ inline QRgb scaleAlpha(QRgb p, int m)
     return (p & 0x00ffffffu) | (uint(a) << 24);
 }
 
-// Interpolación entre dos píxeles con alfa directo (t = 0..255), ponderada
-// por el alfa como si estuvieran premultiplicados. En los extremos devuelve
-// el píxel exacto (también su color si es transparente).
+// Interpolación entre dos píxeles con alfa directo (t = 0..255), ponderada por el alfa como si
+// estuvieran premultiplicados.
 inline QRgb lerpStraight(QRgb a, QRgb b, int t)
 {
     if (t <= 0)
@@ -87,7 +84,6 @@ inline QRgb lerpStraight(QRgb a, QRgb b, int t)
     const int wa = qAlpha(a) * it, wb = qAlpha(b) * t;
     const int w = wa + wb;
     if (w == 0) {
-        // Los dos transparentes: se mezcla el color tal cual.
         return qRgba((qRed(a) * it + qRed(b) * t + 127) / 255, (qGreen(a) * it + qGreen(b) * t + 127) / 255,
                      (qBlue(a) * it + qBlue(b) * t + 127) / 255, 0);
     }
@@ -106,7 +102,7 @@ inline QRgb overStraight(QRgb dst, QRgb src)
     const int da = qAlpha(dst);
     if (da == 0)
         return src;
-    const int y = (da * (255 - sa) + 127) / 255; // parte visible del fondo
+    const int y = (da * (255 - sa) + 127) / 255;
     const int total = y + sa;
     auto ch = [&](int d, int s) { return (d * y + s * sa + total / 2) / total; };
     return qRgba(ch(qRed(dst), qRed(src)), ch(qGreen(dst), qGreen(src)), ch(qBlue(dst), qBlue(src)), total);
@@ -184,8 +180,8 @@ inline QRgb sampleBilinear(const ConstPixels& src, float x, float y)
                  mix(qAlpha(p00), qAlpha(p10), qAlpha(p01), qAlpha(p11)));
 }
 
-// Generador pseudoaleatorio sin estado: el mismo (x, y, semilla) siempre
-// produce el mismo valor, así el resultado no depende del reparto en hilos.
+// Generador pseudoaleatorio sin estado: el mismo (x, y, semilla) siempre produce el mismo
+// valor, así el resultado no depende del reparto en hilos.
 inline uint32_t hash3(uint32_t x, uint32_t y, uint32_t seed)
 {
     uint32_t h = x * 0x8da6b343u ^ y * 0xd8163841u ^ seed * 0xcb1ab31fu;

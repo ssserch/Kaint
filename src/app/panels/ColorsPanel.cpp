@@ -100,7 +100,7 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     struct Row {
         ColorSlider::Channel channel;
         QString label;
-        QString section; // título que va antes de la fila
+        QString section;
     };
     const QList<Row> rows{
         {ColorSlider::Red, tr("R:"), QStringLiteral("RGB")},
@@ -219,11 +219,10 @@ ColorsPanel::ColorsPanel(QWidget* parent)
 
 void ColorsPanel::setExpanded(bool on)
 {
-    // Ampliado: las muestras suben junto al botón, sin el selector de ranura
-    // ni el brillo vertical (ya están los deslizadores).
+    // Ampliado: las muestras suben junto al botón, sin el selector de ranura ni el brillo
+    // vertical (ya están los deslizadores).
     m_target->setVisible(!on);
     m_value->setVisible(!on);
-    // Rueda contenida para que el panel no pase de la altura de los deslizadores.
     m_wheel->setMaximumSize(on ? QSize(150, 150) : QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX));
     if (on) {
         m_swatchColumn->removeWidget(m_swatches);

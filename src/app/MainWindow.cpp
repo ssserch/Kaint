@@ -157,7 +157,6 @@ MainWindow::MainWindow()
                 m_hint->setText(h);
         });
     connect(m_canvas, &Canvas::deselectRequested, this, &MainWindow::deselect);
-    // Extremo borrador del lápiz: Goma de borrar mientras se use (opción de Lápiz y tableta).
     connect(m_canvas, &Canvas::tabletEraserChanged, this, [this](bool eraser) {
         if (!m_settings.tabletEraser || !m_tools->current())
             return;
@@ -180,14 +179,11 @@ MainWindow::MainWindow()
 
     connect(m_undoGroup, &QUndoGroup::canUndoChanged, this, &MainWindow::updateActions);
     connect(m_undoGroup, &QUndoGroup::canRedoChanged, this, &MainWindow::updateActions);
-    // Límite de memoria del historial: se comprueba poco después de cada paso.
     m_historyTimer.setSingleShot(true);
     m_historyTimer.setInterval(500);
     connect(&m_historyTimer, &QTimer::timeout, this, &MainWindow::checkHistoryMemory);
     connect(m_undoGroup, &QUndoGroup::indexChanged, this, [this] { m_historyTimer.start(); });
     connect(AppState::instance(), &AppState::recentFilesChanged, this, &MainWindow::rebuildRecentMenu);
-    // Rich Presence de Discord: el estado se consulta cada poco y solo se
-    // envía si cambió (DiscordPresence agrupa los envíos).
     m_discord = new DiscordPresence(this);
     m_presenceTimer.setInterval(2000);
     connect(&m_presenceTimer, &QTimer::timeout, this, &MainWindow::updatePresence);
@@ -267,7 +263,6 @@ void MainWindow::createActions()
     // Edición
     A["undo"] = makeAction(tr("&Deshacer"), {"edit-undo"}, QKeySequence::Undo, [this] { undo(); });
     A["redo"] = makeAction(tr("&Rehacer"), {"edit-redo"}, QKeySequence(), [this] { redo(); });
-    // Ctrl+Mayús+Z es Giro y zum en Paint.NET, así que rehacer solo usa Ctrl+Y.
     A["redo"]->setShortcut(QKeySequence(QStringLiteral("Ctrl+Y")));
     A["cut"] = makeAction(tr("Cor&tar"), {"edit-cut"}, QKeySequence::Cut, [this] { cut(); }, doc);
     A["cut"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+X")), QKeySequence(QStringLiteral("Shift+Del"))});
@@ -336,7 +331,6 @@ void MainWindow::createActions()
         A[id]->setCheckable(true);
         unitGroup->addAction(A[id]);
     }
-    // Pantalla completa: sin menú (como Paint.NET), solo con F11.
     A["fullscreen"] = makeAction(tr("&Pantalla completa"), {"view-fullscreen"}, QKeySequence::FullScreen, [this] {
         setWindowState(windowState() ^ Qt::WindowFullScreen);
     });
@@ -400,8 +394,8 @@ void MainWindow::createActions()
     A["layerProps"] = makeAction(tr("&Propiedades de la capa..."), {"document-properties", "configure"},
                                  QKeySequence(Qt::Key_F4), [this] { layerProperties(); }, doc);
 
-    // Imágenes abiertas y paneles: sin menú, como en Paint.NET (atajos, la
-    // tira de imágenes y los botones de la esquina superior derecha).
+    // Imágenes abiertas y paneles: sin menú, como en Paint.NET (atajos, la tira de imágenes y
+    // los botones de la esquina superior derecha).
     A["nextImage"] = makeAction(tr("Imagen &siguiente"), {"go-next"}, QKeySequence(QStringLiteral("Ctrl+Tab")),
                                 [this] { switchImage(+1); }, doc);
     A["nextImage"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+Tab")), QKeySequence(QStringLiteral("Ctrl+PgDown"))});
@@ -423,7 +417,6 @@ void MainWindow::createActions()
         m_settings.save();
     });
     for (int n = 1; n <= 9; ++n) {
-        // Alt+número (y Ctrl+número) cambia a la imagen n.ª, como Paint.NET.
         auto* a = new QAction(this);
         a->setShortcuts({QKeySequence(QStringLiteral("Alt+%1").arg(n)), QKeySequence(QStringLiteral("Ctrl+%1").arg(n))});
         connect(a, &QAction::triggered, this, [this, n] {
@@ -479,7 +472,6 @@ void MainWindow::createActions()
     connect(activeSlot, &QAction::triggered, this,
             [] { AppState::instance()->setSecondaryActive(!AppState::instance()->secondaryActive()); });
     addAction(activeSlot);
-    // [ y ] cambian el ancho del pincel de 1 en 1; con Ctrl, de 5 en 5.
     auto brushStep = [this](int delta) {
         AppState::instance()->updateTools([delta](ToolSettings& s) { s.brushSize = std::clamp(s.brushSize + delta, 1.0, 2000.0); });
         m_canvas->updateOverlay();
@@ -514,7 +506,6 @@ void MainWindow::createMenus()
     file->addAction(A["close"]);
     file->addSeparator();
     file->addAction(A["quit"]);
-    // Cerrar todas / todas menos esta: menú contextual de la tira de imágenes.
     addActions({A["closeAll"], A["closeOthers"]});
 
     QMenu* edit = bar->addMenu(tr("&Edición"));
@@ -574,19 +565,16 @@ void MainWindow::createMenus()
 
 void MainWindow::rebuildEffectMenus()
 {
-    // Ajustes y Efectos con los efectos integrados y los de los complementos
-    // activados. Como en Paint.NET, cada submenú está en orden alfabético.
+    // Ajustes y Efectos con los efectos integrados y los de los complementos activados. Como
+    // en Paint.NET, cada submenú está en orden alfabético.
     for (QAction* a : std::as_const(m_effectActions)) {
         m_docActions.removeAll(a);
         a->deleteLater();
     }
     m_effectActions.clear();
-    // Los submenús se borran enteros: si solo se borra su menuAction, el
-    // submenú queda vivo apuntando a ella.
     for (QMenu* sub : std::as_const(m_effectSubmenus))
         sub->deleteLater();
     m_effectSubmenus.clear();
-    // El último efecto pudo ser de un complemento que ya no está cargado.
     if (m_lastEffect && !Effects::all().contains(m_lastEffect)) {
         m_lastEffect = nullptr;
         m_act["repeatEffect"]->setText(tr("Repetir el último efecto"));
@@ -598,7 +586,7 @@ void MainWindow::rebuildEffectMenus()
 
     QList<const Effect*> effects;
     for (const Effect* e : Effects::all())
-        if (!e->hidden()) // p. ej. Giro y zum, que está en el menú Capas
+        if (!e->hidden())
             effects.append(e);
     const QCollator collator = [] {
         QCollator c;
@@ -641,7 +629,7 @@ void MainWindow::createToolBars()
     QToolBar* main = addToolBar(tr("Principal"));
     main->setObjectName(QStringLiteral("MainToolBar"));
     main->setMovable(false);
-    main->setIconSize(QSize(16, 16)); // como Paint.NET (Qt los escala en HiDPI)
+    main->setIconSize(QSize(16, 16));
     main->addActions({A["new"], A["open"], A["save"]});
     main->addSeparator();
     main->addAction(A["print"]);
@@ -661,8 +649,8 @@ void MainWindow::createToolBars()
 
 void MainWindow::createTopRow()
 {
-    // Fila superior de Paint.NET 5: menús, tira de imágenes abiertas y, a la
-    // derecha, los botones de las ventanas, Configuración y Ayuda.
+    // Fila superior de Paint.NET 5: menús, tira de imágenes abiertas y, a la derecha, los
+    // botones de las ventanas, Configuración y Ayuda.
     auto* top = new QWidget(this);
     top->setObjectName(QStringLiteral("TopRow"));
     auto* layout = new QHBoxLayout(top);
@@ -719,7 +707,6 @@ void MainWindow::createTopRow()
     m_cornerLayout->setContentsMargins(0, 0, 0, 0);
     m_cornerLayout->setSpacing(0);
     layout->addWidget(m_cornerButtons, 0, Qt::AlignVCenter);
-    // Clic derecho en los botones: opciones de las ventanas.
     m_cornerButtons->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_cornerButtons, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         QMenu menu(this);
@@ -752,7 +739,6 @@ void MainWindow::createPanels()
     m_colorsPanel = m_workspace->addPanel(QStringLiteral("colors"), tr("Colores"), m_colors, Corner::BottomLeft,
                                           QPoint(8, 8), QSize(230, 330));
     connect(m_colors, &ColorsPanel::layoutChanged, this, [this] {
-        // Ampliada crece a lo ancho; al volver recupera el ancho que tenía.
         const QSize hint = m_colorsPanel->sizeHint();
         if (m_colors->isExpanded()) {
             m_colorsCompactWidth = m_colorsPanel->width();
@@ -791,7 +777,6 @@ void MainWindow::createPanels()
         b->setIconSize(QSize(16, 16));
         m_cornerLayout->addWidget(b);
     }
-    // Engranaje de Configuración y menú de Ayuda.
     auto* gear = new QToolButton(m_cornerButtons);
     gear->setDefaultAction(m_act["settings"]);
     gear->setAutoRaise(true);
@@ -815,14 +800,13 @@ void MainWindow::createPanels()
 
     connect(m_layers, &LayersPanel::soloRequested, this, &MainWindow::soloLayer);
     connect(m_layers, &LayersPanel::moveRequested, this, &MainWindow::moveLayerTo);
-    // Al activar o desactivar complementos cambian los menús de efectos.
     connect(PluginManager::instance(), &PluginManager::changed, this, &MainWindow::rebuildEffectMenus);
 }
 
 void MainWindow::createStatusBar()
 {
-    // Barra de estado de Paint.NET 5: ayuda de la herramienta, tamaño de la
-    // selección, posición del cursor, unidades, zum y su deslizador.
+    // Barra de estado de Paint.NET 5: ayuda de la herramienta, tamaño de la selección,
+    // posición del cursor, unidades, zum y su deslizador.
     QStatusBar* bar = statusBar();
     m_hint = new QLabel(bar);
     m_hint->setTextFormat(Qt::PlainText);
@@ -930,8 +914,8 @@ void MainWindow::createStatusBar()
 
 void MainWindow::rebuildRecentMenu()
 {
-    // Como Paint.NET: número, nombre y miniatura de cada archivo, y al final
-    // "Borrar la lista".
+    // Como Paint.NET: número, nombre y miniatura de cada archivo, y al final "Borrar la
+    // lista".
     m_recentMenu->clear();
     const QStringList files = AppState::instance()->recentFiles();
     int n = 0;
@@ -1066,7 +1050,6 @@ bool MainWindow::maybeSave(Document* doc)
     if (!doc->isModified())
         return true;
     setCurrentDocument(doc);
-    // Como en Paint.NET 5: miniatura y una opción grande por respuesta.
     TaskDialog dlg(tr("Cambios no guardados"), Icons::theme({"dialog-warning"}), doc->flattened(),
                    tr("«%1» tiene cambios sin guardar.\n¿Qué quiere hacer?").arg(doc->displayName()), this);
     const int saveChoice = dlg.addChoice(Icons::theme({"document-save"}), tr("Guardar"),
@@ -1089,7 +1072,6 @@ void MainWindow::updateTab(Document* doc)
     const QImage source = doc == m_doc ? m_canvas->composite() : doc->flattened();
     QImage thumb = Raster::thumbnail(source, m_tabs->iconSize() * dpr);
     if (doc->isModified()) {
-        // Asterisco de "sin guardar", como la tira de imágenes de Paint.NET.
         QPainter p(&thumb);
         p.setRenderHint(QPainter::Antialiasing);
         const qreal r = 5 * dpr;
@@ -1147,7 +1129,6 @@ void MainWindow::updateStatus()
         m_posLabel->clear();
         return;
     }
-    // Sin selección, Paint.NET muestra el tamaño de toda la imagen.
     const Unit u = m_canvas->unit();
     const double dpi = m_doc->dpi();
     auto len = [&](double px) { return formatLength(px, u, dpi); };
@@ -1270,7 +1251,6 @@ void MainWindow::openFiles(const QStringList& paths)
             QMessageBox::critical(this, tr("No se pudo abrir"), tr("No se pudo abrir «%1»:\n%2").arg(abs, error));
             continue;
         }
-        // Si la única imagen abierta es una nueva sin tocar, se sustituye (como Paint.NET).
         if (m_docs.size() == 1 && m_docs.first()->filePath().isEmpty() && !m_docs.first()->isModified()
             && m_docs.first()->undoStack()->count() == 0)
             closeDocument(m_docs.first());
@@ -1284,7 +1264,6 @@ bool MainWindow::save(Document* doc)
 {
     if (!doc)
         return false;
-    // Sin ruta o en un formato que Kaint no escribe (.pdn): Guardar como.
     if (doc->filePath().isEmpty() || !ImageIO::isWritable(doc->filePath()))
         return saveAs(doc);
     return writeFile(doc, doc->filePath());
@@ -1298,7 +1277,6 @@ bool MainWindow::saveAs(Document* doc)
     const QString filters = ImageIO::saveFilter(&selected);
     QString suggestion = doc->filePath();
     if (!suggestion.isEmpty() && !ImageIO::isWritable(suggestion)) {
-        // De .pdn se propone OpenRaster, que conserva las capas.
         suggestion = QFileInfo(suggestion).absolutePath() + QLatin1Char('/') + QFileInfo(suggestion).completeBaseName()
                    + QStringLiteral(".ora");
         for (const QString& f : filters.split(QStringLiteral(";;")))
@@ -1367,7 +1345,7 @@ void MainWindow::moveImageTab(int delta)
     const int to = from + delta;
     if (from < 0 || to < 0 || to >= m_docs.size())
         return;
-    m_tabs->moveTab(from, to); // tabMoved mantiene m_docs en orden
+    m_tabs->moveTab(from, to);
 }
 
 void MainWindow::showTabMenu(const QPoint& pos)
@@ -1411,7 +1389,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
 bool MainWindow::writeFile(Document* doc, const QString& path)
 {
     finishTool();
-    // En un GIF las capas pueden ser fotogramas (lo decide la configuración de guardado).
     if (!ImageIO::isLayered(path) && !ImageIO::isAnimation(path) && doc->layerCount() > 1) {
         QMessageBox box(QMessageBox::Question, tr("Acoplar imagen"),
                         tr("El formato «%1» no admite capas, así que se guardará la imagen acoplada.\n"
@@ -1426,9 +1403,8 @@ bool MainWindow::writeFile(Document* doc, const QString& path)
     const QString suffix = QFileInfo(path).suffix().toLower();
     ImageIO::SaveOptions options = m_saveOptions.value(suffix);
     if (ImageIO::isAnimation(path) && !m_saveOptions.contains(suffix))
-        options.loops = doc->gifLoops(); // las del GIF que se abrió
+        options.loops = doc->gifLoops();
     if (SaveConfigDialog::hasOptions(path)) {
-        // Configuración de guardado con vista previa y tamaño, como Paint.NET.
         const QList<Gif::Frame> frames = ImageIO::isAnimation(path) && doc->layerCount() > 1
                                              ? ImageIO::animationFrames(doc, 0)
                                              : QList<Gif::Frame>();
@@ -1471,7 +1447,6 @@ void MainWindow::renderPrint(QPrinter* printer, const QImage& image, double dpi,
     const QRect page = p.viewport();
     QSizeF size = image.size();
     if (actualSize && dpi > 0) {
-        // Tamaño real según los puntos por pulgada de la imagen (sin pasarse de la página).
         size *= printer->resolution() / dpi;
         if (size.width() > page.width() || size.height() > page.height())
             size = size.scaled(page.size(), Qt::KeepAspectRatio);
@@ -1486,8 +1461,8 @@ void MainWindow::renderPrint(QPrinter* printer, const QImage& image, double dpi,
 
 void MainWindow::print()
 {
-    // Vista previa de impresión con el ajuste a la página (como el asistente
-    // de impresión de Paint.NET); desde ella se imprime o se configura la página.
+    // Vista previa de impresión con el ajuste a la página (como el asistente de impresión de
+    // Paint.NET); desde ella se imprime o se configura la página.
     if (!m_doc)
         return;
     finishTool();
@@ -1500,7 +1475,6 @@ void MainWindow::print()
     preview.setWindowTitle(tr("Imprimir"));
     connect(&preview, &QPrintPreviewDialog::paintRequested, this,
             [this, image, dpi](QPrinter* target) { renderPrint(target, image, dpi, m_printActualSize); });
-    // Ajuste de la imagen en la barra de la vista previa.
     if (auto* bar = preview.findChild<QToolBar*>()) {
         auto* fit = new QComboBox(bar);
         fit->addItem(tr("Ajustar a la página"));
@@ -1632,8 +1606,6 @@ void MainWindow::eraseSelection(const QString& text)
         pushPixelPatch(m_doc, layer, before, r, text, QStringLiteral("edit-delete"));
         return;
     }
-    // Como Paint.NET: los píxeles se borran y la selección desaparece en un
-    // único paso del historial (también al cortar).
     auto* cmd = new QUndoCommand(text);
     new PixelPatchCommand(m_doc, layer, before, r, text, cmd);
     new SelectionCommand(m_doc, selection, Selection(), text, -1, cmd);
@@ -1770,8 +1742,8 @@ void MainWindow::selectAll()
 
 void MainWindow::deselect()
 {
-    // Con algo editable pendiente (forma, texto...), Ctrl+D solo lo termina;
-    // con las herramientas de selección, además anula la selección.
+    // Con algo editable pendiente (forma, texto...), Ctrl+D solo lo termina; con las
+    // herramientas de selección, además anula la selección.
     if (Tool* t = m_tools->current(); t && t->isBusy()) {
         finishTool();
         if (!t->highlightSelection())
@@ -1788,7 +1760,6 @@ void MainWindow::copySelection()
     if (!m_doc || m_doc->selection().isEmpty())
         return;
     finishTool();
-    // El contorno como texto JSON (polygonList), igual que "Copiar selección" de Paint.NET.
     QApplication::clipboard()->setText(m_doc->selection().toJson());
 }
 
@@ -1859,7 +1830,6 @@ void MainWindow::resizeImage()
         return;
     const QSize size = dlg.imageSize();
     if (size == m_doc->size()) {
-        // Solo cambia la resolución (tamaño de impresión).
         if (!qFuzzyCompare(dlg.dpi(), m_doc->dpi()))
             transformDocument(tr("Cambiar el tamaño"), QStringLiteral("transform-scale"), size,
                               [](const QImage& img, int) { return img; }, dlg.dpi());
@@ -1895,7 +1865,6 @@ void MainWindow::resizeCanvasTo(QSize size, Qt::Alignment anchor, const QString&
                                                                             : (size.height() - old.height()) / 2;
     const QColor fill = AppState::instance()->secondary();
     transformDocument(text, QStringLiteral("transform-crop-and-resize"), size, [&](const QImage& img, int index) {
-        // Como en Paint.NET, la zona nueva de la capa de fondo toma el color secundario.
         QImage out(size, kLayerFormat);
         if (index == 0)
             out.fill(fill);
@@ -1939,7 +1908,6 @@ void MainWindow::colorProfile()
     DocumentState after = before;
     after.colorSpace = target;
     if (dlg.result() == ColorProfileDialog::Result::Convert) {
-        // Cada capa pasa al perfil nuevo (los colores se ven igual).
         QApplication::setOverrideCursor(Qt::WaitCursor);
         const QColorTransform t = m_doc->colorSpace().transformationToColorSpace(target);
         for (QImage& img : after.images) {
@@ -2040,7 +2008,6 @@ void MainWindow::mergeLayerDown()
     DocumentState after = before;
     const LayerProps& top = before.props[i];
     QImage merged = before.images[i - 1].copy();
-    // La capa de arriba se compone con su modo de fusión y su opacidad.
     if (top.visible)
         blendImage(merged, QPoint(0, 0), before.images[i], top.blend, top.opacity);
     after.images[i - 1] = merged;
@@ -2135,7 +2102,6 @@ void MainWindow::soloLayer(int index)
     if (!m_doc || !m_doc->layer(index))
         return;
     finishTool();
-    // Si ya es la única visible, se vuelven a mostrar todas.
     bool othersHidden = m_doc->layer(index)->props.visible;
     for (int i = 0; i < m_doc->layerCount(); ++i)
         if (i != index && m_doc->layer(i)->props.visible)
@@ -2191,7 +2157,6 @@ void MainWindow::toggleLayerVisibility(int index)
     after.visible = !before.visible;
     push(new LayerPropsCommand(m_doc, index, before, after, tr("Visibilidad de la capa")),
          after.visible ? QStringLiteral("layer-visible-on") : QStringLiteral("layer-visible-off"));
-    // Opción de Paint.NET: al ocultar la capa activa se activa la visible más cercana.
     if (!after.visible && index == m_doc->activeIndex() && m_settings.autoSelectVisibleLayer) {
         for (int d = 1; d < m_doc->layerCount(); ++d) {
             for (int i : {index - d, index + d}) {
@@ -2229,7 +2194,6 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
 
     const QRect roi = m_doc->selection().isEmpty() ? m_doc->rect() : m_doc->selection().bounds();
     if (effect->hasCustomDialog() && !repeat) {
-        // Diálogo propio del complemento (otra ventana): se espera sin bloquear la interfaz.
         QString error;
         bool accepted = false;
         std::atomic_bool done{false};
@@ -2252,14 +2216,12 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
         EffectDialog dlg(*effect, values, layer->image, roi, this);
         EffectPreview preview(m_doc, layer, *effect, ctx);
         connect(&dlg, &EffectDialog::valuesChanged, &preview, &EffectPreview::request);
-        // Avance de la vista previa en la barra de estado, como Paint.NET.
         connect(&preview, &EffectPreview::progress, this, [this](int permille) {
             m_progress->setVisible(permille >= 0);
             if (permille >= 0)
                 m_progress->setValue(permille);
         });
         preview.request(values);
-        // Sin oscurecer la ventana: hay que ver la vista previa en el lienzo.
         const bool accepted = execWithoutDimming(dlg) == QDialog::Accepted;
         if (accepted) {
             values = dlg.values();
@@ -2271,7 +2233,6 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
     } else {
         result = applyEffectWithProgress(*effect, layer->image, m_doc->selection(), values, ctx, this);
     }
-    // Un complemento que falla deja la imagen igual: se avisa y no se guarda en el historial.
     const QString error = effect->takeError();
     if (!error.isEmpty()) {
         m_doc->clearPreview();
@@ -2308,9 +2269,7 @@ void MainWindow::showSettings(SettingsDialog::Page page)
     dlg.setDiscordStatus(m_discord->statusText());
     connect(m_discord, &DiscordPresence::statusChanged, &dlg, [this, &dlg] { dlg.setDiscordStatus(m_discord->statusText()); });
     connect(&dlg, &SettingsDialog::checkUpdatesRequested, this, [this] { checkForUpdates(true); });
-    // Los cambios se aplican al momento, como en Paint.NET.
     connect(&dlg, &SettingsDialog::settingsChanged, this, [this](const AppSettings& s) {
-        // La fecha de la última comprobación la escribe checkForUpdates.
         const QDateTime lastCheck = m_settings.lastUpdateCheck;
         const QString latest = m_settings.latestVersion;
         m_settings = s;
@@ -2334,7 +2293,6 @@ void MainWindow::applySettings()
     m_canvas->setAppearance(m_settings.dropShadow, m_settings.canvasBorder, m_settings.checkerBrightness);
     m_canvas->setOverscroll(m_settings.overscroll);
     m_canvas->setAutoScroll(m_settings.autoScroll);
-    // Combinación de colores (solo si cambia: aplicarla repinta toda la interfaz).
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme))
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     for (auto effect : {Qt::UI_AnimateMenu, Qt::UI_FadeMenu, Qt::UI_AnimateCombo, Qt::UI_AnimateTooltip,
@@ -2384,8 +2342,8 @@ void MainWindow::updatePresence()
 
 void MainWindow::checkHistoryMemory()
 {
-    // Límite de memoria del historial (Configuración > Rendimiento): si se
-    // supera, se descartan los pasos más antiguos y se avisa.
+    // Límite de memoria del historial (Configuración > Rendimiento): si se supera, se
+    // descartan los pasos más antiguos y se avisa.
     if (!m_doc || m_settings.historyLimitMB <= 0)
         return;
     const qint64 limit = qint64(m_settings.historyLimitMB) * 1024 * 1024;
@@ -2411,8 +2369,8 @@ void MainWindow::setUnit(int unit)
 
 void MainWindow::checkForUpdates(bool interactive)
 {
-    // La versión más reciente es la del último "release" (o etiqueta) del
-    // repositorio de GitHub; las versiones preliminares solo si se piden.
+    // La versión más reciente es la del último "release" (o etiqueta) del repositorio de
+    // GitHub; las versiones preliminares solo si se piden.
     auto* nam = new QNetworkAccessManager(this);
     QNetworkRequest req(QUrl(QStringLiteral("https://api.github.com/repos/%1/releases").arg(QStringLiteral(KAINT_GITHUB))));
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Kaint/" KAINT_VERSION));
@@ -2432,7 +2390,7 @@ void MainWindow::checkForUpdates(bool interactive)
                     continue;
                 latest = r.value(QLatin1String("tag_name")).toString();
                 url = r.value(QLatin1String("html_url")).toString();
-                break; // la API las da de la más nueva a la más antigua
+                break;
             }
         }
         m_settings.lastUpdateCheck = QDateTime::currentDateTime();

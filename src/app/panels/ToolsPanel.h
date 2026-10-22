@@ -9,9 +9,7 @@ class QToolButton;
 class ToolManager;
 class Tool;
 
-// Ventana Herramientas: rejilla de iconos como en Paint.NET. Por defecto
-// tiene dos columnas, pero al cambiar el tamaño de la ventana los iconos se
-// reorganizan en 1, 2 o más columnas (o filas) según el espacio.
+// Ventana Herramientas: rejilla de iconos como en Paint.NET.
 class ToolsPanel : public QWidget, public PanelContent {
     Q_OBJECT
 public:
@@ -20,7 +18,6 @@ public:
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
     QSize fitSize(QSize proposed, Qt::Orientations changed) const override;
-    // Columnas que caben en un ancho dado.
     int columnsFor(int width) const;
     int columns() const { return columnsFor(width()); }
 

@@ -71,7 +71,6 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     }
 
     if (ImageIO::isAnimation(path)) {
-        // GIF: 256 colores como máximo, animación con las capas.
         if (m_frames.size() > 1) {
             m_animation = new QCheckBox(tr("Animación: cada capa visible es un fotograma"), this);
             m_animation->setToolTip(tr("La capa de abajo es el primer fotograma. La duración de cada uno va en el "
@@ -115,7 +114,6 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
         form->addRow(tr("Umbral de transparencia:"), m_threshold);
     }
     if (ImageIO::isIcon(path)) {
-        // Icono: los tamaños que se guardan dentro del archivo.
         auto* sizes = new QWidget(this);
         auto* grid = new QGridLayout(sizes);
         grid->setContentsMargins(0, 0, 0, 0);
@@ -261,8 +259,6 @@ void SaveConfigDialog::start()
     m_pending = false;
     m_running = true;
     const int generation = ++m_generation;
-    // Animación: se codifican todos los fotogramas (el tamaño es el real) y
-    // la vista previa muestra el primero.
     QList<Gif::Frame> frames;
     if (m_animation && m_animation->isChecked())
         frames = m_frames;
@@ -284,7 +280,6 @@ void SaveConfigDialog::start()
         }
         QImage decoded;
         if (!data.isEmpty() && ImageIO::isIcon(path)) {
-            // Del icono se muestra el tamaño más grande.
             QBuffer buffer(&data);
             QImageReader reader(&buffer, "ico");
             for (int i = 0; i < std::max(1, reader.imageCount()); ++i) {

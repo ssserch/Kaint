@@ -9,9 +9,7 @@ class QAction;
 class QListWidget;
 class Document;
 
-// Ventana Capas: miniatura, nombre y casilla de visibilidad (a la derecha,
-// como en Paint.NET). La capa superior aparece arriba. Se pueden arrastrar
-// para reordenarlas; Ctrl+clic en la casilla muestra solo esa capa.
+// Ventana Capas: miniatura, nombre y casilla de visibilidad (a la derecha, como en Paint.NET).
 class LayersPanel : public QWidget {
     Q_OBJECT
 public:
@@ -38,7 +36,7 @@ private:
     QListWidget* m_list;
     QTimer m_thumbTimer;
     QSet<int> m_dirty;
-    int m_dragRow = -1;     // fila que se está arrastrando para reordenar
+    int m_dragRow = -1;
     QPoint m_pressPos;
     bool m_dragging = false;
 };

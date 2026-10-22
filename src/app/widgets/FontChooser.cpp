@@ -90,7 +90,6 @@ void FontChooser::stopEditing(bool commit)
     m_editing = false;
     lineEdit()->setReadOnly(true);
     if (commit) {
-        // Se acepta si coincide con una fuente instalada (sin distinguir mayúsculas).
         const QString typed = lineEdit()->text().trimmed();
         const int i = findText(typed, Qt::MatchFixedString);
         if (i >= 0) {
@@ -131,7 +130,6 @@ bool FontChooser::eventFilter(QObject* watched, QEvent* event)
         }
         break;
     case QEvent::FocusOut:
-        // La lista del autocompletado no cuenta como "clic fuera".
         if (static_cast<QFocusEvent*>(event)->reason() != Qt::PopupFocusReason)
             stopEditing(false);
         break;

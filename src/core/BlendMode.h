@@ -5,13 +5,7 @@
 #include <QRect>
 #include <QString>
 
-// Modos de fusión de Paint.NET. Los 14 primeros sirven para capas y
-// herramientas; "Sobrescribir" solo existe para herramientas (copia el píxel
-// tal cual, incluida su transparencia).
-//
-// Todos siguen la fórmula de composición generalizada de Paint.NET:
-//   G(A,a,B,b,F) = (a - ab)·A + (b - ab)·B + ab·F(A,B)
-// donde A/a es el fondo, B/b lo que se pinta encima y F la función del modo.
+// Modos de fusión de Paint.NET.
 enum class BlendMode {
     Normal,
     Multiply,
@@ -31,8 +25,8 @@ enum class BlendMode {
 };
 
 QString blendModeName(BlendMode mode);
-// Paint.NET traduce distinto la lista de la barra de herramientas
-// ("Aditivo", "Reflejar", "Resplandor", "Trama"...).
+// Paint.NET traduce distinto la lista de la barra de herramientas ("Aditivo", "Reflejar",
+// "Resplandor", "Trama"...).
 QString blendModeToolName(BlendMode mode);
 const QList<BlendMode>& layerBlendModes();
 const QList<BlendMode>& toolBlendModes();
@@ -41,10 +35,8 @@ const QList<BlendMode>& toolBlendModes();
 QString blendModeOraName(BlendMode mode);
 BlendMode blendModeFromOra(const QString& name);
 
-// Compone 'src' (la región srcRect) sobre 'dst' en la posición 'at' con el
-// modo y la opacidad (0..255) indicados. 'dst' puede ser una capa (ARGB32 con
-// alfa directo) o la caché de pantalla (ARGB32 premultiplicado); 'src' puede
-// estar en cualquiera de los dos formatos.
+// Compone 'src' (la región srcRect) sobre 'dst' en la posición 'at' con el modo y la opacidad
+// (0..255) indicados.
 void blendImage(QImage& dst, QPoint at, const QImage& src, const QRect& srcRect, BlendMode mode, int opacity = 255);
 inline void blendImage(QImage& dst, QPoint at, const QImage& src, BlendMode mode, int opacity = 255)
 {

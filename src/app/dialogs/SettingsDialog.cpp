@@ -63,6 +63,7 @@ AppSettings AppSettings::load()
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 2);
+    a.language = get("language", a.language) == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);
     a.rulers = get("rulers", a.rulers);
@@ -95,6 +96,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("autoScroll"), autoScroll);
     s.setValue(QStringLiteral("autoSelectVisibleLayer"), autoSelectVisibleLayer);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
+    s.setValue(QStringLiteral("language"), language);
     s.setValue(QStringLiteral("reopenLast"), reopenLast);
     s.setValue(QStringLiteral("unit"), unit);
     s.setValue(QStringLiteral("rulers"), rulers);
@@ -114,7 +116,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("discordShowFileInfo"), discordShowFileInfo);
     s.setValue(QStringLiteral("discordShowTool"), discordShowTool);
     s.setValue(QStringLiteral("discordShowElapsed"), discordShowElapsed);
-    s.remove(QStringLiteral("discordClientId")); // el ID solo se lee de discord.json
+    s.remove(QStringLiteral("discordClientId"));
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +180,6 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
         m_sections->addItem(new QListWidgetItem(Icons::theme(icon), name));
         m_pages->addWidget(page);
     };
-    // Mismo orden que Paint.NET 5 (sin Gráficos ni Gestión de colores, que son de Windows).
     addPage(tr("Interfaz de usuario"), {"preferences-desktop-theme", "preferences-desktop"}, createInterfacePage());
     addPage(tr("Lienzo"), {"image-x-generic", "view-preview"}, createCanvasPage());
     addPage(tr("Herramientas"), {"tools", "draw-brush"}, createToolsPage(tools));
@@ -244,14 +245,40 @@ QWidget* SettingsDialog::createInterfacePage()
     auto* scheme = new QComboBox(page.widget);
     scheme->addItems({tr("Seguir al sistema"), tr("Claro"), tr("Oscuro")});
     scheme->setCurrentIndex(m_settings.colorScheme);
-    connect(scheme, &QComboBox::activated, this, [this](int i) {
-        m_settings.colorScheme = i;
-        changed();
-    });
     schemeRow->addWidget(new QLabel(tr("Combinación de colores:"), page.widget));
     schemeRow->addWidget(scheme);
     schemeRow->addStretch();
     page.layout->addLayout(schemeRow);
+
+    auto* languageRow = new QHBoxLayout;
+    auto* language = new QComboBox(page.widget);
+    language->addItem(QStringLiteral("English"), QStringLiteral("en"));
+    language->addItem(QStringLiteral("Español"), QStringLiteral("es"));
+    language->setCurrentIndex(language->findData(m_settings.language));
+    languageRow->addWidget(new QLabel(tr("Idioma:"), page.widget));
+    languageRow->addWidget(language);
+    languageRow->addStretch();
+    page.layout->addLayout(languageRow);
+
+    auto* restartNote = wrapped(QString(), page.widget);
+    page.layout->addWidget(restartNote);
+    const QString startLanguage = m_settings.language;
+    auto updateNote = [this, restartNote, startLanguage] {
+        const bool restart = m_settings.language != startLanguage || Theme::needsRestart(Theme::Scheme(m_settings.colorScheme));
+        restartNote->setText(restart ? tr("Reinicia Kaint para aplicar del todo estos cambios.") : QString());
+        restartNote->setVisible(restart);
+    };
+    updateNote();
+    connect(scheme, &QComboBox::activated, this, [this, updateNote](int i) {
+        m_settings.colorScheme = i;
+        changed();
+        updateNote();
+    });
+    connect(language, &QComboBox::activated, this, [this, language, updateNote](int i) {
+        m_settings.language = language->itemData(i).toString();
+        changed();
+        updateNote();
+    });
 
     page.layout->addWidget(sectionHeader(tr("Al iniciar"), page.widget));
     check(tr("Volver a abrir las imágenes de la última sesión"), &AppSettings::reopenLast);
@@ -461,7 +488,6 @@ QWidget* SettingsDialog::createPluginsPage()
     m_pluginDetails->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     m_pluginDetails->setMinimumHeight(100);
     page.layout->addWidget(m_pluginDetails, 1);
-    // Los que Kaint no puede cargar (API de Paint.NET 5...) no se listan salvo que se pida.
     m_showIncompatible = new QCheckBox(tr("Mostrar también los complementos que no son compatibles"), page.widget);
     connect(m_showIncompatible, &QCheckBox::toggled, this, &SettingsDialog::refreshPlugins);
     page.layout->addWidget(m_showIncompatible);
@@ -508,7 +534,6 @@ QWidget* SettingsDialog::createPluginsPage()
         QApplication::restoreOverrideCursor();
         QTimer::singleShot(0, this, &SettingsDialog::refreshPlugins);
     });
-    // El examen de los complementos de Paint.NET termina en segundo plano.
     connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::refreshPlugins);
     refreshPlugins();
     return page.widget;
@@ -521,7 +546,6 @@ void SettingsDialog::refreshPlugins()
     const QSignalBlocker block(m_pluginList);
     m_pluginList->clear();
     for (const PluginInfo& p : PluginManager::instance()->plugins()) {
-        // Sin efectos y con errores: Kaint no lo puede usar (API de Paint.NET 5...).
         const bool incompatible = !p.pending && p.effects.isEmpty() && !p.errors.isEmpty();
         if (incompatible && !p.enabled && !m_showIncompatible->isChecked())
             continue;
@@ -594,7 +618,6 @@ void SettingsDialog::addPlugins()
     pm->scan();
     QApplication::restoreOverrideCursor();
     refreshPlugins();
-    // Se selecciona el primero de los añadidos.
     for (int i = 0; i < m_pluginList->topLevelItemCount(); ++i) {
         QTreeWidgetItem* item = m_pluginList->topLevelItem(i);
         if (copied.contains(item->data(0, Qt::UserRole).toString())) {

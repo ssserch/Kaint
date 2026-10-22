@@ -45,7 +45,6 @@ void applySelection(QImage& img, QPoint origin, const Selection& selection)
 {
     if (selection.isEmpty())
         return;
-    // Capas (alfa directo): se reduce solo el alfa; premultiplicado: todo el píxel.
     const bool pm = isPremultiplied(img);
     const bool aa = selectionAntialias();
     const QImage& mask = selection.mask();
@@ -79,7 +78,6 @@ void compositeRegion(QImage& layer, const QImage& before, const QImage& source, 
     const ConstMask sel(selection.mask());
     const ConstMask cov(coverage);
     auto weight = [&](int x, int y) {
-        // x, y en coordenadas del lienzo
         int m = cov.isNull() ? 255 : cov.row(y - area.top())[x - area.left()];
         if (!sel.isNull())
             m = m * clipCoverage(sel.row(y)[x], aa) / 255;
@@ -135,8 +133,8 @@ QBrush patternBrush(int pattern, QColor fg, QColor bg)
 
 QImage overlayToSource(const QImage& overlay, const QImage& coverage)
 {
-    // overlay (premultiplicado) = cobertura · fuente, así que la fuente con
-    // alfa directo es: color = overlay / alfa del overlay, alfa = alfa / cobertura.
+    // overlay (premultiplicado) = cobertura · fuente, así que la fuente con alfa directo es:
+    // color = overlay / alfa del overlay, alfa = alfa / cobertura.
     QImage out(overlay.size(), kLayerFormat);
     for (int y = 0; y < overlay.height(); ++y) {
         const QRgb* o = reinterpret_cast<const QRgb*>(overlay.constScanLine(y));
@@ -158,8 +156,8 @@ QImage overlayToSource(const QImage& overlay, const QImage& coverage)
 
 void eraseSelection(QImage& layer, const Selection& selection)
 {
-    // Como Paint.NET: lo borrado del todo queda en blanco transparente; los
-    // bordes suavizados solo pierden alfa y conservan su color.
+    // Como Paint.NET: lo borrado del todo queda en blanco transparente; los bordes suavizados
+    // solo pierden alfa y conservan su color.
     if (selection.isEmpty()) {
         layer.fill(kTransparent);
         return;

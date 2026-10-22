@@ -8,9 +8,8 @@
 
 namespace {
 
-// Deja pasar solo la entrada dirigida al diálogo, a sus ventanas hijas
-// (listas desplegables, menús, selectores de color) y a otras ventanas
-// modales abiertas desde él.
+// Deja pasar solo la entrada dirigida al diálogo, a sus ventanas hijas (listas desplegables,
+// menús, selectores de color) y a otras ventanas modales abiertas desde él.
 class InputBlocker : public QObject {
 public:
     explicit InputBlocker(QDialog* dialog) : m_dialog(dialog) {}
@@ -41,12 +40,10 @@ protected:
         for (QWidget* w = widget; w; w = w->parentWidget())
             if (w == m_dialog)
                 return false;
-        // Otra ventana modal (p. ej. el selector de color) sí recibe la entrada.
         if (QWidget* modal = QApplication::activeModalWidget(); modal && modal->isAncestorOf(widget))
             return false;
         if (QApplication::activeModalWidget() == widget->window())
             return false;
-        // Un clic en la ventana principal devuelve el foco al diálogo.
         if (event->type() == QEvent::MouseButtonPress)
             m_dialog->activateWindow();
         return true;

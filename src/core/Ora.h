@@ -5,8 +5,8 @@
 
 class Document;
 
-// OpenRaster (.ora): formato abierto con capas usado por Krita, GIMP y MyPaint.
-// Es un ZIP con stack.xml (estructura y propiedades) y un PNG por capa.
+// OpenRaster (.ora): formato abierto con capas usado por Krita, GIMP y MyPaint. Es un ZIP con
+// stack.xml (estructura y propiedades) y un PNG por capa.
 namespace Ora {
 
 bool save(const Document* doc, const QString& path, QString* error);

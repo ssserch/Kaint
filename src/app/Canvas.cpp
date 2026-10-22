@@ -134,7 +134,6 @@ void Canvas::renderRegion(const QRect& area)
     m_doc->renderComposite(m_composite, r);
     if (m_toDisplay.isIdentity())
         return;
-    // La pantalla se supone sRGB: se convierte lo que se va a ver.
     QImage part = m_composite.copy(r);
     part.applyColorTransform(m_toDisplay);
     Raster::blit(m_composite, part, r.topLeft());
@@ -201,7 +200,6 @@ QPointF Canvas::origin() const
 {
     if (!m_doc)
         return {};
-    // Alinea el origen a píxeles físicos para que el 100 % sea nítido.
     const qreal dpr = viewport()->devicePixelRatioF();
     return QPointF(std::round(m_origin.x() * dpr) / dpr, std::round(m_origin.y() * dpr) / dpr);
 }
@@ -209,13 +207,10 @@ QPointF Canvas::origin() const
 void Canvas::originLimits(qreal content, qreal view, qreal* lo, qreal* hi) const
 {
     if (m_overscroll) {
-        // La imagen puede desplazarse hasta que su borde llegue al centro de
-        // la ventana (media ventana de margen). Así el punto bajo el cursor
-        // no se mueve al hacer zoom, ni siquiera cerca de bordes y esquinas.
         *lo = view / 2.0 - content;
         *hi = view / 2.0;
     } else if (content + 2 * kMargin <= view) {
-        *lo = *hi = (view - content) / 2.0; // cabe: centrada
+        *lo = *hi = (view - content) / 2.0;
     } else {
         *lo = view - content - kMargin;
         *hi = kMargin;
@@ -339,8 +334,6 @@ void Canvas::applyZoom(qreal zoom, std::optional<QPointF> anchor)
         updateRulers();
         return;
     }
-    // El punto de la imagen bajo 'anchor' (el cursor) queda fijo: se mide con
-    // el origen tal como se ve (redondeado a píxeles físicos).
     const QPointF a = anchor.value_or(QPointF(viewport()->width() / 2.0, viewport()->height() / 2.0));
     const QPointF img = (a - origin()) / scale();
     m_zoom = zoom;
@@ -531,7 +524,7 @@ void Canvas::paintEvent(QPaintEvent* e)
 {
     QPainter p(viewport());
     QColor window = palette().color(QPalette::Window);
-    window.setAlpha(255); // opaco aunque el estilo use ventanas translúcidas
+    window.setAlpha(255);
     const bool dark = window.lightness() < 128;
     p.fillRect(e->rect(), m_border.isValid() ? m_border : (dark ? window.darker(135) : window.darker(112)));
     if (!m_doc)
@@ -539,7 +532,6 @@ void Canvas::paintEvent(QPaintEvent* e)
 
     const QRectF imgView = imageToView(QRectF(m_doc->rect()));
     if (m_dropShadow) {
-        // Sombra suave alrededor del lienzo.
         for (int i = 1; i <= 6; ++i) {
             p.setPen(QColor(0, 0, 0, (dark ? 70 : 40) * (7 - i) / 6));
             p.setBrush(Qt::NoBrush);
@@ -625,8 +617,8 @@ void Canvas::drawSelection(QPainter& p) const
 
 void Canvas::drawPixelGrid(QPainter& p, const QRect& src) const
 {
-    // Como en Paint.NET: líneas punteadas (un píxel sí y otro no) de gris
-    // claro opaco, que se distinguen sobre colores claros y oscuros.
+    // Como en Paint.NET: líneas punteadas (un píxel sí y otro no) de gris claro opaco, que se
+    // distinguen sobre colores claros y oscuros.
     p.save();
     p.setRenderHint(QPainter::Antialiasing, false);
     QPen pen(QColor(187, 187, 187), 1);
@@ -635,7 +627,6 @@ void Canvas::drawPixelGrid(QPainter& p, const QRect& src) const
     p.setPen(pen);
     const QRectF dst = imageToView(QRectF(src));
     p.setClipRect(dst.adjusted(0, 0, 1, 1));
-    // Inicio en coordenada par: los puntos de todas las líneas quedan alineados.
     const qreal top = std::floor(dst.top() / 2) * 2, left = std::floor(dst.left() / 2) * 2;
     for (int x = src.left(); x <= src.right() + 1; ++x) {
         const qreal vx = imageToView(QPointF(x, 0)).x();
@@ -659,8 +650,6 @@ QRect Canvas::brushOutlineRect(const QPointF& center) const
 void Canvas::resizeEvent(QResizeEvent* e)
 {
     QAbstractScrollArea::resizeEvent(e);
-    // El punto de la imagen en el centro de la vista se mantiene al cambiar
-    // el tamaño de la ventana (o al mostrar las reglas).
     const QSize vp = viewport()->size();
     if (m_lastViewport.isValid())
         m_origin += QPointF(vp.width() - m_lastViewport.width(), vp.height() - m_lastViewport.height()) / 2.0;
@@ -708,8 +697,8 @@ ToolEvent Canvas::makeEvent(QMouseEvent* e) const
 
 bool Canvas::event(QEvent* e)
 {
-    // Mientras se escribe texto, las teclas sin modificadores van al lienzo
-    // y no disparan los atajos de una letra (B = pincel, etc.).
+    // Mientras se escribe texto, las teclas sin modificadores van al lienzo y no disparan los
+    // atajos de una letra (B = pincel, etc.).
     if (e->type() == QEvent::ShortcutOverride && m_tool) {
         auto* ke = static_cast<QKeyEvent*>(e);
         const auto mods = ke->modifiers() & ~(Qt::ShiftModifier | Qt::KeypadModifier | Qt::GroupSwitchModifier);
@@ -717,14 +706,12 @@ bool Canvas::event(QEvent* e)
             e->accept();
             return true;
         }
-        // Ctrl con las teclas de edición (saltar palabras, pegar texto...).
         static const QList<int> textKeys = {Qt::Key_Left, Qt::Key_Right, Qt::Key_Home, Qt::Key_End, Qt::Key_Backspace,
                                             Qt::Key_Delete, Qt::Key_Return, Qt::Key_Enter, Qt::Key_V};
         if (m_tool->wantsKeyboard() && mods == Qt::ControlModifier && textKeys.contains(ke->key())) {
             e->accept();
             return true;
         }
-        // Con algo editable pendiente, Intro y Esc lo terminan (si no, Intro anula la selección).
         const int k = ke->key();
         if (m_tool->isBusy() && (k == Qt::Key_Return || k == Qt::Key_Enter || k == Qt::Key_Escape)) {
             e->accept();
@@ -742,7 +729,6 @@ bool Canvas::viewportEvent(QEvent* e)
     case QEvent::TabletRelease: {
         auto* te = static_cast<QTabletEvent*>(e);
         m_pressure = te->pressure();
-        // Extremo borrador del lápiz: la ventana puede pasar a la Goma.
         const bool eraser = te->pointerType() == QPointingDevice::PointerType::Eraser;
         if (eraser != m_eraserTip) {
             m_eraserTip = eraser;
@@ -752,7 +738,7 @@ bool Canvas::viewportEvent(QEvent* e)
             m_tabletDown = true;
         else if (e->type() == QEvent::TabletRelease)
             m_tabletDown = false;
-        e->ignore(); // Qt sintetiza el evento de ratón con la misma posición
+        e->ignore();
         return false;
     }
     case QEvent::NativeGesture: {
@@ -842,8 +828,8 @@ void Canvas::mouseMoveEvent(QMouseEvent* e)
 
 void Canvas::updateAutoScroll(const QPointF& pos)
 {
-    // Al arrastrar con una herramienta junto al borde (o fuera) de la vista, se
-    // desplaza más deprisa cuanto más lejos esté el puntero.
+    // Al arrastrar con una herramienta junto al borde (o fuera) de la vista, se desplaza más
+    // deprisa cuanto más lejos esté el puntero.
     if (!m_autoScroll || !m_tool || m_tool->id() == ToolId::Pan || m_tool->id() == ToolId::Zoom) {
         m_autoScrollTimer.stop();
         return;
@@ -873,10 +859,9 @@ void Canvas::autoScrollStep()
     const QPointF before = m_origin;
     scrollByView(m_autoScrollDelta);
     if (m_origin == before) {
-        m_autoScrollTimer.stop(); // ya no se puede desplazar más
+        m_autoScrollTimer.stop();
         return;
     }
-    // La herramienta sigue al puntero, que ahora está sobre otro punto de la imagen.
     ToolEvent ev;
     ev.viewPos = m_lastToolPos;
     ev.pos = viewToImage(m_lastToolPos);
@@ -911,13 +896,10 @@ void Canvas::wheelEvent(QWheelEvent* e)
 {
     m_fitPending = false;
     if (e->modifiers() & Qt::ControlModifier) {
-        // Zoom continuo hacia el cursor: cada muesca de la rueda (120 = 15°)
-        // acerca un 20 %; los touchpads envían fracciones y el paso es suave.
         const QPoint ad = e->angleDelta();
         const int delta = ad.y() != 0 ? ad.y() : ad.x();
         if (delta != 0) {
             qreal z = m_zoom * std::pow(1.2, delta / 120.0);
-            // El 100 % "atrae": al cruzarlo la rueda se detiene en él.
             if ((m_zoom < 1.0 && z > 1.0) || (m_zoom > 1.0 && z < 1.0))
                 z = 1.0;
             setZoom(z, e->position());
@@ -936,7 +918,6 @@ void Canvas::wheelEvent(QWheelEvent* e)
 void Canvas::keyPressEvent(QKeyEvent* e)
 {
     m_fitPending = false;
-    // Espacio + flechas desplaza la vista (Ctrl: x10), como en Paint.NET.
     if (m_spaceDown && keyboardScroll(e))
         return;
     if (m_tool && m_doc && m_tool->keyPress(e))
@@ -993,7 +974,6 @@ bool Canvas::keyboardScroll(QKeyEvent* e)
         if (ctrl) {
             centerOn(e->key() == Qt::Key_Home ? QPointF(0, 0) : QPointF(m_doc->size().width(), m_doc->size().height()));
         } else {
-            // Inicio/Fin muestran el borde de la imagen (sin el margen de overscroll).
             const bool start = e->key() == Qt::Key_Home;
             m_origin.setX(edgeOrigin(Qt::Horizontal, start));
             if (shift || e->isAutoRepeat())

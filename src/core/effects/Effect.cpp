@@ -119,7 +119,6 @@ bool EffectParam::isReadOnly(const ParamValues& values) const
     for (const ReadOnlyCondition& c : readOnlyWhen) {
         const QVariant v = values.value(c.key);
         for (const QVariant& w : c.values) {
-            // Comparación por tipo del valor actual (los índices llegan como double).
             if (v.typeId() == QMetaType::Bool ? v.toBool() == w.toBool() : v.toDouble() == w.toDouble())
                 match = true;
         }
@@ -355,7 +354,6 @@ QStringList edgeBehaviorNames(const QList<EdgeBehavior>& list)
     QStringList names;
     for (EdgeBehavior e : list) {
         switch (e) {
-        // Los nombres de Paint.NET 5.
         case EdgeBehavior::Clamp: names << QObject::tr("Sujetar"); break;
         case EdgeBehavior::Wrap: names << QObject::tr("Ajuste"); break;
         case EdgeBehavior::Reflect: names << QObject::tr("Reflejo"); break;
@@ -378,7 +376,6 @@ QRgb sampleWrapped(const ConstPixels& src, float x, float y)
     };
     x = wrap(x, src.w);
     y = wrap(y, src.h);
-    // Bilineal con vecinos envueltos.
     const float fx = x - 0.5f, fy = y - 0.5f;
     const int x0 = int(std::floor(fx)), y0 = int(std::floor(fy));
     const int tx = int((fx - x0) * 256), ty = int((fy - y0) * 256);
@@ -440,7 +437,7 @@ void warp(const RenderArgs& a, const WarpSetup& setup, const std::function<QPoin
     const double xc = a.roi.left() + a.roi.width() * (1.0 + setup.offset.x()) * 0.5;
     const double yc = a.roi.top() + a.roi.height() * (1.0 + setup.offset.y()) * 0.5;
     const std::vector<QPointF> aa = rgssOffsets(std::clamp(setup.quality, 1, 5));
-    const QRgb primary = qPremultiply(a.ctx.primary.rgba()); // warp trabaja en premultiplicado
+    const QRgb primary = qPremultiply(a.ctx.primary.rgba());
     const QRgb secondary = qPremultiply(a.ctx.secondary.rgba());
     forRows(a, [&](int y) {
         std::vector<QRgb> samples(aa.size());
@@ -476,8 +473,8 @@ void warp(const RenderArgs& a, const WarpSetup& setup, const std::function<QPoin
 
 namespace {
 
-// Media de una ventana [lo, hi] alrededor de cada píxel en un eje, contando
-// solo los píxeles dentro de la imagen (como hace Paint.NET en los bordes).
+// Media de una ventana [lo, hi] alrededor de cada píxel en un eje, contando solo los píxeles
+// dentro de la imagen (como hace Paint.NET en los bordes).
 void boxPass(const QImage& inImg, QImage& outImg, int lo, int hi, bool horizontal, const std::atomic_bool& cancel)
 {
     const ConstPixels in(inImg);
@@ -538,11 +535,8 @@ QImage tentBlur(const QImage& src, const QRect& area, int radius, const std::ato
     const QRect big = expanded(area, tentMargin(radius), src.rect());
     QImage a = src.copy(big);
     QImage b(a.size(), a.format());
-    // Dos cajas de ancho r+1 desplazadas medio píxel en sentidos opuestos
-    // forman el triángulo simétrico de radio r.
     const int lo1 = -(radius / 2), hi1 = (radius + 1) / 2;
     const int lo2 = -((radius + 1) / 2), hi2 = radius / 2;
-    // Los bordes de 'big' que no son bordes de la imagen tienen margen de sobra.
     boxPass(a, b, lo1, hi1, true, cancel);
     boxPass(b, a, lo2, hi2, true, cancel);
     boxPass(a, b, lo1, hi1, false, cancel);
@@ -586,9 +580,8 @@ QRgb histogramPercentile(const LocalHistogram& h, int percentile)
 
 QRgb quantizeBits(QRgb c, int bits)
 {
-    if (bits >= 8 || bits <= 0) // 0: valores guardados sin "Calidad"
+    if (bits >= 8 || bits <= 0)
         return c;
-    // Centro del intervalo en la escala 0–255 (con calidad 1 el blanco queda en 191).
     const int shift = 8 - bits;
     const double levels = double(1 << bits);
     auto q = [shift, levels](int v) { return int(std::lround(((v >> shift) + 0.5) * 255.0 / levels)); };
@@ -880,8 +873,8 @@ ParamValues defaults(const Effect& effect, const EffectContext& ctx)
 QImage apply(const Effect& effect, const QImage& src, const Selection& selection, const ParamValues& values,
              const EffectContext& ctx, const std::atomic_bool& cancel)
 {
-    // Los efectos espaciales calculan en premultiplicado; los ajustes píxel a
-    // píxel reciben la capa tal cual (alfa directo).
+    // Los efectos espaciales calculan en premultiplicado; los ajustes píxel a píxel reciben la
+    // capa tal cual (alfa directo).
     const bool straightIn = !isPremultiplied(src);
     const bool convert = straightIn && !effect.straightAlpha();
     const QImage work = convert ? Raster::premultiplied(src) : src;
@@ -919,8 +912,8 @@ QImage apply(const Effect& effect, const QImage& src, const Selection& selection
     if (!convert)
         return dst;
 
-    // De vuelta a alfa directo. Donde el efecto no cambió nada se recupera el
-    // píxel original exacto (con su color aunque sea transparente).
+    // De vuelta a alfa directo. Donde el efecto no cambió nada se recupera el píxel original
+    // exacto (con su color aunque sea transparente).
     QImage out(dst.size(), kLayerFormat);
     const ConstPixels orig(src), before(work), after(dst);
     const Pixels res(out);

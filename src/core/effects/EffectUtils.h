@@ -1,7 +1,7 @@
 #pragma once
 
-// Utilidades internas compartidas por los efectos. Muchas funciones son
-// adaptaciones a C++ de los algoritmos de Paint.NET 3.36 (licencia MIT).
+// Utilidades internas compartidas por los efectos. Muchas funciones son adaptaciones a C++ de
+// los algoritmos de Paint.NET 3.36 (licencia MIT).
 
 #include "core/BlendMode.h"
 #include "core/Layer.h"
@@ -26,15 +26,15 @@ public:
     struct Def {
         QString id;
         QString name;
-        QString category;          // vacío = ajuste
+        QString category;
         QString icon;
         QKeySequence shortcut;
         QList<EffectParam> params;
         RenderFn render;
         PrepareFn prepare = nullptr;
         bool hidden = false;
-        bool straight = false; // render() trabaja con alfa directo (ver Effect::straightAlpha)
-        QString note = QString(); // nota al pie del diálogo
+        bool straight = false;
+        QString note = QString();
     };
 
     explicit SimpleEffect(Def def) : m(std::move(def)) {}
@@ -68,8 +68,8 @@ inline QColor cval(const ParamValues& v, const char* key) { return v.value(QLati
 
 // --- Recorrido -----------------------------------------------------------------
 
-// Recorre las filas [y0, y1) en paralelo, comprobando la cancelación y
-// notificando el progreso. f(y) procesa una fila completa.
+// Recorre las filas [y0, y1) en paralelo, comprobando la cancelación y notificando el
+// progreso. f(y) procesa una fila completa.
 template <typename F>
 void forRows(const RenderArgs& a, int y0, int y1, F f)
 {
@@ -87,8 +87,8 @@ void forRows(const RenderArgs& a, F f)
     forRows(a, a.roi.top(), a.roi.bottom() + 1, f);
 }
 
-// Píxel por píxel con colores sin premultiplicar. f(QRgb) -> QRgb. Sirve
-// para imágenes con alfa directo (capas) y premultiplicadas.
+// Píxel por píxel con colores sin premultiplicar. f(QRgb) -> QRgb. Sirve para imágenes con
+// alfa directo (capas) y premultiplicadas.
 template <typename F>
 void mapStraight(const RenderArgs& a, F f)
 {
@@ -121,8 +121,8 @@ inline QRgb lerpStraight(QRgb a, QRgb b, double t)
     return qRgba(l(qRed(a), qRed(b)), l(qGreen(a), qGreen(b)), l(qBlue(a), qBlue(b)), l(qAlpha(a), qAlpha(b)));
 }
 
-// Fórmula generalizada de mezcla de Paint.NET sobre colores directos:
-// lhs = fondo, rhs = lo que se pone encima.
+// Fórmula generalizada de mezcla de Paint.NET sobre colores directos: lhs = fondo, rhs = lo
+// que se pone encima.
 template <typename F>
 inline QRgb blendStraight(QRgb lhs, QRgb rhs, F f)
 {
@@ -172,10 +172,10 @@ QRgb average(const QRgb* samples, int count);
 // Desplazamientos de supermuestreo en rejilla girada (Utility.GetRgssOffsets).
 std::vector<QPointF> rgssOffsets(int quality);
 
-// Distorsión al estilo WarpEffectBase de Paint.NET: inverse(x, y) recibe
-// coordenadas relativas al centro y devuelve las de origen (también relativas).
+// Distorsión al estilo WarpEffectBase de Paint.NET: inverse(x, y) recibe coordenadas relativas
+// al centro y devuelve las de origen (también relativas).
 struct WarpSetup {
-    QPointF offset;         // centro desplazado (-1..1 sobre la selección)
+    QPointF offset;
     int quality = 2;
     EdgeBehavior edge = EdgeBehavior::Wrap;
 };
@@ -184,8 +184,8 @@ inline double defaultRadius(const QRect& roi) { return std::min(roi.width(), roi
 
 // --- Desenfoques ------------------------------------------------------------------
 
-// Desenfoque "gaussiano" de Paint.NET: núcleo triangular de radio r, que es
-// exactamente dos pasadas de caja de ancho r + 1 en cada eje. Devuelve 'area'.
+// Desenfoque "gaussiano" de Paint.NET: núcleo triangular de radio r, que es exactamente dos
+// pasadas de caja de ancho r + 1 en cada eje. Devuelve 'area'.
 QImage tentBlur(const QImage& src, const QRect& area, int radius, const std::atomic_bool& cancel);
 int tentMargin(int radius);
 // Media de una caja cuadrada (Desenfoque cuadrado).
@@ -201,8 +201,8 @@ struct LocalHistogram {
 using HistogramFn = std::function<QRgb(QRgb, const LocalHistogram&)>;
 void localHistogram(const RenderArgs& a, int radius, const HistogramFn& apply);
 QRgb histogramPercentile(const LocalHistogram& h, int percentile);
-// "Calidad" (1–9) de Mediana y Contorno en Paint.NET 5: bits de precisión de la
-// búsqueda del percentil; con menos de 8 cada canal cae en el centro de su intervalo.
+// "Calidad" (1–9) de Mediana y Contorno en Paint.NET 5: bits de precisión de la búsqueda del
+// percentil; con menos de 8 cada canal cae en el centro de su intervalo.
 QRgb quantizeBits(QRgb c, int bits);
 
 // --- Ruido de Perlin de Paint.NET (PerlinNoise2D) --------------------------------

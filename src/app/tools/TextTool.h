@@ -8,11 +8,10 @@
 
 class QFontMetricsF;
 
-// Texto editable hasta que se termina (Esc, botón Terminar, clic fuera del
-// texto o cambio de herramienta), como en Paint.NET: cursor con flechas,
-// Inicio/Fin, Ctrl para saltar palabras, clic dentro del texto para mover el
-// cursor y el tirador (o el botón derecho) para mover el texto. Admite
-// métodos de entrada y teclas muertas, así que se puede escribir "á" o "ñ".
+// Texto editable hasta que se termina (Esc, botón Terminar, clic fuera del texto o cambio de
+// herramienta), como en Paint.NET: cursor con flechas, Inicio/Fin, Ctrl para saltar palabras,
+// clic dentro del texto para mover el cursor y el tirador (o el botón derecho) para mover el
+// texto.
 class TextTool : public Tool {
     Q_OBJECT
 public:
@@ -43,12 +42,12 @@ public:
 private:
     QFont font() const;
     void render();
-    void touch(); // tras mover el cursor: reinicia el parpadeo y redibuja
+    void touch();
     void setInputMethodEnabled(bool on);
-    QStringList displayLines() const; // con el texto en composición insertado
+    QStringList displayLines() const;
     qreal lineLeft(const QFontMetricsF& fm, const QString& line) const;
-    QRectF caretRect() const; // en coordenadas de imagen
-    QPoint positionAt(const QPointF& imagePos) const; // (columna, línea)
+    QRectF caretRect() const;
+    QPoint positionAt(const QPointF& imagePos) const;
     QPointF moveIcon() const;
     void ensureCaretVisible();
 

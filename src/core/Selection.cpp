@@ -146,8 +146,8 @@ const QVector<QLineF>& Selection::outline() const
     if (d->outlineValid)
         return d->outline;
 
-    // Bordes horizontales y verticales entre píxeles seleccionados (>= 128)
-    // y no seleccionados, fusionando tramos consecutivos.
+    // Bordes horizontales y verticales entre píxeles seleccionados (>= 128) y no
+    // seleccionados, fusionando tramos consecutivos.
     const QImage& m = d->mask;
     const int w = m.width();
     const int h = m.height();
@@ -281,7 +281,6 @@ QString Selection::toJson() const
     if (d && d->hasPath) {
         polygons = d->path.toFillPolygons();
     } else if (d) {
-        // Máscara: tramos horizontales fusionados en rectángulos.
         const QImage& m = d->mask;
         struct Run {
             int x0, x1, y0;

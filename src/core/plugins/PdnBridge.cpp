@@ -23,8 +23,8 @@ extern char** environ;
 
 namespace {
 
-// Tiempo que se espera a que un complemento atienda la cancelación antes de
-// terminar el proceso auxiliar.
+// Tiempo que se espera a que un complemento atienda la cancelación antes de terminar el
+// proceso auxiliar.
 constexpr int kCancelGraceMs = 3000;
 constexpr int kInspectTimeoutMs = 60000;
 
@@ -97,7 +97,6 @@ bool PdnBridge::available(QString* why)
 bool PdnBridge::ensureStarted(QString* error)
 {
     if (m_pid > 0) {
-        // ¿Sigue vivo?
         int status = 0;
         if (waitpid(m_pid, &status, WNOHANG) == 0)
             return true;
@@ -116,7 +115,6 @@ bool PdnBridge::ensureStarted(QString* error)
             *error = QString::fromLocal8Bit(strerror(errno));
         return false;
     }
-    // El hijo usa su extremo como stdin y stdout; stderr solo con KAINT_PDN_DEBUG.
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, fds[1], STDIN_FILENO);
@@ -149,7 +147,6 @@ void PdnBridge::stop()
         m_socket = -1;
     }
     if (m_pid > 0) {
-        // Al cerrar el canal el proceso termina solo; si no, se le obliga.
         const pid_t pid = m_pid.exchange(-1);
         int status = 0;
         pid_t done = 0;
@@ -192,7 +189,6 @@ bool PdnBridge::writeLine(const QByteArray& line)
     data.append('\n');
     qsizetype done = 0;
     while (done < data.size()) {
-        // MSG_NOSIGNAL: si el proceso murió, error en vez de SIGPIPE.
         const ssize_t n = ::send(m_socket, data.constData() + done, size_t(data.size() - done), MSG_NOSIGNAL);
         if (n < 0) {
             if (errno == EINTR)
@@ -247,7 +243,6 @@ bool PdnBridge::readResponse(QJsonObject* out, int timeoutMs, const std::atomic_
         if (cancelSent)
             sinceCancel += slice;
         if ((timeoutMs >= 0 && waited > timeoutMs) || sinceCancel > kCancelGraceMs) {
-            // El complemento no responde: se termina el proceso.
             if (error && !cancelSent)
                 *error = QCoreApplication::translate("PdnBridge", "El complemento no responde.");
             stop();
@@ -267,7 +262,6 @@ QJsonObject PdnBridge::request(const QJsonObject& req, int timeoutMs, QString* e
         return {};
     if (!writeLine(QJsonDocument(req).toJson(QJsonDocument::Compact))) {
         stop();
-        // Un segundo intento con un proceso nuevo.
         if (!ensureStarted(error) || !writeLine(QJsonDocument(req).toJson(QJsonDocument::Compact))) {
             if (error && error->isEmpty())
                 *error = QCoreApplication::translate("PdnBridge", "No se pudo comunicar con el proceso de "
@@ -326,7 +320,6 @@ bool PdnBridge::prepareShared(const QImage& src, QString* error)
         m_shmSize = needed;
         m_srcKey = 0;
     }
-    // El origen solo se copia si cambió (la vista previa repite la misma capa).
     if (m_srcKey != src.cacheKey() || m_srcSize != src.size()) {
         const int rowBytes = src.width() * 4;
         for (int y = 0; y < src.height(); ++y)
@@ -373,7 +366,6 @@ bool PdnBridge::render(const QString& assembly, const QString& effectId, const Q
     }
     if (cancel)
         return false;
-    // Solo vuelve el rectángulo calculado.
     const uchar* out = m_shm + size_t(src.width()) * size_t(src.height()) * 4;
     const int rowBytes = src.width() * 4;
     for (int y = roi.top(); y <= roi.bottom(); ++y)

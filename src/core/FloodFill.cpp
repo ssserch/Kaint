@@ -28,7 +28,6 @@ QImage mask(const QImage& source, QPoint seed, qreal tolerance, bool contiguous,
     const int w = src.w;
     const int h = src.h;
     const int limit = threshold(tolerance);
-    // Las capas tienen alfa directo; la imagen combinada (Canvas) está premultiplicada.
     const bool pm = isPremultiplied(source);
     const QRgb reference = toStraight(src.at(seed.x(), seed.y()), pm);
 
@@ -46,8 +45,8 @@ QImage mask(const QImage& source, QPoint seed, qreal tolerance, bool contiguous,
         return out;
     }
 
-    // Relleno por líneas: se expande a izquierda y derecha y se siembran las
-    // filas vecinas al comienzo de cada tramo compatible.
+    // Relleno por líneas: se expande a izquierda y derecha y se siembran las filas vecinas al
+    // comienzo de cada tramo compatible.
     auto matches = [&](int x, int y) { return similar(toStraight(src.at(x, y), pm), reference, limit, straight); };
     std::vector<QPoint> stack;
     stack.push_back(seed);
@@ -106,14 +105,15 @@ QList<EdgePixel> antialiasEdge(const QImage& sample, const QImage& maskImage)
     auto inMask = [&](int x, int y) { return x >= 0 && y >= 0 && x < w && y < h && mask.row(y)[x] != 0; };
     auto color = [&](int x, int y) { return pm ? src.at(x, y) : qPremultiply(src.at(x, y)); };
 
-    // Anillo 0: píxeles de la máscara junto al exterior; anillos 1 y 2: por fuera.
-    // 'ring' guarda a qué anillo pertenece cada píxel (0xff = ninguno).
+    // Anillo 0: píxeles de la máscara junto al exterior; anillos 1 y 2: por fuera. 'ring'
+    // guarda a qué anillo pertenece cada píxel (0xff = ninguno).
     std::vector<uint8_t> ring(size_t(w) * h, 0xff);
     std::vector<QRgb> interiorOf(size_t(w) * h, 0);
     std::vector<int> coverageOf(size_t(w) * h, 0);
     auto idx = [w](int x, int y) { return size_t(y) * w + x; };
 
-    // Color del contorno: el más distinto de la zona en un entorno de 5x5 (fuera de la máscara).
+    // Color del contorno: el más distinto de la zona en un entorno de 5x5 (fuera de la
+    // máscara).
     auto outline = [&](int x, int y, QRgb interior) {
         double best = -1;
         QRgb o = interior;
@@ -135,7 +135,7 @@ QList<EdgePixel> antialiasEdge(const QImage& sample, const QImage& maskImage)
         const QRgb p = color(x, y);
         const double dOutline = colorDistance(outline(x, y, interior), interior);
         if (dOutline < 1.0)
-            return 255; // no hay contorno distinto alrededor
+            return 255;
         const double t = 1.0 - colorDistance(p, interior) / dOutline;
         return std::clamp(int(t * 255 + 0.5), 0, 255);
     };
@@ -157,10 +157,6 @@ QList<EdgePixel> antialiasEdge(const QImage& sample, const QImage& maskImage)
                     }
             if (!border)
                 continue;
-            // Color de la zona: primero la media de la máscara alrededor; con
-            // ella se busca el contorno y, como color "puro" de la zona, el
-            // píxel de la máscara más alejado de ese contorno (los del borde
-            // ya están mezclados con él).
             int r = 0, g = 0, b = 0, a = 0, n = 0;
             for (int dy = -1; dy <= 1; ++dy)
                 for (int dx = -1; dx <= 1; ++dx)
@@ -191,9 +187,7 @@ QList<EdgePixel> antialiasEdge(const QImage& sample, const QImage& maskImage)
         }
     }
 
-    // Anillos 1 y 2: vecinos de fuera del anillo anterior. La cobertura no
-    // puede crecer al alejarse de la zona (así no se rellena el otro lado de
-    // una línea fina).
+    // Anillos 1 y 2: vecinos de fuera del anillo anterior.
     for (int level = 1; level <= 2; ++level) {
         QList<QPoint> current;
         for (const QPoint& p : std::as_const(previous)) {
@@ -211,7 +205,7 @@ QList<EdgePixel> antialiasEdge(const QImage& sample, const QImage& maskImage)
                     const QRgb interior = interiorOf[idx(p.x(), p.y())];
                     const int cov = std::min(level == 1 ? 255 : parentCoverage, estimate(x, y, interior));
                     if (ring[i] == level) {
-                        if (cov > coverageOf[i]) { // el vecino más favorable decide
+                        if (cov > coverageOf[i]) {
                             coverageOf[i] = cov;
                             interiorOf[i] = interior;
                         }
@@ -264,8 +258,6 @@ QRect paintBucket(QImage& layer, const QImage& before, const QImage& sample, QPo
     QImage source(bounds.size(), kLayerFormat);
     Raster::renderFill(source, bounds.topLeft(), o.pattern, o.primary, o.secondary);
     QImage coverage = m.copy(bounds);
-    // Con fusión Normal y muestreando la capa, el borde se "desmezcla" después;
-    // en los demás casos se cubre en la proporción estimada.
     const bool unmix = o.blend == BlendMode::Normal && o.sampleIsLayer;
     if (!unmix)
         for (const EdgePixel& e : edge)

@@ -55,7 +55,6 @@ std::vector<Rgb> medianCut(std::vector<Rgb> colors, int count)
     std::vector<Box> boxes{{0, colors.size()}};
     measure(boxes[0]);
     while (int(boxes.size()) < count) {
-        // Se parte la caja con mayor rango de color (el rango se calcula una vez por caja).
         auto it = std::max_element(boxes.begin(), boxes.end(), [](const Box& x, const Box& y) { return x.range < y.range; });
         if (it == boxes.end() || it->range == 0)
             break;
@@ -84,8 +83,8 @@ std::vector<Rgb> medianCut(std::vector<Rgb> colors, int count)
     return palette;
 }
 
-// Cuantificador por octree: los colores se agrupan en un árbol de 8 niveles
-// y se fusionan las hojas menos usadas hasta quedar con 'count' colores.
+// Cuantificador por octree: los colores se agrupan en un árbol de 8 niveles y se fusionan las
+// hojas menos usadas hasta quedar con 'count' colores.
 class Octree {
 public:
     void add(const Rgb& c) { insert(m_root, c, 0); }
@@ -98,8 +97,6 @@ public:
                 --level;
             if (level < 0)
                 break;
-            // Se fusiona el nodo con menos píxeles del nivel más profundo; cada
-            // nivel se ordena una sola vez (los recuentos ya no cambian).
             auto& list = m_reducible[size_t(level)];
             if (!m_sorted[size_t(level)]) {
                 std::sort(list.begin(), list.end(), [](const Node* a, const Node* b) { return a->count > b->count; });
@@ -199,7 +196,6 @@ void renderQuantize(const RenderArgs& a)
     const auto palette = std::any_cast<std::vector<Rgb>>(a.state);
     const double dither = ival(a.values, "dither") / 8.0;
     const int threshold = a.values.value(QStringLiteral("threshold"), 0).toInt();
-    // Caché del color más cercano con 5 bits por canal.
     std::vector<int16_t> cache(32768, -1);
     auto nearest = [&](int r, int g, int b) {
         const int key = (r >> 3) << 10 | (g >> 3) << 5 | (b >> 3);
@@ -216,7 +212,6 @@ void renderQuantize(const RenderArgs& a)
         slot = int16_t(best);
         return best;
     };
-    // El tramado por difusión de error es secuencial (Floyd–Steinberg).
     const int w = a.roi.width();
     std::vector<float> err(size_t(w + 2) * 3 * 2, 0.f);
     const ConstPixels in(a.src);
@@ -229,7 +224,6 @@ void renderQuantize(const RenderArgs& a)
         QRgb* d = out.row(y);
         for (int i = 0; i < w; ++i) {
             const int x = a.roi.left() + i;
-            // Por debajo del umbral de transparencia, el píxel es transparente.
             if (qAlpha(s[x]) == 0 || qAlpha(s[x]) < threshold) {
                 d[x] = 0;
                 continue;

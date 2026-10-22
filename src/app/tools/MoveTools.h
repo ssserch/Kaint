@@ -4,10 +4,9 @@
 #include "app/tools/TransformBox.h"
 #include "core/Commands.h"
 
-// Mover píxeles seleccionados: arrastrar mueve, los tiradores escalan
-// (Mayús = proporcional, Alt = desde el centro), fuera del cuadro o con el
-// botón derecho se gira (Mayús = de 15 en 15°), Ctrl mueve una copia y las
-// flechas desplazan 1 px (Ctrl: 10 px).
+// Mover píxeles seleccionados: arrastrar mueve, los tiradores escalan (Mayús = proporcional,
+// Alt = desde el centro), fuera del cuadro o con el botón derecho se gira (Mayús = de 15 en
+// 15°), Ctrl mueve una copia y las flechas desplazan 1 px (Ctrl: 10 px).
 class MoveSelectedTool : public Tool {
     Q_OBJECT
 public:
@@ -29,13 +28,11 @@ public:
 
     // Píxeles flotantes de la última operación, si se puede continuar con ellos.
     static FloatingPtr currentFloating(Document* doc);
-    // Empieza a mover píxeles pegados (lo usa Edición > Pegar).
     static void startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text);
 
 private:
     FloatingPtr lift(bool keepCopy);
     void boxForCurrentState(TransformBox& box) const;
-    // m_box con el estado actual (el punto de giro vuelve al centro si cambió la selección).
     void syncBox();
     void applyLive(const QTransform& t);
     void push();
@@ -48,8 +45,8 @@ private:
     QTransform m_startTransform;
     QTransform m_current;
     Selection m_selectionBefore;
-    bool m_pivotDrag = false;  // se está moviendo el punto de giro
-    Selection m_pivotFor;      // selección a la que corresponde el punto de giro
+    bool m_pivotDrag = false;
+    Selection m_pivotFor;
 };
 
 class MoveSelectionTool : public Tool {
@@ -79,10 +76,10 @@ private:
 
     bool m_active = false;
     TransformBox m_box;
-    Selection m_base;     // selección al empezar la sesión
-    Selection m_result;   // última selección producida
+    Selection m_base;
+    Selection m_result;
     QTransform m_transform;
-    Selection m_before;   // selección antes del arrastre actual
+    Selection m_before;
     bool m_pivotDrag = false;
     Selection m_pivotFor;
 };

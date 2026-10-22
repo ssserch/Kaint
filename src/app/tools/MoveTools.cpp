@@ -138,7 +138,6 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
     syncBox();
     int handle = -1;
     TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), e.button == Qt::RightButton, &handle);
-    // Sin selección no hay cuadro visible: solo se mueve la capa entera.
     if (doc->selection().isEmpty() && !currentFloating(doc) && e.button == Qt::LeftButton) {
         mode = TransformBox::Mode::Translate;
         handle = -1;
@@ -149,14 +148,13 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
         return;
     }
     if (mode == TransformBox::Mode::Pivot) {
-        // Solo se mueve el punto de giro: no se levantan los píxeles.
         m_box.begin(mode, -1, e.pos);
         m_pivotDrag = true;
         m_active = true;
         return;
     }
     if (mode == TransformBox::Mode::None)
-        mode = TransformBox::Mode::Translate; // lejos del cuadro también se mueve
+        mode = TransformBox::Mode::Translate;
 
     // Ctrl sobre píxeles ya flotantes deja una copia donde están.
     m_float = copy ? nullptr : currentFloating(doc);
@@ -203,7 +201,6 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
         return;
     }
     const QTransform canvasMap = m_box.update(e.pos, e.modifiers);
-    // pixelsToCanvas(t) = T(origen) · t  =>  t = T(-origen) · mapa
     const QTransform t = QTransform::fromTranslate(-m_float->origin.x(), -m_float->origin.y()) * canvasMap;
     applyLive(t);
     if (m_box.mode() == TransformBox::Mode::Rotate)
@@ -233,15 +230,13 @@ void MoveSelectedTool::mouseRelease(const ToolEvent&)
     if (m_current != m_startTransform) {
         push();
     } else if (m_first) {
-        // Un clic (o un arrastre que vuelve al punto de partida) no cambia nada:
-        // se deshace lo que applyLive dejó en la capa y en la selección.
         Document* doc = document();
         m_float->layer->image = m_float->original;
         doc->notifyPixelsChanged(m_float->layer.get(), m_float->boundsFor(m_current));
         doc->setSelection(m_selectionBefore);
     }
     m_float.reset();
-    m_pivotFor = document()->selection(); // el punto de giro sigue a los píxeles movidos
+    m_pivotFor = document()->selection();
     emit hintChanged(hint());
     repaint();
 }
@@ -291,7 +286,6 @@ void MoveSelectedTool::paintOverlay(QPainter& p)
     Document* doc = document();
     if (!doc)
         return;
-    // Sin selección no se dibuja el cuadro; arrastrar mueve la capa entera.
     if (!m_active && doc->selection().isEmpty() && !currentFloating(doc))
         return;
     if (!m_active)
@@ -336,7 +330,6 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
     Document* doc = document();
     if (!doc || (e.button != Qt::LeftButton && e.button != Qt::RightButton))
         return;
-    // Sin selección no hay contorno que mover.
     if (doc->selection().isEmpty())
         return;
     syncBox();

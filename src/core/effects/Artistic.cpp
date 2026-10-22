@@ -117,7 +117,6 @@ void renderPencilSketch(const RenderArgs& a)
         const QRgb* b = bl.row(y - a.roi.top());
         QRgb* d = out.row(y);
         for (int x = a.roi.left(); x <= a.roi.right(); ++x) {
-            // desenfoque -> brillo/contraste -> invertir -> desaturar
             QRgb t = bc.apply(qUnpremultiply(b[x - a.roi.left()]));
             t = qRgba(255 - qRed(t), 255 - qGreen(t), 255 - qBlue(t), qAlpha(t));
             const int ti = intensity(t);

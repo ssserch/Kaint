@@ -62,7 +62,6 @@ public:
     void mouseRelease(const ToolEvent& e) override;
 
 signals:
-    // "Después de hacer clic": volver a la herramienta anterior o pasar al lápiz.
     void switchBackRequested();
     void switchToPencilRequested();
 

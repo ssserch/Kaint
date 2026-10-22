@@ -3,9 +3,8 @@
 #include "app/tools/Tool.h"
 #include "core/Stroke.h"
 
-// Base de las herramientas que pintan con trazos (pincel, goma, lápiz,
-// tampón de clonar y recolorear). Clic izquierdo usa el color principal y
-// clic derecho el secundario, como en Paint.NET.
+// Base de las herramientas que pintan con trazos (pincel, goma, lápiz, tampón de clonar y
+// recolorear).
 class StrokeTool : public Tool {
     Q_OBJECT
 public:
@@ -115,7 +114,7 @@ protected:
 private:
     bool m_hasSource = false;
     bool m_hasOffset = false;
-    std::weak_ptr<Layer> m_sourceLayer; // el origen puede estar en otra capa
+    std::weak_ptr<Layer> m_sourceLayer;
     const Document* m_sourceDoc = nullptr;
     QPointF m_source;
     QPoint m_offset;

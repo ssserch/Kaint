@@ -31,8 +31,8 @@ constexpr int kSize = 32;
 QColor fg() { return QApplication::palette().color(QPalette::WindowText); }
 QColor accent() { return QApplication::palette().color(QPalette::Highlight); }
 
-// Icono dibujado por código. Se pinta cada vez con la paleta actual, así
-// cambia de color con el tema (claro/oscuro) sin tener que recrearlo.
+// Icono dibujado por código. Se pinta cada vez con la paleta actual, así cambia de color con
+// el tema (claro/oscuro) sin tener que recrearlo.
 class DrawnIconEngine : public QIconEngine {
 public:
     using PaintFn = std::function<void(QPainter&, QRectF)>;
@@ -58,7 +58,6 @@ public:
         {
             QPainter p(&pm);
             p.setRenderHint(QPainter::Antialiasing);
-            // Se dibuja en un lienzo lógico de 32x32 escalado al tamaño pedido.
             p.scale(size.width() / qreal(kSize), size.height() / qreal(kSize));
             m_paint(p, QRectF(3, 3, kSize - 6, kSize - 6));
         }
@@ -96,7 +95,6 @@ void setupTheme()
         if (!paths.contains(dir))
             paths.append(dir);
     QIcon::setThemeSearchPaths(paths);
-    // En Plasma el tema ya viene configurado (Breeze o Breeze oscuro); fuera de él, Breeze.
     if (QIcon::themeName().isEmpty() || QIcon::themeName() == QLatin1String("hicolor"))
         QIcon::setThemeName(QStringLiteral("breeze"));
     QIcon::setFallbackThemeName(QStringLiteral("breeze"));
@@ -333,7 +331,6 @@ QIcon smoothing(bool on)
                                      QPointF(r.center().x() - 1, r.center().y() + 2), QPointF(r.center().x() + 4, r.bottom() - 4),
                                      QPointF(r.right() - 5, r.center().y()), QPointF(r.right() - 1, r.top() + 5)});
         }
-        // El pincel que dibuja el trazo.
         p.setPen(Qt::NoPen);
         p.setBrush(accent());
         p.drawEllipse(QPointF(r.right() - 4, r.bottom() - 4), 3.5, 3.5);
@@ -383,7 +380,6 @@ QIcon recolorSampling(RecolorSampling sampling)
 {
     return drawn([sampling](QPainter& p, QRectF r) {
         if (sampling == RecolorSampling::Once) {
-            // Punto de mira: el color donde empieza el trazo.
             p.setPen(QPen(fg(), 2));
             p.drawEllipse(r.center(), r.width() * 0.32, r.height() * 0.32);
             p.drawLine(QPointF(r.center().x(), r.top()), QPointF(r.center().x(), r.top() + 6));
@@ -394,7 +390,6 @@ QIcon recolorSampling(RecolorSampling sampling)
             p.setBrush(accent());
             p.drawEllipse(r.center(), 2.5, 2.5);
         } else {
-            // Colores principal y secundario: se usa el de atrás.
             const QRectF back(r.left(), r.top(), r.width() * 0.62, r.height() * 0.62);
             const QRectF front(r.right() - r.width() * 0.62, r.bottom() - r.height() * 0.62, r.width() * 0.62,
                                r.height() * 0.62);
@@ -416,7 +411,6 @@ QIcon rectSelectMode(RectSelectMode mode)
         p.drawRect(box);
         if (mode == RectSelectMode::Normal)
             return;
-        // Proporción: dos flechas enlazadas; tamaño fijo: un candado.
         p.setPen(Qt::NoPen);
         p.setBrush(accent());
         const QRectF corner(r.right() - 11, r.bottom() - 11, 11, 11);

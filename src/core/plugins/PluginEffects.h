@@ -8,9 +8,8 @@
 
 #include <mutex>
 
-// Efecto de un complemento de Paint.NET: los parámetros salen de la
-// descripción de IndirectUI que envía el proceso auxiliar y el cálculo se
-// hace allí (PdnBridge).
+// Efecto de un complemento de Paint.NET: los parámetros salen de la descripción de IndirectUI
+// que envía el proceso auxiliar y el cálculo se hace allí (PdnBridge).
 class PdnEffect : public Effect {
 public:
     PdnEffect(const QString& assembly, const QString& pluginName, const QJsonObject& description);
@@ -32,7 +31,6 @@ public:
 
     // Valores para el proceso auxiliar (nombres y tipos de Paint.NET).
     QJsonObject toHostValues(const ParamValues& values) const;
-    // Categoría de Kaint para un submenú de Paint.NET ("Blurs" -> "Desenfoques").
     static QString kaintCategory(const QString& subMenu);
 
 private:
@@ -48,7 +46,7 @@ private:
     QImage m_icon;
     QString m_help;
     QList<EffectParam> m_params;
-    QHash<QString, bool> m_colorAlpha; // colores Int32 con alfa (ARGB) o sin él (RGB)
+    QHash<QString, bool> m_colorAlpha;
     mutable std::mutex m_errorMutex;
     mutable QString m_error;
 };

@@ -1,8 +1,6 @@
-// Prueba de humo de la interfaz: arranca la ventana sin pantalla (plataforma
-// offscreen), usa varias herramientas como lo haría el ratón, comprueba el
-// resultado y guarda capturas para revisarlas a mano.
-//
-//   QT_QPA_PLATFORM=offscreen ./kaint_ui_smoke [carpeta_capturas]
+// Prueba de humo de la interfaz: arranca la ventana sin pantalla (plataforma offscreen), usa
+// varias herramientas como lo haría el ratón, comprueba el resultado y guarda capturas para
+// revisarlas a mano.
 
 #include "app/AppState.h"
 #include "app/Canvas.h"
@@ -73,7 +71,6 @@ static void drag(Canvas* c, const QList<QPointF>& pts, Qt::MouseButton button = 
         QApplication::sendEvent(vp, &e);
     };
     send(QEvent::MouseButtonPress, pts.first(), button, button);
-    // Un arrastre real dura algo: Paint.NET trata los de menos de 50 ms como un clic.
     QElapsedTimer t;
     t.start();
     for (const QPointF& p : pts)
@@ -101,7 +98,6 @@ static QAction* findAction(QWidget* w, const QString& text)
             return a;
     return nullptr;
 }
-
 
 // Lee una trama del IPC de Discord: [código][longitud][JSON].
 static bool readFrame(QLocalSocket* s, int* opcode, QJsonObject* payload, int timeoutMs = 2000)
@@ -141,12 +137,10 @@ static void testDiscordPresence()
     CHECK(state.contains(QStringLiteral("PNG")) && state.contains(QStringLiteral("1920 × 1080")));
     CHECK(a.value(QStringLiteral("timestamps")).toObject().value(QStringLiteral("start")).toInteger() == 1000);
     CHECK(a.value(QStringLiteral("assets")).toObject().value(QStringLiteral("small_text")).toString() == QLatin1String("Pincel"));
-    // Con todo oculto no se filtra nada del archivo.
     options.showFile = options.showLayer = options.showFileInfo = options.showTool = options.showElapsed = false;
     a = DiscordPresence::buildActivity(info, options, 1000);
     CHECK(!QJsonDocument(a).toJson().contains("foto") && !a.contains(QStringLiteral("state")));
     CHECK(!a.contains(QStringLiteral("timestamps")));
-    // "PON___AQUI" no es un ID válido.
     CHECK(!DiscordPresence::isValidClientId(QStringLiteral("PON___AQUI")));
     CHECK(DiscordPresence::isValidClientId(QStringLiteral("123456789012345678")));
 
@@ -178,18 +172,15 @@ static void testDiscordPresence()
         CHECK(msg.value(QStringLiteral("cmd")).toString() == QLatin1String("SET_ACTIVITY"));
         const QJsonObject activity = msg.value(QStringLiteral("args")).toObject().value(QStringLiteral("activity")).toObject();
         CHECK(activity.value(QStringLiteral("details")).toString().contains(QStringLiteral("foto.png")));
-        // Otra capa: se envía de nuevo (agrupado tras el intervalo mínimo).
         info.layerIndex = 1;
         info.layerName = QStringLiteral("Fondo");
         presence.update(info);
         CHECK(readFrame(client, &op, &msg) && op == 1);
         CHECK(msg.value(QStringLiteral("args")).toObject().value(QStringLiteral("activity")).toObject()
                   .value(QStringLiteral("state")).toString().contains(QStringLiteral("Fondo")));
-        // Ping -> pong con los mismos datos.
         client->write(DiscordPresence::frame(3, QJsonObject{{QStringLiteral("n"), 7}}));
         client->flush();
         CHECK(readFrame(client, &op, &msg) && op == 4 && msg.value(QStringLiteral("n")).toInt() == 7);
-        // Desactivar cierra la conexión.
         on.enabled = false;
         presence.setOptions(on);
         CHECK(presence.status() == DiscordPresence::Status::Disabled);
@@ -197,25 +188,24 @@ static void testDiscordPresence()
     qputenv("XDG_RUNTIME_DIR", oldRuntime);
 }
 
-// Cuadro de transformación de las herramientas Mover: el punto central se
-// puede mover, el giro (botón derecho) es alrededor de él y se restablece.
+// Cuadro de transformación de las herramientas Mover: el punto central se puede mover, el giro
+// (botón derecho) es alrededor de él y se restablece.
 static void testTransformBox()
 {
     auto near = [](QPointF a, QPointF b) { return QLineF(a, b).length() < 1e-6; };
     TransformBox box;
     box.set(QRectF(0, 0, 100, 50), QTransform());
     CHECK(near(box.pivot(), QPointF(50, 25)) && !box.pivotMoved());
-    const QTransform view = QTransform::fromScale(2, 2); // zoom 200 %
+    const QTransform view = QTransform::fromScale(2, 2);
     CHECK(box.hit(QPointF(100, 50), view, false, nullptr) == TransformBox::Mode::Pivot);
     CHECK(box.hit(QPointF(100, 50), view, true, nullptr) == TransformBox::Mode::Rotate);
     int handle = -1;
     CHECK(box.hit(QPointF(200, 100), view, false, &handle) == TransformBox::Mode::Scale && handle >= 0);
     bool inside = true;
     CHECK(box.hit(QPointF(600, 600), view, false, nullptr, &inside) == TransformBox::Mode::Translate && !inside);
-    // Justo fuera del borde (a 20 px en pantalla): girar con el botón izquierdo.
     CHECK(box.hit(QPointF(220, 50), view, false, nullptr) == TransformBox::Mode::Rotate);
     CHECK(box.hit(QPointF(100, -25), view, false, nullptr) == TransformBox::Mode::Rotate);
-    CHECK(box.hit(QPointF(150, 60), view, false, nullptr) == TransformBox::Mode::Translate); // dentro
+    CHECK(box.hit(QPointF(150, 60), view, false, nullptr) == TransformBox::Mode::Translate);
 
     box.begin(TransformBox::Mode::Pivot, -1, QPointF(50, 25));
     box.update(QPointF(70, 30), Qt::NoModifier);
@@ -229,7 +219,6 @@ static void testTransformBox()
     CHECK(std::abs(box.rotationDegrees() - 90) < 1e-6);
     CHECK(near(box.pivot(), QPointF(70, 30)));
     CHECK(near(box.transform().map(QPointF(0, 0)), QPointF(100, -40)));
-    // Mayús: de 15 en 15°.
     box.begin(TransformBox::Mode::Rotate, -1, QPointF(70, 80));
     box.update(QPointF(70 - 50 * std::sin(0.3), 30 + 50 * std::cos(0.3)), Qt::ShiftModifier);
     box.end();
@@ -238,7 +227,6 @@ static void testTransformBox()
     box.resetPivot();
     CHECK(!box.pivotMoved());
     CHECK(near(box.pivot(), box.transform().map(QPointF(50, 25))));
-    // Mismo rectángulo: se conserva el punto movido; otro rectángulo: vuelve al centro.
     box.begin(TransformBox::Mode::Pivot, -1, box.pivot());
     box.update(box.transform().map(QPointF(10, 10)), Qt::NoModifier);
     box.end();
@@ -254,9 +242,8 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("KaintSmokeTest"));
     QApplication::setApplicationName(QStringLiteral("KaintSmokeTest"));
-    QSettings().clear(); // siempre con la configuración predeterminada
+    QSettings().clear();
     Icons::setupTheme();
-    // Una forma personalizada de Paint.NET (.xaml) en una carpeta propia de la prueba.
     QTemporaryDir shapesDir;
     {
         QFile f(shapesDir.filePath(QStringLiteral("casa.xaml")));
@@ -306,7 +293,6 @@ int main(int argc, char** argv)
     });
     tools->select(ToolId::Shapes);
     drag(canvas, {QPointF(450, 250), QPointF(520, 330), QPointF(640, 470)});
-    // La forma sigue editable (cuadro de transformación) hasta terminarla.
     CHECK(tools->current()->isBusy());
     {
         const int steps = doc->undoStack()->count();
@@ -324,7 +310,7 @@ int main(int argc, char** argv)
     state->setPrimary(QColor(255, 255, 255, 0));
     state->setSecondary(QColor(40, 170, 90, 160));
     drag(canvas, {QPointF(200, 420), QPointF(260, 480), QPointF(330, 560)});
-    tools->current()->finish(); // el degradado es editable hasta terminarlo
+    tools->current()->finish();
 
     // Texto con acentos
     state->setPrimary(Qt::black);
@@ -346,7 +332,7 @@ int main(int argc, char** argv)
     doc->setActiveIndex(0);
     tools->select(ToolId::MoveSelected);
     drag(canvas, {QPointF(200, 150), QPointF(210, 160), QPointF(230, 190)});
-    drag(canvas, {QPointF(230, 190), QPointF(240, 200)}); // segundo arrastre: se fusiona
+    drag(canvas, {QPointF(230, 190), QPointF(240, 200)});
     CHECK(doc->undoStack()->count() == before + 1);
     doc->undoStack()->undo();
     CHECK(doc->undoStack()->count() == before + 1 && doc->undoStack()->index() == before);
@@ -391,7 +377,7 @@ int main(int argc, char** argv)
     tools->select(ToolId::PaintBucket);
     drag(canvas, {QPointF(700, 120)});
     CHECK(QColor(doc->layer(1)->image.pixel(700, 120)) == QColor(200, 0, 200));
-    tools->current()->finish(); // el relleno es editable hasta terminarlo
+    tools->current()->finish();
     QAction* deselectAct = findAction(&w, QStringLiteral("Anular la selección"));
     if (deselectAct)
         deselectAct->trigger();
@@ -418,7 +404,6 @@ int main(int argc, char** argv)
                 d->accept();
                 return;
             }
-            // Los diálogos con vista previa no son modales (no oscurecen la ventana).
             for (QWidget* w : QApplication::topLevelWidgets())
                 if (auto* d = qobject_cast<QDialog*>(w); d && d->isVisible() && d->property("kaintPreviewDialog").toBool())
                     d->accept();
@@ -437,7 +422,6 @@ int main(int argc, char** argv)
     findAction(&w, QStringLiteral("Voltear horizontalmente"))->trigger();
     findAction(&w, QStringLiteral("Combinar capa con la inferior"))->trigger();
     CHECK(doc->layerCount() == 2);
-    // Ctrl+clic en la casilla de visibilidad: solo esa capa (y otra vez: todas).
     if (auto* layers = w.findChild<LayersPanel*>()) {
         emit layers->soloRequested(0);
         CHECK(doc->layer(0)->props.visible && !doc->layer(1)->props.visible);
@@ -454,7 +438,7 @@ int main(int argc, char** argv)
         const int steps = doc->undoStack()->count();
         drag(canvas, {QPointF(100, 650), QPointF(300, 650), QPointF(500, 650)});
         CHECK(tools->current()->isBusy());
-        drag(canvas, {QPointF(233, 650), QPointF(233, 560)}); // nodo 1/3 hacia arriba
+        drag(canvas, {QPointF(233, 650), QPointF(233, 560)});
         CHECK(qAlpha(doc->activeLayer()->image.pixel(233, 560)) > 0);
         tools->current()->finish();
         CHECK(doc->undoStack()->count() == steps + 1);
@@ -473,24 +457,23 @@ int main(int argc, char** argv)
         CHECK(!tools->current()->isBusy());
     }
 
-    // Formas personalizadas: aparecen tras las integradas (A llega a ellas) y se
-    // dibujan estiradas al rectángulo, con su nombre en el historial.
+    // Formas personalizadas: aparecen tras las integradas (A llega a ellas) y se dibujan
+    // estiradas al rectángulo, con su nombre en el historial.
     {
         tools->select(ToolId::Shapes);
-        state->updateTools([](ToolSettings& s) { s.shape = ShapeType::Heart; }); // la última integrada
+        state->updateTools([](ToolSettings& s) { s.shape = ShapeType::Heart; });
         QKeyEvent a(QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, QStringLiteral("a"));
         QApplication::sendEvent(canvas, &a);
         CHECK(state->tools().shape == ShapeType::Custom);
         CHECK(state->tools().customShape == QFileInfo(shapesDir.filePath(QStringLiteral("casa.xaml"))).absoluteFilePath());
         state->updateTools([](ToolSettings& s) { s.shapeStyle = ShapeStyle::Fill; });
-        // En el centro del lienzo actual (a estas alturas ya se ha recortado).
         const QPointF c = QRectF(doc->rect()).center();
         drag(canvas, {c - QPointF(50, 50), c, c + QPointF(50, 50)});
         tools->current()->finish();
         CHECK(doc->undoStack()->text(doc->undoStack()->index() - 1) == QStringLiteral("Casa de prueba"));
         const QImage& img = doc->activeLayer()->image;
         const QPoint body = (c + QPointF(0, 35)).toPoint(), corner = (c + QPointF(-47, -47)).toPoint();
-        CHECK(img.pixel(body) != img.pixel(corner)); // la pared está pintada; la esquina del tejado, no
+        CHECK(img.pixel(body) != img.pixel(corner));
         state->updateTools([](ToolSettings& s) {
             s.shape = ShapeType::Rectangle;
             s.shapeStyle = ShapeStyle::Outline;
@@ -538,7 +521,7 @@ int main(int argc, char** argv)
     drag(canvas, {QPointF(100, 100), QPointF(300, 120), QPointF(250, 300), QPointF(120, 260)});
     CHECK(!doc->selection().isEmpty());
     tools->select(ToolId::EllipseSelect);
-    drag(canvas, {QPointF(50, 400), QPointF(250, 600)}, Qt::LeftButton, Qt::ControlModifier); // unión
+    drag(canvas, {QPointF(50, 400), QPointF(250, 600)}, Qt::LeftButton, Qt::ControlModifier);
     CHECK(doc->selection().bounds().bottom() >= 590);
     if (deselectAct)
         deselectAct->trigger();
@@ -546,7 +529,7 @@ int main(int argc, char** argv)
     tools->select(ToolId::Line);
     drag(canvas, {QPointF(40, 700), QPointF(560, 760)}, Qt::LeftButton, Qt::ShiftModifier);
     tools->select(ToolId::CloneStamp);
-    drag(canvas, {QPointF(300, 400)}, Qt::LeftButton, Qt::ControlModifier); // origen
+    drag(canvas, {QPointF(300, 400)}, Qt::LeftButton, Qt::ControlModifier);
     drag(canvas, {QPointF(100, 100), QPointF(160, 140)});
     tools->select(ToolId::Recolor);
     drag(canvas, {QPointF(300, 300), QPointF(400, 380)});
@@ -585,7 +568,6 @@ int main(int argc, char** argv)
             const QPointF v = canvas->imageToView(img);
             canvas->setZoom(8.0, v);
             CHECK(QLineF(canvas->viewToImage(v), img).length() < 0.5);
-            // Rueda con Ctrl: zoom continuo (una muesca = 20 %) hacia el cursor.
             const qreal before = canvas->zoom();
             QWheelEvent wheel(v, canvas->viewport()->mapToGlobal(v), QPoint(), QPoint(0, 120), Qt::NoButton,
                               Qt::ControlModifier, Qt::NoScrollPhase, false);
@@ -616,19 +598,17 @@ int main(int argc, char** argv)
         CHECK(doc->undoStack()->count() == steps);
     }
 
-    // Al terminar una selección no se cambia de herramienta (como Paint.NET),
-    // salvo que se elija en "Después de seleccionar" (y nunca con Ctrl/Alt o un clic).
+    // Al terminar una selección no se cambia de herramienta (como Paint.NET), salvo que se
+    // elija en "Después de seleccionar" (y nunca con Ctrl/Alt o un clic).
     {
         tools->select(ToolId::RectSelect);
         drag(canvas, {QPointF(50, 50), QPointF(120, 110), QPointF(160, 150)});
         CHECK(tools->current()->id() == ToolId::RectSelect);
         CHECK(!doc->selection().isEmpty());
-        // Mayús: cuadrado perfecto que sigue al lado más largo.
         drag(canvas, {QPointF(50, 50), QPointF(120, 80), QPointF(170, 100)}, Qt::LeftButton, Qt::ShiftModifier);
         const QRect square = doc->selection().bounds();
         CHECK(square.width() == square.height() && square.width() > 20);
         CHECK(tools->current()->id() == ToolId::RectSelect);
-        // Lo que se arrastra fuera del lienzo no queda seleccionado (ni dibujado).
         drag(canvas, {QPointF(50, 50), QPointF(2000, 1500), QPointF(4000, 3000)});
         CHECK(!doc->selection().isEmpty() && doc->rect().contains(doc->selection().bounds()));
         AppState::instance()->updateTools([](ToolSettings& s) { s.afterSelect = AfterSelect::MoveSelection; });
@@ -637,7 +617,7 @@ int main(int argc, char** argv)
         tools->select(ToolId::EllipseSelect);
         drag(canvas, {QPointF(300, 50), QPointF(350, 110), QPointF(380, 150)}, Qt::LeftButton, Qt::ControlModifier);
         CHECK(tools->current()->id() == ToolId::EllipseSelect);
-        drag(canvas, {QPointF(500, 500)}); // un clic solo anula la selección
+        drag(canvas, {QPointF(500, 500)});
         CHECK(doc->selection().isEmpty());
         CHECK(tools->current()->id() == ToolId::EllipseSelect);
         AppState::instance()->updateTools([](ToolSettings& s) { s.afterSelect = AfterSelect::MovePixels; });
@@ -667,7 +647,6 @@ int main(int argc, char** argv)
         if (doc->undoStack()->index() != index + 1)
             std::fprintf(stderr, "  (sin cambios: %s)\n", qPrintable(e->id()));
         if (e->id() == QLatin1String("invertalpha")) {
-            // Se deshace: si no, el resto de efectos trabajaría sobre píxeles transparentes.
             doc->undoStack()->undo();
             settle();
         }
@@ -680,13 +659,12 @@ int main(int argc, char** argv)
     doc->undoStack()->setIndex(0);
     settle();
     CHECK(doc->layerCount() == 1 && doc->size() == QSize(800, 600));
-    QImage white(800, 600, QImage::Format_ARGB32); // las capas tienen alfa directo
+    QImage white(800, 600, QImage::Format_ARGB32);
     white.fill(Qt::white);
     CHECK(doc->flattened() == white);
     doc->undoStack()->setIndex(steps);
     settle();
     CHECK(doc->flattened() == finalImage);
-    // La caché de pantalla está premultiplicada.
     CHECK(canvas->composite() == finalImage.convertToFormat(QImage::Format_ARGB32_Premultiplied));
     if (!outDir.isEmpty())
         w.grab().save(QDir(outDir).filePath(QStringLiteral("final.png")));
@@ -702,7 +680,6 @@ int main(int argc, char** argv)
         if (bar) {
             tools->select(ToolId::ColorPicker);
             settle();
-            // Último control visible antes de "Acabado" (oculto en el cuentagotas).
             QString lastTip;
             for (QAction* a : bar->actions())
                 if (a->isVisible() && !a->isSeparator())
@@ -714,8 +691,8 @@ int main(int argc, char** argv)
         }
     }
 
-    // Paneles redimensionables por cualquier borde; la rejilla de
-    // herramientas se reorganiza en columnas según el ancho.
+    // Paneles redimensionables por cualquier borde; la rejilla de herramientas se reorganiza
+    // en columnas según el ancho.
     {
         FloatingPanel* toolsPanel = nullptr;
         FloatingPanel* historyPanel = nullptr;
@@ -739,17 +716,14 @@ int main(int argc, char** argv)
                 send(QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton);
                 settle();
             };
-            // Borde derecho hacia la izquierda: una sola columna (más alta).
             const int h2 = toolsPanel->height();
             QPoint right(toolsPanel->width() - 2, toolsPanel->height() / 2);
             edgeDrag(toolsPanel, right, right - QPoint(40, 0));
             CHECK(grid->columns() == 1);
             CHECK(toolsPanel->height() > h2);
-            // Más ancha: tres columnas o más.
             right = QPoint(toolsPanel->width() - 2, toolsPanel->height() / 2);
             edgeDrag(toolsPanel, right, right + QPoint(120, 0));
             CHECK(grid->columns() >= 3);
-            // Historial: desde el borde izquierdo y el inferior.
             const QSize before = historyPanel->size();
             edgeDrag(historyPanel, QPoint(1, historyPanel->height() / 2), QPoint(-60, historyPanel->height() / 2));
             CHECK(historyPanel->width() == before.width() + 61);
@@ -779,7 +753,7 @@ int main(int argc, char** argv)
             }
             CHECK(plugins >= 0 && discord == plugins + 1);
         }
-        CHECK(AppSettings().discordEnabled); // activado por defecto
+        CHECK(AppSettings().discordEnabled);
         if (!outDir.isEmpty()) {
             dlg.showPage(SettingsDialog::Page::Discord);
             dlg.resize(820, 560);
@@ -808,7 +782,6 @@ int main(int argc, char** argv)
         CHECK(findAction(&w, QStringLiteral("Configurar página...")));
         CHECK(findAction(&w, QStringLiteral("Animación...")));
     }
-    // Configuración de guardado de GIF e ICO: las opciones vuelven intactas.
     {
         ImageIO::SaveOptions o;
         SaveConfigDialog ico(doc->flattened(), QStringLiteral("icono.ico"), o, &w);
@@ -821,8 +794,8 @@ int main(int argc, char** argv)
         CHECK(back.animation && back.loops == 2 && back.frameDelay == 250);
     }
 
-    // Reconstruir el menú Efectos y luego deshabilitar la ventana no debe
-    // tocar acciones ya borradas.
+    // Reconstruir el menú Efectos y luego deshabilitar la ventana no debe tocar acciones ya
+    // borradas.
     {
         emit PluginManager::instance()->changed();
         settle();
@@ -833,8 +806,8 @@ int main(int argc, char** argv)
         CHECK(findAction(&w, QStringLiteral("Desenfoque gaussiano...")));
     }
 
-    // Diálogos de decisión de Paint.NET 5: pegar una imagen mayor que el
-    // lienzo ("Ampliar lienzo") y cerrar con cambios ("Cancelar" no cierra).
+    // Diálogos de decisión de Paint.NET 5: pegar una imagen mayor que el lienzo ("Ampliar
+    // lienzo") y cerrar con cambios ("Cancelar" no cierra).
     {
         auto choose = [&outDir](const QString& shot, int choice) {
             QTimer::singleShot(300, [=] {
@@ -857,7 +830,7 @@ int main(int argc, char** argv)
         settle();
         CHECK(doc->size() == big.size());
         CHECK(tools->current()->id() == ToolId::MoveSelected);
-        tools->select(ToolId::RectSelect); // termina el pegado
+        tools->select(ToolId::RectSelect);
         settle();
         CHECK(doc->isModified());
         choose(QStringLiteral("cambios.png"), 2);
@@ -868,7 +841,6 @@ int main(int argc, char** argv)
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());
     if (g_failures == 0)
         std::printf("La prueba de humo de la interfaz pasó.\n");
-    // Sin cerrar la ventana: closeEvent preguntaría si guardar los cambios.
     std::fflush(stdout);
     return g_failures == 0 ? 0 : 1;
 }

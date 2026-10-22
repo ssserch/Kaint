@@ -18,16 +18,20 @@ int main(int argc, char** argv)
     QApplication::setApplicationName(QStringLiteral("Kaint"));
     QApplication::setOrganizationName(QStringLiteral("Kaint"));
     QApplication::setApplicationVersion(QStringLiteral(KAINT_VERSION));
-    // En Wayland es el app_id: KDE lo usa para el icono, la barra de tareas y las reglas de ventana.
     QGuiApplication::setDesktopFileName(QStringLiteral("io.github.kaint.Kaint"));
 
     Icons::setupTheme();
-    // Qt limita por defecto a 256 MB la lectura de imágenes; un editor tiene que poder abrir fotos enormes.
     QImageReader::setAllocationLimit(4096);
 
-    // Traducciones de los textos propios de Qt (diálogos estándar), si están instaladas.
+    // Idioma: los textos del código están en español; el inglés (el predeterminado) es una
+    // traducción incluida en el programa.
+    const QString language = AppSettings::load().language;
+    qputenv("KAINT_LANG", language.toUtf8());
+    QTranslator appTranslator;
+    if (language != QLatin1String("es") && appTranslator.load(QStringLiteral(":/i18n/kaint_%1.qm").arg(language)))
+        app.installTranslator(&appTranslator);
     QTranslator qtTranslator;
-    if (qtTranslator.load(QLocale(), QStringLiteral("qtbase"), QStringLiteral("_"),
+    if (qtTranslator.load(QLocale(language), QStringLiteral("qtbase"), QStringLiteral("_"),
                           QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
         app.installTranslator(&qtTranslator);
 
@@ -40,10 +44,9 @@ int main(int argc, char** argv)
     parser.process(app);
 
     AppState::instance()->load();
-    // Combinación de colores antes de crear la ventana (Configuración > Interfaz de usuario).
     Theme::captureSystemDefaults();
+    Theme::initStyle(Theme::Scheme(AppSettings::load().colorScheme));
     Theme::apply(Theme::Scheme(AppSettings::load().colorScheme));
-    // Complementos activados: sus efectos aparecen en los menús.
     PluginManager::instance()->scan();
 
     MainWindow window;

@@ -85,7 +85,7 @@ QPainterPath arrowHead(const QPointF& tip, double angleDeg, double width, bool f
 {
     const double size = std::max(8.0, width * 3);
     const double a = angleDeg * M_PI / 180.0;
-    const QPointF dir(std::cos(a), -std::sin(a)); // Qt mide el ángulo en sentido antihorario
+    const QPointF dir(std::cos(a), -std::sin(a));
     const QPointF side(-dir.y(), dir.x());
     const QPointF back = tip - dir * size;
     QPainterPath p;
@@ -145,7 +145,6 @@ QPainterPath LineTool::curve() const
         path.cubicTo(m_pts[1], m_pts[2], m_pts[3]);
         break;
     case CurveType::Spline:
-        // Catmull-Rom que pasa por los cuatro nodos.
         for (int i = 0; i < 3; ++i) {
             const QPointF p0 = m_pts[size_t(std::max(0, i - 1))], p1 = m_pts[size_t(i)];
             const QPointF p2 = m_pts[size_t(i + 1)], p3 = m_pts[size_t(std::min(3, i + 2))];
@@ -232,7 +231,6 @@ void LineTool::mouseMove(const ToolEvent& e)
     switch (m_drag) {
     case Drag::Create: {
         QPointF end = (e.modifiers & Qt::ShiftModifier) ? snapAngle(m_anchor, e.pos) : e.pos;
-        // Alt: la línea queda centrada en el punto donde se empezó.
         const QPointF start = (e.modifiers & Qt::AltModifier) ? m_anchor * 2 - end : m_anchor;
         setInitialNodes(start, end);
         break;
@@ -271,7 +269,6 @@ void LineTool::mouseMove(const ToolEvent& e)
 void LineTool::mouseRelease(const ToolEvent&)
 {
     if (m_drag == Drag::Create && m_pts[0] == m_pts[3]) {
-        // Un clic sin arrastrar no deja ninguna línea.
         m_edit.cancel();
     }
     m_drag = Drag::None;
@@ -294,7 +291,6 @@ bool LineTool::keyPress(QKeyEvent* e)
         render();
         return true;
     }
-    // Atajos de Paint.NET: , remate inicial · . estilo · / remate final
     auto nextCap = [](LineCap c) { return LineCap((int(c) + 1) % 4); };
     if (e->text() == QLatin1String(",")) {
         AppState::instance()->updateTools([&](ToolSettings& s) { s.startCap = nextCap(s.startCap); });
@@ -389,7 +385,6 @@ void ShapesTool::render()
     const double w = s.brushSize;
     const QRect region = path.boundingRect().adjusted(-w - 3, -w - 3, w + 3, w + 3).toAlignedRect();
     renderVector(m_edit, region, [&](QPainter& p, bool coverage) {
-        // Contorno: principal; relleno solo: principal; contorno y relleno: secundario dentro.
         const QBrush fillBrush = coverage ? QBrush(Qt::black)
                                           : Raster::patternBrush(s.fill, s.shapeStyle == ShapeStyle::OutlineFill ? other : main,
                                                                  s.shapeStyle == ShapeStyle::OutlineFill ? main : other);
@@ -473,7 +468,6 @@ bool ShapesTool::keyPress(QKeyEvent* e)
 {
     if (!m_edit.isActive()) {
         if (e->key() == Qt::Key_A) {
-            // A / Mayús+A: siguiente/anterior forma, también sin forma activa.
             const int dir = (e->modifiers() & Qt::ShiftModifier) ? -1 : 1;
             AppState::instance()->updateTools([&](ToolSettings& s) { stepShape(s, dir); });
             return true;

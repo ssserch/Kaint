@@ -13,10 +13,10 @@ class QLocalSocket;
 // Lo que se cuenta a Discord del trabajo actual.
 struct PresenceInfo {
     bool hasDocument = false;
-    QString fileName;    // vacío = imagen sin guardar
-    QString fileType;    // "PNG", "ORA"...
+    QString fileName;
+    QString fileType;
     QSize size;
-    int layerIndex = 0;  // desde 1
+    int layerIndex = 0;
     int layerCount = 0;
     QString layerName;
     QString tool;
@@ -29,17 +29,15 @@ struct PresenceOptions {
     bool enabled = true;
     bool showFile = true;
     bool showLayer = true;
-    bool showFileInfo = true; // tipo de archivo y tamaño
+    bool showFileInfo = true;
     bool showTool = true;
     bool showElapsed = true;
-    QString clientId;         // vacío = el de discord.json
+    QString clientId;
     bool operator==(const PresenceOptions&) const = default;
 };
 
-// Rich Presence de Discord por el canal IPC local (el socket discord-ipc-N
-// que abre la aplicación de Discord, también la de Flatpak o Snap). No
-// necesita token ni conexión a internet: Discord publica la actividad.
-// Discord admite unas 5 actualizaciones cada 20 s, así que se agrupan.
+// Rich Presence de Discord por el canal IPC local (el socket discord-ipc-N que abre la
+// aplicación de Discord, también la de Flatpak o Snap).
 class DiscordPresence : public QObject {
     Q_OBJECT
 public:
@@ -48,8 +46,8 @@ public:
     explicit DiscordPresence(QObject* parent = nullptr);
     ~DiscordPresence() override;
 
-    // ID de la aplicación de discord.json (al compilar, o el de
-    // ~/.config/Kaint/discord.json); vacío si sigue "PON___AQUI".
+    // ID de la aplicación de discord.json (al compilar, o el de ~/.config/Kaint/discord.json);
+    // vacío si sigue "PON___AQUI".
     static QString configuredClientId();
     static QString largeImageKey();
     static bool isValidClientId(const QString& id);
@@ -82,8 +80,8 @@ private:
 
     QLocalSocket* m_socket = nullptr;
     QByteArray m_buffer;
-    bool m_ready = false;   // Discord respondió al saludo
-    bool m_dirty = true;    // hay que enviar la actividad
+    bool m_ready = false;
+    bool m_dirty = true;
     Status m_status = Status::Disabled;
     QString m_error;
     PresenceOptions m_options;

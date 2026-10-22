@@ -18,9 +18,8 @@ class QToolButton;
 class Tool;
 class ToolManager;
 
-// Opciones de herramienta que editan los controles: las actuales (AppState,
-// barra de opciones) o una copia aparte (los valores predeterminados de
-// Configuración > Herramientas).
+// Opciones de herramienta que editan los controles: las actuales (AppState, barra de opciones)
+// o una copia aparte (los valores predeterminados de Configuración > Herramientas).
 class ToolSettingsModel : public QObject {
     Q_OBJECT
 public:
@@ -66,16 +65,15 @@ private:
     ToolSettings m_tools;
 };
 
-// Crea los controles de todas las opciones de herramienta con los textos de
-// la barra de Paint.NET 5 y las secciones de su Configuración > Herramientas
-// (Pincel y relleno, Forma y estilo, Selección...). Cada grupo tiene una
-// clave (la barra los ordena por herramienta) y un bit de Tool::Option.
+// Crea los controles de todas las opciones de herramienta con los textos de la barra de
+// Paint.NET 5 y las secciones de su Configuración > Herramientas (Pincel y relleno, Forma y
+// estilo, Selección...).
 class ToolOptionsEditor : public QObject {
     Q_OBJECT
 public:
     struct Item {
         QWidget* widget;
-        quint32 mask; // se muestra si la herramienta tiene alguna de estas opciones
+        quint32 mask;
     };
     struct Group {
         QString key;
@@ -88,17 +86,13 @@ public:
     static QStringList sectionNames();
     const QList<Group>& groups() const { return m_groups; }
     ToolSettingsModel* model() const { return m_model; }
-    // Grupos que dependen de otra opción (tamaño fijo de la selección, radio
-    // de las esquinas del rectángulo redondeado).
     static bool groupApplies(const QString& key, const ToolSettings& s);
 
 private:
     void sync();
     QWidget* label(const QString& text);
     QToolButton* textToggle(const QString& text, const QString& tip, const std::function<void(QFont&)>& style);
-    // [−] control [+], como los de Paint.NET.
     QWidget* steppers(QWidget* inner, const std::function<void(int)>& step);
-    // Lista desplegable editable con valores predefinidos (tamaño de pincel, de letra).
     QComboBox* numberCombo(const QList<double>& presets, double min, double max, int decimals,
                            const std::function<void(double)>& set);
     void add(const QString& key, quint32 option, int section, const QList<QWidget*>& widgets);
@@ -153,16 +147,15 @@ private:
     ChoiceButton* m_fill;
 };
 
-// Segunda fila de la barra de herramientas: "Herramienta: [icono]" y las
-// opciones que use la herramienta activa, como en Paint.NET, con el botón
-// "Acabado" al final.
+// Segunda fila de la barra de herramientas: "Herramienta: [icono]" y las opciones que use la
+// herramienta activa, como en Paint.NET, con el botón "Acabado" al final.
 class ToolOptionsBar : public QToolBar {
     Q_OBJECT
 public:
     explicit ToolOptionsBar(ToolManager* manager, QWidget* parent = nullptr);
 
-    // Orden de los grupos de una herramienta en la barra de Paint.NET 5
-    // ("|" = separador). Vacío: el orden de las secciones.
+    // Orden de los grupos de una herramienta en la barra de Paint.NET 5 ("|" = separador).
+    // Vacío: el orden de las secciones.
     static QStringList order(ToolId id);
 
 private:
@@ -180,7 +173,7 @@ private:
         QString key;
         QAction* separator;
         QList<Shown> items;
-        bool shown = false; // visible con la herramienta actual
+        bool shown = false;
         bool separatorWanted = false;
     };
     QList<BarGroup> m_groups;

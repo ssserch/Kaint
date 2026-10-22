@@ -17,13 +17,12 @@ class QSpinBox;
 class QLabel;
 class QScrollArea;
 
-// "Configuración de guardado" de Paint.NET: opciones del formato (calidad,
-// profundidad de bits, tramado, umbral de transparencia) con una vista
-// previa del resultado y el tamaño que ocupará el archivo.
+// "Configuración de guardado" de Paint.NET: opciones del formato (calidad, profundidad de
+// bits, tramado, umbral de transparencia) con una vista previa del resultado y el tamaño que
+// ocupará el archivo.
 class SaveConfigDialog : public QDialog {
     Q_OBJECT
 public:
-    // 'frames': fotogramas de un GIF animado (duración 0 = la predeterminada).
     SaveConfigDialog(const QImage& flattened, const QString& path, const ImageIO::SaveOptions& initial,
                      QWidget* parent = nullptr, const QList<Gif::Frame>& frames = {});
     ~SaveConfigDialog() override;

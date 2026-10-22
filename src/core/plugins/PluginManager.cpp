@@ -94,8 +94,6 @@ QStringList PluginManager::install(const QStringList& files, bool replace, QStri
             continue;
         if (QFileInfo::exists(dest) && !replace)
             continue;
-        // Se copia aparte y luego se renombra: una biblioteca ya cargada sigue
-        // usando el archivo anterior hasta que se descarga.
         const QString tmp = dest + QStringLiteral(".part");
         QFile::remove(tmp);
         if (!QFile::copy(f, tmp) || (QFileInfo::exists(dest) && !QFile::remove(dest)) || !QFile::rename(tmp, dest)) {
@@ -119,9 +117,8 @@ void PluginManager::setPathsForTesting(const QStringList& userPaths, const QStri
 
 QList<PluginManager::Candidate> PluginManager::findCandidates() const
 {
-    // Cada carpeta y un nivel de subcarpetas (una por complemento); las
-    // bibliotecas de apoyo más profundas no se listan. Un archivo repetido
-    // (mismo nombre) solo cuenta la primera vez.
+    // Cada carpeta y un nivel de subcarpetas (una por complemento); las bibliotecas de apoyo
+    // más profundas no se listan.
     QList<Candidate> found;
     QSet<QString> names;
     for (const QString& root : searchPaths()) {
@@ -174,9 +171,9 @@ void PluginManager::loadCache()
     if (cacheFile().isEmpty() || !f.open(QIODevice::ReadOnly))
         return;
     const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
-    // Si cambia el proceso auxiliar (otra versión de Kaint) se vuelve a examinar todo.
     if (root.value(QStringLiteral("version")).toInt() != kCacheVersion
-        || root.value(QStringLiteral("host")).toString() != fileStamp(PdnBridge::hostPath()))
+        || root.value(QStringLiteral("host")).toString() != fileStamp(PdnBridge::hostPath())
+        || root.value(QStringLiteral("lang")).toString() != qEnvironmentVariable("KAINT_LANG"))
         return;
     m_cache = root.value(QStringLiteral("plugins")).toObject();
 }
@@ -191,6 +188,7 @@ void PluginManager::saveCache() const
         return;
     const QJsonObject root{{QStringLiteral("version"), kCacheVersion},
                            {QStringLiteral("host"), fileStamp(PdnBridge::hostPath())},
+                           {QStringLiteral("lang"), qEnvironmentVariable("KAINT_LANG")},
                            {QStringLiteral("plugins"), m_cache}};
     f.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
     f.commit();
@@ -246,7 +244,6 @@ void PluginManager::scan()
             info.kind = QStringLiteral("Paint.NET");
             const QJsonObject reply = cachedReply(c.path);
             if (!reply.isEmpty()) {
-                // Las bibliotecas de apoyo (sin efectos) no se muestran.
                 if (reply.value(QStringLiteral("library")).toBool())
                     continue;
                 fillFromInspection(info, reply);
@@ -317,7 +314,7 @@ void PluginManager::readNative(PluginInfo& info, bool keepLoaded)
 void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& reply)
 {
     auto str = [&](const char* key) { return reply.value(QLatin1String(key)).toString(); };
-    info.name = str("name").simplified(); // algunos traen saltos de línea
+    info.name = str("name").simplified();
     info.version = str("version");
     info.author = str("author");
     info.copyright = str("copyright");
@@ -403,7 +400,6 @@ void PluginManager::setEnabled(const QString& id, bool on)
 void PluginManager::startInspection(const QStringList& paths)
 {
     if (m_inspecting) {
-        // Se examinarán al terminar el examen en curso.
         for (const QString& p : paths)
             if (!m_queued.contains(p))
                 m_queued << p;
@@ -445,7 +441,6 @@ void PluginManager::onInspected(const QString& path, const QJsonObject& reply, c
     QJsonObject stored = reply;
     if (stored.isEmpty())
         stored = QJsonObject{{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
-    // Un fallo de comunicación no se guarda: se reintenta la próxima vez.
     if (!reply.isEmpty())
         storeReply(path, stored);
     for (int i = 0; i < m_plugins.size(); ++i) {
@@ -464,14 +459,13 @@ void PluginManager::onInspected(const QString& path, const QJsonObject& reply, c
             load(p);
         break;
     }
-    // Avisos agrupados para no reconstruir los menús por cada archivo.
     static QTimer* coalesce = nullptr;
     if (!coalesce) {
         coalesce = new QTimer(this);
         coalesce->setSingleShot(true);
         coalesce->setInterval(250);
         connect(coalesce, &QTimer::timeout, this, [this] {
-            saveCache(); // también a medias: si se cierra Kaint no se repite lo examinado
+            saveCache();
             emit changed();
         });
     }

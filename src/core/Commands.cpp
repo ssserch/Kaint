@@ -79,7 +79,6 @@ int trim(QUndoStack* stack, qint64 limit)
     qint64 total = memory(stack);
     int first = barrier(stack);
     const int start = first;
-    // Se conserva siempre el último paso hecho (puede fusionarse con el siguiente).
     while (total > limit && first < stack->index() - 1) {
         auto* cmd = const_cast<QUndoCommand*>(stack->command(first));
         total -= memory(cmd);
@@ -89,9 +88,6 @@ int trim(QUndoStack* stack, qint64 limit)
     if (first == start)
         return first - start;
     if (start == 0) {
-        // La pila no puede bajar de los pasos liberados: si se intenta (desde el
-        // panel Historial), se vuelve a la barrera; los pasos liberados no
-        // cambian nada, así que el documento queda en el estado correcto.
         QObject::connect(stack, &QUndoStack::indexChanged, stack, [stack](int index) {
             const int b = barrier(stack);
             if (index < b)
@@ -397,13 +393,10 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
     const QTransform m = pixelsToCanvas(t);
     const bool exact = m.type() <= QTransform::TxTranslate && m.dx() == std::floor(m.dx()) && m.dy() == std::floor(m.dy());
     if (exact) {
-        // Solo desplazamiento: los píxeles se componen tal cual, con alfa directo.
         const QPoint at(int(m.dx()), int(m.dy()));
         blendImage(img, r.topLeft(), pixels, r.translated(-at), BlendMode::Normal);
         return;
     }
-    // Girados o escalados: se dibujan en una capa temporal premultiplicada
-    // (como espera QPainter) y se componen sobre la capa.
     QImage tmp(r.size(), kPremulFormat);
     tmp.fill(Qt::transparent);
     const QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
@@ -445,8 +438,6 @@ qint64 MovePixelsCommand::memoryBytes() const
 {
     if (!m_floating || !m_first)
         return selectionBytes(m_selectionBefore);
-    // Los píxeles flotantes se comparten entre los pasos de una misma sesión:
-    // se cuentan en el primero.
     return imageBytes(m_floating->original) + imageBytes(m_floating->base) + imageBytes(m_floating->pixels)
          + selectionBytes(m_floating->selectionBase) + selectionBytes(m_selectionBefore);
 }

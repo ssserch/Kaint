@@ -13,9 +13,8 @@ void registerIcon(const QString& text, const QString& iconName);
 QString iconFor(const QString& text);
 }
 
-// Paso del historial que sabe cuánta memoria ocupa y puede liberarla (límite
-// de memoria del historial). Un paso liberado ya no hace nada al deshacerlo o
-// rehacerlo, y la pila no puede bajar de él (History::barrier).
+// Paso del historial que sabe cuánta memoria ocupa y puede liberarla (límite de memoria del
+// historial).
 class HistoryStep {
 public:
     virtual ~HistoryStep() = default;
@@ -32,15 +31,15 @@ namespace History {
 qint64 memory(const QUndoCommand* cmd);
 // Memoria de todos los pasos de la pila.
 qint64 memory(const QUndoStack* stack);
-// Libera los pasos más antiguos (por debajo del actual) hasta que la pila
-// ocupe como mucho 'limit' bytes. Devuelve cuántos pasos se liberaron.
+// Libera los pasos más antiguos (por debajo del actual) hasta que la pila ocupe como mucho
+// 'limit' bytes. Devuelve cuántos pasos se liberaron.
 int trim(QUndoStack* stack, qint64 limit);
 // Primer índice al que se puede volver (los pasos de debajo están liberados).
 int barrier(const QUndoStack* stack);
 } // namespace History
 
-// Cambio de píxeles en una capa. Solo guarda los tiles (64x64) que difieren
-// entre 'before' y el estado actual de la capa dentro de 'rect'.
+// Cambio de píxeles en una capa. Solo guarda los tiles (64x64) que difieren entre 'before' y
+// el estado actual de la capa dentro de 'rect'.
 class PixelPatchCommand : public QUndoCommand, public HistoryStep {
 public:
     PixelPatchCommand(Document* doc, LayerPtr layer, const QImage& before, const QRect& rect,
@@ -71,8 +70,6 @@ bool pushPixelPatch(Document* doc, const LayerPtr& layer, const QImage& before, 
 
 class SelectionCommand : public QUndoCommand, public HistoryStep {
 public:
-    // Los comandos con 'mergeKey' distinto de -1 se fusionan con el anterior
-    // del mismo tipo (p. ej. varios arrastres de "Mover selección").
     SelectionCommand(Document* doc, const Selection& before, const Selection& after, const QString& text,
                      int mergeKey = -1, QUndoCommand* parent = nullptr);
     void undo() override;
@@ -142,9 +139,7 @@ private:
     LayerProps m_after;
 };
 
-// Estado completo del documento, para operaciones globales (redimensionar,
-// girar, acoplar...). Conserva la identidad de cada LayerPtr para que los
-// comandos de píxeles anteriores sigan apuntando a las capas correctas.
+// Estado completo del documento, para operaciones globales (redimensionar, girar, acoplar...).
 struct DocumentState {
     QSize size;
     double dpi = 96;
@@ -174,24 +169,21 @@ private:
     DocumentState m_after;
 };
 
-// Píxeles "flotantes": los que se están moviendo con la herramienta Mover
-// píxeles seleccionados o los recién pegados. Mientras la sesión dura, la
-// capa se reconstruye como base + píxeles transformados, así lo que queda
-// debajo nunca se pierde aunque se arrastren varias veces.
+// Píxeles "flotantes": los que se están moviendo con la herramienta Mover píxeles
+// seleccionados o los recién pegados.
 struct FloatingPixels {
     LayerPtr layer;
-    QImage original;     // capa antes de empezar
-    QImage base;         // capa sin los píxeles levantados (o igual a original al pegar)
-    QImage pixels;       // píxeles levantados
-    QPoint origin;       // posición de 'pixels' en el lienzo
+    QImage original;
+    QImage base;
+    QImage pixels;
+    QPoint origin;
     Selection selectionBase;
-    QTransform transform; // transformación actualmente aplicada
+    QTransform transform;
     Resample::Interpolation interpolation = Resample::Interpolation::Bicubic;
-    bool gammaCorrect = true; // interpolar en luz lineal (Gamma corregido)
+    bool gammaCorrect = true;
 
     QTransform pixelsToCanvas(const QTransform& t) const;
     QRect boundsFor(const QTransform& t) const;
-    // Dibuja base + píxeles con la transformación t dentro de 'region'.
     void render(const QTransform& t, const QRect& region) const;
 };
 using FloatingPtr = std::shared_ptr<FloatingPixels>;

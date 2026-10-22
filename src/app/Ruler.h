@@ -10,8 +10,8 @@ double pixelsPerUnit(Unit unit, double dpi);
 // Formatea una medida en píxeles con la unidad indicada.
 QString formatLength(double pixels, Unit unit, double dpi);
 
-// Regla horizontal o vertical junto al lienzo: marca la posición del cursor
-// y resalta los límites de la selección, en la unidad de medida actual.
+// Regla horizontal o vertical junto al lienzo: marca la posición del cursor y resalta los
+// límites de la selección, en la unidad de medida actual.
 class Ruler : public QWidget {
     Q_OBJECT
 public:

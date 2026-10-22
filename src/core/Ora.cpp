@@ -17,8 +17,8 @@
 namespace {
 
 // ---------------------------------------------------------------------------
-// ZIP mínimo: escritura sin compresión (los PNG ya van comprimidos) y lectura
-// de entradas almacenadas o comprimidas con deflate.
+// ZIP mínimo: escritura sin compresión (los PNG ya van comprimidos) y lectura de entradas
+// almacenadas o comprimidas con deflate.
 // ---------------------------------------------------------------------------
 
 void put16(QByteArray& out, quint16 v)
@@ -35,8 +35,8 @@ void put32(QByteArray& out, quint32 v)
     out.append(b, 4);
 }
 
-// Lectura con comprobación de límites; fuera del archivo devuelve 0.
-// data_ptr() en vez de constData() evita un falso aviso de -Warray-bounds.
+// Lectura con comprobación de límites; fuera del archivo devuelve 0. data_ptr() en vez de
+// constData() evita un falso aviso de -Warray-bounds.
 quint32 getLE(const QByteArray& data, qsizetype pos, int bytes)
 {
     if (pos < 0 || pos + bytes > data.size())
@@ -59,11 +59,11 @@ public:
         Entry e{fname, crc, quint32(data.size()), quint32(m_out.size())};
 
         put32(m_out, 0x04034b50);
-        put16(m_out, 20);  // versión necesaria
-        put16(m_out, 0x0800); // nombres en UTF-8
-        put16(m_out, 0);   // sin compresión
-        put16(m_out, 0);   // hora
-        put16(m_out, 0x21); // fecha (1980-01-01)
+        put16(m_out, 20);
+        put16(m_out, 0x0800);
+        put16(m_out, 0);
+        put16(m_out, 0);
+        put16(m_out, 0x21);
         put32(m_out, crc);
         put32(m_out, e.size);
         put32(m_out, e.size);
@@ -125,7 +125,6 @@ public:
     explicit ZipReader(QByteArray data)
         : m_data(std::move(data))
     {
-        // Busca el registro final del directorio central desde el final.
         const qsizetype minPos = std::max<qsizetype>(0, m_data.size() - 22 - 65535);
         qsizetype eocd = -1;
         for (qsizetype pos = m_data.size() - 22; pos >= minPos; --pos) {
@@ -220,7 +219,6 @@ namespace Ora {
 bool save(const Document* doc, const QString& path, QString* error)
 {
     ZipWriter zip;
-    // La especificación exige que "mimetype" sea la primera entrada y sin comprimir.
     zip.add(QStringLiteral("mimetype"), QByteArrayLiteral("image/openraster"));
 
     QByteArray stackXml;
@@ -234,7 +232,6 @@ bool save(const Document* doc, const QString& path, QString* error)
     xml.writeAttribute(QStringLiteral("xres"), QString::number(doc->dpi(), 'f', 2));
     xml.writeAttribute(QStringLiteral("yres"), QString::number(doc->dpi(), 'f', 2));
     xml.writeStartElement(QStringLiteral("stack"));
-    // En stack.xml la primera capa es la superior.
     for (int i = doc->layerCount() - 1; i >= 0; --i) {
         const Layer* l = doc->layer(i);
         const QString src = QStringLiteral("data/layer%1.png").arg(i);
@@ -308,7 +305,6 @@ Document* load(const QString& path, QString* error)
             if (xres > 0)
                 dpi = xres;
         } else if (xml.name() == QLatin1String("layer")) {
-            // Los grupos (<stack> anidados) se aplanan: solo se leen las capas.
             LayerInfo info;
             info.props.name = attrs.value(QLatin1String("name")).toString();
             info.src = attrs.value(QLatin1String("src")).toString();
@@ -335,7 +331,7 @@ Document* load(const QString& path, QString* error)
             layer->props.name = QObject::tr("Capa %1").arg(layers.size() + 1);
         QImage img;
         img.loadFromData(zip.read(it->src), "PNG");
-        if (!img.isNull()) // copia exacta con alfa directo (sin pasar por QPainter)
+        if (!img.isNull())
             Raster::blit(layer->image, img.convertToFormat(kLayerFormat), it->pos);
         layers.append(layer);
     }

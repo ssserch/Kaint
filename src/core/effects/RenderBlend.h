@@ -3,9 +3,9 @@
 #include <QImage>
 #include <QStringList>
 
-// Modos de fusión de los efectos de Representación de Paint.NET 5 (Nubes,
-// Turbulencia, fractales): los de Direct2D más los propios de Paint.NET y
-// los operadores de composición, con sus nombres y su orden.
+// Modos de fusión de los efectos de Representación de Paint.NET 5 (Nubes, Turbulencia,
+// fractales): los de Direct2D más los propios de Paint.NET y los operadores de composición,
+// con sus nombres y su orden.
 namespace RenderBlend {
 
 enum Mode {
@@ -17,8 +17,8 @@ enum Mode {
 };
 
 QStringList names();
-// Compone 'top' (premultiplicada, del tamaño de la región) sobre 'base' (alfa
-// directo o premultiplicada, del mismo tamaño).
+// Compone 'top' (premultiplicada, del tamaño de la región) sobre 'base' (alfa directo o
+// premultiplicada, del mismo tamaño).
 void compose(QImage& base, const QImage& top, int mode);
 
 } // namespace RenderBlend

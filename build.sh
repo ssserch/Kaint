@@ -18,7 +18,7 @@ DO_RUN=0
 DO_TEST=0
 
 # Paquetes de Arch necesarios para compilar y ejecutar.
-REQUIRED=(gcc cmake ninja qt6-base qt6-wayland qt6-svg zlib breeze-icons)
+REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons)
 # Recomendados: más formatos (WebP, TIFF, AVIF, JPEG XL, HEIF, PSD...), diálogos de Qt en español
 # y mono + libgdiplus para los complementos de Paint.NET (.dll).
 OPTIONAL=(qt6-imageformats kimageformats qt6-translations mono libgdiplus)

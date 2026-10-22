@@ -61,12 +61,12 @@ static void testStrokeAndUndo()
     stroke.begin(doc.get(), doc->layerPtr(0), p);
     stroke.moveTo(QPointF(10, 10), 1.0);
     stroke.lineTo(QPointF(50, 10), 1.0);
-    stroke.lineTo(QPointF(10, 10), 1.0); // vuelve por encima: no debe acumular opacidad
+    stroke.lineTo(QPointF(10, 10), 1.0);
     CHECK(stroke.end(QStringLiteral("Pincel")));
 
     const QRgb center = qUnpremultiply(doc->layer(0)->image.pixel(30, 10));
     CHECK(qRed(center) == 255);
-    CHECK(std::abs(qGreen(center) - 127) <= 2); // 50 % rojo sobre blanco
+    CHECK(std::abs(qGreen(center) - 127) <= 2);
     CHECK(doc->undoStack()->count() == 1);
 
     doc->undoStack()->undo();
@@ -103,7 +103,7 @@ static void testFloodFill()
 {
     QImage img(20, 20, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::white);
-    QPainter(&img).fillRect(10, 0, 1, 20, Qt::black); // pared vertical
+    QPainter(&img).fillRect(10, 0, 1, 20, Qt::black);
     const QImage contiguous = FloodFill::mask(img, QPoint(2, 2), 0.5, true);
     CHECK(contiguous.scanLine(5)[5] == 255);
     CHECK(contiguous.scanLine(5)[10] == 0);
@@ -152,7 +152,7 @@ static void testEffects()
         const QImage whole = Effects::apply(*e, src, Selection(), Effects::defaults(*e), EffectContext(), cancel);
         const QImage part = Effects::apply(*e, src, sel, Effects::defaults(*e), EffectContext(), cancel);
         CHECK(whole.size() == src.size());
-        CHECK(part.pixel(0, 0) == src.pixel(0, 0)); // fuera de la selección no cambia
+        CHECK(part.pixel(0, 0) == src.pixel(0, 0));
         if (whole.size() != src.size())
             std::fprintf(stderr, "  efecto: %s\n", qPrintable(e->id()));
     }
@@ -165,8 +165,8 @@ static void testEffects()
     }
 }
 
-// Las distorsiones (tan() en Reflejo en mosaico) dan coordenadas enormes o
-// NaN: el muestreo de los bordes no debe quedarse en un bucle.
+// Las distorsiones (tan() en Reflejo en mosaico) dan coordenadas enormes o NaN: el muestreo de
+// los bordes no debe quedarse en un bucle.
 static void testEdgeSampling()
 {
     QImage img(16, 8, QImage::Format_ARGB32_Premultiplied);
@@ -179,7 +179,6 @@ static void testEdgeSampling()
         CHECK(qAlpha(fx::sampleWrapped(in, 3.f, v)) == 255);
         CHECK(qAlpha(sampleBilinear(in, v, v)) == 255);
     }
-    // Reflejo con periodo de dos anchos: 18,5 -> 13,5 (centro del píxel 13).
     CHECK(qRed(fx::sampleReflected(in, 18.5f, 0.5f)) == 130);
     CHECK(qRed(fx::sampleReflected(in, -2.5f, 0.5f)) == 20);
     CHECK(qRed(fx::sampleWrapped(in, 18.5f, 0.5f)) == 20);
@@ -214,21 +213,18 @@ static void testCustomShapes()
     CHECK(ok && house.fillRule() == Qt::WindingFill);
     CHECK(house.boundingRect() == QRectF(21, 22, 279, 296));
     CHECK(house.contains(QPointF(160, 200)) && !house.contains(QPointF(30, 40)));
-    // Relativos, H/V y regla par-impar por defecto.
     const QPainterPath box = CustomShapes::parsePathMarkup(QStringLiteral("m10,10 h10 v10 h-10 z"), &ok);
     CHECK(ok && box.fillRule() == Qt::OddEvenFill && box.boundingRect() == QRectF(10, 10, 10, 10));
-    // Dos arcos forman un círculo.
     const QPainterPath circle = CustomShapes::parsePathMarkup(QStringLiteral("M 0,50 A 50,50 0 1 1 100,50 A 50,50 0 1 1 0,50 Z"), &ok);
     const QRectF cb = circle.boundingRect();
     CHECK(ok && std::abs(cb.left()) < 0.5 && std::abs(cb.top()) < 0.5 && std::abs(cb.right() - 100) < 0.5
           && std::abs(cb.bottom() - 100) < 0.5);
     CHECK(circle.contains(QPointF(50, 50)) && circle.contains(QPointF(50, 3)) && !circle.contains(QPointF(5, 5)));
-    // Curvas (C, S, Q, T) y números con exponente o sin separadores.
     CustomShapes::parsePathMarkup(QStringLiteral("M0 0C10 0 10 10 0 10S-10 20 0 20Q5 25 10 20T20 20L1e1-5z"), &ok);
     CHECK(ok);
     CustomShapes::parsePathMarkup(QStringLiteral("M 0,0 L x"), &ok);
     CHECK(!ok);
-    CustomShapes::parsePathMarkup(QStringLiteral("M 0,0 L 5,5 Z 3 4"), &ok); // no se cuelga
+    CustomShapes::parsePathMarkup(QStringLiteral("M 0,0 L 5,5 Z 3 4"), &ok);
     CHECK(!ok);
 
     // Modelo de objetos: grupos, transformaciones, segmentos y combinaciones.
@@ -267,10 +263,10 @@ static void testCustomShapes()
     QString error;
     CHECK(CustomShapes::parse(xaml, &shape, &error));
     CHECK(shape.name == QStringLiteral("Prueba"));
-    CHECK(shape.path.contains(QPointF(50, 50)));                                // elipse
-    CHECK(shape.path.contains(QPointF(139, 19)) && !shape.path.contains(QPointF(19, 5))); // rectángulo escalado y movido
-    CHECK(shape.path.contains(QPointF(55, 120)));                                // el arco sale hacia la derecha
-    CHECK(shape.path.contains(QPointF(205, 5)) && !shape.path.contains(QPointF(230, 30))); // agujero de Exclude
+    CHECK(shape.path.contains(QPointF(50, 50)));
+    CHECK(shape.path.contains(QPointF(139, 19)) && !shape.path.contains(QPointF(19, 5)));
+    CHECK(shape.path.contains(QPointF(55, 120)));
+    CHECK(shape.path.contains(QPointF(205, 5)) && !shape.path.contains(QPointF(230, 30)));
     CHECK(!CustomShapes::parse("<ps:Otra xmlns:ps=\"x\"/>", &shape, &error) && !error.isEmpty());
     CHECK(!CustomShapes::parse("<SimpleGeometryShape><Desconocida/></SimpleGeometryShape>", &shape, &error));
 
@@ -318,7 +314,7 @@ static void testMovePixels()
                                                  QStringLiteral("Mover")));
     const QTransform t2 = QTransform::fromTranslate(20, 20);
     doc->undoStack()->push(new MovePixelsCommand(doc.get(), f, t1, t2, false, false, {}, QStringLiteral("Mover")));
-    CHECK(doc->undoStack()->count() == 1); // el segundo arrastre se fusiona
+    CHECK(doc->undoStack()->count() == 1);
     CHECK(QColor(doc->layer(0)->image.pixel(30, 30)) == QColor(Qt::red));
     CHECK(qAlpha(doc->layer(0)->image.pixel(30, 10)) == 0 || QColor(doc->layer(0)->image.pixel(30, 10)) != QColor(Qt::red));
     CHECK(doc->selection().bounds() == QRect(25, 25, 10, 10));
@@ -344,9 +340,7 @@ static void testBlendModes()
     CHECK(qRed(blendPixel(gray, qRgba(100, 100, 100, 255), BlendMode::Xor)) == (100 ^ 100));
     CHECK(qBlue(blendPixel(gray, qRgba(55, 55, 55, 255), BlendMode::Negation)) == 255 - std::abs(255 - 200 - 55));
     CHECK(qRed(blendPixel(gray, qRgba(0, 0, 0, 255), BlendMode::Reflect)) == 100 * 100 / 255);
-    // Semitransparente sobre opaco: el resultado sigue siendo opaco.
     CHECK(qAlpha(blendPixel(gray, qRgba(10, 10, 10, 128), BlendMode::Glow)) == 255);
-    // Sobrescribir copia el píxel aunque sea transparente.
     CHECK(blendPixel(gray, qRgba(0, 0, 0, 0), BlendMode::Overwrite) == 0);
     CHECK(layerBlendModes().size() == 14 && toolBlendModes().size() == 15);
 }
@@ -359,7 +353,6 @@ static void testResample()
         const QImage up = Resample::scale(src, QSize(97, 61), m);
         const QImage down = Resample::scale(src, QSize(13, 7), m, true);
         CHECK(up.size() == QSize(97, 61) && down.size() == QSize(13, 7));
-        // Un color uniforme se conserva con cualquier método.
         CHECK(std::abs(QColor(up.pixel(50, 30)).red() - 200) <= 1);
         CHECK(std::abs(QColor(down.pixel(6, 3)).green() - 100) <= 1);
     }
@@ -405,11 +398,9 @@ static void testSaveOptions()
     const QImage back(png8);
     CHECK(back.format() == QImage::Format_Indexed8 || back.colorCount() <= 256);
     CHECK(qAlpha(back.pixel(2, 10)) == 0 && qAlpha(back.pixel(50, 10)) == 255);
-    // 24 bits: sin transparencia (compuesto sobre blanco).
     o.bitDepth = 24;
     const QImage opaque = ImageIO::prepare(doc->flattened(), png8, o);
     CHECK(!opaque.hasAlphaChannel() && QColor(opaque.pixel(2, 10)) == QColor(Qt::white));
-    // JPEG: la calidad cambia el tamaño del archivo.
     ImageIO::SaveOptions low, high;
     low.quality = 10;
     high.quality = 100;
@@ -420,8 +411,8 @@ static void testSaveOptions()
     CHECK(!small.isEmpty() && small.size() < big.size());
 }
 
-// Bote de pintura con suavizado: un círculo con contorno suavizado se rellena
-// de un clic sin dejar halo de píxeles intermedios junto al borde.
+// Bote de pintura con suavizado: un círculo con contorno suavizado se rellena de un clic sin
+// dejar halo de píxeles intermedios junto al borde.
 static void testBucketHalo()
 {
     // Blanco con un círculo negro suavizado (2,5 px de grosor, centro fraccionario).
@@ -435,14 +426,14 @@ static void testBucketHalo()
     }
     const QImage before = drawn.convertToFormat(kLayerFormat);
 
-    // "Halo": restos del blanco de dentro. Con el relleno rojo puro y el
-    // contorno negro, el blanco es lo único que aporta verde.
+    // "Halo": restos del blanco de dentro. Con el relleno rojo puro y el contorno negro, el
+    // blanco es lo único que aporta verde.
     auto halo = [&](const QImage& img) {
         int worst = 0;
         for (int y = 0; y < img.height(); ++y)
             for (int x = 0; x < img.width(); ++x) {
                 const double dx = (x + 0.5 - 60.3) / 37.4, dy = (y + 0.5 - 49.7) / 33.1;
-                if (std::hypot(dx, dy) < 1.0) // el interior hasta la línea central del contorno
+                if (std::hypot(dx, dy) < 1.0)
                     worst = std::max(worst, qGreen(img.pixel(x, y)));
             }
         return worst;
@@ -457,7 +448,6 @@ static void testBucketHalo()
     CHECK(QColor(layer.pixel(60, 50)) == QColor(255, 0, 0));
     std::printf("  halo del bote de pintura: %d (sin suavizado: ", halo(layer));
     CHECK(halo(layer) <= 24);
-    // El contorno no se invade: por fuera del círculo todo sigue igual.
     bool outsideSame = true;
     for (int y = 0; y < layer.height(); ++y)
         for (int x = 0; x < layer.width(); ++x) {
@@ -466,7 +456,6 @@ static void testBucketHalo()
                 outsideSame = false;
         }
     CHECK(outsideSame);
-    // Su núcleo sigue negro.
     CHECK(qRed(layer.pixel(60, 49 - 33)) < 60 || qRed(layer.pixel(60, 50 - 33)) < 60);
 
     // Sin suavizado queda el halo que describía el problema (sirve de referencia).
@@ -503,7 +492,6 @@ static void testStraightAlpha()
         CHECK(qAlpha(once.pixel(0, 0)) == 255 && qRed(once.pixel(3, 0)) == 21);
         const QImage twice = Effects::apply(*invAlpha, once, Selection(), {}, EffectContext(), cancel);
         CHECK(twice == img);
-        // También con selección: fuera de ella no cambia nada.
         const Selection sel = Selection::fromRect(QRect(4, 4, 10, 10), img.size());
         const QImage part = Effects::apply(*invAlpha, img, sel, {}, EffectContext(), cancel);
         CHECK(Effects::apply(*invAlpha, part, sel, {}, EffectContext(), cancel) == img);
@@ -542,12 +530,11 @@ static void testStraightAlpha()
     stroke.end(QStringLiteral("Pincel"));
     CHECK(doc->layer(0)->image.pixel(20, 20) == img.pixel(20, 20));
     CHECK(doc->layer(0)->image.pixel(8, 4) != img.pixel(8, 4));
-    // Y el acoplado de una sola capa conserva los píxeles exactos.
     doc->undoStack()->undo();
     CHECK(doc->flattened() == img);
 
-    // Los modos de fusión dan lo mismo sobre una capa (alfa directo) que sobre
-    // la caché de pantalla (premultiplicada), salvo redondeo.
+    // Los modos de fusión dan lo mismo sobre una capa (alfa directo) que sobre la caché de
+    // pantalla (premultiplicada), salvo redondeo.
     QImage top(img.size(), kLayerFormat);
     for (int y = 0; y < top.height(); ++y)
         for (int x = 0; x < top.width(); ++x)
@@ -588,7 +575,6 @@ static void testStraightAlpha()
     CHECK(doubled.format() == kLayerFormat && doubled.pixel(6, 6) == img.pixel(3, 3));
 }
 
-
 static int changedPixels(const QImage& a, const QImage& b)
 {
     int n = 0;
@@ -607,7 +593,6 @@ static QImage testPattern(int w, int h)
     return img;
 }
 
-
 // GIF animado (capas = fotogramas, duración en el nombre) e iconos multitamaño.
 static void testGifAndIco()
 {
@@ -623,10 +608,10 @@ static void testGifAndIco()
     second->image.fill(qRgba(0, 0, 255, 255));
     for (int y = 0; y < 10; ++y)
         for (int x = 0; x < 10; ++x)
-            second->image.setPixel(x, y, kTransparent); // esquina transparente
+            second->image.setPixel(x, y, kTransparent);
     doc->insertLayer(1, second);
     auto hidden = std::make_shared<Layer>(QStringLiteral("Oculta"), QSize(40, 30), Qt::green);
-    hidden->props.visible = false; // las capas ocultas no son fotogramas
+    hidden->props.visible = false;
     doc->insertLayer(2, hidden);
     auto third = std::make_shared<Layer>(QStringLiteral("Fotograma 3 (300ms)"), QSize(40, 30), Qt::yellow);
     doc->insertLayer(3, third);
@@ -652,7 +637,6 @@ static void testGifAndIco()
             CHECK(back->layer(2)->image.pixel(5, 5) == qRgba(255, 255, 0, 255));
         }
     }
-    // Una sola vez: sin repetición.
     o.loops = -1;
     CHECK(ImageIO::save(doc.get(), path, o, &error));
     back.reset(ImageIO::load(path, &error));
@@ -694,15 +678,13 @@ static void testGifAndIco()
     if (icon) {
         const QRgb c = icon->layer(0)->image.pixel(128, 128);
         CHECK(std::abs(qBlue(c) - 255) <= 2 && std::abs(qAlpha(c) - 200) <= 2);
-        CHECK(qAlpha(icon->layer(0)->image.pixel(128, 5)) == 0); // relleno transparente al hacerla cuadrada
+        CHECK(qAlpha(icon->layer(0)->image.pixel(128, 5)) == 0);
     }
-    // Guardar como .ico desde un documento.
     ImageIO::SaveOptions io;
     io.icoSizes = {16, 48};
     CHECK(ImageIO::save(doc.get(), icoPath, io, &error));
     CHECK(QImageReader(icoPath).imageCount() == 2);
 }
-
 
 // Lectura de .pdn con un archivo guardado con Paint.NET 5.1.
 static void testPdn()
@@ -733,11 +715,8 @@ static void testPdn()
     CHECK(qAlpha(doc->layer(3)->image.pixel(300, 600)) == 0);
     CHECK(doc->layer(4)->image.pixel(1500, 500) == 0xffef9907u);
     CHECK(!Pdn::thumbnail(path).isNull());
-    // No se escribe .pdn: Guardar pasa a Guardar como.
     CHECK(!ImageIO::isWritable(path));
     CHECK(ImageIO::isWritable(QStringLiteral("a.ora")) && ImageIO::isWritable(QStringLiteral("a.gif")));
-    // Tipos de los diálogos con el orden y los nombres de Paint.NET; los alias
-    // de extensión (.jfif, .tif) se escriben como su formato.
     const QStringList open = ImageIO::openFilter().split(QStringLiteral(";;"));
     CHECK(open.first().startsWith(QStringLiteral("Todos los tipos de imagen (")) && open.first().contains(QStringLiteral("*.jfif")));
     CHECK(open.value(1) == QStringLiteral("Paint.NET (*.pdn)") && open.last() == QStringLiteral("Todos los archivos (*)"));
@@ -746,7 +725,6 @@ static void testPdn()
     const QStringList save = ImageIO::saveFilter(&png).split(QStringLiteral(";;"));
     CHECK(save.first() == QStringLiteral("OpenRaster con capas (*.ora)") && png == QStringLiteral("PNG (*.png)"));
     CHECK(ImageIO::isWritable(QStringLiteral("a.jfif")) && ImageIO::isWritable(QStringLiteral("a.JPE")));
-    // Un archivo dañado da un error, no un cierre.
     QTemporaryDir dir;
     QFile broken(dir.filePath(QStringLiteral("roto.pdn")));
     QFile original(path);
@@ -757,16 +735,16 @@ static void testPdn()
     CHECK(!bad && !error.isEmpty());
 }
 
-// Complementos: el nativo de ejemplo (API C) y, si hay mono, PolyGlitch a
-// través del proceso auxiliar de Paint.NET.
+// Complementos: el nativo de ejemplo (API C) y, si hay mono, PolyGlitch a través del proceso
+// auxiliar de Paint.NET.
 static void testPlugins()
 {
     QSettings().clear();
     QTemporaryDir dir;
     const QString user = dir.filePath(QStringLiteral("user"));
 
-    // Instalar copia el archivo a la carpeta del usuario (que se crea si hace
-    // falta) y no sustituye uno que ya exista salvo que se pida.
+    // Instalar copia el archivo a la carpeta del usuario (que se crea si hace falta) y no
+    // sustituye uno que ya exista salvo que se pida.
     PluginManager* pm = PluginManager::instance();
     pm->setPathsForTesting({user}, dir.filePath(QStringLiteral("cache.json")));
     const QString example = QStringLiteral(KAINT_TEST_PLUGIN);
@@ -783,7 +761,7 @@ static void testPlugins()
     if (pm->plugins().size() == 1) {
         const PluginInfo& p = pm->plugins().first();
         CHECK(p.kind == QLatin1String("Kaint"));
-        CHECK(p.enabled && p.loaded); // los del usuario vienen activados
+        CHECK(p.enabled && p.loaded);
         CHECK(p.effects.size() == 2);
         CHECK(p.errors.isEmpty());
     }
@@ -797,7 +775,7 @@ static void testPlugins()
         std::atomic_bool cancel{false};
         ParamValues v = Effects::defaults(*swap);
         const QImage swapped = Effects::apply(*swap, img, Selection(), v, EffectContext(), cancel);
-        CHECK(swapped.pixel(3, 3) == qRgba(30, 20, 10, 128)); // BGR, alfa directo intacto
+        CHECK(swapped.pixel(3, 3) == qRgba(30, 20, 10, 128));
         v = Effects::defaults(*tint);
         CHECK(v.value(QStringLiteral("color")).value<QColor>() == QColor(255, 128, 0));
         v.insert(QStringLiteral("amount"), 100);
@@ -814,10 +792,8 @@ static void testPlugins()
     }
     const QImage src = testPattern(64, 48);
     std::atomic_bool cancel{false};
-    // PolyGlitch (MIT), si está su carpeta en el proyecto.
     const QString polyDir = QStringLiteral(KAINT_SOURCE_DIR "/PolyGlitch Plugin");
     auto polyGlitch = [&] {
-        // Los de Paint.NET se examinan en segundo plano.
         pm->setPathsForTesting({polyDir}, dir.filePath(QStringLiteral("cache.json")));
         pm->scan();
         pm->waitForInspection();
@@ -843,7 +819,6 @@ static void testPlugins()
         CHECK(flip->takeError().isEmpty());
         CHECK(changedPixels(src, flipped) > 1000);
 
-        // Desplazamiento: vector de Paint.NET con rango en píxeles (-128..128).
         const QList<EffectParam> params = displace->params();
         CHECK(params.size() == 3 && params.value(0).type == EffectParam::Type::Offset);
         CHECK(params.value(0).min == -128 && params.value(0).maxY == 128);
@@ -851,20 +826,16 @@ static void testPlugins()
         CHECK(changedPixels(src, Effects::apply(*displace, src, Selection(), v, EffectContext(), cancel)) == 0);
         v.insert(QStringLiteral("OffsetRed"), QPointF(5, 0));
         const QImage shifted = Effects::apply(*displace, src, Selection(), v, EffectContext(), cancel);
-        // Solo se desplaza el canal rojo.
         CHECK(qRed(shifted.pixel(20, 10)) != qRed(src.pixel(20, 10)));
         CHECK(qGreen(shifted.pixel(20, 10)) == qGreen(src.pixel(20, 10)) && qBlue(shifted.pixel(20, 10)) == qBlue(src.pixel(20, 10)));
 
-        // Solo cambia la selección y una cancelación devuelve una imagen nula.
         const Selection sel = Selection::fromRect(QRect(0, 0, 32, 48), src.size());
         const QImage half = Effects::apply(*flip, src, sel, Effects::defaults(*flip), EffectContext(), cancel);
         CHECK(half.pixel(50, 10) == src.pixel(50, 10));
         std::atomic_bool cancelled{true};
         CHECK(Effects::apply(*flip, src, Selection(), Effects::defaults(*flip), EffectContext(), cancelled).isNull());
-        // El proceso sigue respondiendo después de cancelar.
         CHECK(changedPixels(src, Effects::apply(*flip, src, Selection(), Effects::defaults(*flip), EffectContext(), cancel)) > 1000);
 
-        // La caché evita volver a examinar: un segundo escaneo no deja nada pendiente.
         pm->setEnabled(poly->id, false);
         pm->scan();
         for (const PluginInfo& p : pm->plugins())
@@ -875,8 +846,8 @@ static void testPlugins()
     else
         polyGlitch();
 
-    // Complementos de Paint.NET 4.3/4.4 compilados para .NET moderno, si está
-    // la colección de Windows en el proyecto.
+    // Complementos de Paint.NET 4.3/4.4 compilados para .NET moderno, si está la colección de
+    // Windows en el proyecto.
     const QString windows = QStringLiteral(KAINT_SOURCE_DIR "/Efectos de mi version de windows paintnet");
     if (QFile::exists(windows + QStringLiteral("/OilPaintingPlus.dll"))) {
         QTemporaryDir modernDir;

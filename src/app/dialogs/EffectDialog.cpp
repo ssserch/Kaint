@@ -37,8 +37,8 @@
 
 namespace {
 
-// Título de un parámetro. Paint.NET 5 solo pone la línea al lado en los
-// selectores de ángulo y de color.
+// Título de un parámetro. Paint.NET 5 solo pone la línea al lado en los selectores de ángulo y
+// de color.
 QWidget* header(const QString& text, QWidget* parent, bool line = true)
 {
     auto* w = new QWidget(parent);
@@ -73,7 +73,6 @@ protected:
         QLinearGradient g(rect().topLeft(), rect().topRight());
         for (int i = 0; i < m_colors.size(); ++i)
             g.setColorAt(m_colors.size() > 1 ? double(i) / (m_colors.size() - 1) : 0, m_colors[i]);
-        // Los extremos del degradado coinciden con los del recorrido del deslizador.
         p.fillRect(rect().adjusted(6, 0, -6, 0), g);
     }
 
@@ -100,8 +99,8 @@ QDoubleSpinBox* doubleBox(QWidget* parent, double min, double max, int decimals)
     return d;
 }
 
-// Fila "deslizador + caja numérica + restablecer" para un valor real; 'changed'
-// recibe el valor nuevo. Devuelve la caja (para fijar el valor desde fuera).
+// Fila "deslizador + caja numérica + restablecer" para un valor real; 'changed' recibe el
+// valor nuevo. Devuelve la caja (para fijar el valor desde fuera).
 QDoubleSpinBox* sliderRow(QWidget* parent, QBoxLayout* into, double min, double max, int decimals, double def,
                           double current, const QString& tip, const std::function<void(double)>& changed)
 {
@@ -153,7 +152,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
     for (const EffectParam& p : m_params)
         if (!p.enableKey.isEmpty())
             titleChecks.insert(p.enableKey);
-    // Pestañas (Nubes / Colores...), si algún parámetro las usa.
     QTabWidget* tabs = nullptr;
     QHash<QString, QVBoxLayout*> tabPages;
     for (const EffectParam& p : m_params) {
@@ -173,7 +171,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
         const QString key = p.key;
         if (titleChecks.contains(key))
             continue;
-        // Cada parámetro en su propio contenedor (para deshabilitarlo si es de solo lectura).
         auto* container = new QWidget(this);
         auto* layout = new QVBoxLayout(container);
         layout->setContentsMargins(0, 0, 0, 0);
@@ -182,8 +179,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
         QVBoxLayout* into = tabPages.value(p.tab, root);
         into->addWidget(container, stretch ? 1 : 0);
         m_containers.insert(key, container);
-        // Título con casilla: el resto de controles va en un cuerpo que se
-        // habilita con ella.
         bool titled = false;
         if (!p.enableKey.isEmpty()) {
             auto* check = new QCheckBox(p.label, container);
@@ -278,7 +273,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             break;
         }
         case EffectParam::Type::Bool: {
-            // Como IndirectUI: con descripción, el nombre va de título y la descripción en la casilla.
             if (!p.description.isEmpty())
                 title(false);
             auto* check = new QCheckBox(p.description.isEmpty() ? p.label : p.description, this);
@@ -292,7 +286,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             break;
         }
         case EffectParam::Type::Choice: {
-            // Como en Paint.NET 5: "Etiqueta: [lista]" en una sola fila.
             auto* row = new QHBoxLayout;
             row->setContentsMargins(0, 6, 0, 0);
             auto* combo = new QComboBox(this);
@@ -312,7 +305,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             break;
         }
         case EffectParam::Type::RollBall: {
-            // Rotación y giro: globo 3D a la izquierda y sus tres valores a la derecha.
             title(true);
             auto* row = new QHBoxLayout;
             auto* ball = new RollBallControl(p.max, this);
@@ -321,7 +313,7 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             row->addWidget(ball);
             auto* sliders = new QVBoxLayout;
             auto boxes = std::make_shared<std::array<QDoubleSpinBox*, 3>>();
-            auto syncing = std::make_shared<bool>(false); // el globo está moviendo los deslizadores
+            auto syncing = std::make_shared<bool>(false);
             auto update = [this, key, ball, boxes, syncing] {
                 if (*syncing)
                     return;
@@ -336,7 +328,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             (*boxes)[2] = sliderRow(this, sliders, -p.max, p.max, 2, 0, current.z(), tr("Inclinación"),
                                     [update](double) { update(); });
             connect(ball, &RollBallControl::valueChanged, this, [this, key, boxes, syncing](const QVector3D& v) {
-                // Las cajas (y con ellas los deslizadores) siguen al globo.
                 *syncing = true;
                 for (int i = 0; i < 3; ++i)
                     (*boxes)[size_t(i)]->setValue(v[i]);
@@ -348,7 +339,6 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             break;
         }
         case EffectParam::Type::Seed: {
-            // Como Paint.NET: solo el botón "Aleatorizar".
             describe();
             auto* button = new QPushButton(p.label, this);
             button->setToolTip(tr("Genera otro resultado aleatorio"));
@@ -385,12 +375,10 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             break;
         }
         case EffectParam::Type::Offset: {
-            // Desplazamiento: miniatura con la cruz y dos deslizadores (X, Y) que la mueven.
             title(false);
             describe();
             auto* pan = new PanControl(this);
             pan->setImage(thumb());
-            // La cruz trabaja en -1..1; los complementos pueden usar otro rango (píxeles...).
             const QRectF range(QPointF(p.min, p.minY), QPointF(p.max, p.maxY));
             auto toPan = [range](const QPointF& v) {
                 return QPointF(range.width() > 0 ? (v.x() - range.left()) / range.width() * 2 - 1 : 0,
@@ -514,12 +502,10 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
     }
     root->addSpacing(8);
     auto* box = okCancelButtons(this);
-    // Restablecer, Automático...: a la izquierda de Aceptar/Cancelar, como Paint.NET.
     for (QPushButton* b : std::as_const(m_extraButtons))
         box->addButton(b, QDialogButtonBox::ResetRole);
     const QString help = effect.helpText();
     if (!help.isEmpty()) {
-        // Ayuda del complemento (WindowHelpContent de IndirectUI).
         auto* helpButton = box->addButton(QDialogButtonBox::Help);
         connect(helpButton, &QPushButton::clicked, this, [this, help, title = effect.name()] {
             QMessageBox m(QMessageBox::Information, title, help, QMessageBox::Close, this);
@@ -544,8 +530,6 @@ void EffectDialog::updateReadOnly()
 void EffectDialog::set(const QString& key, const QVariant& value)
 {
     m_values.insert(key, value);
-    // Parámetros vinculados (p. ej. ancho y alto): si la casilla está
-    // marcada, los demás del grupo toman el mismo valor.
     if (!m_linking) {
         m_linking = true;
         for (const EffectParam& p : m_params) {
@@ -564,7 +548,6 @@ void EffectDialog::set(const QString& key, const QVariant& value)
             }
             break;
         }
-        // Al marcar la casilla, todos toman el valor del primero.
         for (const EffectParam& p : m_params) {
             if (p.linkKey != key || !value.toBool())
                 continue;
@@ -714,7 +697,6 @@ QImage applyEffectWithProgress(const Effect& effect, const QImage& src, const Se
         }
         if (dialog)
             dialog->setValue(progress->permille());
-        // Sin ventana de progreso no se atiende al usuario (evita reentradas).
         QApplication::processEvents(dialog ? QEventLoop::AllEvents : QEventLoop::ExcludeUserInputEvents, 30);
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
     }

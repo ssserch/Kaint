@@ -4,7 +4,6 @@
 #include <QIcon>
 #include <QStyle>
 #include <QStyleFactory>
-#include <QStyleHints>
 
 namespace Theme {
 
@@ -13,16 +12,6 @@ namespace {
 QString g_systemIconTheme;
 QString g_systemStyle;
 Scheme g_current = Scheme::System;
-
-// Estilos como Kvantum pintan el fondo con su propio tema y no hacen caso de
-// la paleta, así que con un esquema propio se cambia a Breeze o Fusion.
-void useStyle(const QString& name)
-{
-    if (name.isEmpty() || QApplication::style()->name().compare(name, Qt::CaseInsensitive) == 0)
-        return;
-    if (QStyle* style = QStyleFactory::create(name))
-        QApplication::setStyle(style);
-}
 
 QString paletteStyle()
 {
@@ -74,7 +63,6 @@ QPalette breezePalette(bool dark)
     p.setColor(QPalette::PlaceholderText, inactiveText);
     p.setColor(QPalette::Link, link);
     p.setColor(QPalette::LinkVisited, visited);
-    // Relieves derivados del color de los botones, como hace KColorScheme.
     p.setColor(QPalette::Light, button.lighter(dark ? 150 : 110));
     p.setColor(QPalette::Midlight, button.lighter(dark ? 125 : 105));
     p.setColor(QPalette::Mid, button.darker(dark ? 130 : 125));
@@ -83,12 +71,33 @@ QPalette breezePalette(bool dark)
 #if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
     p.setColor(QPalette::Accent, highlight);
 #endif
-    // Textos desactivados e inactivos.
     for (auto role : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText})
         p.setColor(QPalette::Disabled, role, inactiveText);
     p.setColor(QPalette::Disabled, QPalette::Highlight, dark ? rgb(54, 73, 87) : rgb(160, 199, 219));
     p.setColor(QPalette::Inactive, QPalette::Highlight, highlight);
     return p;
+}
+
+QString styleFor(Scheme scheme)
+{
+    return scheme == Scheme::System ? g_systemStyle : paletteStyle();
+}
+
+void initStyle(Scheme scheme)
+{
+    if (g_systemIconTheme.isEmpty())
+        captureSystemDefaults();
+    const QString name = styleFor(scheme);
+    if (name.isEmpty() || QApplication::style()->name().compare(name, Qt::CaseInsensitive) == 0)
+        return;
+    if (QStyle* style = QStyleFactory::create(name))
+        QApplication::setStyle(style);
+}
+
+bool needsRestart(Scheme scheme)
+{
+    const QString name = styleFor(scheme);
+    return !name.isEmpty() && QApplication::style()->name().compare(name, Qt::CaseInsensitive) != 0;
 }
 
 void apply(Scheme scheme)
@@ -97,21 +106,12 @@ void apply(Scheme scheme)
     if (g_systemIconTheme.isEmpty())
         captureSystemDefaults();
     if (scheme == Scheme::System) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-        QGuiApplication::styleHints()->unsetColorScheme();
-#endif
-        useStyle(g_systemStyle);
-        // Paleta vacía: vuelve a la del sistema (y la sigue si cambia).
         QApplication::setPalette(QPalette());
         if (!g_systemIconTheme.isEmpty())
             QIcon::setThemeName(g_systemIconTheme);
         return;
     }
     const bool dark = scheme == Scheme::Dark;
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-    QGuiApplication::styleHints()->setColorScheme(dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
-#endif
-    useStyle(paletteStyle());
     QApplication::setPalette(breezePalette(dark));
     QIcon::setThemeName(dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze"));
 }

@@ -73,7 +73,6 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
     if (!doc->rect().contains(e.pixel()))
         return;
     const ToolSettings& s = AppState::instance()->tools();
-    // Se muestrea una sola vez, antes de pintar, para que el propio relleno no cuente.
     m_sample = s.sampleImage ? canvas()->composite().copy() : doc->activeLayer()->image;
     m_seed = e.pixel();
     m_secondary = e.button == Qt::RightButton;
@@ -197,7 +196,7 @@ void GradientTool::mousePress(const ToolEvent& e)
         const bool onStart = Handles::hit(e.viewPos, canvas()->imageToView(m_start));
         const bool onEnd = Handles::hit(e.viewPos, canvas()->imageToView(m_end));
         if (e.button == Qt::RightButton && (onStart || onEnd)) {
-            m_reversed = !m_reversed; // clic derecho en un extremo: intercambiar colores
+            m_reversed = !m_reversed;
             render();
             return;
         }
@@ -376,8 +375,6 @@ void GradientTool::paintOverlay(QPainter& p)
     p.drawLine(a, b);
     const QColor first = m_reversed ? AppState::instance()->secondary() : AppState::instance()->primary();
     const QColor second = m_reversed ? AppState::instance()->primary() : AppState::instance()->secondary();
-    // Anillo claro con borde oscuro y el color del extremo dentro, para que
-    // se vea sobre cualquier fondo.
     const QColor dark(30, 30, 30, 230);
     for (const auto& [pos, color] : {std::pair{a, first}, std::pair{b, second}}) {
         p.setPen(QPen(dark, 1));

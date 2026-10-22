@@ -10,8 +10,8 @@ namespace fx {
 
 namespace {
 
-// Realce de gamma: los colores se elevan a 'gamma' antes de promediar y se
-// devuelven después, así las luces dominan (aspecto "high key").
+// Realce de gamma: los colores se elevan a 'gamma' antes de promediar y se devuelven después,
+// así las luces dominan (aspecto "high key").
 struct GammaTables {
     std::array<float, 256> forward{};
     double gamma = 1;
@@ -29,9 +29,8 @@ void copyBlurred(const RenderArgs& a, const QImage& blurred)
         Raster::blit(a.dst, blurred, a.roi.topLeft());
 }
 
-// Desenfoque con varias pasadas de caja (Calidad): 2 = el triangular clásico
-// de Paint.NET; más pasadas se acercan a la campana de Gauss con la misma
-// varianza.
+// Desenfoque con varias pasadas de caja (Calidad): 2 = el triangular clásico de Paint.NET; más
+// pasadas se acercan a la campana de Gauss con la misma varianza.
 QImage multiBox(const QImage& src, const QRect& area, double radius, int passes, const std::atomic_bool& cancel)
 {
     const int r = std::max(0, int(std::lround(radius)));
@@ -58,7 +57,6 @@ void blurWithGamma(const RenderArgs& a, double boost, int margin,
         copyBlurred(a, blur(a.src, a.roi));
         return;
     }
-    // Con realce de gamma se desenfoca en un espacio elevado a la potencia.
     const GammaTables gt(1.0 + boost);
     const QRect big = a.roi.adjusted(-margin, -margin, margin, margin).intersected(a.src.rect());
     QImage boosted = a.src.copy(big);
@@ -96,8 +94,8 @@ void renderGaussian(const RenderArgs& a)
 
 void renderBokeh(const RenderArgs& a)
 {
-    // Media de un disco (como Desenfocar/Unfocus de Paint.NET) con realce de
-    // gamma; con más Calidad el borde del disco se suaviza.
+    // Media de un disco (como Desenfocar/Unfocus de Paint.NET) con realce de gamma; con más
+    // Calidad el borde del disco se suaviza.
     const int r = std::max(1, int(std::lround(dval(a.values, "radius"))));
     const GammaTables gt(1.0 + dval(a.values, "gamma"));
     const double edgeSoft = (std::clamp(ival(a.values, "quality"), 1, 8) - 1) / 7.0;
@@ -110,8 +108,8 @@ void renderBokeh(const RenderArgs& a)
     const ConstPixels in(a.src);
     const Pixels out(a.dst);
 
-    // Por franjas para acotar la memoria de las sumas de prefijo por fila
-    // de (alfa, alfa·color^gamma): el disco cuesta O(r) por píxel.
+    // Por franjas para acotar la memoria de las sumas de prefijo por fila de (alfa,
+    // alfa·color^gamma): el disco cuesta O(r) por píxel.
     constexpr int kBand = 256;
     std::vector<float> prefix;
     for (int band = a.roi.top(); band <= a.roi.bottom() && !a.cancel; band += kBand) {
@@ -156,7 +154,6 @@ void renderBokeh(const RenderArgs& a)
                     for (int c = 0; c < 4; ++c)
                         sum[c] += double(p[size_t(x1 + 1) * 4 + size_t(c)]) - p[size_t(x0) * 4 + size_t(c)];
                     count += x1 - x0 + 1;
-                    // Píxeles del borde del disco con peso parcial (Calidad).
                     if (edgeSoft > 0) {
                         const double frac = (std::sqrt(std::max(0.0, double(r) * r - double(v) * v)) - w + 1) * edgeSoft * 0.5;
                         for (const int xe : {x - w - 1 - left, x + w + 1 - left}) {
@@ -271,7 +268,6 @@ void renderRadial(const RenderArgs& a)
             int sc = 1;
             double x1 = x - cx, y1 = y - cy, x2 = x1, y2 = y1;
             for (int i = 0; i < n; ++i) {
-                // Gira en ambos sentidos a partir del píxel.
                 const double nx1 = x1 * cs - y1 * sn, ny1 = x1 * sn + y1 * cs;
                 const double nx2 = x2 * cs + y2 * sn, ny2 = -x2 * sn + y2 * cs;
                 x1 = nx1, y1 = ny1, x2 = nx2, y2 = ny2;
@@ -291,12 +287,12 @@ void renderRadial(const RenderArgs& a)
 
 void renderSketchBlur(const RenderArgs& a)
 {
-    // Aproximación del desenfoque de bosquejo de Paint.NET 5: percentil de
-    // muestras aleatorias dentro del disco, como pinceladas gruesas.
+    // Aproximación del desenfoque de bosquejo de Paint.NET 5: percentil de muestras aleatorias
+    // dentro del disco, como pinceladas gruesas.
     const int radius = std::max(1, int(std::lround(dval(a.values, "radius"))));
     const int percentile = ival(a.values, "percentile");
     const int samples = 8 + ival(a.values, "smoothness") * 8;
-    const uint32_t seed = 0; // Paint.NET 5 no tiene "Aleatorizar" aquí
+    const uint32_t seed = 0;
     const ConstPixels in(a.src);
     const Pixels out(a.dst);
     forRows(a, [&](int y) {
@@ -362,9 +358,8 @@ void renderSurface(const RenderArgs& a)
 
 void renderZoom(const RenderArgs& a)
 {
-    // Desenfoque de zum de Paint.NET 5: cada píxel se promedia a lo largo del
-    // radio hacia el centro. Distancia = cuánto (en % del radio ×10); Enfoque
-    // = cuánto se protege el centro (1 = lineal); Calidad = muestras.
+    // Desenfoque de zum de Paint.NET 5: cada píxel se promedia a lo largo del radio hacia el
+    // centro.
     const double distance = dval(a.values, "distance") / 10.0;
     const double focus = std::max(0.1, dval(a.values, "focus"));
     const double quality = std::clamp(dval(a.values, "quality"), 1.0, 5.0);

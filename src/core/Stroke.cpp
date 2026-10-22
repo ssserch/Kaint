@@ -40,7 +40,7 @@ void StrokeEngine::moveTo(QPointF pos, qreal pressure)
     m_carry = 0;
     const QPoint px(int(std::floor(pos.x())), int(std::floor(pos.y())));
     if (m_params.kind == StrokeKind::Recolor && m_params.recolorSampleOnce && m_before.rect().contains(px))
-        m_recolorTarget = m_before.pixel(px); // la capa ya tiene alfa directo
+        m_recolorTarget = m_before.pixel(px);
     composite(m_params.pixelExact ? pixelLine(px, px) : dab(pos, radiusFor(pressure)));
 }
 
@@ -50,7 +50,6 @@ void StrokeEngine::lineTo(QPointF pos, qreal pressure)
         return;
     m_raw = pos;
     if (m_params.smoothing && !m_params.pixelExact) {
-        // Filtro exponencial: el trazo sigue al puntero con algo de inercia.
         m_target += (pos - m_target) * 0.4;
         segmentTo(m_target, pressure);
     } else {
@@ -117,7 +116,6 @@ QRect StrokeEngine::dab(QPointF c, qreal radius)
                 row[x] = uchar(m);
         }
     }
-    // Un pincel diminuto sin suavizado siempre pinta al menos un píxel.
     const QPoint px(int(std::floor(c.x())), int(std::floor(c.y())));
     if (!aa && m_mask.rect().contains(px))
         m_mask.scanLine(px.y())[px.x()] = 255;
@@ -167,7 +165,6 @@ void StrokeEngine::composite(const QRect& area)
 
     switch (m_params.kind) {
     case StrokeKind::Erase: {
-        // La goma hereda la opacidad del color: con alfa 128 solo quita la mitad.
         const int strength = m_params.color.alpha();
         for (int y = r.top(); y <= r.bottom(); ++y) {
             const QRgb* src = reinterpret_cast<const QRgb*>(m_before.constScanLine(y));
@@ -203,7 +200,6 @@ void StrokeEngine::composite(const QRect& area)
         if (m_params.kind == StrokeKind::Paint) {
             Raster::renderFill(source, r.topLeft(), m_params.fill, m_params.color, m_params.background);
         } else {
-            // El tampón copia con la opacidad del color elegido.
             source.fill(kTransparent);
             const QImage& from = m_params.cloneSource.isNull() ? m_before : m_params.cloneSource;
             Raster::blit(source, from, -(r.topLeft() + m_params.cloneOffset));
@@ -221,7 +217,6 @@ void StrokeEngine::composite(const QRect& area)
             for (int x = 0; x < r.width(); ++x)
                 row[x] = uchar(coverage(x + r.left(), y + r.top()));
         }
-        // La selección ya está incluida en la cobertura.
         Raster::compositeRegion(img, m_before, source, r, m_params.blend, Selection(), cov);
         break;
     }
@@ -234,7 +229,7 @@ bool StrokeEngine::end(const QString& text, const QString& icon)
     if (!m_doc)
         return false;
     if (m_params.smoothing && !m_params.pixelExact && m_raw != m_last)
-        segmentTo(m_raw, m_lastPressure); // el trazo termina donde se soltó el botón
+        segmentTo(m_raw, m_lastPressure);
     const bool changed = pushPixelPatch(m_doc, m_layer, m_before, m_total, text, icon);
     m_doc = nullptr;
     m_layer.reset();

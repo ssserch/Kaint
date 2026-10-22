@@ -28,8 +28,8 @@ void put32(QByteArray& out, quint32 v)
     put16(out, int(v >> 16));
 }
 
-// Compresor LZW de GIF: códigos de longitud variable (hasta 12 bits),
-// empaquetados desde el bit menos significativo y en bloques de 255 bytes.
+// Compresor LZW de GIF: códigos de longitud variable (hasta 12 bits), empaquetados desde el
+// bit menos significativo y en bloques de 255 bytes.
 class LzwEncoder {
 public:
     LzwEncoder(QByteArray& out, int minCodeSize)
@@ -63,14 +63,13 @@ public:
             if (assigned >= (1 << m_codeSize) && m_codeSize < 12)
                 ++m_codeSize;
             if (assigned == 4095) {
-                // Tabla llena: se empieza de nuevo.
                 writeCode(m_clear);
                 reset();
             }
             prefix = k;
         }
         writeCode(prefix);
-        writeCode(m_clear + 1); // fin de la información
+        writeCode(m_clear + 1);
         finish();
     }
 
@@ -116,7 +115,7 @@ private:
         m_bits = 0;
         m_bitCount = 0;
         flushBlock();
-        m_out.append(char(0)); // bloque vacío: fin de los datos
+        m_out.append(char(0));
     }
 
     QByteArray& m_out;
@@ -144,7 +143,6 @@ Animation read(const QString& path, QString* error)
         f.image = reader.read();
         if (f.image.isNull())
             break;
-        // Qt da la duración del fotograma recién leído en nextImageDelay().
         const int delay = reader.nextImageDelay();
         f.delayMs = delay > 0 ? delay : 100;
         f.image = f.image.convertToFormat(kLayerFormat);
@@ -175,11 +173,10 @@ QByteArray encode(const QList<Frame>& frames, const Options& options, QString* e
     QByteArray out("GIF89a");
     put16(out, size.width());
     put16(out, size.height());
-    out.append(char(0x70)); // sin paleta global, 8 bits de resolución de color
-    out.append(char(0));    // color de fondo
-    out.append(char(0));    // proporción de píxel
+    out.append(char(0x70));
+    out.append(char(0));
+    out.append(char(0));
     if (frames.size() > 1 && options.loops >= 0) {
-        // Extensión NETSCAPE2.0: número de repeticiones (0 = siempre).
         out.append("\x21\xff\x0b", 3);
         out.append("NETSCAPE2.0");
         out.append("\x03\x01", 2);
@@ -187,9 +184,9 @@ QByteArray encode(const QList<Frame>& frames, const Options& options, QString* e
         out.append(char(0));
     }
 
-    // Si algún fotograma tiene transparencia, todos reservan un color
-    // transparente: así los lectores borran el fotograma anterior (eliminación
-    // "restaurar al fondo") en vez de dejarlo debajo, como los navegadores.
+    // Si algún fotograma tiene transparencia, todos reservan un color transparente: así los
+    // lectores borran el fotograma anterior (eliminación "restaurar al fondo") en vez de
+    // dejarlo debajo, como los navegadores.
     bool anyTransparent = false;
     for (const Frame& frame : frames) {
         for (int y = 0; y < frame.image.height() && !anyTransparent; ++y) {
@@ -216,10 +213,9 @@ QByteArray encode(const QList<Frame>& frames, const Options& options, QString* e
         while ((1 << sizeBits) < table.size())
             ++sizeBits;
 
-        // Control gráfico: duración, transparencia y "restaurar al fondo".
         out.append("\x21\xf9\x04", 3);
         out.append(char((2 << 2) | (transparent >= 0 ? 1 : 0)));
-        put16(out, (std::max(Gif::kMinDelayMs, frame.delayMs) + 5) / 10); // centésimas de segundo
+        put16(out, (std::max(Gif::kMinDelayMs, frame.delayMs) + 5) / 10);
         out.append(char(transparent >= 0 ? transparent : 0));
         out.append(char(0));
 
@@ -228,7 +224,7 @@ QByteArray encode(const QList<Frame>& frames, const Options& options, QString* e
         put16(out, 0);
         put16(out, indexed.width());
         put16(out, indexed.height());
-        out.append(char(0x80 | (sizeBits - 1))); // paleta local
+        out.append(char(0x80 | (sizeBits - 1)));
         for (int i = 0; i < (1 << sizeBits); ++i) {
             const QRgb c = i < table.size() ? table[i] : 0;
             out.append(char(qRed(c)));
@@ -279,7 +275,6 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
             *error = QObject::tr("No hay tamaños que guardar en el icono.");
         return {};
     }
-    // Cuadrada y centrada, con el fondo transparente.
     const int side = std::max(image.width(), image.height());
     QImage square(side, side, QImage::Format_ARGB32_Premultiplied);
     square.fill(Qt::transparent);
@@ -302,7 +297,6 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
             buffer.open(QIODevice::WriteOnly);
             scaled.save(&buffer, "PNG");
         } else {
-            // BITMAPINFOHEADER (alto doble: imagen + máscara), filas de abajo arriba.
             put32(data, 40);
             put32(data, quint32(s));
             put32(data, quint32(s * 2));
@@ -318,7 +312,7 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
             for (int y = s - 1; y >= 0; --y) {
                 const QRgb* row = reinterpret_cast<const QRgb*>(scaled.constScanLine(y));
                 for (int x = 0; x < s; ++x)
-                    put32(data, row[x]); // BGRA en little endian
+                    put32(data, row[x]);
             }
             for (int y = s - 1; y >= 0; --y) {
                 QByteArray mask(maskStride, char(0));
@@ -333,17 +327,17 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
     }
     QByteArray out;
     put16(out, 0);
-    put16(out, 1); // icono
+    put16(out, 1);
     put16(out, int(entries.size()));
     quint32 offset = 6 + 16 * quint32(entries.size());
     for (int i = 0; i < entries.size(); ++i) {
         const int s = used[i];
         out.append(char(s >= 256 ? 0 : s));
         out.append(char(s >= 256 ? 0 : s));
-        out.append(char(0)); // sin paleta
         out.append(char(0));
-        put16(out, 1);       // planos
-        put16(out, 32);      // bits por píxel
+        out.append(char(0));
+        put16(out, 1);
+        put16(out, 32);
         put32(out, quint32(entries[i].size()));
         put32(out, offset);
         offset += quint32(entries[i].size());

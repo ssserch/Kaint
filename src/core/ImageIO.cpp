@@ -3,6 +3,7 @@
 #include "core/Document.h"
 #include "core/Gif.h"
 #include "core/Ora.h"
+#include "core/PngWriter.h"
 #include "core/Pdn.h"
 #include "core/effects/Effect.h"
 
@@ -261,7 +262,7 @@ int automaticBitDepth(const QImage& image)
     return 24;
 }
 
-QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool transparentSlot)
+QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool transparentSlot, int algorithm)
 {
     // Paleta óptima con el mismo cuantificador que el efecto Cuantificar.
     const Effect* quantize = Effects::find(QStringLiteral("quantize"));
@@ -287,7 +288,7 @@ QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool tran
     if (quantize) {
         ParamValues v = Effects::defaults(*quantize);
         v.insert(QStringLiteral("colors"), transparent || transparentSlot ? 255 : 256);
-        v.insert(QStringLiteral("algorithm"), 1);
+        v.insert(QStringLiteral("algorithm"), std::clamp(algorithm, 0, 1));
         v.insert(QStringLiteral("dither"), std::clamp(dither, 0, 8));
         const std::atomic_bool never{false};
         img = Effects::apply(*quantize, img, Selection(), v, EffectContext(), never);
@@ -300,6 +301,11 @@ QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool tran
         indexed.setColorTable(table);
     }
     return indexed;
+}
+
+bool supportsInterlace(const QString& path)
+{
+    return suffixOf(path) == QLatin1String("png");
 }
 
 QImage prepare(const QImage& flattened, const QString& path, const SaveOptions& options)
@@ -315,7 +321,7 @@ QImage prepare(const QImage& flattened, const QString& path, const SaveOptions& 
         depth = 24;
 
     if (depth == 8)
-        return toIndexed8(flattened, options.dither, options.alphaThreshold);
+        return toIndexed8(flattened, options.dither, options.alphaThreshold, false, options.quantization);
     if (depth == 24) {
         QImage opaque(flattened.size(), QImage::Format_RGB32);
         opaque.fill(Qt::white);
@@ -340,6 +346,12 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
     }
     if (isIcon(path))
         return Ico::encode(prepared, options.icoSizes, error);
+    if (options.interlaced && supportsInterlace(path)) {
+        QByteArray png = Png::encode(prepared, true);
+        if (png.isEmpty() && error)
+            *error = QObject::tr("No se pudo comprimir la imagen.");
+        return png;
+    }
     QByteArray data;
     QBuffer buffer(&data);
     buffer.open(QIODevice::WriteOnly);

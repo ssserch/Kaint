@@ -57,6 +57,7 @@ add_library(kaintcore STATIC
     src/core/ImageIO.cpp
     src/core/LayerEdit.cpp
     src/core/Ora.cpp
+    src/core/PngWriter.cpp
     src/core/Palette.cpp
     src/core/Pdn.cpp
     src/core/Raster.cpp
@@ -91,6 +92,8 @@ add_library(kaintui STATIC
     src/app/DiscordPresence.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
+    src/app/PdnIcons.cpp
+    src/app/Recovery.cpp
     src/app/Ruler.cpp
     src/app/Theme.cpp
     src/app/ToolOptionsBar.cpp
@@ -308,3 +311,26 @@ foreach(size ${KAINT_ICON_PNG_SIZES})
             DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
             RENAME io.github.kaint.Kaint.png)
 endforeach()
+
+# ---------------------------------------------------------------------------
+# Paquete .deb (Debian 13, Ubuntu 25.04 o más nuevos): ./build.sh --deb, que compila con prefijo
+# /usr y llama a "cpack -G DEB". Las dependencias de bibliotecas las calcula dpkg-shlibdeps.
+# ---------------------------------------------------------------------------
+set(CPACK_PACKAGE_NAME "kaint")
+set(CPACK_PACKAGE_VENDOR "SSSerch")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Paint.NET-style image editor for Linux")
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION
+    "Kaint is a recreation of Paint.NET for Linux, built with C++ and Qt 6.\n\
+Layers with blend modes, selections, editable tools, adjustments and\n\
+effects with live preview, Paint.NET plugins and OpenRaster projects.")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "SSSerch")
+set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${KAINT_REPOSITORY}")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "qt6-svg-plugins")
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
+    "breeze-icon-theme, qt6-wayland, qt6-image-formats-plugins, kimageformat6-plugins, qt6-translations-l10n")
+set(CPACK_DEBIAN_PACKAGE_SUGGESTS "mono-runtime, libmono-system-windows-forms4.0-cil, libgdiplus")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+include(CPack)

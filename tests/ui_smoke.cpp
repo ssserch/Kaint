@@ -7,42 +7,53 @@
 #include "app/DiscordPresence.h"
 #include "app/Icons.h"
 #include "app/MainWindow.h"
+#include "app/Recovery.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
+#include "app/dialogs/SettingsDialog.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/panels/LayersPanel.h"
 #include "app/panels/ToolsPanel.h"
 #include "app/tools/ToolManager.h"
 #include "app/tools/TransformBox.h"
+#include "app/widgets/FontChooser.h"
 #include "app/widgets/WaveLabel.h"
 #include "core/CustomShapes.h"
 #include "core/Document.h"
+#include "core/Ora.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
+#include <QComboBox>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QGraphicsBlurEffect>
 #include <QImage>
 #include <QJsonDocument>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineF>
 #include <QListWidget>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPrinter>
+#include <QScrollBar>
 #include <QSettings>
+#include <QStatusBar>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QToolButton>
 #include <QtEndian>
 #include <QUndoStack>
 #include <QWheelEvent>
@@ -241,10 +252,12 @@ static void testTransformBox()
 }
 
 // Temas: claro y oscuro de Paint.NET, el personalizado (colores propios, JSON, imagen de fondo),
-// la detección del modo oscuro de Plasma y el tema de KDE sin reiniciar (leído de kdeglobals). El
+// la detección del modo oscuro de Plasma y que entrar o salir del tema KDE pide reiniciar. El
 // fondo del lienzo siempre es opaco (un color translúcido dejaba rastros).
 static void testTheme()
 {
+    CHECK(!Theme::needsRestart(Theme::Scheme::Dark) && !Theme::needsRestart(Theme::Scheme::Custom));
+    CHECK(Theme::needsRestart(Theme::Scheme::Kde));
     Theme::apply(Theme::Scheme::Light);
     CHECK(Theme::current() == Theme::Scheme::Light && !Theme::isDark());
     CHECK(QApplication::palette().color(QPalette::Window) == Theme::preset(false).window);
@@ -306,22 +319,6 @@ static void testTheme()
     Theme::notifier()->systemSettingChanged();
     CHECK(Theme::systemPrefersDark());
 
-    // Tema de KDE desde otro tema: colores y acento de Plasma al momento, sin hoja de estilo.
-    {
-        QFile f(config.filePath(QStringLiteral("kdeglobals")));
-        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-            f.write("[Colors:Window]\nBackgroundNormal=41,44,48\nForegroundNormal=252,252,252\n\n"
-                    "[Colors:View]\nBackgroundNormal=27,30,32\n\n[General]\nAccentColor=46,160,67\n\n"
-                    "[KDE]\nwidgetStyle=Fusion\n");
-    }
-    Theme::apply(Theme::Scheme::Kde);
-    CHECK(qApp->styleSheet().isEmpty() && Theme::current() == Theme::Scheme::Kde);
-    CHECK(QApplication::palette().color(QPalette::Window) == QColor(41, 44, 48));
-    CHECK(QApplication::palette().color(QPalette::Base) == QColor(27, 30, 32));
-    CHECK(QApplication::palette().color(QPalette::Highlight) == QColor(46, 160, 67));
-    CHECK(Theme::isDark() && Theme::active().panelTitle == QColor(46, 160, 67));
-    Theme::apply(Theme::Scheme::Light);
-    CHECK(!qApp->styleSheet().isEmpty() && !Theme::isDark());
     for (const auto& [name, value] : {std::pair{"XDG_CONFIG_HOME", oldConfig}, std::pair{"XDG_CURRENT_DESKTOP", oldDesktop}}) {
         if (value.isEmpty())
             qunsetenv(name);
@@ -685,7 +682,8 @@ int main(int argc, char** argv)
         settle();
     }
 
-    // Sin selección, ni Mover selección ni Mover píxeles seleccionan nada por su cuenta.
+    // Sin selección, Mover selección no hace nada; un clic con Mover píxeles selecciona todo el
+    // lienzo (como Paint.NET), ya al pulsar.
     {
         CHECK(doc->selection().isEmpty());
         tools->select(ToolId::MoveSelection);
@@ -695,9 +693,18 @@ int main(int argc, char** argv)
         CHECK(doc->selection().isEmpty());
         CHECK(doc->undoStack()->count() == steps);
         tools->select(ToolId::MoveSelected);
-        drag(canvas, {QPointF(300, 300)});
+        const QPoint at = canvas->imageToView(QPointF(300, 300)).toPoint();
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(at), QPointF(canvas->viewport()->mapToGlobal(at)),
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas->viewport(), &press);
+        CHECK(doc->selection().bounds() == doc->rect());
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(at), QPointF(canvas->viewport()->mapToGlobal(at)),
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas->viewport(), &release);
+        CHECK(doc->selection().bounds() == doc->rect());
+        CHECK(doc->undoStack()->count() == steps + 1);
+        doc->undoStack()->undo();
         CHECK(doc->selection().isEmpty());
-        CHECK(doc->undoStack()->count() == steps);
     }
 
     // Al terminar una selección no se cambia de herramienta (como Paint.NET), salvo que se
@@ -871,11 +878,16 @@ int main(int argc, char** argv)
     testTransformBox();
     testTheme();
 
-    // Acerca de: la firma enlaza a la web del autor y su ola se mueve.
+    // Acerca de: el logo se aclara (desenfoque animado), la firma enlaza a la web del autor y su
+    // ola se mueve.
     {
-        AboutDialog about(QStringLiteral("Acerca de Kaint"), QStringLiteral("<h3>Kaint</h3><p><a href=\"x\">x</a></p>"), &w);
+        AboutDialog about(&w);
         about.show();
         settle();
+        auto* blur = about.findChild<QGraphicsBlurEffect*>();
+        const qreal startBlur = blur ? blur->blurRadius() : 0;
+        CHECK(blur && startBlur > 0);
+        CHECK(AboutDialog::credits().contains(QStringLiteral("https://www.qt.io/")));
         auto* wave = about.findChild<WaveLabel*>();
         CHECK(wave && wave->url() == QUrl(QStringLiteral("https://ssserch.com")) && wave->isVisible());
         if (wave) {
@@ -886,6 +898,8 @@ int main(int argc, char** argv)
                 QApplication::processEvents(QEventLoop::AllEvents, 20);
             CHECK(wave->phase() != before);
         }
+        blur = about.findChild<QGraphicsBlurEffect*>();
+        CHECK(!blur || blur->blurRadius() < startBlur);
         if (!outDir.isEmpty())
             about.grab().save(QDir(outDir).filePath(QStringLiteral("acerca.png")));
     }
@@ -958,6 +972,202 @@ int main(int argc, char** argv)
         choose(QStringLiteral("cambios.png"), 2);
         CHECK(!w.close());
         CHECK(w.isVisible());
+    }
+
+
+    // Versión 1.0: degradado editable desde el historial, pegado donde se copió, Supr a mitad de
+    // arrastre, lista de capas que no salta, fuentes, menús Efectos y Ayuda, información de la
+    // selección, copias de recuperación y aviso de reinicio al pasar al tema KDE.
+    {
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        QAction* undoAction = findAction(&w, QStringLiteral("Deshacer"));
+        QAction* redoAction = findAction(&w, QStringLiteral("Rehacer"));
+        CHECK(undoAction && redoAction);
+        auto mouse = [canvas](QEvent::Type type, QPointF img, Qt::MouseButton b, Qt::MouseButtons bs) {
+            const QPointF v = canvas->imageToView(img);
+            QMouseEvent e(type, v, canvas->viewport()->mapToGlobal(v), b, bs, Qt::NoModifier);
+            QApplication::sendEvent(canvas->viewport(), &e);
+        };
+
+        // Degradado: "Degradado" y "Finalizar degradado"; al deshacer el final se sigue editando,
+        // y cada arrastre de un extremo es un paso más.
+        tools->select(ToolId::Gradient);
+        const int base = d->undoStack()->count();
+        drag(canvas, {QPointF(100, 100), QPointF(200, 150), QPointF(300, 200)});
+        CHECK(tools->current()->isBusy() && d->undoStack()->count() == base + 1);
+        tools->current()->finish();
+        CHECK(!tools->current()->isBusy() && d->undoStack()->count() == base + 2);
+        tools->select(ToolId::Paintbrush);
+        undoAction->trigger();
+        settle();
+        CHECK(tools->current()->id() == ToolId::Gradient && tools->current()->isBusy());
+        const QRgb stepOne = d->activeLayer()->image.pixel(250, 180);
+        drag(canvas, {QPointF(300, 200), QPointF(380, 260), QPointF(450, 300)});
+        CHECK(d->undoStack()->count() == base + 2);
+        CHECK(d->undoStack()->text(d->undoStack()->count() - 1) == QStringLiteral("Mover degradado"));
+        CHECK(d->activeLayer()->image.pixel(250, 180) != stepOne);
+        undoAction->trigger();
+        settle();
+        CHECK(tools->current()->isBusy() && d->activeLayer()->image.pixel(250, 180) == stepOne);
+        undoAction->trigger();
+        settle();
+        CHECK(!tools->current()->isBusy());
+        redoAction->trigger();
+        settle();
+        CHECK(tools->current()->isBusy());
+        tools->current()->finish();
+
+        // Pegar donde se copió si ese sitio se ve; si no, en lo visible más cercano.
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(120, 140), QPointF(150, 170), QPointF(170, 190)});
+        CHECK(d->selection().bounds() == QRect(120, 140, 50, 50));
+        findAction(&w, QStringLiteral("Copiar"))->trigger();
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        findAction(&w, QStringLiteral("Pegar"))->trigger();
+        settle();
+        CHECK(d->selection().bounds().topLeft() == QPoint(120, 140));
+        tools->select(ToolId::RectSelect);
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        canvas->setZoom(8);
+        settle();
+        const QRect visible = canvas->visibleImageRect();
+        CHECK(!visible.contains(QRect(120, 140, 50, 50)));
+        findAction(&w, QStringLiteral("Pegar"))->trigger();
+        settle();
+        CHECK(visible.contains(d->selection().bounds()));
+        tools->select(ToolId::RectSelect);
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        canvas->setZoom(1);
+        settle();
+
+        // Supr a mitad de arrastre con Mover píxeles: lo borrado no vuelve a aparecer al seguir.
+        drag(canvas, {QPointF(300, 300), QPointF(330, 320), QPointF(360, 340)});
+        CHECK(d->selection().bounds() == QRect(300, 300, 60, 40));
+        tools->select(ToolId::MoveSelected);
+        mouse(QEvent::MouseButtonPress, QPointF(320, 320), Qt::LeftButton, Qt::LeftButton);
+        mouse(QEvent::MouseMove, QPointF(400, 380), Qt::NoButton, Qt::LeftButton);
+        findAction(&w, QStringLiteral("Borrar la selección"))->trigger();
+        mouse(QEvent::MouseMove, QPointF(420, 400), Qt::NoButton, Qt::LeftButton);
+        mouse(QEvent::MouseButtonRelease, QPointF(420, 400), Qt::LeftButton, Qt::NoButton);
+        settle();
+        CHECK(qAlpha(d->activeLayer()->image.pixel(410, 380)) == 0);
+        CHECK(qAlpha(d->activeLayer()->image.pixel(310, 310)) == 0);
+        CHECK(qAlpha(d->activeLayer()->image.pixel(450, 410)) == 255);
+
+        // Mover selección: píxel a píxel por defecto, con su propia opción en la barra.
+        CHECK(!state->tools().moveSelectionAntialias);
+        CHECK(tools->tool(ToolId::MoveSelection)->options() & Tool::OptMoveSelectionQuality);
+
+        // Marcar la casilla de otra capa no hace saltar la lista a la capa activa.
+        for (int i = 0; i < 10; ++i)
+            findAction(&w, QStringLiteral("Agregar nueva capa"))->trigger();
+        settle();
+        auto* layers = w.findChild<LayersPanel*>();
+        auto* list = layers ? layers->findChild<QListWidget*>() : nullptr;
+        CHECK(list);
+        if (list) {
+            list->verticalScrollBar()->setValue(list->verticalScrollBar()->maximum());
+            const int scroll = list->verticalScrollBar()->value();
+            CHECK(scroll > 0);
+            emit layers->visibilityToggled(0);
+            settle();
+            CHECK(list->verticalScrollBar()->value() == scroll);
+            emit layers->visibilityToggled(0);
+            settle();
+        }
+
+        // Fuentes: el selector tiene ancho fijo y hay más tamaños (los de Paint.NET y más).
+        auto* font = w.findChild<FontChooser*>();
+        CHECK(font && font->sizePolicy().horizontalPolicy() == QSizePolicy::Fixed);
+        if (font) {
+            const int width = font->sizeHint().width();
+            CHECK(width >= 150);
+            font->setCurrentIndex(font->count() - 1);
+            CHECK(font->sizeHint().width() == width);
+        }
+        bool sizesFound = false;
+        for (QComboBox* c : w.findChildren<QComboBox*>())
+            if (c->findText(QStringLiteral("96")) >= 0 && c->findText(QStringLiteral("216")) >= 0
+                && c->findText(QStringLiteral("1000")) >= 0)
+                sizesFound = true;
+        CHECK(sizesFound);
+
+        // Efectos: "Repetir" arriba del todo con el último efecto; Ayuda con los enlaces de Kaint.
+        findAction(&w, QStringLiteral("Invertir colores"))->trigger();
+        settle();
+        QAction* repeat = findAction(&w, QStringLiteral("Repetir «Invertir colores»"));
+        CHECK(repeat && repeat->isEnabled());
+        QAction* effectsMenu = findAction(&w, QStringLiteral("Efectos"));
+        CHECK(effectsMenu && effectsMenu->menu() && effectsMenu->menu()->actions().value(0) == repeat);
+        QStringList help;
+        for (QToolButton* b : w.findChildren<QToolButton*>())
+            if (b->menu() && b->toolTip() == QStringLiteral("Ayuda"))
+                for (QAction* a : b->menu()->actions())
+                    help << a->text().remove(QLatin1Char('&'));
+        CHECK(help.contains(QStringLiteral("Sitio web de Kaint")) && help.contains(QStringLiteral("Donar"))
+              && help.contains(QStringLiteral("Enviar comentarios o informe de errores...")) && help.contains(QStringLiteral("Acerca de")));
+        CHECK(!help.join(QString()).contains(QStringLiteral("Documentación")));
+
+        // Con una selección y una herramienta de selección: posición, tamaño y área.
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(100, 100), QPointF(130, 120), QPointF(150, 140)});
+        settle();
+        bool infoShown = false;
+        for (QLabel* l : w.statusBar()->findChildren<QLabel*>())
+            if (l->text().contains(QStringLiteral("50 px × 40 px")) && l->text().contains(QStringLiteral("Área")))
+                infoShown = true;
+        CHECK(infoShown);
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+
+        // Copias de recuperación: se guardan las imágenes con cambios; si Kaint no se cerró bien
+        // (carpeta de un proceso que ya no existe), se ofrecen y se pueden abrir.
+        QTemporaryDir recoveryDir;
+        Recovery::setRootForTesting(recoveryDir.path());
+        CHECK(d->isModified());
+        w.autosave();
+        const QString mine = recoveryDir.filePath(QString::number(QCoreApplication::applicationPid()));
+        CHECK(!QDir(mine).entryList({QStringLiteral("*.ora")}, QDir::Files).isEmpty());
+        CHECK(Recovery::orphaned().isEmpty());
+        CHECK(QDir().rename(mine, recoveryDir.filePath(QStringLiteral("999999999"))));
+        const QList<Recovery::Entry> entries = Recovery::orphaned();
+        bool restoredLayers = false;
+        for (const Recovery::Entry& e : entries) {
+            QString error;
+            std::unique_ptr<Document> restored(Ora::load(e.file, &error));
+            if (restored && restored->layerCount() == d->layerCount())
+                restoredLayers = true;
+        }
+        CHECK(restoredLayers);
+        Recovery::discard(entries);
+        CHECK(Recovery::orphaned().isEmpty());
+        Recovery::setRootForTesting(QString());
+
+        // Pasar al tema KDE pide reiniciar: "Cancelar" deja el tema como estaba y "Reiniciar
+        // ahora" cierra la configuración con el tema pedido.
+        for (int choice : {1, 0}) {
+            SettingsDialog settings(AppSettings::load(), tools, &w);
+            QComboBox* scheme = nullptr;
+            for (QComboBox* c : settings.findChildren<QComboBox*>())
+                if (c->findText(QStringLiteral("KDE")) >= 0)
+                    scheme = c;
+            CHECK(scheme);
+            if (!scheme)
+                break;
+            const int before = scheme->currentIndex();
+            QTimer::singleShot(300, [choice] {
+                if (auto* ask = qobject_cast<TaskDialog*>(QApplication::activeModalWidget()))
+                    if (auto* b = ask->findChild<QAbstractButton*>(QStringLiteral("choice%1").arg(choice)))
+                        b->click();
+            });
+            emit scheme->activated(int(Theme::Scheme::Kde));
+            settle();
+            if (choice == 1)
+                CHECK(settings.restartScheme() == -1 && scheme->currentIndex() == before);
+            else
+                CHECK(settings.restartScheme() == int(Theme::Scheme::Kde) && settings.result() == QDialog::Accepted);
+        }
     }
 
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());

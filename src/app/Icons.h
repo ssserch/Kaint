@@ -17,9 +17,13 @@ void setupTheme();
 // estilo Paint.NET) o, si no, el del tema.
 QIcon tool(const QString& name, const QIcon& fallback);
 
-// Primer icono disponible del tema del sistema (Breeze en KDE).
+// Primer icono disponible: los de estilo Paint.NET de Kaint y, si no hay, el del tema del
+// sistema (Breeze en KDE).
 QIcon theme(std::initializer_list<const char*> names);
 QIcon theme(const QString& name);
+
+// Icono de estilo Paint.NET dibujado por código (herramientas, barras, ventanas), o nulo.
+QIcon pdn(const QString& name);
 
 // Iconos dibujados por código para opciones sin equivalente en el tema.
 QIcon gradient(GradientType type);

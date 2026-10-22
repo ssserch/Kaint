@@ -1,140 +1,75 @@
-# Kaint
+<div align="center">
+  <img src="img/other/kaintlogo.png" alt="kaint.kde logo" width="460">
+  <p><strong>A recreation of Paint.NET for Linux, built with C++20 and Qt 6.</strong></p>
 
-Editor de imágenes con capas para Linux, inspirado en **Paint.NET**. Está escrito
-desde cero en C++20 y Qt 6, pensado para KDE Plasma en Wayland, e intenta que quien
-viene de Paint.NET se sienta en casa: las mismas herramientas, los mismos atajos, los
-mismos efectos y una interfaz que se le parece mucho.
+  [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg)](CMakeLists.txt)
+  [![Qt 6](https://img.shields.io/badge/Qt-6-41CD52.svg)](https://www.qt.io/)
+  [![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)](#install)
+</div>
 
-> Kaint es un proyecto independiente. No está afiliado ni respaldado por dotPDN LLC.
-> Paint.NET es una marca registrada de dotPDN LLC.
+<div align="center">
+  <img src="img/other/screenshot.png" alt="Kaint on Linux: Paint.NET-style dark theme with tools, colors, history and layers windows" width="900">
+</div>
 
-## Qué trae
+---
 
-- **Capas** con modos de fusión, opacidad, propiedades e historial con límite de memoria.
-- **Herramientas**: selección rectangular, elíptica, lazo y varita mágica (con los modos
-  unión, excluir, intersección y O exclusivo), mover píxeles y mover selección (con
-  escala, giro y punto de giro movible), pincel, lápiz, goma, tampón de clonar, volver a
-  colorear, bote de pintura, degradados, líneas y curvas, formas, texto, selector de
-  color, zum y mano. Barra de opciones con el mismo orden que Paint.NET.
-- **Ajustes y efectos** de Paint.NET (desenfoques, distorsiones, artísticos,
-  fotografía, representación, ruido, estilizado...) con vista previa en el lienzo.
-- **Formatos**: OpenRaster (.ora, con capas), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF,
-  TGA, GIF animado (cada fotograma es una capa) e ICO con varios tamaños. Abre archivos
-  **.pdn** de Paint.NET 3, 4 y 5 con sus capas.
-- **Complementos**: los suyos propios (.so) y muchos complementos de Paint.NET (.dll).
-- **Formas personalizadas** de Paint.NET (.xaml).
-- En inglés (predeterminado) y en español: *Settings > User Interface > Language*.
-- **Temas** claro y oscuro como los de Paint.NET, uno que sigue el modo del escritorio, el
-  tema real de KDE y uno personalizado (ver [Temas](#temas)).
-- Rich Presence de Discord opcional.
+**Kaint** is a free raster image editor that recreates the look, the tools and the workflow of
+[Paint.NET](https://www.getpaint.net/) on Linux. It is native (no Wine, no .NET runtime), made
+for KDE Plasma on Wayland, and it should feel like home if you come from Paint.NET.
 
-## Instalar
+## Features
 
-En Arch Linux:
+- **Layers** with blend modes, opacity and a history you can click through.
+- **The Paint.NET tools**: selections with their combine modes, move pixels or selection (scale,
+  rotate, movable pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, editable
+  gradients, lines and curves, shapes, text and more, with the same options bar.
+- **Adjustments and effects** with live preview, plus **Repeat** (Ctrl+F).
+- **Paint.NET plugins** (.dll, through mono) and native plugins with a stable C API.
+- **Formats**: OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA,
+  animated GIF and ICO. Opens Paint.NET **.pdn** files.
+- **Themes**: Paint.NET light and dark, follow the system, the real KDE theme, or your own
+  custom theme (colors, canvas background image, toolbar layout).
+- **Recovery copies** of unsaved images, in case Kaint closes unexpectedly.
+- English and Spanish.
+
+## Install
+
+Kaint needs **Qt 6.5 or newer**: Arch Linux, Debian 13, Ubuntu 25.04 or newer.
+
+**Arch Linux**
 
 ```bash
 sudo pacman -S --needed gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons
-# Opcionales: más formatos, diálogos de Qt traducidos y complementos de Paint.NET
-sudo pacman -S --needed qt6-imageformats kimageformats qt6-translations mono libgdiplus
-
-./build.sh --install     # compila e instala en ~/.local (aparece en el menú)
+./build.sh --install        # installs to ~/.local (shows up in the app menu)
 ```
 
-Otras opciones de `build.sh`:
+**Debian / Ubuntu**
 
 ```bash
-./build.sh               # compila en build/
-./build.sh --run         # compila y abre Kaint
-./build.sh --test        # compila y pasa las pruebas
-./build.sh --help        # todas las opciones
+sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
+    qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev breeze-icon-theme
+./build.sh --deb            # builds build-deb/kaint_<version>_amd64.deb
+sudo apt install ./build-deb/kaint_*_amd64.deb
 ```
 
-Si Qt está instalado en otra ruta, exporta `CMAKE_PREFIX_PATH` antes de compilar.
+Optional extras for more formats and for Paint.NET plugins: `qt6-imageformats kimageformats mono
+libgdiplus` (Arch) or `qt6-image-formats-plugins kimageformat6-plugins mono-devel libgdiplus`
+(Debian/Ubuntu). `./build.sh --help` lists every option (`--run`, `--test`, `--debug`...).
 
-## Temas
+## Contributing
 
-Se eligen en *Configuración > Interfaz de usuario > Tema*:
+Issues and pull requests are welcome: fork the repository, make your change in a branch, check
+that `./build.sh --test` passes and open a pull request. Bugs and ideas go to
+[Issues](https://github.com/ssserch/Kaint/issues).
 
-| Tema | Qué hace |
-|---|---|
-| Seguir al sistema | El claro o el oscuro de Paint.NET según el modo del escritorio (Plasma, GNOME y otros), y cambia con él. |
-| Claro / Oscuro | Los de Paint.NET en Windows 10. |
-| KDE | El estilo, los colores y los iconos reales de Plasma. |
-| Personalizado | **Personalizar…** abre el editor: modo base (claro u oscuro), 18 colores (acento, barras, ventanas flotantes, selección, fondo del lienzo...), imagen de fondo del lienzo (mosaico, centrada, estirada, ajustada o rellenar, con opacidad), tamaño de los iconos, estilo de los botones de las barras, espaciado, redondeo de las esquinas, opacidad de las ventanas translúcidas, fuente y tema de iconos. Se puede importar y exportar como `.json`. |
+## License
 
-Todos menos KDE ignoran la configuración del escritorio y se dibujan igual en cualquier
-sistema. Los cambios de tema se ven al momento; si Kaint se abrió con otro tema, el de KDE se
-arma con la configuración de Plasma (estilo, colores, acento e iconos) y al volver a abrir Kaint
-usa además la integración completa de Plasma (por ejemplo, sus diálogos de archivos). El tema
-también se puede elegir al abrir Kaint (y se guarda):
-`kaint --color-scheme system|light|dark|kde|custom`.
+See [LICENSE](LICENSE). `src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, and the
+Paint.NET-style icons are adapted from [paint.software](https://github.com/Univers4craft/paint.software)
+(MIT).
 
-## Complementos
+## Disclaimer
 
-*Efectos > Complementos...* muestra los complementos instalados y permite activarlos o
-desactivarlos al momento. **Añadir…** copia los archivos que elijas (.dll o .so) a
-`~/.local/share/Kaint/Effects/`, y **Abrir la carpeta** / **Abrir su carpeta** abren esa
-carpeta o la del complemento seleccionado. Si un complemento trae varios archivos,
-añádelos todos o copia su carpeta entera ahí.
-
-**Complementos de Paint.NET (.dll).** Necesitan `mono` y `libgdiplus`. Kaint los ejecuta
-en un proceso aparte con una capa de compatibilidad basada en el código abierto de
-Paint.NET 3.36; el diálogo de cada efecto lo dibuja Kaint con sus propios controles.
-Funcionan los escritos para Paint.NET 3.x y 4.x, también los de 4.3/4.4 compilados para
-.NET moderno que usan la API clásica. No pueden funcionar los que usan la API de efectos
-de GPU de Paint.NET 5 (Direct2D, solo existe en Windows); esos no aparecen en la lista
-salvo que lo pidas.
-
-**Complementos nativos (.so).** API en C con ABI estable:
-[`src/core/plugins/KaintPlugin.h`](src/core/plugins/KaintPlugin.h). Hay un ejemplo en
-[`examples/plugin/`](examples/plugin/):
-
-```bash
-cc -shared -fPIC -O2 -Isrc/core/plugins -o kaint-ejemplo.so examples/plugin/ejemplo.c
-cp kaint-ejemplo.so ~/.local/share/Kaint/Effects/
-```
-
-## Formas personalizadas
-
-La herramienta Formas carga las formas personalizadas de Paint.NET (archivos `.xaml`,
-el formato descrito en la [documentación de la API de Paint.NET](https://paintdotnet.github.io/apidocs/)).
-Cópialas en `~/.local/share/Kaint/Shapes/`; aparecen al final del desplegable de formas
-la próxima vez que abras Kaint. Hay dos ejemplos en [`examples/shapes/`](examples/shapes/).
-
-## GIF animados
-
-Cada fotograma de un GIF es una capa (la de abajo es el primero) y su duración va en el
-nombre de la capa, por ejemplo `Fotograma 1 (100ms)`. *Imagen > Animación...* edita las
-duraciones con una vista previa, y al guardar se elige si el GIF va animado, cuántas veces
-se repite y cómo se tratan la transparencia y el tramado.
-
-## Discord
-
-Kaint puede mostrar en tu perfil de Discord qué estás editando. Funciona con la
-aplicación de Discord abierta en el mismo equipo y se configura en
-*Configuración > Discord*. Para compilar tu propia versión, pon el *Application ID* de
-tu aplicación de Discord en `client_id` de `discord.json`.
-
-## Para desarrolladores
-
-| Carpeta | Contenido |
-|---|---|
-| `src/core/` | Núcleo sin interfaz: documento, capas, selección, historial, efectos, formatos, complementos. |
-| `src/app/` | Interfaz con Qt Widgets: ventana, lienzo, paneles, diálogos y herramientas. |
-| `src/pdnbridge/` | Capa de compatibilidad con los complementos de Paint.NET (C#, mono). |
-| `examples/` | Complemento nativo y formas personalizadas de ejemplo. |
-| `tests/` | Pruebas del núcleo y prueba de la interfaz sin pantalla. |
-| `translations/` | Traducciones (inglés). |
-
-Los textos del código están en español y `translations/kaint_en.ts` tiene la traducción
-al inglés (se compila dentro del programa). Tras cambiar textos, actualiza el `.ts` con
-`cmake --build build -t update_translations` y tradúcelo con Qt Linguist.
-
-`version.json` guarda la versión y el repositorio que consulta *Configuración >
-Actualizaciones*. La opción de CMake `KAINT_PDN_BRIDGE` (activada por defecto) compila la
-capa de compatibilidad si encuentra `mcs`.
-
-## Licencias
-
-`src/pdnbridge/` contiene código de Paint.NET 3.36, publicado con licencia MIT
-(ver `src/pdnbridge/License-PaintDotNet-3.36.txt`).
+Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
+LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the
+software Kaint is inspired by.

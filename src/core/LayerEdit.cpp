@@ -14,6 +14,17 @@ void LayerEdit::begin(Document* doc, LayerPtr layer)
     m_layer->image.detach();
 }
 
+void LayerEdit::resume(Document* doc, LayerPtr layer, const QImage& before, const QRect& touched)
+{
+    reset();
+    if (!doc || !layer)
+        return;
+    m_doc = doc;
+    m_layer = std::move(layer);
+    m_before = before;
+    m_last = m_total = touched;
+}
+
 void LayerEdit::restorePrevious()
 {
     if (!m_last.isEmpty())

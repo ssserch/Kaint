@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QListWidget>
+#include <QScrollBar>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
@@ -213,7 +214,10 @@ void LayersPanel::setDocument(Document* doc)
 
 void LayersPanel::rebuild()
 {
+    // Se conserva el desplazamiento: marcar la casilla de otra capa no debe saltar a la activa.
     const QSignalBlocker block(m_list);
+    const int scroll = m_list->verticalScrollBar()->value();
+    const bool sameCount = m_doc && m_list->count() == m_doc->layerCount();
     m_list->clear();
     m_dirty.clear();
     if (!m_doc)
@@ -230,6 +234,10 @@ void LayersPanel::rebuild()
     }
     updateThumbnails();
     syncSelection();
+    if (sameCount) {
+        m_list->doItemsLayout();
+        m_list->verticalScrollBar()->setValue(scroll);
+    }
 }
 
 void LayersPanel::syncSelection()

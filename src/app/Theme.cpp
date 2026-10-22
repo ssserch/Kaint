@@ -50,7 +50,6 @@ const std::array<ColorRole, 18> kColorRoles{{
 namespace {
 
 QString g_systemIconTheme;
-QString g_systemStyle;
 QString g_configStamp;
 Scheme g_current = Scheme::System;
 Scheme g_start = Scheme::System;
@@ -233,97 +232,6 @@ QFont desktopFont()
             return font;
     }
     return QFontDatabase::systemFont(QFontDatabase::GeneralFont);
-}
-
-QColor kdeColor(const QSettings& kde, const QString& key, QRgb fallback)
-{
-    const QStringList v = kde.value(key).toStringList();
-    if (v.size() >= 3)
-        return QColor(v[0].toInt(), v[1].toInt(), v[2].toInt());
-    const QColor named = QColor::fromString(v.join(QLatin1Char(',')));
-    return named.isValid() ? named : rgb(fallback);
-}
-
-// Paleta del esquema de colores de Plasma guardado en kdeglobals, con los mismos papeles que le
-// da Plasma (KColorScheme); sin esquema guardado, la de Brisa.
-QPalette kdePalette(const QSettings& kde)
-{
-    auto color = [&kde](const char* group, const char* key, QRgb fallback) {
-        return kdeColor(kde, QStringLiteral("Colors:%1/%2").arg(QLatin1String(group), QLatin1String(key)), fallback);
-    };
-    const QColor window = color("Window", "BackgroundNormal", 0xeff0f1);
-    const QColor windowText = color("Window", "ForegroundNormal", 0x232629);
-    const QColor base = color("View", "BackgroundNormal", 0xffffff);
-    const QColor alternate = color("View", "BackgroundAlternate", 0xf7f7f7);
-    const QColor text = color("View", "ForegroundNormal", 0x232629);
-    const QColor inactive = color("View", "ForegroundInactive", 0x707d8a);
-    QColor link = color("View", "ForegroundLink", 0x2980b9);
-    const QColor visited = color("View", "ForegroundVisited", 0x9b59b6);
-    const QColor button = color("Button", "BackgroundNormal", 0xfcfcfc);
-    const QColor buttonText = color("Button", "ForegroundNormal", 0x232629);
-    QColor highlight = color("Selection", "BackgroundNormal", 0x3daee9);
-    const QColor highlightText = color("Selection", "ForegroundNormal", 0xffffff);
-    const QColor tooltip = color("Tooltip", "BackgroundNormal", 0xf7f7f7);
-    const QColor tooltipText = color("Tooltip", "ForegroundNormal", 0x232629);
-    // Color de acento de Plasma (elegido o tomado del fondo de escritorio). QSettings lee la
-    // sección [General] de kdeglobals como claves sin grupo.
-    if (kde.contains(QStringLiteral("AccentColor")))
-        link = highlight = kdeColor(kde, QStringLiteral("AccentColor"), highlight.rgb());
-
-    const bool dark = window.lightness() < 128;
-    QPalette p;
-    for (auto group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
-        const bool disabled = group == QPalette::Disabled;
-        auto dim = [disabled](const QColor& fg, const QColor& bg) { return disabled ? mix(fg, bg, 0.6) : fg; };
-        p.setColor(group, QPalette::Window, window);
-        p.setColor(group, QPalette::WindowText, dim(windowText, window));
-        p.setColor(group, QPalette::Base, base);
-        p.setColor(group, QPalette::AlternateBase, alternate);
-        p.setColor(group, QPalette::Text, dim(text, base));
-        p.setColor(group, QPalette::Button, button);
-        p.setColor(group, QPalette::ButtonText, dim(buttonText, button));
-        p.setColor(group, QPalette::Highlight, disabled ? mix(highlight, window, 0.5) : highlight);
-        p.setColor(group, QPalette::HighlightedText, highlightText);
-        p.setColor(group, QPalette::ToolTipBase, tooltip);
-        p.setColor(group, QPalette::ToolTipText, tooltipText);
-        p.setColor(group, QPalette::PlaceholderText, inactive);
-        p.setColor(group, QPalette::Link, link);
-        p.setColor(group, QPalette::LinkVisited, visited);
-        p.setColor(group, QPalette::BrightText, Qt::white);
-        p.setColor(group, QPalette::Light, window.lighter(dark ? 150 : 110));
-        p.setColor(group, QPalette::Midlight, window.lighter(dark ? 125 : 105));
-        p.setColor(group, QPalette::Mid, window.darker(dark ? 130 : 125));
-        p.setColor(group, QPalette::Dark, window.darker(dark ? 160 : 150));
-        p.setColor(group, QPalette::Shadow, dark ? QColor(Qt::black) : rgb(0x767676));
-#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
-        p.setColor(group, QPalette::Accent, highlight);
-#endif
-    }
-    return p;
-}
-
-// Tema de KDE sin la integración de Plasma (Kaint arrancó con otro tema): su estilo, sus colores
-// y sus iconos, leídos de kdeglobals.
-void applyKdeLook()
-{
-    const QString file = kdeglobals();
-    const QSettings kde(file.isEmpty() ? QStringLiteral("/nonexistent") : file, QSettings::IniFormat);
-    const QPalette palette = kdePalette(kde);
-    const QString styleName = kde.value(QStringLiteral("KDE/widgetStyle"), QStringLiteral("Breeze")).toString();
-    const QStyle* style = QApplication::style();
-    if (!style || style->name().compare(styleName, Qt::CaseInsensitive) != 0) {
-        QStyle* next = QStyleFactory::create(styleName);
-        if (!next)
-            next = QStyleFactory::create(QStringLiteral("Breeze"));
-        if (next)
-            QApplication::setStyle(next);
-    }
-    g_fusion = QApplication::style()->name().compare(QLatin1String("fusion"), Qt::CaseInsensitive) == 0;
-    QApplication::setPalette(palette);
-    const bool dark = palette.color(QPalette::Window).lightness() < 128;
-    QIcon::setThemeName(kde.value(QStringLiteral("Icons/Theme"),
-                                  dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze"))
-                            .toString());
 }
 
 // Tema de KDE descrito con la paleta del sistema (para lo que Kaint pinta por su cuenta).
@@ -627,6 +535,8 @@ QToolButton:disabled { color: %12; }
 QToolButton[popupMode="1"] { padding-right: 14px; }
 QToolButton[popupMode="2"] { padding-right: 10px; }
 QToolButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; }
+QToolButton#ImageListButton { padding-right: %7px; }
+QToolButton#ImageListButton::menu-indicator { image: none; width: 0px; }
 )")
                .arg(css(s.toolBar), css(line), css(s.statusBar), css(s.text), toolIdle)
                .arg(toolRadius)
@@ -771,8 +681,6 @@ QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image:
 void captureSystemDefaults()
 {
     g_systemIconTheme = QIcon::themeName();
-    if (QCoreApplication::instance() && qApp->styleSheet().isEmpty())
-        g_systemStyle = QApplication::style()->name();
 }
 
 void prepare(Scheme scheme)
@@ -810,26 +718,17 @@ void apply(Scheme scheme)
     if (g_systemIconTheme.isEmpty())
         captureSystemDefaults();
     if (scheme == Scheme::Kde) {
+        // Solo al arrancar con él (cambiar desde o hacia KDE reinicia Kaint): estilo, paleta e
+        // iconos de Plasma.
         qApp->setStyleSheet(QString());
-        if (g_baseFontSet && QApplication::font() != g_baseFont)
-            QApplication::setFont(g_baseFont);
-        if (g_start == Scheme::Kde) {
-            // Arrancó con la integración de Plasma: basta con volver a su estilo y su paleta.
-            if (g_fusion && !g_systemStyle.isEmpty())
-                QApplication::setStyle(g_systemStyle);
-            g_fusion = false;
-            QApplication::setPalette(QPalette());
-            if (!g_systemIconTheme.isEmpty())
-                QIcon::setThemeName(g_systemIconTheme);
-        } else {
-            applyKdeLook();
-        }
+        QApplication::setPalette(QPalette());
+        if (!g_systemIconTheme.isEmpty())
+            QIcon::setThemeName(g_systemIconTheme);
         g_active = fromPalette(QApplication::palette());
         emit notifier()->changed();
         return;
     }
 
-    // Desde el tema de KDE: vuelve a Fusion.
     if (!g_fusion && QCoreApplication::instance()) {
         QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
         g_fusion = true;
@@ -873,6 +772,12 @@ Spec custom()
     return g_custom;
 }
 
+bool needsRestart(Scheme scheme)
+{
+    // El tema de KDE usa la integración de Plasma, que se decide al arrancar.
+    return (scheme == Scheme::Kde) != (g_start == Scheme::Kde);
+}
+
 Scheme current()
 {
     return g_current;
@@ -902,9 +807,6 @@ void Notifier::systemSettingChanged()
     g_systemDark = readSystemScheme() == 1 ? 1 : 0;
     if (before != g_systemDark && g_current == Scheme::System)
         apply(Scheme::System);
-    // Tema de KDE leído de kdeglobals: se vuelve a leer al cambiar el esquema de Plasma.
-    else if (g_current == Scheme::Kde && g_start != Scheme::Kde)
-        apply(Scheme::Kde);
 }
 
 Notifier* notifier()

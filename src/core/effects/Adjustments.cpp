@@ -174,6 +174,44 @@ void renderHueSaturation(const RenderArgs& a)
     });
 }
 
+// Balance de color como el de GIMP: cada rango (sombras, medios tonos, luces) solo actúa en su
+// zona de luminosidad; con "conservar la luminosidad" el resultado mantiene la del original.
+void renderColorBalance(const RenderArgs& a)
+{
+    struct Range {
+        double cr, mg, yb;
+    };
+    auto range = [&a](const char* prefix) {
+        auto v = [&](const char* k) {
+            return a.values.value(QLatin1String(prefix) + QLatin1String(k)).toInt() / 100.0;
+        };
+        return Range{v("CyanRed"), v("MagentaGreen"), v("YellowBlue")};
+    };
+    const Range shadows = range("shadows"), midtones = range("midtones"), highlights = range("highlights");
+    const bool preserve = bval(a.values, "preserve");
+    auto map = [](double value, double lightness, double s, double m, double h) {
+        constexpr double ka = 0.25, kb = 0.333, scale = 0.7;
+        s *= std::clamp((lightness - kb) / -ka + 0.5, 0.0, 1.0) * scale;
+        m *= std::clamp((lightness - kb) / ka + 0.5, 0.0, 1.0) * std::clamp((lightness + kb - 1) / -ka + 0.5, 0.0, 1.0) * scale;
+        h *= std::clamp((lightness + kb - 1) / ka + 0.5, 0.0, 1.0) * scale;
+        return std::clamp(value + s + m + h, 0.0, 1.0);
+    };
+    mapStraight(a, [&](QRgb c) {
+        const QColor in(c);
+        const double l = in.lightnessF();
+        const double r = map(qRed(c) / 255.0, l, shadows.cr, midtones.cr, highlights.cr);
+        const double g = map(qGreen(c) / 255.0, l, shadows.mg, midtones.mg, highlights.mg);
+        const double b = map(qBlue(c) / 255.0, l, shadows.yb, midtones.yb, highlights.yb);
+        QColor out = QColor::fromRgbF(float(r), float(g), float(b));
+        if (preserve) {
+            float h, sat, light;
+            out.getHslF(&h, &sat, &light);
+            out = QColor::fromHslF(h < 0 ? 0 : h, sat, float(l));
+        }
+        return qRgba(out.red(), out.green(), out.blue(), qAlpha(c));
+    });
+}
+
 void renderInvertAlpha(const RenderArgs& a)
 {
     mapStraight(a, [](QRgb c) { return qRgba(qRed(c), qGreen(c), qBlue(c), 255 - qAlpha(c)); });
@@ -309,6 +347,29 @@ void registerAdjustments(QList<const Effect*>& list)
         light.gradient = {QColor(0, 0, 0), QColor(128, 128, 128), QColor(255, 255, 255)};
         add({"huesat", QObject::tr("Matiz y saturación"), {}, "adjusthsl", key("Ctrl+Shift+U"), {hue, sat, light},
              renderHueSaturation});
+    }
+    {
+        auto slider = [](const QString& tab, const char* key, const QString& label, QColor from, QColor to) {
+            P p = P::integer(QString::fromLatin1(key), label, -100, 100, 0);
+            p.gradient = {from, QColor(235, 235, 235), to};
+            p.tab = tab;
+            return p;
+        };
+        QList<P> params;
+        const QList<std::pair<const char*, QString>> ranges{{"shadows", QObject::tr("Sombras")},
+                                                            {"midtones", QObject::tr("Medios tonos")},
+                                                            {"highlights", QObject::tr("Luces")}};
+        for (const auto& [prefix, tab] : ranges) {
+            const QString base = QString::fromLatin1(prefix);
+            params << slider(tab, (base + QStringLiteral("CyanRed")).toLatin1().constData(), QObject::tr("Cian ↔ rojo"),
+                             QColor(0, 200, 220), QColor(230, 40, 40))
+                   << slider(tab, (base + QStringLiteral("MagentaGreen")).toLatin1().constData(),
+                             QObject::tr("Magenta ↔ verde"), QColor(220, 40, 200), QColor(40, 190, 60))
+                   << slider(tab, (base + QStringLiteral("YellowBlue")).toLatin1().constData(),
+                             QObject::tr("Amarillo ↔ azul"), QColor(240, 210, 30), QColor(40, 80, 230));
+        }
+        params << P::boolean(QStringLiteral("preserve"), QObject::tr("Conservar la luminosidad"), true);
+        add({"colorbalance", QObject::tr("Balance de color"), {}, "color-management", {}, params, renderColorBalance});
     }
     add({"invertalpha", QObject::tr("Invertir alfa"), {}, "edit-select-invert", key("Ctrl+Alt+I"), {},
          renderInvertAlpha});

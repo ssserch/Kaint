@@ -141,6 +141,7 @@ private:
     ChoiceButton* m_interpolation;
     ChoiceButton* m_gamma;
     ChoiceButton* m_antialias;
+    ChoiceButton* m_moveQuality = nullptr;
     ChoiceButton* m_selectionQuality;
     QToolButton* m_pressure;
     ChoiceButton* m_blend;

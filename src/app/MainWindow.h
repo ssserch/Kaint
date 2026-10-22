@@ -52,6 +52,10 @@ public:
     void newDefaultDocument();
     void restoreSessionOrNew();
     void startupChecks();
+    // Copias de recuperación de las imágenes sin guardar (cada pocos minutos).
+    void autosave();
+    // Se cerró para reiniciar Kaint (cambio al tema KDE o desde él).
+    bool restartRequested() const { return m_restartRequested; }
 
 protected:
     void changeEvent(QEvent* e) override;
@@ -108,6 +112,8 @@ private:
     void deselect();
     void copySelection();
     void pasteSelection(SelectionMode mode);
+    enum class SelectionReshape { Grow, Shrink, Feather };
+    void reshapeSelection(SelectionReshape kind);
     void invertSelection();
     void eraseSelection(const QString& text);
     void fillSelection();
@@ -128,6 +134,7 @@ private:
     QPrinter* printer();
     void pageSetup();
     void flatten();
+    void flattenDocument(Document* doc);
 
     // Capas
     void addLayer();
@@ -156,6 +163,13 @@ private:
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
     void applyThemeLayout();
+    void restartWithScheme(int scheme);
+    void offerRecovery();
+    void showToolHint(const QString& hint);
+    void refreshHint();
+    void prepareHistoryJump();
+    void syncToolWithHistory();
+    QPoint pastePosition(const QImage& image) const;
     void keepOpaque();
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
@@ -217,4 +231,10 @@ private:
     bool m_printActualSize = false;
     QTimer m_presenceTimer;
     int m_toolBeforeEraser = -1;
+    bool m_restartRequested = false;
+    QPoint m_copyOrigin;
+    quint64 m_copySignature = 0;
+    bool m_syncingHistory = false;
+    QString m_toolHint;
+    QTimer m_autosaveTimer;
 };

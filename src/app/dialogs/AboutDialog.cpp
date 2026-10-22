@@ -3,35 +3,145 @@
 #include "app/Icons.h"
 #include "app/widgets/WaveLabel.h"
 
+#include <QApplication>
 #include <QDialogButtonBox>
-#include <QGridLayout>
+#include <QFontDatabase>
+#include <QGraphicsBlurEffect>
 #include <QLabel>
+#include <QPainter>
 #include <QPushButton>
+#include <QTextBrowser>
 #include <QUrl>
+#include <QVBoxLayout>
+#include <QVariantAnimation>
 
-AboutDialog::AboutDialog(const QString& title, const QString& text, QWidget* parent)
+namespace {
+
+// Logo: el icono de Kaint y "kaint.kde" con la fuente fina del logo de Paint.NET (Segoe UI Light
+// si está instalada; si no, la del sistema en su grosor más fino).
+class AboutLogo : public QWidget {
+public:
+    explicit AboutLogo(QWidget* parent)
+        : QWidget(parent)
+    {
+        m_font = QFontDatabase::families().contains(QStringLiteral("Segoe UI Light")) ? QFont(QStringLiteral("Segoe UI Light"))
+                                                                                   : QFont(font().family());
+        m_font.setWeight(QFont::Light);
+        m_font.setPixelSize(44);
+    }
+
+    QSize sizeHint() const override
+    {
+        const QFontMetrics fm(m_font);
+        return QSize(kIcon + kGap + fm.horizontalAdvance(text()) + 2 * kMargin, std::max(kIcon, fm.height()) + 2 * kMargin);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        const int top = (height() - kIcon) / 2;
+        Icons::app().paint(&p, QRect(kMargin, top, kIcon, kIcon));
+        p.setFont(m_font);
+        p.setPen(palette().color(QPalette::WindowText));
+        p.drawText(QRect(kMargin + kIcon + kGap, 0, width(), height()), Qt::AlignLeft | Qt::AlignVCenter, text());
+    }
+
+private:
+    static QString text() { return QStringLiteral("kaint.kde"); }
+    static constexpr int kIcon = 56;
+    static constexpr int kGap = 10;
+    static constexpr int kMargin = 4;
+    QFont m_font;
+};
+
+} // namespace
+
+QString AboutDialog::credits()
+{
+    struct Credit {
+        const char* name;
+        const char* author;
+        const char* url;
+    };
+    static const Credit list[] = {
+        {"Qt 6", "The Qt Company", "https://www.qt.io/"},
+        {"zlib", "Jean-loup Gailly, Mark Adler", "https://zlib.net/"},
+        {"Paint.NET 3.36 (MIT)", "dotPDN LLC, Rick Brewster", "https://www.getpaint.net/"},
+        {"Paint.NET API", "dotPDN LLC", "https://paintdotnet.github.io/apidocs/"},
+        {"paint.software (MIT)", "Univers4craft", "https://github.com/Univers4craft/paint.software"},
+        {"Breeze Icons", "KDE", "https://invent.kde.org/frameworks/breeze-icons"},
+        {"KImageFormats", "KDE", "https://invent.kde.org/frameworks/kimageformats"},
+        {"Mono", "Mono Project", "https://www.mono-project.com/"},
+        {"libgdiplus", "Mono Project", "https://github.com/mono/libgdiplus"},
+        {"Discord Rich Presence", "Discord", "https://discord.com/developers/docs/rich-presence/overview"},
+        {"CMake", "Kitware", "https://cmake.org/"},
+        {"Ninja", "Ninja Authors", "https://ninja-build.org/"},
+        {"GCC", "GNU Project", "https://gcc.gnu.org/"},
+    };
+    QString html;
+    for (const Credit& c : list)
+        html += QStringLiteral("• %1 – %2 <a href=\"%3\">%3</a><br>")
+                    .arg(QString::fromUtf8(c.name), QString::fromUtf8(c.author), QString::fromLatin1(c.url));
+    return html;
+}
+
+AboutDialog::AboutDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(title);
-    auto* icon = new QLabel(this);
-    icon->setPixmap(Icons::app().pixmap(64, 64));
-    auto* label = new QLabel(text, this);
-    label->setTextFormat(Qt::RichText);
-    label->setWordWrap(true);
-    label->setOpenExternalLinks(true);
-    label->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    label->setMinimumWidth(380);
+    setWindowTitle(tr("Acerca de Kaint"));
+    setWindowIcon(Icons::theme({"help-about"}));
+
+    auto* logo = new AboutLogo(this);
+    auto* version = new QLabel(QStringLiteral("Kaint v%1").arg(QStringLiteral(KAINT_VERSION)), this);
+    auto* copyright = new QLabel(tr("Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores."), this);
+    copyright->setWordWrap(true);
+    auto* link = new QLabel(QStringLiteral("<a href=\"%1\">%1</a>").arg(QStringLiteral(KAINT_REPOSITORY)), this);
+    link->setOpenExternalLinks(true);
+    link->setTextInteractionFlags(Qt::TextBrowserInteraction);
     auto* signature = new WaveLabel(QStringLiteral("By "), QStringLiteral("Y2Kerchy"), QUrl(QStringLiteral("https://ssserch.com")),
                                     this);
-    auto* box = new QDialogButtonBox(this);
-    box->addButton(QObject::tr("Aceptar"), QDialogButtonBox::AcceptRole)->setDefault(true);
-    connect(box, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    auto* translation = new QLabel(tr("Traducido al español por SSSerch"), this);
+    auto* creditsTitle = new QLabel(tr("Bibliotecas de software y contribuciones:"), this);
+    auto* creditsList = new QTextBrowser(this);
+    creditsList->setOpenExternalLinks(true);
+    creditsList->setHtml(credits());
+    creditsList->setMinimumHeight(170);
 
-    auto* layout = new QGridLayout(this);
-    layout->setHorizontalSpacing(16);
-    layout->addWidget(icon, 0, 0, 2, 1, Qt::AlignTop);
-    layout->addWidget(label, 0, 1);
-    layout->addWidget(signature, 1, 1, Qt::AlignLeft | Qt::AlignTop);
-    layout->addWidget(box, 2, 0, 1, 2);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
+    auto* box = new QDialogButtonBox(this);
+    box->addButton(tr("Cerrar"), QDialogButtonBox::RejectRole)->setDefault(true);
+    connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    auto* layout = new QVBoxLayout(this);
+    layout->addWidget(logo, 0, Qt::AlignLeft);
+    layout->addSpacing(4);
+    layout->addWidget(version);
+    layout->addWidget(copyright);
+    layout->addWidget(link);
+    layout->addWidget(signature, 0, Qt::AlignLeft);
+    layout->addSpacing(6);
+    layout->addWidget(translation);
+    layout->addSpacing(6);
+    layout->addWidget(creditsTitle);
+    layout->addWidget(creditsList, 1);
+    layout->addWidget(box);
+    resize(520, 500);
+
+    // El logo se aclara desde muy desenfocado cada vez que se abre (sin animaciones, ya nítido).
+    if (QApplication::isEffectEnabled(Qt::UI_General)) {
+        auto* blur = new QGraphicsBlurEffect(logo);
+        blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
+        blur->setBlurRadius(28);
+        logo->setGraphicsEffect(blur);
+        auto* reveal = new QVariantAnimation(this);
+        reveal->setDuration(1500);
+        reveal->setStartValue(28.0);
+        reveal->setEndValue(0.0);
+        reveal->setEasingCurve(QEasingCurve::OutCubic);
+        connect(reveal, &QVariantAnimation::valueChanged, blur, [blur](const QVariant& v) { blur->setBlurRadius(v.toReal()); });
+        connect(reveal, &QVariantAnimation::finished, logo, [logo] { logo->setGraphicsEffect(nullptr); });
+        reveal->start(QAbstractAnimation::DeleteWhenStopped);
+    }
 }

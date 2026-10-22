@@ -5,6 +5,7 @@
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
+#include "app/Recovery.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
 #include "app/DiscordPresence.h"
@@ -20,9 +21,11 @@
 #include "app/panels/ToolsPanel.h"
 #include "app/tools/MoveTools.h"
 #include "app/tools/ToolManager.h"
+#include "app/widgets/FontChooser.h"
 #include "core/Commands.h"
 #include "core/Document.h"
 #include "core/ImageIO.h"
+#include "core/Ora.h"
 #include "core/Raster.h"
 #include "core/plugins/PluginManager.h"
 
@@ -124,6 +127,23 @@ bool versionNewer(const QString& candidate, const QString& current)
     return false;
 }
 
+// Huella de una imagen (tamaño y una rejilla de píxeles): reconoce en el portapapeles lo que
+// copió Kaint aunque vuelva convertido.
+quint64 imageSignature(const QImage& source)
+{
+    if (source.isNull())
+        return 0;
+    const QImage image = source.convertToFormat(QImage::Format_ARGB32);
+    quint64 h = quint64(image.width()) * 1000003u + quint64(image.height());
+    for (int gy = 0; gy < 16; ++gy)
+        for (int gx = 0; gx < 16; ++gx) {
+            const int x = (image.width() - 1) * gx / 15;
+            const int y = (image.height() - 1) * gy / 15;
+            h = (h ^ image.pixel(x, y)) * 1099511628211ull;
+        }
+    return h;
+}
+
 QString zoomText(qreal z)
 {
     const qreal pct = z * 100;
@@ -151,11 +171,11 @@ MainWindow::MainWindow()
     createPanels();
     createStatusBar();
 
-    connect(m_tools, &ToolManager::toolChanged, this, [this](Tool* t) { m_hint->setText(t->hint()); });
+    connect(m_tools, &ToolManager::toolChanged, this, [this](Tool* t) { showToolHint(t->hint()); });
     for (Tool* t : m_tools->tools())
         connect(t, &Tool::hintChanged, this, [this, t](const QString& h) {
             if (m_tools->current() == t)
-                m_hint->setText(h);
+                showToolHint(h);
         });
     connect(m_canvas, &Canvas::deselectRequested, this, &MainWindow::deselect);
     connect(m_canvas, &Canvas::tabletEraserChanged, this, [this](bool eraser) {
@@ -184,12 +204,14 @@ MainWindow::MainWindow()
     m_historyTimer.setInterval(500);
     connect(&m_historyTimer, &QTimer::timeout, this, &MainWindow::checkHistoryMemory);
     connect(m_undoGroup, &QUndoGroup::indexChanged, this, [this] { m_historyTimer.start(); });
+    connect(m_undoGroup, &QUndoGroup::indexChanged, this, &MainWindow::syncToolWithHistory);
     connect(AppState::instance(), &AppState::recentFilesChanged, this, &MainWindow::rebuildRecentMenu);
     m_discord = new DiscordPresence(this);
     m_presenceTimer.setInterval(2000);
     connect(&m_presenceTimer, &QTimer::timeout, this, &MainWindow::updatePresence);
     m_presenceTimer.start();
 
+    connect(&m_autosaveTimer, &QTimer::timeout, this, &MainWindow::autosave);
     m_thumbTimer.setSingleShot(true);
     m_thumbTimer.setInterval(400);
     connect(&m_thumbTimer, &QTimer::timeout, this, [this] {
@@ -302,6 +324,12 @@ void MainWindow::createActions()
                                 [this] { invertSelection(); }, sel);
     A["selectAll"] = makeAction(tr("Seleccionar &todo"), {"edit-select-all"}, QKeySequence::SelectAll,
                                 [this] { selectAll(); }, doc);
+    A["growSel"] = makeAction(tr("A&mpliar la selección..."), {"zoom-in", "list-add"}, {},
+                              [this] { reshapeSelection(SelectionReshape::Grow); }, sel);
+    A["shrinkSel"] = makeAction(tr("&Reducir la selección..."), {"zoom-out", "list-remove"}, {},
+                                [this] { reshapeSelection(SelectionReshape::Shrink); }, sel);
+    A["featherSel"] = makeAction(tr("&Difuminar la selección..."), {"blurfx", "draw-brush"}, {},
+                                 [this] { reshapeSelection(SelectionReshape::Feather); }, sel);
     A["deselect"] = makeAction(tr("&Anular la selección"), {"edit-select-none"}, QKeySequence(QStringLiteral("Ctrl+D")),
                                [this] { deselect(); }, sel);
 
@@ -436,29 +464,25 @@ void MainWindow::createActions()
     A["plugins"] = makeAction(tr("&Complementos..."), {"plugins", "preferences-plugin", "application-x-addon"}, {},
                               [this] { showSettings(SettingsDialog::Page::Plugins); });
 
-    // Ayuda (botón "?" de la esquina)
-    A["docs"] = makeAction(tr("&Documentación de Paint.NET (en línea)"), {"help-contents"}, QKeySequence::HelpContents, [] {
-        QDesktopServices::openUrl(QUrl(QStringLiteral("https://paint.net/doc/latest/index.html")));
-    });
-    addAction(A["docs"]);
-    A["updates"] = makeAction(tr("&Buscar actualizaciones..."), {"update-none", "system-software-update"}, {},
-                              [this] { checkForUpdates(true); });
-    A["about"] = makeAction(tr("&Acerca de Kaint"), {"help-about"}, {}, [this] {
-        AboutDialog dlg(tr("Acerca de Kaint"),
-                        tr("<h3>Kaint %1</h3>"
-                           "<p>Editor de imágenes al estilo Paint.NET, hecho para KDE Plasma y Wayland "
-                           "con C++20 y Qt %2.</p>"
-                           "<p>Recrea el comportamiento de Paint.NET (la versión 3.36 es la última de código "
-                           "abierto): capas con 14 modos de fusión, historial ilimitado, selecciones, "
-                           "herramientas editables, más de 50 efectos y ajustes con vista previa, "
-                           "complementos y proyectos en formato abierto OpenRaster (.ora).</p>"
-                           "<p><a href=\"%3\">%3</a></p>")
-                            .arg(QStringLiteral(KAINT_VERSION), QString::fromLatin1(qVersion()),
-                                 QStringLiteral(KAINT_REPOSITORY)),
-                        this);
+    // Ayuda (botón "?" de la esquina), como la de Paint.NET con los enlaces de Kaint.
+    auto openUrl = [](const QString& url) { return [url] { QDesktopServices::openUrl(QUrl(url)); }; };
+    A["website"] = makeAction(tr("Sitio web de &Kaint"), {"internet-services", "applications-internet", "globe"}, {},
+                              openUrl(QStringLiteral(KAINT_REPOSITORY)));
+    A["donate"] = makeAction(tr("&Donar"), {"face-smile", "emblem-favorite"}, {},
+                             openUrl(QStringLiteral("https://ko-fi.com/opposition")));
+    {
+        QFont italic = A["donate"]->font();
+        italic.setItalic(true);
+        A["donate"]->setFont(italic);
+    }
+    A["pluginsSite"] = makeAction(tr("&Complementos"), {"plugins", "preferences-plugin", "application-x-addon"}, {},
+                                  openUrl(QStringLiteral("https://www.getpaint.net/redirect/plugins_hm.html")));
+    A["feedback"] = makeAction(tr("&Enviar comentarios o informe de errores..."), {"mail-message-new", "mail-send"}, {},
+                               openUrl(QStringLiteral(KAINT_REPOSITORY "/issues")));
+    A["about"] = makeAction(tr("&Acerca de"), {"help-about"}, {}, [this] {
+        AboutDialog dlg(this);
         dlg.exec();
     });
-    A["aboutQt"] = makeAction(tr("Acerca de &Qt"), {"help-about"}, {}, [] { QApplication::aboutQt(); });
 
     // Atajos de herramientas (una letra) y otros atajos sin menú.
     for (const QKeySequence& key : m_tools->shortcuts()) {
@@ -528,6 +552,8 @@ void MainWindow::createMenus()
     m_docActions.append(pasteSel->menuAction());
     edit->addSeparator();
     edit->addActions({A["eraseSel"], A["fillSel"], A["invertSel"], A["selectAll"], A["deselect"]});
+    edit->addSeparator();
+    edit->addActions({A["growSel"], A["shrinkSel"], A["featherSel"]});
 
     QMenu* view = bar->addMenu(tr("&Ver"));
     view->addActions({A["zoomIn"], A["zoomOut"], A["zoomFit"], A["zoomSel"], A["actualSize"]});
@@ -585,9 +611,12 @@ void MainWindow::rebuildEffectMenus()
     if (m_lastEffect && !Effects::all().contains(m_lastEffect)) {
         m_lastEffect = nullptr;
         m_act["repeatEffect"]->setText(tr("Repetir el último efecto"));
+        m_act["repeatEffect"]->setIcon(QIcon());
     }
     m_adjustmentsMenu->clear();
     m_effectsMenu->clear();
+    // Arriba, como en Paint.NET: repetir el último efecto (Ctrl+F) y los complementos.
+    m_effectsMenu->addAction(m_act["repeatEffect"]);
     m_effectsMenu->addAction(m_act["plugins"]);
     m_effectsMenu->addSeparator();
 
@@ -652,6 +681,8 @@ void MainWindow::createToolBars()
     addToolBarBreak();
     m_options = new ToolOptionsBar(m_tools, this);
     addToolBar(m_options);
+    for (FontChooser* font : m_options->findChildren<FontChooser*>())
+        connect(font, &FontChooser::chosen, m_canvas, qOverload<>(&QWidget::setFocus));
 }
 
 void MainWindow::createTopRow()
@@ -681,8 +712,10 @@ void MainWindow::createTopRow()
     m_tabs->setIconSize(QSize(48, 36));
     m_tabs->setUsesScrollButtons(true);
     m_tabs->setElideMode(Qt::ElideRight);
-    m_tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    layout->addWidget(m_tabs, 1);
+    // Solo lo que ocupan las miniaturas: la flecha de la lista va justo después de la última y
+    // llega a la derecha cuando la tira se llena.
+    m_tabs->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    layout->addWidget(m_tabs);
     connect(m_tabs, &QTabBar::currentChanged, this, [this](int i) { setCurrentDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabCloseRequested, this, [this](int i) { closeDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabMoved, this, [this](int from, int to) { m_docs.move(from, to); });
@@ -692,6 +725,7 @@ void MainWindow::createTopRow()
 
     // Lista de todas las imágenes (la flecha del final de la tira).
     auto* list = new QToolButton(top);
+    list->setObjectName(QStringLiteral("ImageListButton"));
     list->setAutoRaise(true);
     list->setArrowType(Qt::DownArrow);
     list->setPopupMode(QToolButton::InstantPopup);
@@ -711,6 +745,7 @@ void MainWindow::createTopRow()
     });
     list->setMenu(listMenu);
     layout->addWidget(list, 0, Qt::AlignVCenter);
+    layout->addStretch(1);
 
     m_cornerButtons = new QWidget(top);
     m_cornerLayout = new QHBoxLayout(m_cornerButtons);
@@ -734,7 +769,7 @@ void MainWindow::createPanels()
                                          QPoint(8, 8), QSize());
 
     m_history = new HistoryPanel(m_undoGroup, m_act["undo"], m_act["redo"]);
-    connect(m_history, &HistoryPanel::aboutToJump, this, &MainWindow::finishTool);
+    connect(m_history, &HistoryPanel::aboutToJump, this, &MainWindow::prepareHistoryJump);
     m_historyPanel = m_workspace->addPanel(QStringLiteral("history"), tr("Historial"), m_history, Corner::TopRight,
                                            QPoint(8, 8), QSize(210, 240));
 
@@ -761,10 +796,10 @@ void MainWindow::createPanels()
 
     // Botones de las ventanas en la esquina superior derecha, como Paint.NET.
     const QList<std::tuple<FloatingPanel*, QString, QIcon, Qt::Key>> panels{
-        {m_toolsPanel, tr("Herramientas"), Icons::theme({"tools", "draw-brush"}), Qt::Key_F5},
-        {m_historyPanel, tr("Historial"), Icons::theme({"view-history"}), Qt::Key_F6},
-        {m_layersPanel, tr("Capas"), Icons::theme({"layer-visible-on", "layer-new"}), Qt::Key_F7},
-        {m_colorsPanel, tr("Colores"), Icons::theme({"color-management", "color-picker"}), Qt::Key_F8},
+        {m_toolsPanel, tr("Herramientas"), Icons::theme({"window-tools", "tools", "draw-brush"}), Qt::Key_F5},
+        {m_historyPanel, tr("Historial"), Icons::theme({"window-history", "view-history"}), Qt::Key_F6},
+        {m_layersPanel, tr("Capas"), Icons::theme({"window-layers", "layer-visible-on", "layer-new"}), Qt::Key_F7},
+        {m_colorsPanel, tr("Colores"), Icons::theme({"window-colors", "color-management", "color-picker"}), Qt::Key_F8},
     };
     for (const auto& [panel, name, icon, key] : panels) {
         QAction* a = makeAction(name, {}, QKeySequence(key), [] {});
@@ -800,11 +835,9 @@ void MainWindow::createPanels()
     help->setIconSize(QSize(16, 16));
     help->setPopupMode(QToolButton::InstantPopup);
     auto* helpMenu = new QMenu(help);
-    helpMenu->addAction(m_act["docs"]);
+    helpMenu->addActions({m_act["website"], m_act["donate"], m_act["pluginsSite"], m_act["feedback"]});
     helpMenu->addSeparator();
-    helpMenu->addActions({m_act["plugins"], m_act["updates"]});
-    helpMenu->addSeparator();
-    helpMenu->addActions({m_act["about"], m_act["aboutQt"]});
+    helpMenu->addAction(m_act["about"]);
     help->setMenu(helpMenu);
     m_cornerLayout->addWidget(help);
 
@@ -1132,8 +1165,48 @@ void MainWindow::updateActions()
     m_act["repeatEffect"]->setEnabled(has && m_lastEffect);
 }
 
+void MainWindow::showToolHint(const QString& hint)
+{
+    m_toolHint = hint;
+    refreshHint();
+}
+
+void MainWindow::refreshHint()
+{
+    // Con una herramienta de selección en reposo y algo seleccionado, como Paint.NET: posición,
+    // rectángulo delimitador y área de la selección.
+    Tool* t = m_tools ? m_tools->current() : nullptr;
+    if (!m_doc || !t || !t->highlightSelection() || t->isBusy() || m_doc->selection().isEmpty()
+        || m_toolHint != t->hint()) {
+        m_hint->setText(m_toolHint);
+        return;
+    }
+    const Unit u = m_canvas->unit();
+    const double dpi = m_doc->dpi();
+    auto len = [&](double px) { return QStringLiteral("%1 %2").arg(formatLength(px, u, dpi), unitSuffix(u)); };
+    const Selection& sel = m_doc->selection();
+    const QRect b = sel.bounds();
+    double area = 0;
+    const QImage& mask = sel.mask();
+    for (int y = b.top(); y <= b.bottom(); ++y) {
+        const uchar* row = mask.constScanLine(y);
+        for (int x = b.left(); x <= b.right(); ++x)
+            area += row[x];
+    }
+    const double ppu = pixelsPerUnit(u, dpi);
+    area /= 255.0 * ppu * ppu;
+    const QString squares = u == Unit::Inches        ? tr("pulgadas cuadradas")
+                            : u == Unit::Centimeters ? tr("centímetros cuadrados")
+                                                     : tr("píxeles cuadrados");
+    m_hint->setText(tr("Esquina superior izquierda de la selección: %1, %2. Tamaño del rectángulo delimitador: %3 × "
+                       "%4. Área: %5 %6")
+                        .arg(len(b.left()), len(b.top()), len(b.width()), len(b.height()),
+                             QLocale().toString(area, 'f', u == Unit::Pixels ? 0 : 2), squares));
+}
+
 void MainWindow::updateStatus()
 {
+    refreshHint();
     if (!m_doc) {
         m_selLabel->clear();
         m_posLabel->clear();
@@ -1400,15 +1473,20 @@ bool MainWindow::writeFile(Document* doc, const QString& path)
 {
     finishTool();
     if (!ImageIO::isLayered(path) && !ImageIO::isAnimation(path) && doc->layerCount() > 1) {
-        QMessageBox box(QMessageBox::Question, tr("Acoplar imagen"),
-                        tr("El formato «%1» no admite capas, así que se guardará la imagen acoplada.\n"
-                           "El documento abierto conserva sus capas. Para guardarlas, usa OpenRaster (.ora).")
-                            .arg(QFileInfo(path).suffix().toUpper()),
-                        QMessageBox::Save | QMessageBox::Cancel, this);
-        box.button(QMessageBox::Save)->setText(tr("Guardar acoplada"));
-        box.button(QMessageBox::Cancel)->setText(tr("Cancelar"));
-        if (box.exec() != QMessageBox::Save)
+        // Como Paint.NET: el formato no admite capas, así que primero se acopla la imagen.
+        TaskDialog ask(tr("Guardar"), Icons::theme({"document-save"}), QImage(),
+                       tr("Para guardar en este formato de archivo primero tiene que acoplar la imagen, lo que la "
+                          "reducirá a una única capa."),
+                       this);
+        const int flattenChoice = ask.addChoice(Icons::theme({"layer-bottom", "merge"}), tr("Acoplar"),
+                                                tr("Se acoplará la imagen y, a continuación, se guardará. El "
+                                                   "acoplamiento queda en el historial, pero el archivo tendrá una "
+                                                   "sola capa."),
+                                                true);
+        ask.addChoice(Icons::theme({"dialog-cancel", "process-stop"}), tr("Cancelar"), tr("Cancelar la acción de guardado."));
+        if (ask.choose() != flattenChoice)
             return false;
+        flattenDocument(doc);
     }
     const QString suffix = QFileInfo(path).suffix().toLower();
     ImageIO::SaveOptions options = m_saveOptions.value(suffix);
@@ -1529,6 +1607,7 @@ void MainWindow::closeEvent(QCloseEvent* e)
     s.setValue(QStringLiteral("view/pixelGrid"), m_act["pixelGrid"]->isChecked());
     m_workspace->saveState();
     AppState::instance()->save();
+    Recovery::clear();
     e->accept();
 }
 
@@ -1572,14 +1651,37 @@ void MainWindow::push(QUndoCommand* cmd, const QString& icon)
 
 void MainWindow::undo()
 {
-    finishTool();
+    prepareHistoryJump();
     m_undoGroup->undo();
 }
 
 void MainWindow::redo()
 {
-    finishTool();
+    prepareHistoryJump();
     m_undoGroup->redo();
+}
+
+void MainWindow::prepareHistoryJump()
+{
+    if (m_tools && m_tools->current())
+        m_tools->current()->beforeHistoryJump();
+}
+
+void MainWindow::syncToolWithHistory()
+{
+    // Al volver a un paso que su herramienta puede retomar (degradado), se activa esa
+    // herramienta para seguir editándolo.
+    if (m_syncingHistory || !m_doc || !m_tools)
+        return;
+    m_syncingHistory = true;
+    const QUndoStack* stack = m_doc->undoStack();
+    const QUndoCommand* top = stack->index() > 0 ? stack->command(stack->index() - 1) : nullptr;
+    if (const auto* step = dynamic_cast<const EditableStep*>(top);
+        step && m_tools->current() && m_tools->current()->id() != step->tool())
+        m_tools->select(step->tool());
+    if (m_tools->current())
+        m_tools->current()->historyChanged();
+    m_syncingHistory = false;
 }
 
 void MainWindow::copy(bool merged)
@@ -1588,8 +1690,28 @@ void MainWindow::copy(bool merged)
         return;
     finishTool();
     const QImage source = merged ? m_doc->flattened() : m_doc->activeLayer()->image;
-    const QImage out = Raster::extractSelection(source, m_doc->selection());
-    QApplication::clipboard()->setImage(out.convertToFormat(QImage::Format_ARGB32));
+    const QImage out = Raster::extractSelection(source, m_doc->selection()).convertToFormat(QImage::Format_ARGB32);
+    QApplication::clipboard()->setImage(out);
+    m_copyOrigin = m_doc->selection().isEmpty() ? QPoint(0, 0) : m_doc->selection().bounds().topLeft();
+    m_copySignature = imageSignature(out);
+}
+
+QPoint MainWindow::pastePosition(const QImage& image) const
+{
+    // Donde se copió, si el portapapeles sigue siendo esa copia y ese sitio se ve entero; si no,
+    // el sitio visible más cercano (o la esquina de lo visible para lo que viene de fuera).
+    const QRect visible = m_canvas->visibleImageRect();
+    QPoint pos = imageSignature(image) == m_copySignature ? m_copyOrigin : visible.topLeft();
+    if (!visible.isEmpty() && !visible.contains(QRect(pos, image.size()))) {
+        auto fit = [](int p, int size, int lo, int length) {
+            return size >= length ? lo : std::clamp(p, lo, lo + length - size);
+        };
+        pos = QPoint(fit(pos.x(), image.width(), visible.left(), visible.width()),
+                     fit(pos.y(), image.height(), visible.top(), visible.height()));
+    }
+    pos.setX(std::clamp(pos.x(), 0, std::max(0, m_doc->size().width() - image.width())));
+    pos.setY(std::clamp(pos.y(), 0, std::max(0, m_doc->size().height() - image.height())));
+    return pos;
 }
 
 void MainWindow::cut()
@@ -1699,10 +1821,7 @@ void MainWindow::paste()
     }
     if (!ensureCanvasFits(img, tr("Pegar")))
         return;
-    QPoint pos = m_canvas->visibleImageRect().topLeft();
-    pos.setX(std::clamp(pos.x(), 0, std::max(0, m_doc->size().width() - img.width())));
-    pos.setY(std::clamp(pos.y(), 0, std::max(0, m_doc->size().height() - img.height())));
-    MoveSelectedTool::startPaste(m_doc, img, pos, tr("Pegar"));
+    MoveSelectedTool::startPaste(m_doc, img, pastePosition(img), tr("Pegar"));
     m_tools->select(ToolId::MoveSelected);
 }
 
@@ -1719,10 +1838,7 @@ void MainWindow::pasteIntoNewLayer()
     m_doc->undoStack()->beginMacro(text);
     m_doc->undoStack()->push(new InsertLayerCommand(m_doc, m_doc->activeIndex() + 1,
                                                     std::make_shared<Layer>(m_doc->nextLayerName(), m_doc->size()), text));
-    QPoint pos = m_canvas->visibleImageRect().topLeft();
-    pos.setX(std::clamp(pos.x(), 0, std::max(0, m_doc->size().width() - img.width())));
-    pos.setY(std::clamp(pos.y(), 0, std::max(0, m_doc->size().height() - img.height())));
-    MoveSelectedTool::startPaste(m_doc, img, pos, text);
+    MoveSelectedTool::startPaste(m_doc, img, pastePosition(img), text);
     m_doc->undoStack()->endMacro();
     m_tools->select(ToolId::MoveSelected);
 }
@@ -1788,6 +1904,26 @@ void MainWindow::pasteSelection(SelectionMode mode)
     const Selection result = mode == SelectionMode::Replace ? pasted : m_doc->selection().combined(pasted, mode);
     push(new SelectionCommand(m_doc, m_doc->selection(), result, tr("Pegar selección")),
          QStringLiteral("edit-paste"));
+}
+
+void MainWindow::reshapeSelection(SelectionReshape kind)
+{
+    // Ampliar, reducir o difuminar el borde de la selección tantos píxeles (como paint.software).
+    if (!m_doc || m_doc->selection().isEmpty())
+        return;
+    finishTool();
+    const QString text = kind == SelectionReshape::Grow     ? tr("Ampliar la selección")
+                         : kind == SelectionReshape::Shrink ? tr("Reducir la selección")
+                                                            : tr("Difuminar la selección");
+    bool ok = false;
+    const int radius = QInputDialog::getInt(this, text, tr("Radio (píxeles):"), 4, 1, 1000, 1, &ok);
+    if (!ok)
+        return;
+    const Selection& before = m_doc->selection();
+    const Selection after = kind == SelectionReshape::Grow     ? before.grown(radius)
+                            : kind == SelectionReshape::Shrink ? before.grown(-radius)
+                                                               : before.feathered(radius);
+    push(new SelectionCommand(m_doc, before, after, text), QStringLiteral("edit-select"));
 }
 
 void MainWindow::invertSelection()
@@ -1960,19 +2096,25 @@ void MainWindow::editAnimation()
 
 void MainWindow::flatten()
 {
-    if (!m_doc || m_doc->layerCount() < 2)
+    flattenDocument(m_doc);
+}
+
+void MainWindow::flattenDocument(Document* doc)
+{
+    if (!doc || doc->layerCount() < 2)
         return;
     finishTool();
-    DocumentState before = DocumentState::capture(m_doc);
+    DocumentState before = DocumentState::capture(doc);
     DocumentState after;
-    auto layer = std::make_shared<Layer>(m_doc->layer(0)->props.name, m_doc->flattened());
+    auto layer = std::make_shared<Layer>(doc->layer(0)->props.name, doc->flattened());
     after.size = before.size;
     after.layers = {layer};
     after.images = {layer->image};
     after.props = {layer->props};
     after.active = 0;
     after.selection = before.selection;
-    push(new DocumentStateCommand(m_doc, before, after, tr("Acoplar")), QStringLiteral("layer-bottom"));
+    HistoryIcons::registerIcon(tr("Acoplar"), QStringLiteral("layer-bottom"));
+    doc->undoStack()->push(new DocumentStateCommand(doc, before, after, tr("Acoplar")));
 }
 
 // ---------------------------------------------------------------------------
@@ -2262,6 +2404,10 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
     if (!effect->hidden()) {
         m_lastEffect = effect;
         m_act["repeatEffect"]->setText(tr("Repetir «%1»").arg(effect->name()));
+        QIcon icon = Icons::theme(effect->iconName());
+        if (icon.isNull() && !effect->iconImage().isNull())
+            icon = QIcon(QPixmap::fromImage(effect->iconImage()));
+        m_act["repeatEffect"]->setIcon(icon);
     }
     m_effectValues.insert(effect->id(), values);
     updateActions();
@@ -2289,6 +2435,23 @@ void MainWindow::showSettings(SettingsDialog::Page page)
         applySettings();
     });
     dlg.exec();
+    if (dlg.restartScheme() >= 0)
+        restartWithScheme(dlg.restartScheme());
+}
+
+void MainWindow::restartWithScheme(int scheme)
+{
+    // Se cierra como siempre (pregunta por los cambios sin guardar); main() abre Kaint de nuevo
+    // con las imágenes que estaban abiertas.
+    const int previous = m_settings.colorScheme;
+    m_settings.colorScheme = scheme;
+    m_settings.save();
+    m_restartRequested = true;
+    if (!close()) {
+        m_restartRequested = false;
+        m_settings.colorScheme = previous;
+        m_settings.save();
+    }
 }
 
 void MainWindow::keepOpaque()
@@ -2336,6 +2499,10 @@ void MainWindow::applySettings()
                         Qt::UI_FadeTooltip, Qt::UI_AnimateToolBox})
         QApplication::setEffectEnabled(effect, m_settings.animations);
     QApplication::setEffectEnabled(Qt::UI_General, m_settings.animations);
+    if (m_settings.autosaveMinutes > 0)
+        m_autosaveTimer.start(m_settings.autosaveMinutes * 60 * 1000);
+    else
+        m_autosaveTimer.stop();
     setUnit(m_settings.unit);
     checkHistoryMemory();
     PresenceOptions presence;
@@ -2464,4 +2631,41 @@ void MainWindow::startupChecks()
 {
     if (m_settings.checkUpdates)
         QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
+    offerRecovery();
+}
+
+void MainWindow::offerRecovery()
+{
+    // Kaint se cerró de golpe: se ofrecen las copias de recuperación de las imágenes sin guardar.
+    const QList<Recovery::Entry> entries = Recovery::orphaned();
+    if (entries.isEmpty())
+        return;
+    QStringList names;
+    for (const Recovery::Entry& e : entries)
+        names << QStringLiteral("• %1").arg(e.name);
+    TaskDialog ask(tr("Recuperar imágenes"), Icons::theme({"document-revert", "edit-undo"}), QImage(),
+                   tr("Kaint no se cerró correctamente. Se pueden recuperar estas imágenes con cambios sin guardar:\n%1")
+                       .arg(names.join(QLatin1Char('\n'))),
+                   this);
+    const int recover = ask.addChoice(Icons::theme({"document-open"}), tr("Recuperar"),
+                                      tr("Abre las imágenes tal como estaban en la última copia de recuperación."), true);
+    ask.addChoice(Icons::theme({"edit-delete"}), tr("Descartar"), tr("Borra las copias de recuperación."));
+    if (ask.choose() == recover) {
+        for (const Recovery::Entry& e : entries) {
+            QString error;
+            Document* doc = Ora::load(e.file, &error);
+            if (!doc)
+                continue;
+            doc->setFilePath(e.originalPath);
+            doc->undoStack()->resetClean();
+            addDocument(doc);
+        }
+    }
+    Recovery::discard(entries);
+    autosave();
+}
+
+void MainWindow::autosave()
+{
+    Recovery::save(m_docs);
 }

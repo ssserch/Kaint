@@ -156,6 +156,15 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
     if (mode == TransformBox::Mode::None)
         mode = TransformBox::Mode::Translate;
 
+    // Sin selección, como en Paint.NET, el clic selecciona todo el lienzo (ya se ve al pulsar).
+    if (doc->selection().isEmpty() && !currentFloating(doc)) {
+        const QString text = tr("Seleccionar todo");
+        HistoryIcons::registerIcon(text, QStringLiteral("edit-select-all"));
+        doc->undoStack()->push(
+            new SelectionCommand(doc, doc->selection(), Selection::fromRect(doc->rect(), doc->size()), text));
+        m_selectionBefore = doc->selection();
+    }
+
     // Ctrl sobre píxeles ya flotantes deja una copia donde están.
     m_float = copy ? nullptr : currentFloating(doc);
     m_first = !m_float;
@@ -269,15 +278,30 @@ bool MoveSelectedTool::keyPress(QKeyEvent* e)
     return true;
 }
 
+void MoveSelectedTool::finish()
+{
+    // Otra acción (Supr, copiar, un efecto...) a mitad de arrastre: se registra lo movido hasta
+    // ahí; si no, al seguir arrastrando volverían a pintarse los píxeles flotantes.
+    if (!m_active)
+        return;
+    m_active = false;
+    m_box.end();
+    if (!m_pivotDrag && m_current != m_startTransform) {
+        push();
+    } else if (!m_pivotDrag && m_first) {
+        Document* doc = document();
+        m_float->layer->image = m_float->original;
+        doc->notifyPixelsChanged(m_float->layer.get(), m_float->boundsFor(m_current));
+        doc->setSelection(m_selectionBefore);
+    }
+    m_pivotDrag = false;
+    m_float.reset();
+    repaint();
+}
+
 void MoveSelectedTool::deactivate()
 {
-    if (m_active) {
-        m_active = false;
-        if (!m_pivotDrag && m_current != m_startTransform)
-            push();
-        m_pivotDrag = false;
-        m_float.reset();
-    }
+    finish();
     Tool::deactivate();
 }
 
@@ -370,7 +394,7 @@ void MoveSelectionTool::mouseMove(const ToolEvent& e)
         return;
     }
     m_transform = m_box.update(e.pos, e.modifiers);
-    m_result = m_base.transformed(m_transform);
+    m_result = m_base.transformed(m_transform, AppState::instance()->tools().moveSelectionAntialias);
     document()->setSelection(m_result);
     if (m_box.mode() == TransformBox::Mode::Rotate)
         emit hintChanged(tr("Ángulo: %1°").arg(m_box.rotationDegrees(), 0, 'f', 2));
@@ -425,14 +449,21 @@ bool MoveSelectionTool::keyPress(QKeyEvent* e)
     return true;
 }
 
+void MoveSelectionTool::finish()
+{
+    if (!m_active)
+        return;
+    m_active = false;
+    m_box.end();
+    if (!m_pivotDrag)
+        push();
+    m_pivotDrag = false;
+    repaint();
+}
+
 void MoveSelectionTool::deactivate()
 {
-    if (m_active) {
-        m_active = false;
-        if (!m_pivotDrag)
-            push();
-        m_pivotDrag = false;
-    }
+    finish();
     Tool::deactivate();
 }
 

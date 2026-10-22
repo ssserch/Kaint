@@ -43,6 +43,9 @@ private:
     QComboBox* m_depth = nullptr;
     BarSlider* m_dither = nullptr;
     BarSlider* m_threshold = nullptr;
+    QComboBox* m_quantization = nullptr;
+    QLabel* m_thresholdNote = nullptr;
+    QCheckBox* m_interlaced = nullptr;
     QCheckBox* m_animation = nullptr;
     QSpinBox* m_delay = nullptr;
     QCheckBox* m_loopForever = nullptr;

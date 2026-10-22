@@ -6,6 +6,7 @@
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/dialogs/DialogExec.h"
+#include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/ThemeDialog.h"
 #include "app/tools/ToolManager.h"
 #include "app/widgets/EffectControls.h"
@@ -39,6 +40,7 @@
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
@@ -65,6 +67,7 @@ AppSettings AppSettings::load()
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 4);
+    a.autosaveMinutes = std::clamp(get("autosaveMinutes", a.autosaveMinutes), 0, 120);
     a.language = get("language", a.language) == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);
@@ -98,6 +101,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("autoScroll"), autoScroll);
     s.setValue(QStringLiteral("autoSelectVisibleLayer"), autoSelectVisibleLayer);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
+    s.setValue(QStringLiteral("autosaveMinutes"), autosaveMinutes);
     s.setValue(QStringLiteral("language"), language);
     s.setValue(QStringLiteral("reopenLast"), reopenLast);
     s.setValue(QStringLiteral("unit"), unit);
@@ -278,18 +282,40 @@ QWidget* SettingsDialog::createInterfacePage()
         restartNote->setVisible(restart);
     };
     updateNote();
-    connect(scheme, &QComboBox::activated, this, [this, updateNote](int i) {
-        m_settings.colorScheme = i;
-        changed();
-        updateNote();
-    });
-    connect(customize, &QPushButton::clicked, this, [this, scheme, updateNote] {
-        if (m_settings.colorScheme != int(Theme::Scheme::Custom)) {
-            m_settings.colorScheme = int(Theme::Scheme::Custom);
-            scheme->setCurrentIndex(m_settings.colorScheme);
-            changed();
-            updateNote();
+    // Entrar en el tema KDE o salir de él reinicia Kaint: se pregunta antes y, si no se acepta,
+    // se queda el tema que había.
+    auto chooseScheme = [this, scheme](int i) {
+        if (i == m_settings.colorScheme)
+            return true;
+        if (Theme::needsRestart(Theme::Scheme(i))) {
+            TaskDialog ask(tr("Reiniciar Kaint"), Icons::theme({"view-refresh"}), QImage(),
+                           i == int(Theme::Scheme::Kde)
+                               ? tr("El tema KDE usa la integración de Plasma, que solo se carga al abrir Kaint. "
+                                    "¿Quieres reiniciar Kaint ahora?")
+                               : tr("Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?"),
+                           this);
+            const int restart = ask.addChoice(Icons::theme({"view-refresh"}), tr("Reiniciar ahora"),
+                                              tr("Kaint se cerrará y se abrirá de nuevo con el tema elegido. Si hay "
+                                                 "cambios sin guardar, te lo preguntará antes."),
+                                              true);
+            ask.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), tr("Seguir con el tema actual."));
+            if (ask.choose() == restart) {
+                m_restartScheme = i;
+                accept();
+            } else {
+                scheme->setCurrentIndex(m_settings.colorScheme);
+            }
+            return false;
         }
+        m_settings.colorScheme = i;
+        scheme->setCurrentIndex(i);
+        changed();
+        return true;
+    };
+    connect(scheme, &QComboBox::activated, this, chooseScheme);
+    connect(customize, &QPushButton::clicked, this, [this, chooseScheme] {
+        if (!chooseScheme(int(Theme::Scheme::Custom)))
+            return;
         ThemeDialog dlg(this);
         execWithoutDimming(dlg);
     });
@@ -301,6 +327,23 @@ QWidget* SettingsDialog::createInterfacePage()
 
     page.layout->addWidget(sectionHeader(tr("Al iniciar"), page.widget));
     check(tr("Volver a abrir las imágenes de la última sesión"), &AppSettings::reopenLast);
+
+    // Copias de recuperación por si Kaint se cierra de golpe.
+    page.layout->addWidget(sectionHeader(tr("Recuperación"), page.widget));
+    auto* autosaveRow = new QHBoxLayout;
+    auto* autosave = new QSpinBox(page.widget);
+    autosave->setRange(0, 120);
+    autosave->setSuffix(tr(" min"));
+    autosave->setSpecialValueText(tr("Nunca"));
+    autosave->setValue(m_settings.autosaveMinutes);
+    autosaveRow->addWidget(new QLabel(tr("Guardar una copia de recuperación de las imágenes sin guardar cada:"), page.widget));
+    autosaveRow->addWidget(autosave);
+    autosaveRow->addStretch();
+    page.layout->addLayout(autosaveRow);
+    connect(autosave, &QSpinBox::valueChanged, this, [this](int v) {
+        m_settings.autosaveMinutes = v;
+        changed();
+    });
     page.layout->addStretch();
     return page.widget;
 }
@@ -562,7 +605,9 @@ void SettingsDialog::refreshPlugins()
 {
     const QString selected = m_pluginList->currentItem() ? m_pluginList->currentItem()->data(0, Qt::UserRole).toString()
                                                          : QString();
+    // Se conserva el desplazamiento: marcar o desmarcar una casilla no salta a la seleccionada.
     const QSignalBlocker block(m_pluginList);
+    const int scroll = m_pluginList->verticalScrollBar()->value();
     m_pluginList->clear();
     for (const PluginInfo& p : PluginManager::instance()->plugins()) {
         const bool incompatible = !p.pending && p.effects.isEmpty() && !p.errors.isEmpty();
@@ -602,6 +647,8 @@ void SettingsDialog::refreshPlugins()
     m_openPluginFolder->setEnabled(m_pluginList->currentItem() != nullptr);
     m_pluginList->resizeColumnToContents(1);
     m_pluginList->resizeColumnToContents(2);
+    m_pluginList->doItemsLayout();
+    m_pluginList->verticalScrollBar()->setValue(scroll);
 }
 
 void SettingsDialog::addPlugins()

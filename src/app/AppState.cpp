@@ -100,6 +100,7 @@ ToolSettings AppState::toolDefaults() const
     t.smoothing = num("smoothing", t.smoothing);
     t.antialias = num("antialias", t.antialias);
     t.selectionAntialias = num("selectionAntialias", t.selectionAntialias);
+    t.moveSelectionAntialias = num("moveSelectionAntialias", t.moveSelectionAntialias);
     t.pressure = num("pressure", t.pressure);
     t.blend = BlendMode(num("blend", int(t.blend)));
     t.tolerance = num("tolerance", t.tolerance);
@@ -151,6 +152,7 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.setValue(QStringLiteral("smoothing"), t.smoothing);
     s.setValue(QStringLiteral("antialias"), t.antialias);
     s.setValue(QStringLiteral("selectionAntialias"), t.selectionAntialias);
+    s.setValue(QStringLiteral("moveSelectionAntialias"), t.moveSelectionAntialias);
     s.setValue(QStringLiteral("pressure"), t.pressure);
     s.setValue(QStringLiteral("blend"), int(t.blend));
     s.setValue(QStringLiteral("tolerance"), t.tolerance);

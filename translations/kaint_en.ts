@@ -2,6 +2,29 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en" sourcelanguage="es">
 <context>
+    <name>AboutDialog</name>
+    <message>
+        <source>Acerca de Kaint</source>
+        <translation>About Kaint</translation>
+    </message>
+    <message>
+        <source>Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores.</source>
+        <translation>Copyright © 2026 SSSerch (aka Y2Kerchy) and contributors.</translation>
+    </message>
+    <message>
+        <source>Traducido al español por SSSerch</source>
+        <translation>English translation by SSSerch</translation>
+    </message>
+    <message>
+        <source>Bibliotecas de software y contribuciones:</source>
+        <translation>Software libraries and contributions:</translation>
+    </message>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+</context>
+<context>
     <name>AngleChooser</name>
     <message>
         <source>Arrastra para elegir el ángulo (Mayús: de 15 en 15°)</source>
@@ -489,6 +512,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Drag to draw the gradient from the primary color to the secondary color (right click: reversed). Shift: 15° angles.</translation>
     </message>
     <message>
+        <source>Mover degradado</source>
+        <translation>Move Gradient</translation>
+    </message>
+    <message>
+        <source>Finalizar degradado</source>
+        <translation>Finish Gradient</translation>
+    </message>
+    <message>
         <source>Degradado</source>
         <translation>Gradient</translation>
     </message>
@@ -763,6 +794,18 @@ Opacity: %2 · Blend: %3</translation>
         <translation>Select &amp;All</translation>
     </message>
     <message>
+        <source>A&amp;mpliar la selección...</source>
+        <translation>E&amp;xpand Selection...</translation>
+    </message>
+    <message>
+        <source>&amp;Reducir la selección...</source>
+        <translation>S&amp;hrink Selection...</translation>
+    </message>
+    <message>
+        <source>&amp;Difuminar la selección...</source>
+        <translation>&amp;Feather Selection...</translation>
+    </message>
+    <message>
         <source>&amp;Anular la selección</source>
         <translation>&amp;Deselect All</translation>
     </message>
@@ -951,28 +994,30 @@ Opacity: %2 · Blend: %3</translation>
         <translation>&amp;Plugins...</translation>
     </message>
     <message>
-        <source>&amp;Documentación de Paint.NET (en línea)</source>
-        <translation>Paint.NET &amp;Documentation (online)</translation>
+        <source>Recuperar imágenes</source>
+        <translation>Recover Images</translation>
     </message>
     <message>
-        <source>&amp;Buscar actualizaciones...</source>
-        <translation>&amp;Check for Updates...</translation>
+        <source>Kaint no se cerró correctamente. Se pueden recuperar estas imágenes con cambios sin guardar:
+%1</source>
+        <translation>Kaint did not close properly. These images with unsaved changes can be recovered:
+%1</translation>
     </message>
     <message>
-        <source>&amp;Acerca de Kaint</source>
-        <translation>&amp;About Kaint</translation>
+        <source>Recuperar</source>
+        <translation>Recover</translation>
     </message>
     <message>
-        <source>Acerca de Kaint</source>
-        <translation>About Kaint</translation>
+        <source>Abre las imágenes tal como estaban en la última copia de recuperación.</source>
+        <translation>Opens the images as they were in the last recovery copy.</translation>
     </message>
     <message>
-        <source>&lt;h3&gt;Kaint %1&lt;/h3&gt;&lt;p&gt;Editor de imágenes al estilo Paint.NET, hecho para KDE Plasma y Wayland con C++20 y Qt %2.&lt;/p&gt;&lt;p&gt;Recrea el comportamiento de Paint.NET (la versión 3.36 es la última de código abierto): capas con 14 modos de fusión, historial ilimitado, selecciones, herramientas editables, más de 50 efectos y ajustes con vista previa, complementos y proyectos en formato abierto OpenRaster (.ora).&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%3&quot;&gt;%3&lt;/a&gt;&lt;/p&gt;</source>
-        <translation>&lt;h3&gt;Kaint %1&lt;/h3&gt;&lt;p&gt;A Paint.NET-style image editor, made for KDE Plasma and Wayland with C++20 and Qt %2.&lt;/p&gt;&lt;p&gt;It recreates the behavior of Paint.NET (version 3.36 is the last open-source one): layers with 14 blend modes, unlimited history, selections, editable tools, more than 50 effects and adjustments with live preview, plugins and projects in the open OpenRaster format (.ora).&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;%3&quot;&gt;%3&lt;/a&gt;&lt;/p&gt;</translation>
+        <source>Descartar</source>
+        <translation>Discard</translation>
     </message>
     <message>
-        <source>Acerca de &amp;Qt</source>
-        <translation>About &amp;Qt</translation>
+        <source>Borra las copias de recuperación.</source>
+        <translation>Deletes the recovery copies.</translation>
     </message>
     <message>
         <source>Intercambiar colores</source>
@@ -1113,6 +1158,22 @@ What do you want to do?</translation>
         <translation>Return to Kaint.</translation>
     </message>
     <message>
+        <source>pulgadas cuadradas</source>
+        <translation>square inches</translation>
+    </message>
+    <message>
+        <source>centímetros cuadrados</source>
+        <translation>square centimeters</translation>
+    </message>
+    <message>
+        <source>píxeles cuadrados</source>
+        <translation>square pixels</translation>
+    </message>
+    <message>
+        <source>Esquina superior izquierda de la selección: %1, %2. Tamaño del rectángulo delimitador: %3 × %4. Área: %5 %6</source>
+        <translation>Selection top left: %1, %2. Bounding rectangle size: %3 × %4. Area: %5 %6</translation>
+    </message>
+    <message>
         <source>Tamaño de la imagen: %1 × %2 %3 (no hay selección)</source>
         <translation>Image size: %1 × %2 %3 (no selection)</translation>
     </message>
@@ -1187,20 +1248,6 @@ What do you want to do?</translation>
     <message>
         <source>Copiar la ruta</source>
         <translation>Copy path</translation>
-    </message>
-    <message>
-        <source>Acoplar imagen</source>
-        <translation>Flatten image</translation>
-    </message>
-    <message>
-        <source>El formato «%1» no admite capas, así que se guardará la imagen acoplada.
-El documento abierto conserva sus capas. Para guardarlas, usa OpenRaster (.ora).</source>
-        <translation>The “%1” format does not support layers, so the flattened image will be saved.
-The open document keeps its layers. To save them, use OpenRaster (.ora).</translation>
-    </message>
-    <message>
-        <source>Guardar acoplada</source>
-        <translation>Save flattened</translation>
     </message>
     <message>
         <source>No se pudo guardar</source>
@@ -1297,6 +1344,22 @@ The open document keeps its layers. To save them, use OpenRaster (.ora).</transl
         <translation>The clipboard does not contain a selection (copied with “Copy Selection”).</translation>
     </message>
     <message>
+        <source>Ampliar la selección</source>
+        <translation>Expand Selection</translation>
+    </message>
+    <message>
+        <source>Reducir la selección</source>
+        <translation>Shrink Selection</translation>
+    </message>
+    <message>
+        <source>Difuminar la selección</source>
+        <translation>Feather Selection</translation>
+    </message>
+    <message>
+        <source>Radio (píxeles):</source>
+        <translation>Radius (pixels):</translation>
+    </message>
+    <message>
         <source>Invertir la selección</source>
         <translation>Invert Selection</translation>
     </message>
@@ -1347,6 +1410,38 @@ The open document keeps its layers. To save them, use OpenRaster (.ora).</transl
     <message>
         <source>Acoplar</source>
         <translation>Flatten</translation>
+    </message>
+    <message>
+        <source>Sitio web de &amp;Kaint</source>
+        <translation>&amp;Kaint Website</translation>
+    </message>
+    <message>
+        <source>&amp;Donar</source>
+        <translation>&amp;Donate</translation>
+    </message>
+    <message>
+        <source>&amp;Complementos</source>
+        <translation>&amp;Plugins</translation>
+    </message>
+    <message>
+        <source>&amp;Enviar comentarios o informe de errores...</source>
+        <translation>&amp;Send Feedback or Bug Report...</translation>
+    </message>
+    <message>
+        <source>&amp;Acerca de</source>
+        <translation>&amp;About</translation>
+    </message>
+    <message>
+        <source>Para guardar en este formato de archivo primero tiene que acoplar la imagen, lo que la reducirá a una única capa.</source>
+        <translation>Saving to this file format requires flattening the image, which will reduce it to a single layer.</translation>
+    </message>
+    <message>
+        <source>Se acoplará la imagen y, a continuación, se guardará. El acoplamiento queda en el historial, pero el archivo tendrá una sola capa.</source>
+        <translation>The image will be flattened and then saved. The flatten step stays in the history, but the file will have a single layer.</translation>
+    </message>
+    <message>
+        <source>Cancelar la acción de guardado.</source>
+        <translation>Cancel the save operation.</translation>
     </message>
     <message>
         <source>Agregar nueva capa</source>
@@ -1461,6 +1556,10 @@ The open document keeps its layers. To save them, use OpenRaster (.ora).</transl
     <message>
         <source>Arrastra la selección para moverla. Arrastre los controles para cambiar el tamaño. Arrastra con el botón derecho del ratón, o justo fuera del borde, para rotar.</source>
         <translation>Drag the selection to move it. Drag the handles to resize it. Drag with the right mouse button, or just outside the edge, to rotate.</translation>
+    </message>
+    <message>
+        <source>Seleccionar todo</source>
+        <translation>Select All</translation>
     </message>
     <message>
         <source>Ángulo: %1°</source>
@@ -2029,6 +2128,34 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Matiz y saturación</source>
         <translation>Hue / Saturation</translation>
+    </message>
+    <message>
+        <source>Medios tonos</source>
+        <translation>Midtones</translation>
+    </message>
+    <message>
+        <source>Luces</source>
+        <translation>Highlights</translation>
+    </message>
+    <message>
+        <source>Cian ↔ rojo</source>
+        <translation>Cyan ↔ red</translation>
+    </message>
+    <message>
+        <source>Magenta ↔ verde</source>
+        <translation>Magenta ↔ green</translation>
+    </message>
+    <message>
+        <source>Amarillo ↔ azul</source>
+        <translation>Yellow ↔ blue</translation>
+    </message>
+    <message>
+        <source>Conservar la luminosidad</source>
+        <translation>Preserve luminosity</translation>
+    </message>
+    <message>
+        <source>Balance de color</source>
+        <translation>Color Balance</translation>
     </message>
     <message>
         <source>Invertir alfa</source>
@@ -3079,6 +3206,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Frame %1</translation>
     </message>
     <message>
+        <source>No se pudo comprimir la imagen.</source>
+        <translation>The image could not be compressed.</translation>
+    </message>
+    <message>
         <source>El archivo no es un OpenRaster válido.</source>
         <translation>The file is not a valid OpenRaster file.</translation>
     </message>
@@ -3266,12 +3397,40 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Bit depth:</translation>
     </message>
     <message>
+        <source>Octree</source>
+        <translation>Octree</translation>
+    </message>
+    <message>
+        <source>Corte a la mediana</source>
+        <translation>Median Cut</translation>
+    </message>
+    <message>
+        <source>Algoritmo de cuantización:</source>
+        <translation>Quantization algorithm:</translation>
+    </message>
+    <message>
         <source>Nivel de tramado:</source>
         <translation>Dithering level:</translation>
     </message>
     <message>
         <source>Umbral de transparencia:</source>
         <translation>Transparency threshold:</translation>
+    </message>
+    <message>
+        <source>Los píxeles que tengan un valor del canal alfa menor que el umbral serán totalmente transparentes.</source>
+        <translation>Pixels with an alpha value below the threshold will be fully transparent.</translation>
+    </message>
+    <message>
+        <source>Entrelazado</source>
+        <translation>Interlaced</translation>
+    </message>
+    <message>
+        <source>La imagen se ve entera a baja resolución mientras se carga (Adam7).</source>
+        <translation>The whole image appears at low resolution while it loads (Adam7).</translation>
+    </message>
+    <message>
+        <source>Otras opciones:</source>
+        <translation>Other options:</translation>
     </message>
     <message>
         <source>Animación: cada capa visible es un fotograma</source>
@@ -3480,12 +3639,56 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Restart Kaint to fully apply these changes.</translation>
     </message>
     <message>
+        <source>Reiniciar Kaint</source>
+        <translation>Restart Kaint</translation>
+    </message>
+    <message>
+        <source>El tema KDE usa la integración de Plasma, que solo se carga al abrir Kaint. ¿Quieres reiniciar Kaint ahora?</source>
+        <translation>The KDE theme uses the Plasma integration, which is only loaded when Kaint starts. Do you want to restart Kaint now?</translation>
+    </message>
+    <message>
+        <source>Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?</source>
+        <translation>Leaving the KDE theme requires restarting Kaint. Do you want to restart it now?</translation>
+    </message>
+    <message>
+        <source>Reiniciar ahora</source>
+        <translation>Restart Now</translation>
+    </message>
+    <message>
+        <source>Kaint se cerrará y se abrirá de nuevo con el tema elegido. Si hay cambios sin guardar, te lo preguntará antes.</source>
+        <translation>Kaint will close and open again with the chosen theme. If there are unsaved changes, you will be asked first.</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Seguir con el tema actual.</source>
+        <translation>Keep the current theme.</translation>
+    </message>
+    <message>
         <source>Al iniciar</source>
         <translation>On startup</translation>
     </message>
     <message>
         <source>Volver a abrir las imágenes de la última sesión</source>
         <translation>Reopen the images from the last session</translation>
+    </message>
+    <message>
+        <source>Recuperación</source>
+        <translation>Recovery</translation>
+    </message>
+    <message>
+        <source> min</source>
+        <translation> min</translation>
+    </message>
+    <message>
+        <source>Nunca</source>
+        <translation>Never</translation>
+    </message>
+    <message>
+        <source>Guardar una copia de recuperación de las imágenes sin guardar cada:</source>
+        <translation>Save a recovery copy of unsaved images every:</translation>
     </message>
     <message>
         <source>Proyectar una sombra bajo el lienzo</source>
@@ -4704,6 +4907,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Calidad de selección con antidentado</source>
         <translation>Antialiased selection quality</translation>
+    </message>
+    <message>
+        <source>La selección se mueve, escala y gira píxel a píxel, sin bordes suaves.</source>
+        <translation>The selection moves, scales and rotates pixel by pixel, without soft edges.</translation>
+    </message>
+    <message>
+        <source>Los bordes de la selección quedan suavizados al escalarla o girarla.</source>
+        <translation>The selection edges are smoothed when it is scaled or rotated.</translation>
     </message>
     <message>
         <source> px</source>

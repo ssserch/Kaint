@@ -30,6 +30,7 @@ struct AppSettings {
     int colorScheme = 0;
     QString language = QStringLiteral("en");
     bool reopenLast = false;
+    int autosaveMinutes = 5;
     int unit = 0;
     bool rulers = false;
     bool dropShadow = true;
@@ -64,6 +65,9 @@ public:
     AppSettings settings() const { return m_settings; }
     void showPage(Page page);
 
+    // Tema que pide reiniciar Kaint (entrar o salir del tema KDE), o -1.
+    int restartScheme() const { return m_restartScheme; }
+
     // Texto de la página Diagnósticos (también se copia al portapapeles).
     static QString diagnostics();
     void setDiscordStatus(const QString& text);
@@ -97,4 +101,5 @@ private:
     QLabel* m_updateStatus = nullptr;
     QLabel* m_discordStatus = nullptr;
     ToolOptionsPanel* m_toolDefaults = nullptr;
+    int m_restartScheme = -1;
 };

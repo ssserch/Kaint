@@ -47,8 +47,14 @@ ToolManager::ToolManager(Canvas* canvas, QObject* parent)
             });
         }
     }
-    auto syncQuality = [] { Raster::setSelectionAntialias(AppState::instance()->tools().selectionAntialias); };
+    // Calidad de selección para recortar con la selección: la de Mover selección mientras se usa.
+    auto syncQuality = [this] {
+        const ToolSettings& s = AppState::instance()->tools();
+        Raster::setSelectionAntialias(m_current && m_current->id() == ToolId::MoveSelection ? s.moveSelectionAntialias
+                                                                                            : s.selectionAntialias);
+    };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, syncQuality);
+    connect(this, &ToolManager::toolChanged, this, syncQuality);
     syncQuality();
 }
 

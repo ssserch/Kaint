@@ -9,7 +9,9 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <vector>
 
 namespace {
 
@@ -42,6 +44,56 @@ QImage emptyMask(QSize size)
     QImage mask(size, QImage::Format_Alpha8);
     mask.fill(0);
     return mask;
+}
+
+// Distancia (euclídea, al cuadrado) de cada píxel al más cercano con 'inside' igual al pedido:
+// transformada de Felzenszwalb y Huttenlocher, separable y lineal.
+std::vector<float> squaredDistance(const QImage& mask, bool toInside)
+{
+    const int w = mask.width(), h = mask.height();
+    constexpr float inf = 1e20f;
+    std::vector<float> d(size_t(w) * h);
+    for (int y = 0; y < h; ++y) {
+        const uchar* row = mask.constScanLine(y);
+        for (int x = 0; x < w; ++x)
+            d[size_t(y) * w + x] = ((row[x] >= 128) == toInside) ? 0.0f : inf;
+    }
+    auto pass = [](float* f, int n, int stride, std::vector<float>& tmp, std::vector<int>& v, std::vector<float>& z) {
+        tmp.resize(n);
+        v.resize(n);
+        z.resize(n + 1);
+        for (int i = 0; i < n; ++i)
+            tmp[i] = f[i * stride];
+        int k = 0;
+        v[0] = 0;
+        z[0] = -inf;
+        z[1] = inf;
+        for (int q = 1; q < n; ++q) {
+            float s = ((tmp[q] + float(q) * q) - (tmp[v[k]] + float(v[k]) * v[k])) / (2.0f * (q - v[k]));
+            while (s <= z[k]) {
+                --k;
+                s = ((tmp[q] + float(q) * q) - (tmp[v[k]] + float(v[k]) * v[k])) / (2.0f * (q - v[k]));
+            }
+            ++k;
+            v[k] = q;
+            z[k] = s;
+            z[k + 1] = inf;
+        }
+        k = 0;
+        for (int q = 0; q < n; ++q) {
+            while (z[k + 1] < q)
+                ++k;
+            const float dq = float(q - v[k]);
+            f[q * stride] = dq * dq + tmp[v[k]];
+        }
+    };
+    std::vector<float> tmp, z;
+    std::vector<int> v;
+    for (int x = 0; x < w; ++x)
+        pass(d.data() + x, h, w, tmp, v, z);
+    for (int y = 0; y < h; ++y)
+        pass(d.data() + size_t(y) * w, w, 1, tmp, v, z);
+    return d;
 }
 
 QPainterPath rectPath(QSize canvas)
@@ -241,7 +293,7 @@ Selection Selection::combined(const Selection& other, SelectionMode mode) const
     return fromMask(result);
 }
 
-Selection Selection::transformed(const QTransform& transform) const
+Selection Selection::transformed(const QTransform& transform, bool smooth) const
 {
     if (!d || transform.isIdentity())
         return *this;
@@ -252,7 +304,7 @@ Selection Selection::transformed(const QTransform& transform) const
     QImage result = emptyMask(canvas);
     {
         QPainter p(&result);
-        p.setRenderHint(QPainter::SmoothPixmapTransform, !transform.isAffine() || transform.isRotating());
+        p.setRenderHint(QPainter::SmoothPixmapTransform, smooth && (!transform.isAffine() || transform.isRotating()));
         p.setTransform(transform);
         p.drawImage(0, 0, d->mask);
     }
@@ -356,4 +408,66 @@ Selection Selection::fromJson(const QString& json, QSize canvas, bool* ok)
     if (ok)
         *ok = true;
     return fromPath(path, canvas);
+}
+
+Selection Selection::grown(double radius) const
+{
+    if (!d || radius == 0)
+        return *this;
+    const QImage& source = d->mask;
+    const int w = source.width(), h = source.height();
+    // Al ampliar cuenta la distancia a lo seleccionado; al reducir, a lo no seleccionado.
+    const bool grow = radius > 0;
+    const double r = std::abs(radius);
+    const std::vector<float> dist = squaredDistance(source, grow);
+    QImage result = emptyMask(source.size());
+    for (int y = 0; y < h; ++y) {
+        uchar* out = result.scanLine(y);
+        for (int x = 0; x < w; ++x) {
+            const double dd = std::sqrt(double(dist[size_t(y) * w + x]));
+            const double coverage = grow ? std::clamp(r - dd + 1.0, 0.0, 1.0) : std::clamp(dd - r, 0.0, 1.0);
+            out[x] = uchar(std::lround(coverage * 255));
+        }
+    }
+    return fromMask(result);
+}
+
+Selection Selection::feathered(double radius) const
+{
+    if (!d || radius <= 0)
+        return *this;
+    const QImage& source = d->mask;
+    const int w = source.width(), h = source.height();
+    const double sigma = radius / 2.0;
+    const int half = int(std::ceil(sigma * 3));
+    std::vector<float> kernel(size_t(2 * half + 1));
+    float sum = 0;
+    for (int i = -half; i <= half; ++i)
+        sum += kernel[size_t(i + half)] = float(std::exp(-(i * i) / (2 * sigma * sigma)));
+    for (float& k : kernel)
+        k /= sum;
+    std::vector<float> a(size_t(w) * h), b(size_t(w) * h);
+    for (int y = 0; y < h; ++y) {
+        const uchar* row = source.constScanLine(y);
+        for (int x = 0; x < w; ++x)
+            a[size_t(y) * w + x] = row[x];
+    }
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x) {
+            float acc = 0;
+            for (int i = -half; i <= half; ++i)
+                acc += kernel[size_t(i + half)] * a[size_t(y) * w + std::clamp(x + i, 0, w - 1)];
+            b[size_t(y) * w + x] = acc;
+        }
+    QImage result = emptyMask(source.size());
+    for (int y = 0; y < h; ++y) {
+        uchar* out = result.scanLine(y);
+        for (int x = 0; x < w; ++x) {
+            float acc = 0;
+            for (int i = -half; i <= half; ++i)
+                acc += kernel[size_t(i + half)] * b[size_t(std::clamp(y + i, 0, h - 1)) * w + x];
+            out[x] = uchar(std::clamp(std::lround(acc), 0L, 255L));
+        }
+    }
+    return fromMask(result);
 }

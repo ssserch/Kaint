@@ -46,6 +46,7 @@ struct ToolSettings {
     bool smoothing = true;
     bool antialias = true;
     bool selectionAntialias = true;
+    bool moveSelectionAntialias = false;
     bool pressure = true;
     BlendMode blend = BlendMode::Normal;
     int fill = 0;

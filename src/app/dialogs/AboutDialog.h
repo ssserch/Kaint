@@ -2,10 +2,14 @@
 
 #include <QDialog>
 
-// Acerca de Kaint: el texto del programa con su icono, como el cuadro "Acerca de" de Qt, y debajo
-// del enlace la firma del autor con una ola.
+// Acerca de Kaint, como el de Paint.NET: el logo aparece desenfocado y se aclara en un segundo y
+// medio cada vez que se abre; debajo, versión, autor, traducción, enlace con la firma en ola y
+// las bibliotecas y aportaciones en las que se apoya.
 class AboutDialog : public QDialog {
     Q_OBJECT
 public:
-    AboutDialog(const QString& title, const QString& text, QWidget* parent = nullptr);
+    explicit AboutDialog(QWidget* parent = nullptr);
+
+    // Texto de la lista "Bibliotecas de software y contribuciones" (HTML).
+    static QString credits();
 };

@@ -102,6 +102,9 @@ void setupTheme()
 
 QIcon theme(std::initializer_list<const char*> names)
 {
+    for (const char* n : names)
+        if (QIcon icon = pdn(QString::fromLatin1(n)); !icon.isNull())
+            return icon;
     for (const char* n : names) {
         const QString name = QString::fromLatin1(n);
         if (QIcon::hasThemeIcon(name))
@@ -112,6 +115,8 @@ QIcon theme(std::initializer_list<const char*> names)
 
 QIcon theme(const QString& name)
 {
+    if (QIcon icon = pdn(name); !icon.isNull())
+        return icon;
     return name.isEmpty() || !QIcon::hasThemeIcon(name) ? QIcon() : QIcon::fromTheme(name);
 }
 
@@ -604,6 +609,8 @@ QIcon cloneStamp()
 
 QIcon tool(const QString& name, const QIcon& fallback)
 {
+    if (QIcon icon = pdn(name); !icon.isNull())
+        return icon;
     // Iconos de img/tools incluidos como recursos al compilar (24 px y 48 px para HiDPI).
     QIcon icon;
     for (const QString& ext : {QStringLiteral("svg"), QStringLiteral("png")}) {

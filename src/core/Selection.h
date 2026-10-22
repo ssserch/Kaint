@@ -39,8 +39,14 @@ public:
     static Selection fromJson(const QString& json, QSize canvas, bool* ok = nullptr);
 
     Selection combined(const Selection& other, SelectionMode mode) const;
-    Selection transformed(const QTransform& transform) const;
+    // Con "smooth" en falso, girar o escalar una máscara no suaviza sus bordes.
+    Selection transformed(const QTransform& transform, bool smooth = true) const;
     Selection inverted(QSize canvas) const;
+    // Amplía (radio positivo) o reduce (negativo) la selección tantos píxeles, con esquinas
+    // redondeadas como en paint.software y GIMP.
+    Selection grown(double radius) const;
+    // Difumina el borde (desenfoque gaussiano de la máscara).
+    Selection feathered(double radius) const;
 
     bool operator==(const Selection& other) const { return d == other.d; }
 

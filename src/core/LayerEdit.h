@@ -27,6 +27,12 @@ public:
     bool commit(const QString& text, const QString& icon = {});
     void cancel();
 
+    // Para herramientas que guardan cada paso en el historial (degradado): retomar una edición
+    // con la imagen de antes y lo que ya estaba dibujado, u olvidarla sin tocar los píxeles.
+    void resume(Document* doc, LayerPtr layer, const QImage& before, const QRect& touched);
+    void detach() { reset(); }
+    QRect touchedArea() const { return m_total; }
+
 private:
     void reset();
 

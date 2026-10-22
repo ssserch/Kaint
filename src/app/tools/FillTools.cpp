@@ -160,12 +160,31 @@ void PaintBucketTool::deactivate()
 // Degradado
 // ---------------------------------------------------------------------------
 
+GradientStepCommand::GradientStepCommand(Document* doc, LayerPtr layer, const QImage& before, const QRect& area,
+                                         const QString& text, const GradientState& state, const QImage& base)
+    : PixelPatchCommand(doc, layer, before, area, text)
+    , m_layer(std::move(layer))
+    , m_state(state)
+    , m_base(base)
+    , m_area(area)
+{
+}
+
+void GradientStepCommand::releaseMemory()
+{
+    PixelPatchCommand::releaseMemory();
+    m_base = QImage();
+}
+
 GradientTool::GradientTool(QObject* parent)
     : Tool(parent)
 {
     auto refresh = [this] {
-        if (m_edit.isActive())
-            render();
+        if (!m_edit.isActive() || m_restoring)
+            return;
+        render();
+        m_dirty = true;
+        repaint();
     };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, refresh);
     connect(AppState::instance(), &AppState::colorsChanged, this, refresh);
@@ -198,6 +217,9 @@ void GradientTool::mousePress(const ToolEvent& e)
         if (e.button == Qt::RightButton && (onStart || onEnd)) {
             m_reversed = !m_reversed;
             render();
+            m_dirty = true;
+            pushStep();
+            repaint();
             return;
         }
         if (onStart || onEnd) {
@@ -212,6 +234,9 @@ void GradientTool::mousePress(const ToolEvent& e)
         finish();
     }
     m_edit.begin(doc, doc->activeLayerPtr());
+    m_stepImage = m_edit.before();
+    m_steps = 0;
+    m_dirty = false;
     m_start = m_end = e.pos;
     m_reversed = e.button == Qt::RightButton;
     m_drag = Drag::End;
@@ -235,13 +260,110 @@ void GradientTool::mouseMove(const ToolEvent& e)
     case Drag::None: break;
     }
     render();
+    m_dirty = true;
     repaint();
 }
 
 void GradientTool::mouseRelease(const ToolEvent&)
 {
+    if (m_drag != Drag::None) {
+        m_drag = Drag::None;
+        pushStep();
+    }
+    emit hintChanged(hint());
+}
+
+GradientState GradientTool::state() const
+{
+    const ToolSettings& s = AppState::instance()->tools();
+    return {m_start,
+            m_end,
+            m_reversed,
+            s.gradient,
+            s.gradientRepeat,
+            s.gradientTransparency,
+            s.blend,
+            AppState::instance()->primary(),
+            AppState::instance()->secondary()};
+}
+
+void GradientTool::pushStep()
+{
+    // Cada cambio terminado es un paso: "Degradado" el primero y "Mover degradado" los demás.
+    if (!m_edit.isActive() || !m_dirty)
+        return;
+    m_dirty = false;
+    Document* doc = m_edit.document();
+    const QString text = m_steps == 0 ? name() : tr("Mover degradado");
+    auto* cmd = new GradientStepCommand(doc, m_edit.layer(), m_stepImage, m_edit.touchedArea(), text, state(),
+                                        m_edit.before());
+    if (cmd->isEmpty()) {
+        delete cmd;
+        return;
+    }
+    HistoryIcons::registerIcon(text, QStringLiteral("color-gradient"));
+    m_pushing = true;
+    doc->undoStack()->push(cmd);
+    m_pushing = false;
+    m_stepImage = m_edit.layer()->image;
+    ++m_steps;
+}
+
+void GradientTool::leaveEditing()
+{
+    m_edit.detach();
+    m_steps = 0;
+    m_dirty = false;
+    m_drag = Drag::None;
+    m_stepImage = QImage();
+    emit hintChanged(hint());
+    repaint();
+}
+
+void GradientTool::beforeHistoryJump()
+{
+    // Lo pendiente (colores u opciones cambiados) se registra; la edición sigue abierta y el
+    // historial decide si se retoma.
+    pushStep();
+}
+
+void GradientTool::historyChanged()
+{
+    if (m_pushing)
+        return;
+    Document* doc = document();
+    if (!doc)
+        return;
+    const QUndoStack* stack = doc->undoStack();
+    const auto* step = stack->index() > 0 ? dynamic_cast<const GradientStepCommand*>(stack->command(stack->index() - 1))
+                                          : nullptr;
+    if (!step || !step->editable()) {
+        if (m_edit.isActive())
+            leaveEditing();
+        return;
+    }
+    // Se vuelve a un paso del degradado: sus opciones y colores, y los extremos para seguir.
+    const GradientState& st = step->state();
+    m_restoring = true;
+    AppState::instance()->updateTools([&st](ToolSettings& s) {
+        s.gradient = st.type;
+        s.gradientRepeat = st.repeat;
+        s.gradientTransparency = st.transparency;
+        s.blend = st.blend;
+    });
+    AppState::instance()->setPrimary(st.primary);
+    AppState::instance()->setSecondary(st.secondary);
+    m_restoring = false;
+    m_edit.resume(doc, step->layer(), step->base(), step->area());
+    m_start = st.start;
+    m_end = st.end;
+    m_reversed = st.reversed;
+    m_stepImage = step->layer()->image;
+    m_steps = 1;
+    m_dirty = false;
     m_drag = Drag::None;
     emit hintChanged(hint());
+    repaint();
 }
 
 bool GradientTool::keyPress(QKeyEvent* e)
@@ -257,10 +379,17 @@ void GradientTool::finish()
 {
     if (!m_edit.isActive())
         return;
-    m_edit.commit(name(), QStringLiteral("color-gradient"));
-    m_drag = Drag::None;
-    emit hintChanged(hint());
-    repaint();
+    pushStep();
+    if (m_steps == 0) {
+        m_edit.cancel();
+    } else {
+        const QString text = tr("Finalizar degradado");
+        HistoryIcons::registerIcon(text, QStringLiteral("color-gradient"));
+        m_pushing = true;
+        m_edit.document()->undoStack()->push(new QUndoCommand(text));
+        m_pushing = false;
+    }
+    leaveEditing();
 }
 
 void GradientTool::deactivate()

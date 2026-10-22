@@ -11,6 +11,7 @@
 #include <QImageReader>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QProcess>
 #include <QSettings>
 #include <QTranslator>
 
@@ -93,5 +94,9 @@ int main(int argc, char** argv)
     else
         window.openFiles(files);
     window.startupChecks();
-    return app.exec();
+    const int code = app.exec();
+    if (window.restartRequested())
+        QProcess::startDetached(QCoreApplication::applicationFilePath(),
+                                QSettings().value(QStringLiteral("session/files")).toStringList());
+    return code;
 }

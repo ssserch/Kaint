@@ -35,9 +35,14 @@ const QList<double>& brushPresets()
     return list;
 }
 
+// Tamaños de letra: los de Paint.NET 3.36 (ToolConfigStrip.defaultFontSizes) con más pasos
+// intermedios y algunos más grandes.
 const QList<double>& fontPresets()
 {
-    static const QList<double> list = {8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72, 144, 288};
+    static const QList<double> list = {6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  18,  20,
+                                       22,  24,  26,  28,  30,  32,  36,  40,  44,  48,  54,  60,  66,
+                                       72,  80,  84,  88,  96,  108, 120, 144, 168, 192, 216, 240, 288,
+                                       336, 384, 432, 480, 576, 720, 864, 1000};
     return list;
 }
 
@@ -399,7 +404,6 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
 
     // --- Texto ------------------------------------------------------------
     m_font = new FontChooser(parent);
-    m_font->setMaximumWidth(190);
     connect(m_font, &QFontComboBox::currentFontChanged, this, [update](const QFont& f) {
         const QString family = f.family();
         update([family](ToolSettings& s) { s.fontFamily = family; });
@@ -605,6 +609,15 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_selectionQuality->onChosen = [update](int v) { update([v](ToolSettings& s) { s.selectionAntialias = v == 1; }); };
     add(QStringLiteral("selQuality"), Tool::OptSelectionQuality, Options, {m_selectionQuality});
 
+    // Mover selección tiene su propia calidad: píxel a píxel por defecto.
+    m_moveQuality = new ChoiceButton(tr("Calidad de selección"), parent);
+    m_moveQuality->addChoice(Icons::selectionQuality(false), tr("Calidad de selección pixelada"), 0,
+                             tr("La selección se mueve, escala y gira píxel a píxel, sin bordes suaves."));
+    m_moveQuality->addChoice(Icons::selectionQuality(true), tr("Calidad de selección con antidentado"), 1,
+                             tr("Los bordes de la selección quedan suavizados al escalarla o girarla."));
+    m_moveQuality->onChosen = [update](int v) { update([v](ToolSettings& s) { s.moveSelectionAntialias = v == 1; }); };
+    add(QStringLiteral("moveQuality"), Tool::OptMoveSelectionQuality, Options, {m_moveQuality});
+
     connect(model, &ToolSettingsModel::changed, this, &ToolOptionsEditor::sync);
     sync();
 }
@@ -658,6 +671,7 @@ void ToolOptionsEditor::sync()
     m_toleranceAlpha->setCurrent(s.toleranceStraight ? 1 : 0);
     m_antialias->setCurrent(s.antialias ? 1 : 0);
     m_selectionQuality->setCurrent(s.selectionAntialias ? 1 : 0);
+    m_moveQuality->setCurrent(s.moveSelectionAntialias ? 1 : 0);
     m_gamma->setCurrent(s.moveGamma ? 1 : 0);
     m_fontMetric->setCurrent(int(s.fontMetric));
     m_fill->setCurrent(s.fill);

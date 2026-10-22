@@ -24,6 +24,7 @@ public:
     void mouseRelease(const ToolEvent& e) override;
     bool keyPress(QKeyEvent* e) override;
     void paintOverlay(QPainter& p) override;
+    void finish() override;
     void deactivate() override;
 
     // Píxeles flotantes de la última operación, si se puede continuar con ellos.
@@ -60,13 +61,14 @@ public:
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
     QCursor cursor() const override { return Qt::SizeAllCursor; }
     bool highlightSelection() const override { return true; }
-    quint32 options() const override { return OptSelectionQuality | OptFinish; }
+    quint32 options() const override { return OptMoveSelectionQuality | OptFinish; }
 
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;
     void mouseRelease(const ToolEvent& e) override;
     bool keyPress(QKeyEvent* e) override;
     void paintOverlay(QPainter& p) override;
+    void finish() override;
     void deactivate() override;
 
 private:

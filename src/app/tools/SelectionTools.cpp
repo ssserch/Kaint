@@ -64,6 +64,9 @@ void SelectToolBase::preview(const Selection& shape)
 {
     m_shape = m_mode == SelectionMode::Replace ? Selection() : shape;
     document()->setSelection(m_mode == SelectionMode::Replace ? shape : m_before.combined(shape, m_mode));
+    // Al excluir o intersecar fuera de la selección el resultado no cambia, pero el contorno que
+    // se dibuja sí.
+    repaint();
 }
 
 QPainterPath SelectToolBase::clippedToCanvas(const QPainterPath& path, QSize canvas)

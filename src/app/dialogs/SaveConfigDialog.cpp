@@ -58,6 +58,12 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
             schedule();
         });
         form->addRow(tr("Profundidad de bits:"), m_depth);
+        m_quantization = new QComboBox(this);
+        m_quantization->addItem(tr("Octree"), 1);
+        m_quantization->addItem(tr("Corte a la mediana"), 0);
+        m_quantization->setCurrentIndex(std::max(0, m_quantization->findData(initial.quantization)));
+        connect(m_quantization, &QComboBox::currentIndexChanged, this, &SaveConfigDialog::schedule);
+        form->addRow(tr("Algoritmo de cuantización:"), m_quantization);
         m_dither = new BarSlider(0, 8, QString(), this);
         m_dither->setValue(initial.dither);
         connect(m_dither, &BarSlider::valueChanged, this, &SaveConfigDialog::schedule);
@@ -67,7 +73,19 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
             m_threshold->setValue(initial.alphaThreshold);
             connect(m_threshold, &BarSlider::valueChanged, this, &SaveConfigDialog::schedule);
             form->addRow(tr("Umbral de transparencia:"), m_threshold);
+            m_thresholdNote = new QLabel(tr("Los píxeles que tengan un valor del canal alfa menor que el umbral serán "
+                                            "totalmente transparentes."),
+                                         this);
+            m_thresholdNote->setWordWrap(true);
+            form->addRow(m_thresholdNote);
         }
+    }
+    if (ImageIO::supportsInterlace(path)) {
+        m_interlaced = new QCheckBox(tr("Entrelazado"), this);
+        m_interlaced->setToolTip(tr("La imagen se ve entera a baja resolución mientras se carga (Adam7)."));
+        m_interlaced->setChecked(initial.interlaced);
+        connect(m_interlaced, &QCheckBox::toggled, this, &SaveConfigDialog::schedule);
+        form->addRow(tr("Otras opciones:"), m_interlaced);
     }
 
     if (ImageIO::isAnimation(path)) {
@@ -171,6 +189,10 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
             m_dither->setValue(d.dither);
         if (m_threshold)
             m_threshold->setValue(d.alphaThreshold);
+        if (m_quantization)
+            m_quantization->setCurrentIndex(m_quantization->findData(d.quantization));
+        if (m_interlaced)
+            m_interlaced->setChecked(d.interlaced);
         if (m_animation)
             m_animation->setChecked(d.animation);
         if (m_delay)
@@ -211,6 +233,10 @@ ImageIO::SaveOptions SaveConfigDialog::options() const
         o.dither = m_dither->value();
     if (m_threshold)
         o.alphaThreshold = m_threshold->value();
+    if (m_quantization)
+        o.quantization = m_quantization->currentData().toInt();
+    if (m_interlaced)
+        o.interlaced = m_interlaced->isChecked();
     if (m_animation)
         o.animation = m_animation->isChecked();
     if (m_delay)
@@ -234,6 +260,10 @@ void SaveConfigDialog::updateControls()
         m_dither->setEnabled(eight);
     if (m_threshold)
         m_threshold->setEnabled(eight);
+    if (m_thresholdNote)
+        m_thresholdNote->setEnabled(eight);
+    if (m_quantization)
+        m_quantization->setEnabled(eight);
     const bool animated = m_animation && m_animation->isChecked();
     if (m_delay)
         m_delay->setEnabled(animated);

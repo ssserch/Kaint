@@ -34,6 +34,14 @@ enum class ToolId {
     Shapes,
 };
 
+// Paso del historial que su herramienta puede retomar (degradado): al volver a él en el
+// historial, se edita otra vez.
+class EditableStep {
+public:
+    virtual ~EditableStep() = default;
+    virtual ToolId tool() const = 0;
+};
+
 struct ToolEvent {
     QPointF pos;
     QPointF viewPos;
@@ -80,6 +88,7 @@ public:
         OptSampleSize = 1u << 28,
         OptAfterSelect = 1u << 29,
         OptGamma = 1u << 30,
+        OptMoveSelectionQuality = 1u << 31,
     };
 
     explicit Tool(QObject* parent = nullptr) : QObject(parent) {}
@@ -116,6 +125,11 @@ public:
     // Termina la operación en curso (botón "Terminar", Intro, cambio de herramienta...).
     virtual void finish() {}
     virtual bool isBusy() const { return false; }
+
+    // Antes de deshacer, rehacer o saltar en el historial (las que guardan cada paso en él solo
+    // registran lo pendiente) y después (para retomar un paso editable).
+    virtual void beforeHistoryJump() { finish(); }
+    virtual void historyChanged() {}
 
 signals:
     void hintChanged(const QString& hint);

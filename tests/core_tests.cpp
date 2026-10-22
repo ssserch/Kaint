@@ -9,6 +9,7 @@
 #include "core/Ora.h"
 #include "core/Palette.h"
 #include "core/Pdn.h"
+#include "core/PngWriter.h"
 #include "core/Raster.h"
 #include "core/Resample.h"
 #include "core/Stroke.h"
@@ -874,6 +875,76 @@ static void testPlugins()
     pm->shutdown();
 }
 
+// PNG propio (entrelazado Adam7 y sin entrelazar): RGBA, RGB e indexado se leen igual que el
+// original, y la profundidad de 8 bits admite los dos cuantificadores.
+static void testPngWriter()
+{
+    QImage rgba(37, 23, QImage::Format_ARGB32);
+    for (int y = 0; y < rgba.height(); ++y)
+        for (int x = 0; x < rgba.width(); ++x)
+            rgba.setPixel(x, y, qRgba(x * 7, y * 11, (x + y) * 3, 255 - x * 4));
+    QImage rgb = rgba.convertToFormat(QImage::Format_RGB32);
+    QImage indexed = rgba.convertToFormat(QImage::Format_Indexed8, Qt::ThresholdDither);
+    for (bool interlaced : {true, false}) {
+        for (const QImage& src : {rgba, rgb, indexed}) {
+            const QByteArray data = Png::encode(src, interlaced);
+            QImage back;
+            CHECK(back.loadFromData(data, "png"));
+            CHECK(back.convertToFormat(QImage::Format_ARGB32) == src.convertToFormat(QImage::Format_ARGB32));
+        }
+    }
+    CHECK(Png::encode(rgba, true).at(28) == 1);
+    ImageIO::SaveOptions o;
+    o.bitDepth = 8;
+    o.interlaced = true;
+    for (int algorithm : {0, 1}) {
+        o.quantization = algorithm;
+        const QImage prepared = ImageIO::prepare(rgba, QStringLiteral("a.png"), o);
+        CHECK(prepared.format() == QImage::Format_Indexed8 && prepared.colorCount() <= 256);
+        QString error;
+        QImage back;
+        CHECK(back.loadFromData(ImageIO::encode(prepared, QStringLiteral("a.png"), o, &error), "png"));
+        CHECK(back.size() == rgba.size());
+    }
+}
+
+// Ampliar, reducir y difuminar la selección (paint.software): esquinas redondeadas y borde suave.
+static void testSelectionReshape()
+{
+    const QSize canvas(80, 60);
+    const Selection box = Selection::fromRect(QRect(20, 20, 30, 20), canvas);
+    const Selection grown = box.grown(5);
+    CHECK(grown.bounds() == QRect(15, 15, 40, 30));
+    CHECK(grown.coverage(15, 30) > 200 && grown.coverage(15, 15) < 128);
+    const Selection shrunk = box.grown(-5);
+    CHECK(shrunk.bounds() == QRect(25, 25, 20, 10));
+    CHECK(box.grown(-20).isEmpty());
+    const Selection soft = box.feathered(6);
+    CHECK(soft.coverage(35, 30) > 250);
+    CHECK(soft.coverage(20, 30) > 60 && soft.coverage(20, 30) < 200);
+    CHECK(soft.bounds().contains(box.bounds()));
+}
+
+// Balance de color: cada rango actúa en su zona de luminosidad.
+static void testColorBalance()
+{
+    const Effect* balance = Effects::find(QStringLiteral("colorbalance"));
+    CHECK(balance != nullptr);
+    if (!balance)
+        return;
+    QImage src(2, 1, QImage::Format_ARGB32_Premultiplied);
+    src.setPixel(0, 0, qRgba(40, 40, 40, 255));
+    src.setPixel(1, 0, qRgba(220, 220, 220, 255));
+    ParamValues v = Effects::defaults(*balance);
+    v.insert(QStringLiteral("shadowsCyanRed"), 100);
+    v.insert(QStringLiteral("preserve"), false);
+    std::atomic_bool cancel{false};
+    const QImage out = Effects::apply(*balance, src, Selection(), v, EffectContext(), cancel);
+    CHECK(qRed(out.pixel(0, 0)) > 100 && qGreen(out.pixel(0, 0)) == 40);
+    CHECK(std::abs(qRed(out.pixel(1, 0)) - 220) <= 2);
+    CHECK(Effects::apply(*balance, src, Selection(), Effects::defaults(*balance), EffectContext(), cancel) == src);
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -897,6 +968,9 @@ int main(int argc, char** argv)
     testGifAndIco();
     testPdn();
     testPlugins();
+    testPngWriter();
+    testSelectionReshape();
+    testColorBalance();
     if (g_failures == 0)
         std::printf("Todas las pruebas del núcleo pasaron.\n");
     return g_failures == 0 ? 0 : 1;

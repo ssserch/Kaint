@@ -27,6 +27,10 @@ struct SaveOptions {
     int bitDepth = 0;
     int dither = 7;
     int alphaThreshold = 128;
+    // Paleta de 8 bits: 0 corte a la mediana, 1 octree (el de Paint.NET).
+    int quantization = 1;
+    // PNG entrelazado (Adam7).
+    bool interlaced = false;
     bool animation = true;
     int frameDelay = 100;
     int loops = 0;
@@ -37,11 +41,12 @@ bool isAnimation(const QString& path);
 bool isIcon(const QString& path);
 // Paleta de 8 bits óptima (255 colores y uno transparente si hace falta; con 'transparentSlot'
 // siempre se reserva el transparente).
-QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool transparentSlot = false);
+QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool transparentSlot = false, int algorithm = 1);
 // Fotogramas de un GIF animado: las capas visibles, la de abajo primero.
 QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay);
 
 bool hasBitDepth(const QString& path);
+bool supportsInterlace(const QString& path);
 int automaticBitDepth(const QImage& flattened);
 
 Document* load(const QString& path, QString* error);

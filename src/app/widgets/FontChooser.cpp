@@ -60,9 +60,25 @@ FontChooser::FontChooser(QWidget* parent)
     setEditable(true);
     setInsertPolicy(QComboBox::NoInsert);
     setItemDelegate(new FontPreviewDelegate(this));
+    // Ancho fijo como en Paint.NET (si no, cambia con el nombre de cada fuente).
+    setMinimumContentsLength(24);
+    setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    setSizePolicy(QSizePolicy::Fixed, sizePolicy().verticalPolicy());
     view()->setMinimumWidth(460);
     lineEdit()->setReadOnly(true);
     lineEdit()->installEventFilter(this);
+    completer()->setCaseSensitivity(Qt::CaseInsensitive);
+    completer()->setFilterMode(Qt::MatchStartsWith);
+    completer()->setCompletionMode(QCompleter::PopupCompletion);
+    // Elegir de la lista no deja el nombre marcado ni el teclado en el campo.
+    connect(this, &QComboBox::activated, this, [this] {
+        QTimer::singleShot(0, this, [this] {
+            lineEdit()->deselect();
+            lineEdit()->setCursorPosition(0);
+            clearFocus();
+            emit chosen();
+        });
+    });
     m_clickTimer.setSingleShot(true);
     connect(&m_clickTimer, &QTimer::timeout, this, [this] {
         if (!m_editing)
@@ -91,13 +107,20 @@ void FontChooser::stopEditing(bool commit)
     lineEdit()->setReadOnly(true);
     if (commit) {
         const QString typed = lineEdit()->text().trimmed();
-        const int i = findText(typed, Qt::MatchFixedString);
+        int i = findText(typed, Qt::MatchFixedString);
+        if (i < 0 && !typed.isEmpty())
+            i = findText(typed, Qt::MatchStartsWith);
         if (i >= 0) {
             setCurrentIndex(i);
+            lineEdit()->deselect();
+            lineEdit()->setCursorPosition(0);
+            clearFocus();
+            emit chosen();
             return;
         }
     }
     lineEdit()->setText(m_before);
+    lineEdit()->deselect();
 }
 
 bool FontChooser::eventFilter(QObject* watched, QEvent* event)

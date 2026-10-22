@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Compila Kaint en Arch Linux (KDE Plasma / Wayland).
+# Compila Kaint en Arch Linux o en Debian/Ubuntu (KDE Plasma / Wayland).
 #
 #   ./build.sh               compila en modo Release (build/kaint)
 #   ./build.sh --run         compila y ejecuta
 #   ./build.sh --install     compila e instala en ~/.local (aparece en el menú de KDE)
+#   ./build.sh --deb         crea el paquete .deb (Debian 13 o Ubuntu 25.04 en adelante)
 #   ./build.sh --help        todas las opciones
 set -euo pipefail
 
@@ -16,12 +17,17 @@ DO_CLEAN=0
 DO_INSTALL=0
 DO_RUN=0
 DO_TEST=0
+DO_DEB=0
 
-# Paquetes de Arch necesarios para compilar y ejecutar.
-REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons)
-# Recomendados: más formatos (WebP, TIFF, AVIF, JPEG XL, HEIF, PSD...), diálogos de Qt en español
-# y mono + libgdiplus para los complementos de Paint.NET (.dll).
-OPTIONAL=(qt6-imageformats kimageformats qt6-translations mono libgdiplus)
+# Paquetes necesarios para compilar y ejecutar y recomendados: más formatos (WebP, TIFF, AVIF,
+# JPEG XL, HEIF, PSD...), diálogos de Qt traducidos y mono + libgdiplus para los complementos de
+# Paint.NET (.dll). Arch y Debian/Ubuntu (Qt 6.5 o más: Debian 13, Ubuntu 25.04).
+ARCH_REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons)
+ARCH_OPTIONAL=(qt6-imageformats kimageformats qt6-translations mono libgdiplus)
+DEB_REQUIRED=(build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev
+              qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev
+              breeze-icon-theme)
+DEB_OPTIONAL=(qt6-image-formats-plugins kimageformat6-plugins qt6-translations-l10n mono-devel libgdiplus)
 
 c_bold=$'\e[1m'; c_red=$'\e[31m'; c_yellow=$'\e[33m'; c_green=$'\e[32m'; c_reset=$'\e[0m'
 if [[ ! -t 1 ]]; then c_bold=""; c_red=""; c_yellow=""; c_green=""; c_reset=""; fi
@@ -36,6 +42,7 @@ Uso: $0 [opciones]
   -i, --install        instala (por defecto en ~/.local, sin sudo)
       --prefix RUTA    prefijo de instalación (p. ej. /usr/local; usará sudo si hace falta)
   -r, --run            ejecuta Kaint al terminar
+      --deb            crea el paquete .deb en build-deb/ (necesita dpkg)
   -h, --help           muestra esta ayuda
 EOF
 }
@@ -48,6 +55,7 @@ while [[ $# -gt 0 ]]; do
         -i|--install) DO_INSTALL=1 ;;
         --prefix)     PREFIX="${2:?falta la ruta de --prefix}"; shift ;;
         -r|--run)     DO_RUN=1 ;;
+        --deb)        DO_DEB=1; BUILD_TYPE=Release; BUILD_DIR=build-deb; PREFIX=/usr ;;
         -h|--help)    usage; exit 0 ;;
         *) echo "${c_red}Opción desconocida: $1${c_reset}" >&2; usage; exit 1 ;;
     esac
@@ -55,31 +63,39 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Dependencias -----------------------------------------------------------
-if command -v pacman >/dev/null 2>&1; then
-    missing=()
-    for pkg in "${REQUIRED[@]}"; do
-        pacman -Qq "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
-    done
+# Comprueba los paquetes con el gestor de la distribución y muestra cómo instalar los que faltan.
+check_packages() {
+    local installed=$1 install_cmd=$2; shift 2
+    local -n required=$1 optional=$2
+    local missing=() optional_missing=() pkg
+    for pkg in "${required[@]}"; do $installed "$pkg" || missing+=("$pkg"); done
     if (( ${#missing[@]} )); then
         echo "${c_red}${c_bold}Faltan paquetes necesarios:${c_reset} ${missing[*]}" >&2
         echo "Instálalos con:" >&2
-        echo "  sudo pacman -S --needed ${missing[*]}" >&2
+        echo "  $install_cmd ${missing[*]}" >&2
         exit 1
     fi
-    optional_missing=()
-    for pkg in "${OPTIONAL[@]}"; do
-        pacman -Qq "$pkg" >/dev/null 2>&1 || optional_missing+=("$pkg")
-    done
+    for pkg in "${optional[@]}"; do $installed "$pkg" || optional_missing+=("$pkg"); done
     if (( ${#optional_missing[@]} )); then
-        echo "${c_yellow}Recomendado (opcional):${c_reset} sudo pacman -S --needed ${optional_missing[*]}"
-        if [[ " ${optional_missing[*]} " == *" mono "* ]]; then
+        echo "${c_yellow}Recomendado (opcional):${c_reset} $install_cmd ${optional_missing[*]}"
+        if [[ " ${optional_missing[*]} " == *" mono"* ]]; then
             echo "  Sin mono no se compila la capa de compatibilidad con los complementos de Paint.NET."
         elif [[ " ${optional_missing[*]} " == *" libgdiplus "* ]]; then
             echo "  Sin libgdiplus muchos complementos de Paint.NET no pueden cargarse (usan System.Drawing)."
         fi
     fi
+}
+pacman_installed() { pacman -Qq "$1" >/dev/null 2>&1; }
+dpkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"; }
+
+if [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
+    echo "${c_yellow}CMAKE_PREFIX_PATH definido (Qt propio): se omite la comprobación de paquetes.${c_reset}"
+elif command -v pacman >/dev/null 2>&1; then
+    check_packages pacman_installed "sudo pacman -S --needed" ARCH_REQUIRED ARCH_OPTIONAL
+elif command -v dpkg-query >/dev/null 2>&1; then
+    check_packages dpkg_installed "sudo apt install" DEB_REQUIRED DEB_OPTIONAL
 else
-    echo "${c_yellow}No se encontró pacman; se omite la comprobación de dependencias.${c_reset}"
+    echo "${c_yellow}No se encontró pacman ni apt; se omite la comprobación de dependencias.${c_reset}"
 fi
 
 # --- Compilación ------------------------------------------------------------
@@ -99,6 +115,13 @@ cmake --build "$BUILD_DIR" --parallel "$(nproc)"
 if (( DO_TEST )); then
     echo "${c_bold}Ejecutando pruebas...${c_reset}"
     ctest --test-dir "$BUILD_DIR" --output-on-failure
+fi
+
+if (( DO_DEB )); then
+    echo "${c_bold}Creando el paquete .deb...${c_reset}"
+    (cd "$BUILD_DIR" && cpack -G DEB)
+    echo "${c_green}Paquete:${c_reset} $(ls "$BUILD_DIR"/kaint_*.deb)"
+    echo "  Instálalo con: sudo apt install ./$(ls "$BUILD_DIR"/kaint_*.deb)"
 fi
 
 if (( DO_INSTALL )); then

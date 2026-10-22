@@ -202,6 +202,13 @@ MainWindow::MainWindow()
     restoreGeometry(s.value(QStringLiteral("window/geometry")).toByteArray());
     m_act[QStringLiteral("pixelGrid")]->setChecked(s.value(QStringLiteral("view/pixelGrid"), false).toBool());
     applySettings();
+    applyThemeLayout();
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, &MainWindow::applyThemeLayout);
+    // Algunos estilos del escritorio (tema de KDE) vuelven translúcida la ventana; Kaint la
+    // pinta opaca y con translucidez quedaban rastros.
+    ensurePolished();
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    setAttribute(Qt::WA_NoSystemBackground, false);
 
     rebuildRecentMenu();
     updateActions();
@@ -656,7 +663,10 @@ void MainWindow::createTopRow()
     auto* layout = new QHBoxLayout(top);
     layout->setContentsMargins(0, 0, 4, 0);
     layout->setSpacing(6);
+    top->setAttribute(Qt::WA_StyledBackground);
     m_menuBar = new QMenuBar(top);
+    // Dentro de la ventana aunque Plasma tenga menú global: si no, se iba con la fila entera.
+    m_menuBar->setNativeMenuBar(false);
     m_menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
     layout->addWidget(m_menuBar, 0, Qt::AlignVCenter);
 
@@ -2279,6 +2289,18 @@ void MainWindow::showSettings(SettingsDialog::Page page)
         applySettings();
     });
     dlg.exec();
+}
+
+void MainWindow::applyThemeLayout()
+{
+    const Theme::Spec spec = Theme::active();
+    const QSize icon(spec.iconSize, spec.iconSize);
+    if (auto* main = findChild<QToolBar*>(QStringLiteral("MainToolBar")))
+        main->setIconSize(icon);
+    for (QToolButton* b : m_cornerButtons->findChildren<QToolButton*>())
+        b->setIconSize(icon);
+    if (auto* tools = findChild<ToolsPanel*>())
+        tools->setIconSize(spec.toolIconSize);
 }
 
 void MainWindow::applySettings()

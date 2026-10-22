@@ -154,6 +154,7 @@ private:
     // Configuración
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
+    void applyThemeLayout();
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();

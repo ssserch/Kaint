@@ -35,6 +35,21 @@ ToolsPanel::ToolsPanel(ToolManager* manager, QWidget* parent)
         onToolChanged(manager->current());
 }
 
+void ToolsPanel::setIconSize(int side)
+{
+    // Conserva las columnas: el tamaño de los botones ya puede haber cambiado con el tema.
+    const int columns = m_columns;
+    for (QToolButton* b : std::as_const(m_buttons))
+        b->setIconSize(QSize(side, side));
+    updateGeometry();
+    if (auto* panel = qobject_cast<FloatingPanel*>(parentWidget())) {
+        const QSize grid = sizeFor(columns);
+        panel->resize(panel->size() - size() + grid);
+        panel->reposition();
+    }
+    layoutButtons();
+}
+
 QSize ToolsPanel::cell() const
 {
     QSize s(1, 1);
@@ -85,6 +100,7 @@ QSize ToolsPanel::fitSize(QSize proposed, Qt::Orientations changed) const
 void ToolsPanel::layoutButtons()
 {
     const int cols = columns();
+    m_columns = cols;
     const QSize c = cell();
     for (int i = 0; i < m_buttons.size(); ++i) {
         const int row = i / cols;

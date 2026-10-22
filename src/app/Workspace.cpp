@@ -2,15 +2,69 @@
 
 #include "app/Canvas.h"
 #include "app/Icons.h"
+#include "app/Theme.h"
 
+#include <QAbstractButton>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
 #include <QSettings>
 #include <QStyle>
-#include <QToolButton>
 #include <QVBoxLayout>
+
+namespace {
+
+// Botón de cerrar de los paneles: el cuadrado rojo de Paint.NET o, con el tema de KDE, el icono
+// del sistema.
+class PanelCloseButton : public QAbstractButton {
+public:
+    explicit PanelCloseButton(QWidget* parent)
+        : QAbstractButton(parent)
+    {
+        setAttribute(Qt::WA_Hover);
+        setFocusPolicy(Qt::NoFocus);
+        setCursor(Qt::ArrowCursor);
+    }
+
+    QSize sizeHint() const override
+    {
+        const int side = fontMetrics().height() + 2;
+        return {side, side};
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const bool hot = underMouse() || isDown();
+        if (Theme::current() == Theme::Scheme::Kde) {
+            if (hot) {
+                QColor c = palette().color(QPalette::HighlightedText);
+                c.setAlpha(isDown() ? 90 : 50);
+                p.fillRect(rect(), c);
+            }
+            icon().paint(&p, rect().adjusted(3, 3, -3, -3));
+            return;
+        }
+        const Theme::Spec s = Theme::active();
+        const QColor bg = isDown() ? s.panelClose.darker(115) : underMouse() ? s.panelClose.lighter(118) : s.panelClose;
+        const QRectF r = QRectF(rect()).adjusted(1, 1, -1, -1);
+        p.setPen(Qt::NoPen);
+        p.setBrush(bg);
+        p.drawRoundedRect(r, s.radius / 2.0, s.radius / 2.0);
+        p.setPen(QPen(Qt::white, 1.5, Qt::SolidLine, Qt::RoundCap));
+        const qreal k = r.width() * 0.16;
+        const QPointF c = r.center();
+        p.drawLine(c + QPointF(-k, -k), c + QPointF(k, k));
+        p.drawLine(c + QPointF(-k, k), c + QPointF(k, -k));
+    }
+};
+
+} // namespace
 
 FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* content, QWidget* parent)
     : QFrame(parent, Qt::SubWindow)
@@ -21,17 +75,13 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     setObjectName(QStringLiteral("FloatingPanel"));
     setFrameShape(QFrame::StyledPanel);
     setFrameShadow(QFrame::Raised);
-    setAutoFillBackground(true);
     setBackgroundRole(QPalette::Window);
     setMouseTracking(true);
 
-    // Cabecera con el color de resalte del tema, como la de Paint.NET (que usa el color de
-    // acento de Windows).
+    // Cabecera: con los temas de Paint.NET, del color del panel (o el del tema personalizado);
+    // con el de KDE, del color de resalte.
     m_titleBar = new QWidget(this);
     m_titleBar->setObjectName(QStringLiteral("FloatingPanelTitle"));
-    m_titleBar->setAutoFillBackground(true);
-    m_titleBar->setBackgroundRole(QPalette::Highlight);
-    m_titleBar->setForegroundRole(QPalette::HighlightedText);
     m_titleBar->setCursor(Qt::SizeAllCursor);
     m_titleBar->setMouseTracking(true);
     m_titleBar->installEventFilter(this);
@@ -39,19 +89,15 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     titleLayout->setContentsMargins(7, 1, 1, 1);
     titleLayout->setSpacing(2);
     m_title = new QLabel(title, m_titleBar);
-    m_title->setForegroundRole(QPalette::HighlightedText);
     m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     m_title->setMouseTracking(true);
     m_title->installEventFilter(this);
-    m_close = new QToolButton(m_titleBar);
-    m_close->setAutoRaise(true);
+    m_close = new PanelCloseButton(m_titleBar);
     m_close->setIcon(Icons::theme({"window-close", "dialog-close"}));
     if (m_close->icon().isNull())
         m_close->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
-    m_close->setIconSize(QSize(12, 12));
     m_close->setToolTip(tr("Cerrar"));
-    m_close->setCursor(Qt::ArrowCursor);
-    connect(m_close, &QToolButton::clicked, this, [this] {
+    connect(m_close, &QAbstractButton::clicked, this, [this] {
         hide();
         emit closed();
     });
@@ -64,7 +110,56 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     layout->setSpacing(0);
     layout->addWidget(content, 1);
     content->installEventFilter(this);
+    updateColors();
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, [this] {
+        updateColors();
+        if (m_opacity && !underMouse())
+            m_opacity->setOpacity(Theme::active().panelOpacity / 100.0);
+        update();
+    });
     updateGeometry();
+}
+
+void FloatingPanel::updateColors()
+{
+    const bool kde = Theme::current() == Theme::Scheme::Kde;
+    setAutoFillBackground(kde);
+    m_titleBar->setAutoFillBackground(kde);
+    m_titleBar->setBackgroundRole(QPalette::Highlight);
+    m_title->setForegroundRole(kde ? QPalette::HighlightedText : QPalette::WindowText);
+    if (kde) {
+        m_titleBar->setPalette(QPalette());
+        return;
+    }
+    QPalette p = m_titleBar->palette();
+    p.setColor(QPalette::WindowText, Theme::active().panelTitleText);
+    m_titleBar->setPalette(p);
+}
+
+void FloatingPanel::paintEvent(QPaintEvent* e)
+{
+    if (Theme::current() == Theme::Scheme::Kde) {
+        QFrame::paintEvent(e);
+        return;
+    }
+    const Theme::Spec s = Theme::active();
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, s.radius > 0);
+    QPainterPath shape;
+    shape.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), s.radius, s.radius);
+    p.fillPath(shape, s.panel);
+    if (s.panelTitle != s.panel) {
+        p.save();
+        p.setClipPath(shape);
+        p.fillRect(QRect(0, 0, width(), m_titleBar->geometry().bottom() + 1), s.panelTitle);
+        p.restore();
+    }
+    QColor border = s.panel;
+    border = QColor::fromRgbF(border.redF() * 0.78f + s.text.redF() * 0.22f, border.greenF() * 0.78f + s.text.greenF() * 0.22f,
+                              border.blueF() * 0.78f + s.text.blueF() * 0.22f);
+    p.setPen(QPen(border, 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(shape);
 }
 
 QSize FloatingPanel::chromeSize() const
@@ -399,7 +494,7 @@ void FloatingPanel::setTranslucent(bool on)
 {
     if (on && !m_opacity) {
         m_opacity = new QGraphicsOpacityEffect(this);
-        m_opacity->setOpacity(underMouse() ? 1.0 : 0.75);
+        m_opacity->setOpacity(underMouse() ? 1.0 : Theme::active().panelOpacity / 100.0);
         setGraphicsEffect(m_opacity);
     } else if (!on && m_opacity) {
         setGraphicsEffect(nullptr);
@@ -417,7 +512,7 @@ void FloatingPanel::enterEvent(QEnterEvent* e)
 void FloatingPanel::leaveEvent(QEvent* e)
 {
     if (m_opacity)
-        m_opacity->setOpacity(0.75);
+        m_opacity->setOpacity(Theme::active().panelOpacity / 100.0);
     QFrame::leaveEvent(e);
 }
 

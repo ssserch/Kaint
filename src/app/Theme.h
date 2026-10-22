@@ -1,32 +1,124 @@
 #pragma once
 
+#include <QColor>
+#include <QJsonObject>
+#include <QObject>
 #include <QPalette>
+#include <QString>
 
-// Esquema de colores de la aplicación: el del sistema, claro u oscuro.
+#include <array>
+
+class QPainter;
+
+// Temas de la interfaz.
 //
-// Con un esquema propio, Kaint no usa la configuración del escritorio y dibuja
-// con el estilo Fusion y su paleta Breeze: estilos como Kvantum pintan con sus
-// propios colores y Plasma vuelve a imponer su tema al cambiarlo. Eso se decide
-// antes de crear la aplicación, así que pasar del esquema del sistema a uno
-// propio (o al revés) se completa al reiniciar.
+// "Seguir al sistema", "Claro" y "Oscuro" imitan Paint.NET en Windows 10 (el primero elige
+// claro u oscuro según el escritorio). "KDE" usa el estilo y los colores reales de Plasma.
+// "Personalizado" parte de claro u oscuro y deja cambiar colores, fondo del lienzo y diseño.
+// Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y una hoja de
+// estilo; eso se decide antes de crear la aplicación, así que entrar o salir de KDE se completa
+// al reiniciar.
 namespace Theme {
 
-enum class Scheme { System = 0, Light = 1, Dark = 2 };
+enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4 };
+enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
+enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
+enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
 
-// Guarda el tema de iconos del sistema, una vez al arrancar.
+// Colores y diseño de un tema. En el personalizado, un color no válido toma el del tema base
+// (claro u oscuro).
+struct Spec {
+    bool dark = false;
+
+    QColor accent;
+    QColor window;
+    QColor text;
+    QColor base;
+    QColor button;
+    QColor border;
+    QColor menuBar;
+    QColor menuBarText;
+    QColor toolBar;
+    QColor statusBar;
+    QColor panel;
+    QColor panelTitle;
+    QColor panelTitleText;
+    QColor panelClose;
+    QColor selection;
+    QColor selectionBorder;
+    QColor hover;
+    QColor workspace;
+
+    QString workspaceImage;
+    ImageMode imageMode = ImageMode::Tile;
+    int imageOpacity = 100;
+
+    int iconSize = 16;
+    int toolIconSize = 22;
+    ButtonStyle buttonStyle = ButtonStyle::Flat;
+    Density density = Density::Normal;
+    int radius = 0;
+    int panelOpacity = 75;
+    QString fontFamily;
+    int fontSize = 0;
+    QString iconTheme;
+
+    bool operator==(const Spec&) const = default;
+};
+
+// Colores editables del tema, con su clave en JSON y su nombre (contexto "Theme").
+struct ColorRole {
+    const char* key;
+    QColor Spec::*color;
+    const char* label;
+};
+extern const std::array<ColorRole, 18> kColorRoles;
+
+// Temas de Paint.NET y el personalizado con sus huecos rellenos.
+Spec preset(bool dark);
+Spec resolved(const Spec& custom);
+QJsonObject toJson(const Spec& spec);
+Spec fromJson(const QJsonObject& json);
+Spec loadCustom();
+void saveCustom(const Spec& custom);
+
+QPalette palette(const Spec& spec);
+QString styleSheet(const Spec& spec);
+
+// Arranque: prepare() antes de crear QApplication, initStyle() después y antes de las ventanas.
 void captureSystemDefaults();
-// Antes de crear QApplication.
 void prepare(Scheme scheme);
-// Después de crear QApplication y antes de las ventanas.
 void initStyle(Scheme scheme);
-// Paleta e iconos del esquema.
+
 void apply(Scheme scheme);
-// El esquema pedido necesita reiniciar Kaint para aplicarse del todo.
+// Cambia el tema personalizado (se ve al momento si es el activo).
+void setCustom(const Spec& custom);
+Spec custom();
 bool needsRestart(Scheme scheme);
 Scheme current();
-// La paleta efectiva es oscura (sirve para el esquema "Seguir al sistema").
+// Tema efectivo; con KDE se deduce de la paleta del sistema.
+Spec active();
 bool isDark();
-// Paletas Breeze clara y oscura (colores de BreezeLight.colors / BreezeDark.colors).
-QPalette breezePalette(bool dark);
+bool systemPrefersDark();
+
+// Fondo del área de trabajo (alrededor de la imagen): color e imagen del tema. 'color' no válido
+// usa el del tema.
+QColor workspaceColor();
+void paintWorkspace(QPainter& p, const QRect& area, const QRect& clip, const QColor& color = QColor());
+
+// Avisa de los cambios de tema, también cuando el sistema pasa de claro a oscuro.
+class Notifier : public QObject {
+    Q_OBJECT
+public:
+    using QObject::QObject;
+
+signals:
+    void changed();
+
+public slots:
+    // Vuelve a leer si el sistema usa modo oscuro.
+    void systemSettingChanged();
+};
+Notifier* notifier();
 
 } // namespace Theme

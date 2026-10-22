@@ -1803,8 +1803,8 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Images to open.</translation>
     </message>
     <message>
-        <source>Combinación de colores: system, light o dark (se guarda).</source>
-        <translation>Color scheme: system, light or dark (saved).</translation>
+        <source>Tema: system, light, dark, kde o custom (se guarda).</source>
+        <translation>Theme: system, light, dark, kde or custom (saved).</translation>
     </message>
     <message>
         <source>px</source>
@@ -3440,8 +3440,36 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Dark</translation>
     </message>
     <message>
-        <source>Combinación de colores:</source>
-        <translation>Color scheme:</translation>
+        <source>KDE</source>
+        <translation>KDE</translation>
+    </message>
+    <message>
+        <source>Personalizado</source>
+        <translation>Custom</translation>
+    </message>
+    <message>
+        <source>Claro u oscuro de Paint.NET, según el modo del escritorio.</source>
+        <translation>Paint.NET light or dark, following the desktop mode.</translation>
+    </message>
+    <message>
+        <source>El estilo y los colores reales de Plasma.</source>
+        <translation>The real Plasma style and colors.</translation>
+    </message>
+    <message>
+        <source>Colores, fondo del lienzo y diseño a tu gusto.</source>
+        <translation>Colors, canvas background and layout your way.</translation>
+    </message>
+    <message>
+        <source>Personalizar…</source>
+        <translation>Customize…</translation>
+    </message>
+    <message>
+        <source>Editar el tema personalizado.</source>
+        <translation>Edit the custom theme.</translation>
+    </message>
+    <message>
+        <source>Tema:</source>
+        <translation>Theme:</translation>
     </message>
     <message>
         <source>Idioma:</source>
@@ -3856,6 +3884,280 @@ Do you want to replace them?</translation>
     <message>
         <source>Texto</source>
         <translation>Text</translation>
+    </message>
+</context>
+<context>
+    <name>Theme</name>
+    <message>
+        <source>Acento</source>
+        <translation>Accent</translation>
+    </message>
+    <message>
+        <source>Ventana y diálogos</source>
+        <translation>Window and dialogs</translation>
+    </message>
+    <message>
+        <source>Texto</source>
+        <translation>Text</translation>
+    </message>
+    <message>
+        <source>Campos y listas</source>
+        <translation>Fields and lists</translation>
+    </message>
+    <message>
+        <source>Botones</source>
+        <translation>Buttons</translation>
+    </message>
+    <message>
+        <source>Bordes</source>
+        <translation>Borders</translation>
+    </message>
+    <message>
+        <source>Fila de menús</source>
+        <translation>Menu row</translation>
+    </message>
+    <message>
+        <source>Texto de los menús</source>
+        <translation>Menu text</translation>
+    </message>
+    <message>
+        <source>Barras de herramientas</source>
+        <translation>Toolbars</translation>
+    </message>
+    <message>
+        <source>Barra de estado</source>
+        <translation>Status bar</translation>
+    </message>
+    <message>
+        <source>Ventanas flotantes</source>
+        <translation>Floating windows</translation>
+    </message>
+    <message>
+        <source>Cabecera de las ventanas</source>
+        <translation>Window header</translation>
+    </message>
+    <message>
+        <source>Título de las ventanas</source>
+        <translation>Window title</translation>
+    </message>
+    <message>
+        <source>Botón de cerrar</source>
+        <translation>Close button</translation>
+    </message>
+    <message>
+        <source>Selección</source>
+        <translation>Selection</translation>
+    </message>
+    <message>
+        <source>Borde de la selección</source>
+        <translation>Selection border</translation>
+    </message>
+    <message>
+        <source>Bajo el puntero</source>
+        <translation>Under the pointer</translation>
+    </message>
+    <message>
+        <source>Fondo del lienzo</source>
+        <translation>Canvas background</translation>
+    </message>
+</context>
+<context>
+    <name>ThemeDialog</name>
+    <message>
+        <source>Tema personalizado</source>
+        <translation>Custom Theme</translation>
+    </message>
+    <message>
+        <source>Base</source>
+        <translation>Base</translation>
+    </message>
+    <message>
+        <source>Claro</source>
+        <translation>Light</translation>
+    </message>
+    <message>
+        <source>Oscuro</source>
+        <translation>Dark</translation>
+    </message>
+    <message>
+        <source>Modo:</source>
+        <translation>Mode:</translation>
+    </message>
+    <message>
+        <source>Los colores que no cambies siguen al modo elegido. Los cambiados aparecen en negrita.</source>
+        <translation>Colors you don't change follow the chosen mode. Changed ones are shown in bold.</translation>
+    </message>
+    <message>
+        <source>Colores</source>
+        <translation>Colors</translation>
+    </message>
+    <message>
+        <source>Fondo del lienzo</source>
+        <translation>Canvas background</translation>
+    </message>
+    <message>
+        <source>Color:</source>
+        <translation>Color:</translation>
+    </message>
+    <message>
+        <source>Sin imagen</source>
+        <translation>No image</translation>
+    </message>
+    <message>
+        <source>Elegir…</source>
+        <translation>Choose…</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
+    </message>
+    <message>
+        <source>Imagen:</source>
+        <translation>Image:</translation>
+    </message>
+    <message>
+        <source>Mosaico</source>
+        <translation>Tile</translation>
+    </message>
+    <message>
+        <source>Centrada</source>
+        <translation>Center</translation>
+    </message>
+    <message>
+        <source>Estirada</source>
+        <translation>Stretch</translation>
+    </message>
+    <message>
+        <source>Ajustada</source>
+        <translation>Fit</translation>
+    </message>
+    <message>
+        <source>Rellenar</source>
+        <translation>Fill</translation>
+    </message>
+    <message>
+        <source>Colocación:</source>
+        <translation>Placement:</translation>
+    </message>
+    <message>
+        <source>Opacidad de la imagen:</source>
+        <translation>Image opacity:</translation>
+    </message>
+    <message>
+        <source>Diseño</source>
+        <translation>Layout</translation>
+    </message>
+    <message>
+        <source>Iconos de las barras:</source>
+        <translation>Toolbar icons:</translation>
+    </message>
+    <message>
+        <source>Iconos de la ventana Herramientas:</source>
+        <translation>Tools window icons:</translation>
+    </message>
+    <message>
+        <source>Planos (Paint.NET)</source>
+        <translation>Flat (Paint.NET)</translation>
+    </message>
+    <message>
+        <source>Con marco</source>
+        <translation>Framed</translation>
+    </message>
+    <message>
+        <source>Redondeados</source>
+        <translation>Rounded</translation>
+    </message>
+    <message>
+        <source>Botones de las barras:</source>
+        <translation>Toolbar buttons:</translation>
+    </message>
+    <message>
+        <source>Compacto</source>
+        <translation>Compact</translation>
+    </message>
+    <message>
+        <source>Normal</source>
+        <translation>Normal</translation>
+    </message>
+    <message>
+        <source>Amplio</source>
+        <translation>Comfortable</translation>
+    </message>
+    <message>
+        <source>Espaciado:</source>
+        <translation>Spacing:</translation>
+    </message>
+    <message>
+        <source>Redondeo de las esquinas:</source>
+        <translation>Corner rounding:</translation>
+    </message>
+    <message>
+        <source>Con «Ventanas translúcidas» activado, opacidad de las ventanas flotantes cuando el puntero no está encima.</source>
+        <translation>With “Translucent windows” on, opacity of the floating windows when the pointer is not over them.</translation>
+    </message>
+    <message>
+        <source>Opacidad de las ventanas translúcidas:</source>
+        <translation>Translucent window opacity:</translation>
+    </message>
+    <message>
+        <source>La del sistema</source>
+        <translation>System font</translation>
+    </message>
+    <message>
+        <source>Fuente:</source>
+        <translation>Font:</translation>
+    </message>
+    <message>
+        <source>Automático (Breeze)</source>
+        <translation>Automatic (Breeze)</translation>
+    </message>
+    <message>
+        <source>Iconos:</source>
+        <translation>Icons:</translation>
+    </message>
+    <message>
+        <source>Importar…</source>
+        <translation>Import…</translation>
+    </message>
+    <message>
+        <source>Exportar…</source>
+        <translation>Export…</translation>
+    </message>
+    <message>
+        <source>Restablecer todo</source>
+        <translation>Reset All</translation>
+    </message>
+    <message>
+        <source>Restablecer</source>
+        <translation>Reset</translation>
+    </message>
+    <message>
+        <source>Imagen de fondo</source>
+        <translation>Background Image</translation>
+    </message>
+    <message>
+        <source>Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl)</source>
+        <translation>Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl)</translation>
+    </message>
+    <message>
+        <source>Importar tema</source>
+        <translation>Import Theme</translation>
+    </message>
+    <message>
+        <source>Temas de Kaint (*.json)</source>
+        <translation>Kaint themes (*.json)</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el tema de «%1».</source>
+        <translation>Could not read the theme in “%1”.</translation>
+    </message>
+    <message>
+        <source>Exportar tema</source>
+        <translation>Export Theme</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar «%1».</source>
+        <translation>Could not save “%1”.</translation>
     </message>
 </context>
 <context>

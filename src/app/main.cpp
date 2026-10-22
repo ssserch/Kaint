@@ -18,8 +18,8 @@
 
 namespace {
 
-// Esquema de colores guardado o el de --color-scheme (system, light o dark), que
-// también se guarda: así se puede recuperar el tema sin abrir la configuración.
+// Tema guardado o el de --color-scheme (system, light, dark, kde o custom), que también se
+// guarda: así se puede recuperar el tema sin abrir la configuración.
 Theme::Scheme startupScheme(int argc, char** argv)
 {
     QSettings settings(QStringLiteral("Kaint"), QStringLiteral("Kaint"));
@@ -30,21 +30,23 @@ Theme::Scheme startupScheme(int argc, char** argv)
             arg += QLatin1Char('=') + QString::fromLocal8Bit(argv[i + 1]);
         if (!arg.startsWith(QLatin1String("--color-scheme=")))
             continue;
-        const QString value = arg.section(QLatin1Char('='), 1);
-        const int scheme = value == QLatin1String("light") ? 1 : value == QLatin1String("dark") ? 2 : 0;
-        settings.setValue(QStringLiteral("colorScheme"), scheme);
+        const QString value = arg.section(QLatin1Char('='), 1).toLower();
+        const QStringList names{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark"),
+                                QStringLiteral("kde"), QStringLiteral("custom")};
+        settings.setValue(QStringLiteral("colorScheme"), std::max(0, int(names.indexOf(value))));
     }
-    return Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 2));
+    return Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 4));
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    // Antes de crear la aplicación: con un esquema propio, el escritorio no debe
-    // imponer su estilo ni su paleta.
+    // Antes de crear la aplicación: salvo con el tema de KDE, el escritorio no debe imponer
+    // su estilo ni su paleta.
     const Theme::Scheme scheme = startupScheme(argc, argv);
     Theme::prepare(scheme);
+    QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Kaint"));
     QApplication::setOrganizationName(QStringLiteral("Kaint"));
@@ -73,7 +75,7 @@ int main(int argc, char** argv)
     parser.addPositionalArgument(QStringLiteral("archivos"), QObject::tr("Imágenes que abrir."),
                                  QStringLiteral("[archivos...]"));
     parser.addOption(QCommandLineOption(QStringLiteral("color-scheme"),
-                                        QObject::tr("Combinación de colores: system, light o dark (se guarda)."),
+                                        QObject::tr("Tema: system, light, dark, kde o custom (se guarda)."),
                                         QStringLiteral("scheme")));
     parser.process(app);
 

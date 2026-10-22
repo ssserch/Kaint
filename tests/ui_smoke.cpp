@@ -29,6 +29,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLineF>
@@ -237,22 +238,73 @@ static void testTransformBox()
     CHECK(!box.pivotMoved() && near(box.pivot(), QPointF(20, 20)));
 }
 
-// Esquemas de colores: claro y oscuro usan la paleta Breeze, y pasar del esquema del sistema a
-// uno propio pide reiniciar. El fondo del lienzo siempre es opaco (un color translúcido dejaba
-// rastros en modo claro).
+// Temas: claro y oscuro de Paint.NET, el personalizado (colores propios, JSON, imagen de fondo),
+// la detección del modo oscuro de Plasma y cuándo hace falta reiniciar. El fondo del lienzo
+// siempre es opaco (un color translúcido dejaba rastros).
 static void testTheme()
 {
-    CHECK(!Theme::needsRestart(Theme::Scheme::System));
-    CHECK(Theme::needsRestart(Theme::Scheme::Light) && Theme::needsRestart(Theme::Scheme::Dark));
+    CHECK(!Theme::needsRestart(Theme::Scheme::System) && !Theme::needsRestart(Theme::Scheme::Dark));
+    CHECK(!Theme::needsRestart(Theme::Scheme::Custom) && Theme::needsRestart(Theme::Scheme::Kde));
+
     Theme::apply(Theme::Scheme::Light);
     CHECK(Theme::current() == Theme::Scheme::Light && !Theme::isDark());
-    CHECK(QApplication::palette().color(QPalette::Window) == Theme::breezePalette(false).color(QPalette::Window));
-    CHECK(QApplication::palette().color(QPalette::WindowText).lightness() < 128);
+    CHECK(QApplication::palette().color(QPalette::Window) == Theme::preset(false).window);
+    CHECK(qApp->styleSheet().contains(QStringLiteral("QMenuBar")));
     Theme::apply(Theme::Scheme::Dark);
-    CHECK(Theme::current() == Theme::Scheme::Dark && Theme::isDark());
-    CHECK(QApplication::palette().color(QPalette::WindowText).lightness() > 128);
+    CHECK(Theme::isDark() && Theme::workspaceColor() == Theme::preset(true).workspace);
+
+    Theme::Spec custom;
+    custom.dark = true;
+    custom.accent = QColor(200, 30, 120);
+    custom.iconSize = 24;
+    custom.radius = 6;
+    custom.buttonStyle = Theme::ButtonStyle::Rounded;
+    CHECK(Theme::fromJson(Theme::toJson(custom)) == custom);
+    Theme::setCustom(custom);
+    Theme::apply(Theme::Scheme::Custom);
+    CHECK(QApplication::palette().color(QPalette::Highlight) == custom.accent);
+    CHECK(QApplication::palette().color(QPalette::Window) == Theme::preset(true).window);
+    CHECK(Theme::active().iconSize == 24);
+
+    QTemporaryDir dir;
+    QImage tile(4, 4, QImage::Format_ARGB32);
+    tile.fill(QColor(250, 0, 0));
+    tile.save(dir.filePath(QStringLiteral("fondo.png")));
+    custom.workspaceImage = dir.filePath(QStringLiteral("fondo.png"));
+    custom.imageMode = Theme::ImageMode::Stretch;
+    Theme::setCustom(custom);
+    {
+        Canvas canvas;
+        canvas.resize(120, 90);
+        CHECK(canvas.viewport()->grab().toImage().pixelColor(5, 5) == QColor(250, 0, 0));
+    }
+
+    // "Seguir al sistema" con Plasma: kdeglobals dice si el esquema es oscuro.
+    QTemporaryDir config;
+    const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+    const QByteArray oldDesktop = qgetenv("XDG_CURRENT_DESKTOP");
+    qputenv("XDG_CONFIG_HOME", config.path().toLocal8Bit());
+    qputenv("XDG_CURRENT_DESKTOP", "KDE");
+    auto writeKde = [&config](const char* window, const char* name) {
+        QFile f(config.filePath(QStringLiteral("kdeglobals")));
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            f.write(QByteArray("[Colors:Window]\nBackgroundNormal=") + window + "\n\n[General]\nColorScheme=" + name + "\n");
+    };
+    writeKde("32,35,38", "BreezeDark");
+    Theme::notifier()->systemSettingChanged();
+    CHECK(Theme::systemPrefersDark());
     Theme::apply(Theme::Scheme::System);
-    CHECK(Theme::current() == Theme::Scheme::System);
+    CHECK(Theme::isDark());
+    writeKde("239,240,241", "BreezeLight");
+    Theme::notifier()->systemSettingChanged();
+    CHECK(!Theme::systemPrefersDark() && !Theme::isDark());
+    for (const auto& [name, value] : {std::pair{"XDG_CONFIG_HOME", oldConfig}, std::pair{"XDG_CURRENT_DESKTOP", oldDesktop}}) {
+        if (value.isEmpty())
+            qunsetenv(name);
+        else
+            qputenv(name, value);
+    }
+    Theme::apply(Theme::Scheme::Light);
 
     Canvas canvas;
     canvas.resize(120, 90);
@@ -268,6 +320,7 @@ int main(int argc, char** argv)
     QApplication::setOrganizationName(QStringLiteral("KaintSmokeTest"));
     QApplication::setApplicationName(QStringLiteral("KaintSmokeTest"));
     QSettings().clear();
+    QSettings().setValue(QStringLiteral("settings/colorScheme"), int(Theme::Scheme::Light));
     Icons::setupTheme();
     QTemporaryDir shapesDir;
     {

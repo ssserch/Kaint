@@ -3,8 +3,8 @@
 #include <QFrame>
 #include <QPointer>
 
+class QAbstractButton;
 class QLabel;
-class QToolButton;
 class Canvas;
 
 // Contenido de panel que decide su propio tamaño al redimensionarlo (la rejilla de
@@ -51,8 +51,10 @@ protected:
     void mouseReleaseEvent(QMouseEvent* e) override;
     void enterEvent(QEnterEvent* e) override;
     void leaveEvent(QEvent* e) override;
+    void paintEvent(QPaintEvent* e) override;
 
 private:
+    void updateColors();
     void updateAnchorFromGeometry();
     Qt::Edges edgesAt(const QPoint& pos) const;
     void updateEdgeCursor(Qt::Edges edges);
@@ -64,7 +66,7 @@ private:
     QString m_fullTitle;
     QWidget* m_titleBar = nullptr;
     QLabel* m_title = nullptr;
-    QToolButton* m_close = nullptr;
+    QAbstractButton* m_close = nullptr;
     QWidget* m_content = nullptr;
     Corner m_corner = TopLeft;
     QPoint m_offset;

@@ -112,6 +112,7 @@ add_library(kaintui STATIC
     src/app/dialogs/SaveConfigDialog.cpp
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp
+    src/app/dialogs/ThemeDialog.cpp
     src/app/tools/Handles.cpp
     src/app/tools/Tool.cpp
     src/app/tools/TransformBox.cpp
@@ -125,6 +126,12 @@ add_library(kaintui STATIC
     src/app/tools/TextTool.cpp
 )
 target_link_libraries(kaintui PUBLIC kaintcore Qt6::Widgets Qt6::PrintSupport Qt6::Network)
+# El tema "Seguir al sistema" pregunta al portal de freedesktop si el escritorio está en modo oscuro.
+find_package(Qt6 QUIET COMPONENTS DBus)
+if(TARGET Qt6::DBus)
+    target_link_libraries(kaintui PUBLIC Qt6::DBus)
+    target_compile_definitions(kaintui PRIVATE KAINT_HAVE_DBUS)
+endif()
 target_compile_definitions(kaintui PUBLIC KAINT_VERSION="${PROJECT_VERSION}"
                            KAINT_REPOSITORY="${KAINT_REPOSITORY}" KAINT_GITHUB="${KAINT_GITHUB}"
                            KAINT_DISCORD_CLIENT_ID="${KAINT_DISCORD_CLIENT_ID}"

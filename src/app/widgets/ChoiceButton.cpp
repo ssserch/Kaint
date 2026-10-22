@@ -1,5 +1,7 @@
 #include "app/widgets/ChoiceButton.h"
 
+#include "app/Theme.h"
+
 #include <QActionGroup>
 #include <QMenu>
 #include <QMouseEvent>
@@ -34,17 +36,25 @@ protected:
     {
         QPainter p(this);
         const bool hot = underMouse();
-        if (hot)
+        // Con los temas de Paint.NET, el resalte de sus menús (relleno claro con borde); con el
+        // de KDE, el color de resalte del sistema.
+        const bool kde = Theme::current() == Theme::Scheme::Kde;
+        const Theme::Spec theme = Theme::active();
+        if (hot && kde) {
             p.fillRect(rect(), palette().highlight());
-        else if (m_action->isChecked()) {
-            QColor c = palette().color(QPalette::Highlight);
-            c.setAlpha(60);
+        } else if (hot) {
+            p.setPen(theme.selectionBorder);
+            p.setBrush(theme.selection);
+            p.drawRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5));
+        } else if (m_action->isChecked()) {
+            QColor c = kde ? palette().color(QPalette::Highlight) : theme.selection;
+            c.setAlpha(kde ? 60 : 140);
             p.fillRect(rect(), c);
         }
         const QFontMetrics fm(font());
         const int iconY = (height() - kIcon) / 2;
         m_icon.paint(&p, QRect(kPad, iconY, kIcon, kIcon));
-        p.setPen(palette().color(hot ? QPalette::HighlightedText : QPalette::Text));
+        p.setPen(palette().color(hot && kde ? QPalette::HighlightedText : QPalette::Text));
         const int x = kIcon + 2 * kPad;
         p.drawText(QRect(x, kPad, width() - x - kPad, fm.height()), Qt::AlignLeft | Qt::AlignVCenter, m_title);
         p.drawText(QRect(x, kPad + fm.height(), width() - x - kPad, fm.height()), Qt::AlignLeft | Qt::AlignVCenter,

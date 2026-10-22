@@ -24,10 +24,8 @@ mismos efectos y una interfaz que se le parece mucho.
 - **Complementos**: los suyos propios (.so) y muchos complementos de Paint.NET (.dll).
 - **Formas personalizadas** de Paint.NET (.xaml).
 - En inglés (predeterminado) y en español: *Settings > User Interface > Language*.
-- Tema del sistema, claro u oscuro, con los iconos de Breeze. El claro y el oscuro no
-  dependen del tema de Plasma (usan el estilo Fusion con la paleta de Breeze); pasar del
-  tema del sistema a uno propio, o al revés, se completa al reiniciar Kaint. También se
-  puede elegir al abrirlo: `kaint --color-scheme system|light|dark` (se guarda).
+- **Temas** claro y oscuro como los de Paint.NET, uno que sigue el modo del escritorio, el
+  tema real de KDE y uno personalizado (ver [Temas](#temas)).
 - Rich Presence de Discord opcional.
 
 ## Instalar
@@ -52,6 +50,22 @@ Otras opciones de `build.sh`:
 ```
 
 Si Qt está instalado en otra ruta, exporta `CMAKE_PREFIX_PATH` antes de compilar.
+
+## Temas
+
+Se eligen en *Configuración > Interfaz de usuario > Tema*:
+
+| Tema | Qué hace |
+|---|---|
+| Seguir al sistema | El claro o el oscuro de Paint.NET según el modo del escritorio (Plasma, GNOME y otros), y cambia con él. |
+| Claro / Oscuro | Los de Paint.NET en Windows 10. |
+| KDE | El estilo, los colores y los iconos reales de Plasma. |
+| Personalizado | **Personalizar…** abre el editor: modo base (claro u oscuro), 18 colores (acento, barras, ventanas flotantes, selección, fondo del lienzo...), imagen de fondo del lienzo (mosaico, centrada, estirada, ajustada o rellenar, con opacidad), tamaño de los iconos, estilo de los botones de las barras, espaciado, redondeo de las esquinas, opacidad de las ventanas translúcidas, fuente y tema de iconos. Se puede importar y exportar como `.json`. |
+
+Todos menos KDE ignoran la configuración del escritorio y se dibujan igual en cualquier
+sistema. Pasar al tema KDE, o salir de él, se completa al reiniciar Kaint; los demás cambian
+al momento. El tema también se puede elegir al abrir Kaint (y se guarda):
+`kaint --color-scheme system|light|dark|kde|custom`.
 
 ## Complementos
 

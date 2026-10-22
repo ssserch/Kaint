@@ -1,5 +1,6 @@
 #include "app/Canvas.h"
 
+#include "app/Theme.h"
 #include "app/tools/Tool.h"
 #include "core/Document.h"
 #include "core/Raster.h"
@@ -30,6 +31,7 @@ Canvas::Canvas(QWidget* parent)
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     viewport()->setAttribute(Qt::WA_TabletTracking);
     viewport()->setAttribute(Qt::WA_AcceptTouchEvents, false);
+    connect(Theme::notifier(), &Theme::Notifier::changed, viewport(), qOverload<>(&QWidget::update));
     m_checker = QPixmap::fromImage(Raster::checkerboard(8));
     m_hRuler = new Ruler(Qt::Horizontal, this, this);
     m_vRuler = new Ruler(Qt::Vertical, this, this);
@@ -525,10 +527,8 @@ const QImage& Canvas::selectionTint() const
 void Canvas::paintEvent(QPaintEvent* e)
 {
     QPainter p(viewport());
-    QColor window = palette().color(QPalette::Window);
-    window.setAlpha(255);
-    const bool dark = window.lightness() < 128;
-    p.fillRect(e->rect(), m_border.isValid() ? m_border : (dark ? window.darker(135) : window.darker(112)));
+    Theme::paintWorkspace(p, viewport()->rect(), e->rect(), m_border);
+    const bool dark = (m_border.isValid() ? m_border : Theme::workspaceColor()).lightness() < 128;
     if (!m_doc)
         return;
 

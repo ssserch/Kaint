@@ -20,6 +20,7 @@ public:
     QSize fitSize(QSize proposed, Qt::Orientations changed) const override;
     int columnsFor(int width) const;
     int columns() const { return columnsFor(width()); }
+    void setIconSize(int size);
 
 protected:
     void resizeEvent(QResizeEvent* e) override;
@@ -33,4 +34,5 @@ private:
     ToolManager* m_manager;
     QButtonGroup* m_group;
     QList<QToolButton*> m_buttons;
+    int m_columns = 2;
 };

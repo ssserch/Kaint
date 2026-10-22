@@ -5,6 +5,8 @@
 #include "app/Icons.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
+#include "app/dialogs/DialogExec.h"
+#include "app/dialogs/ThemeDialog.h"
 #include "app/tools/ToolManager.h"
 #include "app/widgets/EffectControls.h"
 #include "core/plugins/PluginManager.h"
@@ -62,7 +64,7 @@ AppSettings AppSettings::load()
     a.overscroll = get("overscroll", a.overscroll);
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
-    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 2);
+    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 4);
     a.language = get("language", a.language) == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);
@@ -241,12 +243,19 @@ QWidget* SettingsDialog::createInterfacePage()
     check(tr("Seleccionar automáticamente la capa visible más cercana tras ocultar una capa"),
           &AppSettings::autoSelectVisibleLayer);
 
+    // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio.
     auto* schemeRow = new QHBoxLayout;
     auto* scheme = new QComboBox(page.widget);
-    scheme->addItems({tr("Seguir al sistema"), tr("Claro"), tr("Oscuro")});
+    scheme->addItems({tr("Seguir al sistema"), tr("Claro"), tr("Oscuro"), tr("KDE"), tr("Personalizado")});
+    scheme->setItemData(0, tr("Claro u oscuro de Paint.NET, según el modo del escritorio."), Qt::ToolTipRole);
+    scheme->setItemData(3, tr("El estilo y los colores reales de Plasma."), Qt::ToolTipRole);
+    scheme->setItemData(4, tr("Colores, fondo del lienzo y diseño a tu gusto."), Qt::ToolTipRole);
     scheme->setCurrentIndex(m_settings.colorScheme);
-    schemeRow->addWidget(new QLabel(tr("Combinación de colores:"), page.widget));
+    auto* customize = new QPushButton(tr("Personalizar…"), page.widget);
+    customize->setToolTip(tr("Editar el tema personalizado."));
+    schemeRow->addWidget(new QLabel(tr("Tema:"), page.widget));
     schemeRow->addWidget(scheme);
+    schemeRow->addWidget(customize);
     schemeRow->addStretch();
     page.layout->addLayout(schemeRow);
 
@@ -273,6 +282,16 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.colorScheme = i;
         changed();
         updateNote();
+    });
+    connect(customize, &QPushButton::clicked, this, [this, scheme, updateNote] {
+        if (m_settings.colorScheme != int(Theme::Scheme::Custom)) {
+            m_settings.colorScheme = int(Theme::Scheme::Custom);
+            scheme->setCurrentIndex(m_settings.colorScheme);
+            changed();
+            updateNote();
+        }
+        ThemeDialog dlg(this);
+        execWithoutDimming(dlg);
     });
     connect(language, &QComboBox::activated, this, [this, language, updateNote](int i) {
         m_settings.language = language->itemData(i).toString();
@@ -777,7 +796,12 @@ QString SettingsDialog::diagnostics()
     row(QStringLiteral("Desktop"), qEnvironmentVariable("XDG_CURRENT_DESKTOP"));
     row(QStringLiteral("Widget style"), QApplication::style()->name());
     row(QStringLiteral("Icon theme"), QIcon::themeName());
-    row(QStringLiteral("Color scheme"), Theme::isDark() ? QStringLiteral("Dark") : QStringLiteral("Light"));
+    const QStringList schemes{QStringLiteral("System"), QStringLiteral("Light"), QStringLiteral("Dark"),
+                              QStringLiteral("KDE"), QStringLiteral("Custom")};
+    row(QStringLiteral("Color scheme"), QStringLiteral("%1 (%2, system %3)")
+                                            .arg(schemes.value(int(Theme::current())),
+                                                 Theme::isDark() ? QStringLiteral("dark") : QStringLiteral("light"),
+                                                 Theme::systemPrefersDark() ? QStringLiteral("dark") : QStringLiteral("light")));
     for (const QScreen* s : QGuiApplication::screens())
         row(QStringLiteral("Display"), QStringLiteral("%1: %2 x %3, %4x, %5 DPI")
                                             .arg(s->name())

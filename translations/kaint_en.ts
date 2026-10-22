@@ -3985,7 +3985,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los colores que no cambies siguen al modo elegido. Los cambiados aparecen en negrita.</source>
-        <translation>Colors you don't change follow the chosen mode. Changed ones are shown in bold.</translation>
+        <translation>Colors you don&apos;t change follow the chosen mode. Changed ones are shown in bold.</translation>
     </message>
     <message>
         <source>Colores</source>

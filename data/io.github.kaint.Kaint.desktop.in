@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Kaint
+GenericName=Editor de imágenes
+GenericName[en]=Image Editor
+Comment=Editor de imágenes con capas al estilo Paint.NET
+Comment[en]=Paint.NET-style layered image editor
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/kaint %F
+Icon=io.github.kaint.Kaint
+Terminal=false
+StartupNotify=true
+StartupWMClass=kaint
+Categories=Qt;KDE;Graphics;2DGraphics;RasterGraphics;
+MimeType=image/png;image/jpeg;image/bmp;image/gif;image/webp;image/tiff;image/avif;image/jxl;image/x-tga;image/openraster;image/vnd.microsoft.icon;image/x-icon;
+Keywords=paint;draw;image;photo;layers;pintar;dibujar;imagen;foto;capas;paint.net;

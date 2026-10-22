@@ -1,0 +1,94 @@
+#pragma once
+
+#include "app/tools/Tool.h"
+#include "app/tools/TransformBox.h"
+#include "core/LayerEdit.h"
+
+#include <QColor>
+#include <array>
+#include <functional>
+
+// Dibuja una geometría vectorial dos veces (con colores y como cobertura)
+// y la compone en la capa; así funcionan las tramas y "Sobrescribir".
+using VectorDrawFn = std::function<void(QPainter& p, bool coverage)>;
+void renderVector(LayerEdit& edit, const QRect& region, const VectorDrawFn& draw);
+
+// Línea/Curva: tras dibujarla quedan cuatro nodos editables. Recta, spline
+// cúbica o Bézier según la barra; mover con el icono o las flechas, girar
+// con el botón derecho (Mayús: 15°). Teclas , . / cambian remates y estilo.
+class LineTool : public Tool {
+    Q_OBJECT
+public:
+    explicit LineTool(QObject* parent = nullptr);
+    ToolId id() const override { return ToolId::Line; }
+    QString name() const override { return tr("Línea/Curva"); }
+    QIcon icon() const override;
+    QString hint() const override;
+    QKeySequence shortcut() const override { return QKeySequence(Qt::Key_O); }
+    quint32 options() const override
+    {
+        return OptBrushSize | OptCurve | OptDash | OptLineCaps | OptAntialias | OptBlend | OptFill | OptSelectionQuality
+             | OptFinish;
+    }
+
+    void mousePress(const ToolEvent& e) override;
+    void mouseMove(const ToolEvent& e) override;
+    void mouseRelease(const ToolEvent& e) override;
+    bool keyPress(QKeyEvent* e) override;
+    void paintOverlay(QPainter& p) override;
+    void deactivate() override;
+    void finish() override;
+    bool isBusy() const override { return m_edit.isActive(); }
+
+private:
+    enum class Drag { None, Create, Point, Move, Rotate };
+    QPainterPath curve() const;
+    void render();
+    QPointF moveIcon() const;
+    void setInitialNodes(const QPointF& a, const QPointF& b);
+
+    LayerEdit m_edit;
+    std::array<QPointF, 4> m_pts;
+    std::array<QPointF, 4> m_ptsStart;
+    bool m_secondary = false;
+    Drag m_drag = Drag::None;
+    int m_dragIndex = -1;
+    QPointF m_grab;
+    QPointF m_anchor;
+};
+
+// Formas: 29 formas editables con el cuadro de transformación hasta terminar.
+class ShapesTool : public Tool {
+    Q_OBJECT
+public:
+    explicit ShapesTool(QObject* parent = nullptr);
+    ToolId id() const override { return ToolId::Shapes; }
+    QString name() const override { return tr("Formas"); }
+    QIcon icon() const override;
+    QString hint() const override;
+    QKeySequence shortcut() const override { return QKeySequence(Qt::Key_O); }
+    quint32 options() const override
+    {
+        return OptShape | OptShapeStyle | OptBrushSize | OptCornerRadius | OptDash | OptAntialias | OptBlend | OptFill
+             | OptSelectionQuality | OptFinish;
+    }
+
+    void mousePress(const ToolEvent& e) override;
+    void mouseMove(const ToolEvent& e) override;
+    void mouseRelease(const ToolEvent& e) override;
+    bool keyPress(QKeyEvent* e) override;
+    void paintOverlay(QPainter& p) override;
+    void deactivate() override;
+    void finish() override;
+    bool isBusy() const override { return m_edit.isActive(); }
+
+private:
+    void render();
+    QPointF moveIcon() const;
+
+    LayerEdit m_edit;
+    TransformBox m_box;
+    QPointF m_start;
+    bool m_creating = false;
+    bool m_secondary = false;
+};

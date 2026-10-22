@@ -1,0 +1,91 @@
+#pragma once
+
+#include "app/tools/Tool.h"
+#include "app/tools/TransformBox.h"
+#include "core/Commands.h"
+
+// Mover píxeles seleccionados: arrastrar mueve, los tiradores escalan
+// (Mayús = proporcional, Alt = desde el centro), fuera del cuadro o con el
+// botón derecho se gira (Mayús = de 15 en 15°), Ctrl mueve una copia y las
+// flechas desplazan 1 px (Ctrl: 10 px).
+class MoveSelectedTool : public Tool {
+    Q_OBJECT
+public:
+    using Tool::Tool;
+    ToolId id() const override { return ToolId::MoveSelected; }
+    QString name() const override { return tr("Mover píxeles seleccionados"); }
+    QIcon icon() const override;
+    QString hint() const override;
+    QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
+    quint32 options() const override { return OptInterpolation | OptGamma | OptSelectionQuality | OptFinish; }
+    QCursor cursor() const override { return Qt::SizeAllCursor; }
+
+    void mousePress(const ToolEvent& e) override;
+    void mouseMove(const ToolEvent& e) override;
+    void mouseRelease(const ToolEvent& e) override;
+    bool keyPress(QKeyEvent* e) override;
+    void paintOverlay(QPainter& p) override;
+    void deactivate() override;
+
+    // Píxeles flotantes de la última operación, si se puede continuar con ellos.
+    static FloatingPtr currentFloating(Document* doc);
+    // Empieza a mover píxeles pegados (lo usa Edición > Pegar).
+    static void startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text);
+
+private:
+    FloatingPtr lift(bool keepCopy);
+    void boxForCurrentState(TransformBox& box) const;
+    // m_box con el estado actual (el punto de giro vuelve al centro si cambió la selección).
+    void syncBox();
+    void applyLive(const QTransform& t);
+    void push();
+    void nudge(QPoint d);
+
+    bool m_active = false;
+    bool m_first = false;
+    FloatingPtr m_float;
+    TransformBox m_box;
+    QTransform m_startTransform;
+    QTransform m_current;
+    Selection m_selectionBefore;
+    bool m_pivotDrag = false;  // se está moviendo el punto de giro
+    Selection m_pivotFor;      // selección a la que corresponde el punto de giro
+};
+
+class MoveSelectionTool : public Tool {
+    Q_OBJECT
+public:
+    using Tool::Tool;
+    ToolId id() const override { return ToolId::MoveSelection; }
+    QString name() const override { return tr("Mover selección"); }
+    QIcon icon() const override;
+    QString hint() const override;
+    QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
+    QCursor cursor() const override { return Qt::SizeAllCursor; }
+    bool highlightSelection() const override { return true; }
+    quint32 options() const override { return OptSelectionQuality | OptFinish; }
+
+    void mousePress(const ToolEvent& e) override;
+    void mouseMove(const ToolEvent& e) override;
+    void mouseRelease(const ToolEvent& e) override;
+    bool keyPress(QKeyEvent* e) override;
+    void paintOverlay(QPainter& p) override;
+    void deactivate() override;
+
+private:
+    bool continuing() const;
+    void push();
+    void syncBox();
+
+    bool m_active = false;
+    TransformBox m_box;
+    Selection m_base;     // selección al empezar la sesión
+    Selection m_result;   // última selección producida
+    QTransform m_transform;
+    Selection m_before;   // selección antes del arrastre actual
+    bool m_pivotDrag = false;
+    Selection m_pivotFor;
+};
+
+// Cursor de giro y cursor según la zona del cuadro bajo el puntero.
+QCursor transformCursor(TransformBox::Mode mode);

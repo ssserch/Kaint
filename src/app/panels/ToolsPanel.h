@@ -1,0 +1,39 @@
+#pragma once
+
+#include "app/Workspace.h"
+
+#include <QWidget>
+
+class QButtonGroup;
+class QToolButton;
+class ToolManager;
+class Tool;
+
+// Ventana Herramientas: rejilla de iconos como en Paint.NET. Por defecto
+// tiene dos columnas, pero al cambiar el tamaño de la ventana los iconos se
+// reorganizan en 1, 2 o más columnas (o filas) según el espacio.
+class ToolsPanel : public QWidget, public PanelContent {
+    Q_OBJECT
+public:
+    explicit ToolsPanel(ToolManager* manager, QWidget* parent = nullptr);
+
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+    QSize fitSize(QSize proposed, Qt::Orientations changed) const override;
+    // Columnas que caben en un ancho dado.
+    int columnsFor(int width) const;
+    int columns() const { return columnsFor(width()); }
+
+protected:
+    void resizeEvent(QResizeEvent* e) override;
+
+private:
+    void onToolChanged(Tool* tool);
+    QSize cell() const;
+    QSize sizeFor(int columns) const;
+    void layoutButtons();
+
+    ToolManager* m_manager;
+    QButtonGroup* m_group;
+    QList<QToolButton*> m_buttons;
+};

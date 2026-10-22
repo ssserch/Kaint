@@ -1,0 +1,8 @@
+build/
+build-debug/
+
+# Material de referencia de Paint.NET (unos 1,7 GB de binarios y documentación):
+# no forma parte de Kaint y GitHub rechaza los archivos de más de 100 MB.
+archivosdeprograma-windows/
+apidocs-main/
+paint.net.5.200.9790.504.portable.x64.wine.EXPERIMENTAL/

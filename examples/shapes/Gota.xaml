@@ -1,0 +1,16 @@
+<!-- Forma personalizada de ejemplo para Kaint y Paint.NET: modelo de objetos (geometría de WPF). -->
+<ps:SimpleGeometryShape
+    xmlns="clr-namespace:PaintDotNet.UI.Media;assembly=PaintDotNet.Framework"
+    xmlns:ps="clr-namespace:PaintDotNet.Shapes;assembly=PaintDotNet.Framework"
+    DisplayName="Gota">
+  <GeometryGroup FillRule="EvenOdd">
+    <PathGeometry>
+      <PathFigure StartPoint="50,0" IsClosed="True">
+        <BezierSegment Point1="50,0" Point2="15,45" Point3="15,70" />
+        <ArcSegment Point="85,70" Size="35,35" SweepDirection="Counterclockwise" IsLargeArc="True" />
+        <BezierSegment Point1="85,45" Point2="50,0" Point3="50,0" />
+      </PathFigure>
+    </PathGeometry>
+    <EllipseGeometry Center="38,72" RadiusX="7" RadiusY="10" />
+  </GeometryGroup>
+</ps:SimpleGeometryShape>

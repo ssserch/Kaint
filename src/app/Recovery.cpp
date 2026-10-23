@@ -9,29 +9,41 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QSet>
 #include <QStandardPaths>
+
+#include <memory>
 
 namespace Recovery {
 
 namespace {
 
 QString g_root;
+std::unique_ptr<QLockFile> g_lock;
 
 QString sessionDir(qint64 pid)
 {
     return rootDir() + QLatin1Char('/') + QString::number(pid);
 }
 
-// Un proceso de Kaint con ese número sigue abierto (en Linux, por /proc).
-bool kaintRunning(qint64 pid)
+QString lockPath(const QString& dir)
 {
-    if (pid == QCoreApplication::applicationPid())
+    return dir + QStringLiteral("/session.lock");
+}
+
+// Mientras Kaint está abierto, su carpeta tiene un bloqueo; si se cierra de golpe, QLockFile lo
+// da por abandonado (en Linux y en Windows).
+bool sessionAlive(const QString& dir)
+{
+    if (g_lock && g_lock->isLocked() && lockPath(dir) == lockPath(sessionDir(QCoreApplication::applicationPid())))
         return true;
-    QFile comm(QStringLiteral("/proc/%1/comm").arg(pid));
-    if (!comm.open(QIODevice::ReadOnly))
-        return false;
-    return comm.readAll().trimmed().startsWith("kaint");
+    QLockFile lock(lockPath(dir));
+    lock.setStaleLockTime(0);
+    if (!lock.tryLock(0))
+        return true;
+    lock.unlock();
+    return false;
 }
 
 } // namespace
@@ -52,7 +64,11 @@ void save(const QList<Document*>& docs)
 {
     const QString dir = sessionDir(QCoreApplication::applicationPid());
     QDir().mkpath(dir);
-    QSet<QString> kept;
+    if (!g_lock || !g_lock->isLocked()) {
+        g_lock = std::make_unique<QLockFile>(lockPath(dir));
+        g_lock->tryLock(0);
+    }
+    QSet<QString> kept{QStringLiteral("session")};
     for (Document* doc : docs) {
         if (!doc || !doc->isModified())
             continue;
@@ -80,6 +96,9 @@ void save(const QList<Document*>& docs)
 
 void clear()
 {
+    if (g_lock)
+        g_lock->unlock();
+    g_lock.reset();
     QDir(sessionDir(QCoreApplication::applicationPid())).removeRecursively();
 }
 
@@ -88,8 +107,8 @@ QList<Entry> orphaned()
     QList<Entry> entries;
     for (const QFileInfo& session : QDir(rootDir()).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
         bool ok = false;
-        const qint64 pid = session.fileName().toLongLong(&ok);
-        if (!ok || kaintRunning(pid))
+        session.fileName().toLongLong(&ok);
+        if (!ok || sessionAlive(session.absoluteFilePath()))
             continue;
         for (const QFileInfo& f : QDir(session.absoluteFilePath()).entryInfoList({QStringLiteral("*.ora")}, QDir::Files)) {
             Entry e;

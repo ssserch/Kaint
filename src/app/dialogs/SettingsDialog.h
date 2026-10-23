@@ -65,8 +65,9 @@ public:
     AppSettings settings() const { return m_settings; }
     void showPage(Page page);
 
-    // Tema que pide reiniciar Kaint (entrar o salir del tema KDE), o -1.
-    int restartScheme() const { return m_restartScheme; }
+    // Se aceptó reiniciar Kaint para aplicar el tema KDE (o salir de él) o el idioma; settings()
+    // tiene los valores nuevos.
+    bool restartRequested() const { return m_restartRequested; }
 
     // Texto de la página Diagnósticos (también se copia al portapapeles).
     static QString diagnostics();
@@ -90,6 +91,7 @@ private:
     void showPluginDetails();
     void addPlugins();
     void changed();
+    bool askRestart(const QString& question, const QString& restartText, const QString& cancelText);
 
     AppSettings m_settings;
     QListWidget* m_sections;
@@ -101,5 +103,5 @@ private:
     QLabel* m_updateStatus = nullptr;
     QLabel* m_discordStatus = nullptr;
     ToolOptionsPanel* m_toolDefaults = nullptr;
-    int m_restartScheme = -1;
+    bool m_restartRequested = false;
 };

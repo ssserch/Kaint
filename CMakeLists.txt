@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-# La versión y el repositorio se configuran en version.json antes de compilar.
+# Versión y repositorio (version.json)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/version.json" KAINT_VERSION_JSON)
 string(JSON KAINT_VERSION GET "${KAINT_VERSION_JSON}" version)
 string(JSON KAINT_REPOSITORY GET "${KAINT_VERSION_JSON}" repository)
@@ -8,8 +8,7 @@ string(REGEX REPLACE "^https?://github.com/" "" KAINT_GITHUB "${KAINT_REPOSITORY
 string(REGEX REPLACE "/$" "" KAINT_GITHUB "${KAINT_GITHUB}")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS version.json)
 
-# Rich Presence de Discord: el ID de la aplicación se configura en discord.json
-# ("PON___AQUI" = sin configurar). El token no se lee: no hace falta.
+# Rich Presence de Discord (discord.json)
 set(KAINT_DISCORD_CLIENT_ID "")
 set(KAINT_DISCORD_LARGE_IMAGE "kaint")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/discord.json")
@@ -36,15 +35,37 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets PrintSupport Network LinguistTools)
-find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
+
+# zlib (del sistema o descargada)
+find_package(ZLIB QUIET)
+if(NOT ZLIB_FOUND)
+    message(STATUS "Kaint: no hay zlib en el sistema; se descarga zlib 1.3.1")
+    include(FetchContent)
+    FetchContent_Declare(zlib
+        URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
+        URL_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23)
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SKIP_INSTALL_ALL ON)
+    FetchContent_MakeAvailable(zlib)
+    set_target_properties(zlib PROPERTIES EXCLUDE_FROM_ALL ON)
+    target_include_directories(zlibstatic INTERFACE "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}")
+    add_library(ZLIB::ZLIB ALIAS zlibstatic)
+endif()
+
+# Windows y MSVC
+if(WIN32)
+    add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+endif()
+if(MSVC)
+    add_compile_options(/utf-8 /Zc:__cplusplus /permissive-)
+endif()
 
 qt_standard_project_setup()
 include(GNUInstallDirs)
 
 # ---------------------------------------------------------------------------
-# Núcleo: documento, capas, selección, historial, efectos y formatos.
-# Solo depende de QtGui (QImage/QPainter), nunca de QtWidgets.
+# Núcleo (solo QtGui)
 # ---------------------------------------------------------------------------
 add_library(kaintcore STATIC
     src/core/BlendMode.cpp
@@ -131,7 +152,7 @@ add_library(kaintui STATIC
     src/app/tools/TextTool.cpp
 )
 target_link_libraries(kaintui PUBLIC kaintcore Qt6::Widgets Qt6::PrintSupport Qt6::Network)
-# El tema "Seguir al sistema" pregunta al portal de freedesktop si el escritorio está en modo oscuro.
+# Modo oscuro del sistema (portal de freedesktop)
 find_package(Qt6 QUIET COMPONENTS DBus)
 if(TARGET Qt6::DBus)
     target_link_libraries(kaintui PUBLIC Qt6::DBus)
@@ -143,8 +164,7 @@ target_compile_definitions(kaintui PUBLIC KAINT_VERSION="${PROJECT_VERSION}"
                            KAINT_DISCORD_LARGE_IMAGE="${KAINT_DISCORD_LARGE_IMAGE}")
 
 # ---------------------------------------------------------------------------
-# Iconos: los de img/ si existen (ver README) y, si no, los de emergencia de
-# data/. Se incluyen como recursos (:/kaint/...) y se instalan en hicolor.
+# Iconos (img/ o, si no hay, data/)
 # ---------------------------------------------------------------------------
 set(KAINT_ICON_RESOURCES)
 set(KAINT_ICON_PNG_SIZES)
@@ -156,7 +176,6 @@ foreach(size 16 22 24 32 48 64 128 256 512)
         set_source_files_properties("${png}" PROPERTIES QT_RESOURCE_ALIAS "icons/kaint-${size}.png")
     endif()
 endforeach()
-# SVG: el de img/ o, si no hay ningún icono en img/, el de emergencia de data/.
 set(KAINT_ICON_SVG "${CMAKE_CURRENT_SOURCE_DIR}/img/kaint.svg")
 if(NOT EXISTS "${KAINT_ICON_SVG}")
     if(KAINT_ICON_PNG_SIZES)
@@ -181,38 +200,52 @@ list(LENGTH KAINT_TOOL_ICONS KAINT_TOOL_ICON_COUNT)
 message(STATUS "Kaint: iconos de la aplicación en PNG: ${KAINT_ICON_PNG_SIZES}; iconos de herramientas: ${KAINT_TOOL_ICON_COUNT}")
 qt_add_resources(kaintui kaint_icons PREFIX "/kaint" FILES ${KAINT_ICON_RESOURCES})
 
+# Iconos de Breeze incluidos (data/icons)
+file(GLOB_RECURSE KAINT_THEME_ICONS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/icons/kaint-breeze*/*")
+qt_add_resources(kaintui kaint_icon_themes PREFIX "/kaint/icon-themes" BASE data/icons FILES ${KAINT_THEME_ICONS})
+
 
 qt_add_executable(kaint src/app/main.cpp)
 target_link_libraries(kaint PRIVATE kaintui)
+# Ejecutable de Windows
+if(WIN32)
+    set_target_properties(kaint PROPERTIES WIN32_EXECUTABLE ON)
+    configure_file(data/kaint.rc.in kaint.rc @ONLY)
+    target_sources(kaint PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/kaint.rc")
+    find_package(Qt6 REQUIRED COMPONENTS Svg)
+    target_link_libraries(kaint PRIVATE Qt6::Svg)
+endif()
 
-# Las cabeceras también tienen textos traducibles: lupdate tiene que verlas.
+# Cabeceras (para lupdate)
 file(GLOB_RECURSE KAINT_CORE_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.h")
 file(GLOB_RECURSE KAINT_UI_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/app/*.h")
 target_sources(kaintcore PRIVATE ${KAINT_CORE_HEADERS})
 target_sources(kaintui PRIVATE ${KAINT_UI_HEADERS})
 
-# Traducciones: el código está en español y translations/ tiene las demás
-# (el inglés es el idioma predeterminado). Se compilan dentro del programa en
-# :/i18n. Para actualizar los .ts tras cambiar textos: cmake --build build -t update_translations
+# Traducciones (cmake --build build -t update_translations)
 file(GLOB KAINT_TS_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/translations/*.ts")
 qt_add_translations(TARGETS kaintui SOURCE_TARGETS kaintcore kaintui kaint TS_FILES ${KAINT_TS_FILES}
                     RESOURCE_PREFIX "/i18n" LUPDATE_OPTIONS -no-obsolete -locations none)
 
 # ---------------------------------------------------------------------------
-# Capa de compatibilidad con los complementos de Paint.NET (opcional).
-# Con mono (mcs) se compilan las bibliotecas PaintDotNet.*.dll (código de
-# Paint.NET 3.36, licencia MIT, más lo que añadió Paint.NET 4) y el proceso
-# auxiliar kaint-pdn-host.exe. Sin mono, Kaint funciona igual pero no carga
-# complementos .dll.
+# Complementos de Paint.NET (opcional): mcs y mono en Linux, csc en Windows
 # ---------------------------------------------------------------------------
-option(KAINT_PDN_BRIDGE "Compilar la capa de compatibilidad con Paint.NET (necesita mono)" ON)
-find_program(KAINT_MCS mcs)
-if(KAINT_PDN_BRIDGE AND KAINT_MCS)
+option(KAINT_PDN_BRIDGE "Compilar la capa de compatibilidad con Paint.NET" ON)
+if(WIN32)
+    find_program(KAINT_MCS csc PATHS "$ENV{WINDIR}/Microsoft.NET/Framework64/v4.0.30319"
+                 "$ENV{WINDIR}/Microsoft.NET/Framework/v4.0.30319" NO_DEFAULT_PATH)
+    set(PDN_RUN)
+else()
+    find_program(KAINT_MCS mcs)
+    find_program(KAINT_MONO mono)
+    set(PDN_RUN ${KAINT_MONO})
+endif()
+if(KAINT_PDN_BRIDGE AND KAINT_MCS AND (WIN32 OR KAINT_MONO))
     set(PDN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/pdnbridge")
     set(PDN_OUT "${CMAKE_BINARY_DIR}/pdnbridge")
     file(MAKE_DIRECTORY "${PDN_OUT}")
-    # El código de Paint.NET es de terceros: sin avisos (-warn:0).
-    set(PDN_MCS_FLAGS -target:library -unsafe -optimize -warn:0 -r:System.Drawing -r:System.Windows.Forms)
+    set(PDN_MCS_FLAGS -nologo -target:library -unsafe -optimize -warn:0 -r:System.Drawing.dll
+                      -r:System.Windows.Forms.dll)
     set(PDN_REFS)
     set(PDN_OUTPUTS)
     foreach(part Base Core Data Effects)
@@ -221,60 +254,60 @@ if(KAINT_PDN_BRIDGE AND KAINT_MCS)
         add_custom_command(OUTPUT "${dll}"
             COMMAND ${KAINT_MCS} ${PDN_MCS_FLAGS} ${PDN_REFS} -out:${dll} ${PDN_${part}_SOURCES}
             DEPENDS ${PDN_${part}_SOURCES} ${PDN_OUTPUTS}
-            COMMENT "Compilando PaintDotNet.${part}.dll (mono)" VERBATIM)
+            COMMENT "Compilando PaintDotNet.${part}.dll" VERBATIM)
         list(APPEND PDN_REFS -r:${dll})
         list(APPEND PDN_OUTPUTS "${dll}")
     endforeach()
-    # Kaint.Runtime.dll: fachada para los complementos de .NET moderno (ver
-    # src/pdnbridge/Compat/GenerateRuntimeFacade.cs); se genera con el mono instalado.
     set(PDN_FACADE_GEN "${PDN_OUT}/GenerateRuntimeFacade.exe")
     set(PDN_FACADE_CS "${PDN_OUT}/KaintRuntimeFacade.cs")
     set(PDN_FACADE "${PDN_OUT}/Kaint.Runtime.dll")
-    find_program(KAINT_MONO mono)
     add_custom_command(OUTPUT "${PDN_FACADE}"
-        COMMAND ${KAINT_MCS} -target:exe -warn:0 -r:System.Core -out:${PDN_FACADE_GEN}
+        COMMAND ${KAINT_MCS} -nologo -target:exe -warn:0 -r:System.Core.dll -out:${PDN_FACADE_GEN}
                 ${PDN_DIR}/Compat/GenerateRuntimeFacade.cs
-        COMMAND ${KAINT_MONO} ${PDN_FACADE_GEN} ${PDN_FACADE_CS}
-        COMMAND ${KAINT_MCS} -target:library -warn:0 -r:System -r:System.Core -r:System.Configuration
-                -out:${PDN_FACADE} ${PDN_FACADE_CS}
+        COMMAND ${PDN_RUN} ${PDN_FACADE_GEN} ${PDN_FACADE_CS}
+        COMMAND ${KAINT_MCS} -nologo -target:library -warn:0 -r:System.dll -r:System.Core.dll
+                -r:System.Configuration.dll -out:${PDN_FACADE} ${PDN_FACADE_CS}
         DEPENDS "${PDN_DIR}/Compat/GenerateRuntimeFacade.cs"
-        COMMENT "Generando Kaint.Runtime.dll (mono)" VERBATIM)
+        COMMENT "Generando Kaint.Runtime.dll" VERBATIM)
     list(APPEND PDN_OUTPUTS "${PDN_FACADE}")
     file(GLOB PDN_HOST_SOURCES CONFIGURE_DEPENDS "${PDN_DIR}/Host/*.cs")
     set(PDN_HOST "${PDN_OUT}/kaint-pdn-host.exe")
     add_custom_command(OUTPUT "${PDN_HOST}"
-        COMMAND ${KAINT_MCS} -target:exe -unsafe -optimize -warn:4 -warnaserror+ -r:System.Drawing
-                -r:System.Windows.Forms -r:System.Core ${PDN_REFS} -out:${PDN_HOST} ${PDN_HOST_SOURCES}
+        COMMAND ${KAINT_MCS} -nologo -target:exe -unsafe -optimize -warn:4 -warnaserror+ -r:System.Drawing.dll
+                -r:System.Windows.Forms.dll -r:System.Core.dll ${PDN_REFS} -out:${PDN_HOST} ${PDN_HOST_SOURCES}
         DEPENDS ${PDN_HOST_SOURCES} ${PDN_OUTPUTS}
-        COMMENT "Compilando kaint-pdn-host.exe (mono)" VERBATIM)
+        COMMENT "Compilando kaint-pdn-host.exe" VERBATIM)
     add_custom_target(pdnbridge ALL DEPENDS ${PDN_OUTPUTS} "${PDN_HOST}")
     install(FILES ${PDN_OUTPUTS} "${PDN_HOST}" "${PDN_DIR}/License-PaintDotNet-3.36.txt"
             DESTINATION ${CMAKE_INSTALL_DATADIR}/kaint/pdnbridge)
     message(STATUS "Kaint: capa de compatibilidad con Paint.NET activada (${KAINT_MCS})")
 else()
-    message(STATUS "Kaint: sin mono (mcs); no se compila la capa de compatibilidad con Paint.NET")
+    message(STATUS "Kaint: sin compilador de C#; no se compila la capa de compatibilidad con Paint.NET")
 endif()
 
 install(FILES src/core/plugins/KaintPlugin.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/kaint)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(kaintcore PRIVATE -Wall -Wextra)
-    target_compile_options(kaintui PRIVATE -Wall -Wextra)
-    target_compile_options(kaint PRIVATE -Wall -Wextra)
+    set(KAINT_WARNINGS -Wall -Wextra)
+elseif(MSVC)
+    set(KAINT_WARNINGS /W3)
 endif()
+target_compile_options(kaintcore PRIVATE ${KAINT_WARNINGS})
+target_compile_options(kaintui PRIVATE ${KAINT_WARNINGS})
+target_compile_options(kaint PRIVATE ${KAINT_WARNINGS})
 
 # ---------------------------------------------------------------------------
 # Pruebas del núcleo (sin interfaz)
 # ---------------------------------------------------------------------------
 include(CTest)
 if(BUILD_TESTING)
-    # Complemento nativo de ejemplo (lo cargan las pruebas).
+    # Complementos de prueba
     add_library(kaint_example_plugin MODULE examples/plugin/ejemplo.c)
     target_include_directories(kaint_example_plugin PRIVATE src/core/plugins)
     set_target_properties(kaint_example_plugin PROPERTIES PREFIX "" OUTPUT_NAME "kaint-ejemplo"
                           LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test-plugins" C_VISIBILITY_PRESET hidden
                           AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
-    target_compile_options(kaint_example_plugin PRIVATE -Wall -Wextra)
+    target_compile_options(kaint_example_plugin PRIVATE ${KAINT_WARNINGS})
 
     add_executable(kaint_core_tests tests/core_tests.cpp)
     target_link_libraries(kaint_core_tests PRIVATE kaintcore)
@@ -283,11 +316,19 @@ if(BUILD_TESTING)
         KAINT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_dependencies(kaint_core_tests kaint_example_plugin)
     if(TARGET pdnbridge)
-        add_dependencies(kaint_core_tests pdnbridge)
+        set(PDN_TEST_PLUGIN "${CMAKE_BINARY_DIR}/test-plugins/KaintTestEffect.dll")
+        add_custom_command(OUTPUT "${PDN_TEST_PLUGIN}"
+            COMMAND ${KAINT_MCS} -nologo -target:library -warn:4 -warnaserror+ -r:System.Drawing.dll ${PDN_REFS}
+                    -out:${PDN_TEST_PLUGIN} ${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnplugin/KaintTestEffect.cs
+            DEPENDS tests/pdnplugin/KaintTestEffect.cs ${PDN_OUTPUTS}
+            COMMENT "Compilando KaintTestEffect.dll" VERBATIM)
+        add_custom_target(kaint_test_pdn_plugin DEPENDS "${PDN_TEST_PLUGIN}")
+        add_dependencies(kaint_core_tests pdnbridge kaint_test_pdn_plugin)
+        target_compile_definitions(kaint_core_tests PRIVATE KAINT_TEST_PDN_PLUGIN="${PDN_TEST_PLUGIN}")
     endif()
     add_test(NAME core COMMAND kaint_core_tests)
 
-    # Prueba de humo de la interfaz (sin pantalla, plataforma "offscreen").
+    # Prueba de la interfaz (sin pantalla)
     add_executable(kaint_ui_smoke tests/ui_smoke.cpp)
     target_link_libraries(kaint_ui_smoke PRIVATE kaintui)
     add_test(NAME ui_smoke COMMAND kaint_ui_smoke)
@@ -295,26 +336,32 @@ if(BUILD_TESTING)
 endif()
 
 # ---------------------------------------------------------------------------
-# Instalación: binario, lanzador .desktop, icono y tipo MIME
+# Instalación
 # ---------------------------------------------------------------------------
 install(TARGETS kaint RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-configure_file(data/io.github.kaint.Kaint.desktop.in io.github.kaint.Kaint.desktop @ONLY)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/io.github.kaint.Kaint.desktop
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-if(KAINT_ICON_SVG)
-    install(FILES "${KAINT_ICON_SVG}"
-            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-            RENAME io.github.kaint.Kaint.svg)
+install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+if(WIN32)
+    qt_generate_deploy_app_script(TARGET kaint OUTPUT_SCRIPT KAINT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
+    install(SCRIPT "${KAINT_DEPLOY_SCRIPT}")
 endif()
-foreach(size ${KAINT_ICON_PNG_SIZES})
-    install(FILES img/kaint-${size}.png
-            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
-            RENAME io.github.kaint.Kaint.png)
-endforeach()
+if(UNIX AND NOT APPLE)
+    configure_file(data/io.github.kaint.Kaint.desktop.in io.github.kaint.Kaint.desktop @ONLY)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/io.github.kaint.Kaint.desktop
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    if(KAINT_ICON_SVG)
+        install(FILES "${KAINT_ICON_SVG}"
+                DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+                RENAME io.github.kaint.Kaint.svg)
+    endif()
+    foreach(size ${KAINT_ICON_PNG_SIZES})
+        install(FILES img/kaint-${size}.png
+                DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
+                RENAME io.github.kaint.Kaint.png)
+    endforeach()
+endif()
 
 # ---------------------------------------------------------------------------
-# Paquete .deb (Debian 13, Ubuntu 25.04 o más nuevos): ./build.sh --deb, que compila con prefijo
-# /usr y llama a "cpack -G DEB". Las dependencias de bibliotecas las calcula dpkg-shlibdeps.
+# Paquete .deb (./build.sh --deb)
 # ---------------------------------------------------------------------------
 set(CPACK_PACKAGE_NAME "kaint")
 set(CPACK_PACKAGE_VENDOR "SSSerch")

@@ -96,7 +96,9 @@ AboutDialog::AboutDialog(QWidget* parent)
 
     auto* logo = new AboutLogo(this);
     auto* version = new QLabel(QStringLiteral("Kaint v%1").arg(QStringLiteral(KAINT_VERSION)), this);
-    auto* copyright = new QLabel(tr("Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores."), this);
+    auto* copyright = new QLabel(tr("Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores.") + QLatin1Char('\n')
+                                     + tr("Software libre con licencia GPL-3.0."),
+                                 this);
     copyright->setWordWrap(true);
     auto* link = new QLabel(QStringLiteral("<a href=\"%1\">%1</a>").arg(QStringLiteral(KAINT_REPOSITORY)), this);
     link->setOpenExternalLinks(true);

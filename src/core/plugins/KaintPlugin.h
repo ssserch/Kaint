@@ -1,15 +1,17 @@
 /*
  * API de complementos nativos de Kaint (C, ABI estable).
  *
- * Un complemento es una biblioteca compartida (.so) que exporta la función
- * kaint_plugin_info(). Kaint la busca en ~/.local/share/Kaint/Effects y en
- * las carpetas de complementos incluidos. Ver README.md («Complementos»).
+ * Un complemento es una biblioteca compartida (.so en Linux, .dll en Windows)
+ * que exporta la función kaint_plugin_info(). Kaint la busca en la carpeta de
+ * complementos del usuario (~/.local/share/Kaint/Effects en Linux,
+ * %LOCALAPPDATA%\Kaint\Effects en Windows).
  *
  * Los píxeles son BGRA de 8 bits por canal con alfa directo (no
  * premultiplicado), el mismo formato que las capas de Kaint y que el
  * ColorBgra de Paint.NET. Los colores van como 0xAARRGGBB.
  *
- * Compilar:  cc -shared -fPIC -O2 -o mi-efecto.so mi-efecto.c
+ * Compilar:  cc -shared -fPIC -O2 -o mi-efecto.so mi-efecto.c   (Linux)
+ *            gcc -shared -O2 -o mi-efecto.dll mi-efecto.c        (Windows, MinGW)
  */
 #ifndef KAINT_PLUGIN_H
 #define KAINT_PLUGIN_H
@@ -22,7 +24,9 @@ extern "C" {
 
 #define KAINT_PLUGIN_API_VERSION 1
 
-#if defined(__GNUC__)
+#if defined(_WIN32)
+#define KAINT_PLUGIN_EXPORT __declspec(dllexport)
+#elif defined(__GNUC__)
 #define KAINT_PLUGIN_EXPORT __attribute__((visibility("default")))
 #else
 #define KAINT_PLUGIN_EXPORT

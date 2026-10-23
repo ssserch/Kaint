@@ -85,6 +85,14 @@ QString DiscordPresence::effectiveClientId() const
 
 QStringList DiscordPresence::socketPaths()
 {
+#ifdef Q_OS_WIN
+    // En Windows son tuberías con nombre (\\.\pipe\discord-ipc-N): QLocalSocket solo necesita
+    // el nombre.
+    QStringList pipes;
+    for (int i = 0; i < 10; ++i)
+        pipes << QStringLiteral("discord-ipc-%1").arg(i);
+    return pipes;
+#endif
     // Igual que la biblioteca oficial: XDG_RUNTIME_DIR (o TMPDIR, /tmp) y las carpetas de las
     // versiones Flatpak y Snap de Discord.
     QStringList bases;
@@ -216,8 +224,11 @@ void DiscordPresence::connectToDiscord()
     disconnectFromDiscord();
     setStatus(Status::Connecting);
     for (const QString& path : socketPaths()) {
+        // Las tuberías de Windows no son archivos: se intenta conectar (falla al momento si no hay).
+#ifndef Q_OS_WIN
         if (!QFileInfo::exists(path))
             continue;
+#endif
         auto* socket = new QLocalSocket(this);
         socket->connectToServer(path);
         if (!socket->waitForConnected(500)) {

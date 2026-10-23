@@ -8,9 +8,11 @@
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPainterPathStroker>
 #include <QRadialGradient>
 #include <QStyle>
 #include <QStyleOption>
+#include <QtMath>
 
 #include <cmath>
 
@@ -105,30 +107,59 @@ void drawMove(QPainter& p)
     p.drawPolygon(up, 3); p.drawPolygon(dn, 3); p.drawPolygon(lf, 3); p.drawPolygon(rt, 3);
 }
 
+// Arco con punta de flecha al final (span positivo: sentido antihorario), con relleno y borde.
+void arrowArc(QPainter& p, QPointF c, qreal r, qreal startDeg, qreal spanDeg, qreal width, const QColor& fill,
+              const QColor& line)
+{
+    const QRectF box(c.x() - r, c.y() - r, 2 * r, 2 * r);
+    QPainterPath arc;
+    arc.arcMoveTo(box, startDeg);
+    arc.arcTo(box, startDeg, spanDeg);
+    QPainterPathStroker stroker;
+    stroker.setWidth(width);
+    stroker.setCapStyle(Qt::FlatCap);
+    QPainterPath shape = stroker.createStroke(arc);
+    const qreal end = qDegreesToRadians(startDeg + spanDeg);
+    const qreal dir = spanDeg >= 0 ? 1 : -1;
+    const QPointF tip = c + QPointF(std::cos(end), -std::sin(end)) * r;
+    const QPointF tangent(-std::sin(end) * dir, -std::cos(end) * dir);
+    const QPointF radial(std::cos(end), -std::sin(end));
+    QPainterPath head;
+    head.addPolygon(QPolygonF{tip + tangent * width * 1.35, tip + radial * width * 1.2, tip - radial * width * 1.2});
+    head.closeSubpath();
+    p.setPen(QPen(line, 0.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(fill);
+    p.drawPath(shape.united(head).simplified());
+}
+
 void drawBrush(QPainter& p)
 {
+    // Pincel en diagonal: cerdas oscuras en punta, virola metálica y mango azul.
     aa(p);
-    QLinearGradient hg(18, 1, 8, 11);
-    hg.setColorAt(0.0, QColor(126, 180, 238));
-    hg.setColorAt(1.0, QColor(54, 106, 178));
-    p.setPen(QPen(QColor(28, 58, 98), 0.9));
-    p.setBrush(hg);
-    QPainterPath h;
-    h.moveTo(17.4, 1.2); h.lineTo(19.0, 2.8); h.lineTo(10.2, 11.6); h.lineTo(8.4, 9.8);
-    h.closeSubpath();
-    p.drawPath(h);
-    p.setPen(QPen(QColor(92, 98, 110), 0.9));
-    p.setBrush(QColor(198, 205, 216));
-    QPainterPath f;
-    f.moveTo(10.2, 11.6); f.lineTo(8.4, 9.8); f.lineTo(6.2, 12.0); f.lineTo(8.0, 13.8);
-    f.closeSubpath();
-    p.drawPath(f);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(40, 92, 170));
-    QPainterPath b;
-    b.moveTo(6.2, 12.0); b.lineTo(8.0, 13.8); b.lineTo(1.8, 18.6);
-    b.closeSubpath();
-    p.drawPath(b);
+    p.save();
+    p.translate(2.0, 18.0);
+    p.rotate(-45);
+    QPainterPath bristles;
+    bristles.moveTo(0, 0);
+    bristles.cubicTo(2.5, -0.6, 5.5, -2.4, 8.2, -2.4);
+    bristles.lineTo(8.2, 2.4);
+    bristles.cubicTo(5.5, 2.4, 2.5, 0.6, 0, 0);
+    p.setPen(QPen(QColor(24, 26, 30), 0.8));
+    p.setBrush(QColor(52, 56, 64));
+    p.drawPath(bristles);
+    QLinearGradient metal(0, -2.6, 0, 2.6);
+    metal.setColorAt(0, QColor(236, 240, 245));
+    metal.setColorAt(1, QColor(140, 150, 162));
+    p.setPen(QPen(QColor(80, 88, 98), 0.8));
+    p.setBrush(metal);
+    p.drawRect(QRectF(8.2, -2.6, 3.4, 5.2));
+    QLinearGradient handle(0, -2.1, 0, 2.1);
+    handle.setColorAt(0, QColor(120, 170, 235));
+    handle.setColorAt(1, QColor(36, 88, 170));
+    p.setPen(QPen(QColor(24, 56, 110), 0.8));
+    p.setBrush(handle);
+    p.drawRoundedRect(QRectF(11.6, -2.1, 10.6, 4.2), 2.1, 2.1);
+    p.restore();
 }
 
 void drawPencil(QPainter& p)
@@ -178,76 +209,86 @@ void drawEraser(QPainter& p)
 
 void drawFill(QPainter& p)
 {
+    // Cubo metálico inclinado del que se derrama pintura azul, como el de Paint.NET.
     aa(p);
+    QLinearGradient paint(0, 8, 0, 18);
+    paint.setColorAt(0, QColor(80, 150, 240));
+    paint.setColorAt(1, QColor(26, 84, 190));
+    QPainterPath drip;
+    drip.moveTo(4.2, 7.6);
+    drip.cubicTo(2.0, 10.6, 1.0, 13.6, 2.2, 16.0);
+    drip.cubicTo(3.2, 18.2, 6.4, 17.8, 6.4, 15.4);
+    drip.cubicTo(6.4, 13.4, 5.2, 11.6, 6.6, 9.2);
+    drip.closeSubpath();
+    p.setPen(QPen(QColor(20, 60, 140), 0.8));
+    p.setBrush(paint);
+    p.drawPath(drip);
 
     p.save();
-    p.translate(10.0, 9.5);
-    p.rotate(-38);
-    p.translate(-10.0, -9.5);
-
+    p.translate(11.5, 10.5);
+    p.rotate(-40);
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(QColor(76, 96, 122), 1.2));
-    p.drawArc(QRectF(6.0, 1.6, 8.0, 7.0), 15 * 16, 150 * 16);
-
-    QLinearGradient bg(5.5, 0, 14.5, 0);
-    bg.setColorAt(0.0, QColor(112, 170, 234));
-    bg.setColorAt(1.0, QColor(40, 96, 172));
-    p.setPen(QPen(QColor(26, 58, 104), 1.0));
-    p.setBrush(bg);
-    QPainterPath body;
-    body.moveTo(5.2, 6.2); body.lineTo(14.8, 6.2);
-    body.lineTo(12.9, 16.0); body.lineTo(7.1, 16.0);
-    body.closeSubpath();
-    p.drawPath(body);
-
-    p.setBrush(QColor(158, 206, 246));
-    p.drawEllipse(QRectF(5.2, 4.1, 9.6, 4.2));
-    p.restore();
-
+    p.setPen(QPen(QColor(70, 78, 90), 1.3));
+    p.drawArc(QRectF(-5.0, -10.5, 10.0, 11.0), 20 * 16, 140 * 16);
+    QLinearGradient body(-5.5, 0, 5.5, 0);
+    body.setColorAt(0, QColor(232, 236, 241));
+    body.setColorAt(1, QColor(128, 138, 152));
+    QPainterPath bucket;
+    bucket.moveTo(-5.6, -4.2);
+    bucket.lineTo(5.6, -4.2);
+    bucket.lineTo(4.2, 5.4);
+    bucket.quadTo(0, 6.8, -4.2, 5.4);
+    bucket.closeSubpath();
+    p.setPen(QPen(QColor(64, 72, 84), 0.9));
+    p.setBrush(body);
+    p.drawPath(bucket);
+    p.setBrush(QColor(242, 245, 248));
+    p.drawEllipse(QRectF(-5.6, -5.8, 11.2, 3.2));
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(48, 112, 198));
-    QPainterPath drip;
-    drip.moveTo(12.6, 11.4);
-    drip.quadTo(17.6, 14.0, 15.8, 18.4);
-    drip.quadTo(13.4, 19.6, 12.2, 15.6);
-    drip.closeSubpath();
-    p.drawPath(drip);
+    p.setBrush(paint);
+    p.drawEllipse(QRectF(-4.4, -5.2, 8.8, 2.0));
+    p.restore();
 }
 
 void drawColorPicker(QPainter& p)
 {
+    // Cuentagotas en diagonal: punta de cristal con color, tubo, anillo y bulbo azul.
     aa(p);
-    p.setPen(QPen(QColor(28, 60, 102), 0.9));
-    p.setBrush(QColor(92, 150, 216));
-    p.drawEllipse(QRectF(10.8, 1.0, 7.8, 7.8));
-    p.setPen(QPen(QColor(92, 98, 110), 0.9));
-    p.setBrush(QColor(202, 210, 222));
-    QPainterPath shaft;
-    shaft.moveTo(12.4, 7.4); shaft.lineTo(14.8, 9.8); shaft.lineTo(7.4, 15.6); shaft.lineTo(5.2, 13.4);
-    shaft.closeSubpath();
-    p.drawPath(shaft);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(50, 54, 62));
+    p.save();
+    p.translate(2.2, 17.8);
+    p.rotate(-45);
     QPainterPath tip;
-    tip.moveTo(7.4, 15.6); tip.lineTo(5.2, 13.4); tip.lineTo(1.8, 18.6); tip.closeSubpath();
+    tip.moveTo(0, 0);
+    tip.lineTo(4.4, -1.1);
+    tip.lineTo(4.4, 1.1);
+    tip.closeSubpath();
+    p.setPen(QPen(QColor(40, 70, 120), 0.7));
+    p.setBrush(QColor(70, 140, 230));
     p.drawPath(tip);
+    p.setPen(QPen(QColor(80, 96, 118), 0.8));
+    p.setBrush(QColor(236, 243, 251));
+    p.drawRect(QRectF(4.4, -1.6, 7.4, 3.2));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(70, 140, 230));
+    p.drawRect(QRectF(4.8, -1.2, 3.0, 2.4));
+    p.setPen(QPen(QColor(60, 68, 80), 0.8));
+    p.setBrush(QColor(150, 160, 172));
+    p.drawRect(QRectF(11.8, -2.4, 2.2, 4.8));
+    QLinearGradient bulb(0, -3.2, 0, 3.2);
+    bulb.setColorAt(0, QColor(96, 150, 225));
+    bulb.setColorAt(1, QColor(24, 64, 140));
+    p.setPen(QPen(QColor(18, 44, 96), 0.8));
+    p.setBrush(bulb);
+    p.drawRoundedRect(QRectF(14.0, -3.2, 7.6, 6.4), 3.2, 3.2);
+    p.restore();
 }
 
 void drawRecolor(QPainter& p)
 {
+    // Dos flechas en círculo, naranja y azul: cambiar un color por otro.
     aa(p);
-    p.setPen(QPen(QColor(26, 58, 100), 0.9));
-    p.setBrush(QColor(72, 128, 202));
-    p.drawEllipse(QRectF(2.6, 5.4, 11.2, 11.2));
-    QPen ap(QColor(212, 64, 42), 2.1);
-    ap.setCapStyle(Qt::RoundCap);
-    p.setPen(ap);
-    p.setBrush(Qt::NoBrush);
-    p.drawArc(QRectF(4.6, 2.4, 13.0, 13.0), 15 * 16, 205 * 16);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(212, 64, 42));
-    QPointF ah[] = { QPointF(18.6, 7.6), QPointF(13.6, 6.9), QPointF(16.3, 11.4) };
-    p.drawPolygon(ah, 3);
+    arrowArc(p, QPointF(10, 10), 6.0, 105, 140, 3.0, QColor(240, 120, 40), QColor(150, 60, 10));
+    arrowArc(p, QPointF(10, 10), 6.0, 285, 140, 3.0, QColor(60, 130, 230), QColor(20, 60, 140));
 }
 
 void drawCloneStamp(QPainter& p)
@@ -456,25 +497,13 @@ void drawSaveDoc(QPainter& p)
 void drawUndo(QPainter& p)
 {
     aa(p);
-    p.setPen(QPen(QColor(50, 100, 200), 2));
-    p.setBrush(Qt::NoBrush);
-    p.drawArc(QRect(3, 4, 10, 10), 45*16, 225*16);
-    p.setBrush(QColor(50, 100, 200));
-    p.setPen(Qt::NoPen);
-    QPointF arr[] = {QPointF(3, 4), QPointF(7, 3), QPointF(5, 7)};
-    p.drawPolygon(arr, 3);
+    arrowArc(p, QPointF(8.8, 9.2), 4.6, -40, 215, 2.6, QColor(52, 128, 232), QColor(18, 60, 140));
 }
 
 void drawRedo(QPainter& p)
 {
     aa(p);
-    p.setPen(QPen(QColor(50, 100, 200), 2));
-    p.setBrush(Qt::NoBrush);
-    p.drawArc(QRect(3, 4, 10, 10), -45*16, -225*16);
-    p.setBrush(QColor(50, 100, 200));
-    p.setPen(Qt::NoPen);
-    QPointF arr[] = {QPointF(13, 4), QPointF(9, 3), QPointF(11, 7)};
-    p.drawPolygon(arr, 3);
+    arrowArc(p, QPointF(7.2, 9.2), 4.6, 220, -215, 2.6, QColor(52, 128, 232), QColor(18, 60, 140));
 }
 
 void drawCut(QPainter& p)
@@ -705,8 +734,8 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("edit-cut"), {16, drawCut, true}},
         {QStringLiteral("edit-copy"), {16, drawCopy, true}},
         {QStringLiteral("edit-paste"), {16, drawPaste, true}},
-        {QStringLiteral("edit-undo"), {16, drawUndo, true}},
-        {QStringLiteral("edit-redo"), {16, drawRedo, true}},
+        {QStringLiteral("edit-undo"), {16, drawUndo, false}},
+        {QStringLiteral("edit-redo"), {16, drawRedo, false}},
         {QStringLiteral("transform-crop"), {16, cropAction, true}},
         {QStringLiteral("edit-select-none"), {16, deselectAction, true}},
         {QStringLiteral("view-grid"), {16, pixelGridAction, true}},

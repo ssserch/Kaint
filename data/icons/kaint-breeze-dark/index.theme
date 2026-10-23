@@ -1,0 +1,16 @@
+[Icon Theme]
+Name=Kaint Breeze Dark
+Comment=Breeze icons used by Kaint (KDE, LGPL-3.0-or-later)
+Directories=16,22
+
+[16]
+Size=16
+MinSize=8
+MaxSize=18
+Type=Scalable
+
+[22]
+Size=22
+MinSize=19
+MaxSize=512
+Type=Scalable

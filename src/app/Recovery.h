@@ -6,8 +6,8 @@
 class Document;
 
 // Copias de recuperación: cada pocos minutos se guardan en OpenRaster las imágenes con cambios
-// sin guardar, en una carpeta por proceso. Al cerrar Kaint con normalidad se borran; si se
-// cierra de golpe, al abrirlo otra vez se ofrecen para recuperarlas.
+// sin guardar, en una carpeta por proceso con un bloqueo (QLockFile). Al cerrar Kaint con
+// normalidad se borran; si se cierra de golpe, al abrirlo otra vez se ofrecen para recuperarlas.
 namespace Recovery {
 
 struct Entry {

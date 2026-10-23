@@ -1,12 +1,13 @@
 // Kaint: proceso auxiliar que carga complementos de efectos de Paint.NET
-// (.dll) con mono y los ejecuta para Kaint.
+// (.dll) y los ejecuta para Kaint (con mono en Linux, con .NET Framework en
+// Windows).
 //
 // Protocolo: una petición JSON por línea en stdin y una respuesta JSON por
 // línea en stdout. Antes de la respuesta de "render" pueden llegar líneas
-// {"progress":n,"total":m}. Los píxeles viajan por un archivo de memoria
-// compartida (/dev/shm) con el origen y luego el destino en BGRA de alfa
-// directo: el mismo formato que las capas de Kaint y que ColorBgra, así que
-// no hay conversión.
+// {"progress":n,"total":m}. Los píxeles viajan por memoria compartida
+// (/dev/shm en Linux, con nombre en Windows) con el origen y luego el destino
+// en BGRA de alfa directo: el mismo formato que las capas de Kaint y que
+// ColorBgra, así que no hay conversión.
 
 using System;
 using System.Collections.Generic;
@@ -590,7 +591,8 @@ namespace Kaint.PdnHost
             return new Rectangle(Convert.ToInt32(r[0]), Convert.ToInt32(r[1]), Convert.ToInt32(r[2]), Convert.ToInt32(r[3]));
         }
 
-        // Archivo de memoria compartida con el origen y el destino.
+        // Memoria compartida con el origen y el destino: un archivo de /dev/shm en Linux o una
+        // memoria con nombre ("Local\\...") en Windows.
         private sealed unsafe class SharedPixels
             : IDisposable
         {
@@ -603,7 +605,9 @@ namespace Kaint.PdnHost
             public SharedPixels(string path, int width, int height)
             {
                 long bytes = (long)width * height * 4;
-                this.file = MemoryMappedFile.CreateFromFile(path, FileMode.Open, null, 0, MemoryMappedFileAccess.ReadWrite);
+                this.file = path.StartsWith("Local\\", StringComparison.Ordinal)
+                    ? MemoryMappedFile.OpenExisting(path, MemoryMappedFileRights.ReadWrite)
+                    : MemoryMappedFile.CreateFromFile(path, FileMode.Open, null, 0, MemoryMappedFileAccess.ReadWrite);
                 this.view = this.file.CreateViewAccessor(0, bytes * 2, MemoryMappedFileAccess.ReadWrite);
                 this.view.SafeMemoryMappedViewHandle.AcquirePointer(ref this.pointer);
                 byte* start = this.pointer + this.view.PointerOffset;

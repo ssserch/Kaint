@@ -144,6 +144,20 @@ quint64 imageSignature(const QImage& source)
     return h;
 }
 
+// Tira de imágenes: no pide más ancho que el de sus pestañas (QTabBar reserva sitio para las
+// flechas de desplazamiento aunque no hagan falta), así la flecha de la lista queda pegada a la
+// última miniatura, como en Paint.NET.
+class ImageStrip : public QTabBar {
+public:
+    using QTabBar::QTabBar;
+
+    QSize minimumSizeHint() const override
+    {
+        const QSize min = QTabBar::minimumSizeHint();
+        return QSize(std::min(min.width(), sizeHint().width()), min.height());
+    }
+};
+
 QString zoomText(qreal z)
 {
     const qreal pct = z * 100;
@@ -702,7 +716,7 @@ void MainWindow::createTopRow()
     layout->addWidget(m_menuBar, 0, Qt::AlignVCenter);
 
     // Tira de imágenes abiertas con miniaturas.
-    m_tabs = new QTabBar(top);
+    m_tabs = new ImageStrip(top);
     m_tabs->setObjectName(QStringLiteral("ImageStrip"));
     m_tabs->setDocumentMode(true);
     m_tabs->setTabsClosable(true);
@@ -2435,21 +2449,22 @@ void MainWindow::showSettings(SettingsDialog::Page page)
         applySettings();
     });
     dlg.exec();
-    if (dlg.restartScheme() >= 0)
-        restartWithScheme(dlg.restartScheme());
+    if (dlg.restartRequested())
+        restartWith(dlg.settings());
 }
 
-void MainWindow::restartWithScheme(int scheme)
+void MainWindow::restartWith(const AppSettings& settings)
 {
     // Se cierra como siempre (pregunta por los cambios sin guardar); main() abre Kaint de nuevo
-    // con las imágenes que estaban abiertas.
-    const int previous = m_settings.colorScheme;
-    m_settings.colorScheme = scheme;
+    // con las imágenes que estaban abiertas. Si no se cierra, todo queda como estaba.
+    const AppSettings previous = m_settings;
+    m_settings.colorScheme = settings.colorScheme;
+    m_settings.language = settings.language;
     m_settings.save();
     m_restartRequested = true;
     if (!close()) {
         m_restartRequested = false;
-        m_settings.colorScheme = previous;
+        m_settings = previous;
         m_settings.save();
     }
 }

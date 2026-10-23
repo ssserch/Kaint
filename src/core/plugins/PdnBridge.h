@@ -8,8 +8,8 @@
 #include <atomic>
 #include <mutex>
 
-// Comunicación con el proceso auxiliar kaint-pdn-host.exe (mono), que carga los complementos
-// de efectos de Paint.NET.
+// Comunicación con el proceso auxiliar kaint-pdn-host.exe (con mono en Linux, con .NET
+// Framework en Windows), que carga los complementos de efectos de Paint.NET.
 class PdnBridge {
 public:
     static PdnBridge& instance();
@@ -40,12 +40,24 @@ private:
                       int progressTotal, QString* error);
     bool prepareShared(const QImage& src, QString* error);
     QJsonObject request(const QJsonObject& req, int timeoutMs, QString* error);
+    // Según el sistema: leer lo que haya llegado (1 sí, 0 nada en el plazo, -1 se cerró), crear la
+    // memoria compartida y dejar que el diálogo del complemento pase al frente.
+    int readChunk(int timeoutMs);
+    bool mapShared(size_t bytes, QString* error);
+    void allowDialogFocus();
 
     std::mutex m_mutex;
+#ifdef Q_OS_WIN
+    std::atomic<void*> m_process{nullptr};
+    void* m_toHost = nullptr;
+    void* m_fromHost = nullptr;
+    void* m_mapping = nullptr;
+#else
     std::atomic_int m_pid{-1};
     int m_socket = -1;
-    QByteArray m_buffer;
     int m_shmFd = -1;
+#endif
+    QByteArray m_buffer;
     uchar* m_shm = nullptr;
     size_t m_shmSize = 0;
     QString m_shmPath;

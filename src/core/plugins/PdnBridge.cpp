@@ -7,9 +7,13 @@
 #include <QJsonDocument>
 #include <QStandardPaths>
 
+#include <cstring>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#else
 #include <cerrno>
 #include <csignal>
-#include <cstring>
 #include <fcntl.h>
 #include <poll.h>
 #include <spawn.h>
@@ -20,6 +24,7 @@
 #include <unistd.h>
 
 extern char** environ;
+#endif
 
 namespace {
 
@@ -41,6 +46,18 @@ QJsonArray paletteJson(const EffectContext& ctx)
         list.append(toArgb(c));
     return list;
 }
+
+#ifdef Q_OS_WIN
+QString windowsError(DWORD code = GetLastError())
+{
+    wchar_t* text = nullptr;
+    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr,
+                   code, 0, reinterpret_cast<wchar_t*>(&text), 0, nullptr);
+    const QString message = text ? QString::fromWCharArray(text).trimmed() : QString::number(code);
+    LocalFree(text);
+    return message;
+}
+#endif
 
 } // namespace
 
@@ -79,21 +96,28 @@ QString PdnBridge::monoPath()
 
 bool PdnBridge::available(QString* why)
 {
+#ifndef Q_OS_WIN
     if (monoPath().isEmpty()) {
         if (why)
             *why = QCoreApplication::translate("PdnBridge", "Los complementos de Paint.NET necesitan mono "
                                                             "(sudo pacman -S mono libgdiplus).");
         return false;
     }
+#endif
     if (hostPath().isEmpty()) {
         if (why)
             *why = QCoreApplication::translate("PdnBridge", "Kaint se compiló sin la capa de compatibilidad con "
-                                                            "Paint.NET (hace falta mono al compilar).");
+                                                            "Paint.NET (hace falta un compilador de C# al compilar).");
         return false;
     }
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Proceso auxiliar, comunicación y memoria compartida, según el sistema
+// ---------------------------------------------------------------------------
+
+#ifndef Q_OS_WIN
 bool PdnBridge::ensureStarted(QString* error)
 {
     if (m_pid > 0) {
@@ -177,12 +201,6 @@ void PdnBridge::abort()
         ::kill(pid, SIGKILL);
 }
 
-void PdnBridge::shutdown()
-{
-    std::lock_guard lock(m_mutex);
-    stop();
-}
-
 bool PdnBridge::writeLine(const QByteArray& line)
 {
     QByteArray data = line;
@@ -198,6 +216,247 @@ bool PdnBridge::writeLine(const QByteArray& line)
         done += n;
     }
     return true;
+}
+
+int PdnBridge::readChunk(int timeoutMs)
+{
+    pollfd pfd{m_socket, POLLIN, 0};
+    const int rc = ::poll(&pfd, 1, timeoutMs);
+    if (rc < 0)
+        return errno == EINTR ? 0 : -1;
+    if (rc == 0)
+        return 0;
+    char chunk[65536];
+    const ssize_t n = ::recv(m_socket, chunk, sizeof chunk, 0);
+    if (n <= 0)
+        return -1;
+    m_buffer.append(chunk, n);
+    return 1;
+}
+
+bool PdnBridge::mapShared(size_t needed, QString* error)
+{
+    if (m_shm) {
+        munmap(m_shm, m_shmSize);
+        m_shm = nullptr;
+    }
+    if (m_shmFd < 0) {
+        static std::atomic_int counter{0};
+        const QString name = QStringLiteral("/kaint-pdn-%1-%2").arg(getpid()).arg(++counter);
+        m_shmFd = shm_open(QFile::encodeName(name).constData(), O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+        if (m_shmFd < 0) {
+            if (error)
+                *error = QString::fromLocal8Bit(strerror(errno));
+            return false;
+        }
+        m_shmPath = QStringLiteral("/dev/shm") + name;
+    }
+    if (ftruncate(m_shmFd, off_t(needed)) != 0) {
+        if (error)
+            *error = QString::fromLocal8Bit(strerror(errno));
+        return false;
+    }
+    void* p = mmap(nullptr, needed, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmFd, 0);
+    if (p == MAP_FAILED) {
+        if (error)
+            *error = QString::fromLocal8Bit(strerror(errno));
+        return false;
+    }
+    m_shm = static_cast<uchar*>(p);
+    m_shmSize = needed;
+    return true;
+}
+
+void PdnBridge::allowDialogFocus() {}
+
+#else
+// Windows: el proceso auxiliar es un programa de .NET Framework (viene con Windows); se habla
+// con él por tuberías anónimas y los píxeles van por memoria compartida con nombre.
+
+bool PdnBridge::ensureStarted(QString* error)
+{
+    if (HANDLE process = m_process.load()) {
+        if (WaitForSingleObject(process, 0) == WAIT_TIMEOUT)
+            return true;
+        stop();
+    }
+    QString why;
+    if (!available(&why)) {
+        if (error)
+            *error = why;
+        return false;
+    }
+    SECURITY_ATTRIBUTES inherit{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+    HANDLE childIn = nullptr, toHost = nullptr, fromHost = nullptr, childOut = nullptr;
+    if (!CreatePipe(&childIn, &toHost, &inherit, 0)) {
+        if (error)
+            *error = windowsError();
+        return false;
+    }
+    if (!CreatePipe(&fromHost, &childOut, &inherit, 0)) {
+        if (error)
+            *error = windowsError();
+        CloseHandle(childIn);
+        CloseHandle(toHost);
+        return false;
+    }
+    SetHandleInformation(toHost, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(fromHost, HANDLE_FLAG_INHERIT, 0);
+    HANDLE errors = qEnvironmentVariableIsEmpty("KAINT_PDN_DEBUG")
+                        ? CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &inherit, OPEN_EXISTING, 0, nullptr)
+                        : GetStdHandle(STD_ERROR_HANDLE);
+    STARTUPINFOW startup{};
+    startup.cb = sizeof startup;
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = childIn;
+    startup.hStdOutput = childOut;
+    startup.hStdError = errors;
+    PROCESS_INFORMATION info{};
+    std::wstring command = L"\"" + QDir::toNativeSeparators(hostPath()).toStdWString() + L"\"";
+    const BOOL started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+                                        nullptr, &startup, &info);
+    const DWORD code = GetLastError();
+    CloseHandle(childIn);
+    CloseHandle(childOut);
+    if (qEnvironmentVariableIsEmpty("KAINT_PDN_DEBUG") && errors != INVALID_HANDLE_VALUE)
+        CloseHandle(errors);
+    if (!started) {
+        CloseHandle(toHost);
+        CloseHandle(fromHost);
+        if (error)
+            *error = windowsError(code);
+        return false;
+    }
+    CloseHandle(info.hThread);
+    m_process = info.hProcess;
+    m_toHost = toHost;
+    m_fromHost = fromHost;
+    m_buffer.clear();
+    return true;
+}
+
+void PdnBridge::stop()
+{
+    // Al cerrar su entrada el proceso termina solo; si no, se termina a la fuerza.
+    if (m_toHost) {
+        CloseHandle(m_toHost);
+        m_toHost = nullptr;
+    }
+    if (m_fromHost) {
+        CloseHandle(m_fromHost);
+        m_fromHost = nullptr;
+    }
+    if (HANDLE process = m_process.exchange(nullptr)) {
+        if (WaitForSingleObject(process, 200) != WAIT_OBJECT_0) {
+            TerminateProcess(process, 1);
+            WaitForSingleObject(process, 2000);
+        }
+        CloseHandle(process);
+    }
+    if (m_shm) {
+        UnmapViewOfFile(m_shm);
+        m_shm = nullptr;
+    }
+    if (m_mapping) {
+        CloseHandle(m_mapping);
+        m_mapping = nullptr;
+    }
+    m_shmSize = 0;
+    m_srcKey = 0;
+}
+
+void PdnBridge::abort()
+{
+    if (HANDLE process = m_process.load())
+        TerminateProcess(process, 1);
+}
+
+bool PdnBridge::writeLine(const QByteArray& line)
+{
+    QByteArray data = line;
+    data.append('\n');
+    qsizetype done = 0;
+    while (done < data.size()) {
+        DWORD written = 0;
+        if (!WriteFile(m_toHost, data.constData() + done, DWORD(data.size() - done), &written, nullptr))
+            return false;
+        done += written;
+    }
+    return true;
+}
+
+int PdnBridge::readChunk(int timeoutMs)
+{
+    // Las tuberías anónimas no admiten espera con plazo: se mira cada pocos milisegundos.
+    for (int waited = 0;; waited += 5) {
+        DWORD available = 0;
+        if (!PeekNamedPipe(m_fromHost, nullptr, 0, nullptr, &available, nullptr))
+            return -1;
+        if (available > 0) {
+            char chunk[65536];
+            DWORD n = 0;
+            if (!ReadFile(m_fromHost, chunk, std::min<DWORD>(available, sizeof chunk), &n, nullptr) || n == 0)
+                return -1;
+            m_buffer.append(chunk, qsizetype(n));
+            return 1;
+        }
+        if (waited >= timeoutMs)
+            return 0;
+        Sleep(5);
+    }
+}
+
+bool PdnBridge::mapShared(size_t needed, QString* error)
+{
+    // Una memoria con nombre por tamaño (no se puede agrandar): el proceso la abre por su nombre.
+    if (m_shm) {
+        UnmapViewOfFile(m_shm);
+        m_shm = nullptr;
+    }
+    if (m_mapping) {
+        CloseHandle(m_mapping);
+        m_mapping = nullptr;
+    }
+    static std::atomic_int counter{0};
+    const QString name = QStringLiteral("Local\\kaint-pdn-%1-%2").arg(GetCurrentProcessId()).arg(++counter);
+    const quint64 size = needed;
+    m_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, DWORD(size >> 32),
+                                   DWORD(size & 0xffffffffu), reinterpret_cast<const wchar_t*>(name.utf16()));
+    if (!m_mapping) {
+        if (error)
+            *error = windowsError();
+        return false;
+    }
+    void* p = MapViewOfFile(m_mapping, FILE_MAP_ALL_ACCESS, 0, 0, needed);
+    if (!p) {
+        if (error)
+            *error = windowsError();
+        CloseHandle(m_mapping);
+        m_mapping = nullptr;
+        return false;
+    }
+    m_shm = static_cast<uchar*>(p);
+    m_shmSize = needed;
+    m_shmPath = name;
+    return true;
+}
+
+void PdnBridge::allowDialogFocus()
+{
+    // El diálogo del complemento lo abre el otro proceso: se le deja pasar al frente.
+    if (HANDLE process = m_process.load())
+        AllowSetForegroundWindow(GetProcessId(process));
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// Peticiones (comunes)
+// ---------------------------------------------------------------------------
+
+void PdnBridge::shutdown()
+{
+    std::lock_guard lock(m_mutex);
+    stop();
 }
 
 bool PdnBridge::readResponse(QJsonObject* out, int timeoutMs, const std::atomic_bool* cancel,
@@ -226,19 +485,12 @@ bool PdnBridge::readResponse(QJsonObject* out, int timeoutMs, const std::atomic_
             cancelSent = true;
             writeLine(QByteArrayLiteral("{\"cmd\":\"cancel\"}"));
         }
-        pollfd pfd{m_socket, POLLIN, 0};
         const int slice = 50;
-        const int rc = ::poll(&pfd, 1, slice);
-        if (rc < 0 && errno != EINTR)
+        const int got = readChunk(slice);
+        if (got < 0)
             break;
-        if (rc > 0) {
-            char chunk[65536];
-            const ssize_t n = ::recv(m_socket, chunk, sizeof chunk, 0);
-            if (n <= 0)
-                break;
-            m_buffer.append(chunk, n);
+        if (got > 0)
             continue;
-        }
         waited += slice;
         if (cancelSent)
             sinceCancel += slice;
@@ -290,34 +542,8 @@ bool PdnBridge::prepareShared(const QImage& src, QString* error)
     const size_t layerBytes = size_t(src.width()) * size_t(src.height()) * 4;
     const size_t needed = layerBytes * 2;
     if (!m_shm || m_shmSize < needed) {
-        if (m_shm) {
-            munmap(m_shm, m_shmSize);
-            m_shm = nullptr;
-        }
-        if (m_shmFd < 0) {
-            static std::atomic_int counter{0};
-            const QString name = QStringLiteral("/kaint-pdn-%1-%2").arg(getpid()).arg(++counter);
-            m_shmFd = shm_open(QFile::encodeName(name).constData(), O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-            if (m_shmFd < 0) {
-                if (error)
-                    *error = QString::fromLocal8Bit(strerror(errno));
-                return false;
-            }
-            m_shmPath = QStringLiteral("/dev/shm") + name;
-        }
-        if (ftruncate(m_shmFd, off_t(needed)) != 0) {
-            if (error)
-                *error = QString::fromLocal8Bit(strerror(errno));
+        if (!mapShared(needed, error))
             return false;
-        }
-        void* p = mmap(nullptr, needed, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmFd, 0);
-        if (p == MAP_FAILED) {
-            if (error)
-                *error = QString::fromLocal8Bit(strerror(errno));
-            return false;
-        }
-        m_shm = static_cast<uchar*>(p);
-        m_shmSize = needed;
         m_srcKey = 0;
     }
     if (m_srcKey != src.cacheKey() || m_srcSize != src.size()) {
@@ -381,6 +607,7 @@ bool PdnBridge::showDialog(const QString& assembly, const QString& effectId, con
     *accepted = false;
     if (!ensureStarted(error) || !prepareShared(src, error))
         return false;
+    allowDialogFocus();
     const QJsonObject req{
         {QStringLiteral("cmd"), QStringLiteral("dialog")},
         {QStringLiteral("path"), assembly},

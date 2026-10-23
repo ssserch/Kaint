@@ -10,8 +10,11 @@
 namespace Icons {
 
 // Asegura que se encuentran los temas de iconos del sistema (Breeze) aunque no haya un tema de
-// plataforma de KDE cargado (otros escritorios, pruebas).
+// plataforma de KDE cargado (otros escritorios, pruebas) y, si el sistema no tiene Breeze
+// (Windows), usa los iconos de Breeze que lleva Kaint (data/icons).
 void setupTheme();
+// Breeze claro u oscuro: el del sistema o, si no hay, el incluido en Kaint.
+QString breezeTheme(bool dark);
 
 // Icono de herramienta: el de img/tools/<nombre>.svg|png si se incluyó al compilar (iconos al
 // estilo Paint.NET) o, si no, el del tema.

@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
-# Compila Kaint en Arch Linux o en Debian/Ubuntu (KDE Plasma / Wayland).
-#
-#   ./build.sh               compila en modo Release (build/kaint)
-#   ./build.sh --run         compila y ejecuta
-#   ./build.sh --install     compila e instala en ~/.local (aparece en el menú de KDE)
-#   ./build.sh --deb         crea el paquete .deb (Debian 13 o Ubuntu 25.04 en adelante)
-#   ./build.sh --help        todas las opciones
+# Compila e instala Kaint en Arch Linux o Debian/Ubuntu (opciones: ./build.sh --help).
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
@@ -19,9 +13,7 @@ DO_RUN=0
 DO_TEST=0
 DO_DEB=0
 
-# Paquetes necesarios para compilar y ejecutar y recomendados: más formatos (WebP, TIFF, AVIF,
-# JPEG XL, HEIF, PSD...), diálogos de Qt traducidos y mono + libgdiplus para los complementos de
-# Paint.NET (.dll). Arch y Debian/Ubuntu (Qt 6.5 o más: Debian 13, Ubuntu 25.04).
+# --- Paquetes (necesarios y recomendados) -----------------------------------
 ARCH_REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons)
 ARCH_OPTIONAL=(qt6-imageformats kimageformats qt6-translations mono libgdiplus)
 DEB_REQUIRED=(build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev
@@ -32,6 +24,7 @@ DEB_OPTIONAL=(qt6-image-formats-plugins kimageformat6-plugins qt6-translations-l
 c_bold=$'\e[1m'; c_red=$'\e[31m'; c_yellow=$'\e[33m'; c_green=$'\e[32m'; c_reset=$'\e[0m'
 if [[ ! -t 1 ]]; then c_bold=""; c_red=""; c_yellow=""; c_green=""; c_reset=""; fi
 
+# --- Opciones ---------------------------------------------------------------
 usage() {
     cat <<EOF
 Uso: $0 [opciones]
@@ -63,7 +56,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Dependencias -----------------------------------------------------------
-# Comprueba los paquetes con el gestor de la distribución y muestra cómo instalar los que faltan.
 check_packages() {
     local installed=$1 install_cmd=$2; shift 2
     local -n required=$1 optional=$2
@@ -124,6 +116,7 @@ if (( DO_DEB )); then
     echo "  Instálalo con: sudo apt install ./$(ls "$BUILD_DIR"/kaint_*.deb)"
 fi
 
+# --- Instalación ------------------------------------------------------------
 if (( DO_INSTALL )); then
     echo "${c_bold}Instalando en $PREFIX...${c_reset}"
     mkdir -p "$PREFIX" 2>/dev/null || true
@@ -132,7 +125,6 @@ if (( DO_INSTALL )); then
     else
         sudo cmake --install "$BUILD_DIR"
     fi
-    # Refresca el menú de aplicaciones de KDE y la caché de iconos.
     command -v update-desktop-database >/dev/null && update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null || true
     command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
     echo "${c_green}Instalado:${c_reset} $PREFIX/bin/kaint (también en el menú de aplicaciones)"

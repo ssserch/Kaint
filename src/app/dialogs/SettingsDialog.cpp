@@ -224,6 +224,14 @@ void SettingsDialog::changed()
     emit settingsChanged(m_settings);
 }
 
+bool SettingsDialog::askRestart(const QString& question, const QString& restartText, const QString& cancelText)
+{
+    TaskDialog ask(tr("Reiniciar Kaint"), Icons::theme({"view-refresh"}), QImage(), question, this);
+    const int restart = ask.addChoice(Icons::theme({"view-refresh"}), tr("Reiniciar ahora"), restartText, true);
+    ask.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), cancelText);
+    return ask.choose() == restart;
+}
+
 QWidget* SettingsDialog::createInterfacePage()
 {
     PageBox page = makePage(this);
@@ -250,9 +258,17 @@ QWidget* SettingsDialog::createInterfacePage()
     // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio.
     auto* schemeRow = new QHBoxLayout;
     auto* scheme = new QComboBox(page.widget);
-    scheme->addItems({tr("Seguir al sistema"), tr("Claro"), tr("Oscuro"), tr("KDE"), tr("Personalizado")});
+    // El tema del escritorio: Plasma en Linux, el estilo nativo en Windows.
+#ifdef Q_OS_WIN
+    const QString native = tr("Windows");
+    const QString nativeTip = tr("El estilo y los colores reales de Windows.");
+#else
+    const QString native = tr("KDE");
+    const QString nativeTip = tr("El estilo y los colores reales de Plasma.");
+#endif
+    scheme->addItems({tr("Seguir al sistema"), tr("Claro"), tr("Oscuro"), native, tr("Personalizado")});
     scheme->setItemData(0, tr("Claro u oscuro de Paint.NET, según el modo del escritorio."), Qt::ToolTipRole);
-    scheme->setItemData(3, tr("El estilo y los colores reales de Plasma."), Qt::ToolTipRole);
+    scheme->setItemData(3, nativeTip, Qt::ToolTipRole);
     scheme->setItemData(4, tr("Colores, fondo del lienzo y diseño a tu gusto."), Qt::ToolTipRole);
     scheme->setCurrentIndex(m_settings.colorScheme);
     auto* customize = new QPushButton(tr("Personalizar…"), page.widget);
@@ -273,34 +289,30 @@ QWidget* SettingsDialog::createInterfacePage()
     languageRow->addStretch();
     page.layout->addLayout(languageRow);
 
-    auto* restartNote = wrapped(QString(), page.widget);
-    page.layout->addWidget(restartNote);
-    const QString startLanguage = m_settings.language;
-    auto updateNote = [this, restartNote, startLanguage] {
-        const bool restart = m_settings.language != startLanguage;
-        restartNote->setText(restart ? tr("Reinicia Kaint para aplicar del todo estos cambios.") : QString());
-        restartNote->setVisible(restart);
-    };
-    updateNote();
-    // Entrar en el tema KDE o salir de él reinicia Kaint: se pregunta antes y, si no se acepta,
-    // se queda el tema que había.
+    // Entrar en el tema KDE o salir de él, y cambiar el idioma, reinicia Kaint: se pregunta antes
+    // y, si no se acepta, se queda como estaba.
     auto chooseScheme = [this, scheme](int i) {
         if (i == m_settings.colorScheme)
             return true;
         if (Theme::needsRestart(Theme::Scheme(i))) {
-            TaskDialog ask(tr("Reiniciar Kaint"), Icons::theme({"view-refresh"}), QImage(),
-                           i == int(Theme::Scheme::Kde)
-                               ? tr("El tema KDE usa la integración de Plasma, que solo se carga al abrir Kaint. "
-                                    "¿Quieres reiniciar Kaint ahora?")
-                               : tr("Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?"),
-                           this);
-            const int restart = ask.addChoice(Icons::theme({"view-refresh"}), tr("Reiniciar ahora"),
-                                              tr("Kaint se cerrará y se abrirá de nuevo con el tema elegido. Si hay "
-                                                 "cambios sin guardar, te lo preguntará antes."),
-                                              true);
-            ask.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), tr("Seguir con el tema actual."));
-            if (ask.choose() == restart) {
-                m_restartScheme = i;
+#ifdef Q_OS_WIN
+            const QString question = i == int(Theme::Scheme::Kde)
+                                         ? tr("El tema Windows usa el estilo del sistema, que solo se carga al abrir "
+                                              "Kaint. ¿Quieres reiniciar Kaint ahora?")
+                                         : tr("Para salir del tema Windows hay que reiniciar Kaint. ¿Quieres "
+                                              "reiniciarlo ahora?");
+#else
+            const QString question = i == int(Theme::Scheme::Kde)
+                                         ? tr("El tema KDE usa la integración de Plasma, que solo se carga al abrir "
+                                              "Kaint. ¿Quieres reiniciar Kaint ahora?")
+                                         : tr("Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo "
+                                              "ahora?");
+#endif
+            if (askRestart(question, tr("Kaint se cerrará y se abrirá de nuevo con el tema elegido. Si hay cambios sin "
+                                        "guardar, te lo preguntará antes."),
+                           tr("Seguir con el tema actual."))) {
+                m_settings.colorScheme = i;
+                m_restartRequested = true;
                 accept();
             } else {
                 scheme->setCurrentIndex(m_settings.colorScheme);
@@ -319,10 +331,20 @@ QWidget* SettingsDialog::createInterfacePage()
         ThemeDialog dlg(this);
         execWithoutDimming(dlg);
     });
-    connect(language, &QComboBox::activated, this, [this, language, updateNote](int i) {
-        m_settings.language = language->itemData(i).toString();
-        changed();
-        updateNote();
+    connect(language, &QComboBox::activated, this, [this, language](int i) {
+        const QString chosen = language->itemData(i).toString();
+        if (chosen == m_settings.language)
+            return;
+        if (askRestart(tr("El idioma se cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
+                       tr("Kaint se cerrará y se abrirá de nuevo en el idioma elegido. Si hay cambios sin guardar, te "
+                          "lo preguntará antes."),
+                       tr("Seguir con el idioma actual."))) {
+            m_settings.language = chosen;
+            m_restartRequested = true;
+            accept();
+        } else {
+            language->setCurrentIndex(language->findData(m_settings.language));
+        }
     });
 
     page.layout->addWidget(sectionHeader(tr("Al iniciar"), page.widget));

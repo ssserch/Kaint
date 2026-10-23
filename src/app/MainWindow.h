@@ -54,7 +54,7 @@ public:
     void startupChecks();
     // Copias de recuperación de las imágenes sin guardar (cada pocos minutos).
     void autosave();
-    // Se cerró para reiniciar Kaint (cambio al tema KDE o desde él).
+    // Se cerró para reiniciar Kaint (tema KDE o idioma).
     bool restartRequested() const { return m_restartRequested; }
 
 protected:
@@ -163,7 +163,7 @@ private:
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
     void applyThemeLayout();
-    void restartWithScheme(int scheme);
+    void restartWith(const AppSettings& settings);
     void offerRecovery();
     void showToolHint(const QString& hint);
     void refreshHint();

@@ -1,6 +1,9 @@
 build/
 build-debug/
 build-deb/
+build-windows/
+build-windows-debug/
+aqtinstall.log
 archivosdeprograma-windows/
 apidocs-main/
 paint.net.5.200.9790.504.portable.x64.wine.EXPERIMENTAL/

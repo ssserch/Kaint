@@ -12,6 +12,10 @@
         <translation>Copyright © 2026 SSSerch (aka Y2Kerchy) and contributors.</translation>
     </message>
     <message>
+        <source>Software libre con licencia GPL-3.0.</source>
+        <translation>Free software under the GPL-3.0 license.</translation>
+    </message>
+    <message>
         <source>Traducido al español por SSSerch</source>
         <translation>English translation by SSSerch</translation>
     </message>
@@ -1658,8 +1662,8 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Paint.NET plugins need mono (sudo pacman -S mono libgdiplus).</translation>
     </message>
     <message>
-        <source>Kaint se compiló sin la capa de compatibilidad con Paint.NET (hace falta mono al compilar).</source>
-        <translation>Kaint was built without the Paint.NET compatibility layer (mono is needed at build time).</translation>
+        <source>Kaint se compiló sin la capa de compatibilidad con Paint.NET (hace falta un compilador de C# al compilar).</source>
+        <translation>Kaint was built without the Paint.NET compatibility layer (a C# compiler is needed at build time).</translation>
     </message>
     <message>
         <source>El complemento no responde.</source>
@@ -3635,16 +3639,28 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Language:</translation>
     </message>
     <message>
-        <source>Reinicia Kaint para aplicar del todo estos cambios.</source>
-        <translation>Restart Kaint to fully apply these changes.</translation>
-    </message>
-    <message>
         <source>Reiniciar Kaint</source>
         <translation>Restart Kaint</translation>
     </message>
     <message>
         <source>El tema KDE usa la integración de Plasma, que solo se carga al abrir Kaint. ¿Quieres reiniciar Kaint ahora?</source>
         <translation>The KDE theme uses the Plasma integration, which is only loaded when Kaint starts. Do you want to restart Kaint now?</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>Windows</translation>
+    </message>
+    <message>
+        <source>El estilo y los colores reales de Windows.</source>
+        <translation>The real Windows style and colors.</translation>
+    </message>
+    <message>
+        <source>El tema Windows usa el estilo del sistema, que solo se carga al abrir Kaint. ¿Quieres reiniciar Kaint ahora?</source>
+        <translation>The Windows theme uses the system style, which is only loaded when Kaint starts. Do you want to restart Kaint now?</translation>
+    </message>
+    <message>
+        <source>Para salir del tema Windows hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?</source>
+        <translation>Leaving the Windows theme requires restarting Kaint. Do you want to restart it now?</translation>
     </message>
     <message>
         <source>Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?</source>
@@ -3665,6 +3681,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Seguir con el tema actual.</source>
         <translation>Keep the current theme.</translation>
+    </message>
+    <message>
+        <source>El idioma se cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?</source>
+        <translation>The language changes when Kaint starts. Do you want to restart it now?</translation>
+    </message>
+    <message>
+        <source>Kaint se cerrará y se abrirá de nuevo en el idioma elegido. Si hay cambios sin guardar, te lo preguntará antes.</source>
+        <translation>Kaint will close and open again in the chosen language. If there are unsaved changes, it will ask you first.</translation>
+    </message>
+    <message>
+        <source>Seguir con el idioma actual.</source>
+        <translation>Keep the current language.</translation>
     </message>
     <message>
         <source>Al iniciar</source>

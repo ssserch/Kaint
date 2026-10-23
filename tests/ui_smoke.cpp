@@ -51,6 +51,7 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QStatusBar>
+#include <QTabBar>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QToolButton>
@@ -326,6 +327,19 @@ static void testTheme()
             qputenv(name, value);
     }
     Theme::apply(Theme::Scheme::Light);
+
+    // Iconos de Breeze incluidos en Kaint (los que se usan en Windows o sin Breeze en el sistema).
+    {
+        const QString previous = QIcon::themeName();
+        for (const QString& name : {QStringLiteral("kaint-breeze"), QStringLiteral("kaint-breeze-dark")}) {
+            CHECK(QFile::exists(QStringLiteral(":/kaint/icon-themes/%1/index.theme").arg(name)));
+            QIcon::setThemeName(name);
+            CHECK(QIcon::hasThemeIcon(QStringLiteral("layer-new")) && QIcon::hasThemeIcon(QStringLiteral("media-skip-forward")));
+            CHECK(!QIcon::fromTheme(QStringLiteral("edit-delete")).pixmap(16, 16).isNull());
+        }
+        QIcon::setThemeName(previous);
+        CHECK(!Icons::breezeTheme(true).isEmpty());
+    }
 
     Canvas canvas;
     canvas.resize(120, 90);
@@ -1130,7 +1144,11 @@ int main(int argc, char** argv)
         const QString mine = recoveryDir.filePath(QString::number(QCoreApplication::applicationPid()));
         CHECK(!QDir(mine).entryList({QStringLiteral("*.ora")}, QDir::Files).isEmpty());
         CHECK(Recovery::orphaned().isEmpty());
-        CHECK(QDir().rename(mine, recoveryDir.filePath(QStringLiteral("999999999"))));
+        // Una sesión cuyo proceso ya no existe: sus copias sin bloqueo vivo.
+        const QString crashed = recoveryDir.filePath(QStringLiteral("999999999"));
+        QDir().mkpath(crashed);
+        for (const QFileInfo& f : QDir(mine).entryInfoList({QStringLiteral("*.ora"), QStringLiteral("*.json")}, QDir::Files))
+            QFile::copy(f.absoluteFilePath(), crashed + QLatin1Char('/') + f.fileName());
         const QList<Recovery::Entry> entries = Recovery::orphaned();
         bool restoredLayers = false;
         for (const Recovery::Entry& e : entries) {
@@ -1141,7 +1159,9 @@ int main(int argc, char** argv)
         }
         CHECK(restoredLayers);
         Recovery::discard(entries);
-        CHECK(Recovery::orphaned().isEmpty());
+        CHECK(Recovery::orphaned().isEmpty() && !QDir(crashed).exists());
+        Recovery::clear();
+        CHECK(!QDir(mine).exists());
         Recovery::setRootForTesting(QString());
 
         // Pasar al tema KDE pide reiniciar: "Cancelar" deja el tema como estaba y "Reiniciar
@@ -1150,7 +1170,7 @@ int main(int argc, char** argv)
             SettingsDialog settings(AppSettings::load(), tools, &w);
             QComboBox* scheme = nullptr;
             for (QComboBox* c : settings.findChildren<QComboBox*>())
-                if (c->findText(QStringLiteral("KDE")) >= 0)
+                if (c->count() == 5 && c->itemText(4) == QStringLiteral("Personalizado"))
                     scheme = c;
             CHECK(scheme);
             if (!scheme)
@@ -1164,9 +1184,47 @@ int main(int argc, char** argv)
             emit scheme->activated(int(Theme::Scheme::Kde));
             settle();
             if (choice == 1)
-                CHECK(settings.restartScheme() == -1 && scheme->currentIndex() == before);
+                CHECK(!settings.restartRequested() && scheme->currentIndex() == before);
             else
-                CHECK(settings.restartScheme() == int(Theme::Scheme::Kde) && settings.result() == QDialog::Accepted);
+                CHECK(settings.restartRequested() && settings.settings().colorScheme == int(Theme::Scheme::Kde)
+                      && settings.result() == QDialog::Accepted);
+        }
+
+        // Cambiar el idioma también pide reiniciar, con las mismas dos respuestas.
+        for (int choice : {1, 0}) {
+            SettingsDialog settings(AppSettings::load(), tools, &w);
+            QComboBox* language = nullptr;
+            for (QComboBox* c : settings.findChildren<QComboBox*>())
+                if (c->findData(QStringLiteral("es")) >= 0 && c->findData(QStringLiteral("en")) >= 0)
+                    language = c;
+            CHECK(language);
+            if (!language)
+                break;
+            const QString before = language->currentData().toString();
+            const int other = language->findData(before == QLatin1String("es") ? QStringLiteral("en") : QStringLiteral("es"));
+            QTimer::singleShot(300, [choice] {
+                if (auto* ask = qobject_cast<TaskDialog*>(QApplication::activeModalWidget()))
+                    if (auto* b = ask->findChild<QAbstractButton*>(QStringLiteral("choice%1").arg(choice)))
+                        b->click();
+            });
+            language->setCurrentIndex(other);
+            emit language->activated(other);
+            settle();
+            if (choice == 1)
+                CHECK(!settings.restartRequested() && language->currentData().toString() == before);
+            else
+                CHECK(settings.restartRequested() && settings.settings().language != before);
+        }
+
+        // La flecha de la lista de imágenes va justo después de la última miniatura.
+        auto* strip = w.findChild<QTabBar*>(QStringLiteral("ImageStrip"));
+        auto* listButton = w.findChild<QToolButton*>(QStringLiteral("ImageListButton"));
+        CHECK(strip && listButton && strip->count() > 0);
+        if (strip && listButton && strip->count() > 0) {
+            CHECK(strip->minimumSizeHint().width() <= strip->sizeHint().width());
+            const int lastTab = strip->mapTo(w.window(), strip->tabRect(strip->count() - 1).topRight()).x();
+            const int arrow = listButton->mapTo(w.window(), QPoint(0, 0)).x();
+            CHECK(arrow - lastTab >= 0 && arrow - lastTab <= 12);
         }
     }
 

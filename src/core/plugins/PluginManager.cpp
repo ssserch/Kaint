@@ -27,6 +27,44 @@ struct PluginManager::Loaded {
 
 namespace {
 
+#ifdef Q_OS_WIN
+// Ensamblado de .NET (complemento de Paint.NET): un PE con la cabecera CLI rellena. Se lee la
+// cabecera en vez de cargar el archivo, que podría ejecutar código.
+bool isManagedAssembly(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray head = file.read(4096);
+    auto u32 = [&head](qsizetype at, int bytes = 4) {
+        quint32 v = 0;
+        for (int i = bytes - 1; i >= 0; --i)
+            v = (v << 8) | (at >= 0 && at + i < head.size() ? uchar(head.at(at + i)) : 0u);
+        return v;
+    };
+    auto u16 = [&u32](qsizetype at) { return u32(at, 2); };
+    if (!head.startsWith("MZ"))
+        return false;
+    const qsizetype pe = u32(0x3c);
+    if (u32(pe) != 0x00004550)
+        return false;
+    const qsizetype optional = pe + 24;
+    const qsizetype directories = optional + (u16(optional) == 0x20b ? 112 : 96);
+    return u32(directories + 14 * 8) != 0;
+}
+#endif
+
+// Complemento nativo de Kaint: un .so en Linux; en Windows, un .dll que no es de .NET (los de
+// Paint.NET también son .dll).
+bool isNativePlugin(const QString& path)
+{
+#ifdef Q_OS_WIN
+    return path.endsWith(QLatin1String(".dll"), Qt::CaseInsensitive) && !isManagedAssembly(path);
+#else
+    return path.endsWith(QLatin1String(".so"));
+#endif
+}
+
 // Versión del formato de la caché: al cambiarla se vuelven a examinar todos.
 constexpr int kCacheVersion = 1;
 
@@ -237,7 +275,7 @@ void PluginManager::scan()
         info.file = QFileInfo(c.path).fileName();
         m_roots.insert(info.id, c.root);
         info.enabled = QSettings().value(settingsKey(info), true).toBool();
-        if (c.path.endsWith(QLatin1String(".so"))) {
+        if (isNativePlugin(c.path)) {
             info.kind = QStringLiteral("Kaint");
             readNative(info, false);
         } else {

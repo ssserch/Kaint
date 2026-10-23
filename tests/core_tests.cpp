@@ -25,6 +25,7 @@
 #include <QRandomGenerator>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QPainter>
@@ -750,7 +751,7 @@ static void testPlugins()
     pm->setPathsForTesting({user}, dir.filePath(QStringLiteral("cache.json")));
     const QString example = QStringLiteral(KAINT_TEST_PLUGIN);
     CHECK(pm->installedAlready({example}).isEmpty());
-    CHECK(pm->install({example}, false) == QStringList{user + QStringLiteral("/kaint-ejemplo.so")});
+    CHECK(pm->install({example}, false) == QStringList{user + QLatin1Char('/') + QFileInfo(example).fileName()});
     CHECK(pm->installedAlready({example}) == QStringList{example});
     CHECK(pm->install({example}, false).isEmpty());
     CHECK(pm->install({example}, true).size() == 1);
@@ -846,6 +847,42 @@ static void testPlugins()
         std::printf("Se omite la prueba de PolyGlitch: no está %s\n", qPrintable(polyDir));
     else
         polyGlitch();
+
+#ifdef KAINT_TEST_PDN_PLUGIN
+    // Complemento de prueba propio (tests/pdnplugin): parámetros, selección, cancelación y una
+    // imagen más grande que obliga a crear otra memoria compartida.
+    {
+        QTemporaryDir pdnDir;
+        QFile::copy(QStringLiteral(KAINT_TEST_PDN_PLUGIN), pdnDir.filePath(QStringLiteral("KaintTestEffect.dll")));
+        pm->setPathsForTesting({pdnDir.path()}, dir.filePath(QStringLiteral("cache-prueba.json")));
+        pm->scan();
+        pm->waitForInspection();
+        CHECK(pm->plugins().size() == 1 && pm->plugins().value(0).errors.isEmpty());
+        pm->setEnabled(pm->plugins().value(0).id, true);
+        const Effect* xorEffect = Effects::find(QStringLiteral("pdn:KaintTestEffect.dll:KaintTest.XorEffect"));
+        CHECK(xorEffect);
+        if (xorEffect) {
+            const QImage inverted = Effects::apply(*xorEffect, src, Selection(), Effects::defaults(*xorEffect), EffectContext(), cancel);
+            CHECK(xorEffect->takeError().isEmpty());
+            CHECK(inverted.pixel(5, 7) == qRgba(255 - qRed(src.pixel(5, 7)), 255 - qGreen(src.pixel(5, 7)),
+                                                255 - qBlue(src.pixel(5, 7)), qAlpha(src.pixel(5, 7))));
+            ParamValues none = Effects::defaults(*xorEffect);
+            none.insert(QStringLiteral("Amount"), 0);
+            CHECK(changedPixels(src, Effects::apply(*xorEffect, src, Selection(), none, EffectContext(), cancel)) == 0);
+            const Selection left = Selection::fromRect(QRect(0, 0, 32, 48), src.size());
+            const QImage half = Effects::apply(*xorEffect, src, left, Effects::defaults(*xorEffect), EffectContext(), cancel);
+            CHECK(half.pixel(50, 10) == src.pixel(50, 10) && half.pixel(10, 10) != src.pixel(10, 10));
+            std::atomic_bool stopNow{true};
+            CHECK(Effects::apply(*xorEffect, src, Selection(), Effects::defaults(*xorEffect), EffectContext(), stopNow).isNull());
+            const QImage big = testPattern(300, 200);
+            const QImage bigOut = Effects::apply(*xorEffect, big, Selection(), Effects::defaults(*xorEffect), EffectContext(), cancel);
+            CHECK(changedPixels(big, bigOut) == 300 * 200);
+            CHECK(changedPixels(src, Effects::apply(*xorEffect, src, Selection(), Effects::defaults(*xorEffect), EffectContext(), cancel))
+                  == 64 * 48);
+        }
+        pm->setEnabled(pm->plugins().value(0).id, false);
+    }
+#endif
 
     // Complementos de Paint.NET 4.3/4.4 compilados para .NET moderno, si está la colección de
     // Windows en el proyecto.

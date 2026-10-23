@@ -1,5 +1,7 @@
 #include "app/Theme.h"
 
+#include "app/Icons.h"
+
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -15,6 +17,7 @@
 #include <QStandardPaths>
 #include <QStyle>
 #include <QStyleFactory>
+#include <QStyleHints>
 #include <QTimer>
 #ifdef KAINT_HAVE_DBUS
 #include <QDBusConnection>
@@ -161,11 +164,28 @@ int gtkScheme()
     return -1;
 }
 
+// Windows: "Elegir el modo de aplicación" (AppsUseLightTheme en el registro).
+int windowsScheme()
+{
+#ifdef Q_OS_WIN
+    const QSettings personalize(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\"
+                                               "Themes\\Personalize"),
+                                QSettings::NativeFormat);
+    const QVariant light = personalize.value(QStringLiteral("AppsUseLightTheme"));
+    if (light.isValid())
+        return light.toInt() == 0 ? 1 : 0;
+#endif
+    return -1;
+}
+
 int readSystemScheme()
 {
-    // En Plasma manda kdeglobals (cambia al aplicar el esquema); si no, el portal de
-    // freedesktop y la configuración de GTK.
-    int scheme = onKde() ? kdeScheme() : -1;
+    // En Windows manda el registro; en Plasma, kdeglobals (cambia al aplicar el esquema); si no,
+    // el portal de freedesktop y la configuración de GTK.
+    int scheme = windowsScheme();
+    if (scheme >= 0)
+        return scheme;
+    scheme = onKde() ? kdeScheme() : -1;
     if (scheme < 0)
         scheme = portalScheme();
     if (scheme < 0)
@@ -212,6 +232,9 @@ void watchSystem()
     };
     QObject::connect(g_watcher, &QFileSystemWatcher::fileChanged, notifier(), changed);
     QObject::connect(g_watcher, &QFileSystemWatcher::directoryChanged, notifier(), changed);
+    // Windows (y cualquier plataforma que lo avise): el cambio de modo claro u oscuro.
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, notifier(),
+                     &Notifier::systemSettingChanged);
 #ifdef KAINT_HAVE_DBUS
     QDBusConnection::sessionBus().connect(QStringLiteral("org.freedesktop.portal.Desktop"),
                                           QStringLiteral("/org/freedesktop/portal/desktop"),
@@ -288,7 +311,7 @@ QString iconThemeFor(const Spec& s)
 {
     if (!s.iconTheme.isEmpty())
         return s.iconTheme;
-    return s.dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze");
+    return Icons::breezeTheme(s.dark);
 }
 
 } // namespace

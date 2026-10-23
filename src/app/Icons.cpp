@@ -84,6 +84,14 @@ QIcon drawn(F paint)
     return QIcon(new DrawnIconEngine(std::move(paint)));
 }
 
+bool themeInstalled(const QString& name)
+{
+    for (const QString& path : QIcon::themeSearchPaths())
+        if (QFile::exists(path + QLatin1Char('/') + name + QStringLiteral("/index.theme")))
+            return true;
+    return false;
+}
+
 } // namespace
 
 void setupTheme()
@@ -94,10 +102,19 @@ void setupTheme()
     for (const QString& dir : dirs)
         if (!paths.contains(dir))
             paths.append(dir);
+    paths.append(QStringLiteral(":/kaint/icon-themes"));
     QIcon::setThemeSearchPaths(paths);
     if (QIcon::themeName().isEmpty() || QIcon::themeName() == QLatin1String("hicolor"))
-        QIcon::setThemeName(QStringLiteral("breeze"));
-    QIcon::setFallbackThemeName(QStringLiteral("breeze"));
+        QIcon::setThemeName(breezeTheme(false));
+    QIcon::setFallbackThemeName(breezeTheme(false));
+}
+
+QString breezeTheme(bool dark)
+{
+    const QString system = dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze");
+    if (themeInstalled(system))
+        return system;
+    return dark ? QStringLiteral("kaint-breeze-dark") : QStringLiteral("kaint-breeze");
 }
 
 QIcon theme(std::initializer_list<const char*> names)

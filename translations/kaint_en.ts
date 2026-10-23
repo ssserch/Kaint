@@ -1631,8 +1631,8 @@ What do you want to do?</translation>
         <translation>Background:</translation>
     </message>
     <message>
-        <source>Tamaño de la imagen nueva:</source>
-        <translation>New image size:</translation>
+        <source>Nuevo tamaño: %1</source>
+        <translation>New size: %1</translation>
     </message>
 </context>
 <context>
@@ -4093,40 +4093,40 @@ Do you want to replace them?</translation>
         <translation>Pixel size</translation>
     </message>
     <message>
-        <source> píxeles</source>
-        <translation> pixels</translation>
+        <source>píxeles/cm</source>
+        <translation>pixels/cm</translation>
     </message>
     <message>
-        <source>Ancho:</source>
+        <source>Anchura:</source>
         <translation>Width:</translation>
     </message>
     <message>
-        <source>Alto:</source>
+        <source>píxeles</source>
+        <translation>pixels</translation>
+    </message>
+    <message>
+        <source>Altura:</source>
         <translation>Height:</translation>
     </message>
     <message>
-        <source>Tamaño de impresión</source>
+        <source>Tamaño de la impresión</source>
         <translation>Print size</translation>
+    </message>
+    <message>
+        <source>pulgadas</source>
+        <translation>inches</translation>
+    </message>
+    <message>
+        <source>centímetros</source>
+        <translation>centimeters</translation>
     </message>
     <message>
         <source>píxeles/pulgada</source>
         <translation>pixels/inch</translation>
     </message>
     <message>
-        <source>píxeles/centímetro</source>
-        <translation>pixels/centimeter</translation>
-    </message>
-    <message>
         <source>Resolución:</source>
         <translation>Resolution:</translation>
-    </message>
-    <message>
-        <source> cm</source>
-        <translation> cm</translation>
-    </message>
-    <message>
-        <source> pulgadas</source>
-        <translation> inches</translation>
     </message>
 </context>
 <context>

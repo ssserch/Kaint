@@ -81,18 +81,17 @@ runs on Windows 10 and 11, and it should feel like home if you come from Paint.N
 
 ## 🎨 Themes
 
-Light and dark (or follow the system), the real KDE theme on Linux, a classic **Windows 98** theme
-made for Kaint, and your own **custom theme**: colors, classic 3D borders, pixel fonts, toolbar
-layout and a canvas background image with placement, scale, blur and tint.
+Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
+colors, toolbar layout and a canvas background image with placement, scale, blur and tint.
 
 <table>
   <tr>
+    <td width="50%"><img src="img/other/screenshot-light.png" alt="Light theme"></td>
     <td width="50%"><img src="img/other/screenshot.png" alt="Dark theme"></td>
-    <td width="50%"><img src="img/other/screenshot-win98.png" alt="Windows 98 theme"></td>
   </tr>
   <tr>
+    <td align="center"><sub>Light</sub></td>
     <td align="center"><sub>Dark</sub></td>
-    <td align="center"><sub>Windows 98</sub></td>
   </tr>
 </table>
 

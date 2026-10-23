@@ -151,8 +151,8 @@ quint64 imageSignature(const QImage& source)
 
 // Tira de imágenes: no pide más ancho que el de sus pestañas (QTabBar reserva sitio para las
 // flechas de desplazamiento aunque no hagan falta), así la flecha de la lista queda pegada a la
-// última miniatura. Las miniaturas las dibuja la tira, y la X de cerrar va encima de la esquina
-// de la imagen actual y de la que tiene el puntero, como en Paint.NET. Se reordenan
+// última miniatura. Las miniaturas las dibuja la tira, y la X de cerrar va en la esquina del
+// recuadro de la imagen actual y de la que tiene el puntero, como en Paint.NET. Se reordenan
 // arrastrando.
 class ImageStrip : public QTabBar {
 public:
@@ -179,10 +179,12 @@ public:
                      thumb.width(), thumb.height());
     }
 
+    // Siempre en la esquina de arriba a la derecha del recuadro de la pestaña (dentro de su
+    // margen), aunque la miniatura sea estrecha o muy baja.
     QRect closeRect(int index) const
     {
-        const QRect thumb = thumbRect(index);
-        return QRect(thumb.right() - kClose - 1, thumb.top() + 2, kClose, kClose);
+        const QRect tab = tabRect(index);
+        return QRect(tab.right() - 2 - kClose, tab.top() + 4, kClose, kClose);
     }
 
 protected:

@@ -13,6 +13,7 @@
 #include "app/Workspace.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/EffectDialog.h"
+#include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
 #include "app/dialogs/TaskDialog.h"
@@ -54,6 +55,8 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QStatusBar>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QTabBar>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -1465,6 +1468,35 @@ int main(int argc, char** argv)
                 settle();
                 CHECK(strip->currentIndex() == 1 && canvas->document() == first);
             }
+        }
+    }
+
+    // Imagen nueva: las unidades van fuera de los campos (como en Paint.NET) y la unidad de la
+    // impresión va a la par de la de la resolución.
+    {
+        NewImageDialog dlg(QSize(300, 200), 96, &w);
+        for (QSpinBox* sb : dlg.findChildren<QSpinBox*>())
+            CHECK(sb->suffix().isEmpty());
+        for (QDoubleSpinBox* sb : dlg.findChildren<QDoubleSpinBox*>())
+            CHECK(sb->suffix().isEmpty());
+        QComboBox* resolution = nullptr;
+        QComboBox* print = nullptr;
+        for (QComboBox* c : dlg.findChildren<QComboBox*>()) {
+            if (c->findText(QStringLiteral("píxeles/cm")) >= 0)
+                resolution = c;
+            if (c->findText(QStringLiteral("centímetros")) >= 0)
+                print = c;
+        }
+        CHECK(resolution && print);
+        if (resolution && print) {
+            CHECK(resolution->currentIndex() == print->currentIndex());
+            const int other = 1 - print->currentIndex();
+            print->setCurrentIndex(other);
+            emit print->activated(other);
+            CHECK(resolution->currentIndex() == other);
+            CHECK(dlg.imageSize() == QSize(300, 200) && std::abs(dlg.dpi() - 96) < 0.01);
+            print->setCurrentIndex(1);
+            emit print->activated(1);
         }
     }
 

@@ -47,6 +47,7 @@ private:
 
     QSize m_original;
     double m_aspect;
+    double m_dpi;
     QRadioButton* m_byPercent = nullptr;
     QRadioButton* m_byAbsolute = nullptr;
     QSpinBox* m_percent = nullptr;
@@ -57,6 +58,8 @@ private:
     QComboBox* m_resolutionUnit;
     QDoubleSpinBox* m_printWidth;
     QDoubleSpinBox* m_printHeight;
+    QComboBox* m_printUnit;
+    QLabel* m_printHeightUnit;
     bool m_updating = false;
 };
 

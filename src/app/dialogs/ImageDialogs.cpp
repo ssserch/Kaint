@@ -22,6 +22,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
@@ -44,7 +45,9 @@ constexpr int kMaxSide = 65535;
 QString memoryText(QSize s, int layers = 1)
 {
     const double mb = double(s.width()) * s.height() * 4 * layers / (1024.0 * 1024.0);
-    return mb >= 1024 ? QObject::tr("%1 GB").arg(mb / 1024.0, 0, 'f', 2) : QObject::tr("%1 MB").arg(mb, 0, 'f', 1);
+    const QLocale locale;
+    return mb >= 1024 ? QObject::tr("%1 GB").arg(locale.toString(mb / 1024.0, 'f', 2))
+                      : QObject::tr("%1 MB").arg(locale.toString(mb, 'f', 1));
 }
 
 } // namespace
@@ -55,6 +58,7 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
     : QWidget(parent)
     , m_original(original)
     , m_aspect(original.height() > 0 ? double(original.width()) / original.height() : 1.0)
+    , m_dpi(dpi)
 {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -79,44 +83,70 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
     m_keepAspect->setChecked(true);
     layout->addWidget(m_keepAspect);
 
+    // Como en Paint.NET: cada número en su campo y la unidad a la derecha, como texto o como
+    // desplegable (la resolución y la anchura de impresión, que van a la par).
+    auto unitLabel = [this](const QString& text) {
+        auto* label = new QLabel(text, this);
+        return label;
+    };
     auto* pixelBox = new QGroupBox(tr("Tamaño en píxeles"), this);
-    auto* pixelForm = new QFormLayout(pixelBox);
+    auto* pixelGrid = new QGridLayout(pixelBox);
     m_width = new QSpinBox(this);
     m_height = new QSpinBox(this);
-    for (QSpinBox* s : {m_width, m_height}) {
-        s->setRange(1, kMaxSide);
-        s->setSuffix(tr(" píxeles"));
-    }
+    for (QSpinBox* sb : {m_width, m_height})
+        sb->setRange(1, kMaxSide);
     m_width->setValue(original.width());
     m_height->setValue(original.height());
-    pixelForm->addRow(tr("Ancho:"), m_width);
-    pixelForm->addRow(tr("Alto:"), m_height);
-    layout->addWidget(pixelBox);
-
-    auto* printBox = new QGroupBox(tr("Tamaño de impresión"), this);
-    auto* printForm = new QFormLayout(printBox);
     m_resolution = new QDoubleSpinBox(this);
     m_resolution->setRange(0.01, 99999);
     m_resolution->setDecimals(2);
     m_resolutionUnit = new QComboBox(this);
     m_resolutionUnit->addItem(tr("píxeles/pulgada"));
-    m_resolutionUnit->addItem(tr("píxeles/centímetro"));
+    m_resolutionUnit->addItem(tr("píxeles/cm"));
     // Píxeles/centímetro por defecto; se recuerda la última unidad elegida.
     m_resolutionUnit->setCurrentIndex(QSettings().value(QStringLiteral("dialogs/resolutionUnit"), 1).toInt() == 0 ? 0 : 1);
     m_resolution->setValue(m_resolutionUnit->currentIndex() == 1 ? dpi / 2.54 : dpi);
-    auto* resRow = new QHBoxLayout;
-    resRow->addWidget(m_resolution, 1);
-    resRow->addWidget(m_resolutionUnit);
+    pixelGrid->addWidget(new QLabel(tr("Anchura:"), this), 0, 0);
+    pixelGrid->addWidget(m_width, 0, 1);
+    pixelGrid->addWidget(unitLabel(tr("píxeles")), 0, 2);
+    pixelGrid->addWidget(new QLabel(tr("Altura:"), this), 1, 0);
+    pixelGrid->addWidget(m_height, 1, 1);
+    pixelGrid->addWidget(unitLabel(tr("píxeles")), 1, 2);
+    pixelGrid->addWidget(new QLabel(tr("Resolución:"), this), 2, 0);
+    pixelGrid->addWidget(m_resolution, 2, 1);
+    pixelGrid->addWidget(m_resolutionUnit, 2, 2);
+    pixelGrid->setColumnStretch(3, 1);
+    layout->addWidget(pixelBox);
+
+    auto* printBox = new QGroupBox(tr("Tamaño de la impresión"), this);
+    auto* printGrid = new QGridLayout(printBox);
     m_printWidth = new QDoubleSpinBox(this);
     m_printHeight = new QDoubleSpinBox(this);
-    for (QDoubleSpinBox* s : {m_printWidth, m_printHeight}) {
-        s->setRange(0.01, 999999);
-        s->setDecimals(2);
+    for (QDoubleSpinBox* sb : {m_printWidth, m_printHeight}) {
+        sb->setRange(0.01, 999999);
+        sb->setDecimals(2);
     }
-    printForm->addRow(tr("Resolución:"), resRow);
-    printForm->addRow(tr("Ancho:"), m_printWidth);
-    printForm->addRow(tr("Alto:"), m_printHeight);
+    m_printUnit = new QComboBox(this);
+    m_printUnit->addItems({tr("pulgadas"), tr("centímetros")});
+    m_printUnit->setCurrentIndex(m_resolutionUnit->currentIndex());
+    m_printHeightUnit = unitLabel(QString());
+    printGrid->addWidget(new QLabel(tr("Anchura:"), this), 0, 0);
+    printGrid->addWidget(m_printWidth, 0, 1);
+    printGrid->addWidget(m_printUnit, 0, 2);
+    printGrid->addWidget(new QLabel(tr("Altura:"), this), 1, 0);
+    printGrid->addWidget(m_printHeight, 1, 1);
+    printGrid->addWidget(m_printHeightUnit, 1, 2);
+    printGrid->setColumnStretch(3, 1);
     layout->addWidget(printBox);
+    // Las dos columnas de campos con el mismo ancho, alineadas entre los dos grupos.
+    const int fieldWidth = std::max(m_resolution->sizeHint().width(), m_printWidth->sizeHint().width()) + 12;
+    for (QWidget* field : std::initializer_list<QWidget*>{m_width, m_height, m_resolution, m_printWidth, m_printHeight})
+        field->setFixedWidth(fieldWidth);
+    const int labelWidth = std::max({QLabel(tr("Resolución:")).sizeHint().width(), QLabel(tr("Anchura:")).sizeHint().width(),
+                                     QLabel(tr("Altura:")).sizeHint().width()});
+    pixelGrid->setColumnMinimumWidth(0, labelWidth);
+    printGrid->setColumnMinimumWidth(0, labelWidth);
+    connect(m_printUnit, &QComboBox::activated, m_resolutionUnit, &QComboBox::setCurrentIndex);
 
     connect(m_width, &QSpinBox::valueChanged, this, [this] { onPixels(true); });
     connect(m_height, &QSpinBox::valueChanged, this, [this] { onPixels(false); });
@@ -125,9 +155,10 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
     connect(m_resolution, &QDoubleSpinBox::valueChanged, this, &SizeEditor::onResolution);
     connect(m_resolutionUnit, &QComboBox::currentIndexChanged, this, [this](int unit) {
         m_updating = true;
-        m_resolution->setValue(unit == 1 ? m_resolution->value() / 2.54 : m_resolution->value() * 2.54);
+        m_resolution->setValue(unit == 1 ? m_dpi / 2.54 : m_dpi);
         m_updating = false;
         QSettings().setValue(QStringLiteral("dialogs/resolutionUnit"), unit);
+        m_printUnit->setCurrentIndex(unit);
         syncPrint();
     });
     connect(m_keepAspect, &QCheckBox::toggled, this, [this](bool on) {
@@ -140,12 +171,12 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
 
 double SizeEditor::unitPixels() const
 {
-    return m_resolution->value();
+    return m_resolutionUnit->currentIndex() == 1 ? m_dpi / 2.54 : m_dpi;
 }
 
 double SizeEditor::dpi() const
 {
-    return m_resolutionUnit->currentIndex() == 1 ? m_resolution->value() * 2.54 : m_resolution->value();
+    return m_dpi;
 }
 
 QSize SizeEditor::value() const
@@ -172,9 +203,7 @@ void SizeEditor::syncPrint()
 {
     const bool was = m_updating;
     m_updating = true;
-    const QString suffix = m_resolutionUnit->currentIndex() == 1 ? tr(" cm") : tr(" pulgadas");
-    m_printWidth->setSuffix(suffix);
-    m_printHeight->setSuffix(suffix);
+    m_printHeightUnit->setText(m_printUnit->currentText());
     m_printWidth->setValue(m_width->value() / unitPixels());
     m_printHeight->setValue(m_height->value() / unitPixels());
     m_updating = was;
@@ -233,6 +262,8 @@ void SizeEditor::onResolution()
 {
     if (m_updating)
         return;
+    // La resolución exacta solo cambia cuando se escribe otra (el campo la muestra redondeada).
+    m_dpi = m_resolutionUnit->currentIndex() == 1 ? m_resolution->value() * 2.54 : m_resolution->value();
     if (m_keepAspect->isChecked() && !(m_byPercent && m_byPercent->isChecked())) {
         const double pw = m_printWidth->value();
         m_updating = true;
@@ -258,11 +289,12 @@ NewImageDialog::NewImageDialog(QSize initial, double dpi, QWidget* parent)
     m_background->addItems({tr("Blanco"), tr("Color secundario"), tr("Transparente")});
     m_memory = new QLabel(this);
 
+    // Como en Paint.NET: el tamaño en memoria arriba; el fondo, abajo.
     auto* form = new QFormLayout;
     form->addRow(tr("Fondo:"), m_background);
-    form->addRow(tr("Tamaño de la imagen nueva:"), m_memory);
 
     auto* layout = new QVBoxLayout(this);
+    layout->addWidget(m_memory);
     layout->addWidget(m_size);
     layout->addLayout(form);
     layout->addWidget(okCancel(this));
@@ -270,7 +302,7 @@ NewImageDialog::NewImageDialog(QSize initial, double dpi, QWidget* parent)
     updateMemory();
 }
 
-void NewImageDialog::updateMemory() { m_memory->setText(memoryText(m_size->value())); }
+void NewImageDialog::updateMemory() { m_memory->setText(tr("Nuevo tamaño: %1").arg(memoryText(m_size->value()))); }
 QSize NewImageDialog::imageSize() const { return m_size->value(); }
 double NewImageDialog::dpi() const { return m_size->dpi(); }
 

@@ -3,6 +3,10 @@
 #include "app/Icons.h"
 
 #include <QApplication>
+#include <QAbstractButton>
+#include <QStyleOption>
+#include <QRegularExpression>
+#include <QProxyStyle>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -346,11 +350,8 @@ QString classicStyleSheet(const Spec& s)
                                    .arg(css(shadow), css(hi));
     const QColor selectedText = contrast(s.selection);
     QString qss = QStringLiteral(R"(
-QPushButton { background: %1; %2 padding: 3px 12px; }
-QPushButton:hover { background: %1; %2 }
-QPushButton:pressed, QPushButton:checked { background: %1; %3 padding: 4px 11px 2px 13px; }
-QPushButton:disabled { background: %1; %2 color: %4; }
 QToolButton, QToolButton:hover:!checked:!pressed { background: transparent; border: 1px solid transparent; border-radius: 0; }
+QToolButton:disabled { color: %4; }
 QToolButton:hover { %5 }
 QToolButton:checked, QToolButton:pressed { background: %6; %7 }
 QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox, QComboBox:editable, QListView, QTreeView,
@@ -437,6 +438,93 @@ QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: %7 %3 
 
 } // namespace
 
+namespace {
+
+bool classicButtons()
+{
+    return g_current != Scheme::Kde && g_active.classic;
+}
+
+// Estilo de la aplicación: Fusion, salvo los botones con bordes clásicos, que llevan el doble
+// relieve de 98.css, el marco negro del botón por defecto y el foco punteado de Windows 98.
+class KaintStyle : public QProxyStyle {
+public:
+    using QProxyStyle::QProxyStyle;
+
+    void drawPrimitive(PrimitiveElement element, const QStyleOption* option, QPainter* p, const QWidget* widget) const override
+    {
+        if (classicButtons()) {
+            if (element == PE_PanelButtonCommand) {
+                drawClassicButton(option, p);
+                return;
+            }
+            if (element == PE_FrameDefaultButton)
+                return;
+            if (element == PE_FrameFocusRect && qobject_cast<const QAbstractButton*>(widget)) {
+                QPen dotted(option->palette.color(QPalette::ButtonText), 1, Qt::DotLine);
+                p->save();
+                p->setPen(dotted);
+                p->setBrush(Qt::NoBrush);
+                p->drawRect(option->rect.adjusted(1, 1, -2, -2));
+                p->restore();
+                return;
+            }
+        }
+        QProxyStyle::drawPrimitive(element, option, p, widget);
+    }
+
+    int pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const override
+    {
+        if (classicButtons() && (metric == PM_ButtonShiftHorizontal || metric == PM_ButtonShiftVertical))
+            return 1;
+        return QProxyStyle::pixelMetric(metric, option, widget);
+    }
+
+private:
+    static void drawClassicButton(const QStyleOption* option, QPainter* p)
+    {
+        const auto* button = qstyleoption_cast<const QStyleOptionButton*>(option);
+        const bool down = option->state & (State_Sunken | State_On);
+        const bool isDefault = button && (button->features & QStyleOptionButton::DefaultButton);
+        const QColor face = option->palette.color(QPalette::Button);
+        const QColor hi = mix(face, Qt::white, 0.9), light = mix(face, Qt::white, 0.5);
+        const QColor shadow = mix(face, Qt::black, 0.33), dark = mix(face, Qt::black, 0.95);
+        QRect r = option->rect;
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing, false);
+        p->fillRect(r, face);
+        if (isDefault) {
+            p->setPen(dark);
+            p->drawRect(r.adjusted(0, 0, -1, -1));
+            r.adjust(1, 1, -1, -1);
+        }
+        auto bevel = [p](const QRect& box, const QColor& topLeft, const QColor& bottomRight) {
+            p->setPen(topLeft);
+            p->drawLine(box.topLeft(), box.topRight() - QPoint(1, 0));
+            p->drawLine(box.topLeft(), box.bottomLeft() - QPoint(0, 1));
+            p->setPen(bottomRight);
+            p->drawLine(box.bottomLeft(), box.bottomRight());
+            p->drawLine(box.topRight(), box.bottomRight());
+        };
+        const QRect outer = r.adjusted(0, 0, -1, -1), inner = r.adjusted(1, 1, -2, -2);
+        if (down) {
+            bevel(outer, dark, hi);
+            bevel(inner, shadow, light);
+        } else {
+            bevel(outer, hi, dark);
+            bevel(inner, light, shadow);
+        }
+        p->restore();
+    }
+};
+
+QStyle* createStyle()
+{
+    return new KaintStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+}
+
+} // namespace
+
 // ---------------------------------------------------------------------------
 // Temas de Paint.NET 4/5 en Windows 10 (colores tomados de sus capturas)
 
@@ -519,6 +607,7 @@ Spec windows98()
     s.buttonStyle = ButtonStyle::Framed;
     s.density = Density::Compact;
     s.classic = true;
+    s.pixelFont = true;
     s.panelOpacity = 100;
     s.fontFamily = QStringLiteral("Microsoft Sans Serif");
     s.fontSize = 8;
@@ -585,6 +674,7 @@ QJsonObject toJson(const Spec& spec, bool embedImage)
         {QStringLiteral("imageTint"), spec.imageTint.isValid() ? spec.imageTint.name() : QString()},
         {QStringLiteral("imageTintStrength"), spec.imageTintStrength},
         {QStringLiteral("classic"), spec.classic},
+        {QStringLiteral("pixelFont"), spec.pixelFont},
         {QStringLiteral("iconSize"), spec.iconSize},
         {QStringLiteral("toolIconSize"), spec.toolIconSize},
         {QStringLiteral("buttonStyle"), int(spec.buttonStyle)},
@@ -640,6 +730,7 @@ Spec fromJson(const QJsonObject& json)
     s.imageTint = QColor::fromString(json.value(QStringLiteral("imageTint")).toString());
     s.imageTintStrength = number("imageTintStrength", base.imageTintStrength, 0, 100);
     s.classic = json.value(QStringLiteral("classic")).toBool(false);
+    s.pixelFont = json.value(QStringLiteral("pixelFont")).toBool(false);
     s.iconSize = number("iconSize", base.iconSize, 12, 48);
     s.toolIconSize = number("toolIconSize", base.toolIconSize, 12, 48);
     s.buttonStyle = ButtonStyle(number("buttonStyle", int(base.buttonStyle), 0, 2));
@@ -913,8 +1004,10 @@ QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image:
 )")
                .arg(indicatorImage("down", arrow), indicatorImage("down", disabled), css(mix(field, s.base, 0.5)),
                     css(s.hover), css(s.selection), indicatorImage("up", arrow), indicatorImage("up", disabled));
-    if (s.classic)
+    if (s.classic) {
+        qss.remove(QRegularExpression(QStringLiteral("^QPushButton[^\n]*\n"), QRegularExpression::MultilineOption));
         qss += classicStyleSheet(s);
+    }
     return qss;
 }
 
@@ -934,7 +1027,7 @@ void prepare(Scheme scheme)
     // Sin la configuración del escritorio (estilo, paleta, menú global, cambios de tema de
     // Plasma) y con Fusion, que pinta siempre con los colores de Kaint.
     QApplication::setDesktopSettingsAware(false);
-    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    QApplication::setStyle(createStyle());
 }
 
 void initStyle(Scheme scheme)
@@ -947,8 +1040,8 @@ void initStyle(Scheme scheme)
         g_baseFontSet = true;
         return;
     }
-    if (QApplication::style()->name().compare(QLatin1String("fusion"), Qt::CaseInsensitive) != 0)
-        QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    if (!dynamic_cast<KaintStyle*>(QApplication::style()))
+        QApplication::setStyle(createStyle());
     g_fusion = true;
     g_baseFont = desktopFont();
     g_baseFontSet = true;
@@ -973,7 +1066,7 @@ void apply(Scheme scheme)
     }
 
     if (!g_fusion && QCoreApplication::instance()) {
-        QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+        QApplication::setStyle(createStyle());
         g_fusion = true;
     }
     if (scheme == Scheme::Custom)
@@ -987,10 +1080,14 @@ void apply(Scheme scheme)
         // Fuente propia: la del personalizado o la de Windows 98.
         const bool ownFont = scheme == Scheme::Custom || scheme == Scheme::Windows98;
         QFont font = g_baseFont;
+        // Si no está la fuente (Microsoft Sans Serif en Linux), las más parecidas.
         if (ownFont && !g_active.fontFamily.isEmpty())
-            font.setFamily(g_active.fontFamily);
+            font.setFamilies({g_active.fontFamily, QStringLiteral("Tahoma"), QStringLiteral("Arial"),
+                              QStringLiteral("Liberation Sans"), g_baseFont.family()});
         if (ownFont && g_active.fontSize > 0)
             font.setPointSize(g_active.fontSize);
+        font.setStyleStrategy(ownFont && g_active.pixelFont ? QFont::NoAntialias : QFont::PreferDefault);
+        font.setHintingPreference(ownFont && g_active.pixelFont ? QFont::PreferFullHinting : g_baseFont.hintingPreference());
         if (font != QApplication::font())
             QApplication::setFont(font);
     }

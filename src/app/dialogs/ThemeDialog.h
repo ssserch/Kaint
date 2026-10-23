@@ -48,6 +48,7 @@ private:
     QComboBox* m_template = nullptr;
     QComboBox* m_base = nullptr;
     QCheckBox* m_classic = nullptr;
+    QCheckBox* m_pixelFont = nullptr;
     QWidget* m_preview = nullptr;
     QComboBox* m_imageAnchor = nullptr;
     QSpinBox* m_imageScale = nullptr;

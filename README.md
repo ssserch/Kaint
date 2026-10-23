@@ -1,53 +1,117 @@
 <div align="center">
   <img src="img/other/kaintlogo.png" alt="kaint.kde logo" width="460">
-  <p><strong>A recreation of Paint.NET for Linux and Windows, built with C++20 and Qt 6.</strong></p>
 
-  [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg)](CMakeLists.txt)
-  [![Qt 6](https://img.shields.io/badge/Qt-6-41CD52.svg)](https://www.qt.io/)
-  [![Platforms: Linux | Windows](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-informational.svg)](#install)
+  <h3>The Paint.NET experience, native on Linux and Windows.</h3>
+  <p>A free raster image editor built with C++20 and Qt 6.</p>
+
+  [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg?logo=cplusplus)](CMakeLists.txt)
+  [![Qt 6](https://img.shields.io/badge/Qt-6-41CD52.svg?logo=qt&logoColor=white)](https://www.qt.io/)
+  [![Platforms: Linux | Windows](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-informational.svg)](#-install)
+  [![Paint.NET plugins](https://img.shields.io/badge/Paint.NET-plugins-8a2be2.svg)](#-features)
   [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
+  <p>
+    <a href="#-features">Features</a> •
+    <a href="#-themes">Themes</a> •
+    <a href="#-install">Install</a> •
+    <a href="#-contributing">Contributing</a> •
+    <a href="#-license">License</a>
+  </p>
 </div>
 
 <div align="center">
-  <img src="img/other/screenshot.png" alt="Kaint on Linux: Paint.NET-style dark theme with tools, colors, history and layers windows" width="900">
+  <img src="img/other/screenshot.png" alt="Kaint in the dark theme with the tools, colors, history and layers windows" width="900">
 </div>
 
 ---
 
-**Kaint** is a free raster image editor that recreates the look, the tools and the workflow of
-[Paint.NET](https://www.getpaint.net/) on Linux. It is native (no Wine, no .NET runtime), made
-for KDE Plasma on Wayland, it also runs on Windows 10 and 11, and it should feel like home if you
-come from Paint.NET.
+**Kaint** recreates the look, the tools and the workflow of [Paint.NET](https://www.getpaint.net/)
+as a native application: no Wine, no .NET runtime. It is made for KDE Plasma on Wayland, it also
+runs on Windows 10 and 11, and it should feel like home if you come from Paint.NET.
 
-## Features
+## ✨ Features
 
-- **Layers** with blend modes, opacity and a history you can click through.
-- **The Paint.NET tools**: selections with their combine modes, move pixels or selection (scale,
-  rotate, movable pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, editable
-  gradients, lines and curves, shapes, text and more, with the same options bar.
-- **Adjustments and effects** with live preview, plus **Repeat** (Ctrl+F).
-- **Paint.NET plugins** (.dll, through mono on Linux and the .NET Framework built into Windows)
-  and native plugins with a stable C API.
-- **Formats**: OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA,
-  animated GIF and ICO. Opens Paint.NET **.pdn** files.
-- **Themes**: Paint.NET light and dark, follow the system, the real KDE theme (on Linux), a classic
-  Windows 98 theme, or your own custom theme (colors, 3D borders, toolbar layout and a canvas
-  background image with placement, scale, blur and tint).
-- **Recovery copies** of unsaved images, in case Kaint closes unexpectedly.
-- English and Spanish.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>🖌️ The Paint.NET tools</h4>
+      Selections with their combine modes, move pixels or the selection (scale, rotate, movable
+      pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, gradients, lines and
+      curves, shapes and text, all with the same options bar.
+    </td>
+    <td width="50%" valign="top">
+      <h4>🕘 Editable history</h4>
+      Click through the history like in Paint.NET. Gradients, lines and shapes stay editable when
+      you go back to one of their steps.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>🗂️ Layers</h4>
+      Blend modes, opacity, visibility and properties, with live thumbnails.
+    </td>
+    <td valign="top">
+      <h4>🎛️ Adjustments and effects</h4>
+      Live preview while you tweak them, and <b>Repeat</b> (Ctrl+F) for the last one.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>🧩 Plugins</h4>
+      Paint.NET effect plugins (.dll), through mono on Linux and the .NET Framework built into
+      Windows, plus native plugins with a stable C API.
+    </td>
+    <td valign="top">
+      <h4>🖼️ Formats</h4>
+      OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA, animated GIF
+      and ICO. Opens Paint.NET <b>.pdn</b> files.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>🛟 Recovery copies</h4>
+      Unsaved images are kept safe in case Kaint closes unexpectedly.
+    </td>
+    <td valign="top">
+      <h4>🌍 Languages</h4>
+      English and Spanish.
+    </td>
+  </tr>
+</table>
 
-## Install
+## 🎨 Themes
+
+Light and dark (or follow the system), the real KDE theme on Linux, a classic **Windows 98** theme
+made for Kaint, and your own **custom theme**: colors, classic 3D borders, pixel fonts, toolbar
+layout and a canvas background image with placement, scale, blur and tint.
+
+<table>
+  <tr>
+    <td width="50%"><img src="img/other/screenshot.png" alt="Dark theme"></td>
+    <td width="50%"><img src="img/other/screenshot-win98.png" alt="Windows 98 theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Dark</sub></td>
+    <td align="center"><sub>Windows 98</sub></td>
+  </tr>
+</table>
+
+## 📦 Install
 
 Kaint needs **Qt 6.5 or newer**: Arch Linux, Debian 13, Ubuntu 25.04 or newer, or Windows 10/11.
 
-**Arch Linux**
+<details open>
+<summary><b>🐧 Arch Linux</b></summary>
 
 ```bash
 sudo pacman -S --needed gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons
 ./build.sh --install        # installs to ~/.local (shows up in the app menu)
 ```
 
-**Debian / Ubuntu**
+</details>
+
+<details open>
+<summary><b>🍥 Debian / Ubuntu</b></summary>
 
 ```bash
 sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
@@ -56,33 +120,49 @@ sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-too
 sudo apt install ./build-deb/kaint_*_amd64.deb
 ```
 
-Optional extras for more formats and for Paint.NET plugins: `qt6-imageformats kimageformats mono
-libgdiplus` (Arch) or `qt6-image-formats-plugins kimageformat6-plugins mono-devel libgdiplus`
-(Debian/Ubuntu). `./build.sh --help` lists every option (`--run`, `--test`, `--debug`...).
+</details>
 
-**Windows 10 / 11**
+<details open>
+<summary><b>🪟 Windows 10 / 11</b></summary>
 
 Download the source code and double-click `build.bat` (or run `build.bat --install`). It builds
 Kaint and installs it in `%LOCALAPPDATA%\Programs\Kaint` with a Start menu entry; uninstall it
 from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to download them
-(about 1.5 GB) into `%LOCALAPPDATA%\Kaint\toolchain`. `build.bat --zip` makes a portable
-`Kaint-<version>-windows-x64.zip` (unzip it and run `Kaint\bin\kaint.exe`), and `build.bat --help`
-lists every option.
+(about 1.5 GB) into `%LOCALAPPDATA%\Kaint\toolchain`.
 
-## Contributing
+`build.bat --zip` makes a portable `Kaint-<version>-windows-x64.zip`: unzip it anywhere and run
+`Kaint\bin\kaint.exe`.
+
+</details>
+
+> [!TIP]
+> Optional extras for more formats and for Paint.NET plugins: `qt6-imageformats kimageformats
+> mono libgdiplus` (Arch) or `qt6-image-formats-plugins kimageformat6-plugins mono-devel libgdiplus`
+> (Debian/Ubuntu). On Windows, plugins work out of the box.
+
+| Option | `build.sh` (Linux) | `build.bat` (Windows) |
+| --- | :---: | :---: |
+| Build and install | `--install` | `--install` |
+| Build and run | `--run` | `--run` |
+| Run the tests | `--test` | `--test` |
+| Debug build | `--debug` | `--debug` |
+| Package | `--deb` | `--zip` |
+| Every option | `--help` | `--help` |
+
+## 🤝 Contributing
 
 Issues and pull requests are welcome: fork the repository, make your change in a branch, check
 that `./build.sh --test` passes and open a pull request. Bugs and ideas go to
 [Issues](https://github.com/ssserch/Kaint/issues).
 
-## License
+## 📄 License
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
 `src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, the Paint.NET-style icons are
 adapted from [paint.software](https://github.com/Univers4craft/paint.software) (MIT), and
 `data/icons/` bundles KDE's Breeze icons (LGPL-3.0-or-later).
 
-## Disclaimer
+## ⚠️ Disclaimer
 
 Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
 LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the

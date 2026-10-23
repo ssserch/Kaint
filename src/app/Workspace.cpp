@@ -157,11 +157,16 @@ void FloatingPanel::updateColors()
         m_titleBar->setPalette(QPalette());
         return;
     }
-    QPalette p = m_titleBar->palette();
-    p.setColor(QPalette::WindowText, Theme::active().panelTitleText);
-    m_titleBar->setPalette(p);
+    // El color va también en la etiqueta: con la hoja de estilo, no hereda el de la cabecera.
+    const Theme::Spec s = Theme::active();
+    for (QWidget* w : {m_titleBar, static_cast<QWidget*>(m_title)}) {
+        QPalette p = w->palette();
+        p.setColor(QPalette::WindowText, s.panelTitleText);
+        w->setPalette(p);
+    }
     QFont font = m_title->font();
-    font.setBold(Theme::active().classic);
+    font.setBold(s.classic);
+    font.setStyleStrategy(s.pixelFont ? QFont::NoAntialias : QFont::PreferDefault);
     m_title->setFont(font);
 }
 

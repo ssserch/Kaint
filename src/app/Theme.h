@@ -64,6 +64,8 @@ struct Spec {
 
     // Bordes clásicos en relieve (Windows 98) en botones, campos, menús y ventanas.
     bool classic = false;
+    // Texto sin suavizado, pixelado como en Windows 98.
+    bool pixelFont = false;
 
     int iconSize = 16;
     int toolIconSize = 22;

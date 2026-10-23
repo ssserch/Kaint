@@ -4234,14 +4234,6 @@ Do you want to replace them?</translation>
         <translation>Base</translation>
     </message>
     <message>
-        <source>Paint.NET claro</source>
-        <translation>Paint.NET light</translation>
-    </message>
-    <message>
-        <source>Paint.NET oscuro</source>
-        <translation>Paint.NET dark</translation>
-    </message>
-    <message>
         <source>Windows 98</source>
         <translation>Windows 98</translation>
     </message>
@@ -4406,16 +4398,16 @@ Do you want to replace them?</translation>
         <translation>Tools window icons:</translation>
     </message>
     <message>
-        <source>Planos (Paint.NET)</source>
-        <translation>Flat (Paint.NET)</translation>
-    </message>
-    <message>
         <source>Con marco</source>
         <translation>Framed</translation>
     </message>
     <message>
         <source>Redondeados</source>
         <translation>Rounded</translation>
+    </message>
+    <message>
+        <source>Planos</source>
+        <translation>Flat</translation>
     </message>
     <message>
         <source>Botones de las barras:</source>
@@ -4448,6 +4440,10 @@ Do you want to replace them?</translation>
     <message>
         <source>Estilo:</source>
         <translation>Style:</translation>
+    </message>
+    <message>
+        <source>Texto sin suavizado (pixelado, como Windows 98)</source>
+        <translation>Text without smoothing (pixelated, like Windows 98)</translation>
     </message>
     <message>
         <source>Con «Ventanas translúcidas» activado, opacidad de las ventanas flotantes cuando el puntero no está encima.</source>

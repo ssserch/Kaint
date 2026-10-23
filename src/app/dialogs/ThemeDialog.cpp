@@ -166,7 +166,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     auto* baseForm = new QFormLayout;
     auto* templateRow = new QHBoxLayout;
     m_template = new QComboBox(content);
-    m_template->addItems({tr("Paint.NET claro"), tr("Paint.NET oscuro"), tr("Windows 98")});
+    m_template->addItems({tr("Claro"), tr("Oscuro"), tr("Windows 98")});
     auto* applyTemplate = new QPushButton(tr("Aplicar"), content);
     applyTemplate->setToolTip(tr("Sustituye colores y diseño por los de la plantilla (la imagen de fondo se queda)."));
     templateRow->addWidget(m_template);
@@ -328,7 +328,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     m_toolIconSize = sizeCombo({16, 20, 22, 24, 28, 32}, content);
     designForm->addRow(tr("Iconos de la ventana Herramientas:"), m_toolIconSize);
     m_buttonStyle = new QComboBox(content);
-    m_buttonStyle->addItems({tr("Planos (Paint.NET)"), tr("Con marco"), tr("Redondeados")});
+    m_buttonStyle->addItems({tr("Planos"), tr("Con marco"), tr("Redondeados")});
     designForm->addRow(tr("Botones de las barras:"), m_buttonStyle);
     m_density = new QComboBox(content);
     m_density->addItems({tr("Compacto"), tr("Normal"), tr("Amplio")});
@@ -343,6 +343,14 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         if (m_refreshing)
             return;
         m_spec.classic = on;
+        changed();
+    });
+    m_pixelFont = new QCheckBox(tr("Texto sin suavizado (pixelado, como Windows 98)"), content);
+    designForm->addRow(QString(), m_pixelFont);
+    connect(m_pixelFont, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_refreshing)
+            return;
+        m_spec.pixelFont = on;
         changed();
     });
     m_panelOpacity = new QSlider(Qt::Horizontal, content);
@@ -500,6 +508,7 @@ void ThemeDialog::refresh()
                                                       m_imageTintStrength})
         w->setEnabled(hasImage);
     m_classic->setChecked(m_spec.classic);
+    m_pixelFont->setChecked(m_spec.pixelFont);
     static_cast<BackgroundPreview*>(m_preview)->setSpec(m_spec);
     selectData(m_iconSize, m_spec.iconSize);
     selectData(m_toolIconSize, m_spec.toolIconSize);

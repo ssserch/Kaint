@@ -1155,6 +1155,22 @@ int main(int argc, char** argv)
         CHECK(QColor(d->activeLayer()->image.pixel(700, 300)) == QColor(220, 0, 0));
         tools->current()->finish();
         CHECK(d->undoStack()->count() == steps);
+
+        // Con una selección, un clic fuera de ella no rellena nada (como en Paint.NET).
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(500, 100), QPointF(600, 150), QPointF(700, 200)});
+        CHECK(!d->selection().isEmpty());
+        tools->select(ToolId::PaintBucket);
+        state->setPrimary(QColor(0, 0, 200));
+        const int before = d->undoStack()->count();
+        const QImage untouched = d->activeLayer()->image;
+        drag(canvas, {QPointF(100, 400)});
+        CHECK(!tools->current()->isBusy() && d->undoStack()->count() == before && d->activeLayer()->image == untouched);
+        drag(canvas, {QPointF(600, 150)});
+        CHECK(QColor(d->activeLayer()->image.pixel(600, 150)) == QColor(0, 0, 200));
+        CHECK(QColor(d->activeLayer()->image.pixel(700, 400)) == QColor(220, 0, 0));
+        tools->current()->finish();
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
         state->updateTools([](ToolSettings& s) { s.antialias = true; });
     }
 

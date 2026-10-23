@@ -35,6 +35,7 @@ public:
 private:
     void render();
     QPointF handlePos() const;
+    bool insideSelection(QPoint pixel) const;
 
     LayerEdit m_edit;
     QImage m_sample;

@@ -55,6 +55,13 @@ QString PaintBucketTool::hint() const
              : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.");
 }
 
+bool PaintBucketTool::insideSelection(QPoint pixel) const
+{
+    // Como en Paint.NET: con una selección, un clic fuera de ella no rellena nada.
+    const Selection& sel = document()->selection();
+    return sel.isEmpty() || sel.coverage(pixel.x(), pixel.y()) > 0;
+}
+
 QPointF PaintBucketTool::handlePos() const
 {
     return Handles::moveIconPos(QRectF(canvas()->imageToView(QPointF(m_seed) + QPointF(0.5, 0.5)), QSizeF()));
@@ -71,7 +78,7 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
         return;
     }
     finish();
-    if (!doc->rect().contains(e.pixel()))
+    if (!doc->rect().contains(e.pixel()) || !insideSelection(e.pixel()))
         return;
     const ToolSettings& s = AppState::instance()->tools();
     m_sample = s.sampleImage ? canvas()->composite().copy() : doc->activeLayer()->image;
@@ -93,7 +100,7 @@ void PaintBucketTool::mouseMove(const ToolEvent& e)
     }
     const QPointF at = e.pos + m_grab;
     const QPoint p(int(std::floor(at.x())), int(std::floor(at.y())));
-    if (p != m_seed && document()->rect().contains(p)) {
+    if (p != m_seed && document()->rect().contains(p) && insideSelection(p)) {
         m_seed = p;
         render();
     }

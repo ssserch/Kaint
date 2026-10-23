@@ -295,6 +295,39 @@ static void testTheme()
         CHECK(canvas.viewport()->grab().toImage().pixelColor(5, 5) == QColor(250, 0, 0));
     }
 
+    // Fondo con tinte (blanco al 100 %) y exportación con la imagen dentro: al importar, la imagen
+    // queda copiada en la carpeta de Kaint y el resto de opciones se conserva.
+    custom.imageTint = Qt::white;
+    custom.imageTintStrength = 100;
+    custom.imageScale = 150;
+    custom.imageAnchor = 2;
+    custom.imageBlur = 3;
+    custom.imageGrayscale = true;
+    custom.classic = true;
+    custom.panelTitleEnd = QColor(10, 130, 210);
+    Theme::setCustom(custom);
+    {
+        Canvas canvas;
+        canvas.resize(120, 90);
+        CHECK(canvas.viewport()->grab().toImage().pixelColor(5, 5) == QColor(Qt::white));
+    }
+    {
+        Theme::Spec back = Theme::fromJson(Theme::toJson(custom, true));
+        CHECK(back.workspaceImage != custom.workspaceImage && QFile::exists(back.workspaceImage));
+        CHECK(QImage(back.workspaceImage).pixelColor(0, 0) == QColor(250, 0, 0));
+        back.workspaceImage = custom.workspaceImage;
+        CHECK(back == custom);
+        QFile::remove(Theme::fromJson(Theme::toJson(custom, true)).workspaceImage);
+    }
+
+    // Windows 98: gris con relieve, cabeceras en degradado y escritorio verde azulado.
+    Theme::apply(Theme::Scheme::Windows98);
+    CHECK(Theme::active().classic && QApplication::palette().color(QPalette::Window) == QColor(0xc0, 0xc0, 0xc0));
+    CHECK(Theme::workspaceColor() == QColor(0x00, 0x80, 0x80) && Theme::active().panelTitleEnd != Theme::active().panelTitle);
+    CHECK(qApp->styleSheet().contains(QStringLiteral("border-width: 2px")));
+    CHECK(!Theme::needsRestart(Theme::Scheme::Windows98));
+    Theme::apply(Theme::Scheme::Light);
+
     // "Seguir al sistema" con Plasma: kdeglobals dice si el esquema es oscuro.
     QTemporaryDir config;
     const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
@@ -1310,7 +1343,7 @@ int main(int argc, char** argv)
             SettingsDialog settings(AppSettings::load(), tools, &w);
             QComboBox* scheme = nullptr;
             for (QComboBox* c : settings.findChildren<QComboBox*>())
-                if (c->count() == 5 && c->itemText(4) == QStringLiteral("Personalizado"))
+                if (c->findText(QStringLiteral("Personalizado")) >= 0 && c->findText(QStringLiteral("Windows 98")) >= 0)
                     scheme = c;
             CHECK(scheme);
             if (!scheme)

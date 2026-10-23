@@ -67,7 +67,7 @@ AppSettings AppSettings::load()
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
     a.coloredToolIcons = get("coloredToolIcons", a.coloredToolIcons);
-    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 4);
+    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 5);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
         a.colorScheme = int(Theme::Scheme::System);
@@ -278,6 +278,7 @@ QWidget* SettingsDialog::createInterfacePage()
 #ifndef Q_OS_WIN
     addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
+    addScheme(tr("Windows 98"), Theme::Scheme::Windows98, tr("El clásico gris con relieve. También es una plantilla del personalizado."));
     addScheme(tr("Personalizado"), Theme::Scheme::Custom, tr("Colores, fondo del lienzo y diseño a tu gusto."));
     scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
     auto* customize = new QPushButton(tr("Personalizar…"), page.widget);

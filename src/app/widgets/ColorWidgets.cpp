@@ -325,18 +325,20 @@ void ColorSwatches::paintEvent(QPaintEvent*)
     swatch(secondaryRect(), m_secondary, m_editingSecondary);
     swatch(primaryRect(), m_primary, !m_editingSecondary);
 
-    // Flecha doble para intercambiar.
+    // Flecha doble para intercambiar, como la de Paint.NET: sale a la izquierda arriba y baja
+    // por la derecha.
     p.setRenderHint(QPainter::Antialiasing);
     const QRectF s = swapRect();
-    QPainterPath arc;
-    arc.moveTo(s.left() + 3, s.top() + 4);
-    arc.quadTo(s.right() - 3, s.top() + 4, s.right() - 3, s.bottom() - 2);
-    p.setPen(QPen(QColor(60, 130, 210), 1.6));
+    const QPointF a(s.left() + 2.5, s.top() + 4.5), b(s.right() - 3.5, s.bottom() - 2.5);
+    QPainterPath arc(a);
+    arc.lineTo(b.x() - 4, a.y());
+    arc.quadTo(b.x(), a.y(), b.x(), a.y() + 4);
+    arc.lineTo(b);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(74, 144, 217), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.drawPath(arc);
-    p.drawLine(QPointF(s.left() + 3, s.top() + 4), QPointF(s.left() + 6, s.top() + 1));
-    p.drawLine(QPointF(s.left() + 3, s.top() + 4), QPointF(s.left() + 6, s.top() + 7));
-    p.drawLine(QPointF(s.right() - 3, s.bottom() - 2), QPointF(s.right() - 6, s.bottom() - 5));
-    p.drawLine(QPointF(s.right() - 3, s.bottom() - 2), QPointF(s.right(), s.bottom() - 5));
+    p.drawPolyline(QPolygonF{a + QPointF(3, -3), a, a + QPointF(3, 3)});
+    p.drawPolyline(QPolygonF{b + QPointF(-3, -3), b, b + QPointF(3, -3)});
 
     // Mini muestras negro/blanco para restablecer.
     p.setRenderHint(QPainter::Antialiasing, false);

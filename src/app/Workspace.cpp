@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <QSettings>
@@ -51,6 +52,27 @@ protected:
             return;
         }
         const Theme::Spec s = Theme::active();
+        if (s.classic) {
+            // Botón gris en relieve con la X negra, como en Windows 98.
+            const QRect r = rect().adjusted(1, 1, -1, -1);
+            const QColor face = s.panelClose;
+            const QColor hi = isDown() ? face.darker(250) : QColor(Qt::white);
+            const QColor lo = isDown() ? QColor(Qt::white) : face.darker(250);
+            p.setRenderHint(QPainter::Antialiasing, false);
+            p.fillRect(r, face);
+            p.setPen(hi);
+            p.drawLine(r.topLeft(), r.topRight());
+            p.drawLine(r.topLeft(), r.bottomLeft());
+            p.setPen(lo);
+            p.drawLine(r.bottomLeft(), r.bottomRight());
+            p.drawLine(r.topRight(), r.bottomRight());
+            p.setPen(QPen(s.text, 2));
+            const QPointF c = QRectF(r).center() + (isDown() ? QPointF(1, 1) : QPointF());
+            const qreal k = r.width() * 0.2;
+            p.drawLine(c + QPointF(-k, -k), c + QPointF(k, k));
+            p.drawLine(c + QPointF(-k, k), c + QPointF(k, -k));
+            return;
+        }
         const QColor bg = isDown() ? s.panelClose.darker(115) : underMouse() ? s.panelClose.lighter(118) : s.panelClose;
         const QRectF r = QRectF(rect()).adjusted(1, 1, -1, -1);
         p.setPen(Qt::NoPen);
@@ -113,6 +135,10 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     updateColors();
     connect(Theme::notifier(), &Theme::Notifier::changed, this, [this] {
         updateColors();
+        QEvent relayout(QEvent::StyleChange);
+        event(&relayout);
+        const int inset = titleInset();
+        m_titleBar->setGeometry(inset, inset, width() - 2 * inset, m_titleBar->sizeHint().height());
         if (m_opacity && !underMouse())
             m_opacity->setOpacity(Theme::active().panelOpacity / 100.0);
         update();
@@ -134,6 +160,9 @@ void FloatingPanel::updateColors()
     QPalette p = m_titleBar->palette();
     p.setColor(QPalette::WindowText, Theme::active().panelTitleText);
     m_titleBar->setPalette(p);
+    QFont font = m_title->font();
+    font.setBold(Theme::active().classic);
+    m_title->setFont(font);
 }
 
 void FloatingPanel::paintEvent(QPaintEvent* e)
@@ -148,11 +177,33 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     QPainterPath shape;
     shape.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), s.radius, s.radius);
     p.fillPath(shape, s.panel);
-    if (s.panelTitle != s.panel) {
+    // Cabecera de un color o en degradado (Windows 98: azul marino a azul).
+    const QRect title(0, 0, width(), m_titleBar->geometry().bottom() + 1);
+    if (s.panelTitle != s.panel || s.panelTitleEnd != s.panelTitle) {
+        QLinearGradient gradient(title.topLeft(), title.topRight());
+        gradient.setColorAt(0, s.panelTitle);
+        gradient.setColorAt(1, s.panelTitleEnd);
         p.save();
         p.setClipPath(shape);
-        p.fillRect(QRect(0, 0, width(), m_titleBar->geometry().bottom() + 1), s.panelTitle);
+        p.fillRect(s.classic ? title.adjusted(3, 3, -3, 0) : title, gradient);
         p.restore();
+    }
+    if (s.classic) {
+        // Marco en relieve de dos líneas, como las ventanas de 98.css.
+        const QRect r = rect().adjusted(0, 0, -1, -1);
+        const QColor face = s.panel;
+        auto bevel = [&p](const QRect& box, const QColor& topLeft, const QColor& bottomRight) {
+            p.setPen(topLeft);
+            p.drawLine(box.topLeft(), box.topRight());
+            p.drawLine(box.topLeft(), box.bottomLeft());
+            p.setPen(bottomRight);
+            p.drawLine(box.bottomLeft(), box.bottomRight());
+            p.drawLine(box.topRight(), box.bottomRight());
+        };
+        p.setRenderHint(QPainter::Antialiasing, false);
+        bevel(r, face.lighter(115), face.darker(280));
+        bevel(r.adjusted(1, 1, -1, -1), Qt::white, face.darker(150));
+        return;
     }
     QColor border = s.panel;
     border = QColor::fromRgbF(border.redF() * 0.78f + s.text.redF() * 0.22f, border.greenF() * 0.78f + s.text.greenF() * 0.22f,
@@ -160,6 +211,12 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     p.setPen(QPen(border, 1));
     p.setBrush(Qt::NoBrush);
     p.drawPath(shape);
+}
+
+int FloatingPanel::titleInset() const
+{
+    // Con el estilo clásico, la cabecera queda dentro del marco en relieve (como en 98.css).
+    return Theme::current() != Theme::Scheme::Kde && Theme::active().classic ? 3 : frameWidth();
 }
 
 QSize FloatingPanel::chromeSize() const
@@ -182,7 +239,7 @@ bool FloatingPanel::event(QEvent* e)
     case QEvent::Polish:
     case QEvent::StyleChange:
     case QEvent::FontChange: {
-        const int titleHeight = m_titleBar->sizeHint().height();
+        const int titleHeight = m_titleBar->sizeHint().height() + titleInset() - frameWidth();
         layout()->setContentsMargins(kBorder - frameWidth(), titleHeight + 2, kBorder - frameWidth(),
                                      kBorder - frameWidth());
         break;
@@ -442,8 +499,8 @@ bool FloatingPanel::eventFilter(QObject* obj, QEvent* e)
 void FloatingPanel::resizeEvent(QResizeEvent* e)
 {
     QFrame::resizeEvent(e);
-    const int fw = frameWidth();
-    m_titleBar->setGeometry(fw, fw, width() - 2 * fw, m_titleBar->sizeHint().height());
+    const int inset = titleInset();
+    m_titleBar->setGeometry(inset, inset, width() - 2 * inset, m_titleBar->sizeHint().height());
     if (!m_dragging && !m_resizeEdges)
         reposition();
 }

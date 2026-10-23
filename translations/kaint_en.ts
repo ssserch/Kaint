@@ -3690,6 +3690,14 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The Paint Bucket, Paintbrush, Recolor and Gradient icons show the primary and secondary colors.</translation>
     </message>
     <message>
+        <source>Windows 98</source>
+        <translation>Windows 98</translation>
+    </message>
+    <message>
+        <source>El clásico gris con relieve. También es una plantilla del personalizado.</source>
+        <translation>The classic gray 3D look. It is also a template for the custom theme.</translation>
+    </message>
+    <message>
         <source>Seguir con el tema actual.</source>
         <translation>Keep the current theme.</translation>
     </message>
@@ -4187,6 +4195,10 @@ Do you want to replace them?</translation>
         <translation>Window header</translation>
     </message>
     <message>
+        <source>Cabecera (final del degradado)</source>
+        <translation>Window header (gradient end)</translation>
+    </message>
+    <message>
         <source>Título de las ventanas</source>
         <translation>Window title</translation>
     </message>
@@ -4220,6 +4232,30 @@ Do you want to replace them?</translation>
     <message>
         <source>Base</source>
         <translation>Base</translation>
+    </message>
+    <message>
+        <source>Paint.NET claro</source>
+        <translation>Paint.NET light</translation>
+    </message>
+    <message>
+        <source>Paint.NET oscuro</source>
+        <translation>Paint.NET dark</translation>
+    </message>
+    <message>
+        <source>Windows 98</source>
+        <translation>Windows 98</translation>
+    </message>
+    <message>
+        <source>Aplicar</source>
+        <translation>Apply</translation>
+    </message>
+    <message>
+        <source>Sustituye colores y diseño por los de la plantilla (la imagen de fondo se queda).</source>
+        <translation>Replaces colors and layout with the template ones (the background image stays).</translation>
+    </message>
+    <message>
+        <source>Partir de:</source>
+        <translation>Start from:</translation>
     </message>
     <message>
         <source>Claro</source>
@@ -4266,12 +4302,12 @@ Do you want to replace them?</translation>
         <translation>Image:</translation>
     </message>
     <message>
-        <source>Mosaico</source>
-        <translation>Tile</translation>
+        <source>Vista previa:</source>
+        <translation>Preview:</translation>
     </message>
     <message>
-        <source>Centrada</source>
-        <translation>Center</translation>
+        <source>Mosaico</source>
+        <translation>Tile</translation>
     </message>
     <message>
         <source>Estirada</source>
@@ -4286,12 +4322,76 @@ Do you want to replace them?</translation>
         <translation>Fill</translation>
     </message>
     <message>
+        <source>Tamaño original</source>
+        <translation>Original size</translation>
+    </message>
+    <message>
         <source>Colocación:</source>
         <translation>Placement:</translation>
     </message>
     <message>
+        <source>Arriba a la izquierda</source>
+        <translation>Top left</translation>
+    </message>
+    <message>
+        <source>Arriba</source>
+        <translation>Top</translation>
+    </message>
+    <message>
+        <source>Arriba a la derecha</source>
+        <translation>Top right</translation>
+    </message>
+    <message>
+        <source>Izquierda</source>
+        <translation>Left</translation>
+    </message>
+    <message>
+        <source>Centro</source>
+        <translation>Center</translation>
+    </message>
+    <message>
+        <source>Derecha</source>
+        <translation>Right</translation>
+    </message>
+    <message>
+        <source>Abajo a la izquierda</source>
+        <translation>Bottom left</translation>
+    </message>
+    <message>
+        <source>Abajo</source>
+        <translation>Bottom</translation>
+    </message>
+    <message>
+        <source>Abajo a la derecha</source>
+        <translation>Bottom right</translation>
+    </message>
+    <message>
+        <source>Posición:</source>
+        <translation>Position:</translation>
+    </message>
+    <message>
+        <source>Tamaño de la imagen en mosaico o a tamaño original.</source>
+        <translation>Image size when tiled or at original size.</translation>
+    </message>
+    <message>
+        <source>Escala:</source>
+        <translation>Scale:</translation>
+    </message>
+    <message>
         <source>Opacidad de la imagen:</source>
         <translation>Image opacity:</translation>
+    </message>
+    <message>
+        <source>Desenfoque:</source>
+        <translation>Blur:</translation>
+    </message>
+    <message>
+        <source>En escala de grises</source>
+        <translation>Grayscale</translation>
+    </message>
+    <message>
+        <source>Tinte:</source>
+        <translation>Tint:</translation>
     </message>
     <message>
         <source>Diseño</source>
@@ -4340,6 +4440,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Redondeo de las esquinas:</source>
         <translation>Corner rounding:</translation>
+    </message>
+    <message>
+        <source>Bordes clásicos en relieve (como Windows 98)</source>
+        <translation>Classic 3D borders (like Windows 98)</translation>
+    </message>
+    <message>
+        <source>Estilo:</source>
+        <translation>Style:</translation>
     </message>
     <message>
         <source>Con «Ventanas translúcidas» activado, opacidad de las ventanas flotantes cuando el puntero no está encima.</source>

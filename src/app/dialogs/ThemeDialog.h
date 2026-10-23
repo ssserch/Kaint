@@ -45,7 +45,16 @@ private:
     Theme::Spec m_spec;
     Theme::Spec m_original;
     bool m_refreshing = false;
+    QComboBox* m_template = nullptr;
     QComboBox* m_base = nullptr;
+    QCheckBox* m_classic = nullptr;
+    QWidget* m_preview = nullptr;
+    QComboBox* m_imageAnchor = nullptr;
+    QSpinBox* m_imageScale = nullptr;
+    QSlider* m_imageBlur = nullptr;
+    QCheckBox* m_imageGrayscale = nullptr;
+    ColorButton* m_imageTint = nullptr;
+    QSlider* m_imageTintStrength = nullptr;
     QList<ColorRow> m_colors;
     QLineEdit* m_image = nullptr;
     QPushButton* m_clearImage = nullptr;

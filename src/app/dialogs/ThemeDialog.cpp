@@ -21,6 +21,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSettings>
 #include <QSlider>
@@ -104,6 +106,45 @@ QStringList iconThemes()
     return names;
 }
 
+// Vista previa del fondo: el área de trabajo en pequeño, con la imagen colocada como en el lienzo
+// y una hoja en medio.
+class BackgroundPreview : public QWidget {
+public:
+    explicit BackgroundPreview(QWidget* parent)
+        : QWidget(parent)
+    {
+        setFixedSize(240, 150);
+    }
+    void setSpec(const Theme::Spec& spec)
+    {
+        m_spec = Theme::resolved(spec);
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        // Se dibuja como un área de trabajo de 1200x750 reducida, para que la escala y la
+        // colocación se vean como en la ventana.
+        constexpr double f = 0.2;
+        QPainter p(this);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.scale(f, f);
+        const QRect area(0, 0, int(width() / f), int(height() / f));
+        p.fillRect(area, m_spec.workspace);
+        Theme::paintBackgroundImage(p, area, area, m_spec);
+        const QRect page(area.width() / 2 - 300, area.height() / 2 - 200, 600, 400);
+        p.fillRect(page.translated(8, 8), QColor(0, 0, 0, 60));
+        p.fillRect(page, Qt::white);
+        p.resetTransform();
+        p.setPen(palette().color(QPalette::Mid));
+        p.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+
+private:
+    Theme::Spec m_spec;
+};
+
 } // namespace
 
 ThemeDialog::ThemeDialog(QWidget* parent)
@@ -123,9 +164,38 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     // Modo base: los colores sin cambiar salen del tema claro u oscuro de Paint.NET.
     layout->addWidget(sectionHeader(tr("Base"), content));
     auto* baseForm = new QFormLayout;
+    auto* templateRow = new QHBoxLayout;
+    m_template = new QComboBox(content);
+    m_template->addItems({tr("Paint.NET claro"), tr("Paint.NET oscuro"), tr("Windows 98")});
+    auto* applyTemplate = new QPushButton(tr("Aplicar"), content);
+    applyTemplate->setToolTip(tr("Sustituye colores y diseño por los de la plantilla (la imagen de fondo se queda)."));
+    templateRow->addWidget(m_template);
+    templateRow->addWidget(applyTemplate);
+    templateRow->addStretch();
+    baseForm->addRow(tr("Partir de:"), templateRow);
     m_base = new QComboBox(content);
     m_base->addItems({tr("Claro"), tr("Oscuro")});
     baseForm->addRow(tr("Modo:"), m_base);
+    connect(applyTemplate, &QPushButton::clicked, this, [this] {
+        Theme::Spec spec;
+        switch (m_template->currentIndex()) {
+        case 2: spec = Theme::windows98(); break;
+        default:
+            spec.dark = m_template->currentIndex() == 1;
+            spec.radius = Theme::preset(spec.dark).radius;
+            break;
+        }
+        spec.workspaceImage = m_spec.workspaceImage;
+        spec.imageMode = m_spec.imageMode;
+        spec.imageOpacity = m_spec.imageOpacity;
+        spec.imageScale = m_spec.imageScale;
+        spec.imageAnchor = m_spec.imageAnchor;
+        spec.imageBlur = m_spec.imageBlur;
+        spec.imageGrayscale = m_spec.imageGrayscale;
+        spec.imageTint = m_spec.imageTint;
+        spec.imageTintStrength = m_spec.imageTintStrength;
+        setSpec(spec);
+    });
     layout->addLayout(baseForm);
     auto* note = new QLabel(tr("Los colores que no cambies siguen al modo elegido. Los cambiados aparecen en negrita."),
                             content);
@@ -182,12 +252,45 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     imageRow->addWidget(chooseImage);
     imageRow->addWidget(m_clearImage);
     backForm->addRow(tr("Imagen:"), imageRow);
+    auto* preview = new BackgroundPreview(content);
+    m_preview = preview;
+    backForm->addRow(tr("Vista previa:"), preview);
     m_imageMode = new QComboBox(content);
-    m_imageMode->addItems({tr("Mosaico"), tr("Centrada"), tr("Estirada"), tr("Ajustada"), tr("Rellenar")});
+    m_imageMode->addItems({tr("Mosaico"), tr("Tamaño original"), tr("Estirada"), tr("Ajustada"), tr("Rellenar")});
     backForm->addRow(tr("Colocación:"), m_imageMode);
+    m_imageAnchor = new QComboBox(content);
+    m_imageAnchor->addItems({tr("Arriba a la izquierda"), tr("Arriba"), tr("Arriba a la derecha"), tr("Izquierda"), tr("Centro"),
+                             tr("Derecha"), tr("Abajo a la izquierda"), tr("Abajo"), tr("Abajo a la derecha")});
+    backForm->addRow(tr("Posición:"), m_imageAnchor);
+    m_imageScale = new QSpinBox(content);
+    m_imageScale->setRange(10, 400);
+    m_imageScale->setSingleStep(10);
+    m_imageScale->setSuffix(QStringLiteral(" %"));
+    m_imageScale->setToolTip(tr("Tamaño de la imagen en mosaico o a tamaño original."));
+    backForm->addRow(tr("Escala:"), m_imageScale);
     m_imageOpacity = new QSlider(Qt::Horizontal, content);
     m_imageOpacity->setRange(0, 100);
     backForm->addRow(tr("Opacidad de la imagen:"), sliderRow(m_imageOpacity, content));
+    m_imageBlur = new QSlider(Qt::Horizontal, content);
+    m_imageBlur->setRange(0, 40);
+    auto* blurRow = new QHBoxLayout;
+    auto* blurValue = new QLabel(content);
+    blurValue->setMinimumWidth(blurValue->fontMetrics().horizontalAdvance(QStringLiteral("40 px")));
+    connect(m_imageBlur, &QSlider::valueChanged, blurValue, [blurValue](int v) { blurValue->setText(QStringLiteral("%1 px").arg(v)); });
+    m_imageBlur->setMaximumWidth(260);
+    blurRow->addWidget(m_imageBlur, 1);
+    blurRow->addWidget(blurValue);
+    blurRow->addStretch();
+    backForm->addRow(tr("Desenfoque:"), blurRow);
+    m_imageGrayscale = new QCheckBox(tr("En escala de grises"), content);
+    backForm->addRow(QString(), m_imageGrayscale);
+    auto* tintRow = new QHBoxLayout;
+    m_imageTint = new ColorButton(content);
+    m_imageTintStrength = new QSlider(Qt::Horizontal, content);
+    m_imageTintStrength->setRange(0, 100);
+    tintRow->addWidget(m_imageTint);
+    tintRow->addLayout(sliderRow(m_imageTintStrength, content), 1);
+    backForm->addRow(tr("Tinte:"), tintRow);
     layout->addLayout(backForm);
     connect(chooseImage, &QPushButton::clicked, this, &ThemeDialog::chooseImage);
     connect(m_clearImage, &QPushButton::clicked, this, [this] {
@@ -195,14 +298,27 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         refresh();
         changed();
     });
-    connect(m_imageMode, &QComboBox::activated, this, [this](int i) {
-        m_spec.imageMode = Theme::ImageMode(i);
-        changed();
-    });
-    connect(m_imageOpacity, &QSlider::valueChanged, this, [this](int v) {
-        m_spec.imageOpacity = v;
-        changed();
-    });
+    auto edit = [this](auto apply) {
+        return [this, apply](auto value) {
+            if (m_refreshing)
+                return;
+            apply(value);
+            refresh();
+            changed();
+        };
+    };
+    connect(m_imageMode, &QComboBox::activated, this, edit([this](int i) { m_spec.imageMode = Theme::ImageMode(i); }));
+    connect(m_imageAnchor, &QComboBox::activated, this, edit([this](int i) { m_spec.imageAnchor = i; }));
+    connect(m_imageScale, &QSpinBox::valueChanged, this, edit([this](int v) { m_spec.imageScale = v; }));
+    connect(m_imageOpacity, &QSlider::valueChanged, this, edit([this](int v) { m_spec.imageOpacity = v; }));
+    connect(m_imageBlur, &QSlider::valueChanged, this, edit([this](int v) { m_spec.imageBlur = v; }));
+    connect(m_imageGrayscale, &QCheckBox::toggled, this, edit([this](bool on) { m_spec.imageGrayscale = on; }));
+    connect(m_imageTint, &ColorButton::colorChanged, this, edit([this](const QColor& c) {
+        m_spec.imageTint = c;
+        if (m_spec.imageTintStrength == 0)
+            m_spec.imageTintStrength = 30;
+    }));
+    connect(m_imageTintStrength, &QSlider::valueChanged, this, edit([this](int v) { m_spec.imageTintStrength = v; }));
 
     // Diseño: iconos, botones de las barras, espaciado, esquinas, fuente.
     layout->addWidget(sectionHeader(tr("Diseño"), content));
@@ -221,6 +337,14 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     m_radius->setRange(0, 16);
     m_radius->setSuffix(QStringLiteral(" px"));
     designForm->addRow(tr("Redondeo de las esquinas:"), m_radius);
+    m_classic = new QCheckBox(tr("Bordes clásicos en relieve (como Windows 98)"), content);
+    designForm->addRow(tr("Estilo:"), m_classic);
+    connect(m_classic, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_refreshing)
+            return;
+        m_spec.classic = on;
+        changed();
+    });
     m_panelOpacity = new QSlider(Qt::Horizontal, content);
     m_panelOpacity->setRange(20, 100);
     m_panelOpacity->setToolTip(tr("Con «Ventanas translúcidas» activado, opacidad de las ventanas flotantes cuando el "
@@ -242,7 +366,8 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         m_iconTheme->addItem(name, name);
     designForm->addRow(tr("Iconos:"), m_iconTheme);
     layout->addLayout(designForm);
-    fixedWidth({m_base, m_imageMode, m_iconSize, m_toolIconSize, m_buttonStyle, m_density, m_radius, m_iconTheme});
+    fixedWidth({m_template, m_base, m_imageMode, m_imageAnchor, m_imageScale, m_iconSize, m_toolIconSize, m_buttonStyle,
+                m_density, m_radius, m_iconTheme});
     layout->addStretch();
 
     connect(m_iconSize, &QComboBox::activated, this, [this] {
@@ -360,7 +485,22 @@ void ThemeDialog::refresh()
     m_image->setText(QDir::toNativeSeparators(m_spec.workspaceImage));
     m_clearImage->setEnabled(!m_spec.workspaceImage.isEmpty());
     m_imageMode->setCurrentIndex(int(m_spec.imageMode));
+    m_imageAnchor->setCurrentIndex(m_spec.imageAnchor);
+    m_imageScale->setValue(m_spec.imageScale);
+    const bool hasImage = !m_spec.workspaceImage.isEmpty();
+    m_imageScale->setEnabled(hasImage
+                             && (m_spec.imageMode == Theme::ImageMode::Tile || m_spec.imageMode == Theme::ImageMode::Center));
+    m_imageAnchor->setEnabled(hasImage && m_spec.imageMode != Theme::ImageMode::Stretch);
     m_imageOpacity->setValue(m_spec.imageOpacity);
+    m_imageBlur->setValue(m_spec.imageBlur);
+    m_imageGrayscale->setChecked(m_spec.imageGrayscale);
+    m_imageTint->setColor(m_spec.imageTint.isValid() ? m_spec.imageTint : QColor(Qt::black));
+    m_imageTintStrength->setValue(m_spec.imageTintStrength);
+    for (QWidget* w : std::initializer_list<QWidget*>{m_imageMode, m_imageOpacity, m_imageBlur, m_imageGrayscale, m_imageTint,
+                                                      m_imageTintStrength})
+        w->setEnabled(hasImage);
+    m_classic->setChecked(m_spec.classic);
+    static_cast<BackgroundPreview*>(m_preview)->setSpec(m_spec);
     selectData(m_iconSize, m_spec.iconSize);
     selectData(m_toolIconSize, m_spec.toolIconSize);
     m_buttonStyle->setCurrentIndex(int(m_spec.buttonStyle));
@@ -392,7 +532,7 @@ void ThemeDialog::chooseImage()
                                                       tr("Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl)"));
     if (file.isEmpty())
         return;
-    m_spec.workspaceImage = file;
+    m_spec.workspaceImage = Theme::storeBackground(file);
     refresh();
     changed();
 }
@@ -419,7 +559,7 @@ void ThemeDialog::exportTheme()
         return;
     QFile f(file);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
-        f.write(QJsonDocument(Theme::toJson(m_spec)).toJson(QJsonDocument::Indented)) < 0)
+        f.write(QJsonDocument(Theme::toJson(m_spec, true)).toJson(QJsonDocument::Indented)) < 0)
         QMessageBox::warning(this, windowTitle(), tr("No se pudo guardar «%1».").arg(QFileInfo(file).fileName()));
 }
 

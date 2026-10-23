@@ -30,8 +30,9 @@ come from Paint.NET.
   and native plugins with a stable C API.
 - **Formats**: OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA,
   animated GIF and ICO. Opens Paint.NET **.pdn** files.
-- **Themes**: Paint.NET light and dark, follow the system, the real KDE theme (on Linux), or your
-  own custom theme (colors, canvas background image, toolbar layout).
+- **Themes**: Paint.NET light and dark, follow the system, the real KDE theme (on Linux), a classic
+  Windows 98 theme, or your own custom theme (colors, 3D borders, toolbar layout and a canvas
+  background image with placement, scale, blur and tint).
 - **Recovery copies** of unsaved images, in case Kaint closes unexpectedly.
 - English and Spanish.
 

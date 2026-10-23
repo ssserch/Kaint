@@ -35,7 +35,7 @@
 
 namespace Theme {
 
-const std::array<ColorRole, 18> kColorRoles{{
+const std::array<ColorRole, 19> kColorRoles{{
     {"accent", &Spec::accent, QT_TRANSLATE_NOOP("Theme", "Acento")},
     {"window", &Spec::window, QT_TRANSLATE_NOOP("Theme", "Ventana y diálogos")},
     {"text", &Spec::text, QT_TRANSLATE_NOOP("Theme", "Texto")},
@@ -48,6 +48,7 @@ const std::array<ColorRole, 18> kColorRoles{{
     {"statusBar", &Spec::statusBar, QT_TRANSLATE_NOOP("Theme", "Barra de estado")},
     {"panel", &Spec::panel, QT_TRANSLATE_NOOP("Theme", "Ventanas flotantes")},
     {"panelTitle", &Spec::panelTitle, QT_TRANSLATE_NOOP("Theme", "Cabecera de las ventanas")},
+    {"panelTitleEnd", &Spec::panelTitleEnd, QT_TRANSLATE_NOOP("Theme", "Cabecera (final del degradado)")},
     {"panelTitleText", &Spec::panelTitleText, QT_TRANSLATE_NOOP("Theme", "Título de las ventanas")},
     {"panelClose", &Spec::panelClose, QT_TRANSLATE_NOOP("Theme", "Botón de cerrar")},
     {"selection", &Spec::selection, QT_TRANSLATE_NOOP("Theme", "Selección")},
@@ -73,17 +74,11 @@ QFileSystemWatcher* g_watcher = nullptr;
 
 // Imagen de fondo cargada y su copia escalada (se crea con la aplicación ya en marcha).
 struct ImageCache {
-    QString path;
+    QString key;
     QPixmap image;
     QPixmap scaled;
     QSize scaledSize;
 };
-
-ImageCache& imageCache()
-{
-    static ImageCache cache;
-    return cache;
-}
 
 QColor rgb(QRgb value) { return QColor::fromRgb(value); }
 
@@ -302,6 +297,18 @@ QString indicatorImage(const char* kind, const QColor& color)
         shape = QStringLiteral("<circle cx='8' cy='8' r='3.5' fill='%1'/>");
     else if (qstrcmp(kind, "up") == 0)
         shape = line.arg(QStringLiteral("%1"), QStringLiteral("M3.5 10.5l4.5-4.5 4.5 4.5"), QStringLiteral("1.6"));
+    else if (qstrcmp(kind, "left") == 0)
+        shape = line.arg(QStringLiteral("%1"), QStringLiteral("M10.5 3.5l-4.5 4.5 4.5 4.5"), QStringLiteral("1.6"));
+    else if (qstrcmp(kind, "right") == 0)
+        shape = line.arg(QStringLiteral("%1"), QStringLiteral("M5.5 3.5l4.5 4.5-4.5 4.5"), QStringLiteral("1.6"));
+    else if (qstrcmp(kind, "tri-up") == 0)
+        shape = QStringLiteral("<path d='M4 10.5h8l-4-5z' fill='%1'/>");
+    else if (qstrcmp(kind, "tri-down") == 0)
+        shape = QStringLiteral("<path d='M4 5.5h8l-4 5z' fill='%1'/>");
+    else if (qstrcmp(kind, "tri-left") == 0)
+        shape = QStringLiteral("<path d='M10.5 4v8l-5-4z' fill='%1'/>");
+    else if (qstrcmp(kind, "tri-right") == 0)
+        shape = QStringLiteral("<path d='M5.5 4v8l5-4z' fill='%1'/>");
     else
         shape = line.arg(QStringLiteral("%1"), QStringLiteral("M3.5 5.5l4.5 4.5 4.5-4.5"), QStringLiteral("1.6"));
     QDir().mkpath(dir);
@@ -318,6 +325,114 @@ QString iconThemeFor(const Spec& s)
     if (!s.iconTheme.isEmpty())
         return s.iconTheme;
     return Icons::breezeTheme(s.dark);
+}
+
+// Bordes clásicos en relieve, como 98.css: claro arriba y a la izquierda, oscuro abajo y a la
+// derecha (al revés en lo hundido: campos, botones pulsados).
+QString classicStyleSheet(const Spec& s)
+{
+    const QColor face = s.button;
+    const QColor hi = mix(face, Qt::white, 0.9);
+    const QColor light = mix(face, Qt::white, 0.5);
+    const QColor shadow = mix(face, Qt::black, 0.33);
+    const QColor dark = mix(face, Qt::black, 0.95);
+    const QString raised = QStringLiteral("border-style: solid; border-width: 2px; border-color: %1 %2 %2 %1; border-radius: 0;")
+                               .arg(css(hi), css(dark));
+    const QString sunken = QStringLiteral("border-style: solid; border-width: 2px; border-color: %1 %2 %2 %1; border-radius: 0;")
+                               .arg(css(shadow), css(hi));
+    const QString thinRaised = QStringLiteral("border-style: solid; border-width: 1px; border-color: %1 %2 %2 %1; border-radius: 0;")
+                                   .arg(css(hi), css(shadow));
+    const QString thinSunken = QStringLiteral("border-style: solid; border-width: 1px; border-color: %1 %2 %2 %1; border-radius: 0;")
+                                   .arg(css(shadow), css(hi));
+    const QColor selectedText = contrast(s.selection);
+    QString qss = QStringLiteral(R"(
+QPushButton { background: %1; %2 padding: 3px 12px; }
+QPushButton:hover { background: %1; %2 }
+QPushButton:pressed, QPushButton:checked { background: %1; %3 padding: 4px 11px 2px 13px; }
+QPushButton:disabled { background: %1; %2 color: %4; }
+QToolButton, QToolButton:hover:!checked:!pressed { background: transparent; border: 1px solid transparent; border-radius: 0; }
+QToolButton:hover { %5 }
+QToolButton:checked, QToolButton:pressed { background: %6; %7 }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox, QComboBox:editable, QListView, QTreeView,
+QTableView { background: %8; %3 }
+QComboBox:hover, QComboBox:on, QLineEdit:focus, QAbstractSpinBox:focus { %3 }
+QComboBox::drop-down { background: %1; %2 width: 13px; }
+QComboBox::down-arrow { image: url("%9"); }
+QAbstractSpinBox::up-button, QAbstractSpinBox::down-button { background: %1; %5 width: 14px; }
+QAbstractSpinBox::up-button:pressed, QAbstractSpinBox::down-button:pressed { background: %1; %7 }
+QAbstractSpinBox::up-arrow { image: url("%10"); }
+QAbstractSpinBox::down-arrow { image: url("%9"); }
+)")
+                      .arg(css(face), raised, sunken, css(shadow), thinRaised, css(light), thinSunken, css(s.base),
+                           indicatorImage("tri-down", s.text))
+                      .arg(indicatorImage("tri-up", s.text));
+
+    qss += QStringLiteral(R"(
+QMenuBar { background: %1; border: none; border-radius: 0; padding: 1px; }
+QMenuBar::item { border: none; border-radius: 0; }
+QMenuBar::item:selected, QMenuBar::item:pressed { background: %2; color: %3; border: none; }
+QMenu { background: %4; %5 padding: 1px; }
+QMenu::item { border: none; border-radius: 0; padding: 3px 20px 3px 20px; }
+QMenu::item:selected { background: %2; color: %3; border: none; }
+QMenu::separator { height: 0px; border-top: 1px solid %6; border-bottom: 1px solid %7; margin: 3px 2px; }
+QToolTip { background: #ffffe1; color: #000000; border: 1px solid #000000; }
+QToolBar::separator { background: %6; width: 1px; height: 1px; border-right: 1px solid %7; margin: 3px 3px; }
+QStatusBar::item { %8 }
+QHeaderView::section { background: %4; %9 }
+QGroupBox { border: 2px groove %4; margin-top: 8px; padding-top: 6px; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }
+FloatingPanel QAbstractItemView { background: %10; %11 }
+QAbstractItemView, QComboBox QAbstractItemView { selection-background-color: %2; selection-color: %3; }
+QListView::item:selected, QTreeView::item:selected { background: %2; color: %3; border: none; }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit { selection-background-color: %2; selection-color: %3; }
+)")
+               .arg(css(s.menuBar), css(s.selection), css(selectedText), css(face), raised, css(shadow), css(hi), thinSunken,
+                    thinRaised)
+               .arg(css(s.base), sunken);
+
+    qss += QStringLiteral(R"(
+QScrollBar:vertical { background: %1; width: 16px; margin: 16px 0 16px 0; border: none; }
+QScrollBar:horizontal { background: %1; height: 16px; margin: 0 16px 0 16px; border: none; }
+QScrollBar::handle { background: %2; %3 }
+QScrollBar::handle:vertical { min-height: 16px; margin: 0; }
+QScrollBar::handle:horizontal { min-width: 16px; margin: 0; }
+QScrollBar::handle:hover { background: %2; }
+QScrollBar::add-line, QScrollBar::sub-line { background: %2; %3 subcontrol-origin: margin; }
+QScrollBar::add-line:vertical { height: 12px; width: 12px; subcontrol-position: bottom; }
+QScrollBar::sub-line:vertical { height: 12px; width: 12px; subcontrol-position: top; }
+QScrollBar::add-line:horizontal { width: 12px; height: 12px; subcontrol-position: right; }
+QScrollBar::sub-line:horizontal { width: 12px; height: 12px; subcontrol-position: left; }
+QScrollBar::up-arrow { image: url("%4"); width: 10px; height: 10px; }
+QScrollBar::down-arrow { image: url("%5"); width: 10px; height: 10px; }
+QScrollBar::left-arrow { image: url("%6"); width: 10px; height: 10px; }
+QScrollBar::right-arrow { image: url("%7"); width: 10px; height: 10px; }
+QSlider::groove:horizontal { height: 2px; background: %8; %9 }
+QSlider::groove:vertical { width: 2px; background: %8; %9 }
+QSlider::handle:horizontal { background: %2; %3 width: 9px; margin: -9px 0; }
+QSlider::handle:vertical { background: %2; %3 height: 9px; margin: 0 -9px; }
+QSlider::handle:hover { background: %2; }
+QProgressBar { background: %10; %11 color: %12; }
+QProgressBar::chunk { background: %13; width: 10px; margin: 2px; }
+)")
+               .arg(css(light), css(face), raised, indicatorImage("tri-up", s.text), indicatorImage("tri-down", s.text),
+                    indicatorImage("tri-left", s.text), indicatorImage("tri-right", s.text), css(dark), thinSunken)
+               .arg(css(s.base), sunken, css(s.text), css(s.selection));
+
+    qss += QStringLiteral(R"(
+QTabWidget::pane { background: %1; %2 top: -2px; }
+QTabBar::tab { background: %1; border-style: solid; border-width: 2px 2px 0 2px; border-color: %3 %4 %4 %3;
+               border-radius: 0; padding: 3px 10px; margin-right: 0; }
+QTabBar::tab:!selected { margin-top: 2px; }
+QCheckBox::indicator, QAbstractItemView::indicator, QGroupBox::indicator { background: %5; %6 width: 9px; height: 9px; }
+QCheckBox::indicator:checked, QAbstractItemView::indicator:checked, QGroupBox::indicator:checked {
+    background: %5; border-color: %7 %3 %3 %7; image: url("%8"); }
+QRadioButton::indicator { background: %5; %6 border-radius: 6px; width: 8px; height: 8px; }
+QRadioButton::indicator:checked { background: %5; image: url("%9"); }
+QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: %7 %3 %3 %7; }
+)")
+               .arg(css(face), raised, css(hi), css(dark), css(s.base), sunken, css(shadow),
+                    indicatorImage("check", s.text), indicatorImage("dot", s.text));
+    return qss;
 }
 
 } // namespace
@@ -349,6 +464,7 @@ Spec preset(bool dark)
         s.hover = rgb(0x3a3a3a);
         s.workspace = rgb(0x303030);
         s.radius = 4;
+        s.panelTitleEnd = s.panelTitle;
     } else {
         s.accent = rgb(0x0078d7);
         s.window = rgb(0xf0f0f0);
@@ -369,7 +485,43 @@ Spec preset(bool dark)
         s.hover = rgb(0xe5f3ff);
         s.workspace = rgb(0xcbcbcb);
         s.radius = 0;
+        s.panelTitleEnd = s.panelTitle;
     }
+    return s;
+}
+
+// Windows 98, con los colores de 98.css (https://jdan.github.io/98.css/): gris con relieve,
+// cabeceras azul marino en degradado y el escritorio verde azulado detrás de la imagen.
+Spec windows98()
+{
+    Spec s;
+    s.dark = false;
+    s.accent = rgb(0x000080);
+    s.window = rgb(0xc0c0c0);
+    s.text = rgb(0x000000);
+    s.base = rgb(0xffffff);
+    s.button = rgb(0xc0c0c0);
+    s.border = rgb(0x808080);
+    s.menuBar = rgb(0xc0c0c0);
+    s.menuBarText = rgb(0x000000);
+    s.toolBar = rgb(0xc0c0c0);
+    s.statusBar = rgb(0xc0c0c0);
+    s.panel = rgb(0xc0c0c0);
+    s.panelTitle = rgb(0x000080);
+    s.panelTitleEnd = rgb(0x1084d0);
+    s.panelTitleText = rgb(0xffffff);
+    s.panelClose = rgb(0xc0c0c0);
+    s.selection = rgb(0x000080);
+    s.selectionBorder = rgb(0x000080);
+    s.hover = rgb(0xc0c0c0);
+    s.workspace = rgb(0x008080);
+    s.radius = 0;
+    s.buttonStyle = ButtonStyle::Framed;
+    s.density = Density::Compact;
+    s.classic = true;
+    s.panelOpacity = 100;
+    s.fontFamily = QStringLiteral("Microsoft Sans Serif");
+    s.fontSize = 8;
     return s;
 }
 
@@ -380,13 +532,39 @@ Spec resolved(const Spec& custom)
     for (const ColorRole& role : kColorRoles)
         if (!(s.*role.color).isValid())
             s.*role.color = base.*role.color;
+    // Sin final propio, la cabecera es de un solo color (el suyo, aunque se haya cambiado).
+    if (!custom.panelTitleEnd.isValid())
+        s.panelTitleEnd = s.panelTitle;
     return s;
 }
 
 // ---------------------------------------------------------------------------
 // Tema personalizado: JSON (se guarda en la configuración y se puede exportar)
 
-QJsonObject toJson(const Spec& spec)
+QString storeBackground(const QString& file)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/backgrounds");
+    if (file.isEmpty() || QFileInfo(file).absolutePath() == QDir(dir).absolutePath())
+        return file;
+    QDir().mkpath(dir);
+    QFile in(file);
+    if (!in.open(QIODevice::ReadOnly))
+        return file;
+    const QByteArray data = in.readAll();
+    const QString name = QStringLiteral("%1-%2.%3")
+                             .arg(QFileInfo(file).completeBaseName())
+                             .arg(qHash(data), 8, 16, QLatin1Char('0'))
+                             .arg(QFileInfo(file).suffix().toLower());
+    const QString target = QDir(dir).filePath(name);
+    if (!QFile::exists(target)) {
+        QFile out(target);
+        if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size())
+            return file;
+    }
+    return target;
+}
+
+QJsonObject toJson(const Spec& spec, bool embedImage)
 {
     QJsonObject colors;
     for (const ColorRole& role : kColorRoles) {
@@ -394,12 +572,19 @@ QJsonObject toJson(const Spec& spec)
         if (c.isValid())
             colors.insert(QLatin1String(role.key), c.name(c.alpha() == 255 ? QColor::HexRgb : QColor::HexArgb));
     }
-    return QJsonObject{
+    QJsonObject json{
         {QStringLiteral("dark"), spec.dark},
         {QStringLiteral("colors"), colors},
         {QStringLiteral("workspaceImage"), spec.workspaceImage},
         {QStringLiteral("imageMode"), int(spec.imageMode)},
         {QStringLiteral("imageOpacity"), spec.imageOpacity},
+        {QStringLiteral("imageScale"), spec.imageScale},
+        {QStringLiteral("imageAnchor"), spec.imageAnchor},
+        {QStringLiteral("imageBlur"), spec.imageBlur},
+        {QStringLiteral("imageGrayscale"), spec.imageGrayscale},
+        {QStringLiteral("imageTint"), spec.imageTint.isValid() ? spec.imageTint.name() : QString()},
+        {QStringLiteral("imageTintStrength"), spec.imageTintStrength},
+        {QStringLiteral("classic"), spec.classic},
         {QStringLiteral("iconSize"), spec.iconSize},
         {QStringLiteral("toolIconSize"), spec.toolIconSize},
         {QStringLiteral("buttonStyle"), int(spec.buttonStyle)},
@@ -410,6 +595,14 @@ QJsonObject toJson(const Spec& spec)
         {QStringLiteral("fontSize"), spec.fontSize},
         {QStringLiteral("iconTheme"), spec.iconTheme},
     };
+    if (embedImage && !spec.workspaceImage.isEmpty()) {
+        QFile f(spec.workspaceImage);
+        if (f.open(QIODevice::ReadOnly)) {
+            json.insert(QStringLiteral("workspaceImageName"), QFileInfo(spec.workspaceImage).fileName());
+            json.insert(QStringLiteral("workspaceImageData"), QString::fromLatin1(f.readAll().toBase64()));
+        }
+    }
+    return json;
 }
 
 Spec fromJson(const QJsonObject& json)
@@ -426,8 +619,27 @@ Spec fromJson(const QJsonObject& json)
         return std::clamp(json.value(QLatin1String(key)).toInt(fallback), lo, hi);
     };
     s.workspaceImage = json.value(QStringLiteral("workspaceImage")).toString();
+    // Tema exportado con la imagen dentro: se guarda en la carpeta de Kaint.
+    const QByteArray embedded = QByteArray::fromBase64(json.value(QStringLiteral("workspaceImageData")).toString().toLatin1());
+    if (!embedded.isEmpty()) {
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/backgrounds");
+        QDir().mkpath(dir);
+        const QString name = QFileInfo(json.value(QStringLiteral("workspaceImageName")).toString()).fileName();
+        const QString target = QDir(dir).filePath(QStringLiteral("%1-%2").arg(qHash(embedded), 8, 16, QLatin1Char('0'))
+                                                      .arg(name.isEmpty() ? QStringLiteral("fondo.png") : name));
+        QFile out(target);
+        if (QFile::exists(target) || (out.open(QIODevice::WriteOnly) && out.write(embedded) == embedded.size()))
+            s.workspaceImage = target;
+    }
     s.imageMode = ImageMode(number("imageMode", int(base.imageMode), 0, 4));
     s.imageOpacity = number("imageOpacity", base.imageOpacity, 0, 100);
+    s.imageScale = number("imageScale", base.imageScale, 10, 400);
+    s.imageAnchor = number("imageAnchor", base.imageAnchor, 0, 8);
+    s.imageBlur = number("imageBlur", base.imageBlur, 0, 40);
+    s.imageGrayscale = json.value(QStringLiteral("imageGrayscale")).toBool(false);
+    s.imageTint = QColor::fromString(json.value(QStringLiteral("imageTint")).toString());
+    s.imageTintStrength = number("imageTintStrength", base.imageTintStrength, 0, 100);
+    s.classic = json.value(QStringLiteral("classic")).toBool(false);
     s.iconSize = number("iconSize", base.iconSize, 12, 48);
     s.toolIconSize = number("toolIconSize", base.toolIconSize, 12, 48);
     s.buttonStyle = ButtonStyle(number("buttonStyle", int(base.buttonStyle), 0, 2));
@@ -701,6 +913,8 @@ QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image:
 )")
                .arg(indicatorImage("down", arrow), indicatorImage("down", disabled), css(mix(field, s.base, 0.5)),
                     css(s.hover), css(s.selection), indicatorImage("up", arrow), indicatorImage("up", disabled));
+    if (s.classic)
+        qss += classicStyleSheet(s);
     return qss;
 }
 
@@ -764,14 +978,18 @@ void apply(Scheme scheme)
     }
     if (scheme == Scheme::Custom)
         g_active = resolved(custom());
+    else if (scheme == Scheme::Windows98)
+        g_active = windows98();
     else
         g_active = preset(scheme == Scheme::Dark || (scheme == Scheme::System && systemPrefersDark()));
 
     if (g_baseFontSet) {
+        // Fuente propia: la del personalizado o la de Windows 98.
+        const bool ownFont = scheme == Scheme::Custom || scheme == Scheme::Windows98;
         QFont font = g_baseFont;
-        if (scheme == Scheme::Custom && !g_active.fontFamily.isEmpty())
+        if (ownFont && !g_active.fontFamily.isEmpty())
             font.setFamily(g_active.fontFamily);
-        if (scheme == Scheme::Custom && g_active.fontSize > 0)
+        if (ownFont && g_active.fontSize > 0)
             font.setPointSize(g_active.fontSize);
         if (font != QApplication::font())
             QApplication::setFont(font);
@@ -889,49 +1107,102 @@ QColor workspaceColor()
 void paintWorkspace(QPainter& p, const QRect& area, const QRect& clip, const QColor& color)
 {
     p.fillRect(clip, color.isValid() ? color : workspaceColor());
-    if (g_current == Scheme::Kde || g_active.workspaceImage.isEmpty())
-        return;
-    ImageCache& cache = imageCache();
-    if (cache.path != g_active.workspaceImage) {
-        cache = ImageCache();
-        cache.path = g_active.workspaceImage;
-        cache.image.load(cache.path);
+    if (g_current != Scheme::Kde)
+        paintBackgroundImage(p, area, clip, g_active);
+}
+
+namespace {
+
+// La imagen de fondo con sus retoques (escala de grises, desenfoque, tinte), en caché.
+const QPixmap& processedBackground(const Spec& spec, ImageCache& cache)
+{
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5")
+                            .arg(spec.workspaceImage)
+                            .arg(spec.imageGrayscale)
+                            .arg(spec.imageBlur)
+                            .arg(spec.imageTint.isValid() ? spec.imageTint.name() : QString())
+                            .arg(spec.imageTintStrength);
+    if (cache.key == key)
+        return cache.image;
+    cache = ImageCache();
+    cache.key = key;
+    QImage image(spec.workspaceImage);
+    if (image.isNull())
+        return cache.image;
+    image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    if (spec.imageGrayscale) {
+        for (int y = 0; y < image.height(); ++y) {
+            QRgb* line = reinterpret_cast<QRgb*>(image.scanLine(y));
+            for (int x = 0; x < image.width(); ++x) {
+                const int g = qGray(line[x]);
+                line[x] = qRgba(g, g, g, qAlpha(line[x]));
+            }
+        }
     }
-    const QPixmap& image = cache.image;
-    if (image.isNull() || area.isEmpty())
+    if (spec.imageBlur > 0) {
+        // Reducir y volver a ampliar con suavizado: un desenfoque rápido y sin bordes duros.
+        const double f = 1.0 + spec.imageBlur / 2.0;
+        const QSize small((image.size() / f).expandedTo(QSize(1, 1)));
+        image = image.scaled(small, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                    .scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+    if (spec.imageTint.isValid() && spec.imageTintStrength > 0) {
+        QPainter tp(&image);
+        tp.setCompositionMode(QPainter::CompositionMode_SourceAtop);
+        tp.setOpacity(spec.imageTintStrength / 100.0);
+        tp.fillRect(image.rect(), spec.imageTint);
+    }
+    cache.image = QPixmap::fromImage(image);
+    return cache.image;
+}
+
+// Posición de un rectángulo 'size' en 'area' según el ancla (0..8: de arriba a la izquierda a
+// abajo a la derecha, 4 es el centro).
+QPoint anchored(const QRect& area, QSize size, int anchor)
+{
+    const int col = std::clamp(anchor, 0, 8) % 3, row = std::clamp(anchor, 0, 8) / 3;
+    return QPoint(area.left() + (area.width() - size.width()) * col / 2, area.top() + (area.height() - size.height()) * row / 2);
+}
+
+} // namespace
+
+void paintBackgroundImage(QPainter& p, const QRect& area, const QRect& clip, const Spec& spec)
+{
+    if (spec.workspaceImage.isEmpty() || area.isEmpty())
+        return;
+    // Una caché para el lienzo y otra para las vistas previas (otro tamaño u otros retoques).
+    static ImageCache main, preview;
+    ImageCache& cache = &spec == &g_active ? main : preview;
+    const QPixmap& image = processedBackground(spec, cache);
+    if (image.isNull())
         return;
 
     p.save();
     p.setClipRect(clip);
-    p.setOpacity(std::clamp(g_active.imageOpacity, 0, 100) / 100.0);
-    const QSize size = image.size();
-    switch (g_active.imageMode) {
-    case ImageMode::Tile: {
-        const QPoint offset((clip.left() - area.left()) % size.width(), (clip.top() - area.top()) % size.height());
-        p.drawTiledPixmap(clip, image, offset);
-        break;
+    p.setOpacity(std::clamp(spec.imageOpacity, 0, 100) / 100.0);
+    const double scale = std::clamp(spec.imageScale, 10, 400) / 100.0;
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
+    QSize target;
+    switch (spec.imageMode) {
+    case ImageMode::Tile:
+    case ImageMode::Center: target = (QSizeF(image.size()) * scale).toSize().expandedTo(QSize(1, 1)); break;
+    case ImageMode::Stretch: target = area.size(); break;
+    case ImageMode::Fit: target = image.size().scaled(area.size(), Qt::KeepAspectRatio); break;
+    case ImageMode::Fill: target = image.size().scaled(area.size(), Qt::KeepAspectRatioByExpanding); break;
     }
-    case ImageMode::Center:
-        p.drawPixmap(area.left() + (area.width() - size.width()) / 2, area.top() + (area.height() - size.height()) / 2,
-                     image);
-        break;
-    case ImageMode::Stretch:
-    case ImageMode::Fit:
-    case ImageMode::Fill: {
-        const QSize target = g_active.imageMode == ImageMode::Stretch ? area.size()
-                             : g_active.imageMode == ImageMode::Fit
-                                 ? size.scaled(area.size(), Qt::KeepAspectRatio)
-                                 : size.scaled(area.size(), Qt::KeepAspectRatioByExpanding);
-        const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
-        if (cache.scaledSize != target * dpr) {
-            cache.scaledSize = target * dpr;
-            cache.scaled = image.scaled(cache.scaledSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-            cache.scaled.setDevicePixelRatio(dpr);
-        }
-        p.drawPixmap(area.left() + (area.width() - target.width()) / 2, area.top() + (area.height() - target.height()) / 2,
-                     cache.scaled);
-        break;
+    if (cache.scaledSize != target * dpr) {
+        cache.scaledSize = target * dpr;
+        cache.scaled = target == image.size() ? image
+                                              : image.scaled(cache.scaledSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        cache.scaled.setDevicePixelRatio(dpr);
     }
+    if (spec.imageMode == ImageMode::Tile) {
+        const QPoint origin = anchored(area, target, spec.imageAnchor);
+        auto wrap = [](int v, int m) { return ((v % m) + m) % m; };
+        const QPoint offset(wrap(clip.left() - origin.x(), target.width()), wrap(clip.top() - origin.y(), target.height()));
+        p.drawTiledPixmap(clip, cache.scaled, offset);
+    } else {
+        p.drawPixmap(anchored(area, target, spec.imageAnchor), cache.scaled);
     }
     p.restore();
 }

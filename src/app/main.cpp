@@ -33,10 +33,10 @@ Theme::Scheme startupScheme(int argc, char** argv)
             continue;
         const QString value = arg.section(QLatin1Char('='), 1).toLower();
         const QStringList names{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark"),
-                                QStringLiteral("kde"), QStringLiteral("custom")};
+                                QStringLiteral("kde"), QStringLiteral("custom"), QStringLiteral("windows98")};
         settings.setValue(QStringLiteral("colorScheme"), std::max(0, int(names.indexOf(value))));
     }
-    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 4));
+    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 5));
 #ifdef Q_OS_WIN
     // En Windows no hay tema nativo aparte (versiones anteriores lo tenían).
     if (scheme == Theme::Scheme::Kde)

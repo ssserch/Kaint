@@ -16,12 +16,13 @@ class QWidget;
 // "Seguir al sistema", "Claro" y "Oscuro" imitan Paint.NET en Windows 10 (el primero elige
 // claro u oscuro según el escritorio). "KDE" usa el estilo y los colores reales de Plasma.
 // "Personalizado" parte de claro u oscuro y deja cambiar colores, fondo del lienzo y diseño.
-// Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y una hoja de
-// estilo. Eso se decide antes de crear la aplicación, así que pasar al tema KDE o salir de él
-// reinicia Kaint.
+// "Windows 98" es el clásico gris con relieve (basado en 98.css); también es una plantilla del
+// personalizado. Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y
+// una hoja de estilo. Eso se decide antes de crear la aplicación, así que pasar al tema KDE o
+// salir de él reinicia Kaint.
 namespace Theme {
 
-enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4 };
+enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5 };
 enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
 enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
 enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
@@ -43,6 +44,7 @@ struct Spec {
     QColor statusBar;
     QColor panel;
     QColor panelTitle;
+    QColor panelTitleEnd;
     QColor panelTitleText;
     QColor panelClose;
     QColor selection;
@@ -53,6 +55,15 @@ struct Spec {
     QString workspaceImage;
     ImageMode imageMode = ImageMode::Tile;
     int imageOpacity = 100;
+    int imageScale = 100;
+    int imageAnchor = 4;
+    int imageBlur = 0;
+    bool imageGrayscale = false;
+    QColor imageTint;
+    int imageTintStrength = 0;
+
+    // Bordes clásicos en relieve (Windows 98) en botones, campos, menús y ventanas.
+    bool classic = false;
 
     int iconSize = 16;
     int toolIconSize = 22;
@@ -73,13 +84,17 @@ struct ColorRole {
     QColor Spec::*color;
     const char* label;
 };
-extern const std::array<ColorRole, 18> kColorRoles;
+extern const std::array<ColorRole, 19> kColorRoles;
 
-// Temas de Paint.NET y el personalizado con sus huecos rellenos.
+// Temas de Paint.NET, Windows 98 y el personalizado con sus huecos rellenos.
 Spec preset(bool dark);
+Spec windows98();
 Spec resolved(const Spec& custom);
-QJsonObject toJson(const Spec& spec);
+// 'embedImage' guarda también la imagen de fondo (para exportar el tema y compartirlo).
+QJsonObject toJson(const Spec& spec, bool embedImage = false);
 Spec fromJson(const QJsonObject& json);
+// Copia una imagen de fondo a la carpeta de Kaint (así no se pierde si se mueve el original).
+QString storeBackground(const QString& file);
 Spec loadCustom();
 void saveCustom(const Spec& custom);
 
@@ -113,6 +128,8 @@ void styleTitleBar(QWidget* window, const QColor& band);
 // usa el del tema.
 QColor workspaceColor();
 void paintWorkspace(QPainter& p, const QRect& area, const QRect& clip, const QColor& color = QColor());
+// La imagen de fondo de un tema (con su colocación, escala, desenfoque y tinte) sobre 'area'.
+void paintBackgroundImage(QPainter& p, const QRect& area, const QRect& clip, const Spec& spec);
 
 // Avisa de los cambios de tema, también cuando el sistema pasa de claro a oscuro.
 class Notifier : public QObject {

@@ -65,6 +65,7 @@ private:
     void updateEdgeCursor(Qt::Edges edges);
     QRect constrained(const QRect& proposed, Qt::Edges edges) const;
     QSize chromeSize() const;
+    int titleInset() const;
     void updateTitleText();
 
     QString m_id;

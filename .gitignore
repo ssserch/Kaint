@@ -1,6 +1,7 @@
 build/
 build-debug/
 build-deb/
+build-pkg/
 build-windows/
 build-windows-debug/
 aqtinstall.log

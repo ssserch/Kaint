@@ -1,7 +1,7 @@
 <div align="center">
   <img src="img/other/kaintqt6logo.png" alt="kaint.qt6 logo" width="460">
 
-  <h3>The Paint.NET experience, native on Linux and Windows.</h3>
+  <h3>The Paint.NET experience, native on Linux (and Windows!)</h3>
   <p>A free raster image editor built with C++20 and Qt 6.</p>
 
   [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg?logo=cplusplus)](CMakeLists.txt)
@@ -29,57 +29,57 @@
 as a native application: no Wine, no .NET runtime. It is made for KDE Plasma on Wayland, it also
 runs on Windows 10 and 11, and it should feel like home if you come from Paint.NET.
 
-## ✨ Features
+## Features
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h4>🖌️ The Paint.NET tools</h4>
+      <h4>Paint.NET tools</h4>
       Selections with their combine modes, move pixels or the selection (scale, rotate, movable
       pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, gradients, lines and
       curves, shapes and text, all with the same options bar.
     </td>
     <td width="50%" valign="top">
-      <h4>🕘 Editable history</h4>
+      <h4>Editable history</h4>
       Click through the history like in Paint.NET. Gradients, lines and shapes stay editable when
       you go back to one of their steps.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h4>🗂️ Layers</h4>
+      <h4>Layers</h4>
       Blend modes, opacity, visibility and properties, with live thumbnails.
     </td>
     <td valign="top">
-      <h4>🎛️ Adjustments and effects</h4>
+      <h4>Adjustments and effects</h4>
       Live preview while you tweak them, and <b>Repeat</b> (Ctrl+F) for the last one.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h4>🧩 Plugins</h4>
+      <h4>Plugins</h4>
       Paint.NET effect plugins (.dll), through mono on Linux and the .NET Framework built into
       Windows, plus native plugins with a stable C API.
     </td>
     <td valign="top">
-      <h4>🖼️ Formats</h4>
+      <h4>Formats</h4>
       OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA, animated GIF
       and ICO. Opens Paint.NET <b>.pdn</b> files.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h4>🛟 Recovery copies</h4>
+      <h4>Recovery copies</h4>
       Unsaved images are kept safe in case Kaint closes unexpectedly.
     </td>
     <td valign="top">
-      <h4>🌍 Languages</h4>
-      English and Spanish.
+      <h4>Languages</h4>
+      English and Spanish (for now).
     </td>
   </tr>
 </table>
 
-## 🎨 Themes
+## Themes
 
 Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
 colors, toolbar layout and a canvas background image with placement, scale, blur and tint.
@@ -105,6 +105,13 @@ Kaint needs **Qt 6.5 or newer**: Arch Linux, Debian 13, Ubuntu 25.04 or newer, o
 ```bash
 sudo pacman -S --needed gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons
 ./build.sh --install        # installs to ~/.local (shows up in the app menu)
+```
+
+Or build a native package with `makepkg` and install it with pacman:
+
+```bash
+./build.sh --pkg            # builds build-pkg/kaint-<version>-1-x86_64.pkg.tar.zst
+sudo pacman -U build-pkg/kaint-*.pkg.tar.zst
 ```
 
 </details>
@@ -145,14 +152,8 @@ from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to d
 | Build and run | `--run` | `--run` |
 | Run the tests | `--test` | `--test` |
 | Debug build | `--debug` | `--debug` |
-| Package | `--deb` | `--zip` |
+| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) | `--zip` |
 | Every option | `--help` | `--help` |
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome: fork the repository, make your change in a branch, check
-that `./build.sh --test` passes and open a pull request. Bugs and ideas go to
-[Issues](https://github.com/ssserch/Kaint/issues).
 
 ## 📄 License
 

@@ -12,6 +12,7 @@ DO_INSTALL=0
 DO_RUN=0
 DO_TEST=0
 DO_DEB=0
+DO_PKG=0
 
 # --- Paquetes (necesarios y recomendados) -----------------------------------
 ARCH_REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons)
@@ -36,6 +37,7 @@ Uso: $0 [opciones]
       --prefix RUTA    prefijo de instalación (p. ej. /usr/local; usará sudo si hace falta)
   -r, --run            ejecuta Kaint al terminar
       --deb            crea el paquete .deb en build-deb/ (necesita dpkg)
+      --pkg            crea el paquete de Arch en build-pkg/ (necesita makepkg)
   -h, --help           muestra esta ayuda
 EOF
 }
@@ -49,6 +51,7 @@ while [[ $# -gt 0 ]]; do
         --prefix)     PREFIX="${2:?falta la ruta de --prefix}"; shift ;;
         -r|--run)     DO_RUN=1 ;;
         --deb)        DO_DEB=1; BUILD_TYPE=Release; BUILD_DIR=build-deb; PREFIX=/usr ;;
+        --pkg)        DO_PKG=1 ;;
         -h|--help)    usage; exit 0 ;;
         *) echo "${c_red}Opción desconocida: $1${c_reset}" >&2; usage; exit 1 ;;
     esac
@@ -88,6 +91,22 @@ elif command -v dpkg-query >/dev/null 2>&1; then
     check_packages dpkg_installed "sudo apt install" DEB_REQUIRED DEB_OPTIONAL
 else
     echo "${c_yellow}No se encontró pacman ni apt; se omite la comprobación de dependencias.${c_reset}"
+fi
+
+# --- Paquete de Arch ---------------------------------------------------------
+if (( DO_PKG )); then
+    if ! command -v makepkg >/dev/null 2>&1; then
+        echo "${c_red}Falta makepkg (paquete pacman): --pkg solo funciona en Arch Linux.${c_reset}" >&2
+        exit 1
+    fi
+    echo "${c_bold}Creando el paquete de Arch...${c_reset}"
+    mkdir -p build-pkg
+    (cd packaging/arch && KAINT_SOURCE_DIR="$PWD/../.." BUILDDIR="$PWD/../../build-pkg" \
+        PKGDEST="$PWD/../../build-pkg" makepkg --force --cleanbuild)
+    pkg=$(ls -t build-pkg/kaint-[0-9]*.pkg.tar.* | head -n 1)
+    echo "${c_green}Paquete:${c_reset} $pkg"
+    echo "  Instálalo con: sudo pacman -U $pkg"
+    exit 0
 fi
 
 # --- Compilación ------------------------------------------------------------

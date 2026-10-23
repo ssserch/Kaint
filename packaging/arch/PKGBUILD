@@ -1,0 +1,29 @@
+# Paquete de Arch Linux de Kaint a partir de este código (./build.sh --pkg)
+_src="${KAINT_SOURCE_DIR:-$(realpath "$startdir/../..")}"
+
+pkgname=kaint
+pkgver=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$_src/version.json")
+pkgrel=1
+pkgdesc="Paint.NET-style image editor built with C++20 and Qt 6"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ssserch/Kaint"
+license=('GPL-3.0-only')
+depends=('qt6-base' 'qt6-svg' 'zlib' 'hicolor-icon-theme')
+makedepends=('cmake' 'ninja' 'qt6-tools')
+options=('!debug')
+optdepends=('qt6-wayland: Wayland'
+            'breeze-icons: KDE icons'
+            'qt6-imageformats: WebP, TIFF and more formats'
+            'kimageformats: AVIF, JPEG XL, PSD and more formats'
+            'qt6-translations: translated Qt dialogs'
+            'mono: Paint.NET plugins'
+            'libgdiplus: Paint.NET plugins that use System.Drawing')
+
+build() {
+    cmake -S "$_src" -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

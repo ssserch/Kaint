@@ -43,7 +43,7 @@ public:
     Selection transformed(const QTransform& transform, bool smooth = true) const;
     Selection inverted(QSize canvas) const;
     // Amplía (radio positivo) o reduce (negativo) la selección tantos píxeles, con esquinas
-    // redondeadas como en paint.software y GIMP.
+    // redondeadas como en GIMP.
     Selection grown(double radius) const;
     // Difumina el borde (desenfoque gaussiano de la máscara).
     Selection feathered(double radius) const;

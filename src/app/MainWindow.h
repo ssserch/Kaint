@@ -34,6 +34,7 @@ class QTabBar;
 class QToolButton;
 class QUndoCommand;
 class QUndoGroup;
+class QUndoStack;
 class ToolManager;
 class ToolOptionsBar;
 class Workspace;
@@ -93,7 +94,7 @@ private:
     bool save(Document* doc);
     bool saveAs(Document* doc);
     bool saveAll();
-    bool writeFile(Document* doc, const QString& path);
+    bool writeFile(Document* doc, const QString& requestedPath);
     void print();
     bool closeAll(Document* except = nullptr);
     void switchImage(int delta);
@@ -164,6 +165,7 @@ private:
     void applySettings();
     void updateToolIconColors();
     void showImageList();
+    void syncLayerWithHistory();
     void applyThemeLayout();
     void restartWith(const AppSettings& settings);
     void offerRecovery();
@@ -205,6 +207,7 @@ private:
     QList<QMenu*> m_effectSubmenus;
     QWidget* m_cornerButtons = nullptr;
     class QHBoxLayout* m_cornerLayout = nullptr;
+    QHash<const QUndoStack*, int> m_historyIndex;
     class QGridLayout* m_topLayout = nullptr;
 
     QLabel* m_hint = nullptr;

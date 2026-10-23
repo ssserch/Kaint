@@ -32,7 +32,9 @@ public:
     static void startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text);
 
 private:
-    FloatingPtr lift(bool keepCopy);
+    FloatingPtr lift(bool keepCopy, LayerPtr layer = nullptr);
+    void restoreUnmoved();
+    void endMove();
     void boxForCurrentState(TransformBox& box) const;
     void syncBox();
     void applyLive(const QTransform& t);
@@ -42,6 +44,8 @@ private:
     bool m_active = false;
     bool m_first = false;
     FloatingPtr m_float;
+    // Las otras capas que se mueven a la vez (Ctrl+clic en Capas).
+    QList<FloatingPtr> m_extra;
     TransformBox m_box;
     QTransform m_startTransform;
     QTransform m_current;

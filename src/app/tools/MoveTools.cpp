@@ -84,11 +84,11 @@ void MoveSelectedTool::startPaste(Document* doc, const QImage& image, QPoint pos
     doc->undoStack()->push(new MovePixelsCommand(doc, f, QTransform(), QTransform(), true, true, doc->selection(), text));
 }
 
-FloatingPtr MoveSelectedTool::lift(bool keepCopy)
+FloatingPtr MoveSelectedTool::lift(bool keepCopy, LayerPtr layer)
 {
     Document* doc = document();
     auto f = std::make_shared<FloatingPixels>();
-    f->layer = doc->activeLayerPtr();
+    f->layer = layer ? layer : doc->activeLayerPtr();
     f->original = f->layer->image;
     const Selection sel = doc->selection().isEmpty() ? Selection::fromRect(doc->rect(), doc->size()) : doc->selection();
     f->selectionBase = sel;
@@ -165,11 +165,19 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
         m_selectionBefore = doc->selection();
     }
 
-    // Ctrl sobre píxeles ya flotantes deja una copia donde están.
-    m_float = copy ? nullptr : currentFloating(doc);
+    // Ctrl sobre píxeles ya flotantes deja una copia donde están. Con otras capas vinculadas se
+    // levanta todo de nuevo, para que compartan origen y transformación.
+    QList<LayerPtr> linked;
+    for (const LayerPtr& layer : doc->linkedLayers())
+        if (layer != doc->activeLayerPtr() && doc->indexOf(layer.get()) >= 0)
+            linked << layer;
+    m_float = copy || !linked.isEmpty() ? nullptr : currentFloating(doc);
     m_first = !m_float;
     if (m_first)
         m_float = lift(copy);
+    m_extra.clear();
+    for (const LayerPtr& layer : std::as_const(linked))
+        m_extra << lift(copy, layer);
     m_startTransform = m_float->transform;
     m_current = m_startTransform;
     m_box.set(QRectF(m_float->pixels.rect()), m_float->pixelsToCanvas(m_startTransform));
@@ -184,6 +192,10 @@ void MoveSelectedTool::applyLive(const QTransform& t)
     if (m_first)
         r |= m_float->boundsFor(QTransform());
     m_float->render(t, r);
+    for (const FloatingPtr& extra : std::as_const(m_extra)) {
+        extra->render(t, r);
+        doc->notifyPixelsChanged(extra->layer.get(), r);
+    }
     m_current = t;
     doc->notifyPixelsChanged(m_float->layer.get(), r);
     doc->setSelection(m_float->selectionBase.transformed(t));
@@ -221,8 +233,43 @@ void MoveSelectedTool::push()
 {
     Document* doc = document();
     HistoryIcons::registerIcon(name(), QStringLiteral("transform-move"));
-    doc->undoStack()->push(new MovePixelsCommand(doc, m_float, m_startTransform, m_current, m_first, false,
-                                                 m_selectionBefore, name()));
+    if (m_extra.isEmpty()) {
+        doc->undoStack()->push(new MovePixelsCommand(doc, m_float, m_startTransform, m_current, m_first, false,
+                                                     m_selectionBefore, name()));
+        return;
+    }
+    // Varias capas: un solo paso con el movimiento de cada una.
+    auto* macro = new QUndoCommand(name());
+    new MovePixelsCommand(doc, m_float, m_startTransform, m_current, m_first, false, m_selectionBefore, name(), macro);
+    for (const FloatingPtr& extra : std::as_const(m_extra))
+        new MovePixelsCommand(doc, extra, QTransform(), m_current, true, false, m_selectionBefore, name(), macro);
+    doc->undoStack()->push(macro);
+}
+
+void MoveSelectedTool::restoreUnmoved()
+{
+    // Se soltó sin mover: las capas vuelven a estar como antes.
+    Document* doc = document();
+    if (m_first) {
+        m_float->layer->image = m_float->original;
+        doc->notifyPixelsChanged(m_float->layer.get(), m_float->boundsFor(m_current));
+    }
+    for (const FloatingPtr& extra : std::as_const(m_extra)) {
+        extra->layer->image = extra->original;
+        doc->notifyPixelsChanged(extra->layer.get(), extra->boundsFor(m_current));
+    }
+    if (m_first)
+        doc->setSelection(m_selectionBefore);
+}
+
+void MoveSelectedTool::endMove()
+{
+    // Tras mover varias capas se vuelve solo a la del principio.
+    m_float.reset();
+    if (!m_extra.isEmpty()) {
+        m_extra.clear();
+        document()->setLinkedLayers({});
+    }
 }
 
 void MoveSelectedTool::mouseRelease(const ToolEvent&)
@@ -236,15 +283,11 @@ void MoveSelectedTool::mouseRelease(const ToolEvent&)
         repaint();
         return;
     }
-    if (m_current != m_startTransform) {
+    if (m_current != m_startTransform)
         push();
-    } else if (m_first) {
-        Document* doc = document();
-        m_float->layer->image = m_float->original;
-        doc->notifyPixelsChanged(m_float->layer.get(), m_float->boundsFor(m_current));
-        doc->setSelection(m_selectionBefore);
-    }
-    m_float.reset();
+    else
+        restoreUnmoved();
+    endMove();
     m_pivotFor = document()->selection();
     emit hintChanged(hint());
     repaint();
@@ -286,16 +329,12 @@ void MoveSelectedTool::finish()
         return;
     m_active = false;
     m_box.end();
-    if (!m_pivotDrag && m_current != m_startTransform) {
+    if (!m_pivotDrag && m_current != m_startTransform)
         push();
-    } else if (!m_pivotDrag && m_first) {
-        Document* doc = document();
-        m_float->layer->image = m_float->original;
-        doc->notifyPixelsChanged(m_float->layer.get(), m_float->boundsFor(m_current));
-        doc->setSelection(m_selectionBefore);
-    }
+    else if (!m_pivotDrag)
+        restoreUnmoved();
     m_pivotDrag = false;
-    m_float.reset();
+    endMove();
     repaint();
 }
 

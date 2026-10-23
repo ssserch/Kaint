@@ -45,6 +45,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineF>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -163,7 +164,7 @@ static void testDiscordPresence()
     a = DiscordPresence::buildActivity(info, options, 1000);
     CHECK(!QJsonDocument(a).toJson().contains("foto") && !a.contains(QStringLiteral("state")));
     CHECK(!a.contains(QStringLiteral("timestamps")));
-    CHECK(!DiscordPresence::isValidClientId(QStringLiteral("PON___AQUI")));
+    CHECK(!DiscordPresence::isValidClientId(QStringLiteral("sin-configurar")));
     CHECK(DiscordPresence::isValidClientId(QStringLiteral("123456789012345678")));
 
     QTemporaryDir dir;
@@ -485,11 +486,12 @@ int main(int argc, char** argv)
     const int before = doc->undoStack()->count();
     doc->setActiveIndex(0);
     tools->select(ToolId::MoveSelected);
+    // Como en Paint.NET, cada arrastre es un paso del historial.
     drag(canvas, {QPointF(200, 150), QPointF(210, 160), QPointF(230, 190)});
     drag(canvas, {QPointF(230, 190), QPointF(240, 200)});
-    CHECK(doc->undoStack()->count() == before + 1);
+    CHECK(doc->undoStack()->count() == before + 2);
     doc->undoStack()->undo();
-    CHECK(doc->undoStack()->count() == before + 1 && doc->undoStack()->index() == before);
+    CHECK(doc->undoStack()->count() == before + 2 && doc->undoStack()->index() == before + 1);
     doc->undoStack()->redo();
 
     // Efecto con vista previa en segundo plano
@@ -1469,6 +1471,118 @@ int main(int argc, char** argv)
                 CHECK(strip->currentIndex() == 1 && canvas->document() == first);
             }
         }
+    }
+
+    // Historial y capas: deshacer selecciona la capa que cambió ese paso; con Mover píxeles, las
+    // capas vinculadas (Ctrl+clic en Capas) se mueven a la vez en un solo paso y luego se vuelve a
+    // la capa del principio.
+    {
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        findAction(&w, QStringLiteral("Agregar nueva capa"))->trigger();
+        settle();
+        CHECK(d->layerCount() == 2 && d->activeIndex() == 1);
+        state->setPrimary(QColor(200, 0, 0));
+        tools->select(ToolId::Paintbrush);
+        drag(canvas, {QPointF(100, 100), QPointF(160, 100)});
+        d->setActiveIndex(0);
+        findAction(&w, QStringLiteral("Deshacer"))->trigger();
+        settle();
+        CHECK(d->activeIndex() == 1);
+        findAction(&w, QStringLiteral("Rehacer"))->trigger();
+        settle();
+
+        // Algo en las dos capas, mismo sitio.
+        d->setActiveIndex(0);
+        state->setPrimary(QColor(0, 0, 200));
+        drag(canvas, {QPointF(100, 140), QPointF(160, 140)});
+        d->setActiveIndex(1);
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(80, 80), QPointF(120, 120), QPointF(180, 160)});
+        tools->select(ToolId::MoveSelected);
+        auto* layersPanel = w.findChild<LayersPanel*>();
+        auto* list = layersPanel ? layersPanel->findChild<QListWidget*>() : nullptr;
+        CHECK(list);
+        if (list) {
+            // Ctrl+clic en la fila del fondo (la de abajo).
+            const QPoint at = list->visualItemRect(list->item(1)).center();
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(at), QPointF(list->viewport()->mapToGlobal(at)), Qt::LeftButton,
+                              Qt::LeftButton, Qt::ControlModifier);
+            QApplication::sendEvent(list->viewport(), &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(at), QPointF(list->viewport()->mapToGlobal(at)),
+                                Qt::LeftButton, Qt::NoButton, Qt::ControlModifier);
+            QApplication::sendEvent(list->viewport(), &release);
+        }
+        CHECK(d->linkedLayers().size() == 1 && d->activeIndex() == 1);
+        const int steps = d->undoStack()->count();
+        drag(canvas, {QPointF(110, 100), QPointF(130, 130), QPointF(150, 160)});
+        CHECK(d->undoStack()->count() == steps + 1 && d->activeIndex() == 1 && d->linkedLayers().isEmpty());
+        CHECK(QColor(d->layer(1)->image.pixel(140, 160)) == QColor(200, 0, 0));
+        CHECK(QColor(d->layer(0)->image.pixel(140, 200)) == QColor(0, 0, 200));
+        findAction(&w, QStringLiteral("Deshacer"))->trigger();
+        settle();
+        CHECK(QColor(d->layer(0)->image.pixel(140, 140)) == QColor(0, 0, 200) && qAlpha(d->layer(1)->image.pixel(140, 160)) == 0);
+
+        // Arrastrar una capa en la lista muestra la línea de dónde quedará.
+        if (list) {
+            const QPoint from = list->visualItemRect(list->item(0)).center();
+            const QPoint to = list->visualItemRect(list->item(1)).center();
+            auto send = [list](QEvent::Type type, QPoint at, Qt::MouseButtons buttons) {
+                QMouseEvent e(type, QPointF(at), QPointF(list->viewport()->mapToGlobal(at)),
+                              type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton, buttons, Qt::NoModifier);
+                QApplication::sendEvent(list->viewport(), &e);
+            };
+            send(QEvent::MouseButtonPress, from, Qt::LeftButton);
+            send(QEvent::MouseMove, from + QPoint(0, 12), Qt::LeftButton);
+            send(QEvent::MouseMove, to, Qt::LeftButton);
+            bool lineShown = false;
+            for (QWidget* child : list->viewport()->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))
+                lineShown = lineShown || (child->isVisible() && child->height() <= 4 && child->width() > 50);
+            CHECK(lineShown);
+            send(QEvent::MouseButtonRelease, to, Qt::NoButton);
+        }
+    }
+
+    // Estirar con Mover píxeles una línea de 1 px subiendo y bajando sin soltar no deja restos
+    // de los pasos intermedios (con bilineal y bicúbica se pinta un poco fuera del recuadro).
+    for (auto interp : {Resample::Interpolation::Bilinear, Resample::Interpolation::Bicubic}) {
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        state->updateTools([interp](ToolSettings& t) { t.moveInterpolation = interp; });
+        state->setPrimary(QColor(0, 40, 255));
+        tools->select(ToolId::Pencil);
+        drag(canvas, {QPointF(100.5, 100.5), QPointF(200.5, 100.5), QPointF(300.5, 100.5)});
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(100, 100), QPointF(200, 100.6), QPointF(301, 101)});
+        tools->select(ToolId::MoveSelected);
+        QList<QPointF> path{QPointF(301, 100.5)};
+        for (int i = 1; i <= 40; ++i)
+            path << QPointF(301 + i * 5, 100.5 + 60 * std::sin(i / 4.0));
+        drag(canvas, path);
+        QList<int> rows;
+        const QImage& im = d->layer(0)->image;
+        for (int y = 0; y < 300; ++y) {
+            bool blue = false;
+            for (int x = 90; x < 600 && !blue; ++x)
+                blue = qBlue(im.pixel(x, y)) > qRed(im.pixel(x, y)) + 30;
+            if (blue)
+                rows << y;
+        }
+        CHECK(!rows.isEmpty() && rows.last() - rows.first() + 1 == rows.size());
+        state->updateTools([](ToolSettings& t) { t.moveInterpolation = Resample::Interpolation::NearestNeighbor; });
+    }
+
+    // Tamaño de letra: se comporta como un botón; solo con doble clic se puede escribir.
+    {
+        tools->select(ToolId::Text);
+        settle();
+        QComboBox* fontSize = nullptr;
+        for (QComboBox* c : w.findChildren<QComboBox*>())
+            if (c->isEditable() && c->findText(QStringLiteral("288")) >= 0)
+                fontSize = c;
+        CHECK(fontSize && fontSize->lineEdit()->isReadOnly());
     }
 
     // Imagen nueva: las unidades van fuera de los campos (como en Paint.NET) y la unidad de la

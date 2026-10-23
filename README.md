@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="img/other/kaintlogo.png" alt="kaint.kde logo" width="460">
+  <img src="img/other/kaintqt6logo.png" alt="kaint.qt6 logo" width="460">
 
   <h3>The Paint.NET experience, native on Linux and Windows.</h3>
   <p>A free raster image editor built with C++20 and Qt 6.</p>
@@ -157,9 +157,8 @@ that `./build.sh --test` passes and open a pull request. Bugs and ideas go to
 ## 📄 License
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
-`src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, the Paint.NET-style icons are
-adapted from [paint.software](https://github.com/Univers4craft/paint.software) (MIT), and
-`data/icons/` bundles KDE's Breeze icons (LGPL-3.0-or-later).
+`src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, and `data/icons/` bundles KDE's
+Breeze icons (LGPL-3.0-or-later).
 
 ## ⚠️ Disclaimer
 

@@ -17,8 +17,8 @@
 
 namespace {
 
-// Logo: el icono de Kaint y "kaint.kde" con la fuente fina del logo de Paint.NET (Segoe UI Light
-// si está instalada; si no, la del sistema en su grosor más fino).
+// Logo: el icono de Kaint y "kaint.qt6" ("kaint.kde" dentro de Plasma) con la fuente fina del
+// logo de Paint.NET (Segoe UI Light si está instalada; si no, la del sistema en su grosor más fino).
 class AboutLogo : public QWidget {
 public:
     explicit AboutLogo(QWidget* parent)
@@ -50,7 +50,12 @@ protected:
     }
 
 private:
-    static QString text() { return QStringLiteral("kaint.kde"); }
+    static QString text()
+    {
+        const bool kde = qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains(QLatin1String("KDE"), Qt::CaseInsensitive)
+                         || !qEnvironmentVariableIsEmpty("KDE_FULL_SESSION");
+        return kde ? QStringLiteral("kaint.kde") : QStringLiteral("kaint.qt6");
+    }
     static constexpr int kIcon = 56;
     static constexpr int kGap = 10;
     static constexpr int kMargin = 4;
@@ -71,7 +76,6 @@ QString AboutDialog::credits()
         {"zlib", "Jean-loup Gailly, Mark Adler", "https://zlib.net/"},
         {"Paint.NET 3.36 (MIT)", "dotPDN LLC, Rick Brewster", "https://www.getpaint.net/"},
         {"Paint.NET API", "dotPDN LLC", "https://paintdotnet.github.io/apidocs/"},
-        {"paint.software (MIT)", "Univers4craft", "https://github.com/Univers4craft/paint.software"},
         {"Breeze Icons", "KDE", "https://invent.kde.org/frameworks/breeze-icons"},
         {"KImageFormats", "KDE", "https://invent.kde.org/frameworks/kimageformats"},
         {"Mono", "Mono Project", "https://www.mono-project.com/"},

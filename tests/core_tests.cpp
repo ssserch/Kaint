@@ -360,10 +360,14 @@ static void testMovePixels()
                                                  QStringLiteral("Mover")));
     const QTransform t2 = QTransform::fromTranslate(20, 20);
     doc->undoStack()->push(new MovePixelsCommand(doc.get(), f, t1, t2, false, false, {}, QStringLiteral("Mover")));
-    CHECK(doc->undoStack()->count() == 1);
+    // Cada movimiento es un paso (como en Paint.NET): deshacer uno vuelve al anterior.
+    CHECK(doc->undoStack()->count() == 2);
     CHECK(QColor(doc->layer(0)->image.pixel(30, 30)) == QColor(Qt::red));
     CHECK(qAlpha(doc->layer(0)->image.pixel(30, 10)) == 0 || QColor(doc->layer(0)->image.pixel(30, 10)) != QColor(Qt::red));
     CHECK(doc->selection().bounds() == QRect(25, 25, 10, 10));
+    doc->undoStack()->undo();
+    CHECK(QColor(doc->layer(0)->image.pixel(30, 10)) == QColor(Qt::red) && QColor(doc->layer(0)->image.pixel(30, 30)) != QColor(Qt::red));
+    CHECK(doc->selection().bounds() == QRect(25, 5, 10, 10));
     doc->undoStack()->undo();
     CHECK(sameImage(doc->layer(0)->image, original));
     CHECK(doc->selection().bounds() == QRect(5, 5, 10, 10));
@@ -1011,7 +1015,7 @@ static void testPngWriter()
     }
 }
 
-// Ampliar, reducir y difuminar la selección (paint.software): esquinas redondeadas y borde suave.
+// Ampliar, reducir y difuminar la selección: esquinas redondeadas y borde suave.
 static void testSelectionReshape()
 {
     const QSize canvas(80, 60);

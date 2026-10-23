@@ -408,6 +408,7 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     });
     m_fontSize = numberCombo(fontPresets(), 1, 2000, 1, [update](double v) { update([v](ToolSettings& s) { s.fontSize = v; }); });
     m_fontSize->setToolTip(tr("Tamaño de letra"));
+    new ComboClickToOpen(m_fontSize);
     m_fontMetric = new ChoiceButton(tr("Unidad del tamaño de letra"), parent);
     m_fontMetric->addChoice(Icons::fontMetric(FontMetric::Points), tr("Puntos (PPP de imagen)"), int(FontMetric::Points),
                             tr("La conversión del tamaño de letra a píxeles utiliza puntos estándar de la industria "

@@ -15,6 +15,8 @@ class LayersPanel : public QWidget {
 public:
     LayersPanel(const QList<QAction*>& actions, QWidget* parent = nullptr);
     void setDocument(Document* doc);
+    // Con Mover píxeles seleccionados: Ctrl+clic añade capas que se mueven junto con la activa.
+    void setLinkingEnabled(bool on);
 
 signals:
     void visibilityToggled(int layerIndex);
@@ -28,6 +30,8 @@ protected:
 private:
     void rebuild();
     void syncSelection();
+    void syncLinked();
+    void showDropLine(int targetRow);
     void updateThumbnails();
     int rowForLayer(int index) const;
     int layerForRow(int row) const;
@@ -39,4 +43,7 @@ private:
     int m_dragRow = -1;
     QPoint m_pressPos;
     bool m_dragging = false;
+    bool m_linking = false;
+    bool m_linkClick = false;
+    QWidget* m_dropLine = nullptr;
 };

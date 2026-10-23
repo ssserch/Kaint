@@ -1269,6 +1269,18 @@ What do you want to do?</translation>
         <translation>Copy path</translation>
     </message>
     <message>
+        <source>No acoplar (guardar como .ora)</source>
+        <translation>Don&apos;t flatten (save as .ora)</translation>
+    </message>
+    <message>
+        <source>Se guarda con todas sus capas en «%1».</source>
+        <translation>It is saved with all its layers in &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>«%1» ya existe. ¿Quieres reemplazarlo?</source>
+        <translation>&quot;%1&quot; already exists. Do you want to replace it?</translation>
+    </message>
+    <message>
         <source>No se pudo guardar</source>
         <translation>Could not save</translation>
     </message>

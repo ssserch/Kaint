@@ -22,6 +22,7 @@ constexpr int kRowHeight = 50;
 constexpr int kThumb = 42;
 constexpr int VisibleRole = Qt::UserRole + 1;
 constexpr int ThumbRole = Qt::UserRole + 2;
+constexpr int LinkedRole = Qt::UserRole + 3;
 
 class LayerDelegate : public QStyledItemDelegate {
 public:
@@ -44,6 +45,12 @@ public:
         opt.text.clear();
         opt.icon = QIcon();
         style->drawControl(QStyle::CE_ItemViewItem, &opt, p, w);
+        // Capa que se mueve junto con la activa: resaltada más suave.
+        if (index.data(LinkedRole).toBool() && !(option.state & QStyle::State_Selected)) {
+            QColor linked = option.palette.color(QPalette::Highlight);
+            linked.setAlpha(90);
+            p->fillRect(option.rect, linked);
+        }
 
         const QRect r = option.rect;
         const QRect thumbBox(r.left() + 4, r.top() + (r.height() - kThumb) / 2, kThumb, kThumb);
@@ -131,6 +138,13 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
     });
     connect(m_list, &QListWidget::itemDoubleClicked, this, [this] { emit propertiesRequested(); });
 
+    // Línea que marca dónde quedará la capa que se arrastra.
+    m_dropLine = new QWidget(m_list->viewport());
+    m_dropLine->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_dropLine->setAutoFillBackground(true);
+    m_dropLine->setBackgroundRole(QPalette::Highlight);
+    m_dropLine->hide();
+
     m_thumbTimer.setSingleShot(true);
     m_thumbTimer.setInterval(250);
     connect(&m_thumbTimer, &QTimer::timeout, this, &LayersPanel::updateThumbnails);
@@ -143,7 +157,21 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
     switch (e->type()) {
     case QEvent::MouseButtonPress: {
         auto* me = static_cast<QMouseEvent*>(e);
-        m_dragRow = me->button() == Qt::LeftButton ? m_list->indexAt(me->position().toPoint()).row() : -1;
+        const int row = m_list->indexAt(me->position().toPoint()).row();
+        if (m_linking && me->button() == Qt::LeftButton && (me->modifiers() & Qt::ControlModifier) && row >= 0) {
+            // Ctrl+clic: la capa se añade o se quita de las que se mueven con la activa.
+            const LayerPtr layer = m_doc->layerPtr(layerForRow(row));
+            QList<LayerPtr> linked = m_doc->linkedLayers();
+            if (layer && layer != m_doc->activeLayerPtr()) {
+                if (!linked.removeOne(layer))
+                    linked.append(layer);
+                m_doc->setLinkedLayers(linked);
+            }
+            m_linkClick = true;
+            m_dragRow = -1;
+            return true;
+        }
+        m_dragRow = me->button() == Qt::LeftButton ? row : -1;
         m_pressPos = me->position().toPoint();
         m_dragging = false;
         break;
@@ -155,6 +183,7 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
                 m_dragging = true;
             if (m_dragging) {
                 m_list->viewport()->setCursor(Qt::DragMoveCursor);
+                showDropLine(m_list->indexAt(me->position().toPoint()).row());
                 return true;
             }
         }
@@ -162,8 +191,13 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
     }
     case QEvent::MouseButtonRelease: {
         auto* me = static_cast<QMouseEvent*>(e);
+        if (m_linkClick) {
+            m_linkClick = false;
+            return true;
+        }
         if (m_dragging) {
             m_list->viewport()->unsetCursor();
+            m_dropLine->hide();
             int target = m_list->indexAt(me->position().toPoint()).row();
             if (target < 0)
                 target = me->position().y() < 0 ? 0 : m_list->count() - 1;
@@ -182,6 +216,36 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
         break;
     }
     return QWidget::eventFilter(obj, e);
+}
+
+void LayersPanel::showDropLine(int targetRow)
+{
+    // Hacia abajo queda debajo de la fila de destino; hacia arriba, encima.
+    if (targetRow < 0 || targetRow == m_dragRow) {
+        m_dropLine->hide();
+        return;
+    }
+    const QRect r = m_list->visualRect(m_list->model()->index(targetRow, 0));
+    const int y = targetRow > m_dragRow ? r.bottom() : r.top();
+    m_dropLine->setGeometry(r.left() + 2, y - 1, r.width() - 4, 3);
+    m_dropLine->show();
+    m_dropLine->raise();
+}
+
+void LayersPanel::setLinkingEnabled(bool on)
+{
+    m_linking = on;
+    if (!on && m_doc)
+        m_doc->setLinkedLayers({});
+}
+
+void LayersPanel::syncLinked()
+{
+    if (!m_doc)
+        return;
+    const QList<LayerPtr>& linked = m_doc->linkedLayers();
+    for (int row = 0; row < m_list->count(); ++row)
+        m_list->item(row)->setData(LinkedRole, linked.contains(m_doc->layerPtr(layerForRow(row))));
 }
 
 int LayersPanel::rowForLayer(int index) const
@@ -203,6 +267,7 @@ void LayersPanel::setDocument(Document* doc)
         connect(m_doc, &Document::layersChanged, this, &LayersPanel::rebuild);
         connect(m_doc, &Document::sizeChanged, this, &LayersPanel::rebuild);
         connect(m_doc, &Document::activeLayerChanged, this, &LayersPanel::syncSelection);
+        connect(m_doc, &Document::linkedLayersChanged, this, &LayersPanel::syncLinked);
         connect(m_doc, &Document::layerPixelsChanged, this, [this](int index) {
             m_dirty.insert(index);
             if (!m_thumbTimer.isActive())
@@ -234,6 +299,7 @@ void LayersPanel::rebuild()
     }
     updateThumbnails();
     syncSelection();
+    syncLinked();
     if (sameCount) {
         m_list->doItemsLayout();
         m_list->verticalScrollBar()->setValue(scroll);

@@ -38,6 +38,8 @@ int trim(QUndoStack* stack, qint64 limit);
 int barrier(const QUndoStack* stack);
 // Vuelve a dibujar el historial (tras cambiar el texto de un paso ya apilado).
 void refresh(QUndoStack* stack);
+// Capa que cambia un paso (píxeles, mover píxeles; en una macro, la de su primer hijo), o nula.
+const Layer* layerOf(const QUndoCommand* cmd);
 } // namespace History
 
 // Cambio de píxeles en una capa. Solo guarda los tiles (64x64) que difieren entre 'before' y
@@ -47,6 +49,7 @@ public:
     PixelPatchCommand(Document* doc, LayerPtr layer, const QImage& before, const QRect& rect,
                       const QString& text, QUndoCommand* parent = nullptr);
     bool isEmpty() const { return m_tiles.isEmpty(); }
+    const LayerPtr& targetLayer() const { return m_layer; }
     void undo() override;
     void redo() override;
     qint64 memoryBytes() const override;
@@ -193,11 +196,11 @@ using FloatingPtr = std::shared_ptr<FloatingPixels>;
 class MovePixelsCommand : public QUndoCommand, public HistoryStep {
 public:
     MovePixelsCommand(Document* doc, FloatingPtr floating, const QTransform& before, const QTransform& after,
-                      bool first, bool paste, const Selection& selectionBefore, const QString& text);
+                      bool first, bool paste, const Selection& selectionBefore, const QString& text,
+                      QUndoCommand* parent = nullptr);
     void undo() override;
     void redo() override;
-    int id() const override { return m_paste ? -1 : 0x4b4d; }
-    bool mergeWith(const QUndoCommand* other) override;
+    // Cada arrastre es un paso propio, como en Paint.NET (no se fusionan).
     const FloatingPtr& floating() const { return m_floating; }
     qint64 memoryBytes() const override;
     void releaseMemory() override;

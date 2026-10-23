@@ -2,6 +2,7 @@
 
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QComboBox>
 #include <QCompleter>
 #include <QFocusEvent>
 #include <QKeyEvent>
@@ -54,6 +55,87 @@ public:
 
 } // namespace
 
+ComboClickToOpen::ComboClickToOpen(QComboBox* combo)
+    : QObject(combo)
+    , m_combo(combo)
+{
+    combo->lineEdit()->setReadOnly(true);
+    combo->lineEdit()->installEventFilter(this);
+    m_clickTimer.setSingleShot(true);
+    connect(&m_clickTimer, &QTimer::timeout, this, [this] {
+        if (!m_editing)
+            m_combo->showPopup();
+    });
+    connect(combo->lineEdit(), &QLineEdit::returnPressed, this, [this] {
+        if (m_editing)
+            stopEditing(true);
+    });
+}
+
+void ComboClickToOpen::startEditing()
+{
+    m_editing = true;
+    m_before = m_combo->lineEdit()->text();
+    m_combo->lineEdit()->setReadOnly(false);
+    m_combo->lineEdit()->setFocus(Qt::MouseFocusReason);
+    m_combo->lineEdit()->selectAll();
+}
+
+void ComboClickToOpen::stopEditing(bool commit)
+{
+    if (!m_editing)
+        return;
+    m_editing = false;
+    QLineEdit* edit = m_combo->lineEdit();
+    edit->setReadOnly(true);
+    if (!commit) {
+        // Se vuelve al valor de antes (el campo lo aplica al editarlo).
+        edit->setText(m_before);
+        emit edit->textEdited(m_before);
+    }
+    edit->deselect();
+    edit->setCursorPosition(0);
+    m_combo->clearFocus();
+}
+
+bool ComboClickToOpen::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched != m_combo->lineEdit())
+        return QObject::eventFilter(watched, event);
+    if (!m_editing) {
+        switch (event->type()) {
+        case QEvent::MouseButtonPress:
+            if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton)
+                m_clickTimer.start(QApplication::doubleClickInterval());
+            return true;
+        case QEvent::MouseButtonDblClick:
+            m_clickTimer.stop();
+            startEditing();
+            return true;
+        case QEvent::MouseButtonRelease:
+        case QEvent::MouseMove:
+            return true;
+        default:
+            return false;
+        }
+    }
+    switch (event->type()) {
+    case QEvent::KeyPress:
+        if (static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+            stopEditing(false);
+            return true;
+        }
+        break;
+    case QEvent::FocusOut:
+        if (static_cast<QFocusEvent*>(event)->reason() != Qt::PopupFocusReason)
+            stopEditing(true);
+        break;
+    default:
+        break;
+    }
+    return false;
+}
+
 FontChooser::FontChooser(QWidget* parent)
     : QFontComboBox(parent)
 {
@@ -65,6 +147,7 @@ FontChooser::FontChooser(QWidget* parent)
     setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     setSizePolicy(QSizePolicy::Fixed, sizePolicy().verticalPolicy());
     view()->setMinimumWidth(460);
+    setMaxVisibleItems(24);
     lineEdit()->setReadOnly(true);
     lineEdit()->installEventFilter(this);
     completer()->setCaseSensitivity(Qt::CaseInsensitive);

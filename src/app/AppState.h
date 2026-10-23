@@ -82,7 +82,7 @@ struct ToolSettings {
     int pickerSize = 1;
     PickerAfter pickerAfter = PickerAfter::DoNotSwitch;
     RecolorSampling recolorSampling = RecolorSampling::SecondaryColor;
-    Resample::Interpolation moveInterpolation = Resample::Interpolation::Bicubic;
+    Resample::Interpolation moveInterpolation = Resample::Interpolation::NearestNeighbor;
     bool moveGamma = true;
     AfterSelect afterSelect = AfterSelect::DoNotSwitch;
 };

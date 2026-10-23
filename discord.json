@@ -1,6 +1,4 @@
 {
-    "_comentario": "Rich Presence de Discord. Crea una aplicación en https://discord.com/developers/applications, copia su «Application ID» en client_id y vuelve a compilar. En «Rich Presence > Art Assets» puedes subir una imagen con el nombre de large_image. El token no hace falta: la presencia se envía a la aplicación de Discord del propio equipo y Kaint nunca lo incluye en el programa.",
     "client_id": "1562478067727999109",
-    "token": "PON___AQUI",
     "large_image": "kaint"
 }

@@ -16,10 +16,8 @@
 
 #include <cmath>
 
-// Iconos al estilo Paint.NET dibujados por código, adaptados de paint.software
-// (https://github.com/Univers4craft/paint.software, licencia MIT, © Univers4craft). Cada uno se
-// dibuja en una rejilla de 20 px (herramientas) o 16 px (barras y ventanas) y se escala a
-// cualquier tamaño.
+// Iconos dibujados por código imitando los de Paint.NET. Cada uno se dibuja en una rejilla de
+// 20 px (herramientas) o 16 px (barras y ventanas) y se escala a cualquier tamaño.
 namespace Icons {
 
 namespace {

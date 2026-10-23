@@ -58,7 +58,7 @@ void DiscordPresence::setIntervals(int minSendMs, int retryMs)
 
 bool DiscordPresence::isValidClientId(const QString& id)
 {
-    // Los ID de Discord son números (snowflakes); "PON___AQUI" no vale.
+    // Los ID de Discord son números (snowflakes).
     static const QRegularExpression digits(QStringLiteral("^[0-9]{5,25}$"));
     return digits.match(id.trimmed()).hasMatch();
 }

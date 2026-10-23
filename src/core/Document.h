@@ -41,6 +41,10 @@ public:
     Layer* activeLayer() const { return layer(m_active); }
     LayerPtr activeLayerPtr() const { return layerPtr(m_active); }
     void setActiveIndex(int index);
+    // Capas que se mueven junto con la activa (Ctrl+clic en Capas con Mover píxeles
+    // seleccionados).
+    const QList<LayerPtr>& linkedLayers() const { return m_linked; }
+    void setLinkedLayers(const QList<LayerPtr>& layers);
 
     // Modificaciones sin historial.
     void insertLayer(int index, LayerPtr layer);
@@ -83,6 +87,7 @@ signals:
     void layerPixelsChanged(int index);
     void layersChanged();
     void activeLayerChanged(int index);
+    void linkedLayersChanged();
     void selectionChanged();
     void sizeChanged(QSize size);
     void resolutionChanged(double dpi);
@@ -96,6 +101,7 @@ private:
     QColorSpace m_colorSpace = QColorSpace(QColorSpace::SRgb);
     QList<LayerPtr> m_layers;
     int m_active = -1;
+    QList<LayerPtr> m_linked;
     Selection m_selection;
     QUndoStack* m_undo;
     QString m_filePath;

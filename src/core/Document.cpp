@@ -45,6 +45,14 @@ LayerPtr Document::layerPtr(int index) const
     return index >= 0 && index < m_layers.size() ? m_layers[index] : nullptr;
 }
 
+void Document::setLinkedLayers(const QList<LayerPtr>& layers)
+{
+    if (layers == m_linked)
+        return;
+    m_linked = layers;
+    emit linkedLayersChanged();
+}
+
 int Document::indexOf(const Layer* layer) const
 {
     for (int i = 0; i < m_layers.size(); ++i)

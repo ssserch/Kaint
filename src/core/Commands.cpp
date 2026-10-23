@@ -67,6 +67,20 @@ static void release(QUndoCommand* cmd)
         release(const_cast<QUndoCommand*>(cmd->child(i)));
 }
 
+const Layer* layerOf(const QUndoCommand* cmd)
+{
+    if (!cmd)
+        return nullptr;
+    if (const auto* patch = dynamic_cast<const PixelPatchCommand*>(cmd))
+        return patch->targetLayer().get();
+    if (const auto* move = dynamic_cast<const MovePixelsCommand*>(cmd))
+        return move->floating() ? move->floating()->layer.get() : nullptr;
+    for (int i = 0; i < cmd->childCount(); ++i)
+        if (const Layer* layer = layerOf(cmd->child(i)))
+            return layer;
+    return nullptr;
+}
+
 void refresh(QUndoStack* stack)
 {
     emit stack->indexChanged(stack->index());
@@ -384,7 +398,10 @@ QTransform FloatingPixels::pixelsToCanvas(const QTransform& t) const
 
 QRect FloatingPixels::boundsFor(const QTransform& t) const
 {
-    const QRect r = pixelsToCanvas(t).mapRect(QRectF(pixels.rect())).toAlignedRect().adjusted(-1, -1, 1, 1);
+    // El mismo margen que usa Resample::drawTransformed: con bilineal o bicúbica se pinta hasta
+    // 2 px fuera del rectángulo transformado, y eso hay que borrarlo en el siguiente paso (si no,
+    // quedan restos al estirar o encoger).
+    const QRect r = pixelsToCanvas(t).mapRect(QRectF(pixels.rect())).toAlignedRect().adjusted(-3, -3, 3, 3);
     return r.intersected(base.rect());
 }
 
@@ -405,10 +422,9 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
     QImage tmp(r.size(), kPremulFormat);
     tmp.fill(Qt::transparent);
     QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
-    // Al reducir con bilineal o bicúbica, antes se promedia por áreas: si no, sale pixelado.
-    const QImage source = interpolation == Resample::Interpolation::NearestNeighbor
-                              ? pixels
-                              : Resample::prefiltered(pixels, &toTmp, gammaCorrect);
+    // Al reducir, antes se promedia por áreas (si no, sale pixelado); al ampliar, el vecino más
+    // cercano (por defecto) deja los píxeles nítidos.
+    const QImage source = Resample::prefiltered(pixels, &toTmp, gammaCorrect && interpolation != Resample::Interpolation::NearestNeighbor);
     if (interpolation == Resample::Interpolation::Bicubic
         || (gammaCorrect && interpolation == Resample::Interpolation::Bilinear)) {
         Resample::drawTransformed(tmp, source, toTmp, interpolation, tmp.rect(), gammaCorrect);
@@ -423,8 +439,8 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
 
 MovePixelsCommand::MovePixelsCommand(Document* doc, FloatingPtr floating, const QTransform& before,
                                      const QTransform& after, bool first, bool paste,
-                                     const Selection& selectionBefore, const QString& text)
-    : QUndoCommand(text)
+                                     const Selection& selectionBefore, const QString& text, QUndoCommand* parent)
+    : QUndoCommand(text, parent)
     , m_doc(doc)
     , m_floating(std::move(floating))
     , m_before(before)
@@ -485,11 +501,4 @@ void MovePixelsCommand::redo()
     m_doc->notifyPixelsChanged(m_floating->layer.get(), r);
 }
 
-bool MovePixelsCommand::mergeWith(const QUndoCommand* other)
-{
-    const auto* o = static_cast<const MovePixelsCommand*>(other);
-    if (m_released || o->m_floating != m_floating || o->m_first)
-        return false;
-    m_after = o->m_after;
-    return true;
-}
+

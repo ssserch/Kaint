@@ -43,6 +43,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QImageReader>
 #include <QInputDialog>
@@ -380,7 +381,11 @@ MainWindow::MainWindow()
     createPanels();
     createStatusBar();
 
-    connect(m_tools, &ToolManager::toolChanged, this, [this](Tool* t) { showToolHint(t->hint()); });
+    connect(m_tools, &ToolManager::toolChanged, this, [this](Tool* t) {
+        showToolHint(t->hint());
+        if (m_layers)
+            m_layers->setLinkingEnabled(t->id() == ToolId::MoveSelected);
+    });
     connect(AppState::instance(), &AppState::colorsChanged, this, &MainWindow::updateToolIconColors);
     for (Tool* t : m_tools->tools())
         connect(t, &Tool::hintChanged, this, [this, t](const QString& h) {
@@ -414,6 +419,7 @@ MainWindow::MainWindow()
     m_historyTimer.setInterval(500);
     connect(&m_historyTimer, &QTimer::timeout, this, &MainWindow::checkHistoryMemory);
     connect(m_undoGroup, &QUndoGroup::indexChanged, this, [this] { m_historyTimer.start(); });
+    connect(m_undoGroup, &QUndoGroup::indexChanged, this, &MainWindow::syncLayerWithHistory);
     connect(m_undoGroup, &QUndoGroup::indexChanged, this, &MainWindow::syncToolWithHistory);
     connect(AppState::instance(), &AppState::recentFilesChanged, this, &MainWindow::rebuildRecentMenu);
     m_discord = new DiscordPresence(this);
@@ -1726,9 +1732,10 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* e)
     return QMainWindow::eventFilter(obj, e);
 }
 
-bool MainWindow::writeFile(Document* doc, const QString& path)
+bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
 {
     finishTool();
+    QString path = requestedPath;
     if (!ImageIO::isLayered(path) && !ImageIO::isAnimation(path) && doc->layerCount() > 1) {
         // Como Paint.NET: el formato no admite capas, así que primero se acopla la imagen.
         TaskDialog ask(tr("Guardar"), Icons::theme({"document-save"}), QImage(),
@@ -1740,10 +1747,24 @@ bool MainWindow::writeFile(Document* doc, const QString& path)
                                                    "acoplamiento queda en el historial, pero el archivo tendrá una "
                                                    "sola capa."),
                                                 true);
+        // Sin acoplar: con todas las capas, en OpenRaster junto al nombre elegido.
+        const QString oraPath = QFileInfo(path).absolutePath() + QLatin1Char('/') + QFileInfo(path).completeBaseName()
+                                + QStringLiteral(".ora");
+        const int oraChoice = ask.addChoice(Icons::theme({"document-save-as"}), tr("No acoplar (guardar como .ora)"),
+                                            tr("Se guarda con todas sus capas en «%1».").arg(QFileInfo(oraPath).fileName()));
         ask.addChoice(Icons::theme({"dialog-cancel", "process-stop"}), tr("Cancelar"), tr("Cancelar la acción de guardado."));
-        if (ask.choose() != flattenChoice)
+        const int choice = ask.choose();
+        if (choice == oraChoice) {
+            if (QFileInfo::exists(oraPath) && oraPath != doc->filePath()
+                && QMessageBox::question(this, tr("Guardar"), tr("«%1» ya existe. ¿Quieres reemplazarlo?").arg(QFileInfo(oraPath).fileName()))
+                       != QMessageBox::Yes)
+                return false;
+            path = oraPath;
+        } else if (choice == flattenChoice) {
+            flattenDocument(doc);
+        } else {
             return false;
-        flattenDocument(doc);
+        }
     }
     const QString suffix = QFileInfo(path).suffix().toLower();
     ImageIO::SaveOptions options = m_saveOptions.value(suffix);
@@ -1922,6 +1943,24 @@ void MainWindow::prepareHistoryJump()
 {
     if (m_tools && m_tools->current())
         m_tools->current()->beforeHistoryJump();
+}
+
+void MainWindow::syncLayerWithHistory()
+{
+    // Al deshacer o rehacer se selecciona la capa que cambió ese paso (el más cercano al punto
+    // al que se llega).
+    if (!m_doc)
+        return;
+    QUndoStack* stack = m_doc->undoStack();
+    const int now = stack->index();
+    const int before = m_historyIndex.value(stack, now);
+    m_historyIndex.insert(stack, now);
+    if (now == before)
+        return;
+    const QUndoCommand* step = now < before ? stack->command(now) : stack->command(now - 1);
+    const int index = m_doc->indexOf(History::layerOf(step));
+    if (index >= 0 && index != m_doc->activeIndex())
+        m_doc->setActiveIndex(index);
 }
 
 void MainWindow::syncToolWithHistory()
@@ -2165,7 +2204,7 @@ void MainWindow::pasteSelection(SelectionMode mode)
 
 void MainWindow::reshapeSelection(SelectionReshape kind)
 {
-    // Ampliar, reducir o difuminar el borde de la selección tantos píxeles (como paint.software).
+    // Ampliar, reducir o difuminar el borde de la selección tantos píxeles.
     if (!m_doc || m_doc->selection().isEmpty())
         return;
     finishTool();
@@ -2756,9 +2795,13 @@ void MainWindow::applySettings()
     m_canvas->setAutoScroll(m_settings.autoScroll);
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme))
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
-    for (auto effect : {Qt::UI_AnimateMenu, Qt::UI_FadeMenu, Qt::UI_AnimateCombo, Qt::UI_AnimateTooltip,
-                        Qt::UI_FadeTooltip, Qt::UI_AnimateToolBox})
-        QApplication::setEffectEnabled(effect, m_settings.animations);
+    // Los efectos de menús y listas de Qt son ventanas aparte: el de las listas desplegables
+    // se ve primero en otro sitio y salta a su lugar (y en Wayland, todos).
+    const bool wayland = QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
+    for (auto effect : {Qt::UI_AnimateMenu, Qt::UI_FadeMenu, Qt::UI_AnimateTooltip, Qt::UI_FadeTooltip})
+        QApplication::setEffectEnabled(effect, m_settings.animations && !wayland);
+    QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
+    QApplication::setEffectEnabled(Qt::UI_AnimateToolBox, m_settings.animations);
     QApplication::setEffectEnabled(Qt::UI_General, m_settings.animations);
     if (m_settings.autosaveMinutes > 0)
         m_autosaveTimer.start(m_settings.autosaveMinutes * 60 * 1000);

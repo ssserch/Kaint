@@ -47,7 +47,7 @@ public:
     ~DiscordPresence() override;
 
     // ID de la aplicación de discord.json (al compilar, o el de ~/.config/Kaint/discord.json);
-    // vacío si sigue "PON___AQUI".
+    // vacío si no es un ID válido.
     static QString configuredClientId();
     static QString largeImageKey();
     static bool isValidClientId(const QString& id);

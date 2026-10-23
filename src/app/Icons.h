@@ -27,6 +27,9 @@ QIcon theme(const QString& name);
 
 // Icono de estilo Paint.NET dibujado por código (herramientas, barras, ventanas), o nulo.
 QIcon pdn(const QString& name);
+// Colores con los que se tiñen el cubo de pintura, el pincel, cambiar color y el degradado
+// (inválidos: sus colores de siempre). Los iconos ya creados cambian al volver a dibujarse.
+void setActiveColors(const QColor& primary, const QColor& secondary);
 
 // Iconos dibujados por código para opciones sin equivalente en el tema.
 QIcon gradient(GradientType type);

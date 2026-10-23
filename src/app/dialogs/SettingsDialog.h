@@ -27,6 +27,7 @@ struct AppSettings {
     bool overscroll = true;
     bool autoScroll = true;
     bool autoSelectVisibleLayer = false;
+    bool coloredToolIcons = true;
     int colorScheme = 0;
     QString language = QStringLiteral("en");
     bool reopenLast = false;

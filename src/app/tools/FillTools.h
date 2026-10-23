@@ -42,6 +42,7 @@ private:
     bool m_secondary = false;
     bool m_shiftGlobal = false;
     bool m_dragging = false;
+    QPointF m_grab;
 };
 
 // Degradado editable con sus dos extremos y el icono de mover.

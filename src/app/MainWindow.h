@@ -162,6 +162,8 @@ private:
     // Configuración
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
+    void updateToolIconColors();
+    void showImageList();
     void applyThemeLayout();
     void restartWith(const AppSettings& settings);
     void offerRecovery();
@@ -182,6 +184,7 @@ private:
     ToolManager* m_tools;
     ToolOptionsBar* m_options = nullptr;
     QTabBar* m_tabs = nullptr;
+    QToolButton* m_listButton = nullptr;
     QUndoGroup* m_undoGroup;
 
     QList<Document*> m_docs;

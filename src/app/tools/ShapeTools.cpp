@@ -268,9 +268,10 @@ void LineTool::mouseMove(const ToolEvent& e)
 
 void LineTool::mouseRelease(const ToolEvent&)
 {
-    if (m_drag == Drag::Create && m_pts[0] == m_pts[3]) {
+    if (m_drag == Drag::Create && m_pts[0] == m_pts[3])
         m_edit.cancel();
-    }
+    else if (m_drag == Drag::Create)
+        m_edit.showInHistory(name(), QStringLiteral("draw-line"));
     m_drag = Drag::None;
     emit hintChanged(hint());
     repaint();
@@ -458,6 +459,8 @@ void ShapesTool::mouseRelease(const ToolEvent&)
         m_creating = false;
         if (m_box.localRect().width() < 1 || m_box.localRect().height() < 1)
             m_edit.cancel();
+        else
+            m_edit.showInHistory(toolShapeName(AppState::instance()->tools()), QStringLiteral("shapes"));
     }
     m_box.end();
     emit hintChanged(hint());

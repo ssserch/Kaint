@@ -340,9 +340,9 @@ void MagicWandTool::mousePress(const ToolEvent& e)
     Document* doc = document();
     if (!doc || !doc->activeLayer() || (e.button != Qt::LeftButton && e.button != Qt::RightButton))
         return;
-    if (m_session && e.button == Qt::LeftButton
-        && Handles::hit(e.viewPos, Handles::moveIconPos(QRectF(canvas()->imageToView(QPointF(m_seed) + QPointF(0.5, 0.5)), QSizeF())))) {
+    if (m_session && e.button == Qt::LeftButton && Handles::hit(e.viewPos, seedHandle(), 11)) {
         m_draggingSeed = true;
+        m_seedGrab = QPointF(m_seed) + QPointF(0.5, 0.5) - e.pos;
         return;
     }
     finish();
@@ -359,11 +359,19 @@ void MagicWandTool::mousePress(const ToolEvent& e)
     emit hintChanged(hint());
 }
 
+QPointF MagicWandTool::seedHandle() const
+{
+    return Handles::moveIconPos(QRectF(canvas()->imageToView(QPointF(m_seed) + QPointF(0.5, 0.5)), QSizeF()));
+}
+
 void MagicWandTool::mouseMove(const ToolEvent& e)
 {
-    if (!m_draggingSeed)
+    if (!m_draggingSeed) {
+        canvas()->setToolCursor(m_session && Handles::hit(e.viewPos, seedHandle(), 11) ? QCursor(Qt::SizeAllCursor) : cursor());
         return;
-    const QPoint p = e.pixel();
+    }
+    const QPointF at = e.pos + m_seedGrab;
+    const QPoint p(int(std::floor(at.x())), int(std::floor(at.y())));
     if (p != m_seed && document()->rect().contains(p)) {
         m_seed = p;
         recompute();
@@ -398,7 +406,7 @@ void MagicWandTool::paintOverlay(QPainter& p)
     p.setPen(QPen(Qt::black, 1));
     p.setBrush(Qt::white);
     p.drawRect(QRectF(seed - QPointF(2, 2), QSizeF(4, 4)));
-    Handles::draw(p, Handles::moveIconPos(QRectF(seed, QSizeF())), Handles::Shape::Move);
+    Handles::draw(p, seedHandle(), Handles::Shape::Move);
 }
 
 void MagicWandTool::finish()

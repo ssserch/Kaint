@@ -44,7 +44,8 @@ if(NOT ZLIB_FOUND)
     include(FetchContent)
     FetchContent_Declare(zlib
         URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
-        URL_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23)
+        URL_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
     set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(SKIP_INSTALL_ALL ON)
     FetchContent_MakeAvailable(zlib)
@@ -235,46 +236,80 @@ if(WIN32)
     find_program(KAINT_MCS csc PATHS "$ENV{WINDIR}/Microsoft.NET/Framework64/v4.0.30319"
                  "$ENV{WINDIR}/Microsoft.NET/Framework/v4.0.30319" NO_DEFAULT_PATH)
     set(PDN_RUN)
+    set(PDN_STRICT -warn:4)
 else()
     find_program(KAINT_MCS mcs)
     find_program(KAINT_MONO mono)
     set(PDN_RUN ${KAINT_MONO})
+    set(PDN_STRICT -warn:4 -warnaserror+)
 endif()
+
+# Argumentos del compilador de C# en un .rsp con rutas nativas (csc no entiende "C:/...")
+function(pdn_rsp var name output)
+    cmake_parse_arguments(ARG "" "" "FLAGS;REFS;SOURCES" ${ARGN})
+    set(text "")
+    foreach(flag ${ARG_FLAGS})
+        string(APPEND text "${flag}\n")
+    endforeach()
+    foreach(path ${ARG_REFS})
+        cmake_path(NATIVE_PATH path native)
+        string(APPEND text "\"-r:${native}\"\n")
+    endforeach()
+    cmake_path(NATIVE_PATH output native)
+    string(APPEND text "\"-out:${native}\"\n")
+    foreach(path ${ARG_SOURCES})
+        cmake_path(NATIVE_PATH path native)
+        string(APPEND text "\"${native}\"\n")
+    endforeach()
+    set(rsp "${PDN_OUT}/${name}.rsp")
+    file(CONFIGURE OUTPUT "${rsp}" CONTENT "${text}" @ONLY)
+    cmake_path(NATIVE_PATH rsp native)
+    set(${var} "@${native}" PARENT_SCOPE)
+endfunction()
+
 if(KAINT_PDN_BRIDGE AND KAINT_MCS AND (WIN32 OR KAINT_MONO))
     set(PDN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/pdnbridge")
     set(PDN_OUT "${CMAKE_BINARY_DIR}/pdnbridge")
     file(MAKE_DIRECTORY "${PDN_OUT}")
-    set(PDN_MCS_FLAGS -nologo -target:library -unsafe -optimize -warn:0 -r:System.Drawing.dll
-                      -r:System.Windows.Forms.dll)
     set(PDN_REFS)
     set(PDN_OUTPUTS)
     foreach(part Base Core Data Effects)
         file(GLOB_RECURSE PDN_${part}_SOURCES CONFIGURE_DEPENDS "${PDN_DIR}/${part}/*.cs")
         set(dll "${PDN_OUT}/PaintDotNet.${part}.dll")
+        pdn_rsp(rsp PaintDotNet.${part} "${dll}"
+                FLAGS -target:library -unsafe -optimize -warn:0 -r:System.Drawing.dll -r:System.Windows.Forms.dll
+                REFS ${PDN_REFS} SOURCES ${PDN_${part}_SOURCES})
         add_custom_command(OUTPUT "${dll}"
-            COMMAND ${KAINT_MCS} ${PDN_MCS_FLAGS} ${PDN_REFS} -out:${dll} ${PDN_${part}_SOURCES}
+            COMMAND ${KAINT_MCS} -nologo ${rsp}
             DEPENDS ${PDN_${part}_SOURCES} ${PDN_OUTPUTS}
             COMMENT "Compilando PaintDotNet.${part}.dll" VERBATIM)
-        list(APPEND PDN_REFS -r:${dll})
+        list(APPEND PDN_REFS "${dll}")
         list(APPEND PDN_OUTPUTS "${dll}")
     endforeach()
     set(PDN_FACADE_GEN "${PDN_OUT}/GenerateRuntimeFacade.exe")
     set(PDN_FACADE_CS "${PDN_OUT}/KaintRuntimeFacade.cs")
     set(PDN_FACADE "${PDN_OUT}/Kaint.Runtime.dll")
+    pdn_rsp(gen_rsp GenerateRuntimeFacade "${PDN_FACADE_GEN}" FLAGS -target:exe -warn:0 -r:System.Core.dll
+            SOURCES "${PDN_DIR}/Compat/GenerateRuntimeFacade.cs")
+    pdn_rsp(facade_rsp Kaint.Runtime "${PDN_FACADE}"
+            FLAGS -target:library -warn:0 -r:System.dll -r:System.Core.dll -r:System.Configuration.dll
+            SOURCES "${PDN_FACADE_CS}")
+    cmake_path(NATIVE_PATH PDN_FACADE_CS facade_cs)
     add_custom_command(OUTPUT "${PDN_FACADE}"
-        COMMAND ${KAINT_MCS} -nologo -target:exe -warn:0 -r:System.Core.dll -out:${PDN_FACADE_GEN}
-                ${PDN_DIR}/Compat/GenerateRuntimeFacade.cs
-        COMMAND ${PDN_RUN} ${PDN_FACADE_GEN} ${PDN_FACADE_CS}
-        COMMAND ${KAINT_MCS} -nologo -target:library -warn:0 -r:System.dll -r:System.Core.dll
-                -r:System.Configuration.dll -out:${PDN_FACADE} ${PDN_FACADE_CS}
+        COMMAND ${KAINT_MCS} -nologo ${gen_rsp}
+        COMMAND ${PDN_RUN} ${PDN_FACADE_GEN} ${facade_cs}
+        COMMAND ${KAINT_MCS} -nologo ${facade_rsp}
         DEPENDS "${PDN_DIR}/Compat/GenerateRuntimeFacade.cs"
         COMMENT "Generando Kaint.Runtime.dll" VERBATIM)
     list(APPEND PDN_OUTPUTS "${PDN_FACADE}")
     file(GLOB PDN_HOST_SOURCES CONFIGURE_DEPENDS "${PDN_DIR}/Host/*.cs")
     set(PDN_HOST "${PDN_OUT}/kaint-pdn-host.exe")
+    pdn_rsp(rsp kaint-pdn-host "${PDN_HOST}"
+            FLAGS -target:exe -unsafe -optimize ${PDN_STRICT} -r:System.Drawing.dll -r:System.Windows.Forms.dll
+                  -r:System.Core.dll
+            REFS ${PDN_REFS} SOURCES ${PDN_HOST_SOURCES})
     add_custom_command(OUTPUT "${PDN_HOST}"
-        COMMAND ${KAINT_MCS} -nologo -target:exe -unsafe -optimize -warn:4 -warnaserror+ -r:System.Drawing.dll
-                -r:System.Windows.Forms.dll -r:System.Core.dll ${PDN_REFS} -out:${PDN_HOST} ${PDN_HOST_SOURCES}
+        COMMAND ${KAINT_MCS} -nologo ${rsp}
         DEPENDS ${PDN_HOST_SOURCES} ${PDN_OUTPUTS}
         COMMENT "Compilando kaint-pdn-host.exe" VERBATIM)
     add_custom_target(pdnbridge ALL DEPENDS ${PDN_OUTPUTS} "${PDN_HOST}")
@@ -317,9 +352,10 @@ if(BUILD_TESTING)
     add_dependencies(kaint_core_tests kaint_example_plugin)
     if(TARGET pdnbridge)
         set(PDN_TEST_PLUGIN "${CMAKE_BINARY_DIR}/test-plugins/KaintTestEffect.dll")
+        pdn_rsp(rsp KaintTestEffect "${PDN_TEST_PLUGIN}" FLAGS -target:library ${PDN_STRICT} -r:System.Drawing.dll
+                REFS ${PDN_REFS} SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnplugin/KaintTestEffect.cs")
         add_custom_command(OUTPUT "${PDN_TEST_PLUGIN}"
-            COMMAND ${KAINT_MCS} -nologo -target:library -warn:4 -warnaserror+ -r:System.Drawing.dll ${PDN_REFS}
-                    -out:${PDN_TEST_PLUGIN} ${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnplugin/KaintTestEffect.cs
+            COMMAND ${KAINT_MCS} -nologo ${rsp}
             DEPENDS tests/pdnplugin/KaintTestEffect.cs ${PDN_OUTPUTS}
             COMMENT "Compilando KaintTestEffect.dll" VERBATIM)
         add_custom_target(kaint_test_pdn_plugin DEPENDS "${PDN_TEST_PLUGIN}")

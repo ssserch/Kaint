@@ -208,6 +208,7 @@ void TextTool::insertText(const QString& text)
     m_col = int(m_lines[m_line].size());
     m_lines[m_line] += tail;
     render();
+    m_edit.showInHistory(name(), QStringLiteral("draw-text"));
 }
 
 bool TextTool::keyPress(QKeyEvent* e)

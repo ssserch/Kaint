@@ -18,6 +18,7 @@
 #include "app/dialogs/TaskDialog.h"
 #include "app/panels/LayersPanel.h"
 #include "app/panels/ToolsPanel.h"
+#include "app/tools/Handles.h"
 #include "app/tools/ToolManager.h"
 #include "app/tools/TransformBox.h"
 #include "app/widgets/FontChooser.h"
@@ -405,10 +406,12 @@ int main(int argc, char** argv)
         s.shapeStyle = ShapeStyle::OutlineFill;
     });
     tools->select(ToolId::Shapes);
-    drag(canvas, {QPointF(450, 250), QPointF(520, 330), QPointF(640, 470)});
-    CHECK(tools->current()->isBusy());
     {
+        // El paso aparece en el historial al dibujar la forma y se completa al terminar.
         const int steps = doc->undoStack()->count();
+        drag(canvas, {QPointF(450, 250), QPointF(520, 330), QPointF(640, 470)});
+        CHECK(tools->current()->isBusy());
+        CHECK(doc->undoStack()->count() == steps + 1 && doc->undoStack()->text(steps) == QStringLiteral("Estrella de 5 puntas"));
         tools->current()->finish();
         CHECK(!tools->current()->isBusy());
         CHECK(doc->undoStack()->count() == steps + 1);
@@ -608,10 +611,45 @@ int main(int argc, char** argv)
         QApplication::sendEvent(canvas, &del);
         CHECK(tools->current()->isBusy());
         const int steps = doc->undoStack()->count();
+        CHECK(doc->undoStack()->text(steps - 1) == QStringLiteral("Texto"));
         QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
         QApplication::sendEvent(canvas, &esc);
-        CHECK(!tools->current()->isBusy() && doc->undoStack()->count() == steps + 1);
+        CHECK(!tools->current()->isBusy() && doc->undoStack()->count() == steps);
         state->updateTools([](ToolSettings& s) { s.textAlign = TextAlign::Left; });
+    }
+
+    // Pasos en vivo, como en Paint.NET: el cubo y el texto aparecen en el historial al empezar,
+    // cambiar de herramienta los completa sin añadir otro y deshacer mientras se edita los quita.
+    {
+        QUndoStack* stack = doc->undoStack();
+        tools->select(ToolId::PaintBucket);
+        state->setPrimary(QColor(10, 200, 120));
+        int steps = stack->count();
+        drag(canvas, {QPointF(30, 560)});
+        CHECK(tools->current()->isBusy() && stack->count() == steps + 1);
+        CHECK(stack->text(steps) == QStringLiteral("Cubo de pintura"));
+        tools->select(ToolId::Text);
+        CHECK(stack->count() == steps + 1 && stack->index() == steps + 1);
+        steps = stack->count();
+        drag(canvas, {QPointF(40, 40)});
+        CHECK(stack->count() == steps);
+        typeText(canvas, QStringLiteral("xy"));
+        CHECK(stack->count() == steps + 1 && tools->current()->isBusy());
+        const QImage withText = doc->activeLayer()->image;
+        findAction(&w, QStringLiteral("Deshacer"))->trigger();
+        CHECK(!tools->current()->isBusy() && stack->index() == steps && stack->count() == steps + 1);
+        CHECK(doc->activeLayer()->image != withText);
+        findAction(&w, QStringLiteral("Rehacer"))->trigger();
+        CHECK(doc->activeLayer()->image == withText);
+        steps = stack->count();
+        drag(canvas, {QPointF(40, 200)});
+        typeText(canvas, QStringLiteral("z"));
+        CHECK(stack->count() == steps + 1);
+        QKeyEvent back(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &back);
+        QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &esc);
+        CHECK(!tools->current()->isBusy() && stack->count() == steps && stack->index() == steps);
     }
 
     // Copiar la selección (contorno JSON) y pegarla de nuevo.
@@ -989,6 +1027,46 @@ int main(int argc, char** argv)
     }
 
 
+    // Iconos teñidos con los colores activos (activado por defecto): el cubo cambia con el color
+    // principal y el degradado también con el secundario.
+    {
+        Tool* bucket = tools->tool(ToolId::PaintBucket);
+        Tool* gradientTool = tools->tool(ToolId::Gradient);
+        state->setPrimary(QColor(220, 20, 20));
+        const QImage red = bucket->icon().pixmap(40, 40).toImage();
+        state->setPrimary(QColor(20, 180, 40));
+        CHECK(bucket->icon().pixmap(40, 40).toImage() != red);
+        const QImage before = gradientTool->icon().pixmap(40, 40).toImage();
+        state->setSecondary(QColor(250, 220, 0));
+        CHECK(gradientTool->icon().pixmap(40, 40).toImage() != before);
+    }
+
+    // Cubo de pintura: el icono de mover arrastra el punto de origen (el relleno lo sigue) sin
+    // añadir pasos al historial.
+    {
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        state->setPrimary(Qt::black);
+        state->updateTools([](ToolSettings& s) { s.brushSize = 8; s.antialias = false; s.dash = Qt::SolidLine; });
+        tools->select(ToolId::Line);
+        drag(canvas, {QPointF(400, -10), QPointF(400, 300), QPointF(400, 700)});
+        tools->current()->finish();
+        state->setPrimary(QColor(220, 0, 0));
+        tools->select(ToolId::PaintBucket);
+        drag(canvas, {QPointF(100, 100)});
+        const int steps = d->undoStack()->count();
+        CHECK(QColor(d->activeLayer()->image.pixel(100, 300)) == QColor(220, 0, 0));
+        const QPointF handle = canvas->viewToImage(Handles::moveIconPos(QRectF(canvas->imageToView(QPointF(100.5, 100.5)), QSizeF())));
+        drag(canvas, {handle, handle + QPointF(300, 0), handle + QPointF(600, 0)});
+        CHECK(tools->current()->isBusy() && d->undoStack()->count() == steps);
+        CHECK(QColor(d->activeLayer()->image.pixel(100, 300)) == QColor(Qt::white));
+        CHECK(QColor(d->activeLayer()->image.pixel(700, 300)) == QColor(220, 0, 0));
+        tools->current()->finish();
+        CHECK(d->undoStack()->count() == steps);
+        state->updateTools([](ToolSettings& s) { s.antialias = true; });
+    }
+
     // Versión 1.0: degradado editable desde el historial, pegado donde se copió, Supr a mitad de
     // arrastre, lista de capas que no salta, fuentes, menús Efectos y Ayuda, información de la
     // selección, copias de recuperación y aviso de reinicio al pasar al tema KDE.
@@ -1225,6 +1303,26 @@ int main(int argc, char** argv)
             const int lastTab = strip->mapTo(w.window(), strip->tabRect(strip->count() - 1).topRight()).x();
             const int arrow = listButton->mapTo(w.window(), QPoint(0, 0)).x();
             CHECK(arrow - lastTab >= 0 && arrow - lastTab <= 12);
+            CHECK(listButton->height() >= strip->height() - 8);
+
+            // La flecha despliega la lista de imágenes con miniaturas; al elegir una se cierra.
+            listButton->click();
+            settle();
+            auto* popup = qobject_cast<QFrame*>(QApplication::activePopupWidget());
+            auto* imageList = popup ? popup->findChild<QListWidget*>(QStringLiteral("ImageList")) : nullptr;
+            CHECK(imageList && imageList->count() == strip->count());
+            if (imageList && imageList->count() > 1) {
+                CHECK(imageList->currentRow() == strip->currentIndex());
+                CHECK(imageList->iconSize() == strip->iconSize() && strip->iconSize().width() >= 64);
+                if (!outDir.isEmpty())
+                    w.grab().save(QDir(outDir).filePath(QStringLiteral("lista-imagenes.png")));
+                const int target = strip->currentIndex() == 0 ? 1 : 0;
+                emit imageList->itemClicked(imageList->item(target));
+                settle();
+                CHECK(!QApplication::activePopupWidget() && strip->currentIndex() == target);
+            } else if (popup) {
+                popup->close();
+            }
         }
     }
 

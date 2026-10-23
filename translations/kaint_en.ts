@@ -3679,6 +3679,14 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Cancel</translation>
     </message>
     <message>
+        <source>Iconos de herramientas con los colores activos</source>
+        <translation>Tool icons use the active colors</translation>
+    </message>
+    <message>
+        <source>El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario.</source>
+        <translation>The Paint Bucket, Paintbrush, Recolor and Gradient icons show the primary and secondary colors.</translation>
+    </message>
+    <message>
         <source>Seguir con el tema actual.</source>
         <translation>Keep the current theme.</translation>
     </message>

@@ -138,8 +138,10 @@ public:
 
 private:
     void recompute();
+    QPointF seedHandle() const;
     bool m_session = false;
     bool m_draggingSeed = false;
+    QPointF m_seedGrab;
     bool m_shiftGlobal = false;
     QPoint m_seed;
     QImage m_sample;

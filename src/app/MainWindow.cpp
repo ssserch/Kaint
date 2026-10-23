@@ -50,6 +50,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
@@ -60,6 +61,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPainter>
+#include <QPointer>
 #include <QPageSetupDialog>
 #include <QPrintPreviewDialog>
 #include <QPrintPreviewWidget>
@@ -69,10 +71,12 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScreen>
 #include <QSettings>
 #include <QSlider>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QStylePainter>
 #include <QTabBar>
 #include <QToolBar>
 #include <QToolButton>
@@ -158,6 +162,32 @@ public:
     }
 };
 
+// Flecha de la lista de imágenes: una franja de la altura de la tira con el chevrón arriba,
+// como en Paint.NET.
+class ImageListButton : public QToolButton {
+public:
+    using QToolButton::QToolButton;
+
+    QSize sizeHint() const override { return QSize(16, 32); }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QStylePainter p(this);
+        QStyleOptionToolButton opt;
+        initStyleOption(&opt);
+        opt.icon = QIcon();
+        opt.text.clear();
+        opt.arrowType = Qt::NoArrow;
+        opt.features &= ~QStyleOptionToolButton::HasMenu;
+        p.drawComplexControl(QStyle::CC_ToolButton, opt);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(palette().color(QPalette::ButtonText), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        const qreal cx = width() / 2.0;
+        p.drawPolyline(QPolygonF{QPointF(cx - 3.5, 9.5), QPointF(cx, 13), QPointF(cx + 3.5, 9.5)});
+    }
+};
+
 QString zoomText(qreal z)
 {
     const qreal pct = z * 100;
@@ -186,6 +216,7 @@ MainWindow::MainWindow()
     createStatusBar();
 
     connect(m_tools, &ToolManager::toolChanged, this, [this](Tool* t) { showToolHint(t->hint()); });
+    connect(AppState::instance(), &AppState::colorsChanged, this, &MainWindow::updateToolIconColors);
     for (Tool* t : m_tools->tools())
         connect(t, &Tool::hintChanged, this, [this, t](const QString& h) {
             if (m_tools->current() == t)
@@ -723,7 +754,7 @@ void MainWindow::createTopRow()
     m_tabs->setMovable(true);
     m_tabs->setExpanding(false);
     m_tabs->setDrawBase(false);
-    m_tabs->setIconSize(QSize(48, 36));
+    m_tabs->setIconSize(QSize(64, 48));
     m_tabs->setUsesScrollButtons(true);
     m_tabs->setElideMode(Qt::ElideRight);
     // Solo lo que ocupan las miniaturas: la flecha de la lista va justo después de la última y
@@ -738,27 +769,13 @@ void MainWindow::createTopRow()
     m_tabs->installEventFilter(this);
 
     // Lista de todas las imágenes (la flecha del final de la tira).
-    auto* list = new QToolButton(top);
-    list->setObjectName(QStringLiteral("ImageListButton"));
-    list->setAutoRaise(true);
-    list->setArrowType(Qt::DownArrow);
-    list->setPopupMode(QToolButton::InstantPopup);
-    list->setToolTip(tr("Imágenes abiertas"));
-    auto* listMenu = new QMenu(list);
-    connect(listMenu, &QMenu::aboutToShow, this, [this, listMenu] {
-        listMenu->clear();
-        for (Document* d : std::as_const(m_docs)) {
-            const QString name = (d->isModified() ? QStringLiteral("*") : QString()) + d->displayName();
-            QAction* a = listMenu->addAction(m_tabs->tabIcon(int(m_docs.indexOf(d))), name, this,
-                                             [this, d] { setCurrentDocument(d); });
-            a->setCheckable(true);
-            a->setChecked(d == m_doc);
-        }
-        listMenu->addSeparator();
-        listMenu->addActions({m_act["nextImage"], m_act["prevImage"], m_act["tabLeft"], m_act["tabRight"]});
-    });
-    list->setMenu(listMenu);
-    layout->addWidget(list, 0, Qt::AlignVCenter);
+    m_listButton = new ImageListButton(top);
+    m_listButton->setObjectName(QStringLiteral("ImageListButton"));
+    m_listButton->setAutoRaise(true);
+    m_listButton->setToolTip(tr("Imágenes abiertas"));
+    m_listButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    connect(m_listButton, &QToolButton::clicked, this, &MainWindow::showImageList);
+    layout->addWidget(m_listButton);
     layout->addStretch(1);
 
     m_cornerButtons = new QWidget(top);
@@ -1128,6 +1145,12 @@ void MainWindow::updateTab(Document* doc)
     const qreal dpr = devicePixelRatioF();
     const QImage source = doc == m_doc ? m_canvas->composite() : doc->flattened();
     QImage thumb = Raster::thumbnail(source, m_tabs->iconSize() * dpr);
+    {
+        // Borde fino: una imagen blanca no se pierde sobre el fondo claro.
+        QPainter p(&thumb);
+        p.setPen(QPen(QColor(0, 0, 0, 70), dpr));
+        p.drawRect(QRectF(thumb.rect()).adjusted(dpr / 2, dpr / 2, -dpr / 2, -dpr / 2));
+    }
     if (doc->isModified()) {
         QPainter p(&thumb);
         p.setRenderHint(QPainter::Antialiasing);
@@ -1142,6 +1165,62 @@ void MainWindow::updateTab(Document* doc)
                                  .arg(doc->isModified() ? QStringLiteral("*") : QString(), doc->displayName())
                                  .arg(doc->size().width())
                                  .arg(doc->size().height()));
+}
+
+void MainWindow::showImageList()
+{
+    // Como Paint.NET: debajo de la flecha, cada imagen con su miniatura y su nombre, y la actual
+    // resaltada.
+    auto* popup = new QFrame(this, Qt::Popup);
+    popup->setObjectName(QStringLiteral("ImageListPopup"));
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->setFrameShape(QFrame::StyledPanel);
+    auto* layout = new QVBoxLayout(popup);
+    layout->setContentsMargins(1, 1, 1, 1);
+    auto* list = new QListWidget(popup);
+    list->setObjectName(QStringLiteral("ImageList"));
+    list->setFrameShape(QFrame::NoFrame);
+    list->setIconSize(m_tabs->iconSize());
+    list->setUniformItemSizes(true);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    layout->addWidget(list);
+    const int rowHeight = m_tabs->iconSize().height() + 10;
+    int textWidth = 0;
+    for (int i = 0; i < m_docs.size(); ++i) {
+        Document* d = m_docs.at(i);
+        const QString name = (d->isModified() ? QStringLiteral("*") : QString()) + d->displayName();
+        // La miniatura de la actual sin teñir por el resaltado.
+        QIcon icon;
+        const QPixmap thumb = m_tabs->tabIcon(i).pixmap(m_tabs->iconSize());
+        icon.addPixmap(thumb, QIcon::Normal);
+        icon.addPixmap(thumb, QIcon::Selected);
+        auto* item = new QListWidgetItem(icon, name, list);
+        item->setSizeHint(QSize(0, rowHeight));
+        textWidth = std::max(textWidth, list->fontMetrics().horizontalAdvance(name));
+        if (d == m_doc)
+            list->setCurrentItem(item);
+    }
+    auto choose = [this, popup, list](QListWidgetItem* item) {
+        Document* d = m_docs.value(list->row(item));
+        popup->close();
+        if (d)
+            setCurrentDocument(d);
+    };
+    connect(list, &QListWidget::itemClicked, popup, choose);
+    connect(list, &QListWidget::itemActivated, popup, choose);
+    connect(popup, &QObject::destroyed, m_listButton, [button = QPointer<QToolButton>(m_listButton)] {
+        if (button)
+            button->setDown(false);
+    });
+    const int rows = std::min<int>(int(m_docs.size()), 8);
+    popup->resize(std::clamp(m_tabs->iconSize().width() + textWidth + 48, 220, 480), rows * rowHeight + 2 * 1 + 4);
+    const QRect screen = m_listButton->screen()->availableGeometry();
+    QPoint at = m_listButton->mapToGlobal(QPoint(0, m_listButton->height()));
+    at.setX(std::min(at.x(), screen.right() - popup->width()));
+    popup->move(at);
+    m_listButton->setDown(true);
+    popup->show();
+    list->setFocus();
 }
 
 void MainWindow::updateTitle()
@@ -2529,6 +2608,19 @@ void MainWindow::applySettings()
     presence.showElapsed = m_settings.discordShowElapsed;
     m_discord->setOptions(presence);
     updatePresence();
+    updateToolIconColors();
+}
+
+void MainWindow::updateToolIconColors()
+{
+    // Cubo, pincel, cambiar color y degradado con los colores activos, como en Paint.NET.
+    const AppState* app = AppState::instance();
+    Icons::setActiveColors(m_settings.coloredToolIcons ? app->primary() : QColor(),
+                           m_settings.coloredToolIcons ? app->secondary() : QColor());
+    if (auto* tools = findChild<ToolsPanel*>())
+        tools->update();
+    if (auto* bar = findChild<ToolOptionsBar*>())
+        bar->update();
 }
 
 PresenceInfo MainWindow::presenceInfo() const

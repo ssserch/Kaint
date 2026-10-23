@@ -67,6 +67,11 @@ static void release(QUndoCommand* cmd)
         release(const_cast<QUndoCommand*>(cmd->child(i)));
 }
 
+void refresh(QUndoStack* stack)
+{
+    emit stack->indexChanged(stack->index());
+}
+
 int barrier(const QUndoStack* stack)
 {
     return stack->property("kaintHistoryBarrier").toInt();

@@ -66,6 +66,7 @@ AppSettings AppSettings::load()
     a.overscroll = get("overscroll", a.overscroll);
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
+    a.coloredToolIcons = get("coloredToolIcons", a.coloredToolIcons);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 4);
     a.autosaveMinutes = std::clamp(get("autosaveMinutes", a.autosaveMinutes), 0, 120);
     a.language = get("language", a.language) == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
@@ -100,6 +101,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("overscroll"), overscroll);
     s.setValue(QStringLiteral("autoScroll"), autoScroll);
     s.setValue(QStringLiteral("autoSelectVisibleLayer"), autoSelectVisibleLayer);
+    s.setValue(QStringLiteral("coloredToolIcons"), coloredToolIcons);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
     s.setValue(QStringLiteral("autosaveMinutes"), autosaveMinutes);
     s.setValue(QStringLiteral("language"), language);
@@ -254,6 +256,8 @@ QWidget* SettingsDialog::createInterfacePage()
     check(tr("Desplazamiento automático al dibujar en el borde de la ventana"), &AppSettings::autoScroll);
     check(tr("Seleccionar automáticamente la capa visible más cercana tras ocultar una capa"),
           &AppSettings::autoSelectVisibleLayer);
+    check(tr("Iconos de herramientas con los colores activos"), &AppSettings::coloredToolIcons,
+          tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario."));
 
     // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio.
     auto* schemeRow = new QHBoxLayout;

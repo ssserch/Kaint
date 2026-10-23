@@ -3,6 +3,8 @@
 #include "core/Commands.h"
 #include "core/Raster.h"
 
+#include <QUndoStack>
+
 void LayerEdit::begin(Document* doc, LayerPtr layer)
 {
     reset();
@@ -51,11 +53,52 @@ void LayerEdit::showOverlay(const QImage& overlay, QPoint pos, BlendMode mode)
     touched(r);
 }
 
+void LayerEdit::showInHistory(const QString& text, const QString& icon)
+{
+    if (!m_doc || m_live)
+        return;
+    HistoryIcons::registerIcon(text, icon);
+    m_live = new QUndoCommand(text);
+    m_doc->undoStack()->push(m_live);
+}
+
+bool LayerEdit::liveOnTop() const
+{
+    const QUndoStack* stack = m_doc->undoStack();
+    return m_live && stack->index() == stack->count() && stack->index() > 0
+        && stack->command(stack->index() - 1) == m_live;
+}
+
+void LayerEdit::dropLive()
+{
+    // Un paso obsoleto se borra de la pila al deshacerlo.
+    if (!m_live)
+        return;
+    m_live->setObsolete(true);
+    if (liveOnTop())
+        m_doc->undoStack()->undo();
+    m_live = nullptr;
+}
+
 bool LayerEdit::commit(const QString& text, const QString& icon)
 {
     if (!m_doc)
         return false;
-    const bool changed = pushPixelPatch(m_doc, m_layer, m_before, m_total, text, icon);
+    bool changed = false;
+    if (liveOnTop()) {
+        HistoryIcons::registerIcon(text, icon);
+        auto* patch = new PixelPatchCommand(m_doc, m_layer, m_before, m_total, text, m_live);
+        changed = !patch->isEmpty();
+        if (!changed) {
+            dropLive();
+        } else if (m_live->text() != text) {
+            m_live->setText(text);
+            History::refresh(m_doc->undoStack());
+        }
+    } else {
+        dropLive();
+        changed = pushPixelPatch(m_doc, m_layer, m_before, m_total, text, icon);
+    }
     reset();
     return changed;
 }
@@ -66,6 +109,7 @@ void LayerEdit::cancel()
         return;
     Raster::copyRect(m_layer->image, m_before, m_total);
     m_doc->notifyPixelsChanged(m_layer.get(), m_total);
+    dropLive();
     reset();
 }
 
@@ -76,4 +120,5 @@ void LayerEdit::reset()
     m_before = QImage();
     m_last = QRect();
     m_total = QRect();
+    m_live = nullptr;
 }

@@ -26,6 +26,31 @@ namespace {
 
 constexpr int TS = 20;
 
+// Colores activos para las partes que se tiñen (inválidos: los colores propios del icono).
+QColor g_primary;
+QColor g_secondary;
+
+QColor mix(const QColor& a, const QColor& b, qreal t)
+{
+    return QColor::fromRgbF(float(a.redF() + (b.redF() - a.redF()) * t), float(a.greenF() + (b.greenF() - a.greenF()) * t),
+                            float(a.blueF() + (b.blueF() - a.blueF()) * t));
+}
+
+QColor tint(const QColor& active, const QColor& fallback)
+{
+    if (!active.isValid())
+        return fallback;
+    QColor c = active.toRgb();
+    c.setAlpha(255);
+    return c;
+}
+
+// Borde que se distingue tanto en colores claros como en oscuros.
+QColor outlineFor(const QColor& c)
+{
+    return c.lightnessF() < 0.25 ? mix(c, Qt::white, 0.45) : mix(c, Qt::black, 0.55);
+}
+
 void aa(QPainter& p)
 {
     p.setRenderHint(QPainter::Antialiasing, true);
@@ -134,31 +159,42 @@ void arrowArc(QPainter& p, QPointF c, qreal r, qreal startDeg, qreal spanDeg, qr
 
 void drawBrush(QPainter& p)
 {
-    // Pincel en diagonal: cerdas oscuras en punta, virola metálica y mango azul.
+    // Pincel en diagonal como el de Paint.NET: punta con el color principal, virola metálica y
+    // mango oscuro.
     aa(p);
+    const QColor paint = tint(g_primary, QColor(46, 110, 210));
     p.save();
     p.translate(2.0, 18.0);
     p.rotate(-45);
     QPainterPath bristles;
-    bristles.moveTo(0, 0);
-    bristles.cubicTo(2.5, -0.6, 5.5, -2.4, 8.2, -2.4);
-    bristles.lineTo(8.2, 2.4);
-    bristles.cubicTo(5.5, 2.4, 2.5, 0.6, 0, 0);
-    p.setPen(QPen(QColor(24, 26, 30), 0.8));
-    p.setBrush(QColor(52, 56, 64));
+    bristles.moveTo(0, 0.9);
+    bristles.cubicTo(1.4, -1.6, 4.8, -2.9, 8.2, -2.5);
+    bristles.lineTo(8.2, 2.5);
+    bristles.cubicTo(5.0, 2.9, 2.0, 2.4, 0, 0.9);
+    QLinearGradient tipFill(0, -2.6, 0, 2.6);
+    tipFill.setColorAt(0, mix(paint, Qt::white, 0.35));
+    tipFill.setColorAt(1, paint);
+    p.setPen(QPen(outlineFor(paint), 0.8));
+    p.setBrush(tipFill);
     p.drawPath(bristles);
     QLinearGradient metal(0, -2.6, 0, 2.6);
     metal.setColorAt(0, QColor(236, 240, 245));
     metal.setColorAt(1, QColor(140, 150, 162));
     p.setPen(QPen(QColor(80, 88, 98), 0.8));
     p.setBrush(metal);
-    p.drawRect(QRectF(8.2, -2.6, 3.4, 5.2));
-    QLinearGradient handle(0, -2.1, 0, 2.1);
-    handle.setColorAt(0, QColor(120, 170, 235));
-    handle.setColorAt(1, QColor(36, 88, 170));
-    p.setPen(QPen(QColor(24, 56, 110), 0.8));
-    p.setBrush(handle);
-    p.drawRoundedRect(QRectF(11.6, -2.1, 10.6, 4.2), 2.1, 2.1);
+    p.drawRect(QRectF(8.2, -2.6, 3.2, 5.2));
+    QPainterPath handle;
+    handle.moveTo(11.4, -2.0);
+    handle.lineTo(20.6, -1.2);
+    handle.quadTo(22.2, 0, 20.6, 1.2);
+    handle.lineTo(11.4, 2.0);
+    handle.closeSubpath();
+    QLinearGradient wood(0, -2.0, 0, 2.0);
+    wood.setColorAt(0, QColor(112, 118, 128));
+    wood.setColorAt(1, QColor(52, 56, 64));
+    p.setPen(QPen(QColor(30, 32, 38), 0.8));
+    p.setBrush(wood);
+    p.drawPath(handle);
     p.restore();
 }
 
@@ -209,18 +245,19 @@ void drawEraser(QPainter& p)
 
 void drawFill(QPainter& p)
 {
-    // Cubo metálico inclinado del que se derrama pintura azul, como el de Paint.NET.
+    // Cubo metálico inclinado del que se derrama pintura del color principal, como el de Paint.NET.
     aa(p);
+    const QColor color = tint(g_primary, QColor(40, 110, 215));
     QLinearGradient paint(0, 8, 0, 18);
-    paint.setColorAt(0, QColor(80, 150, 240));
-    paint.setColorAt(1, QColor(26, 84, 190));
+    paint.setColorAt(0, mix(color, Qt::white, 0.3));
+    paint.setColorAt(1, color);
     QPainterPath drip;
     drip.moveTo(4.2, 7.6);
     drip.cubicTo(2.0, 10.6, 1.0, 13.6, 2.2, 16.0);
     drip.cubicTo(3.2, 18.2, 6.4, 17.8, 6.4, 15.4);
     drip.cubicTo(6.4, 13.4, 5.2, 11.6, 6.6, 9.2);
     drip.closeSubpath();
-    p.setPen(QPen(QColor(20, 60, 140), 0.8));
+    p.setPen(QPen(outlineFor(color), 0.8));
     p.setBrush(paint);
     p.drawPath(drip);
 
@@ -285,10 +322,29 @@ void drawColorPicker(QPainter& p)
 
 void drawRecolor(QPainter& p)
 {
-    // Dos flechas en círculo, naranja y azul: cambiar un color por otro.
+    // Como el de Paint.NET: el color secundario (arriba) pasa a ser el principal (abajo).
     aa(p);
-    arrowArc(p, QPointF(10, 10), 6.0, 105, 140, 3.0, QColor(240, 120, 40), QColor(150, 60, 10));
-    arrowArc(p, QPointF(10, 10), 6.0, 285, 140, 3.0, QColor(60, 130, 230), QColor(20, 60, 140));
+    const QColor primary = tint(g_primary, QColor(50, 120, 220));
+    const QColor secondary = tint(g_secondary, QColor(225, 80, 50));
+    p.setPen(QPen(outlineFor(secondary), 0.9));
+    p.setBrush(secondary);
+    p.drawEllipse(QPointF(14.0, 6.0), 4.4, 4.4);
+    p.setPen(QPen(outlineFor(primary), 0.9));
+    p.setBrush(primary);
+    p.drawEllipse(QPointF(6.0, 14.0), 4.4, 4.4);
+    QPainterPath shaft;
+    shaft.moveTo(13.6, 6.4);
+    shaft.lineTo(8.6, 11.4);
+    QPainterPathStroker stroker;
+    stroker.setWidth(2.6);
+    stroker.setCapStyle(Qt::FlatCap);
+    QPainterPath arrow = stroker.createStroke(shaft);
+    QPainterPath head;
+    head.addPolygon(QPolygonF{QPointF(6.0, 14.0), QPointF(6.4, 8.6), QPointF(11.4, 13.6)});
+    head.closeSubpath();
+    p.setPen(QPen(QColor(40, 110, 92), 0.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(QColor(236, 248, 244));
+    p.drawPath(arrow.united(head).simplified());
 }
 
 void drawCloneStamp(QPainter& p)
@@ -359,13 +415,17 @@ void drawShape(QPainter& p)
 
 void drawGradient(QPainter& p)
 {
+    // Cuadro con marco claro y degradado del color principal al secundario, como el de Paint.NET.
     aa(p);
-    QLinearGradient grad(3, 3, 17, 17);
-    grad.setColorAt(0.0, QColor(166, 100, 220));
-    grad.setColorAt(1.0, QColor(56, 104, 198));
-    p.setPen(QPen(QColor(44, 54, 74), 1.1));
+    p.setPen(QPen(QColor(96, 102, 112), 0.8));
+    p.setBrush(QColor(232, 235, 239));
+    p.drawRect(QRectF(2.4, 2.4, 15.2, 15.2));
+    QLinearGradient grad(4.5, 4.5, 15.5, 15.5);
+    grad.setColorAt(0.0, tint(g_primary, QColor(56, 120, 230)));
+    grad.setColorAt(1.0, tint(g_secondary, QColor(160, 72, 205)));
+    p.setPen(Qt::NoPen);
     p.setBrush(grad);
-    p.drawRoundedRect(QRectF(3, 3, 14, 14), 1.6, 1.6);
+    p.drawRect(QRectF(4.4, 4.4, 11.2, 11.2));
 }
 
 void drawLasso(QPainter& p)
@@ -806,6 +866,12 @@ private:
 };
 
 } // namespace
+
+void setActiveColors(const QColor& primary, const QColor& secondary)
+{
+    g_primary = primary;
+    g_secondary = secondary;
+}
 
 QIcon pdn(const QString& name)
 {

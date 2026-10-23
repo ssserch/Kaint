@@ -5,6 +5,8 @@
 // Edición interactiva de una capa (formas, líneas, texto, degradados...): guarda la imagen
 // original, permite redibujar la vista previa tantas veces como haga falta y al final registra
 // un único cambio en el historial.
+
+class QUndoCommand;
 class LayerEdit {
 public:
     void begin(Document* doc, LayerPtr layer);
@@ -24,6 +26,10 @@ public:
     void restorePrevious();
     void touched(const QRect& rect);
 
+    // Paso del historial visible desde que empieza la edición, como el texto de Paint.NET:
+    // commit() le pone los píxeles y cancel() lo quita.
+    void showInHistory(const QString& text, const QString& icon = {});
+
     bool commit(const QString& text, const QString& icon = {});
     void cancel();
 
@@ -35,10 +41,13 @@ public:
 
 private:
     void reset();
+    bool liveOnTop() const;
+    void dropLive();
 
     Document* m_doc = nullptr;
     LayerPtr m_layer;
     QImage m_before;
     QRect m_last;
     QRect m_total;
+    QUndoCommand* m_live = nullptr;
 };

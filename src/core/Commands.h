@@ -36,6 +36,8 @@ qint64 memory(const QUndoStack* stack);
 int trim(QUndoStack* stack, qint64 limit);
 // Primer índice al que se puede volver (los pasos de debajo están liberados).
 int barrier(const QUndoStack* stack);
+// Vuelve a dibujar el historial (tras cambiar el texto de un paso ya apilado).
+void refresh(QUndoStack* stack);
 } // namespace History
 
 // Cambio de píxeles en una capa. Solo guarda los tiles (64x64) que difieren entre 'before' y

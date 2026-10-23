@@ -65,8 +65,9 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
     Document* doc = document();
     if (!doc || !doc->activeLayer() || (e.button != Qt::LeftButton && e.button != Qt::RightButton))
         return;
-    if (m_edit.isActive() && e.button == Qt::LeftButton && Handles::hit(e.viewPos, handlePos())) {
+    if (m_edit.isActive() && e.button == Qt::LeftButton && Handles::hit(e.viewPos, handlePos(), 11)) {
         m_dragging = true;
+        m_grab = QPointF(m_seed) + QPointF(0.5, 0.5) - e.pos;
         return;
     }
     finish();
@@ -79,14 +80,19 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
     m_shiftGlobal = e.modifiers & Qt::ShiftModifier;
     m_edit.begin(doc, doc->activeLayerPtr());
     render();
+    m_edit.showInHistory(name(), QStringLiteral("fill-color"));
     emit hintChanged(hint());
 }
 
 void PaintBucketTool::mouseMove(const ToolEvent& e)
 {
-    if (!m_dragging)
+    if (!m_dragging) {
+        canvas()->setToolCursor(m_edit.isActive() && Handles::hit(e.viewPos, handlePos(), 11) ? QCursor(Qt::SizeAllCursor)
+                                                                                                : cursor());
         return;
-    const QPoint p = e.pixel();
+    }
+    const QPointF at = e.pos + m_grab;
+    const QPoint p(int(std::floor(at.x())), int(std::floor(at.y())));
     if (p != m_seed && document()->rect().contains(p)) {
         m_seed = p;
         render();

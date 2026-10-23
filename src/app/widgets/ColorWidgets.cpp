@@ -12,7 +12,7 @@
 void paintCheckerboard(QPainter& p, const QRectF& r, int cell)
 {
     p.save();
-    p.setClipRect(r);
+    p.setClipRect(r, p.hasClipping() ? Qt::IntersectClip : Qt::ReplaceClip);
     p.fillRect(r, Qt::white);
     for (int y = 0; y * cell < r.height(); ++y)
         for (int x = (y % 2); x * cell < r.width(); x += 2)
@@ -295,59 +295,69 @@ void ColorSwatches::setEditingSecondary(bool secondary)
     update();
 }
 
-QRectF ColorSwatches::primaryRect() const { return QRectF(2, 2, 38, 38); }
-QRectF ColorSwatches::secondaryRect() const { return QRectF(22, 22, 38, 38); }
-QRectF ColorSwatches::swapRect() const { return QRectF(44, 2, 18, 16); }
-QRectF ColorSwatches::resetRect() const { return QRectF(2, 46, 16, 16); }
+// Medidas de la ventana Colores de Paint.NET.
+QRectF ColorSwatches::primaryRect() const { return QRectF(1, 1, 35, 35); }
+QRectF ColorSwatches::secondaryRect() const { return QRectF(19, 19, 35, 35); }
+QRectF ColorSwatches::swapRect() const { return QRectF(40, 3, 14, 13); }
+QRectF ColorSwatches::resetRect() const { return QRectF(1, 39, 16, 16); }
 
 void ColorSwatches::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
+    // Como en Paint.NET: marco negro, blanco y negro alrededor del color; la ranura activa lleva
+    // un pico blanco recortado abajo en el centro.
     auto swatch = [&](const QRectF& r, const QColor& c, bool active) {
-        paintCheckerboard(p, r, 5);
-        p.fillRect(r, c);
-        // Como en Paint.NET: marco blanco por dentro y, en la ranura activa, un pico abajo.
-        p.setPen(QPen(palette().color(QPalette::WindowText), 1));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(r.adjusted(0.5, 0.5, -0.5, -0.5));
-        p.setPen(QPen(Qt::white, 1));
-        p.drawRect(r.adjusted(1.5, 1.5, -1.5, -1.5));
+        p.setRenderHint(QPainter::Antialiasing, false);
+        p.fillRect(r, Qt::black);
+        p.fillRect(r.adjusted(1, 1, -1, -1), Qt::white);
+        const QRectF inner = r.adjusted(3, 3, -3, -3);
+        QPainterPath frame;
+        frame.addRect(inner);
+        QPainterPath fill;
+        fill.addRect(inner.adjusted(1, 1, -1, -1));
         if (active) {
-            const qreal cx = r.center().x();
-            const QPolygonF notch{QPointF(cx - 5, r.bottom() - 1), QPointF(cx, r.bottom() - 7), QPointF(cx + 5, r.bottom() - 1)};
+            const qreal cx = inner.center().x(), bottom = inner.bottom();
+            QPainterPath notch;
+            notch.addPolygon(QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom - 6), QPointF(cx + 5, bottom + 1)});
+            QPainterPath notchOutline;
+            notchOutline.addPolygon(QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom - 7.5), QPointF(cx + 6.5, bottom + 1)});
+            frame = frame.subtracted(notch);
+            fill = fill.subtracted(notchOutline);
             p.setRenderHint(QPainter::Antialiasing);
-            p.setPen(QPen(Qt::black, 1));
-            p.setBrush(Qt::white);
-            p.drawPolygon(notch);
-            p.setRenderHint(QPainter::Antialiasing, false);
         }
+        p.fillPath(frame, Qt::black);
+        p.save();
+        p.setClipPath(fill);
+        paintCheckerboard(p, inner, 5);
+        p.fillRect(inner, c);
+        p.restore();
     };
     swatch(secondaryRect(), m_secondary, m_editingSecondary);
     swatch(primaryRect(), m_primary, !m_editingSecondary);
 
-    // Flecha doble para intercambiar, como la de Paint.NET: sale a la izquierda arriba y baja
-    // por la derecha.
+    // Flecha doble para intercambiar, pequeña y azul como la de Paint.NET: punta a la izquierda
+    // arriba y punta hacia abajo a la derecha.
     p.setRenderHint(QPainter::Antialiasing);
-    const QRectF s = swapRect();
-    const QPointF a(s.left() + 2.5, s.top() + 4.5), b(s.right() - 3.5, s.bottom() - 2.5);
+    const QRectF sw = swapRect();
+    const QPointF a(sw.left() + 1.5, sw.top() + 3.5), b(sw.right() - 3, sw.bottom() - 1.5);
     QPainterPath arc(a);
-    arc.lineTo(b.x() - 4, a.y());
-    arc.quadTo(b.x(), a.y(), b.x(), a.y() + 4);
+    arc.lineTo(b.x() - 3, a.y());
+    arc.quadTo(b.x(), a.y(), b.x(), a.y() + 3);
     arc.lineTo(b);
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(QColor(74, 144, 217), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setPen(QPen(QColor(70, 140, 215), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.drawPath(arc);
-    p.drawPolyline(QPolygonF{a + QPointF(3, -3), a, a + QPointF(3, 3)});
-    p.drawPolyline(QPolygonF{b + QPointF(-3, -3), b, b + QPointF(3, -3)});
+    p.drawPolyline(QPolygonF{a + QPointF(2.5, -2.5), a, a + QPointF(2.5, 2.5)});
+    p.drawPolyline(QPolygonF{b + QPointF(-2.5, -2.5), b, b + QPointF(2.5, -2.5)});
 
-    // Mini muestras negro/blanco para restablecer.
+    // Mini muestras negro y blanco para restablecer, con borde gris.
     p.setRenderHint(QPainter::Antialiasing, false);
     const QRectF rr = resetRect();
-    p.setPen(palette().color(QPalette::WindowText));
-    p.setBrush(Qt::white);
-    p.drawRect(QRectF(rr.left() + 6, rr.top() + 6, 9, 9));
+    p.setPen(QColor(120, 120, 120));
     p.setBrush(Qt::black);
-    p.drawRect(QRectF(rr.left() + 1, rr.top() + 1, 9, 9));
+    p.drawRect(QRectF(rr.left(), rr.top(), 10, 10));
+    p.setBrush(Qt::white);
+    p.drawRect(QRectF(rr.left() + 5, rr.top() + 5, 10, 10));
 }
 
 void ColorSwatches::mousePressEvent(QMouseEvent* e)

@@ -151,8 +151,9 @@ quint64 imageSignature(const QImage& source)
 
 // Tira de imágenes: no pide más ancho que el de sus pestañas (QTabBar reserva sitio para las
 // flechas de desplazamiento aunque no hagan falta), así la flecha de la lista queda pegada a la
-// última miniatura. La X de cerrar va sobre la esquina de la miniatura, en la imagen actual y en
-// la que tiene el puntero encima, como en Paint.NET.
+// última miniatura. Las miniaturas las dibuja la tira, y la X de cerrar va encima de la esquina
+// de la imagen actual y de la que tiene el puntero, como en Paint.NET. Se reordenan
+// arrastrando.
 class ImageStrip : public QTabBar {
 public:
     explicit ImageStrip(QWidget* parent)
@@ -167,25 +168,46 @@ public:
         return QSize(std::min(min.width(), sizeHint().width()), min.height());
     }
 
-    QRect closeRect(int index) const
+    // Miniatura de una pestaña, centrada en su hueco.
+    QRect thumbRect(int index) const
     {
         const QRect tab = tabRect(index);
-        return QRect(tab.right() - kClose - 2, tab.top() + 3, kClose, kClose);
+        const QSize box = iconSize();
+        const QSize thumb = tabIcon(index).actualSize(box).boundedTo(box);
+        const QRect slot(tab.left() + kPadX, tab.top() + kPadY, box.width(), box.height());
+        return QRect(slot.left() + (slot.width() - thumb.width()) / 2, slot.top() + (slot.height() - thumb.height()) / 2,
+                     thumb.width(), thumb.height());
+    }
+
+    QRect closeRect(int index) const
+    {
+        const QRect thumb = thumbRect(index);
+        return QRect(thumb.right() - kClose - 1, thumb.top() + 2, kClose, kClose);
     }
 
 protected:
+    QSize tabSizeHint(int) const override { return iconSize() + QSize(2 * kPadX, 2 * kPadY); }
+    QSize minimumTabSizeHint(int index) const override { return tabSizeHint(index); }
+
+    void initStyleOption(QStyleOptionTab* option, int index) const override
+    {
+        QTabBar::initStyleOption(option, index);
+        option->icon = QIcon();
+        option->text.clear();
+    }
+
     void paintEvent(QPaintEvent* e) override
     {
         QTabBar::paintEvent(e);
-        if (m_pressedTab >= 0 && m_dragged)
-            return;
         QPainter p(this);
+        for (int i = 0; i < count(); ++i)
+            tabIcon(i).paint(&p, thumbRect(i));
         p.setRenderHint(QPainter::Antialiasing);
         QList<int> shown{currentIndex()};
         if (m_hoverTab != currentIndex())
             shown << m_hoverTab;
         for (int i : std::as_const(shown)) {
-            if (i < 0)
+            if (i < 0 || i >= count())
                 continue;
             const QRectF r = QRectF(closeRect(i)).adjusted(0.5, 0.5, -0.5, -0.5);
             const bool hot = i == m_hoverTab && m_hoverClose;
@@ -201,24 +223,33 @@ protected:
 
     void mousePressEvent(QMouseEvent* e) override
     {
-        const int i = tabAt(e->position().toPoint());
+        const QPoint pos = e->position().toPoint();
+        const int i = tabAt(pos);
         if (e->button() == Qt::LeftButton && i >= 0 && (i == currentIndex() || i == m_hoverTab)
-            && closeRect(i).contains(e->position().toPoint())) {
+            && closeRect(i).contains(pos)) {
             m_closeTab = i;
             e->accept();
             return;
         }
         m_pressedTab = e->button() == Qt::LeftButton ? i : -1;
-        m_dragged = false;
+        m_pressPos = pos;
         QTabBar::mousePressEvent(e);
     }
 
     void mouseMoveEvent(QMouseEvent* e) override
     {
-        if (m_pressedTab >= 0 && (e->buttons() & Qt::LeftButton))
-            m_dragged = true;
-        const int hover = tabAt(e->position().toPoint());
-        const bool onClose = hover >= 0 && closeRect(hover).contains(e->position().toPoint());
+        const QPoint pos = e->position().toPoint();
+        // Arrastrar una miniatura sobre otra las intercambia.
+        if (m_pressedTab >= 0 && (e->buttons() & Qt::LeftButton)
+            && (pos - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
+            const int target = tabAt(QPoint(pos.x(), height() / 2));
+            if (target >= 0 && target != m_pressedTab) {
+                moveTab(m_pressedTab, target);
+                m_pressedTab = target;
+            }
+        }
+        const int hover = tabAt(pos);
+        const bool onClose = hover >= 0 && closeRect(hover).contains(pos);
         if (hover != m_hoverTab || onClose != m_hoverClose) {
             m_hoverTab = hover;
             m_hoverClose = onClose;
@@ -239,7 +270,6 @@ protected:
             return;
         }
         m_pressedTab = -1;
-        m_dragged = false;
         QTabBar::mouseReleaseEvent(e);
         update();
     }
@@ -254,11 +284,14 @@ protected:
 
 private:
     static constexpr int kClose = 14;
+    // Margen, borde y relleno de la pestaña (los de la hoja de estilo) alrededor de la miniatura.
+    static constexpr int kPadX = 6;
+    static constexpr int kPadY = 5;
     int m_hoverTab = -1;
     bool m_hoverClose = false;
     int m_closeTab = -1;
     int m_pressedTab = -1;
-    bool m_dragged = false;
+    QPoint m_pressPos;
 };
 
 // Fila superior al estilo de Paint.NET 5: menús con la barra principal debajo, la tira de
@@ -884,7 +917,7 @@ void MainWindow::createTopRow()
     m_tabs = new ImageStrip(top);
     m_tabs->setObjectName(QStringLiteral("ImageStrip"));
     m_tabs->setDocumentMode(true);
-    m_tabs->setMovable(true);
+    m_tabs->setMovable(false);
     m_tabs->setExpanding(false);
     m_tabs->setDrawBase(false);
     m_tabs->setIconSize(QSize(64, 48));

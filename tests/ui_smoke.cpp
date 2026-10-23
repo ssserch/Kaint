@@ -1418,6 +1418,37 @@ int main(int argc, char** argv)
             } else if (popup) {
                 popup->close();
             }
+
+            // La X va encima de la esquina de la miniatura (como en Paint.NET) y cierra la imagen;
+            // arrastrar una miniatura sobre otra las reordena.
+            w.newDefaultDocument();
+            settle();
+            auto mouse = [strip](QEvent::Type type, QPoint at, Qt::MouseButtons buttons) {
+                QMouseEvent e(type, QPointF(at), QPointF(strip->mapToGlobal(at)),
+                              type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton, buttons, Qt::NoModifier);
+                QApplication::sendEvent(strip, &e);
+            };
+            const int tabs = strip->count();
+            const int last = strip->currentIndex();
+            const QRect tab = strip->tabRect(last);
+            const QPoint xPos(tab.right() - 12, tab.top() + 12);
+            mouse(QEvent::MouseMove, xPos, Qt::NoButton);
+            mouse(QEvent::MouseButtonPress, xPos, Qt::LeftButton);
+            mouse(QEvent::MouseButtonRelease, xPos, Qt::NoButton);
+            settle();
+            CHECK(strip->count() == tabs - 1);
+            if (strip->count() >= 2) {
+                strip->setCurrentIndex(0);
+                settle();
+                Document* first = canvas->document();
+                const QPoint from = strip->tabRect(0).center(), to = strip->tabRect(1).center();
+                mouse(QEvent::MouseButtonPress, from, Qt::LeftButton);
+                mouse(QEvent::MouseMove, from + QPoint(10, 0), Qt::LeftButton);
+                mouse(QEvent::MouseMove, to, Qt::LeftButton);
+                mouse(QEvent::MouseButtonRelease, to, Qt::NoButton);
+                settle();
+                CHECK(strip->currentIndex() == 1 && canvas->document() == first);
+            }
         }
     }
 

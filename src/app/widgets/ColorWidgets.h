@@ -74,7 +74,7 @@ public:
     explicit ColorSwatches(QWidget* parent = nullptr);
     void setColors(const QColor& primary, const QColor& secondary);
     void setEditingSecondary(bool secondary);
-    QSize sizeHint() const override { return {64, 64}; }
+    QSize sizeHint() const override { return {56, 56}; }
 
 signals:
     void primaryClicked();

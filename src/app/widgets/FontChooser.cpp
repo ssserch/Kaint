@@ -75,6 +75,8 @@ ComboClickToOpen::ComboClickToOpen(QComboBox* combo)
 void ComboClickToOpen::startEditing()
 {
     m_editing = true;
+    // Un clic en cualquier otro sitio (aunque no tome el foco) vuelve a dejarlo como botón.
+    qApp->installEventFilter(this);
     m_before = m_combo->lineEdit()->text();
     m_combo->lineEdit()->setReadOnly(false);
     m_combo->lineEdit()->setFocus(Qt::MouseFocusReason);
@@ -86,6 +88,7 @@ void ComboClickToOpen::stopEditing(bool commit)
     if (!m_editing)
         return;
     m_editing = false;
+    qApp->removeEventFilter(this);
     QLineEdit* edit = m_combo->lineEdit();
     edit->setReadOnly(true);
     if (!commit) {
@@ -100,6 +103,11 @@ void ComboClickToOpen::stopEditing(bool commit)
 
 bool ComboClickToOpen::eventFilter(QObject* watched, QEvent* event)
 {
+    if (m_editing && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
+        auto* w = static_cast<QWidget*>(watched);
+        if (w != m_combo && !m_combo->isAncestorOf(w) && w->window() != m_combo->view()->window())
+            stopEditing(true);
+    }
     if (watched != m_combo->lineEdit())
         return QObject::eventFilter(watched, event);
     if (!m_editing) {
@@ -176,6 +184,7 @@ FontChooser::FontChooser(QWidget* parent)
 void FontChooser::startEditing()
 {
     m_editing = true;
+    qApp->installEventFilter(this);
     m_before = currentText();
     lineEdit()->setReadOnly(false);
     lineEdit()->setFocus(Qt::MouseFocusReason);
@@ -187,6 +196,7 @@ void FontChooser::stopEditing(bool commit)
     if (!m_editing)
         return;
     m_editing = false;
+    qApp->removeEventFilter(this);
     lineEdit()->setReadOnly(true);
     if (commit) {
         const QString typed = lineEdit()->text().trimmed();
@@ -208,6 +218,11 @@ void FontChooser::stopEditing(bool commit)
 
 bool FontChooser::eventFilter(QObject* watched, QEvent* event)
 {
+    if (m_editing && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
+        auto* w = static_cast<QWidget*>(watched);
+        if (w != this && !isAncestorOf(w) && w->window() != view()->window() && w->window() != completer()->popup()->window())
+            stopEditing(false);
+    }
     if (watched != lineEdit())
         return QFontComboBox::eventFilter(watched, event);
     if (!m_editing) {

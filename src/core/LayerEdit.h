@@ -27,14 +27,18 @@ public:
     void touched(const QRect& rect);
 
     // Paso del historial visible desde que empieza la edición, como el texto de Paint.NET:
-    // commit() le pone los píxeles y cancel() lo quita.
-    void showInHistory(const QString& text, const QString& icon = {});
+    // commit() le pone los píxeles y cancel() lo quita. 'command' es el paso que se apila (para
+    // herramientas que guardan en él su estado); si ya hay uno, se descarta.
+    void showInHistory(const QString& text, const QString& icon = {}, QUndoCommand* command = nullptr);
+    // El paso en vivo, si sigue en lo alto del historial.
+    QUndoCommand* liveStep() const { return m_doc && liveOnTop() ? m_live : nullptr; }
 
     bool commit(const QString& text, const QString& icon = {});
     void cancel();
 
     // Para herramientas que guardan cada paso en el historial (degradado): retomar una edición
     // con la imagen de antes y lo que ya estaba dibujado, u olvidarla sin tocar los píxeles.
+    // Tras retomar, commit() y cancel() parten de la capa tal como estaba al retomar.
     void resume(Document* doc, LayerPtr layer, const QImage& before, const QRect& touched);
     void detach() { reset(); }
     QRect touchedArea() const { return m_total; }
@@ -47,6 +51,7 @@ private:
     Document* m_doc = nullptr;
     LayerPtr m_layer;
     QImage m_before;
+    QImage m_start;
     QRect m_last;
     QRect m_total;
     QUndoCommand* m_live = nullptr;

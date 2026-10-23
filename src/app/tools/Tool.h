@@ -56,7 +56,7 @@ struct ToolEvent {
 class Tool : public QObject {
     Q_OBJECT
 public:
-    enum Option : quint32 {
+    enum Option : quint64 {
         OptBrushSize = 1u << 0,
         OptHardness = 1u << 1,
         OptAntialias = 1u << 2,
@@ -89,6 +89,7 @@ public:
         OptAfterSelect = 1u << 29,
         OptGamma = 1u << 30,
         OptMoveSelectionQuality = 1u << 31,
+        OptFillAccumulate = 1ull << 32,
     };
 
     explicit Tool(QObject* parent = nullptr) : QObject(parent) {}
@@ -98,7 +99,7 @@ public:
     virtual QIcon icon() const = 0;
     virtual QString hint() const = 0;
     virtual QKeySequence shortcut() const = 0;
-    virtual quint32 options() const { return 0; }
+    virtual quint64 options() const { return 0; }
 
     virtual void activate(Canvas* canvas) { m_canvas = canvas; }
     virtual void deactivate() { m_canvas = nullptr; }

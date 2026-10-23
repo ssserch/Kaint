@@ -45,6 +45,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineF>
+#include <QFontComboBox>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QLocalServer>
@@ -229,6 +230,19 @@ static void testTransformBox()
     CHECK(box.hit(QPointF(220, 50), view, false, nullptr) == TransformBox::Mode::Rotate);
     CHECK(box.hit(QPointF(100, -25), view, false, nullptr) == TransformBox::Mode::Rotate);
     CHECK(box.hit(QPointF(150, 60), view, false, nullptr) == TransformBox::Mode::Translate);
+
+    // Píxel a píxel: sin giro, las esquinas caen en píxeles enteros; con giro, solo se redondea
+    // el desplazamiento.
+    const QTransform loose = QTransform::fromScale(1.37, 0.81) * QTransform::fromTranslate(10.4, 7.3);
+    const QTransform snapped = TransformBox::snappedToPixels(loose, QRectF(0, 0, 100, 50));
+    for (const QPointF corner : {QPointF(0, 0), QPointF(100, 50)}) {
+        const QPointF p = snapped.map(corner);
+        CHECK(near(p, QPointF(std::round(p.x()), std::round(p.y()))));
+    }
+    QTransform turned;
+    turned.translate(5.6, 3.2).rotate(30);
+    const QTransform turnedSnap = TransformBox::snappedToPixels(turned, QRectF(0, 0, 100, 50));
+    CHECK(near(turnedSnap.map(QPointF(0, 0)), QPointF(6, 3)) && std::abs(turnedSnap.m11() - turned.m11()) < 1e-9);
 
     box.begin(TransformBox::Mode::Pivot, -1, QPointF(50, 25));
     box.update(QPointF(70, 30), Qt::NoModifier);
@@ -671,12 +685,28 @@ int main(int argc, char** argv)
         CHECK(doc->undoStack()->text(steps - 1) == QStringLiteral("Texto"));
         QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
         QApplication::sendEvent(canvas, &esc);
-        CHECK(!tools->current()->isBusy() && doc->undoStack()->count() == steps);
+        CHECK(!tools->current()->isBusy() && doc->undoStack()->count() == steps + 1);
+        CHECK(doc->undoStack()->text(steps) == QStringLiteral("Finalizar texto"));
+
+        // Al volver al paso del texto se sigue editando, con sus colores y opciones.
+        const QColor textColor = state->primary();
+        state->setPrimary(QColor(0, 150, 255));
+        state->updateTools([](ToolSettings& s) { s.textAlign = TextAlign::Left; });
+        const QImage written = doc->activeLayer()->image;
+        findAction(&w, QStringLiteral("Deshacer"))->trigger();
+        CHECK(tools->current()->isBusy() && state->primary() == textColor);
+        CHECK(state->tools().textAlign == TextAlign::Center && doc->activeLayer()->image == written);
+        typeText(canvas, QStringLiteral("d"));
+        CHECK(doc->undoStack()->count() == steps + 1 && doc->undoStack()->text(steps) == QStringLiteral("Editar texto"));
+        QApplication::sendEvent(canvas, &esc);
+        CHECK(!tools->current()->isBusy() && doc->undoStack()->count() == steps + 2);
+        CHECK(doc->undoStack()->text(steps + 1) == QStringLiteral("Finalizar texto"));
+        CHECK(doc->activeLayer()->image != written);
         state->updateTools([](ToolSettings& s) { s.textAlign = TextAlign::Left; });
     }
 
-    // Pasos en vivo, como en Paint.NET: el cubo y el texto aparecen en el historial al empezar,
-    // cambiar de herramienta los completa sin añadir otro y deshacer mientras se edita los quita.
+    // Pasos en vivo, como en Paint.NET: el cubo y el texto aparecen en el historial al empezar;
+    // cambiar de herramienta termina el cubo ("Finalizar…") y deshacer mientras se edita quita el texto.
     {
         QUndoStack* stack = doc->undoStack();
         tools->select(ToolId::PaintBucket);
@@ -686,7 +716,8 @@ int main(int argc, char** argv)
         CHECK(tools->current()->isBusy() && stack->count() == steps + 1);
         CHECK(stack->text(steps) == QStringLiteral("Cubo de pintura"));
         tools->select(ToolId::Text);
-        CHECK(stack->count() == steps + 1 && stack->index() == steps + 1);
+        CHECK(stack->count() == steps + 2 && stack->index() == steps + 2);
+        CHECK(stack->text(steps + 1) == QStringLiteral("Finalizar cubo de pintura"));
         steps = stack->count();
         drag(canvas, {QPointF(40, 40)});
         CHECK(stack->count() == steps);
@@ -1137,8 +1168,8 @@ int main(int argc, char** argv)
         CHECK(gradientTool->icon().pixmap(40, 40).toImage() != before);
     }
 
-    // Cubo de pintura: el icono de mover arrastra el punto de origen (el relleno lo sigue) sin
-    // añadir pasos al historial.
+    // Cubo de pintura: el icono de mover arrastra el punto de origen (el relleno lo sigue) y cada
+    // arrastre es un paso "Editar cubo de pintura".
     {
         w.newDefaultDocument();
         settle();
@@ -1155,11 +1186,30 @@ int main(int argc, char** argv)
         CHECK(QColor(d->activeLayer()->image.pixel(100, 300)) == QColor(220, 0, 0));
         const QPointF handle = canvas->viewToImage(Handles::moveIconPos(QRectF(canvas->imageToView(QPointF(100.5, 100.5)), QSizeF())));
         drag(canvas, {handle, handle + QPointF(300, 0), handle + QPointF(600, 0)});
-        CHECK(tools->current()->isBusy() && d->undoStack()->count() == steps);
+        CHECK(tools->current()->isBusy() && d->undoStack()->count() == steps + 1);
+        CHECK(d->undoStack()->text(steps) == QStringLiteral("Editar cubo de pintura"));
         CHECK(QColor(d->activeLayer()->image.pixel(100, 300)) == QColor(Qt::white));
         CHECK(QColor(d->activeLayer()->image.pixel(700, 300)) == QColor(220, 0, 0));
         tools->current()->finish();
-        CHECK(d->undoStack()->count() == steps);
+        CHECK(d->undoStack()->count() == steps + 2);
+
+        // Al volver a un relleno en el historial se retoma: el punto de origen vuelve, sus colores
+        // pasan a ser los actuales y cambiar el color lo vuelve a rellenar.
+        state->setPrimary(QColor(0, 160, 0));
+        drag(canvas, {QPointF(100, 100)});
+        CHECK(QColor(d->activeLayer()->image.pixel(100, 300)) == QColor(0, 160, 0));
+        QAction* undoAct = findAction(&w, QStringLiteral("Deshacer"));
+        undoAct->trigger();
+        CHECK(!tools->current()->isBusy());
+        undoAct->trigger();
+        CHECK(tools->current()->isBusy() && state->primary() == QColor(220, 0, 0));
+        CHECK(QColor(d->activeLayer()->image.pixel(700, 300)) == QColor(220, 0, 0));
+        state->setPrimary(QColor(250, 200, 0));
+        CHECK(QColor(d->activeLayer()->image.pixel(700, 300)) == QColor(250, 200, 0));
+        const int resumed = d->undoStack()->index();
+        tools->current()->finish();
+        CHECK(d->undoStack()->count() == resumed + 2);
+        CHECK(d->undoStack()->text(resumed) == QStringLiteral("Editar cubo de pintura"));
 
         // Con una selección, un clic fuera de ella no rellena nada (como en Paint.NET).
         tools->select(ToolId::RectSelect);
@@ -1173,7 +1223,7 @@ int main(int argc, char** argv)
         CHECK(!tools->current()->isBusy() && d->undoStack()->count() == before && d->activeLayer()->image == untouched);
         drag(canvas, {QPointF(600, 150)});
         CHECK(QColor(d->activeLayer()->image.pixel(600, 150)) == QColor(0, 0, 200));
-        CHECK(QColor(d->activeLayer()->image.pixel(700, 400)) == QColor(220, 0, 0));
+        CHECK(QColor(d->activeLayer()->image.pixel(700, 400)) == QColor(250, 200, 0));
         tools->current()->finish();
         findAction(&w, QStringLiteral("Anular la selección"))->trigger();
         state->updateTools([](ToolSettings& s) { s.antialias = true; });
@@ -1574,7 +1624,8 @@ int main(int argc, char** argv)
         state->updateTools([](ToolSettings& t) { t.moveInterpolation = Resample::Interpolation::NearestNeighbor; });
     }
 
-    // Tamaño de letra: se comporta como un botón; solo con doble clic se puede escribir.
+    // Tamaño de letra y demás listas de tamaños: se comportan como un botón; solo con doble clic
+    // se puede escribir, y un clic fuera las vuelve a dejar como botón.
     {
         tools->select(ToolId::Text);
         settle();
@@ -1583,6 +1634,77 @@ int main(int argc, char** argv)
             if (c->isEditable() && c->findText(QStringLiteral("288")) >= 0)
                 fontSize = c;
         CHECK(fontSize && fontSize->lineEdit()->isReadOnly());
+        if (fontSize) {
+            QLineEdit* edit = fontSize->lineEdit();
+            const QPoint at = edit->rect().center();
+            QMouseEvent dbl(QEvent::MouseButtonDblClick, QPointF(at), QPointF(edit->mapToGlobal(at)), Qt::LeftButton,
+                            Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(edit, &dbl);
+            CHECK(!edit->isReadOnly());
+            QWidget* outside = w.statusBar();
+            const QPoint out = outside->rect().center();
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(out), QPointF(outside->mapToGlobal(out)), Qt::LeftButton,
+                              Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(outside, &press);
+            CHECK(edit->isReadOnly());
+        }
+        tools->select(ToolId::Paintbrush);
+        settle();
+        int sizeLists = 0;
+        for (QComboBox* c : w.findChild<ToolOptionsBar*>()->findChildren<QComboBox*>())
+            if (c->isEditable() && c->isVisible() && !qobject_cast<QFontComboBox*>(c)) {
+                ++sizeLists;
+                CHECK(c->lineEdit()->isReadOnly());
+            }
+        CHECK(sizeLists > 0);
+    }
+
+    // Mover píxeles: cambiar el muestreo se ve al momento en lo que se está moviendo.
+    {
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        state->setPrimary(Qt::black);
+        tools->select(ToolId::Pencil);
+        for (int x = 100; x < 140; x += 3)
+            drag(canvas, {QPointF(x + 0.5, 100.5), QPointF(x + 0.5, 139.5)});
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(100, 100), QPointF(120, 120), QPointF(140, 140)});
+        tools->select(ToolId::MoveSelected);
+        drag(canvas, {QPointF(140, 140), QPointF(170, 160), QPointF(197, 171)});
+        const QImage nearest = d->layer(0)->image;
+        state->updateTools([](ToolSettings& t) { t.moveInterpolation = Resample::Interpolation::Bilinear; });
+        CHECK(d->layer(0)->image != nearest);
+        state->updateTools([](ToolSettings& t) { t.moveInterpolation = Resample::Interpolation::NearestNeighbor; });
+        CHECK(d->layer(0)->image == nearest);
+        tools->current()->finish();
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+    }
+
+    // Varita mágica: píxel a píxel por defecto; con calidad antidentado, contorno suave como el
+    // lazo. El cubo tiene la opción de acumular (activada).
+    {
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        state->setPrimary(Qt::black);
+        state->updateTools([](ToolSettings& t) { t.brushSize = 30; t.shape = ShapeType::Ellipse; t.shapeStyle = ShapeStyle::Fill; });
+        tools->select(ToolId::Shapes);
+        drag(canvas, {QPointF(100, 100), QPointF(150, 140), QPointF(200, 180)});
+        tools->current()->finish();
+        tools->select(ToolId::MagicWand);
+        drag(canvas, {QPointF(150, 140)});
+        tools->current()->finish();
+        CHECK(!d->selection().isEmpty() && !d->selection().isPathBased());
+        state->updateTools([](ToolSettings& t) { t.selectionAntialias = true; });
+        drag(canvas, {QPointF(150, 140)});
+        tools->current()->finish();
+        CHECK(!d->selection().isEmpty() && d->selection().isPathBased());
+        state->updateTools([](ToolSettings& t) { t.selectionAntialias = false; });
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        CHECK(state->tools().fillAccumulate);
+        CHECK(tools->tool(ToolId::PaintBucket)->options() & Tool::OptFillAccumulate);
+        CHECK(ToolOptionsBar::order(ToolId::PaintBucket).contains(QStringLiteral("accumulate")));
     }
 
     // Imagen nueva: las unidades van fuera de los campos (como en Paint.NET) y la unidad de la

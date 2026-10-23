@@ -46,6 +46,7 @@ QIcon selectionMode(SelectionMode mode);
 QIcon dash(Qt::PenStyle style);
 QIcon floodMode(bool global);
 QIcon toleranceAlpha(bool straight);
+QIcon fillAccumulate(bool on);
 QIcon textAlign(TextAlign align);
 QIcon smoothing(bool on);
 QIcon gamma(bool corrected);

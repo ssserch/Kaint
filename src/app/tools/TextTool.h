@@ -11,7 +11,7 @@ class QFontMetricsF;
 // Texto editable hasta que se termina (Esc, botón Terminar, clic fuera del texto o cambio de
 // herramienta), como en Paint.NET: cursor con flechas, Inicio/Fin, Ctrl para saltar palabras,
 // clic dentro del texto para mover el cursor y el tirador (o el botón derecho) para mover el
-// texto.
+// texto. Al volver a uno de sus pasos en el historial se sigue editando.
 class TextTool : public Tool {
     Q_OBJECT
 public:
@@ -21,7 +21,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_T); }
-    quint32 options() const override { return OptText | OptAntialias | OptBlend | OptSelectionQuality | OptFinish; }
+    quint64 options() const override { return OptText | OptAntialias | OptBlend | OptSelectionQuality | OptFinish; }
     QCursor cursor() const override { return Qt::IBeamCursor; }
 
     void mousePress(const ToolEvent& e) override;
@@ -35,6 +35,8 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_edit.isActive(); }
+    void beforeHistoryJump() override;
+    void historyChanged() override;
 
     // Inserta texto en la posición del cursor (Pegar mientras se escribe).
     void insertText(const QString& text);
@@ -42,6 +44,9 @@ public:
 private:
     QFont font() const;
     void render();
+    void changed();
+    bool commitLive();
+    void leave();
     void touch();
     void setInputMethodEnabled(bool on);
     QStringList displayLines() const;
@@ -62,4 +67,8 @@ private:
     bool m_caretOn = true;
     bool m_dragging = false;
     QPointF m_grab;
+    // Edición retomada desde el historial; pasos propios en curso; opciones restauradas.
+    bool m_resumed = false;
+    bool m_pushing = false;
+    bool m_restoring = false;
 };

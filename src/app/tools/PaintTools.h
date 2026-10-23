@@ -35,7 +35,7 @@ public:
     QIcon icon() const override;
     QString hint() const override { return tr("Clic izquierdo: pintar con el color principal · clic derecho: con el secundario."); }
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_B); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptBlend | OptFill
              | OptSelectionQuality;
@@ -58,7 +58,7 @@ public:
         return tr("Arrastra para borrar. La opacidad del color principal (clic derecho: secundario) regula la fuerza.");
     }
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_E); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptSelectionQuality;
     }
@@ -80,7 +80,7 @@ public:
         return tr("Dibuja píxeles sueltos con el color principal (clic derecho: secundario), ideal para pixel art.");
     }
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_P); }
-    quint32 options() const override { return OptBlend | OptSelectionQuality; }
+    quint64 options() const override { return OptBlend | OptSelectionQuality; }
     qreal brushOutlineDiameter() const override { return 0; }
 
 protected:
@@ -97,7 +97,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_L); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptBlend
              | OptSelectionQuality;
@@ -130,7 +130,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_R); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptTolerance
              | OptToleranceAlpha | OptRecolorSampling | OptSelectionQuality;

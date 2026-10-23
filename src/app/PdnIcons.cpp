@@ -267,10 +267,13 @@ void drawFill(QPainter& p)
     p.setBrush(paintFill);
     p.drawPath(paint);
 
+    // Asa en arco por encima de la boca del cubo.
+    QPainterPath handle;
+    handle.moveTo(8.2, 9.8);
+    handle.cubicTo(6.6, 4.4, 12.2, 1.4, 15.8, 8.6);
     p.setPen(QPen(QColor(60, 64, 72), 1.1, Qt::SolidLine, Qt::RoundCap));
-    p.drawLine(QPointF(12.6, 10.6), QPointF(11.2, 2.0));
-    p.setBrush(QColor(60, 64, 72));
-    p.drawEllipse(QPointF(11.2, 2.0), 1.1, 1.1);
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(handle);
     QPolygonF body{QPointF(12.6, 5.4), QPointF(18.6, 11.4), QPointF(12.6, 17.4), QPointF(6.6, 11.4)};
     QLinearGradient metal(7, 6, 18, 17);
     metal.setColorAt(0, QColor(222, 226, 232));
@@ -473,14 +476,15 @@ void drawMoveSelection(QPainter& p)
 
 void drawZoom(QPainter& p)
 {
-    // Lupa con mango azul oscuro y la cuadrícula dentro, como en Paint.NET.
+    // Lupa con mango azul oscuro y la cuadrícula dentro (el cristal, transparente), como en
+    // Paint.NET.
     aa(p);
     QPen hp(QColor(40, 80, 140), 3.0);
     hp.setCapStyle(Qt::RoundCap);
     p.setPen(hp);
     p.drawLine(QPointF(12.6, 12.6), QPointF(17.6, 17.6));
     p.setPen(QPen(QColor(40, 80, 140), 1.8));
-    p.setBrush(QColor(206, 230, 250));
+    p.setBrush(Qt::NoBrush);
     p.drawEllipse(QRectF(2.2, 2.2, 11.6, 11.6));
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(50, 60, 76));
@@ -490,22 +494,31 @@ void drawZoom(QPainter& p)
 
 void drawPan(QPainter& p)
 {
+    // Mano abierta de color carne con el contorno marrón, como la de Paint.NET.
     aa(p);
-    const QColor ink(150, 98, 54);
-    const QColor skin(243, 208, 168);
-    p.setPen(QPen(ink, 1.1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(skin);
-
     QPainterPath hand;
-    hand.addRoundedRect(QRectF(5.5, 8.5, 9.0, 9.5), 3.0, 3.0);
-    p.drawPath(hand);
-
+    hand.setFillRule(Qt::WindingFill);
+    hand.addRoundedRect(QRectF(5.8, 3.4, 2.8, 9.0), 1.4, 1.4);
+    hand.addRoundedRect(QRectF(8.7, 2.2, 2.8, 10.0), 1.4, 1.4);
+    hand.addRoundedRect(QRectF(11.6, 2.8, 2.8, 9.5), 1.4, 1.4);
+    hand.addRoundedRect(QRectF(14.4, 4.8, 2.6, 7.6), 1.3, 1.3);
+    hand.addRoundedRect(QRectF(5.8, 8.4, 11.2, 9.6), 3.6, 3.6);
+    QTransform thumb;
+    thumb.translate(4.6, 12.6);
+    thumb.rotate(-38);
+    QPainterPath thumbPath;
+    thumbPath.addRoundedRect(QRectF(-4.2, -1.5, 6.2, 3.0), 1.5, 1.5);
+    hand.addPath(thumb.map(thumbPath));
+    hand = hand.simplified();
+    QLinearGradient skin(0, 2, 0, 18);
+    skin.setColorAt(0, QColor(255, 222, 180));
+    skin.setColorAt(1, QColor(236, 172, 110));
+    p.setPen(QPen(QColor(138, 88, 40), 1.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.setBrush(skin);
-    p.drawRoundedRect(QRectF(6.2, 3.2, 2.0, 7.0), 1.0, 1.0);
-    p.drawRoundedRect(QRectF(8.6, 2.4, 2.0, 8.0), 1.0, 1.0);
-    p.drawRoundedRect(QRectF(11.0, 3.0, 2.0, 7.4), 1.0, 1.0);
-    p.drawRoundedRect(QRectF(13.2, 4.6, 2.0, 6.0), 1.0, 1.0);
-    p.drawRoundedRect(QRectF(3.2, 9.0, 3.4, 2.1), 1.0, 1.0);
+    p.drawPath(hand);
+    p.setPen(QPen(QColor(176, 118, 64), 0.8, Qt::SolidLine, Qt::RoundCap));
+    for (qreal x : {8.65, 11.55, 14.4})
+        p.drawLine(QPointF(x, 8.6), QPointF(x, 11.2));
 }
 
 void drawNewDoc(QPainter& p)

@@ -13,10 +13,10 @@ void paintCheckerboard(QPainter& p, const QRectF& r, int cell)
 {
     p.save();
     p.setClipRect(r, p.hasClipping() ? Qt::IntersectClip : Qt::ReplaceClip);
-    p.fillRect(r, Qt::white);
+    p.fillRect(r, QColor(191, 191, 191));
     for (int y = 0; y * cell < r.height(); ++y)
         for (int x = (y % 2); x * cell < r.width(); x += 2)
-            p.fillRect(QRectF(r.left() + x * cell, r.top() + y * cell, cell, cell), QColor(204, 204, 204));
+            p.fillRect(QRectF(r.left() + x * cell, r.top() + y * cell, cell, cell), QColor(143, 143, 143));
     p.restore();
 }
 

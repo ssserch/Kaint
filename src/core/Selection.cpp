@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -37,6 +38,73 @@ QRect maskBounds(const QImage& mask)
     if (top < 0)
         return {};
     return QRect(QPoint(left, top), QPoint(right, bottom));
+}
+
+// Contorno de una máscara con marching squares (vértices entre centros de píxel, dentro a la
+// derecha) y una pasada de Chaikin para redondear los escalones.
+QPainterPath smoothContour(const QImage& mask, const QRect& bounds)
+{
+    const int w = mask.width(), h = mask.height();
+    auto in = [&](int x, int y) { return x >= 0 && y >= 0 && x < w && y < h && mask.constScanLine(y)[x] >= 128; };
+    // Puntos con coordenadas dobladas para que sean enteros.
+    auto key = [](QPoint p) { return (quint64(quint32(p.x())) << 32) | quint32(p.y()); };
+    std::vector<std::pair<QPoint, QPoint>> segs;
+    std::unordered_map<quint64, size_t> from;
+    for (int y = bounds.top() - 1; y <= bounds.bottom(); ++y)
+        for (int x = bounds.left() - 1; x <= bounds.right(); ++x) {
+            const int code = in(x, y) << 3 | in(x + 1, y) << 2 | in(x + 1, y + 1) << 1 | in(x, y + 1);
+            if (code == 0 || code == 15)
+                continue;
+            const QPoint T(2 * x + 2, 2 * y + 1), R(2 * x + 3, 2 * y + 2), B(2 * x + 2, 2 * y + 3), L(2 * x + 1, 2 * y + 2);
+            auto add = [&](QPoint a, QPoint b) {
+                from[key(a)] = segs.size();
+                segs.emplace_back(a, b);
+            };
+            switch (code) {
+            case 8: add(T, L); break;
+            case 4: add(R, T); break;
+            case 2: add(B, R); break;
+            case 1: add(L, B); break;
+            case 12: add(R, L); break;
+            case 6: add(B, T); break;
+            case 3: add(L, R); break;
+            case 9: add(T, B); break;
+            case 14: add(B, L); break;
+            case 13: add(R, B); break;
+            case 11: add(T, R); break;
+            case 7: add(L, T); break;
+            case 10: add(T, L), add(B, R); break;
+            case 5: add(R, T), add(L, B); break;
+            }
+        }
+
+    QPainterPath path;
+    std::vector<bool> used(segs.size(), false);
+    for (size_t start = 0; start < segs.size(); ++start) {
+        if (used[start])
+            continue;
+        QPolygonF loop;
+        for (size_t i = start; !used[i];) {
+            used[i] = true;
+            loop << QPointF(segs[i].first) / 2.0;
+            const auto next = from.find(key(segs[i].second));
+            if (next == from.end())
+                break;
+            i = next->second;
+        }
+        if (loop.size() < 3)
+            continue;
+        QPolygonF smooth;
+        smooth.reserve(loop.size() * 2 + 1);
+        for (qsizetype i = 0; i < loop.size(); ++i) {
+            const QPointF a = loop[i], b = loop[(i + 1) % loop.size()];
+            smooth << a * 0.75 + b * 0.25 << a * 0.25 + b * 0.75;
+        }
+        smooth << smooth.first();
+        path.addPolygon(smooth);
+        path.closeSubpath();
+    }
+    return path;
 }
 
 QImage emptyMask(QSize size)
@@ -136,6 +204,17 @@ Selection Selection::fromRect(const QRect& rect, QSize canvas)
     QPainterPath p;
     p.addRect(QRectF(rect.normalized()));
     return fromPath(p, canvas, false);
+}
+
+Selection Selection::fromMaskSmooth(const QImage& source)
+{
+    if (source.isNull())
+        return {};
+    const QImage mask = source.format() == QImage::Format_Alpha8 ? source : source.convertToFormat(QImage::Format_Alpha8);
+    const QRect bounds = maskBounds(mask);
+    if (bounds.isEmpty())
+        return {};
+    return fromPath(smoothContour(mask, bounds), mask.size(), true);
 }
 
 Selection Selection::fromMask(const QImage& source)

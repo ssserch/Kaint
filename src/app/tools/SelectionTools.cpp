@@ -331,7 +331,8 @@ void MagicWandTool::recompute()
     const ToolSettings& s = AppState::instance()->tools();
     const bool global = s.floodGlobal != m_shiftGlobal;
     const QImage mask = FloodFill::mask(m_sample, m_seed, s.tolerance / 100.0, !global, s.toleranceStraight);
-    preview(Selection::fromMask(mask));
+    // Con calidad antidentado, el contorno se suaviza como el del lazo; por defecto, píxel a píxel.
+    preview(s.selectionAntialias ? Selection::fromMaskSmooth(mask) : Selection::fromMask(mask));
     repaint();
 }
 

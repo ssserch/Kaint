@@ -56,7 +56,8 @@ QImage premultiplied(const QImage& straight);
 QImage unpremultiplied(const QImage& premul);
 
 // Tablero de ajedrez para mostrar la transparencia.
-QImage checkerboard(int cell, QColor light = QColor(255, 255, 255), QColor dark = QColor(204, 204, 204));
+// Damero de la transparencia, con los grises del lienzo (como Paint.NET).
+QImage checkerboard(int cell, QColor light = QColor(191, 191, 191), QColor dark = QColor(143, 143, 143));
 
 QImage thumbnail(const QImage& image, QSize box, bool checker = true);
 

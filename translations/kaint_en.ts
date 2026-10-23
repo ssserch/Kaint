@@ -540,13 +540,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
-    <name>ImageStrip</name>
-    <message>
-        <source>Cerrar</source>
-        <translation>Close</translation>
-    </message>
-</context>
-<context>
     <name>LassoSelectTool</name>
     <message>
         <source>Arrastra para dibujar el contorno de la selección. </source>
@@ -1656,6 +1649,14 @@ What do you want to do?</translation>
     <message>
         <source>Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.</source>
         <translation>Left click: fill with the primary color · right click: with the secondary color. Shift: global mode.</translation>
+    </message>
+    <message>
+        <source>Editar cubo de pintura</source>
+        <translation>Edit Paint Bucket</translation>
+    </message>
+    <message>
+        <source>Finalizar cubo de pintura</source>
+        <translation>Finish Paint Bucket</translation>
     </message>
     <message>
         <source>Cubo de pintura</source>
@@ -4152,6 +4153,14 @@ Do you want to replace them?</translation>
         <translation>Click where you want to start typing with the primary color.</translation>
     </message>
     <message>
+        <source>Editar texto</source>
+        <translation>Edit Text</translation>
+    </message>
+    <message>
+        <source>Finalizar texto</source>
+        <translation>Finish Text</translation>
+    </message>
+    <message>
         <source>Texto</source>
         <translation>Text</translation>
     </message>
@@ -5054,6 +5063,18 @@ Do you want to replace them?</translation>
     <message>
         <source>Suavizado desactivado</source>
         <translation>Antialiasing disabled</translation>
+    </message>
+    <message>
+        <source>Acumulación del relleno</source>
+        <translation>Fill accumulation</translation>
+    </message>
+    <message>
+        <source>Acumular rellenos</source>
+        <translation>Accumulate fills</translation>
+    </message>
+    <message>
+        <source>No acumular rellenos</source>
+        <translation>Don&apos;t accumulate fills</translation>
     </message>
     <message>
         <source>Modo de fusión</source>

@@ -13,7 +13,7 @@ class SelectToolBase : public Tool {
     Q_OBJECT
 public:
     using Tool::Tool;
-    quint32 options() const override { return OptSelectionMode | OptAfterSelect | OptSelectionQuality; }
+    quint64 options() const override { return OptSelectionMode | OptAfterSelect | OptSelectionQuality; }
     bool highlightSelection() const override { return true; }
     void deactivate() override;
     void paintOverlay(QPainter& p) override;
@@ -66,7 +66,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_S); }
-    quint32 options() const override { return SelectToolBase::options() | OptRectMode; }
+    quint64 options() const override { return SelectToolBase::options() | OptRectMode; }
 
 protected:
     bool ellipse() const override { return false; }
@@ -118,7 +118,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_S); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptSelectionMode | OptFloodMode | OptTolerance | OptToleranceAlpha | OptSampling | OptAfterSelect
              | OptSelectionQuality | OptFinish;

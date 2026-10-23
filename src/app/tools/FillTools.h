@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/AppState.h"
+#include "app/tools/EditableSteps.h"
 #include "app/tools/Tool.h"
 #include "core/Commands.h"
 #include "core/LayerEdit.h"
@@ -8,7 +9,7 @@
 #include <QColor>
 
 // Bote de pintura editable: hasta terminar se pueden cambiar la tolerancia, los colores, la
-// trama o el modo, y arrastrar el punto de origen.
+// trama o el modo, y arrastrar el punto de origen. Al volver a uno de sus pasos se retoma.
 class PaintBucketTool : public Tool {
     Q_OBJECT
 public:
@@ -18,10 +19,10 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_F); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptFloodMode | OptTolerance | OptToleranceAlpha | OptSampling | OptBlend | OptFill | OptAntialias
-             | OptSelectionQuality | OptFinish;
+             | OptFillAccumulate | OptSelectionQuality | OptFinish;
     }
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;
@@ -31,18 +32,24 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_edit.isActive(); }
+    void beforeHistoryJump() override;
+    void historyChanged() override;
 
 private:
     void render();
+    void commitStep();
     QPointF handlePos() const;
     bool insideSelection(QPoint pixel) const;
 
     LayerEdit m_edit;
+    StepRecorder m_steps{ToolId::PaintBucket, QStringLiteral("fill-color")};
     QImage m_sample;
     QPoint m_seed;
     bool m_secondary = false;
     bool m_shiftGlobal = false;
     bool m_dragging = false;
+    bool m_moved = false;
+    bool m_restoring = false;
     QPointF m_grab;
 };
 
@@ -90,7 +97,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_G); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptGradient | OptGradientRepeat | OptAntialias | OptBlend | OptSelectionQuality | OptFinish;
     }

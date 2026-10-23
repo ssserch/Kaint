@@ -243,6 +243,29 @@ QRgb replaceInterior(QRgb pixel, QRgb interior, QRgb fill, int coverage)
     return qUnpremultiply(result);
 }
 
+// Cobertura de cada píxel de fuera de la máscara si esta se ensancha medio píxel con suavizado:
+// cada cuarto del píxel cuenta si toca un píxel de la máscara (borde 1/2, esquina 1/4).
+static QImage halfPixelRing(const QImage& m, const QRect& bounds)
+{
+    QImage ring(bounds.size(), QImage::Format_Grayscale8);
+    ring.fill(0);
+    const ConstMask mask(m);
+    auto in = [&](int x, int y) { return x >= 0 && y >= 0 && x < m.width() && y < m.height() && mask.row(y)[x]; };
+    for (int y = bounds.top(); y <= bounds.bottom(); ++y) {
+        uchar* out = ring.scanLine(y - bounds.top());
+        for (int x = bounds.left(); x <= bounds.right(); ++x) {
+            if (in(x, y))
+                continue;
+            int quarters = 0;
+            for (int sy : {-1, 1})
+                for (int sx : {-1, 1})
+                    quarters += in(x + sx, y) || in(x, y + sy) || in(x + sx, y + sy);
+            out[x - bounds.left()] = uchar(std::min(255, quarters * 64));
+        }
+    }
+    return ring;
+}
+
 QRect paintBucket(QImage& layer, const QImage& before, const QImage& sample, QPoint seed, const BucketOptions& o,
                   const Selection& selection)
 {
@@ -253,16 +276,32 @@ QRect paintBucket(QImage& layer, const QImage& before, const QImage& sample, QPo
     const QList<EdgePixel> edge = o.antialias ? antialiasEdge(sample, m) : QList<EdgePixel>();
     for (const EdgePixel& e : edge)
         bounds |= QRect(e.pos, QSize(1, 1));
+    // Acumular: como en Paint.NET, el borde suavizado sale medio píxel de la zona y se mezcla con
+    // lo que había, así que cada relleno repetido engrosa el borde.
+    const bool accumulate = o.antialias && o.accumulate;
+    QImage ring;
+    if (accumulate) {
+        bounds = bounds.adjusted(-1, -1, 1, 1) & layer.rect();
+        ring = halfPixelRing(m, bounds);
+    }
 
     // Relleno (color o trama) y cobertura de cada píxel.
     QImage source(bounds.size(), kLayerFormat);
     Raster::renderFill(source, bounds.topLeft(), o.pattern, o.primary, o.secondary);
     QImage coverage = m.copy(bounds);
     const bool unmix = o.blend == BlendMode::Normal && o.sampleIsLayer;
-    if (!unmix)
+    if (!unmix) {
         for (const EdgePixel& e : edge)
             if (!m.constScanLine(e.pos.y())[e.pos.x()])
                 coverage.scanLine(e.pos.y() - bounds.top())[e.pos.x() - bounds.left()] = uchar(e.coverage);
+        if (accumulate)
+            for (int y = 0; y < coverage.height(); ++y) {
+                uchar* c = coverage.scanLine(y);
+                const uchar* r = ring.constScanLine(y);
+                for (int x = 0; x < coverage.width(); ++x)
+                    c[x] = std::max(c[x], r[x]);
+            }
+    }
     Raster::compositeRegion(layer, before, source, bounds, o.blend, selection, coverage);
 
     if (unmix) {
@@ -275,6 +314,20 @@ QRect paintBucket(QImage& layer, const QImage& before, const QImage& sample, QPo
             const QRgb unmixed = replaceInterior(p, e.interior, f, e.coverage);
             const int weight = sel.isNull() ? 255 : Raster::clipCoverage(sel.row(y)[x], aa);
             layer.setPixel(x, y, lerpStraight(p, unmixed, weight));
+        }
+        // Lo desmezclado no deja halo; encima, el medio píxel de más que acumula.
+        if (accumulate) {
+            for (int y = bounds.top(); y <= bounds.bottom(); ++y) {
+                const uchar* r = ring.constScanLine(y - bounds.top());
+                for (int x = bounds.left(); x <= bounds.right(); ++x) {
+                    const int cov = r[x - bounds.left()];
+                    const int weight = sel.isNull() ? 255 : Raster::clipCoverage(sel.row(y)[x], aa);
+                    if (!cov || !weight)
+                        continue;
+                    const QRgb f = source.pixel(x - bounds.left(), y - bounds.top());
+                    layer.setPixel(x, y, overStraight(layer.pixel(x, y), scaleAlpha(f, cov * weight / 255)));
+                }
+            }
         }
     }
     return bounds;

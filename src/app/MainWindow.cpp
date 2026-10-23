@@ -256,7 +256,7 @@ protected:
         if (hover != m_hoverTab || onClose != m_hoverClose) {
             m_hoverTab = hover;
             m_hoverClose = onClose;
-            setToolTip(onClose ? tr("Cerrar") : QString());
+            setToolTip(onClose ? QCoreApplication::translate("MainWindow", "Cerrar") : QString());
             update();
         }
         QTabBar::mouseMoveEvent(e);

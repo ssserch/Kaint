@@ -19,6 +19,8 @@ public:
     static Selection fromPath(const QPainterPath& path, QSize canvas, bool antialias = true);
     static Selection fromRect(const QRect& rect, QSize canvas);
     static Selection fromMask(const QImage& mask);
+    // Máscara con el contorno suavizado (escalones como diagonales), como el lazo con antidentado.
+    static Selection fromMaskSmooth(const QImage& mask);
 
     bool isEmpty() const { return !d; }
     bool isPathBased() const { return d && d->hasPath; }

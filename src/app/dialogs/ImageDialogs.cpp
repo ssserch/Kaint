@@ -376,14 +376,19 @@ CanvasSizeDialog::CanvasSizeDialog(QSize current, double dpi, QWidget* parent)
         for (int c = 0; c < 3; ++c) {
             auto* b = new QToolButton(anchorBox);
             b->setCheckable(true);
-            b->setFixedSize(32, 32);
+            b->setFixedSize(44, 44);
+            QFont arrows = b->font();
+            arrows.setPointSizeF(arrows.pointSizeF() * 1.5);
+            b->setFont(arrows);
             m_anchor->addButton(b, int(rows[r] | cols[c]));
-            grid->addWidget(b, r, c);
+            grid->addWidget(b, r, c + 1);
             if (r == 1 && c == 1)
                 b->setChecked(true);
         }
     }
-    grid->setColumnStretch(3, 1);
+    // La rejilla, centrada en su recuadro.
+    grid->setColumnStretch(0, 1);
+    grid->setColumnStretch(4, 1);
     connect(m_anchor, &QButtonGroup::idToggled, this, [this](int, bool on) {
         if (on)
             updateArrows();

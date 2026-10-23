@@ -32,6 +32,10 @@ public:
 
     void draw(QPainter& p, const QTransform& imageToView, bool handles) const;
 
+    // Píxel a píxel: sin giro, las esquinas del rectángulo transformado quedan en píxeles enteros
+    // (con giro, solo el desplazamiento).
+    static QTransform snappedToPixels(const QTransform& t, const QRectF& localRect);
+
 private:
     QRectF m_rect;
     QTransform m_transform;

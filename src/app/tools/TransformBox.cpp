@@ -35,6 +35,23 @@ void TransformBox::set(const QRectF& localRect, const QTransform& toCanvas)
     m_transform = toCanvas;
 }
 
+QTransform TransformBox::snappedToPixels(const QTransform& t, const QRectF& local)
+{
+    if (std::abs(t.m12()) > 1e-9 || std::abs(t.m21()) > 1e-9 || local.width() <= 0 || local.height() <= 0)
+        return QTransform(t.m11(), t.m12(), t.m21(), t.m22(), std::round(t.dx()), std::round(t.dy()));
+    const QPointF a = t.map(local.topLeft()), b = t.map(local.bottomRight());
+    auto axis = [](double from, double to) {
+        double x0 = std::round(from), x1 = std::round(to);
+        if (x0 == x1)
+            x1 = x0 + (to >= from ? 1 : -1);
+        return std::pair{x0, x1};
+    };
+    const auto [x0, x1] = axis(a.x(), b.x());
+    const auto [y0, y1] = axis(a.y(), b.y());
+    const double sx = (x1 - x0) / local.width(), sy = (y1 - y0) / local.height();
+    return QTransform(sx, 0, 0, sy, x0 - sx * local.left(), y0 - sy * local.top());
+}
+
 void TransformBox::resetPivot()
 {
     m_localPivot = m_rect.center();

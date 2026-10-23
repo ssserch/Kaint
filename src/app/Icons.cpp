@@ -587,6 +587,33 @@ QIcon toleranceAlpha(bool straight)
     });
 }
 
+QIcon fillAccumulate(bool on)
+{
+    // Dos manchas translúcidas: con acumulación, donde se solapan el color se refuerza.
+    return drawn([on](QPainter& p, QRectF r) {
+        p.setRenderHint(QPainter::Antialiasing);
+        QColor c = accent();
+        c.setAlpha(150);
+        p.setPen(Qt::NoPen);
+        p.setBrush(c);
+        const qreal d = r.width() * 0.62;
+        const QRectF a(r.left() + 1, r.top() + 1, d, d), b(r.right() - 1 - d, r.bottom() - 1 - d, d, d);
+        if (on) {
+            p.drawEllipse(a);
+            p.drawEllipse(b);
+        } else {
+            QPainterPath both;
+            both.addEllipse(a);
+            both.addEllipse(b);
+            p.drawPath(both.simplified());
+        }
+        p.setPen(QPen(fg(), 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(a);
+        p.drawEllipse(b);
+    });
+}
+
 QIcon textAlign(TextAlign align)
 {
     switch (align) {

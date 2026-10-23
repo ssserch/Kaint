@@ -48,6 +48,36 @@ QCursor transformCursor(TransformBox::Mode mode)
 // Mover píxeles seleccionados
 // ---------------------------------------------------------------------------
 
+MoveSelectedTool::MoveSelectedTool(QObject* parent)
+    : Tool(parent)
+{
+    connect(AppState::instance(), &AppState::toolSettingsChanged, this, &MoveSelectedTool::applySampling);
+}
+
+void MoveSelectedTool::applySampling()
+{
+    // El muestreo y la corrección gamma de la barra se aplican al momento a lo que se mueve.
+    Document* doc = document();
+    if (!doc)
+        return;
+    QList<FloatingPtr> floating;
+    if (m_active && m_float)
+        floating << m_float << m_extra;
+    else if (FloatingPtr f = currentFloating(doc))
+        floating << f;
+    const ToolSettings& s = AppState::instance()->tools();
+    for (const FloatingPtr& f : std::as_const(floating)) {
+        if (f->interpolation == s.moveInterpolation && f->gammaCorrect == s.moveGamma)
+            continue;
+        f->interpolation = s.moveInterpolation;
+        f->gammaCorrect = s.moveGamma;
+        const QTransform t = m_active ? m_current : f->transform;
+        const QRect r = f->boundsFor(t);
+        f->render(t, r);
+        doc->notifyPixelsChanged(f->layer.get(), r);
+    }
+}
+
 QIcon MoveSelectedTool::icon() const { return Icons::tool(QStringLiteral("moveselectedpixels"), Icons::theme({"transform-move"})); }
 
 QString MoveSelectedTool::hint() const
@@ -221,7 +251,12 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
         repaint();
         return;
     }
-    const QTransform canvasMap = m_box.update(e.pos, e.modifiers);
+    QTransform canvasMap = m_box.update(e.pos, e.modifiers);
+    // Píxel a píxel (por defecto): nada queda a medio píxel, como la selección.
+    if (!AppState::instance()->tools().selectionAntialias) {
+        canvasMap = TransformBox::snappedToPixels(canvasMap, m_box.localRect());
+        m_box.set(m_box.localRect(), canvasMap);
+    }
     const QTransform t = QTransform::fromTranslate(-m_float->origin.x(), -m_float->origin.y()) * canvasMap;
     applyLive(t);
     if (m_box.mode() == TransformBox::Mode::Rotate)
@@ -439,6 +474,10 @@ void MoveSelectionTool::mouseMove(const ToolEvent& e)
         return;
     }
     m_transform = m_box.update(e.pos, e.modifiers);
+    if (!AppState::instance()->tools().moveSelectionAntialias) {
+        m_transform = TransformBox::snappedToPixels(m_transform, m_box.localRect());
+        m_box.set(m_box.localRect(), m_transform);
+    }
     m_result = m_base.transformed(m_transform, AppState::instance()->tools().moveSelectionAntialias);
     document()->setSelection(m_result);
     if (m_box.mode() == TransformBox::Mode::Rotate)

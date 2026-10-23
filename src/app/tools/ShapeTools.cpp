@@ -215,31 +215,56 @@ QPointF LineTool::moveIcon() const
 
 void LineTool::render()
 {
+    // Cada extremo con su remate: plano, redondo, flecha o flecha rellena (el uno no cambia al
+    // otro). Con flecha rellena el trazo acaba antes, para que no asome por la punta.
     const ToolSettings& s = AppState::instance()->tools();
     const AppState* app = AppState::instance();
     const QColor main = m_secondary ? app->secondary() : app->primary();
     const QColor other = m_secondary ? app->primary() : app->secondary();
     const QPainterPath path = curve();
     const double w = s.brushSize;
-    QPainterPath heads;
-    if (s.startCap == LineCap::Arrow || s.startCap == LineCap::ArrowFilled)
-        heads.addPath(arrowHead(m_pts[0], path.angleAtPercent(0) + 180, w, s.startCap == LineCap::ArrowFilled));
-    if (s.endCap == LineCap::Arrow || s.endCap == LineCap::ArrowFilled)
-        heads.addPath(arrowHead(m_pts[3], path.angleAtPercent(1), w, s.endCap == LineCap::ArrowFilled));
-    const bool roundCaps = s.startCap == LineCap::Round || s.endCap == LineCap::Round;
-    const QRect region = (path.boundingRect() | heads.boundingRect()).adjusted(-w * 2 - 4, -w * 2 - 4, w * 2 + 4, w * 2 + 4).toAlignedRect();
+    const double length = path.length();
+    const double headSize = std::max(8.0, w * 3);
+    double from = 0, to = 1;
+    if (length > 0 && s.startCap == LineCap::ArrowFilled)
+        from = path.percentAtLength(std::min(length / 2, headSize * 0.6));
+    if (length > 0 && s.endCap == LineCap::ArrowFilled)
+        to = path.percentAtLength(std::max(length / 2, length - headSize * 0.6));
+    QPainterPath body = path;
+    if (from > 0 || to < 1) {
+        body = QPainterPath(path.pointAtPercent(from));
+        constexpr int kSteps = 256;
+        for (int i = 1; i <= kSteps; ++i)
+            body.lineTo(path.pointAtPercent(from + (to - from) * i / kSteps));
+    }
+    QPainterPath openHeads, filledHeads, dots;
+    auto cap = [&](LineCap c, const QPointF& at, double angle) {
+        switch (c) {
+        case LineCap::Arrow: openHeads.addPath(arrowHead(at, angle, w, false)); break;
+        case LineCap::ArrowFilled: filledHeads.addPath(arrowHead(at, angle, w, true)); break;
+        case LineCap::Round: dots.addEllipse(at, w / 2, w / 2); break;
+        case LineCap::Flat: break;
+        }
+    };
+    cap(s.startCap, m_pts[0], path.angleAtPercent(0) + 180);
+    cap(s.endCap, m_pts[3], path.angleAtPercent(1));
+    const QRectF extent = path.boundingRect() | openHeads.boundingRect() | filledHeads.boundingRect() | dots.boundingRect();
+    const QRect region = extent.adjusted(-w * 2 - 4, -w * 2 - 4, w * 2 + 4, w * 2 + 4).toAlignedRect();
     renderVector(m_edit, region, [&](QPainter& p, bool coverage) {
         const QBrush brush = coverage ? QBrush(Qt::black) : Raster::patternBrush(s.fill, main, other);
         p.setBrush(Qt::NoBrush);
-        p.setPen(strokePen(brush, roundCaps ? Qt::RoundCap : Qt::FlatCap));
-        p.drawPath(path);
-        if (!heads.isEmpty()) {
-            QPen headPen(brush, w, Qt::SolidLine, Qt::RoundCap, Qt::MiterJoin);
-            p.setPen(headPen);
-            const bool filled = s.startCap == LineCap::ArrowFilled || s.endCap == LineCap::ArrowFilled;
-            p.setBrush(filled ? brush : QBrush(Qt::NoBrush));
-            p.drawPath(heads);
+        p.setPen(strokePen(brush, Qt::FlatCap));
+        p.drawPath(body);
+        if (!openHeads.isEmpty()) {
+            p.setPen(QPen(brush, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(openHeads);
         }
+        p.setPen(Qt::NoPen);
+        p.setBrush(brush);
+        if (!filledHeads.isEmpty())
+            p.drawPath(filledHeads);
+        if (!dots.isEmpty())
+            p.drawPath(dots);
     });
     repaint();
 }

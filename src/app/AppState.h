@@ -45,7 +45,7 @@ struct ToolSettings {
     int spacing = 15;
     bool smoothing = true;
     bool antialias = true;
-    bool selectionAntialias = true;
+    bool selectionAntialias = false;
     bool moveSelectionAntialias = false;
     bool pressure = true;
     BlendMode blend = BlendMode::Normal;
@@ -54,6 +54,8 @@ struct ToolSettings {
     bool toleranceStraight = false;
     bool floodGlobal = false;
     bool sampleImage = false;
+    // Cubo de pintura: rellenar varias veces seguidas acumula los bordes suavizados.
+    bool fillAccumulate = true;
     bool pickerSampleImage = false;
     SelectionMode selectionMode = SelectionMode::Replace;
     RectSelectMode rectMode = RectSelectMode::Normal;

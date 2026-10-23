@@ -175,10 +175,12 @@ QComboBox* ToolOptionsEditor::numberCombo(const QList<double>& presets, double m
     };
     connect(c->lineEdit(), &QLineEdit::textEdited, this, apply);
     connect(c, &QComboBox::activated, this, [c, set](int i) { set(c->itemData(i).toDouble()); });
+    // Como un botón: un clic abre la lista y solo con doble clic se escribe.
+    new ComboClickToOpen(c);
     return c;
 }
 
-void ToolOptionsEditor::add(const QString& key, quint32 option, int section, const QList<QWidget*>& widgets)
+void ToolOptionsEditor::add(const QString& key, quint64 option, int section, const QList<QWidget*>& widgets)
 {
     QList<Item> items;
     for (QWidget* w : widgets)
@@ -186,7 +188,7 @@ void ToolOptionsEditor::add(const QString& key, quint32 option, int section, con
     addItems(key, option, section, items);
 }
 
-void ToolOptionsEditor::addItems(const QString& key, quint32 option, int section, const QList<Item>& items)
+void ToolOptionsEditor::addItems(const QString& key, quint64 option, int section, const QList<Item>& items)
 {
     m_groups.append({key, option, section, items});
 }
@@ -408,7 +410,6 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     });
     m_fontSize = numberCombo(fontPresets(), 1, 2000, 1, [update](double v) { update([v](ToolSettings& s) { s.fontSize = v; }); });
     m_fontSize->setToolTip(tr("Tamaño de letra"));
-    new ComboClickToOpen(m_fontSize);
     m_fontMetric = new ChoiceButton(tr("Unidad del tamaño de letra"), parent);
     m_fontMetric->addChoice(Icons::fontMetric(FontMetric::Points), tr("Puntos (PPP de imagen)"), int(FontMetric::Points),
                             tr("La conversión del tamaño de letra a píxeles utiliza puntos estándar de la industria "
@@ -595,6 +596,12 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_antialias->onChosen = [update](int v) { update([v](ToolSettings& s) { s.antialias = v == 1; }); };
     add(QStringLiteral("aa"), Tool::OptAntialias, Options, {m_antialias});
 
+    m_accumulate = new ChoiceButton(tr("Acumulación del relleno"), parent);
+    m_accumulate->addChoice(Icons::fillAccumulate(true), tr("Acumular rellenos"), 1);
+    m_accumulate->addChoice(Icons::fillAccumulate(false), tr("No acumular rellenos"), 0);
+    m_accumulate->onChosen = [update](int v) { update([v](ToolSettings& s) { s.fillAccumulate = v == 1; }); };
+    add(QStringLiteral("accumulate"), Tool::OptFillAccumulate, Options, {m_accumulate});
+
     m_blend = new ChoiceButton(tr("Modo de fusión"), parent);
     for (BlendMode m : toolBlendModes())
         m_blend->addChoice(Icons::blendMode(), blendModeToolName(m), int(m));
@@ -669,6 +676,7 @@ void ToolOptionsEditor::sync()
     m_flood->setCurrent(s.floodGlobal ? 1 : 0);
     m_toleranceAlpha->setCurrent(s.toleranceStraight ? 1 : 0);
     m_antialias->setCurrent(s.antialias ? 1 : 0);
+    m_accumulate->setCurrent(s.fillAccumulate ? 1 : 0);
     m_selectionQuality->setCurrent(s.selectionAntialias ? 1 : 0);
     m_moveQuality->setCurrent(s.moveSelectionAntialias ? 1 : 0);
     m_gamma->setCurrent(s.moveGamma ? 1 : 0);
@@ -710,7 +718,7 @@ QStringList ToolOptionsBar::order(ToolId id)
         return list("selMode | flood | tolerance tolAlpha | sampling | afterSelect | selQuality");
     case ToolId::MoveSelected: return list("interp | gamma selQuality");
     case ToolId::MoveSelection: return list("selQuality");
-    case ToolId::PaintBucket: return list("flood | fill | tolerance tolAlpha | sampling | aa blend selQuality");
+    case ToolId::PaintBucket: return list("flood | fill | tolerance tolAlpha | sampling | aa accumulate blend selQuality");
     case ToolId::Gradient: return list("gradient.types | gradient.mode gradient.repeat | aa blend selQuality");
     case ToolId::Paintbrush: return list("size hardness spacing fill | smoothing pressure aa blend selQuality");
     case ToolId::Eraser: return list("size hardness spacing | smoothing pressure aa selQuality");
@@ -794,7 +802,7 @@ void ToolOptionsBar::onToolChanged(Tool* tool)
 {
     m_toolButton->setIcon(tool->icon());
     m_toolButton->setToolTip(tool->name());
-    const quint32 opts = tool->options();
+    const quint64 opts = tool->options();
 
     // Orden de Paint.NET para esta herramienta; los grupos que no figuran (o todos, si no hay
     // orden) van detrás con su separador.
@@ -846,7 +854,7 @@ void ToolOptionsBar::updateDependent()
     // Grupos que dependen de otra opción (sin mover nada de sitio: así no se interrumpe un
     // arrastre en curso en otro control).
     const ToolSettings& s = AppState::instance()->tools();
-    const quint32 opts = m_manager->current() ? m_manager->current()->options() : 0;
+    const quint64 opts = m_manager->current() ? m_manager->current()->options() : 0;
     for (const BarGroup& g : std::as_const(m_groups)) {
         if (!g.shown)
             continue;

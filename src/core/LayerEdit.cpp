@@ -13,6 +13,7 @@ void LayerEdit::begin(Document* doc, LayerPtr layer)
     m_doc = doc;
     m_layer = std::move(layer);
     m_before = m_layer->image;
+    m_start = m_before;
     m_layer->image.detach();
 }
 
@@ -24,6 +25,8 @@ void LayerEdit::resume(Document* doc, LayerPtr layer, const QImage& before, cons
     m_doc = doc;
     m_layer = std::move(layer);
     m_before = before;
+    m_start = m_layer->image;
+    m_layer->image.detach();
     m_last = m_total = touched;
 }
 
@@ -53,12 +56,15 @@ void LayerEdit::showOverlay(const QImage& overlay, QPoint pos, BlendMode mode)
     touched(r);
 }
 
-void LayerEdit::showInHistory(const QString& text, const QString& icon)
+void LayerEdit::showInHistory(const QString& text, const QString& icon, QUndoCommand* command)
 {
-    if (!m_doc || m_live)
+    if (!m_doc || m_live) {
+        delete command;
         return;
+    }
     HistoryIcons::registerIcon(text, icon);
-    m_live = new QUndoCommand(text);
+    m_live = command ? command : new QUndoCommand;
+    m_live->setText(text);
     m_doc->undoStack()->push(m_live);
 }
 
@@ -87,7 +93,7 @@ bool LayerEdit::commit(const QString& text, const QString& icon)
     bool changed = false;
     if (liveOnTop()) {
         HistoryIcons::registerIcon(text, icon);
-        auto* patch = new PixelPatchCommand(m_doc, m_layer, m_before, m_total, text, m_live);
+        auto* patch = new PixelPatchCommand(m_doc, m_layer, m_start, m_total, text, m_live);
         changed = !patch->isEmpty();
         if (!changed) {
             dropLive();
@@ -97,7 +103,7 @@ bool LayerEdit::commit(const QString& text, const QString& icon)
         }
     } else {
         dropLive();
-        changed = pushPixelPatch(m_doc, m_layer, m_before, m_total, text, icon);
+        changed = pushPixelPatch(m_doc, m_layer, m_start, m_total, text, icon);
     }
     reset();
     return changed;
@@ -107,7 +113,7 @@ void LayerEdit::cancel()
 {
     if (!m_doc)
         return;
-    Raster::copyRect(m_layer->image, m_before, m_total);
+    Raster::copyRect(m_layer->image, m_start, m_total);
     m_doc->notifyPixelsChanged(m_layer.get(), m_total);
     dropLive();
     reset();
@@ -118,6 +124,7 @@ void LayerEdit::reset()
     m_doc = nullptr;
     m_layer.reset();
     m_before = QImage();
+    m_start = QImage();
     m_last = QRect();
     m_total = QRect();
     m_live = nullptr;

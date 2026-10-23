@@ -99,7 +99,7 @@ ToolSettings AppState::toolDefaults() const
     t.spacing = num("spacing", t.spacing);
     t.smoothing = num("smoothing", t.smoothing);
     t.antialias = num("antialias", t.antialias);
-    t.selectionAntialias = num("selectionAntialias", t.selectionAntialias);
+    t.selectionAntialias = num("selectionQuality", t.selectionAntialias);
     t.moveSelectionAntialias = num("moveSelectionAntialias", t.moveSelectionAntialias);
     t.pressure = num("pressure", t.pressure);
     t.blend = BlendMode(num("blend", int(t.blend)));
@@ -129,6 +129,7 @@ ToolSettings AppState::toolDefaults() const
     t.pickerSize = num("pickerSize", t.pickerSize);
     t.pickerAfter = PickerAfter(num("pickerAfter", int(t.pickerAfter)));
     t.sampleImage = num("floodSampleImage", t.sampleImage);
+    t.fillAccumulate = num("fillAccumulate", t.fillAccumulate);
     t.pickerSampleImage = num("pickerSampleImage", t.pickerSampleImage);
     t.recolorSampling = RecolorSampling(num("recolorSampling", int(t.recolorSampling)));
     t.shape = ShapeType(num("shape", int(t.shape)));
@@ -151,7 +152,8 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.setValue(QStringLiteral("spacing"), t.spacing);
     s.setValue(QStringLiteral("smoothing"), t.smoothing);
     s.setValue(QStringLiteral("antialias"), t.antialias);
-    s.setValue(QStringLiteral("selectionAntialias"), t.selectionAntialias);
+    s.setValue(QStringLiteral("selectionQuality"), t.selectionAntialias);
+    s.remove(QStringLiteral("selectionAntialias"));
     s.setValue(QStringLiteral("moveSelectionAntialias"), t.moveSelectionAntialias);
     s.setValue(QStringLiteral("pressure"), t.pressure);
     s.setValue(QStringLiteral("blend"), int(t.blend));
@@ -181,6 +183,7 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.setValue(QStringLiteral("pickerSize"), t.pickerSize);
     s.setValue(QStringLiteral("pickerAfter"), int(t.pickerAfter));
     s.setValue(QStringLiteral("floodSampleImage"), t.sampleImage);
+    s.setValue(QStringLiteral("fillAccumulate"), t.fillAccumulate);
     s.setValue(QStringLiteral("pickerSampleImage"), t.pickerSampleImage);
     s.remove(QStringLiteral("sampleImage"));
     s.setValue(QStringLiteral("recolorSampling"), int(t.recolorSampling));

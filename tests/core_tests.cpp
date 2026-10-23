@@ -514,6 +514,7 @@ static void testBucketHalo()
     FloodFill::BucketOptions o;
     o.tolerance = 0.5;
     o.primary = QColor(255, 0, 0);
+    o.accumulate = false;
     QImage layer = before.copy();
     const QRect changed = FloodFill::paintBucket(layer, before, before, QPoint(60, 50), o, Selection());
     CHECK(!changed.isEmpty());
@@ -543,6 +544,83 @@ static void testBucketHalo()
     QImage multiplied = before.copy();
     FloodFill::paintBucket(multiplied, before, before, QPoint(60, 50), o, Selection());
     CHECK(halo(multiplied) < halo(hard));
+
+    // Acumulando tampoco queda halo: el medio píxel de más se mezcla sobre lo ya desmezclado.
+    o.blend = BlendMode::Normal;
+    o.accumulate = true;
+    QImage accumulated = before.copy();
+    FloodFill::paintBucket(accumulated, before, before, QPoint(60, 50), o, Selection());
+    std::printf("  halo acumulando: %d\n", halo(accumulated));
+    CHECK(halo(accumulated) <= 24);
+}
+
+// Rellenos acumulados: como en Paint.NET, cada clic del cubo con suavizado sale medio píxel de la
+// zona, así que repetirlo engrosa una silueta; sin acumular no crece. Acumular tampoco deja halo.
+static void testBucketAccumulate()
+{
+    QImage silhouette(80, 80, kLayerFormat);
+    silhouette.fill(kTransparent);
+    {
+        QImage pm(silhouette.size(), QImage::Format_ARGB32_Premultiplied);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::black);
+        p.drawEllipse(QPointF(40, 40), 15.3, 15.3);
+        p.end();
+        silhouette = pm.convertToFormat(kLayerFormat);
+    }
+    auto opaque = [](const QImage& img) {
+        int n = 0;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x)
+                n += qAlpha(img.pixel(x, y)) >= 128;
+        return n;
+    };
+    auto clicks = [&](bool accumulate, int times) {
+        FloodFill::BucketOptions o;
+        o.primary = Qt::black;
+        o.accumulate = accumulate;
+        QImage layer = silhouette;
+        for (int i = 0; i < times; ++i) {
+            const QImage before = layer;
+            FloodFill::paintBucket(layer, before, before, QPoint(40, 40), o, Selection());
+        }
+        return layer;
+    };
+    const int start = opaque(silhouette);
+    const int once = opaque(clicks(true, 1)), many = opaque(clicks(true, 6));
+    std::printf("  silueta acumulada: %d → %d → %d píxeles\n", start, once, many);
+    CHECK(once >= start && many > once + 150);
+    CHECK(opaque(clicks(false, 6)) == opaque(clicks(false, 1)));
+    // Un píxel lejano no cambia: crece medio píxel por clic, no se desborda.
+    CHECK(qAlpha(clicks(true, 6).pixel(2, 2)) == 0);
+}
+
+// Contorno suavizado de una máscara (varita mágica con antidentado): escalones como diagonales.
+static void testSmoothMaskSelection()
+{
+    QImage mask(40, 40, QImage::Format_Alpha8);
+    mask.fill(0);
+    for (int y = 10; y < 30; ++y)
+        for (int x = 10; x < 10 + (y - 10) + 1; ++x)
+            mask.scanLine(y)[x] = 255;
+    const Selection pixel = Selection::fromMask(mask);
+    const Selection smooth = Selection::fromMaskSmooth(mask);
+    CHECK(!pixel.isPathBased() && smooth.isPathBased());
+    int partial = 0;
+    long area = 0, smoothArea = 0;
+    for (int y = 0; y < 40; ++y)
+        for (int x = 0; x < 40; ++x) {
+            const int c = smooth.coverage(x, y);
+            partial += c > 0 && c < 255;
+            area += pixel.coverage(x, y);
+            smoothArea += c;
+        }
+    CHECK(partial > 15);
+    CHECK(std::abs(smoothArea - area) < area / 10);
+    CHECK(smooth.coverage(12, 25) == 255 && smooth.coverage(25, 12) == 0);
 }
 
 // Capas con alfa directo (como ColorBgra de Paint.NET).
@@ -1074,6 +1152,8 @@ int main(int argc, char** argv)
     testSaveOptions();
     testStraightAlpha();
     testBucketHalo();
+    testBucketAccumulate();
+    testSmoothMaskSelection();
     testGifAndIco();
     testPdn();
     testPlugins();

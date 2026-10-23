@@ -41,8 +41,8 @@ runs on Windows 10 and 11, and it should feel like home if you come from Paint.N
     </td>
     <td width="50%" valign="top">
       <h4>Editable history</h4>
-      Click through the history like in Paint.NET. Gradients, lines and shapes stay editable when
-      you go back to one of their steps.
+      Click through the history like in Paint.NET. Gradients, lines, shapes, text and paint bucket
+      fills stay editable when you go back to one of their steps.
     </td>
   </tr>
   <tr>
@@ -155,13 +155,13 @@ from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to d
 | Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) | `--zip` |
 | Every option | `--help` | `--help` |
 
-## 📄 License
+## License
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
 `src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, and `data/icons/` bundles KDE's
 Breeze icons (LGPL-3.0-or-later).
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
 LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the

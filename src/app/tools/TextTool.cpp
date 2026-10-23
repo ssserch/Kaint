@@ -3,6 +3,7 @@
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
+#include "app/tools/EditableSteps.h"
 #include "app/tools/Handles.h"
 #include "app/tools/ShapeTools.h"
 #include "core/Raster.h"
@@ -14,6 +15,7 @@
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QPainter>
+#include <QUndoStack>
 
 #include <cmath>
 
@@ -41,6 +43,43 @@ int wordLeft(const QString& s, int col)
     return col;
 }
 
+// Texto, posición y opciones con los que se escribió.
+struct TextState : ToolStepState {
+    QPointF pos;
+    QStringList lines;
+};
+
+// Paso del texto ("Texto", "Editar texto"): es el paso en vivo mientras se escribe y, al
+// registrarlo, guarda el estado y la capa de antes para seguir editando al volver a él.
+class TextStepCommand : public QUndoCommand, public EditableStep, public HistoryStep {
+public:
+    ToolId tool() const override { return ToolId::Text; }
+    void set(LayerPtr layer, std::shared_ptr<const TextState> state, const QImage& base, const QRect& area)
+    {
+        m_layer = std::move(layer);
+        m_state = std::move(state);
+        m_base = base;
+        m_area = area;
+    }
+    bool editable() const { return m_state && !m_base.isNull(); }
+    const LayerPtr& layer() const { return m_layer; }
+    const TextState& state() const { return *m_state; }
+    const QImage& base() const { return m_base; }
+    QRect area() const { return m_area; }
+    qint64 memoryBytes() const override { return 0; }
+    void releaseMemory() override
+    {
+        m_base = QImage();
+        m_released = true;
+    }
+
+private:
+    LayerPtr m_layer;
+    std::shared_ptr<const TextState> m_state;
+    QImage m_base;
+    QRect m_area;
+};
+
 } // namespace
 
 TextTool::TextTool(QObject* parent)
@@ -52,8 +91,8 @@ TextTool::TextTool(QObject* parent)
         repaint();
     });
     auto refresh = [this] {
-        if (m_edit.isActive())
-            render();
+        if (m_edit.isActive() && !m_restoring)
+            changed();
     };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, refresh);
     connect(AppState::instance(), &AppState::colorsChanged, this, refresh);
@@ -157,6 +196,7 @@ void TextTool::mousePress(const ToolEvent& e)
         return;
     finish();
     m_edit.begin(doc, doc->activeLayerPtr());
+    m_resumed = false;
     m_pos = QPointF(std::round(e.pos.x()), std::round(e.pos.y()));
     m_lines = QStringList{QString()};
     m_line = m_col = 0;
@@ -186,7 +226,7 @@ void TextTool::mouseRelease(const ToolEvent&)
     if (m_dragging) {
         m_dragging = false;
         m_pos = QPointF(std::round(m_pos.x()), std::round(m_pos.y()));
-        render();
+        changed();
     }
 }
 
@@ -207,8 +247,7 @@ void TextTool::insertText(const QString& text)
         m_lines.insert(++m_line, parts[i]);
     m_col = int(m_lines[m_line].size());
     m_lines[m_line] += tail;
-    render();
-    m_edit.showInHistory(name(), QStringLiteral("draw-text"));
+    changed();
 }
 
 bool TextTool::keyPress(QKeyEvent* e)
@@ -231,7 +270,7 @@ bool TextTool::keyPress(QKeyEvent* e)
         m_lines[m_line].truncate(m_col);
         ++m_line;
         m_col = 0;
-        render();
+        changed();
         return true;
     case Qt::Key_Backspace:
         if (m_col > 0) {
@@ -245,7 +284,7 @@ bool TextTool::keyPress(QKeyEvent* e)
             m_lines[m_line - 1] += cur;
             m_lines.removeAt(m_line--);
         }
-        render();
+        changed();
         return true;
     case Qt::Key_Delete:
         if (m_col < cur.size()) {
@@ -257,7 +296,7 @@ bool TextTool::keyPress(QKeyEvent* e)
             cur += m_lines[m_line + 1];
             m_lines.removeAt(m_line + 1);
         }
-        render();
+        changed();
         return true;
     case Qt::Key_Left:
         if (m_col > 0)
@@ -421,23 +460,136 @@ void TextTool::paintOverlay(QPainter& p)
     Handles::draw(p, moveIcon(), Handles::Shape::Move);
 }
 
+void TextTool::changed()
+{
+    // Lo escrito aparece en el historial al momento ("Editar texto" si se retomó).
+    render();
+    if ((m_lines.join(QString()).isEmpty() && !m_resumed) || m_edit.liveStep())
+        return;
+    m_pushing = true;
+    m_edit.showInHistory(m_resumed ? tr("Editar texto") : name(), QStringLiteral("draw-text"), new TextStepCommand);
+    m_pushing = false;
+}
+
+bool TextTool::commitLive()
+{
+    // Registra el paso en vivo con el estado para retomarlo; la edición sigue abierta desde él.
+    Document* doc = m_edit.document();
+    const LayerPtr layer = m_edit.layer();
+    const QImage base = m_edit.before();
+    const QRect area = m_edit.touchedArea();
+    QString text = m_resumed ? tr("Editar texto") : name();
+    if (auto* step = dynamic_cast<TextStepCommand*>(m_edit.liveStep())) {
+        auto st = std::make_shared<TextState>();
+        st->settings = AppState::instance()->tools();
+        st->primary = AppState::instance()->primary();
+        st->secondary = AppState::instance()->secondary();
+        st->pos = m_pos;
+        st->lines = m_lines;
+        step->set(layer, st, base, area);
+        text = step->text();
+    }
+    // Sin paso en vivo (retomado sin cambios) solo se registra lo que haya cambiado.
+    m_pushing = true;
+    const bool done = m_edit.commit(text, QStringLiteral("draw-text"));
+    m_pushing = false;
+    m_edit.resume(doc, layer, base, area);
+    m_resumed = true;
+    return done;
+}
+
+void TextTool::leave()
+{
+    m_edit.detach();
+    m_lines.clear();
+    m_preedit.clear();
+    m_dragging = false;
+    m_resumed = false;
+    m_blink.stop();
+    setInputMethodEnabled(false);
+    emit hintChanged(hint());
+    repaint();
+}
+
 void TextTool::finish()
 {
     if (!m_edit.isActive())
         return;
     m_preedit.clear();
     m_dragging = false;
-    if (m_lines.join(QString()).trimmed().isEmpty())
+    if (m_lines.join(QString()).trimmed().isEmpty() && !m_resumed) {
         m_edit.cancel();
-    else {
+    } else {
         render();
-        m_edit.commit(name(), QStringLiteral("draw-text"));
+        Document* doc = m_edit.document();
+        if (commitLive()) {
+            const QString text = tr("Finalizar texto");
+            HistoryIcons::registerIcon(text, QStringLiteral("draw-text"));
+            m_pushing = true;
+            doc->undoStack()->push(new QUndoCommand(text));
+            m_pushing = false;
+        }
     }
-    m_lines.clear();
-    m_blink.stop();
-    setInputMethodEnabled(false);
+    leave();
+}
+
+void TextTool::beforeHistoryJump()
+{
+    // Lo escrito se registra; el historial decide si se retoma.
+    if (!m_edit.liveStep())
+        return;
+    m_preedit.clear();
+    render();
+    commitLive();
+}
+
+void TextTool::historyChanged()
+{
+    if (m_pushing)
+        return;
+    Document* doc = document();
+    const QUndoStack* stack = doc ? doc->undoStack() : nullptr;
+    const auto* step = stack && stack->index() > 0 ? dynamic_cast<const TextStepCommand*>(stack->command(stack->index() - 1))
+                                                   : nullptr;
+    if (!step || !step->editable()) {
+        if (m_edit.isActive())
+            leave();
+        return;
+    }
+    // Se vuelve a un texto: su fuente, opciones y colores (que pasan a ser los actuales), y el
+    // cursor al final para seguir escribiendo.
+    const TextState& st = step->state();
+    m_restoring = true;
+    AppState::instance()->updateTools([&st](ToolSettings& s) {
+        const ToolSettings& o = st.settings;
+        s.fontFamily = o.fontFamily;
+        s.fontSize = o.fontSize;
+        s.bold = o.bold;
+        s.italic = o.italic;
+        s.underline = o.underline;
+        s.strikeout = o.strikeout;
+        s.textAlign = o.textAlign;
+        s.fontMetric = o.fontMetric;
+        s.textRendering = o.textRendering;
+        s.antialias = o.antialias;
+        s.blend = o.blend;
+    });
+    AppState::instance()->setPrimary(st.primary);
+    AppState::instance()->setSecondary(st.secondary);
+    m_restoring = false;
+    m_edit.resume(doc, step->layer(), step->base(), step->area());
+    m_pos = st.pos;
+    m_lines = st.lines.isEmpty() ? QStringList{QString()} : st.lines;
+    m_line = int(m_lines.size()) - 1;
+    m_col = int(m_lines[m_line].size());
+    m_preedit.clear();
+    m_dragging = false;
+    m_resumed = true;
+    m_caretOn = true;
+    m_blink.start();
+    setInputMethodEnabled(true);
+    render();
     emit hintChanged(hint());
-    repaint();
 }
 
 void TextTool::deactivate()

@@ -29,6 +29,14 @@ bool isFinishKey(QKeyEvent* e)
     return e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter || e->key() == Qt::Key_Escape;
 }
 
+// Paso del bote de pintura: el punto de origen y la muestra (si era de la imagen).
+struct BucketState : ToolStepState {
+    QPoint seed;
+    bool swapped = false;
+    bool shiftGlobal = false;
+    QImage sample;
+};
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -39,8 +47,10 @@ PaintBucketTool::PaintBucketTool(QObject* parent)
     : Tool(parent)
 {
     auto refresh = [this] {
-        if (m_edit.isActive())
-            render();
+        if (!m_edit.isActive() || m_restoring)
+            return;
+        render();
+        m_steps.changed();
     };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, refresh);
     connect(AppState::instance(), &AppState::colorsChanged, this, refresh);
@@ -74,6 +84,7 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
         return;
     if (m_edit.isActive() && e.button == Qt::LeftButton && Handles::hit(e.viewPos, handlePos(), 11)) {
         m_dragging = true;
+        m_moved = false;
         m_grab = QPointF(m_seed) + QPointF(0.5, 0.5) - e.pos;
         return;
     }
@@ -86,8 +97,11 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
     m_secondary = e.button == Qt::RightButton;
     m_shiftGlobal = e.modifiers & Qt::ShiftModifier;
     m_edit.begin(doc, doc->activeLayerPtr());
+    m_steps.start(m_edit);
     render();
-    m_edit.showInHistory(name(), QStringLiteral("fill-color"));
+    // El relleno entra en el historial al momento; los cambios posteriores son "Editar…".
+    m_steps.changed();
+    commitStep();
     emit hintChanged(hint());
 }
 
@@ -102,13 +116,18 @@ void PaintBucketTool::mouseMove(const ToolEvent& e)
     const QPoint p(int(std::floor(at.x())), int(std::floor(at.y())));
     if (p != m_seed && document()->rect().contains(p) && insideSelection(p)) {
         m_seed = p;
+        m_moved = true;
         render();
+        m_steps.changed();
     }
 }
 
 void PaintBucketTool::mouseRelease(const ToolEvent&)
 {
+    if (m_dragging && m_moved)
+        commitStep();
     m_dragging = false;
+    m_moved = false;
 }
 
 void PaintBucketTool::render()
@@ -126,6 +145,7 @@ void PaintBucketTool::render()
     o.primary = m_secondary ? app->secondary() : app->primary();
     o.secondary = m_secondary ? app->primary() : app->secondary();
     o.sampleIsLayer = !s.sampleImage;
+    o.accumulate = s.fillAccumulate;
     m_edit.restorePrevious();
     const QRect r = FloodFill::paintBucket(m_edit.image(), m_edit.before(), m_sample, m_seed, o, document()->selection());
     m_edit.touched(r);
@@ -152,12 +172,76 @@ void PaintBucketTool::paintOverlay(QPainter& p)
     Handles::draw(p, handlePos(), Handles::Shape::Move);
 }
 
+void PaintBucketTool::commitStep()
+{
+    auto st = std::make_shared<BucketState>();
+    st->settings = AppState::instance()->tools();
+    st->primary = AppState::instance()->primary();
+    st->secondary = AppState::instance()->secondary();
+    st->seed = m_seed;
+    st->swapped = m_secondary;
+    st->shiftGlobal = m_shiftGlobal;
+    if (st->settings.sampleImage)
+        st->sample = m_sample;
+    m_steps.commit(m_edit, name(), tr("Editar cubo de pintura"), st);
+}
+
 void PaintBucketTool::finish()
 {
     if (!m_edit.isActive())
         return;
-    m_edit.commit(name(), QStringLiteral("fill-color"));
+    commitStep();
+    m_steps.finish(m_edit, tr("Finalizar cubo de pintura"));
     m_sample = QImage();
+    m_dragging = false;
+    emit hintChanged(hint());
+    repaint();
+}
+
+void PaintBucketTool::beforeHistoryJump()
+{
+    // Lo pendiente (colores u opciones cambiados) se registra; el historial decide si se retoma.
+    commitStep();
+}
+
+void PaintBucketTool::historyChanged()
+{
+    if (m_steps.pushing())
+        return;
+    const ToolStepCommand* step = m_steps.top(document());
+    if (!step) {
+        if (m_edit.isActive()) {
+            m_steps.leave(m_edit);
+            m_sample = QImage();
+            m_dragging = false;
+            emit hintChanged(hint());
+            repaint();
+        }
+        return;
+    }
+    // Se vuelve a un relleno: sus opciones y colores (que pasan a ser los actuales) y su origen.
+    const auto* st = static_cast<const BucketState*>(step->state());
+    m_restoring = true;
+    AppState::instance()->updateTools([st](ToolSettings& s) {
+        const ToolSettings& o = st->settings;
+        s.tolerance = o.tolerance;
+        s.toleranceStraight = o.toleranceStraight;
+        s.floodGlobal = o.floodGlobal;
+        s.sampleImage = o.sampleImage;
+        s.antialias = o.antialias;
+        s.fillAccumulate = o.fillAccumulate;
+        s.blend = o.blend;
+        s.fill = o.fill;
+        s.selectionAntialias = o.selectionAntialias;
+    });
+    AppState::instance()->setPrimary(st->primary);
+    AppState::instance()->setSecondary(st->secondary);
+    m_restoring = false;
+    m_steps.resume(m_edit, document(), step);
+    m_seed = st->seed;
+    m_secondary = st->swapped;
+    m_shiftGlobal = st->shiftGlobal;
+    m_sample = st->sample.isNull() ? m_edit.before() : st->sample;
     m_dragging = false;
     emit hintChanged(hint());
     repaint();

@@ -10,13 +10,13 @@
 class MoveSelectedTool : public Tool {
     Q_OBJECT
 public:
-    using Tool::Tool;
+    explicit MoveSelectedTool(QObject* parent = nullptr);
     ToolId id() const override { return ToolId::MoveSelected; }
     QString name() const override { return tr("Mover píxeles seleccionados"); }
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
-    quint32 options() const override { return OptInterpolation | OptGamma | OptSelectionQuality | OptFinish; }
+    quint64 options() const override { return OptInterpolation | OptGamma | OptSelectionQuality | OptFinish; }
     QCursor cursor() const override { return Qt::SizeAllCursor; }
 
     void mousePress(const ToolEvent& e) override;
@@ -35,6 +35,7 @@ private:
     FloatingPtr lift(bool keepCopy, LayerPtr layer = nullptr);
     void restoreUnmoved();
     void endMove();
+    void applySampling();
     void boxForCurrentState(TransformBox& box) const;
     void syncBox();
     void applyLive(const QTransform& t);
@@ -65,7 +66,7 @@ public:
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
     QCursor cursor() const override { return Qt::SizeAllCursor; }
     bool highlightSelection() const override { return true; }
-    quint32 options() const override { return OptMoveSelectionQuality | OptFinish; }
+    quint64 options() const override { return OptMoveSelectionQuality | OptFinish; }
 
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;

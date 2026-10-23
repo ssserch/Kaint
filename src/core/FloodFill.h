@@ -66,6 +66,8 @@ struct BucketOptions {
     QColor primary = Qt::black;
     QColor secondary = Qt::white;
     bool sampleIsLayer = true;
+    // Sin acumular, los bordes suavizados se rehacen en vez de mezclarse con el relleno anterior.
+    bool accumulate = true;
 };
 
 // Bote de pintura: restaura 'before' y rellena en 'layer' (alfa directo) la zona de 'sample'

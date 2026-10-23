@@ -73,11 +73,11 @@ class ToolOptionsEditor : public QObject {
 public:
     struct Item {
         QWidget* widget;
-        quint32 mask;
+        quint64 mask;
     };
     struct Group {
         QString key;
-        quint32 option;
+        quint64 option;
         int section;
         QList<Item> items;
     };
@@ -95,8 +95,8 @@ private:
     QWidget* steppers(QWidget* inner, const std::function<void(int)>& step);
     QComboBox* numberCombo(const QList<double>& presets, double min, double max, int decimals,
                            const std::function<void(double)>& set);
-    void add(const QString& key, quint32 option, int section, const QList<QWidget*>& widgets);
-    void addItems(const QString& key, quint32 option, int section, const QList<Item>& items);
+    void add(const QString& key, quint64 option, int section, const QList<QWidget*>& widgets);
+    void addItems(const QString& key, quint64 option, int section, const QList<Item>& items);
 
     ToolSettingsModel* m_model;
     QWidget* m_parent;
@@ -132,6 +132,7 @@ private:
     ChoiceButton* m_textRendering;
     BarSlider* m_tolerance;
     ChoiceButton* m_toleranceAlpha;
+    ChoiceButton* m_accumulate;
     ChoiceButton* m_flood;
     ChoiceButton* m_sampling;
     ChoiceButton* m_pickerSampling;
@@ -168,7 +169,7 @@ private:
     QToolButton* m_toolButton;
     struct Shown {
         QAction* action;
-        quint32 mask;
+        quint64 mask;
     };
     struct BarGroup {
         QString key;

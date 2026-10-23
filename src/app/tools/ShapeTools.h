@@ -24,7 +24,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_O); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptBrushSize | OptCurve | OptDash | OptLineCaps | OptAntialias | OptBlend | OptFill | OptSelectionQuality
              | OptFinish;
@@ -71,7 +71,7 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_O); }
-    quint32 options() const override
+    quint64 options() const override
     {
         return OptShape | OptShapeStyle | OptBrushSize | OptCornerRadius | OptDash | OptAntialias | OptBlend | OptFill
              | OptSelectionQuality | OptFinish;

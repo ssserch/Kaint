@@ -24,6 +24,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
 #include <QToolButton>
@@ -97,10 +98,12 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
     m_resolution = new QDoubleSpinBox(this);
     m_resolution->setRange(0.01, 99999);
     m_resolution->setDecimals(2);
-    m_resolution->setValue(dpi);
     m_resolutionUnit = new QComboBox(this);
     m_resolutionUnit->addItem(tr("píxeles/pulgada"));
     m_resolutionUnit->addItem(tr("píxeles/centímetro"));
+    // Píxeles/centímetro por defecto; se recuerda la última unidad elegida.
+    m_resolutionUnit->setCurrentIndex(QSettings().value(QStringLiteral("dialogs/resolutionUnit"), 1).toInt() == 0 ? 0 : 1);
+    m_resolution->setValue(m_resolutionUnit->currentIndex() == 1 ? dpi / 2.54 : dpi);
     auto* resRow = new QHBoxLayout;
     resRow->addWidget(m_resolution, 1);
     resRow->addWidget(m_resolutionUnit);
@@ -124,6 +127,7 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
         m_updating = true;
         m_resolution->setValue(unit == 1 ? m_resolution->value() / 2.54 : m_resolution->value() * 2.54);
         m_updating = false;
+        QSettings().setValue(QStringLiteral("dialogs/resolutionUnit"), unit);
         syncPrint();
     });
     connect(m_keepAspect, &QCheckBox::toggled, this, [this](bool on) {

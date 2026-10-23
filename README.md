@@ -30,8 +30,8 @@ come from Paint.NET.
   and native plugins with a stable C API.
 - **Formats**: OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA,
   animated GIF and ICO. Opens Paint.NET **.pdn** files.
-- **Themes**: Paint.NET light and dark, follow the system, the real KDE theme (the Windows style
-  on Windows), or your own custom theme (colors, canvas background image, toolbar layout).
+- **Themes**: Paint.NET light and dark, follow the system, the real KDE theme (on Linux), or your
+  own custom theme (colors, canvas background image, toolbar layout).
 - **Recovery copies** of unsaved images, in case Kaint closes unexpectedly.
 - English and Spanish.
 
@@ -64,7 +64,9 @@ libgdiplus` (Arch) or `qt6-image-formats-plugins kimageformat6-plugins mono-deve
 Download the source code and double-click `build.bat` (or run `build.bat --install`). It builds
 Kaint and installs it in `%LOCALAPPDATA%\Programs\Kaint` with a Start menu entry; uninstall it
 from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to download them
-(about 1.5 GB) into `%LOCALAPPDATA%\Kaint\toolchain`. `build.bat --help` lists every option.
+(about 1.5 GB) into `%LOCALAPPDATA%\Kaint\toolchain`. `build.bat --zip` makes a portable
+`Kaint-<version>-windows-x64.zip` (unzip it and run `Kaint\bin\kaint.exe`), and `build.bat --help`
+lists every option.
 
 ## Contributing
 

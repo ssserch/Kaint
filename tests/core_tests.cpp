@@ -77,6 +77,50 @@ static void testStrokeAndUndo()
     CHECK(!sameImage(doc->layer(0)->image, original));
 }
 
+// Lápiz: tramos inclinados hacia la izquierda y hacia arriba sin huecos (antes se perdían los
+// píxeles de la fila y la columna del final de cada tramo).
+static void testPencilLines()
+{
+    std::unique_ptr<Document> doc(Document::createBlank(QSize(60, 60), Qt::white));
+    StrokeEngine stroke;
+    StrokeParams p;
+    p.pixelExact = true;
+    p.antialias = false;
+    p.smoothing = false;
+    p.diameter = 1;
+    p.color = Qt::red;
+    const QList<QPoint> pts{{50, 50}, {47, 48}, {40, 45}, {36, 40}, {35, 33}, {30, 31}, {22, 28}, {20, 20}, {28, 14}, {12, 9}, {5, 2}};
+    stroke.begin(doc.get(), doc->layerPtr(0), p);
+    stroke.moveTo(QPointF(pts.first()) + QPointF(0.5, 0.5), 1.0);
+    for (const QPoint& pt : pts)
+        stroke.lineTo(QPointF(pt) + QPointF(0.5, 0.5), 1.0);
+    CHECK(stroke.end(QStringLiteral("Lápiz")));
+    const QImage& img = doc->layer(0)->image;
+    int gaps = 0;
+    for (int i = 1; i < pts.size(); ++i) {
+        // Bresenham, como el lápiz.
+        int x0 = pts[i - 1].x(), y0 = pts[i - 1].y();
+        const int x1 = pts[i].x(), y1 = pts[i].y();
+        const int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        int err = dx + dy;
+        for (;;) {
+            gaps += QColor(img.pixel(x0, y0)) != QColor(Qt::red);
+            if (x0 == x1 && y0 == y1)
+                break;
+            const int e2 = 2 * err;
+            if (e2 >= dy) {
+                err += dy;
+                x0 += sx;
+            }
+            if (e2 <= dx) {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+    CHECK(gaps == 0);
+}
+
 static void testSelection()
 {
     const QSize canvas(100, 100);
@@ -345,6 +389,28 @@ static void testBlendModes()
     CHECK(qAlpha(blendPixel(gray, qRgba(10, 10, 10, 128), BlendMode::Glow)) == 255);
     CHECK(blendPixel(gray, qRgba(0, 0, 0, 0), BlendMode::Overwrite) == 0);
     CHECK(layerBlendModes().size() == 14 && toolBlendModes().size() == 15);
+}
+
+// Reducir con la herramienta Mover: con el prefiltro, unas rayas de 1 píxel quedan grises (sin
+// el, la bicúbica se salta píxeles y sale pixelado).
+static void testShrinkTransform()
+{
+    QImage stripes(256, 256, QImage::Format_ARGB32);
+    for (int y = 0; y < 256; ++y)
+        for (int x = 0; x < 256; ++x)
+            stripes.setPixel(x, y, (x + y / 3) % 2 ? qRgb(255, 255, 255) : qRgb(0, 0, 0));
+    QTransform t = QTransform::fromScale(0.125, 0.125) * QTransform().rotate(7);
+    const QImage src = Resample::prefiltered(stripes, &t);
+    CHECK(src.width() < 64 && src.height() < 64);
+    QImage out(48, 48, QImage::Format_ARGB32_Premultiplied);
+    out.fill(Qt::transparent);
+    Resample::drawTransformed(out, src, t, Resample::Interpolation::Bicubic, out.rect());
+    int extreme = 0;
+    for (int y = 10; y < 26; ++y)
+        for (int x = 8; x < 24; ++x)
+            if (qAlpha(out.pixel(x, y)) == 255 && (qGray(out.pixel(x, y)) < 90 || qGray(out.pixel(x, y)) > 165))
+                ++extreme;
+    CHECK(extreme == 0);
 }
 
 static void testResample()
@@ -989,6 +1055,7 @@ int main(int argc, char** argv)
     QGuiApplication::setOrganizationName(QStringLiteral("KaintCoreTest"));
     QGuiApplication::setApplicationName(QStringLiteral("KaintCoreTest"));
     testStrokeAndUndo();
+    testPencilLines();
     testSelection();
     testFloodFill();
     testOraRoundTrip();
@@ -998,6 +1065,7 @@ int main(int argc, char** argv)
     testMovePixels();
     testBlendModes();
     testResample();
+    testShrinkTransform();
     testPaletteAndJson();
     testSaveOptions();
     testStraightAlpha();

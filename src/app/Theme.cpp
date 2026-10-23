@@ -19,6 +19,7 @@
 #include <QStyleFactory>
 #include <QStyleHints>
 #include <QTimer>
+#include <QWidget>
 #ifdef KAINT_HAVE_DBUS
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -26,6 +27,11 @@
 #endif
 
 #include <algorithm>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+#endif
 
 namespace Theme {
 
@@ -809,6 +815,40 @@ Scheme current()
 Spec active()
 {
     return g_current == Scheme::Kde ? fromPalette(QApplication::palette()) : g_active;
+}
+
+QColor titleBarColor()
+{
+#ifdef Q_OS_WIN
+    // "Mostrar el color de énfasis en las barras de título" (AccentColor está en ABGR).
+    const QSettings dwm(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\DWM"), QSettings::NativeFormat);
+    if (dwm.value(QStringLiteral("ColorPrevalence")).toInt() == 1) {
+        const auto abgr = quint32(dwm.value(QStringLiteral("AccentColor")).toLongLong());
+        if (abgr != 0)
+            return QColor(int(abgr & 0xff), int(abgr >> 8 & 0xff), int(abgr >> 16 & 0xff));
+    }
+#endif
+    return {};
+}
+
+void styleTitleBar(QWidget* window, const QColor& band)
+{
+#ifdef Q_OS_WIN
+    // Modo oscuro de la barra nativa (Windows 10 1809+) y, si no lleva el color de énfasis, el de
+    // la franja de los menús (Windows 11; en Windows 10 se ignora).
+    const auto hwnd = reinterpret_cast<HWND>(window->winId());
+    const BOOL dark = isDark();
+    DwmSetWindowAttribute(hwnd, 20, &dark, sizeof dark);
+    if (!titleBarColor().isValid() && band.isValid()) {
+        const COLORREF caption = RGB(band.red(), band.green(), band.blue());
+        const COLORREF text = band.lightness() < 128 ? RGB(255, 255, 255) : RGB(0, 0, 0);
+        DwmSetWindowAttribute(hwnd, 35, &caption, sizeof caption);
+        DwmSetWindowAttribute(hwnd, 36, &text, sizeof text);
+    }
+#else
+    Q_UNUSED(window);
+    Q_UNUSED(band);
+#endif
 }
 
 bool isDark()

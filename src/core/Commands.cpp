@@ -404,15 +404,19 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
     }
     QImage tmp(r.size(), kPremulFormat);
     tmp.fill(Qt::transparent);
-    const QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
+    QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
+    // Al reducir con bilineal o bicúbica, antes se promedia por áreas: si no, sale pixelado.
+    const QImage source = interpolation == Resample::Interpolation::NearestNeighbor
+                              ? pixels
+                              : Resample::prefiltered(pixels, &toTmp, gammaCorrect);
     if (interpolation == Resample::Interpolation::Bicubic
         || (gammaCorrect && interpolation == Resample::Interpolation::Bilinear)) {
-        Resample::drawTransformed(tmp, pixels, toTmp, interpolation, tmp.rect(), gammaCorrect);
+        Resample::drawTransformed(tmp, source, toTmp, interpolation, tmp.rect(), gammaCorrect);
     } else {
         QPainter p(&tmp);
         p.setRenderHint(QPainter::SmoothPixmapTransform, interpolation != Resample::Interpolation::NearestNeighbor);
         p.setTransform(toTmp);
-        p.drawImage(0, 0, pixels);
+        p.drawImage(0, 0, source);
     }
     blendImage(img, r.topLeft(), tmp, BlendMode::Normal);
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/tools/EditableSteps.h"
 #include "app/tools/Tool.h"
 #include "app/tools/TransformBox.h"
 #include "core/LayerEdit.h"
@@ -37,6 +38,8 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_edit.isActive(); }
+    void beforeHistoryJump() override;
+    void historyChanged() override;
 
 private:
     enum class Drag { None, Create, Point, Move, Rotate };
@@ -44,8 +47,11 @@ private:
     void render();
     QPointF moveIcon() const;
     void setInitialNodes(const QPointF& a, const QPointF& b);
+    void commitStep();
 
     LayerEdit m_edit;
+    StepRecorder m_steps{ToolId::Line, QStringLiteral("draw-line")};
+    bool m_restoring = false;
     std::array<QPointF, 4> m_pts;
     std::array<QPointF, 4> m_ptsStart;
     bool m_secondary = false;
@@ -79,12 +85,17 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_edit.isActive(); }
+    void beforeHistoryJump() override;
+    void historyChanged() override;
 
 private:
     void render();
     QPointF moveIcon() const;
+    void commitStep();
 
     LayerEdit m_edit;
+    StepRecorder m_steps{ToolId::Shapes, QStringLiteral("shapes")};
+    bool m_restoring = false;
     TransformBox m_box;
     QPointF m_start;
     bool m_creating = false;

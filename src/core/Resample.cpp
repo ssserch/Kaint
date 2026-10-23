@@ -466,6 +466,32 @@ struct LinearImage {
 
 } // namespace
 
+QImage prefiltered(const QImage& src, QTransform* transform, bool gammaCorrect)
+{
+    // Escala de cada eje de la imagen en el destino; solo se prefiltra lo que encoge.
+    const double sx = std::hypot(transform->m11(), transform->m12());
+    const double sy = std::hypot(transform->m21(), transform->m22());
+    if (src.isNull() || (sx >= 0.85 && sy >= 0.85))
+        return src;
+    const QSize size(std::max(1, int(std::lround(src.width() * std::min(1.0, sx)))),
+                     std::max(1, int(std::lround(src.height() * std::min(1.0, sy)))));
+    struct Cache {
+        qint64 key = 0;
+        QSize size;
+        bool gamma = false;
+        QImage image;
+    };
+    static thread_local Cache cache;
+    if (cache.key != src.cacheKey() || cache.size != size || cache.gamma != gammaCorrect) {
+        cache.image = scale(src, size, Method::Supersampling, gammaCorrect);
+        cache.key = src.cacheKey();
+        cache.size = size;
+        cache.gamma = gammaCorrect;
+    }
+    *transform = QTransform::fromScale(double(src.width()) / size.width(), double(src.height()) / size.height()) * *transform;
+    return cache.image;
+}
+
 void drawTransformed(QImage& dst, const QImage& source, const QTransform& transform, Interpolation interpolation,
                      const QRect& clip, bool gammaCorrect)
 {

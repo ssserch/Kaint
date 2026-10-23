@@ -306,15 +306,18 @@ void ColorSwatches::paintEvent(QPaintEvent*)
     auto swatch = [&](const QRectF& r, const QColor& c, bool active) {
         paintCheckerboard(p, r, 5);
         p.fillRect(r, c);
+        // Como en Paint.NET: marco blanco por dentro y, en la ranura activa, un pico abajo.
         p.setPen(QPen(palette().color(QPalette::WindowText), 1));
         p.setBrush(Qt::NoBrush);
         p.drawRect(r.adjusted(0.5, 0.5, -0.5, -0.5));
+        p.setPen(QPen(Qt::white, 1));
+        p.drawRect(r.adjusted(1.5, 1.5, -1.5, -1.5));
         if (active) {
-            const QPolygonF notch{r.bottomLeft() + QPointF(1, -1), r.bottomLeft() + QPointF(1, -12),
-                                  r.bottomLeft() + QPointF(12, -1)};
+            const qreal cx = r.center().x();
+            const QPolygonF notch{QPointF(cx - 5, r.bottom() - 1), QPointF(cx, r.bottom() - 7), QPointF(cx + 5, r.bottom() - 1)};
             p.setRenderHint(QPainter::Antialiasing);
-            p.setPen(QPen(palette().color(QPalette::Base), 1));
-            p.setBrush(palette().color(QPalette::Highlight));
+            p.setPen(QPen(Qt::black, 1));
+            p.setBrush(Qt::white);
             p.drawPolygon(notch);
             p.setRenderHint(QPainter::Antialiasing, false);
         }
@@ -328,7 +331,7 @@ void ColorSwatches::paintEvent(QPaintEvent*)
     QPainterPath arc;
     arc.moveTo(s.left() + 3, s.top() + 4);
     arc.quadTo(s.right() - 3, s.top() + 4, s.right() - 3, s.bottom() - 2);
-    p.setPen(QPen(palette().color(QPalette::WindowText), 1.4));
+    p.setPen(QPen(QColor(60, 130, 210), 1.6));
     p.drawPath(arc);
     p.drawLine(QPointF(s.left() + 3, s.top() + 4), QPointF(s.left() + 6, s.top() + 1));
     p.drawLine(QPointF(s.left() + 3, s.top() + 4), QPointF(s.left() + 6, s.top() + 7));

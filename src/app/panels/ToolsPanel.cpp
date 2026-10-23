@@ -97,16 +97,25 @@ QSize ToolsPanel::fitSize(QSize proposed, Qt::Orientations changed) const
     return sizeFor(columnsFor(proposed.width()));
 }
 
+QSize ToolsPanel::sizeForLayout(const QVariant& state) const
+{
+    bool ok = false;
+    const int columns = state.toInt(&ok);
+    return ok && columns > 0 ? sizeFor(columns) : QSize();
+}
+
 void ToolsPanel::layoutButtons()
 {
+    // Como en Paint.NET, el último botón (Formas) ocupa lo que quede de su fila.
     const int cols = columns();
     m_columns = cols;
     const QSize c = cell();
     for (int i = 0; i < m_buttons.size(); ++i) {
         const int row = i / cols;
         const int col = i % cols;
+        const int span = i == m_buttons.size() - 1 ? cols - col : 1;
         m_buttons[i]->setGeometry(kMargin + col * (c.width() + kSpacing), kMargin + row * (c.height() + kSpacing),
-                                  c.width(), c.height());
+                                  span * c.width() + (span - 1) * kSpacing, c.height());
     }
 }
 

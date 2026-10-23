@@ -2,6 +2,7 @@
 
 #include <QFrame>
 #include <QPointer>
+#include <QVariant>
 
 class QAbstractButton;
 class QLabel;
@@ -13,6 +14,10 @@ class PanelContent {
 public:
     virtual ~PanelContent() = default;
     virtual QSize fitSize(QSize proposed, Qt::Orientations changed) const = 0;
+    // Distribución que se guarda en vez del tamaño en píxeles (columnas, escala), para que no
+    // se estropee si cambian los iconos o la fuente; tamaño del contenido para una guardada.
+    virtual QVariant layoutState() const = 0;
+    virtual QSize sizeForLayout(const QVariant& state) const = 0;
 };
 
 // Panel flotante dentro del área de trabajo (Herramientas, Historial, Capas, Colores).

@@ -32,7 +32,7 @@ Canvas::Canvas(QWidget* parent)
     viewport()->setAttribute(Qt::WA_TabletTracking);
     viewport()->setAttribute(Qt::WA_AcceptTouchEvents, false);
     connect(Theme::notifier(), &Theme::Notifier::changed, viewport(), qOverload<>(&QWidget::update));
-    m_checker = QPixmap::fromImage(Raster::checkerboard(8));
+    m_checker = QPixmap::fromImage(Raster::checkerboard(8, QColor(191, 191, 191), QColor(143, 143, 143)));
     m_hRuler = new Ruler(Qt::Horizontal, this, this);
     m_vRuler = new Ruler(Qt::Vertical, this, this);
     m_rulerCorner = new QWidget(this);
@@ -494,8 +494,9 @@ void Canvas::setAppearance(bool dropShadow, const QColor& border, int checkerBri
     m_border = border;
     if (m_border.isValid())
         m_border.setAlpha(255);
+    // Como Paint.NET: grises 191 y 143 por defecto.
     const int light = std::clamp(checkerBrightness, 0, 255);
-    const int dark = std::max(0, light - 51);
+    const int dark = int(std::lround(light * 0.75));
     m_checker = QPixmap::fromImage(Raster::checkerboard(8, QColor(light, light, light), QColor(dark, dark, dark)));
     viewport()->update();
 }
@@ -545,10 +546,8 @@ void Canvas::paintEvent(QPaintEvent* e)
 
     const QRectF visible = imgView.intersected(QRectF(e->rect()));
     if (!visible.isEmpty()) {
-        p.save();
-        p.setBrushOrigin(imgView.topLeft());
+        // Fijo en la ventana, como en Paint.NET: no cambia con el zum ni al desplazarse.
         p.fillRect(visible, QBrush(m_checker));
-        p.restore();
 
         const QRect src = QRectF(viewToImage(visible.topLeft()), viewToImage(visible.bottomRight()))
                               .toAlignedRect()

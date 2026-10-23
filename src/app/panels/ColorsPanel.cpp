@@ -17,6 +17,8 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QSpinBox>
@@ -68,7 +70,25 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     m_paletteMenu = new QToolButton(this);
     m_paletteMenu->setAutoRaise(true);
     m_paletteMenu->setPopupMode(QToolButton::InstantPopup);
-    m_paletteMenu->setIcon(Icons::theme({"color-management", "palette-symbolic", "preferences-desktop-color"}));
+    {
+        // Como en Paint.NET: nueve colores en un marco blanco.
+        QPixmap pm(32, 32);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setPen(QPen(QColor(60, 60, 64), 2));
+        p.setBrush(Qt::white);
+        p.drawRect(QRectF(2, 2, 27, 27));
+        const QColor grid[] = {QColor(220, 70, 50),  QColor(130, 50, 160), QColor(60, 70, 180),
+                               QColor(240, 140, 30), Qt::white,             QColor(60, 140, 240),
+                               QColor(250, 200, 40), QColor(100, 180, 70),  QColor(30, 140, 110)};
+        p.setPen(Qt::NoPen);
+        for (int i = 0; i < 9; ++i) {
+            p.setBrush(grid[i]);
+            p.drawRect(QRectF(5 + (i % 3) * 7.3, 5 + (i / 3) * 7.3, 7.3, 7.3));
+        }
+        p.end();
+        m_paletteMenu->setIcon(QIcon(pm));
+    }
     m_paletteMenu->setToolTip(tr("Paletas"));
     auto* paletteMenu = new QMenu(m_paletteMenu);
     m_paletteMenu->setMenu(paletteMenu);
@@ -217,13 +237,55 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     refresh();
 }
 
+double ColorsPanel::scale() const
+{
+    const QSize base = sizeHint();
+    return base.width() > 0 ? std::max(minimumScale(), double(width()) / base.width()) : 1.0;
+}
+
+double ColorsPanel::minimumScale() const
+{
+    const QSize base = sizeHint(), least = minimumSizeHint();
+    if (base.isEmpty())
+        return 1.0;
+    return std::max({0.5, double(least.width()) / base.width(), double(least.height()) / base.height()});
+}
+
+QSize ColorsPanel::sizeForScale(double scale) const
+{
+    const QSize base = sizeHint();
+    scale = std::clamp(scale, minimumScale(), 4.0);
+    return QSize(int(std::lround(base.width() * scale)), int(std::lround(base.height() * scale)));
+}
+
+QSize ColorsPanel::fitSize(QSize proposed, Qt::Orientations changed) const
+{
+    const QSize base = sizeHint();
+    if (base.isEmpty())
+        return proposed;
+    const double sx = double(proposed.width()) / base.width();
+    const double sy = double(proposed.height()) / base.height();
+    if (changed == Qt::Vertical)
+        return sizeForScale(sy);
+    if (changed == Qt::Horizontal)
+        return sizeForScale(sx);
+    return sizeForScale(std::max(sx, sy));
+}
+
+QSize ColorsPanel::sizeForLayout(const QVariant& state) const
+{
+    bool ok = false;
+    const double s = state.toDouble(&ok);
+    return ok && s > 0 ? sizeForScale(s) : QSize();
+}
+
 void ColorsPanel::setExpanded(bool on)
 {
     // Ampliado: las muestras suben junto al botón, sin el selector de ranura ni el brillo
-    // vertical (ya están los deslizadores).
+    // vertical (ya están los deslizadores). La escala se mantiene.
+    const double keep = scale();
     m_target->setVisible(!on);
     m_value->setVisible(!on);
-    m_wheel->setMaximumSize(on ? QSize(150, 150) : QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX));
     if (on) {
         m_swatchColumn->removeWidget(m_swatches);
         m_topRow->insertWidget(0, m_swatches, 0, Qt::AlignTop);
@@ -234,7 +296,7 @@ void ColorsPanel::setExpanded(bool on)
     m_extended->setVisible(on);
     m_more->setText(on ? tr("« Menos") : tr("Más »"));
     m_palette->setVisibleCount(on ? Palette::kColorCount : 32);
-    emit layoutChanged();
+    emit layoutChanged(keep);
 }
 
 bool ColorsPanel::isExpanded() const
@@ -263,7 +325,23 @@ void ColorsPanel::editWithDialog(bool secondary)
 
 void ColorsPanel::updateAddIcon()
 {
-    m_addColor->setIcon(Icons::swatch(current()));
+    // Como en Paint.NET: el color activo con un "+".
+    QPixmap pm(32, 32);
+    pm.fill(Qt::transparent);
+    {
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(QColor(60, 60, 64), 2));
+        p.setBrush(QColor(current().rgb()));
+        p.drawRect(QRectF(2, 2, 24, 24));
+        QPainterPath plus;
+        plus.addRect(QRectF(20, 13, 5, 18));
+        plus.addRect(QRectF(13.5, 19.5, 18, 5));
+        p.setPen(QPen(QColor(50, 110, 100), 1.6));
+        p.setBrush(Qt::white);
+        p.drawPath(plus.simplified());
+    }
+    m_addColor->setIcon(QIcon(pm));
 }
 
 void ColorsPanel::buildPaletteMenu()

@@ -354,8 +354,14 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
     Document* doc = document();
     if (!doc || (e.button != Qt::LeftButton && e.button != Qt::RightButton))
         return;
-    if (doc->selection().isEmpty())
-        return;
+    // Sin selección, como Mover píxeles seleccionados: el clic selecciona todo el lienzo.
+    if (doc->selection().isEmpty()) {
+        if (e.button != Qt::LeftButton)
+            return;
+        const QString text = tr("Seleccionar todo");
+        HistoryIcons::registerIcon(text, QStringLiteral("edit-select-all"));
+        doc->undoStack()->push(new SelectionCommand(doc, doc->selection(), Selection::fromRect(doc->rect(), doc->size()), text));
+    }
     syncBox();
     int handle = -1;
     TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), e.button == Qt::RightButton, &handle);

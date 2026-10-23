@@ -106,12 +106,65 @@ QPainterPath arrowHead(const QPointF& tip, double angleDeg, double width, bool f
 // Línea/Curva
 // ---------------------------------------------------------------------------
 
+namespace {
+
+struct LineState : ToolStepState {
+    std::array<QPointF, 4> pts;
+    bool swapped = false;
+};
+
+struct ShapeState : ToolStepState {
+    QRectF rect;
+    QTransform transform;
+    bool swapped = false;
+};
+
+// Opciones y colores de la herramienta en este momento.
+template<typename State>
+std::shared_ptr<State> captureState()
+{
+    auto st = std::make_shared<State>();
+    st->settings = AppState::instance()->tools();
+    st->primary = AppState::instance()->primary();
+    st->secondary = AppState::instance()->secondary();
+    return st;
+}
+
+// Vuelve a las opciones de un paso: solo las que usa la herramienta, y sus colores.
+void restoreSettings(const ToolStepState& st, bool shape)
+{
+    AppState::instance()->updateTools([&](ToolSettings& s) {
+        const ToolSettings& o = st.settings;
+        s.brushSize = o.brushSize;
+        s.dash = o.dash;
+        s.antialias = o.antialias;
+        s.blend = o.blend;
+        s.fill = o.fill;
+        if (shape) {
+            s.shape = o.shape;
+            s.customShape = o.customShape;
+            s.shapeStyle = o.shapeStyle;
+            s.cornerRadius = o.cornerRadius;
+        } else {
+            s.curveType = o.curveType;
+            s.startCap = o.startCap;
+            s.endCap = o.endCap;
+        }
+    });
+    AppState::instance()->setPrimary(st.primary);
+    AppState::instance()->setSecondary(st.secondary);
+}
+
+} // namespace
+
 LineTool::LineTool(QObject* parent)
     : Tool(parent)
 {
     auto refresh = [this] {
-        if (m_edit.isActive())
-            render();
+        if (!m_edit.isActive() || m_restoring)
+            return;
+        render();
+        m_steps.changed();
     };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, refresh);
     connect(AppState::instance(), &AppState::colorsChanged, this, refresh);
@@ -218,6 +271,7 @@ void LineTool::mousePress(const ToolEvent& e)
         finish();
     }
     m_edit.begin(doc, doc->activeLayerPtr());
+    m_steps.start(m_edit);
     m_secondary = e.button == Qt::RightButton;
     m_anchor = e.pos;
     setInitialNodes(e.pos, e.pos);
@@ -268,10 +322,13 @@ void LineTool::mouseMove(const ToolEvent& e)
 
 void LineTool::mouseRelease(const ToolEvent&)
 {
-    if (m_drag == Drag::Create && m_pts[0] == m_pts[3])
+    if (m_drag == Drag::Create && m_pts[0] == m_pts[3]) {
         m_edit.cancel();
-    else if (m_drag == Drag::Create)
-        m_edit.showInHistory(name(), QStringLiteral("draw-line"));
+        m_steps.leave(m_edit);
+    } else if (m_drag != Drag::None) {
+        m_steps.changed();
+        commitStep();
+    }
     m_drag = Drag::None;
     emit hintChanged(hint());
     repaint();
@@ -290,6 +347,7 @@ bool LineTool::keyPress(QKeyEvent* e)
         for (QPointF& p : m_pts)
             p += QPointF(d);
         render();
+        m_steps.changed();
         return true;
     }
     auto nextCap = [](LineCap c) { return LineCap((int(c) + 1) % 4); };
@@ -328,11 +386,51 @@ void LineTool::paintOverlay(QPainter& p)
     Handles::draw(p, moveIcon(), Handles::Shape::Move);
 }
 
+void LineTool::commitStep()
+{
+    auto st = captureState<LineState>();
+    st->pts = m_pts;
+    st->swapped = m_secondary;
+    m_steps.commit(m_edit, name(), tr("Editar línea/curva"), st);
+}
+
 void LineTool::finish()
 {
     if (!m_edit.isActive())
         return;
-    m_edit.commit(name(), QStringLiteral("draw-line"));
+    commitStep();
+    m_steps.finish(m_edit, tr("Finalizar línea/curva"));
+    m_drag = Drag::None;
+    emit hintChanged(hint());
+    repaint();
+}
+
+void LineTool::beforeHistoryJump()
+{
+    // Lo pendiente (opciones o colores cambiados) se registra; el historial decide si se retoma.
+    commitStep();
+}
+
+void LineTool::historyChanged()
+{
+    if (m_steps.pushing())
+        return;
+    const ToolStepCommand* step = m_steps.top(document());
+    if (!step) {
+        if (m_edit.isActive()) {
+            m_steps.leave(m_edit);
+            emit hintChanged(hint());
+            repaint();
+        }
+        return;
+    }
+    const auto* st = static_cast<const LineState*>(step->state());
+    m_restoring = true;
+    restoreSettings(*st, false);
+    m_restoring = false;
+    m_steps.resume(m_edit, document(), step);
+    m_pts = st->pts;
+    m_secondary = st->swapped;
     m_drag = Drag::None;
     emit hintChanged(hint());
     repaint();
@@ -352,8 +450,10 @@ ShapesTool::ShapesTool(QObject* parent)
     : Tool(parent)
 {
     auto refresh = [this] {
-        if (m_edit.isActive())
-            render();
+        if (!m_edit.isActive() || m_restoring || m_creating)
+            return;
+        render();
+        m_steps.changed();
     };
     connect(AppState::instance(), &AppState::toolSettingsChanged, this, refresh);
     connect(AppState::instance(), &AppState::colorsChanged, this, refresh);
@@ -421,6 +521,7 @@ void ShapesTool::mousePress(const ToolEvent& e)
         finish();
     }
     m_edit.begin(doc, doc->activeLayerPtr());
+    m_steps.start(m_edit);
     m_secondary = e.button == Qt::RightButton;
     m_start = QPointF(std::round(e.pos.x()), std::round(e.pos.y()));
     m_box.set(QRectF(m_start, QSizeF(0, 0)), QTransform());
@@ -457,12 +558,17 @@ void ShapesTool::mouseRelease(const ToolEvent&)
 {
     if (m_creating) {
         m_creating = false;
-        if (m_box.localRect().width() < 1 || m_box.localRect().height() < 1)
+        if (m_box.localRect().width() < 1 || m_box.localRect().height() < 1) {
             m_edit.cancel();
-        else
-            m_edit.showInHistory(toolShapeName(AppState::instance()->tools()), QStringLiteral("shapes"));
+            m_steps.leave(m_edit);
+        } else {
+            m_steps.changed();
+        }
+    } else if (m_box.mode() != TransformBox::Mode::None) {
+        m_steps.changed();
     }
     m_box.end();
+    commitStep();
     emit hintChanged(hint());
     repaint();
 }
@@ -490,6 +596,7 @@ bool ShapesTool::keyPress(QKeyEvent* e)
     if (!d.isNull()) {
         m_box.set(m_box.localRect(), m_box.transform() * QTransform::fromTranslate(d.x(), d.y()));
         render();
+        m_steps.changed();
         return true;
     }
     return false;
@@ -504,13 +611,57 @@ void ShapesTool::paintOverlay(QPainter& p)
         Handles::draw(p, moveIcon(), Handles::Shape::Move);
 }
 
+void ShapesTool::commitStep()
+{
+    auto st = captureState<ShapeState>();
+    st->rect = m_box.localRect();
+    st->transform = m_box.transform();
+    st->swapped = m_secondary;
+    m_steps.commit(m_edit, toolShapeName(st->settings), tr("Editar forma"), st);
+}
+
 void ShapesTool::finish()
 {
     if (!m_edit.isActive())
         return;
-    m_edit.commit(toolShapeName(AppState::instance()->tools()), QStringLiteral("shapes"));
+    if (!m_creating)
+        commitStep();
+    m_steps.finish(m_edit, tr("Finalizar forma"));
     m_creating = false;
     m_box.end();
+    emit hintChanged(hint());
+    repaint();
+}
+
+void ShapesTool::beforeHistoryJump()
+{
+    if (!m_creating)
+        commitStep();
+}
+
+void ShapesTool::historyChanged()
+{
+    if (m_steps.pushing())
+        return;
+    const ToolStepCommand* step = m_steps.top(document());
+    if (!step) {
+        if (m_edit.isActive()) {
+            m_steps.leave(m_edit);
+            m_creating = false;
+            m_box.end();
+            emit hintChanged(hint());
+            repaint();
+        }
+        return;
+    }
+    const auto* st = static_cast<const ShapeState*>(step->state());
+    m_restoring = true;
+    restoreSettings(*st, true);
+    m_restoring = false;
+    m_steps.resume(m_edit, document(), step);
+    m_box.set(st->rect, st->transform);
+    m_secondary = st->swapped;
+    m_creating = false;
     emit hintChanged(hint());
     repaint();
 }

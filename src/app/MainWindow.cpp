@@ -42,6 +42,7 @@
 #include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QImageReader>
 #include <QInputDialog>
@@ -150,16 +151,142 @@ quint64 imageSignature(const QImage& source)
 
 // Tira de imágenes: no pide más ancho que el de sus pestañas (QTabBar reserva sitio para las
 // flechas de desplazamiento aunque no hagan falta), así la flecha de la lista queda pegada a la
-// última miniatura, como en Paint.NET.
+// última miniatura. La X de cerrar va sobre la esquina de la miniatura, en la imagen actual y en
+// la que tiene el puntero encima, como en Paint.NET.
 class ImageStrip : public QTabBar {
 public:
-    using QTabBar::QTabBar;
+    explicit ImageStrip(QWidget* parent)
+        : QTabBar(parent)
+    {
+        setMouseTracking(true);
+    }
 
     QSize minimumSizeHint() const override
     {
         const QSize min = QTabBar::minimumSizeHint();
         return QSize(std::min(min.width(), sizeHint().width()), min.height());
     }
+
+    QRect closeRect(int index) const
+    {
+        const QRect tab = tabRect(index);
+        return QRect(tab.right() - kClose - 2, tab.top() + 3, kClose, kClose);
+    }
+
+protected:
+    void paintEvent(QPaintEvent* e) override
+    {
+        QTabBar::paintEvent(e);
+        if (m_pressedTab >= 0 && m_dragged)
+            return;
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        QList<int> shown{currentIndex()};
+        if (m_hoverTab != currentIndex())
+            shown << m_hoverTab;
+        for (int i : std::as_const(shown)) {
+            if (i < 0)
+                continue;
+            const QRectF r = QRectF(closeRect(i)).adjusted(0.5, 0.5, -0.5, -0.5);
+            const bool hot = i == m_hoverTab && m_hoverClose;
+            p.setPen(QPen(QColor(150, 30, 30), 1));
+            p.setBrush(hot ? QColor(240, 80, 70) : QColor(215, 60, 55));
+            p.drawRoundedRect(r, 2, 2);
+            p.setPen(QPen(Qt::white, 1.6, Qt::SolidLine, Qt::RoundCap));
+            const QRectF x = r.adjusted(4, 4, -4, -4);
+            p.drawLine(x.topLeft(), x.bottomRight());
+            p.drawLine(x.topRight(), x.bottomLeft());
+        }
+    }
+
+    void mousePressEvent(QMouseEvent* e) override
+    {
+        const int i = tabAt(e->position().toPoint());
+        if (e->button() == Qt::LeftButton && i >= 0 && (i == currentIndex() || i == m_hoverTab)
+            && closeRect(i).contains(e->position().toPoint())) {
+            m_closeTab = i;
+            e->accept();
+            return;
+        }
+        m_pressedTab = e->button() == Qt::LeftButton ? i : -1;
+        m_dragged = false;
+        QTabBar::mousePressEvent(e);
+    }
+
+    void mouseMoveEvent(QMouseEvent* e) override
+    {
+        if (m_pressedTab >= 0 && (e->buttons() & Qt::LeftButton))
+            m_dragged = true;
+        const int hover = tabAt(e->position().toPoint());
+        const bool onClose = hover >= 0 && closeRect(hover).contains(e->position().toPoint());
+        if (hover != m_hoverTab || onClose != m_hoverClose) {
+            m_hoverTab = hover;
+            m_hoverClose = onClose;
+            setToolTip(onClose ? tr("Cerrar") : QString());
+            update();
+        }
+        QTabBar::mouseMoveEvent(e);
+    }
+
+    void mouseReleaseEvent(QMouseEvent* e) override
+    {
+        if (m_closeTab >= 0) {
+            const int i = m_closeTab;
+            m_closeTab = -1;
+            if (closeRect(i).contains(e->position().toPoint()))
+                emit tabCloseRequested(i);
+            e->accept();
+            return;
+        }
+        m_pressedTab = -1;
+        m_dragged = false;
+        QTabBar::mouseReleaseEvent(e);
+        update();
+    }
+
+    void leaveEvent(QEvent* e) override
+    {
+        m_hoverTab = -1;
+        m_hoverClose = false;
+        update();
+        QTabBar::leaveEvent(e);
+    }
+
+private:
+    static constexpr int kClose = 14;
+    int m_hoverTab = -1;
+    bool m_hoverClose = false;
+    int m_closeTab = -1;
+    int m_pressedTab = -1;
+    bool m_dragged = false;
+};
+
+// Fila superior al estilo de Paint.NET 5: menús con la barra principal debajo, la tira de
+// imágenes a lo alto de las dos filas y los botones de las ventanas a la derecha. La franja de
+// los menús lleva el color de la barra de título y la de abajo el de las barras.
+class TopRow : public QWidget {
+public:
+    using QWidget::QWidget;
+
+    void setMenuBar(QWidget* menu) { m_menu = menu; }
+
+    static QColor bandColor()
+    {
+        const QColor title = Theme::titleBarColor();
+        return title.isValid() ? title : Theme::active().menuBar;
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        const int split = m_menu ? m_menu->geometry().bottom() + 1 : height() / 2;
+        p.fillRect(rect(), Theme::active().toolBar);
+        p.fillRect(QRect(0, 0, width(), split), bandColor());
+    }
+
+private:
+    QWidget* m_menu = nullptr;
 };
 
 // Flecha de la lista de imágenes: una franja de la altura de la tira con el chevrón arriba,
@@ -182,7 +309,10 @@ protected:
         opt.features &= ~QStyleOptionToolButton::HasMenu;
         p.drawComplexControl(QStyle::CC_ToolButton, opt);
         p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(QPen(palette().color(QPalette::ButtonText), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        const QColor band = TopRow::bandColor();
+        const QColor arrow = isDown() || underMouse() ? palette().color(QPalette::ButtonText)
+                                                      : (band.lightness() < 128 ? QColor(Qt::white) : QColor(Qt::black));
+        p.setPen(QPen(arrow, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         const qreal cx = width() / 2.0;
         p.drawPolyline(QPolygonF{QPointF(cx - 3.5, 9.5), QPointF(cx, 13), QPointF(cx + 3.5, 9.5)});
     }
@@ -707,7 +837,8 @@ void MainWindow::rebuildEffectMenus()
 void MainWindow::createToolBars()
 {
     auto& A = m_act;
-    QToolBar* main = addToolBar(tr("Principal"));
+    // La barra principal va en la fila superior, bajo los menús (como en Paint.NET).
+    auto* main = new QToolBar(tr("Principal"), menuWidget());
     main->setObjectName(QStringLiteral("MainToolBar"));
     main->setMovable(false);
     main->setIconSize(QSize(16, 16));
@@ -722,8 +853,8 @@ void MainWindow::createToolBars()
     main->addActions({A["undo"], A["redo"]});
     main->addSeparator();
     main->addActions({A["pixelGrid"], A["rulers"]});
+    m_topLayout->addWidget(main, 1, 0, Qt::AlignLeft | Qt::AlignTop);
 
-    addToolBarBreak();
     m_options = new ToolOptionsBar(m_tools, this);
     addToolBar(m_options);
     for (FontChooser* font : m_options->findChildren<FontChooser*>())
@@ -732,25 +863,27 @@ void MainWindow::createToolBars()
 
 void MainWindow::createTopRow()
 {
-    // Fila superior de Paint.NET 5: menús, tira de imágenes abiertas y, a la derecha, los
+    // Fila superior de Paint.NET 5: menús y, debajo, la barra principal (la pone
+    // createToolBars); a la derecha, la tira de imágenes a lo alto de las dos filas y los
     // botones de las ventanas, Configuración y Ayuda.
-    auto* top = new QWidget(this);
+    auto* top = new TopRow(this);
     top->setObjectName(QStringLiteral("TopRow"));
-    auto* layout = new QHBoxLayout(top);
-    layout->setContentsMargins(0, 0, 4, 0);
-    layout->setSpacing(6);
-    top->setAttribute(Qt::WA_StyledBackground);
+    m_topLayout = new QGridLayout(top);
+    m_topLayout->setContentsMargins(0, 0, 4, 0);
+    m_topLayout->setHorizontalSpacing(6);
+    m_topLayout->setVerticalSpacing(0);
     m_menuBar = new QMenuBar(top);
     // Dentro de la ventana aunque Plasma tenga menú global: si no, se iba con la fila entera.
     m_menuBar->setNativeMenuBar(false);
-    m_menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-    layout->addWidget(m_menuBar, 0, Qt::AlignVCenter);
+    m_menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    top->setMenuBar(m_menuBar);
+    m_topLayout->addWidget(m_menuBar, 0, 0, Qt::AlignLeft | Qt::AlignBottom);
+    m_topLayout->setRowStretch(0, 1);
 
     // Tira de imágenes abiertas con miniaturas.
     m_tabs = new ImageStrip(top);
     m_tabs->setObjectName(QStringLiteral("ImageStrip"));
     m_tabs->setDocumentMode(true);
-    m_tabs->setTabsClosable(true);
     m_tabs->setMovable(true);
     m_tabs->setExpanding(false);
     m_tabs->setDrawBase(false);
@@ -760,7 +893,7 @@ void MainWindow::createTopRow()
     // Solo lo que ocupan las miniaturas: la flecha de la lista va justo después de la última y
     // llega a la derecha cuando la tira se llena.
     m_tabs->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-    layout->addWidget(m_tabs);
+    m_topLayout->addWidget(m_tabs, 0, 1, 2, 1, Qt::AlignBottom);
     connect(m_tabs, &QTabBar::currentChanged, this, [this](int i) { setCurrentDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabCloseRequested, this, [this](int i) { closeDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabMoved, this, [this](int from, int to) { m_docs.move(from, to); });
@@ -775,14 +908,14 @@ void MainWindow::createTopRow()
     m_listButton->setToolTip(tr("Imágenes abiertas"));
     m_listButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     connect(m_listButton, &QToolButton::clicked, this, &MainWindow::showImageList);
-    layout->addWidget(m_listButton);
-    layout->addStretch(1);
+    m_topLayout->addWidget(m_listButton, 0, 2, 2, 1);
+    m_topLayout->setColumnStretch(3, 1);
 
     m_cornerButtons = new QWidget(top);
     m_cornerLayout = new QHBoxLayout(m_cornerButtons);
     m_cornerLayout->setContentsMargins(0, 0, 0, 0);
     m_cornerLayout->setSpacing(0);
-    layout->addWidget(m_cornerButtons, 0, Qt::AlignVCenter);
+    m_topLayout->addWidget(m_cornerButtons, 0, 4, Qt::AlignRight | Qt::AlignVCenter);
     m_cornerButtons->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_cornerButtons, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         QMenu menu(this);
@@ -814,14 +947,10 @@ void MainWindow::createPanels()
     m_colors = new ColorsPanel;
     m_colorsPanel = m_workspace->addPanel(QStringLiteral("colors"), tr("Colores"), m_colors, Corner::BottomLeft,
                                           QPoint(8, 8), QSize(230, 330));
-    connect(m_colors, &ColorsPanel::layoutChanged, this, [this] {
-        const QSize hint = m_colorsPanel->sizeHint();
-        if (m_colors->isExpanded()) {
-            m_colorsCompactWidth = m_colorsPanel->width();
-            m_colorsPanel->resize(std::max(hint.width(), m_colorsPanel->width()), hint.height());
-        } else {
-            m_colorsPanel->resize(m_colorsCompactWidth > 0 ? m_colorsCompactWidth : m_colorsPanel->width(), hint.height());
-        }
+    connect(m_colors, &ColorsPanel::layoutChanged, this, [this](double scale) {
+        m_colors->layout()->invalidate();
+        m_colors->layout()->activate();
+        m_colorsPanel->resize(m_colors->sizeForScale(scale) + (m_colorsPanel->size() - m_colors->size()));
         m_colorsPanel->reposition();
     });
 
@@ -2566,6 +2695,9 @@ void MainWindow::changeEvent(QEvent* e)
 void MainWindow::applyThemeLayout()
 {
     const Theme::Spec spec = Theme::active();
+    Theme::styleTitleBar(this, TopRow::bandColor());
+    if (QWidget* top = menuWidget())
+        top->update();
     const QSize icon(spec.iconSize, spec.iconSize);
     if (auto* main = findChild<QToolBar*>(QStringLiteral("MainToolBar")))
         main->setIconSize(icon);

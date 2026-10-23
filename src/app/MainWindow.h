@@ -197,7 +197,6 @@ private:
     HistoryPanel* m_history = nullptr;
     LayersPanel* m_layers = nullptr;
     ColorsPanel* m_colors = nullptr;
-    int m_colorsCompactWidth = 0;
 
     QMenuBar* m_menuBar = nullptr;
     QMenu* m_adjustmentsMenu = nullptr;
@@ -206,6 +205,7 @@ private:
     QList<QMenu*> m_effectSubmenus;
     QWidget* m_cornerButtons = nullptr;
     class QHBoxLayout* m_cornerLayout = nullptr;
+    class QGridLayout* m_topLayout = nullptr;
 
     QLabel* m_hint = nullptr;
     QLabel* m_posLabel = nullptr;

@@ -9,6 +9,7 @@
 #include <array>
 
 class QPainter;
+class QWidget;
 
 // Temas de la interfaz.
 //
@@ -101,6 +102,12 @@ Scheme current();
 Spec active();
 bool isDark();
 bool systemPrefersDark();
+
+// Color de la barra de título del sistema cuando no es la del tema (Windows con el color de
+// énfasis en las barras de título), o no válido.
+QColor titleBarColor();
+// Barra de título nativa a juego con el tema: en Windows, modo oscuro y el color 'band'.
+void styleTitleBar(QWidget* window, const QColor& band);
 
 // Fondo del área de trabajo (alrededor de la imagen): color e imagen del tema. 'color' no válido
 // usa el del tema.

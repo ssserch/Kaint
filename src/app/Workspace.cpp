@@ -455,6 +455,8 @@ void FloatingPanel::saveState() const
     s.setValue(QStringLiteral("corner"), int(m_corner));
     s.setValue(QStringLiteral("offset"), m_offset);
     s.setValue(QStringLiteral("size"), size());
+    if (const auto* fit = dynamic_cast<const PanelContent*>(m_content))
+        s.setValue(QStringLiteral("layout"), fit->layoutState());
     s.setValue(QStringLiteral("visible"), !isHidden());
     s.endGroup();
 }
@@ -468,6 +470,10 @@ void FloatingPanel::restoreState(Corner defaultCorner, QPoint defaultOffset, QSi
     QSettings s;
     s.beginGroup(QStringLiteral("panels/") + m_id);
     QSize size = s.value(QStringLiteral("size")).toSize();
+    if (const auto* fit = dynamic_cast<const PanelContent*>(m_content)) {
+        const QSize fromLayout = fit->sizeForLayout(s.value(QStringLiteral("layout")));
+        size = fromLayout.isValid() ? fromLayout + chromeSize() : QSize();
+    }
     if (!size.isValid())
         size = defaultSize.isValid() ? defaultSize : sizeHint();
     resize(size.expandedTo(minimumSizeHint()));

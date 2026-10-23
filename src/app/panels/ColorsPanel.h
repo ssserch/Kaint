@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/Workspace.h"
 #include "app/widgets/ColorWidgets.h"
 
 #include <QWidget>
@@ -13,16 +14,25 @@ class QToolButton;
 class QVBoxLayout;
 
 // Ventana Colores de Paint.NET: muestras principal/secundario, rueda de tono, brillo y paleta
-// (32 colores; 96 en la vista ampliada) con "Añadir color" y el menú de paletas.
-class ColorsPanel : public QWidget {
+// (32 colores; 96 en la vista ampliada) con "Añadir color" y el menú de paletas. Como en
+// Paint.NET, solo cambia de tamaño manteniendo la proporción, y "Más" conserva la escala.
+class ColorsPanel : public QWidget, public PanelContent {
     Q_OBJECT
 public:
     explicit ColorsPanel(QWidget* parent = nullptr);
 
     bool isExpanded() const;
+    // Tamaño actual respecto al recomendado de la vista (compacta o ampliada).
+    double scale() const;
+    QSize sizeForScale(double scale) const;
+
+    QSize fitSize(QSize proposed, Qt::Orientations changed) const override;
+    QVariant layoutState() const override { return scale(); }
+    QSize sizeForLayout(const QVariant& state) const override;
 
 signals:
-    void layoutChanged();
+    // La vista cambió (Más/Menos): el panel debe tomar sizeForScale(scale).
+    void layoutChanged(double scale);
 
 private:
     QColor current() const;
@@ -32,6 +42,7 @@ private:
     void buildPaletteMenu();
     void updateAddIcon();
     void setExpanded(bool on);
+    double minimumScale() const;
 
     QHBoxLayout* m_topRow;
     QVBoxLayout* m_swatchColumn;

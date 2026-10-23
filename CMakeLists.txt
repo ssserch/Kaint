@@ -148,6 +148,7 @@ add_library(kaintui STATIC
     src/app/tools/MoveTools.cpp
     src/app/tools/ViewTools.cpp
     src/app/tools/PaintTools.cpp
+    src/app/tools/EditableSteps.cpp
     src/app/tools/FillTools.cpp
     src/app/tools/ShapeTools.cpp
     src/app/tools/TextTool.cpp
@@ -215,6 +216,7 @@ if(WIN32)
     target_sources(kaint PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/kaint.rc")
     find_package(Qt6 REQUIRED COMPONENTS Svg)
     target_link_libraries(kaint PRIVATE Qt6::Svg)
+    target_link_libraries(kaintui PRIVATE dwmapi)
 endif()
 
 # Cabeceras (para lupdate)

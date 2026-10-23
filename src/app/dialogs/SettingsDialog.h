@@ -23,7 +23,7 @@ class ToolOptionsPanel;
 struct AppSettings {
     // Interfaz de usuario
     bool animations = true;
-    bool translucentPanels = false;
+    bool translucentPanels = true;
     bool overscroll = true;
     bool autoScroll = true;
     bool autoSelectVisibleLayer = false;
@@ -36,7 +36,7 @@ struct AppSettings {
     bool rulers = false;
     bool dropShadow = true;
     QColor canvasBorder;
-    int checkerBrightness = 255;
+    int checkerBrightness = 191;
     int startTool = -1;
     bool tabletEraser = true;
     int historyLimitMB = 4096;

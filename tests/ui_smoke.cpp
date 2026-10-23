@@ -16,6 +16,7 @@
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
 #include "app/dialogs/TaskDialog.h"
+#include "app/panels/ColorsPanel.h"
 #include "app/panels/LayersPanel.h"
 #include "app/panels/ToolsPanel.h"
 #include "app/tools/Handles.h"
@@ -49,6 +50,7 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPrinter>
+#include <QPushButton>
 #include <QScrollBar>
 #include <QSettings>
 #include <QStatusBar>
@@ -407,14 +409,14 @@ int main(int argc, char** argv)
     });
     tools->select(ToolId::Shapes);
     {
-        // El paso aparece en el historial al dibujar la forma y se completa al terminar.
+        // Como en Paint.NET: el paso aparece al dibujar la forma y "Finalizar forma" al terminar.
         const int steps = doc->undoStack()->count();
         drag(canvas, {QPointF(450, 250), QPointF(520, 330), QPointF(640, 470)});
         CHECK(tools->current()->isBusy());
         CHECK(doc->undoStack()->count() == steps + 1 && doc->undoStack()->text(steps) == QStringLiteral("Estrella de 5 puntas"));
         tools->current()->finish();
         CHECK(!tools->current()->isBusy());
-        CHECK(doc->undoStack()->count() == steps + 1);
+        CHECK(doc->undoStack()->count() == steps + 2 && doc->undoStack()->text(steps + 1) == QStringLiteral("Finalizar forma"));
     }
     CHECK(doc->layer(1)->image.pixel(545, 380) != 0);
 
@@ -547,17 +549,34 @@ int main(int argc, char** argv)
     findAction(&w, QStringLiteral("Acoplar"))->trigger();
     CHECK(doc->layerCount() == 1);
 
-    // Línea/Curva editable: arrastrar un nodo curva la línea y todo queda en un solo paso.
+    // Línea/Curva editable, como en Paint.NET: "Línea/Curva", un "Editar línea/curva" por cada
+    // cambio y "Finalizar línea/curva"; al deshacer el final se sigue editando.
     {
         tools->select(ToolId::Line);
         state->updateTools([](ToolSettings& s) { s.brushSize = 5; s.curveType = CurveType::Spline; s.dash = Qt::SolidLine; });
-        const int steps = doc->undoStack()->count();
+        QUndoStack* stack = doc->undoStack();
+        const int steps = stack->count();
         drag(canvas, {QPointF(100, 650), QPointF(300, 650), QPointF(500, 650)});
-        CHECK(tools->current()->isBusy());
+        CHECK(tools->current()->isBusy() && stack->count() == steps + 1 && stack->text(steps) == QStringLiteral("Línea/Curva"));
         drag(canvas, {QPointF(233, 650), QPointF(233, 560)});
         CHECK(qAlpha(doc->activeLayer()->image.pixel(233, 560)) > 0);
+        CHECK(stack->count() == steps + 2 && stack->text(steps + 1) == QStringLiteral("Editar línea/curva"));
+        state->updateTools([](ToolSettings& s) { s.brushSize = 9; });
         tools->current()->finish();
-        CHECK(doc->undoStack()->count() == steps + 1);
+        CHECK(stack->count() == steps + 4 && stack->text(steps + 3) == QStringLiteral("Finalizar línea/curva"));
+        tools->select(ToolId::Paintbrush);
+        findAction(&w, QStringLiteral("Deshacer"))->trigger();
+        settle();
+        CHECK(tools->current()->id() == ToolId::Line && tools->current()->isBusy());
+        CHECK(state->tools().brushSize == 9);
+        findAction(&w, QStringLiteral("Deshacer"))->trigger();
+        settle();
+        CHECK(tools->current()->isBusy() && state->tools().brushSize == 5);
+        drag(canvas, {QPointF(366, 650), QPointF(366, 740)});
+        CHECK(stack->count() == steps + 3 && stack->text(steps + 2) == QStringLiteral("Editar línea/curva"));
+        CHECK(qAlpha(doc->activeLayer()->image.pixel(233, 560)) > 0);
+        tools->current()->finish();
+        CHECK(!tools->current()->isBusy());
     }
 
     // Formas: A cambia de forma mientras se edita.
@@ -586,7 +605,7 @@ int main(int argc, char** argv)
         const QPointF c = QRectF(doc->rect()).center();
         drag(canvas, {c - QPointF(50, 50), c, c + QPointF(50, 50)});
         tools->current()->finish();
-        CHECK(doc->undoStack()->text(doc->undoStack()->index() - 1) == QStringLiteral("Casa de prueba"));
+        CHECK(doc->undoStack()->text(doc->undoStack()->index() - 2) == QStringLiteral("Casa de prueba"));
         const QImage& img = doc->activeLayer()->image;
         const QPoint body = (c + QPointF(0, 35)).toPoint(), corner = (c + QPointF(-47, -47)).toPoint();
         CHECK(img.pixel(body) != img.pixel(corner));
@@ -734,16 +753,18 @@ int main(int argc, char** argv)
         settle();
     }
 
-    // Sin selección, Mover selección no hace nada; un clic con Mover píxeles selecciona todo el
-    // lienzo (como Paint.NET), ya al pulsar.
+    // Sin selección, un clic con Mover selección o con Mover píxeles selecciona todo el lienzo
+    // (como Paint.NET), ya al pulsar.
     {
         CHECK(doc->selection().isEmpty());
         tools->select(ToolId::MoveSelection);
-        const int steps = doc->undoStack()->count();
+        int steps = doc->undoStack()->count();
         drag(canvas, {QPointF(300, 300)});
-        drag(canvas, {QPointF(300, 300), QPointF(340, 320)});
+        CHECK(doc->selection().bounds() == doc->rect());
+        CHECK(doc->undoStack()->count() == steps + 1);
+        doc->undoStack()->undo();
         CHECK(doc->selection().isEmpty());
-        CHECK(doc->undoStack()->count() == steps);
+        steps = doc->undoStack()->index();
         tools->select(ToolId::MoveSelected);
         const QPoint at = canvas->imageToView(QPointF(300, 300)).toPoint();
         QMouseEvent press(QEvent::MouseButtonPress, QPointF(at), QPointF(canvas->viewport()->mapToGlobal(at)),
@@ -1027,6 +1048,43 @@ int main(int argc, char** argv)
     }
 
 
+    // Colores: solo cambia de tamaño manteniendo la proporción, y "Más"/"Menos" conservan la
+    // escala (antes, al ampliarla, "Más" la volvía pequeña).
+    {
+        auto* colors = w.findChild<ColorsPanel*>();
+        auto* panel = colors ? qobject_cast<FloatingPanel*>(colors->parentWidget()) : nullptr;
+        CHECK(colors && panel);
+        if (colors && panel) {
+            const QSize base = colors->sizeHint();
+            const QSize wide = colors->fitSize(QSize(base.width() * 3 / 2, base.height()), Qt::Horizontal);
+            CHECK(std::abs(double(wide.height()) / wide.width() - double(base.height()) / base.width()) < 0.02);
+            panel->resize(colors->sizeForScale(1.4) + (panel->size() - colors->size()));
+            settle();
+            const QSize compact = panel->size();
+            CHECK(std::abs(colors->scale() - 1.4) < 0.05);
+            auto* more = colors->findChild<QPushButton*>();
+            CHECK(more && more->isCheckable());
+            if (more) {
+                more->click();
+                settle();
+                CHECK(colors->isExpanded() && std::abs(colors->scale() - 1.4) < 0.05);
+                CHECK(panel->width() > compact.width());
+                more->click();
+                settle();
+                CHECK(!colors->isExpanded() && std::abs(panel->width() - compact.width()) <= 2
+                      && std::abs(panel->height() - compact.height()) <= 2);
+            }
+            panel->resize(colors->sizeForScale(1.0) + (panel->size() - colors->size()));
+        }
+        // Herramientas: dos columnas por defecto y Formas ocupa lo que queda de la última fila.
+        auto* toolsGrid = w.findChild<ToolsPanel*>();
+        CHECK(toolsGrid && toolsGrid->columns() == 2);
+        if (toolsGrid) {
+            QList<QToolButton*> buttons = toolsGrid->findChildren<QToolButton*>();
+            CHECK(buttons.size() == 19 && buttons.last()->width() > buttons.first()->width() * 3 / 2);
+        }
+    }
+
     // Iconos teñidos con los colores activos (activado por defecto): el cubo cambia con el color
     // principal y el degradado también con el secundario.
     {
@@ -1170,7 +1228,7 @@ int main(int argc, char** argv)
             settle();
         }
 
-        // Fuentes: el selector tiene ancho fijo y hay más tamaños (los de Paint.NET y más).
+        // Fuentes: el selector tiene ancho fijo y los tamaños son exactamente los de Paint.NET.
         auto* font = w.findChild<FontChooser*>();
         CHECK(font && font->sizePolicy().horizontalPolicy() == QSizePolicy::Fixed);
         if (font) {
@@ -1180,10 +1238,14 @@ int main(int argc, char** argv)
             CHECK(font->sizeHint().width() == width);
         }
         bool sizesFound = false;
-        for (QComboBox* c : w.findChildren<QComboBox*>())
-            if (c->findText(QStringLiteral("96")) >= 0 && c->findText(QStringLiteral("216")) >= 0
-                && c->findText(QStringLiteral("1000")) >= 0)
-                sizesFound = true;
+        for (QComboBox* c : w.findChildren<QComboBox*>()) {
+            if (c->findText(QStringLiteral("216")) < 0 || c->findText(QStringLiteral("288")) < 0)
+                continue;
+            QStringList items;
+            for (int i = 0; i < c->count(); ++i)
+                items << c->itemText(i);
+            sizesFound = items.join(QLatin1Char(' ')) == QStringLiteral("8 9 10 11 12 14 16 18 20 22 24 26 28 36 48 72 84 96 108 144 192 216 288");
+        }
         CHECK(sizesFound);
 
         // Efectos: "Repetir" arriba del todo con el último efecto; Ayuda con los enlaces de Kaint.
@@ -1259,7 +1321,7 @@ int main(int argc, char** argv)
                     if (auto* b = ask->findChild<QAbstractButton*>(QStringLiteral("choice%1").arg(choice)))
                         b->click();
             });
-            emit scheme->activated(int(Theme::Scheme::Kde));
+            emit scheme->activated(scheme->findData(int(Theme::Scheme::Kde)));
             settle();
             if (choice == 1)
                 CHECK(!settings.restartRequested() && scheme->currentIndex() == before);

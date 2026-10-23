@@ -540,6 +540,13 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>ImageStrip</name>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+</context>
+<context>
     <name>LassoSelectTool</name>
     <message>
         <source>Arrastra para dibujar el contorno de la selección. </source>
@@ -646,6 +653,14 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Arrastra para dibujar una línea con el color principal (clic derecho: secundario). Mayús: 15°. Alt: desde el centro.</source>
         <translation>Drag to draw a line with the primary color (right click: secondary). Shift: 15°. Alt: from the center.</translation>
+    </message>
+    <message>
+        <source>Editar línea/curva</source>
+        <translation>Edit Line/Curve</translation>
+    </message>
+    <message>
+        <source>Finalizar línea/curva</source>
+        <translation>Finish Line/Curve</translation>
     </message>
     <message>
         <source>Línea/Curva</source>
@@ -1579,6 +1594,10 @@ What do you want to do?</translation>
     <message>
         <source>Arrastra la selección para moverla. Arrastre los controles para cambiar el tamaño. Arrastra con el botón derecho del ratón, o justo fuera del borde, para rotar.</source>
         <translation>Drag the selection to move it. Drag the handles to resize it. Drag with the right mouse button, or just outside the edge, to rotate.</translation>
+    </message>
+    <message>
+        <source>Seleccionar todo</source>
+        <translation>Select All</translation>
     </message>
     <message>
         <source>Ángulo: %1°</source>
@@ -3647,22 +3666,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The KDE theme uses the Plasma integration, which is only loaded when Kaint starts. Do you want to restart Kaint now?</translation>
     </message>
     <message>
-        <source>Windows</source>
-        <translation>Windows</translation>
-    </message>
-    <message>
-        <source>El estilo y los colores reales de Windows.</source>
-        <translation>The real Windows style and colors.</translation>
-    </message>
-    <message>
-        <source>El tema Windows usa el estilo del sistema, que solo se carga al abrir Kaint. ¿Quieres reiniciar Kaint ahora?</source>
-        <translation>The Windows theme uses the system style, which is only loaded when Kaint starts. Do you want to restart Kaint now?</translation>
-    </message>
-    <message>
-        <source>Para salir del tema Windows hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?</source>
-        <translation>Leaving the Windows theme requires restarting Kaint. Do you want to restart it now?</translation>
-    </message>
-    <message>
         <source>Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo ahora?</source>
         <translation>Leaving the KDE theme requires restarting Kaint. Do you want to restart it now?</translation>
     </message>
@@ -4049,6 +4052,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Arrastra para dibujar la forma: contorno con el color principal y relleno con el secundario (clic derecho: al revés). Mayús: proporciones iguales. Alt: desde el centro.</source>
         <translation>Drag to draw the shape: outline with the primary color and fill with the secondary color (right click: reversed). Shift: equal proportions. Alt: from the center.</translation>
+    </message>
+    <message>
+        <source>Editar forma</source>
+        <translation>Edit Shape</translation>
+    </message>
+    <message>
+        <source>Finalizar forma</source>
+        <translation>Finish Shape</translation>
     </message>
     <message>
         <source>Formas</source>

@@ -145,7 +145,10 @@ QRect StrokeEngine::pixelLine(QPoint a, QPoint b)
             y0 += sy;
         }
     }
-    return QRect(a, b).normalized().adjusted(0, 0, 1, 1).intersected(m_mask.rect());
+    // Con los dos extremos incluidos en cualquier sentido (QRect::normalized() los dejaba
+    // fuera al trazar hacia la izquierda o hacia arriba).
+    return QRect(QPoint(std::min(a.x(), b.x()), std::min(a.y(), b.y())), QPoint(std::max(a.x(), b.x()), std::max(a.y(), b.y())))
+        .intersected(m_mask.rect());
 }
 
 void StrokeEngine::composite(const QRect& area)

@@ -39,10 +39,8 @@ const QList<double>& brushPresets()
 // intermedios y algunos más grandes.
 const QList<double>& fontPresets()
 {
-    static const QList<double> list = {6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  18,  20,
-                                       22,  24,  26,  28,  30,  32,  36,  40,  44,  48,  54,  60,  66,
-                                       72,  80,  84,  88,  96,  108, 120, 144, 168, 192, 216, 240, 288,
-                                       336, 384, 432, 480, 576, 720, 864, 1000};
+    // Los tamaños de la lista de Paint.NET.
+    static const QList<double> list = {8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72, 84, 96, 108, 144, 192, 216, 288};
     return list;
 }
 

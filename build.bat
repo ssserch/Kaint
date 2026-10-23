@@ -30,6 +30,7 @@ set "DO_TEST=0"
 set "DO_INSTALL=0"
 set "DO_RUN=0"
 set "DO_UNINSTALL=0"
+set "DO_ZIP=0"
 set "ASSUME_YES=0"
 if "%~1"=="" if "%INTERACTIVE%"=="1" set "DO_INSTALL=1"
 
@@ -45,6 +46,7 @@ if /i "%~1"=="--test"      (set "DO_TEST=1" & shift & goto args)
 if /i "%~1"=="-i"          (set "DO_INSTALL=1" & shift & goto args)
 if /i "%~1"=="--install"   (set "DO_INSTALL=1" & shift & goto args)
 if /i "%~1"=="--uninstall" (set "DO_UNINSTALL=1" & shift & goto args)
+if /i "%~1"=="--zip"       (set "DO_ZIP=1" & shift & goto args)
 if /i "%~1"=="-r"          (set "DO_RUN=1" & shift & goto args)
 if /i "%~1"=="--run"       (set "DO_RUN=1" & shift & goto args)
 if /i "%~1"=="-y"          (set "ASSUME_YES=1" & shift & goto args)
@@ -102,6 +104,7 @@ if "%DO_TEST%"=="1" (
 )
 
 if "%DO_INSTALL%"=="1" call :install || exit /b 1
+if "%DO_ZIP%"=="1" call :zip || exit /b 1
 
 echo Listo: %BUILD_DIR%\kaint.exe
 if "%DO_RUN%"=="1" (
@@ -132,6 +135,22 @@ reg add "%UNINSTALL_KEY%" /v UninstallString /d "\"%PREFIX%\build.bat\" --uninst
 reg add "%UNINSTALL_KEY%" /v NoModify /t REG_DWORD /d 1 /f >nul
 reg add "%UNINSTALL_KEY%" /v NoRepair /t REG_DWORD /d 1 /f >nul
 echo Instalado: %PREFIX%\bin\kaint.exe (también en el menú Inicio)
+exit /b 0
+
+rem --- Paquete portable (.zip) ------------------------------------------------
+:zip
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content version.json -Raw | ConvertFrom-Json).version"`) do set "KAINT_VERSION=%%V"
+set "PACKAGE=%CD%\%BUILD_DIR%\package\Kaint"
+set "ZIP=%CD%\%BUILD_DIR%\Kaint-%KAINT_VERSION%-windows-x64.zip"
+echo Creando %ZIP%...
+if exist "%BUILD_DIR%\package" rmdir /s /q "%BUILD_DIR%\package"
+cmake --install "%BUILD_DIR%" --prefix "%PACKAGE%" || exit /b 1
+for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
+    if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%PACKAGE%\bin\" >nul
+)
+if exist "%ZIP%" del /q "%ZIP%"
+powershell -NoProfile -Command "Compress-Archive -Path '%PACKAGE%' -DestinationPath '%ZIP%'" || exit /b 1
+echo Paquete: %ZIP% (descomprimir y abrir Kaint\bin\kaint.exe)
 exit /b 0
 
 rem --- Desinstalar ------------------------------------------------------------
@@ -200,6 +219,7 @@ echo   -t, --test           ejecuta las pruebas después de compilar
 echo   -i, --install        instala en %%LOCALAPPDATA%%\Programs\Kaint con acceso en el menú Inicio
 echo       --uninstall      quita la instalación (también desde "Aplicaciones instaladas")
 echo       --prefix RUTA    carpeta de instalación
+echo       --zip            crea un .zip portable para publicar (build-windows\Kaint-VERSIÓN-windows-x64.zip)
 echo   -r, --run            ejecuta Kaint al terminar
 echo   -y, --yes            descarga las herramientas que falten sin preguntar
 echo   -h, --help           muestra esta ayuda

@@ -36,7 +36,13 @@ Theme::Scheme startupScheme(int argc, char** argv)
                                 QStringLiteral("kde"), QStringLiteral("custom")};
         settings.setValue(QStringLiteral("colorScheme"), std::max(0, int(names.indexOf(value))));
     }
-    return Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 4));
+    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 4));
+#ifdef Q_OS_WIN
+    // En Windows no hay tema nativo aparte (versiones anteriores lo tenían).
+    if (scheme == Theme::Scheme::Kde)
+        return Theme::Scheme::System;
+#endif
+    return scheme;
 }
 
 } // namespace

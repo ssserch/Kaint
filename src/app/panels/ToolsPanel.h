@@ -18,6 +18,8 @@ public:
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
     QSize fitSize(QSize proposed, Qt::Orientations changed) const override;
+    QVariant layoutState() const override { return m_columns; }
+    QSize sizeForLayout(const QVariant& state) const override;
     int columnsFor(int width) const;
     int columns() const { return columnsFor(width()); }
     void setIconSize(int size);

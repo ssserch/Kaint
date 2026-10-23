@@ -68,6 +68,10 @@ AppSettings AppSettings::load()
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
     a.coloredToolIcons = get("coloredToolIcons", a.coloredToolIcons);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 4);
+#ifdef Q_OS_WIN
+    if (a.colorScheme == int(Theme::Scheme::Kde))
+        a.colorScheme = int(Theme::Scheme::System);
+#endif
     a.autosaveMinutes = std::clamp(get("autosaveMinutes", a.autosaveMinutes), 0, 120);
     a.language = get("language", a.language) == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
     a.reopenLast = get("reopenLast", a.reopenLast);
@@ -75,7 +79,7 @@ AppSettings AppSettings::load()
     a.rulers = get("rulers", a.rulers);
     a.dropShadow = get("dropShadow", a.dropShadow);
     a.canvasBorder = s.value(QStringLiteral("canvasBorder"), QColor()).value<QColor>();
-    a.checkerBrightness = std::clamp(get("checkerBrightness", a.checkerBrightness), 0, 255);
+    a.checkerBrightness = std::clamp(get("checkerboardBrightness", a.checkerBrightness), 0, 255);
     a.startTool = get("startTool", a.startTool);
     a.tabletEraser = get("tabletEraser", a.tabletEraser);
     a.historyLimitMB = std::max(0, get("historyLimitMB", a.historyLimitMB));
@@ -110,7 +114,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("rulers"), rulers);
     s.setValue(QStringLiteral("dropShadow"), dropShadow);
     s.setValue(QStringLiteral("canvasBorder"), canvasBorder);
-    s.setValue(QStringLiteral("checkerBrightness"), checkerBrightness);
+    s.setValue(QStringLiteral("checkerboardBrightness"), checkerBrightness);
+    s.remove(QStringLiteral("checkerBrightness"));
     s.setValue(QStringLiteral("startTool"), startTool);
     s.setValue(QStringLiteral("tabletEraser"), tabletEraser);
     s.setValue(QStringLiteral("historyLimitMB"), historyLimitMB);
@@ -259,22 +264,22 @@ QWidget* SettingsDialog::createInterfacePage()
     check(tr("Iconos de herramientas con los colores activos"), &AppSettings::coloredToolIcons,
           tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario."));
 
-    // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio.
+    // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
+    // tema nativo aparte: claro y oscuro ya son los de Windows, como en Paint.NET.
     auto* schemeRow = new QHBoxLayout;
     auto* scheme = new QComboBox(page.widget);
-    // El tema del escritorio: Plasma en Linux, el estilo nativo en Windows.
-#ifdef Q_OS_WIN
-    const QString native = tr("Windows");
-    const QString nativeTip = tr("El estilo y los colores reales de Windows.");
-#else
-    const QString native = tr("KDE");
-    const QString nativeTip = tr("El estilo y los colores reales de Plasma.");
+    auto addScheme = [scheme](const QString& text, Theme::Scheme id, const QString& tip) {
+        scheme->addItem(text, int(id));
+        scheme->setItemData(scheme->count() - 1, tip, Qt::ToolTipRole);
+    };
+    addScheme(tr("Seguir al sistema"), Theme::Scheme::System, tr("Claro u oscuro de Paint.NET, según el modo del escritorio."));
+    addScheme(tr("Claro"), Theme::Scheme::Light, {});
+    addScheme(tr("Oscuro"), Theme::Scheme::Dark, {});
+#ifndef Q_OS_WIN
+    addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
-    scheme->addItems({tr("Seguir al sistema"), tr("Claro"), tr("Oscuro"), native, tr("Personalizado")});
-    scheme->setItemData(0, tr("Claro u oscuro de Paint.NET, según el modo del escritorio."), Qt::ToolTipRole);
-    scheme->setItemData(3, nativeTip, Qt::ToolTipRole);
-    scheme->setItemData(4, tr("Colores, fondo del lienzo y diseño a tu gusto."), Qt::ToolTipRole);
-    scheme->setCurrentIndex(m_settings.colorScheme);
+    addScheme(tr("Personalizado"), Theme::Scheme::Custom, tr("Colores, fondo del lienzo y diseño a tu gusto."));
+    scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
     auto* customize = new QPushButton(tr("Personalizar…"), page.widget);
     customize->setToolTip(tr("Editar el tema personalizado."));
     schemeRow->addWidget(new QLabel(tr("Tema:"), page.widget));
@@ -299,19 +304,11 @@ QWidget* SettingsDialog::createInterfacePage()
         if (i == m_settings.colorScheme)
             return true;
         if (Theme::needsRestart(Theme::Scheme(i))) {
-#ifdef Q_OS_WIN
-            const QString question = i == int(Theme::Scheme::Kde)
-                                         ? tr("El tema Windows usa el estilo del sistema, que solo se carga al abrir "
-                                              "Kaint. ¿Quieres reiniciar Kaint ahora?")
-                                         : tr("Para salir del tema Windows hay que reiniciar Kaint. ¿Quieres "
-                                              "reiniciarlo ahora?");
-#else
             const QString question = i == int(Theme::Scheme::Kde)
                                          ? tr("El tema KDE usa la integración de Plasma, que solo se carga al abrir "
                                               "Kaint. ¿Quieres reiniciar Kaint ahora?")
                                          : tr("Para salir del tema KDE hay que reiniciar Kaint. ¿Quieres reiniciarlo "
                                               "ahora?");
-#endif
             if (askRestart(question, tr("Kaint se cerrará y se abrirá de nuevo con el tema elegido. Si hay cambios sin "
                                         "guardar, te lo preguntará antes."),
                            tr("Seguir con el tema actual."))) {
@@ -319,16 +316,16 @@ QWidget* SettingsDialog::createInterfacePage()
                 m_restartRequested = true;
                 accept();
             } else {
-                scheme->setCurrentIndex(m_settings.colorScheme);
+                scheme->setCurrentIndex(scheme->findData(m_settings.colorScheme));
             }
             return false;
         }
         m_settings.colorScheme = i;
-        scheme->setCurrentIndex(i);
+        scheme->setCurrentIndex(scheme->findData(i));
         changed();
         return true;
     };
-    connect(scheme, &QComboBox::activated, this, chooseScheme);
+    connect(scheme, &QComboBox::activated, this, [scheme, chooseScheme](int index) { chooseScheme(scheme->itemData(index).toInt()); });
     connect(customize, &QPushButton::clicked, this, [this, chooseScheme] {
         if (!chooseScheme(int(Theme::Scheme::Custom)))
             return;
@@ -435,7 +432,7 @@ QWidget* SettingsDialog::createCanvasPage()
     }
     connect(slider, &QSlider::valueChanged, this, [set](int v) { set(v / 100.0); });
     connect(spin, &QDoubleSpinBox::valueChanged, this, set);
-    connect(reset, &QToolButton::clicked, this, [set] { set(1.0); });
+    connect(reset, &QToolButton::clicked, this, [set] { set(191 / 255.0); });
     page.layout->addStretch();
     return page.widget;
 }

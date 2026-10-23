@@ -31,6 +31,11 @@ QImage scale(const QImage& src, QSize size, Method method, bool gammaCorrect = f
 enum class Interpolation { NearestNeighbor, Bilinear, Bicubic };
 QString name(Interpolation interpolation);
 
+// Para reducir sin dientes de sierra: si 'transform' encoge la imagen, la devuelve ya reducida
+// promediando por áreas (como Paint.NET) y ajusta 'transform' a la nueva imagen. Guarda el
+// último resultado, así arrastrar no la recalcula.
+QImage prefiltered(const QImage& src, QTransform* transform, bool gammaCorrect = false);
+
 // Dibuja 'src' transformada por 'transform' sobre 'dst' (src-over), limitado a 'clip'.
 void drawTransformed(QImage& dst, const QImage& src, const QTransform& transform, Interpolation interpolation,
                      const QRect& clip, bool gammaCorrect = false);

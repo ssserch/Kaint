@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 #include <QtEndian>
 
+#include <algorithm>
 #include <cmath>
 #include <unordered_map>
 
@@ -133,10 +134,11 @@ private:
 
 namespace Gif {
 
-Animation read(const QString& path, QString* error)
+namespace {
+
+Animation readFrom(QImageReader& reader, QString* error)
 {
     Animation anim;
-    QImageReader reader(path);
     reader.setAutoTransform(false);
     while (reader.canRead()) {
         Frame f;
@@ -157,6 +159,72 @@ Animation read(const QString& path, QString* error)
     return anim;
 }
 
+} // namespace
+
+Animation read(const QString& path, QString* error)
+{
+    QImageReader reader(path);
+    return readFrom(reader, error);
+}
+
+Animation decode(const QByteArray& data, QString* error)
+{
+    QByteArray copy = data;
+    QBuffer buffer(&copy);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer, "gif");
+    return readFrom(reader, error);
+}
+
+QList<Frame> applyEffects(QList<Frame> frames, const Effects& effects)
+{
+    if (frames.size() < 2)
+        return frames;
+    // El primero, debajo de los demás.
+    if (effects.firstAsBackground) {
+        const QImage background = frames.first().image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        for (int i = 1; i < frames.size(); ++i) {
+            QImage composed = background.copy();
+            QPainter p(&composed);
+            p.drawImage(0, 0, frames[i].image);
+            p.end();
+            frames[i].image = composed.convertToFormat(kLayerFormat);
+        }
+        if (effects.firstOnlyAsBackground)
+            frames.removeFirst();
+    }
+    if (!effects.crossfade || frames.size() < 2)
+        return frames;
+    // Fundidos intermedios (mezcla premultiplicada: también de transparente a opaco).
+    const int steps = std::clamp(effects.fadeFrames, 1, 20);
+    const int delay = std::max(kMinDelayMs, effects.fadeDelayMs);
+    QList<Frame> out;
+    const int n = int(frames.size());
+    for (int i = 0; i < n; ++i) {
+        out << frames[i];
+        if (i == n - 1 && !effects.fadeLastToFirst)
+            break;
+        const QImage a = frames[i].image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        const QImage b = frames[(i + 1) % n].image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        for (int k = 1; k <= steps; ++k) {
+            const int t = 256 * k / (steps + 1);
+            QImage mixed(a.size(), QImage::Format_ARGB32_Premultiplied);
+            for (int y = 0; y < a.height(); ++y) {
+                const QRgb* ra = reinterpret_cast<const QRgb*>(a.constScanLine(y));
+                const QRgb* rb = reinterpret_cast<const QRgb*>(b.constScanLine(y));
+                QRgb* rm = reinterpret_cast<QRgb*>(mixed.scanLine(y));
+                for (int x = 0; x < a.width(); ++x) {
+                    auto lerp = [t](int from, int to) { return (from * (256 - t) + to * t) >> 8; };
+                    rm[x] = qRgba(lerp(qRed(ra[x]), qRed(rb[x])), lerp(qGreen(ra[x]), qGreen(rb[x])),
+                                  lerp(qBlue(ra[x]), qBlue(rb[x])), lerp(qAlpha(ra[x]), qAlpha(rb[x])));
+                }
+            }
+            out << Frame{mixed.convertToFormat(kLayerFormat), delay};
+        }
+    }
+    return out;
+}
+
 QByteArray encode(const QList<Frame>& frames, const Options& options, QString* error)
 {
     if (frames.isEmpty()) {
@@ -170,20 +238,6 @@ QByteArray encode(const QList<Frame>& frames, const Options& options, QString* e
             *error = QObject::tr("El formato GIF no admite imágenes de más de 65535 píxeles.");
         return {};
     }
-    QByteArray out("GIF89a");
-    put16(out, size.width());
-    put16(out, size.height());
-    out.append(char(0x70));
-    out.append(char(0));
-    out.append(char(0));
-    if (frames.size() > 1 && options.loops >= 0) {
-        out.append("\x21\xff\x0b", 3);
-        out.append("NETSCAPE2.0");
-        out.append("\x03\x01", 2);
-        put16(out, std::clamp(options.loops, 0, 65535));
-        out.append(char(0));
-    }
-
     // Si algún fotograma tiene transparencia, todos reservan un color transparente: así los
     // lectores borran el fotograma anterior (eliminación "restaurar al fondo") en vez de
     // dejarlo debajo, como los navegadores.
@@ -200,43 +254,94 @@ QByteArray encode(const QList<Frame>& frames, const Options& options, QString* e
     }
     const bool slot = anyTransparent && frames.size() > 1;
 
-    for (const Frame& frame : frames) {
-        const QImage indexed = ImageIO::toIndexed8(frame.image, options.dither, options.alphaThreshold, slot);
-        const QList<QRgb> table = indexed.colorTable();
+    // Paleta global: los fotogramas uno debajo de otro se cuantizan juntos y luego se separan
+    // (todos comparten la tabla de colores).
+    QList<QImage> indexed;
+    if (options.globalPalette && frames.size() > 1) {
+        QImage strip(size.width(), size.height() * int(frames.size()), kLayerFormat);
+        strip.fill(Qt::transparent);
+        {
+            QPainter p(&strip);
+            p.setCompositionMode(QPainter::CompositionMode_Source);
+            for (int i = 0; i < frames.size(); ++i)
+                p.drawImage(0, i * size.height(), frames[i].image);
+        }
+        const QImage all = ImageIO::toIndexed8(strip, options.dither, options.alphaThreshold, slot, options.quantization);
+        for (int i = 0; i < frames.size(); ++i)
+            indexed << all.copy(0, i * size.height(), size.width(), size.height());
+    } else {
+        for (const Frame& frame : frames)
+            indexed << ImageIO::toIndexed8(frame.image, options.dither, options.alphaThreshold, slot, options.quantization);
+    }
+    auto bitsFor = [](qsizetype colors) {
+        int bits = 1;
+        while ((1 << bits) < colors)
+            ++bits;
+        return bits;
+    };
+    auto writeTable = [](QByteArray& out, const QList<QRgb>& table, int bits) {
+        for (int i = 0; i < (1 << bits); ++i) {
+            const QRgb c = i < table.size() ? table[i] : 0;
+            out.append(char(qRed(c)));
+            out.append(char(qGreen(c)));
+            out.append(char(qBlue(c)));
+        }
+    };
+    const bool global = options.globalPalette && frames.size() > 1;
+    const QList<QRgb> globalTable = global ? indexed.first().colorTable() : QList<QRgb>();
+    const int globalBits = bitsFor(globalTable.size());
+
+    QByteArray out("GIF89a");
+    put16(out, size.width());
+    put16(out, size.height());
+    out.append(char(global ? 0xf0 | (globalBits - 1) : 0x70));
+    out.append(char(0));
+    out.append(char(0));
+    if (global)
+        writeTable(out, globalTable, globalBits);
+    if (frames.size() > 1 && options.loops >= 0) {
+        out.append("\x21\xff\x0b", 3);
+        out.append("NETSCAPE2.0");
+        out.append("\x03\x01", 2);
+        put16(out, std::clamp(options.loops, 0, 65535));
+        out.append(char(0));
+    }
+
+    for (int f = 0; f < frames.size(); ++f) {
+        const QImage& image = indexed[f];
+        const QList<QRgb> table = image.colorTable();
         int transparent = -1;
         for (int i = 0; i < table.size(); ++i)
             if (qAlpha(table[i]) == 0) {
                 transparent = i;
                 break;
             }
-        int sizeBits = 1;
-        while ((1 << sizeBits) < table.size())
-            ++sizeBits;
+        const int sizeBits = global ? globalBits : bitsFor(table.size());
 
+        // Eliminación: 1 deja el fotograma debajo del siguiente (apilar), 2 lo borra.
         out.append("\x21\xf9\x04", 3);
-        out.append(char((2 << 2) | (transparent >= 0 ? 1 : 0)));
-        put16(out, (std::max(Gif::kMinDelayMs, frame.delayMs) + 5) / 10);
+        out.append(char(((options.stack ? 1 : 2) << 2) | (transparent >= 0 ? 1 : 0)));
+        put16(out, (std::max(Gif::kMinDelayMs, frames[f].delayMs) + 5) / 10);
         out.append(char(transparent >= 0 ? transparent : 0));
         out.append(char(0));
 
         out.append(char(0x2c));
         put16(out, 0);
         put16(out, 0);
-        put16(out, indexed.width());
-        put16(out, indexed.height());
-        out.append(char(0x80 | (sizeBits - 1)));
-        for (int i = 0; i < (1 << sizeBits); ++i) {
-            const QRgb c = i < table.size() ? table[i] : 0;
-            out.append(char(qRed(c)));
-            out.append(char(qGreen(c)));
-            out.append(char(qBlue(c)));
+        put16(out, image.width());
+        put16(out, image.height());
+        if (global) {
+            out.append(char(0));
+        } else {
+            out.append(char(0x80 | (sizeBits - 1)));
+            writeTable(out, table, sizeBits);
         }
         const int minCodeSize = std::max(2, sizeBits);
         out.append(char(minCodeSize));
         QByteArray pixels;
-        pixels.reserve(qsizetype(indexed.width()) * indexed.height());
-        for (int y = 0; y < indexed.height(); ++y)
-            pixels.append(reinterpret_cast<const char*>(indexed.constScanLine(y)), indexed.width());
+        pixels.reserve(qsizetype(image.width()) * image.height());
+        for (int y = 0; y < image.height(); ++y)
+            pixels.append(reinterpret_cast<const char*>(image.constScanLine(y)), image.width());
         LzwEncoder(out, minCodeSize).encode(reinterpret_cast<const uchar*>(pixels.constData()), pixels.size());
     }
     out.append(char(0x3b));

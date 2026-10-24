@@ -337,13 +337,8 @@ QImage prepare(const QImage& flattened, const QString& path, const SaveOptions& 
 
 QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions& options, QString* error)
 {
-    if (isAnimation(path)) {
-        Gif::Options o;
-        o.dither = options.dither;
-        o.alphaThreshold = options.alphaThreshold;
-        o.loops = options.loops;
-        return Gif::encode({Gif::Frame{prepared, options.frameDelay}}, o, error);
-    }
+    if (isAnimation(path))
+        return encodeAnimation({Gif::Frame{prepared, options.frameDelay}}, options, error);
     if (isIcon(path))
         return Ico::encode(prepared, options.icoSizes, error);
     if (options.interlaced && supportsInterlace(path)) {
@@ -375,16 +370,8 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
         return Ora::save(doc, path, error);
 
     QByteArray data;
-    if (isAnimation(path) && options.animation && doc->layerCount() > 1) {
-        Gif::Options o;
-        o.dither = options.dither;
-        o.alphaThreshold = options.alphaThreshold;
-        o.loops = options.loops;
-        data = Gif::encode(animationFrames(doc, options.frameDelay), o, error);
-        if (data.isEmpty())
-            return false;
-        return writeFile(path, data, error);
-    }
+    if (isAnimation(path) && options.animation && doc->layerCount() > 1)
+        return saveAnimation(animationFrames(doc, options.frameDelay), path, options, error);
     QImage image = prepare(doc->flattened(), path, options);
     const int dpm = int(std::round(doc->dpi() / 0.0254));
     image.setDotsPerMeterX(dpm);
@@ -395,6 +382,27 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
     if (data.isEmpty())
         return false;
     return writeFile(path, data, error);
+}
+
+QByteArray encodeAnimation(QList<Gif::Frame> frames, const SaveOptions& options, QString* error)
+{
+    for (Gif::Frame& f : frames)
+        if (f.delayMs <= 0)
+            f.delayMs = options.frameDelay;
+    Gif::Options o;
+    o.dither = options.dither;
+    o.alphaThreshold = options.alphaThreshold;
+    o.loops = options.loops;
+    o.quantization = options.quantization;
+    o.globalPalette = options.gifGlobalPalette;
+    o.stack = options.gifStack;
+    return Gif::encode(Gif::applyEffects(frames, options.gifEffects), o, error);
+}
+
+bool saveAnimation(const QList<Gif::Frame>& frames, const QString& path, const SaveOptions& options, QString* error)
+{
+    const QByteArray data = encodeAnimation(frames, options, error);
+    return !data.isEmpty() && writeFile(path, data, error);
 }
 
 QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay)

@@ -3549,6 +3549,14 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Repetitions:</translation>
     </message>
     <message>
+        <source>Configuración avanzada…</source>
+        <translation>Advanced settings…</translation>
+    </message>
+    <message>
+        <source>Fotogramas uno por uno (duración, omitir, copiar), paleta global, fundidos y fondo, como en ezgif.</source>
+        <translation>Frame by frame (duration, skip, copy), global palette, crossfades and background, like ezgif.</translation>
+    </message>
+    <message>
         <source>Tamaños:</source>
         <translation>Sizes:</translation>
     </message>
@@ -3575,6 +3583,154 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Tamaño del archivo: %1</source>
         <translation>File size: %1</translation>
+    </message>
+    <message>
+        <source>Fotograma %1 de %2</source>
+        <translation>Frame %1 of %2</translation>
+    </message>
+    <message>
+        <source>Pausa</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>Reproducir</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <source>Configuración avanzada del GIF</source>
+        <translation>Advanced GIF Settings</translation>
+    </message>
+    <message>
+        <source>Activar u omitir varios fotogramas</source>
+        <translation>Toggle a range of frames</translation>
+    </message>
+    <message>
+        <source>Omitir rango</source>
+        <translation>Skip range</translation>
+    </message>
+    <message>
+        <source>Activar rango</source>
+        <translation>Enable range</translation>
+    </message>
+    <message>
+        <source>Omitir cada N.º</source>
+        <translation>Skip every N-th</translation>
+    </message>
+    <message>
+        <source>Activar cada N.º</source>
+        <translation>Enable every N-th</translation>
+    </message>
+    <message>
+        <source>Desde:</source>
+        <translation>From:</translation>
+    </message>
+    <message>
+        <source>Hasta:</source>
+        <translation>To:</translation>
+    </message>
+    <message>
+        <source>Cada:</source>
+        <translation>Every:</translation>
+    </message>
+    <message>
+        <source>Opciones del GIF</source>
+        <translation>GIF options</translation>
+    </message>
+    <message>
+        <source>Sin fin</source>
+        <translation>Forever</translation>
+    </message>
+    <message>
+        <source>Usar una paleta global</source>
+        <translation>Use a global palette</translation>
+    </message>
+    <message>
+        <source>Cómo se eligen los 256 colores de la paleta. Octree es el de Paint.NET; el corte a la mediana reparte mejor los degradados.</source>
+        <translation>How the 256 palette colors are chosen. Octree is the one Paint.NET uses; median cut spreads gradients better.</translation>
+    </message>
+    <message>
+        <source>(cambiarla pone esta duración a todos los fotogramas)</source>
+        <translation>(changing it sets this duration for all frames)</translation>
+    </message>
+    <message>
+        <source>Duración:</source>
+        <translation>Duration:</translation>
+    </message>
+    <message>
+        <source>(vacío: se repite sin fin)</source>
+        <translation>(empty: loops forever)</translation>
+    </message>
+    <message>
+        <source>Reproducciones:</source>
+        <translation>Plays:</translation>
+    </message>
+    <message>
+        <source>(los mismos colores en todos los fotogramas: el archivo ocupa menos)</source>
+        <translation>(the same colors in every frame: a smaller file)</translation>
+    </message>
+    <message>
+        <source>Cuantización:</source>
+        <translation>Quantization:</translation>
+    </message>
+    <message>
+        <source>Efectos</source>
+        <translation>Effects</translation>
+    </message>
+    <message>
+        <source>Fundido entre fotogramas</source>
+        <translation>Crossfade frames</translation>
+    </message>
+    <message>
+        <source>No fundir el último fotograma con el primero</source>
+        <translation>Don&apos;t fade the last frame into the first</translation>
+    </message>
+    <message>
+        <source>Duración del fundido:</source>
+        <translation>Fade duration:</translation>
+    </message>
+    <message>
+        <source>Fotogramas del fundido:</source>
+        <translation>Fade frames:</translation>
+    </message>
+    <message>
+        <source>No apilar los fotogramas</source>
+        <translation>Don&apos;t stack frames</translation>
+    </message>
+    <message>
+        <source>(cada fotograma se borra al mostrar el siguiente; para imágenes con fondo transparente)</source>
+        <translation>(each frame is removed when the next one shows; for images with a transparent background)</translation>
+    </message>
+    <message>
+        <source>Usar el primer fotograma como fondo</source>
+        <translation>Use the first frame as background</translation>
+    </message>
+    <message>
+        <source>Duración 0 para el primer fotograma (no mostrarlo solo)</source>
+        <translation>0 duration for the first frame (don&apos;t show it alone)</translation>
+    </message>
+    <message>
+        <source>Omitido: no va en el GIF</source>
+        <translation>Skipped: not included in the GIF</translation>
+    </message>
+    <message>
+        <source>Activar</source>
+        <translation>Enable</translation>
+    </message>
+    <message>
+        <source>Omitir</source>
+        <translation>Skip</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Repite este fotograma justo después</source>
+        <translation>Repeats this frame right after it</translation>
+    </message>
+    <message>
+        <source>(%1 FPS)</source>
+        <translation>(%1 FPS)</translation>
     </message>
 </context>
 <context>

@@ -867,6 +867,61 @@ static void testGifAndIco()
             }
     CHECK(same);
 
+    // Configuración avanzada (como ezgif): paleta global (una sola tabla en la cabecera),
+    // apilar (eliminación 1) o no (2), fundidos y el primer fotograma como fondo.
+    {
+        QImage red(20, 10, kLayerFormat), blue(20, 10, kLayerFormat);
+        red.fill(qRgba(255, 0, 0, 255));
+        blue.fill(kTransparent);
+        for (int x = 10; x < 20; ++x)
+            for (int y = 0; y < 10; ++y)
+                blue.setPixel(x, y, qRgba(0, 0, 255, 255));
+        const QList<Gif::Frame> two{Gif::Frame{red, 100}, Gif::Frame{blue, 200}};
+        Gif::Options g;
+        g.globalPalette = true;
+        const QByteArray shared = Gif::encode(two, g, &error);
+        CHECK(shared.size() > 13 && (uchar(shared[10]) & 0x80));
+        const Gif::Animation sharedBack = Gif::decode(shared);
+        CHECK(sharedBack.frames.size() == 2);
+        if (sharedBack.frames.size() == 2) {
+            CHECK(sharedBack.frames[0].image.pixel(5, 5) == qRgba(255, 0, 0, 255));
+            CHECK(sharedBack.frames[1].image.pixel(15, 5) == qRgba(0, 0, 255, 255));
+            CHECK(sharedBack.frames[1].delayMs == 200);
+        }
+        g.globalPalette = false;
+        const QByteArray separate = Gif::encode(two, g, &error);
+        CHECK(!(uchar(separate[10]) & 0x80));
+        const int gce = int(separate.indexOf("\x21\xf9\x04"));
+        CHECK(gce > 0 && ((uchar(separate[gce + 3]) >> 2) & 7) == 2);
+        g.stack = true;
+        const QByteArray stacked = Gif::encode(two, g, &error);
+        const int gce2 = int(stacked.indexOf("\x21\xf9\x04"));
+        CHECK(gce2 > 0 && ((uchar(stacked[gce2 + 3]) >> 2) & 7) == 1);
+        // Apilados, lo transparente del segundo deja ver el primero.
+        const Gif::Animation stackedBack = Gif::decode(stacked);
+        CHECK(stackedBack.frames.size() == 2 && stackedBack.frames[1].image.pixel(5, 5) == qRgba(255, 0, 0, 255));
+
+        Gif::Effects fx;
+        fx.crossfade = true;
+        fx.fadeFrames = 3;
+        fx.fadeDelayMs = 40;
+        const QList<Gif::Frame> faded = Gif::applyEffects(two, fx);
+        CHECK(faded.size() == 2 + 2 * 3 && faded[1].delayMs == 40);
+        if (faded.size() == 8) {
+            const QRgb mid = faded[2].image.pixel(15, 5);
+            CHECK(qRed(mid) > 40 && qRed(mid) < 215 && qBlue(mid) > 40 && qBlue(mid) < 215);
+        }
+        fx.fadeLastToFirst = false;
+        CHECK(Gif::applyEffects(two, fx).size() == 2 + 3);
+        Gif::Effects bg;
+        bg.firstAsBackground = true;
+        const QList<Gif::Frame> under = Gif::applyEffects(two, bg);
+        CHECK(under.size() == 2 && under[1].image.pixel(5, 5) == qRgba(255, 0, 0, 255)
+              && under[1].image.pixel(15, 5) == qRgba(0, 0, 255, 255));
+        bg.firstOnlyAsBackground = true;
+        CHECK(Gif::applyEffects(two, bg).size() == 1);
+    }
+
     // Icono con tres tamaños; al abrirlo se usa el más grande.
     QImage logo(40, 30, kLayerFormat);
     logo.fill(qRgba(0, 128, 255, 200));

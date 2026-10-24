@@ -13,9 +13,11 @@
 class BarSlider;
 class QCheckBox;
 class QComboBox;
-class QSpinBox;
 class QLabel;
+class QPushButton;
 class QScrollArea;
+class QSpinBox;
+class QToolButton;
 
 // "Configuración de guardado" de Paint.NET: opciones del formato (calidad, profundidad de
 // bits, tramado, umbral de transparencia) con una vista previa del resultado y el tamaño que
@@ -27,15 +29,39 @@ public:
                      QWidget* parent = nullptr, const QList<Gif::Frame>& frames = {});
     ~SaveConfigDialog() override;
     ImageIO::SaveOptions options() const;
+    // Fotogramas del GIF animado tal como quedaron en la configuración avanzada (sin los omitidos,
+    // con las copias y sus duraciones); vacío si no se guarda como animación.
+    QList<Gif::Frame> animationFrames() const;
 
     // Hay algo que configurar para este formato.
     static bool hasOptions(const QString& path);
 
 private:
+    // Un fotograma de la configuración avanzada: cuál de los originales, su duración (0: la
+    // predeterminada) y si se omite.
+    struct FrameEntry {
+        int source = 0;
+        int delayMs = 0;
+        bool skip = false;
+    };
+    // Lo que se edita en la configuración avanzada.
+    struct Advanced {
+        QList<FrameEntry> entries;
+        int quantization = 1;
+        bool globalPalette = false;
+        bool stack = false;
+        Gif::Effects effects;
+    };
+
     void schedule();
     void start();
-    void onEncoded(const QImage& preview, qint64 bytes, const QString& error, int generation);
+    void onEncoded(const QList<Gif::Frame>& preview, qint64 bytes, const QString& error, int generation);
+    void showFrame(int index);
+    void setPlaying(bool playing);
+    void nextFrame();
     void updateControls();
+    void showAdvanced();
+    Advanced defaultAdvanced() const;
 
     QImage m_image;
     QString m_path;
@@ -52,13 +78,20 @@ private:
     QSpinBox* m_loops = nullptr;
     QList<QCheckBox*> m_icoSizes;
     QList<Gif::Frame> m_frames;
+    Advanced m_advanced;
+    QPushButton* m_advancedButton = nullptr;
     QLabel* m_size;
     QLabel* m_preview;
     QComboBox* m_zoom;
+    QToolButton* m_play = nullptr;
+    QLabel* m_frameLabel = nullptr;
     QTimer m_debounce;
+    QTimer m_playTimer;
     std::thread m_thread;
     int m_generation = 0;
     bool m_running = false;
     bool m_pending = false;
-    QImage m_lastPreview;
+    QList<Gif::Frame> m_previewFrames;
+    int m_previewIndex = 0;
+    int m_playsLeft = 0;
 };

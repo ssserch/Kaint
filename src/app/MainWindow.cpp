@@ -192,6 +192,20 @@ public:
         return QRect(tab.right() - 2 - kClose, tab.top() + 4, kClose, kClose);
     }
 
+    // Punto de "sin guardar": siempre en la esquina de arriba a la izquierda, frente a la X.
+    QRect unsavedRect(int index) const
+    {
+        const QRect tab = tabRect(index);
+        return QRect(tab.left() + 2, tab.top() + 4, kDot, kDot);
+    }
+    void setUnsaved(int index, bool unsaved)
+    {
+        if (tabData(index).toBool() == unsaved)
+            return;
+        setTabData(index, unsaved);
+        update(unsavedRect(index));
+    }
+
 protected:
     QSize tabSizeHint(int) const override { return iconSize() + QSize(2 * kPadX, 2 * kPadY); }
     QSize minimumTabSizeHint(int index) const override { return tabSizeHint(index); }
@@ -210,6 +224,13 @@ protected:
         for (int i = 0; i < count(); ++i)
             tabIcon(i).paint(&p, thumbRect(i));
         p.setRenderHint(QPainter::Antialiasing);
+        for (int i = 0; i < count(); ++i) {
+            if (!tabData(i).toBool())
+                continue;
+            p.setPen(QPen(Qt::white, 1.5));
+            p.setBrush(QColor(255, 170, 20));
+            p.drawEllipse(QRectF(unsavedRect(i)).adjusted(1, 1, -1, -1));
+        }
         QList<int> shown{currentIndex()};
         if (m_hoverTab != currentIndex())
             shown << m_hoverTab;
@@ -291,6 +312,7 @@ protected:
 
 private:
     static constexpr int kClose = 14;
+    static constexpr int kDot = 12;
     // Margen, borde y relleno de la pestaña (los de la hoja de estilo) alrededor de la miniatura.
     static constexpr int kPadX = 6;
     static constexpr int kPadY = 5;
@@ -1394,16 +1416,9 @@ void MainWindow::updateTab(Document* doc)
         p.setPen(QPen(QColor(0, 0, 0, 70), dpr));
         p.drawRect(QRectF(thumb.rect()).adjusted(dpr / 2, dpr / 2, -dpr / 2, -dpr / 2));
     }
-    if (doc->isModified()) {
-        QPainter p(&thumb);
-        p.setRenderHint(QPainter::Antialiasing);
-        const qreal r = 5 * dpr;
-        p.setPen(QPen(Qt::white, 1.5 * dpr));
-        p.setBrush(QColor(255, 140, 0));
-        p.drawEllipse(QPointF(r + 1, r + 1), r, r);
-    }
     thumb.setDevicePixelRatio(dpr);
     m_tabs->setTabIcon(i, QIcon(QPixmap::fromImage(thumb)));
+    static_cast<ImageStrip*>(m_tabs)->setUnsaved(i, doc->isModified());
     m_tabs->setTabToolTip(i, QStringLiteral("%1%2\n%3 × %4")
                                  .arg(doc->isModified() ? QStringLiteral("*") : QString(), doc->displayName())
                                  .arg(doc->size().width())
@@ -1873,6 +1888,8 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
     ImageIO::SaveOptions options = m_saveOptions.value(suffix);
     if (ImageIO::isAnimation(path) && !m_saveOptions.contains(suffix))
         options.loops = doc->gifLoops();
+    // Fotogramas del GIF tal como quedaron en la configuración avanzada (omitidos, copias...).
+    QList<Gif::Frame> edited;
     if (SaveConfigDialog::hasOptions(path)) {
         const QList<Gif::Frame> frames = ImageIO::isAnimation(path) && doc->layerCount() > 1
                                              ? ImageIO::animationFrames(doc, 0)
@@ -1881,11 +1898,13 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
         if (dlg.exec() != QDialog::Accepted)
             return false;
         options = dlg.options();
+        edited = dlg.animationFrames();
         m_saveOptions.insert(suffix, options);
     }
     QString error;
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const bool ok = ImageIO::save(doc, path, options, &error);
+    const bool ok = edited.isEmpty() ? ImageIO::save(doc, path, options, &error)
+                                     : ImageIO::saveAnimation(edited, path, options, &error);
     QApplication::restoreOverrideCursor();
     if (!ok) {
         QMessageBox::critical(this, tr("No se pudo guardar"), tr("No se pudo guardar «%1»:\n%2").arg(path, error));

@@ -22,15 +22,40 @@ struct Animation {
 
 // Lee todos los fotogramas ya compuestos (con su duración).
 Animation read(const QString& path, QString* error);
+// Lo mismo desde un GIF en memoria (la vista previa al guardar).
+Animation decode(const QByteArray& data, QString* error = nullptr);
 
 struct Options {
     int loops = 0;
     int dither = 7;
     int alphaThreshold = 128;
+    // Paleta de 8 bits: 0 corte a la mediana, 1 octree.
+    int quantization = 1;
+    // Una sola paleta para todos los fotogramas (archivo más pequeño) en vez de una por fotograma.
+    bool globalPalette = false;
+    // Cada fotograma se dibuja sobre el anterior; si no (por defecto), el anterior se borra al
+    // mostrar el siguiente ("no apilar", para fondos transparentes).
+    bool stack = false;
 };
-// Codifica los fotogramas con una paleta propia por fotograma (hasta 255 colores y uno
-// transparente).
+// Codifica los fotogramas (hasta 255 colores y uno transparente por paleta).
 QByteArray encode(const QList<Frame>& frames, const Options& options, QString* error);
+
+// Efectos de la configuración avanzada (como los de ezgif).
+struct Effects {
+    // Fundido: entre cada fotograma y el siguiente, 'fadeFrames' fotogramas intermedios de
+    // 'fadeDelayMs' cada uno.
+    bool crossfade = false;
+    int fadeDelayMs = 60;
+    int fadeFrames = 10;
+    bool fadeLastToFirst = true;
+    // El primer fotograma queda debajo de todos los demás; con 'firstOnlyAsBackground' no se
+    // muestra solo (es únicamente el fondo).
+    bool firstAsBackground = false;
+    bool firstOnlyAsBackground = false;
+
+    bool operator==(const Effects&) const = default;
+};
+QList<Frame> applyEffects(QList<Frame> frames, const Effects& effects);
 
 // Duración escrita en el nombre de una capa ("(120ms)"); 'fallback' si no hay.
 int delayFromName(const QString& name, int fallback);

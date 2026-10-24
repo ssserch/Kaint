@@ -1088,6 +1088,78 @@ int main(int argc, char** argv)
         SaveConfigDialog gif(doc->flattened(), QStringLiteral("anim.gif"), o, &w, frames);
         const ImageIO::SaveOptions back = gif.options();
         CHECK(back.animation && back.loops == 2 && back.frameDelay == 250);
+        CHECK(!back.gifStack && !back.gifGlobalPalette && back.gifEffects == Gif::Effects());
+
+        // Vista previa del GIF: el botón la reproduce con sus duraciones.
+        QImage dot(60, 40, kLayerFormat);
+        dot.fill(kTransparent);
+        QList<Gif::Frame> moving;
+        for (int i = 0; i < 3; ++i) {
+            QImage f = dot.copy();
+            f.setPixel(10 + 20 * i, 20, qRgba(255, 0, 0, 255));
+            moving << Gif::Frame{f, 40};
+        }
+        SaveConfigDialog player(moving.first().image, QStringLiteral("anim.gif"), ImageIO::SaveOptions(), &w, moving);
+        player.show();
+        auto frameText = [&player] {
+            for (QLabel* l : player.findChildren<QLabel*>())
+                if (l->text().startsWith(QStringLiteral("Fotograma")))
+                    return l->text();
+            return QString();
+        };
+        QElapsedTimer t;
+        t.start();
+        while (frameText().isEmpty() && t.elapsed() < 5000)
+            QApplication::processEvents(QEventLoop::AllEvents, 20);
+        CHECK(frameText() == QStringLiteral("Fotograma 1 de 3"));
+        auto* play = player.findChild<QToolButton*>();
+        CHECK(play && play->isEnabled());
+        if (play)
+            play->click();
+        t.restart();
+        while (frameText() == QStringLiteral("Fotograma 1 de 3") && t.elapsed() < 2000)
+            QApplication::processEvents(QEventLoop::AllEvents, 10);
+        CHECK(frameText() != QStringLiteral("Fotograma 1 de 3"));
+        if (!outDir.isEmpty())
+            player.grab().save(QDir(outDir).filePath(QStringLiteral("gif-reproducir.png")));
+
+        // Configuración avanzada: omitir el segundo fotograma y copiar el primero.
+        QPushButton* advanced = nullptr;
+        for (QPushButton* b : player.findChildren<QPushButton*>())
+            if (b->text().startsWith(QStringLiteral("Configuración avanzada")))
+                advanced = b;
+        CHECK(advanced && advanced->isEnabled());
+        QTimer::singleShot(300, [&outDir] {
+            auto* dlg = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            CHECK(dlg);
+            if (!dlg)
+                return;
+            QList<QPushButton*> skips, copies;
+            for (QPushButton* b : dlg->findChildren<QPushButton*>()) {
+                if (b->text() == QStringLiteral("Omitir"))
+                    skips << b;
+                else if (b->text() == QStringLiteral("Copiar"))
+                    copies << b;
+            }
+            CHECK(skips.size() == 3 && copies.size() == 3);
+            if (skips.size() == 3)
+                skips[1]->click();
+            settle();
+            for (QPushButton* b : dlg->findChildren<QPushButton*>())
+                if (b->text() == QStringLiteral("Copiar")) {
+                    b->click();
+                    break;
+                }
+            settle();
+            if (!outDir.isEmpty())
+                dlg->grab().save(QDir(outDir).filePath(QStringLiteral("gif-avanzada.png")));
+            dlg->accept();
+        });
+        if (advanced)
+            advanced->click();
+        settle();
+        CHECK(player.animationFrames().size() == 3);
+        player.close();
     }
 
     // Reconstruir el menú Efectos y luego deshabilitar la ventana no debe tocar acciones ya
@@ -1224,6 +1296,8 @@ int main(int argc, char** argv)
         drag(canvas, {QPointF(20, 20), QPointF(80, 60)});
         CHECK(d->isModified() && canvas->document()->isModified());
         const int before = strip ? strip->count() : 0;
+        // El punto de "sin guardar" va en la esquina de la pestaña (no en la miniatura).
+        CHECK(strip && strip->tabData(strip->currentIndex()).toBool());
         int thumbnails = -1;
         QTimer::singleShot(300, [&thumbnails, &outDir] {
             auto* ask = qobject_cast<TaskDialog*>(QApplication::activeModalWidget());

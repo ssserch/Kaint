@@ -34,6 +34,11 @@ struct SaveOptions {
     bool animation = true;
     int frameDelay = 100;
     int loops = 0;
+    // GIF animado, configuración avanzada (como ezgif): una paleta para todos los fotogramas,
+    // apilarlos en vez de borrar el anterior, fundidos y el primero como fondo.
+    bool gifGlobalPalette = false;
+    bool gifStack = false;
+    Gif::Effects gifEffects;
     QList<int> icoSizes{16, 24, 32, 48, 64, 128, 256};
 };
 
@@ -44,6 +49,10 @@ bool isIcon(const QString& path);
 QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool transparentSlot = false, int algorithm = 1);
 // Fotogramas de un GIF animado: las capas visibles, la de abajo primero.
 QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay);
+// GIF animado con las opciones: los fotogramas sin duración llevan la predeterminada, y luego
+// los efectos, la paleta y las repeticiones.
+QByteArray encodeAnimation(QList<Gif::Frame> frames, const SaveOptions& options, QString* error);
+bool saveAnimation(const QList<Gif::Frame>& frames, const QString& path, const SaveOptions& options, QString* error);
 
 bool hasBitDepth(const QString& path);
 bool supportsInterlace(const QString& path);

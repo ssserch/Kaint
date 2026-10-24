@@ -1892,7 +1892,7 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
     QList<Gif::Frame> edited;
     if (SaveConfigDialog::hasOptions(path)) {
         const QList<Gif::Frame> frames = ImageIO::isAnimation(path) && doc->layerCount() > 1
-                                             ? ImageIO::animationFrames(doc, 0)
+                                             ? ImageIO::animationFrames(doc, 0, true)
                                              : QList<Gif::Frame>();
         SaveConfigDialog dlg(doc->flattened(), path, options, this, frames);
         if (dlg.exec() != QDialog::Accepted)

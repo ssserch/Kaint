@@ -359,6 +359,34 @@ QIcon smoothing(bool on)
     });
 }
 
+QIcon eye(bool open)
+{
+    // Ojo de visibilidad: abierto con la pupila; cerrado, el párpado con pestañas.
+    return drawn([open](QPainter& p, QRectF r) {
+        const QPointF c = r.center();
+        const qreal w = r.width() / 2, h = r.height() * 0.32;
+        p.setPen(QPen(fg(), 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        QPainterPath lower(QPointF(c.x() - w, c.y()));
+        lower.quadTo(QPointF(c.x(), c.y() + 2 * h), QPointF(c.x() + w, c.y()));
+        if (open) {
+            QPainterPath upper(QPointF(c.x() - w, c.y()));
+            upper.quadTo(QPointF(c.x(), c.y() - 2 * h), QPointF(c.x() + w, c.y()));
+            p.drawPath(upper);
+            p.drawPath(lower);
+            p.setPen(Qt::NoPen);
+            p.setBrush(fg());
+            p.drawEllipse(c, h * 0.8, h * 0.8);
+            return;
+        }
+        p.drawPath(lower);
+        for (qreal t : {-0.6, 0.0, 0.6}) {
+            const QPointF from(c.x() + t * w, c.y() + h * (1 - t * t) * 0.95);
+            p.drawLine(from, from + QPointF(t * 2.5, 3.5));
+        }
+    });
+}
+
 QIcon gamma(bool corrected)
 {
     // Una curva de gamma (corregida) o una recta (se ignora la gamma).

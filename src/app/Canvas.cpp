@@ -603,7 +603,19 @@ void Canvas::drawSelection(QPainter& p) const
     QPen black(Qt::black, 0);
     black.setDashPattern({4, 4});
     black.setDashOffset(m_antsOffset);
-    if (sel.isPathBased()) {
+    if (sel.isRectangular() && !t.isRotating()) {
+        // Rectángulo: líneas nítidas en píxeles enteros de la pantalla, con el mismo grosor y
+        // trazos con cualquier zum (suavizadas salían grises y borrosas).
+        const QRectF v = t.mapRect(sel.path().boundingRect());
+        const QRect r(QPoint(int(std::lround(v.left())), int(std::lround(v.top()))),
+                      QPoint(int(std::lround(v.right())), int(std::lround(v.bottom()))));
+        p.setRenderHint(QPainter::Antialiasing, false);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(white);
+        p.drawRect(r);
+        p.setPen(black);
+        p.drawRect(r);
+    } else if (sel.isPathBased()) {
         p.setRenderHint(QPainter::Antialiasing);
         const QPainterPath path = t.map(sel.path());
         p.setBrush(Qt::NoBrush);

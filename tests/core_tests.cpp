@@ -846,6 +846,13 @@ static void testGifAndIco()
     CHECK(ImageIO::save(doc.get(), path, o, &error));
     back.reset(ImageIO::load(path, &error));
     CHECK(back && back->gifLoops() == -1);
+    // Con las capas ocultas, también son fotogramas (en su sitio).
+    CHECK(ImageIO::animationFrames(doc.get(), 70, true).size() == 4 && ImageIO::animationFrames(doc.get(), 70, true)[2].hidden);
+    o.gifHiddenLayers = true;
+    CHECK(ImageIO::save(doc.get(), path, o, &error));
+    back.reset(ImageIO::load(path, &error));
+    CHECK(back && back->layerCount() == 4 && back->layer(2)->image.pixel(5, 5) == qRgba(0, 255, 0, 255));
+    o.gifHiddenLayers = false;
 
     // Muchos colores e imagen grande: el LZW reinicia la tabla varias veces.
     QImage noise(320, 240, kLayerFormat);

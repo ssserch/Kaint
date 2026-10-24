@@ -37,6 +37,8 @@ private:
         int source = 0;
         int delayMs = 0;
         bool skip = false;
+
+        bool operator==(const FrameEntry&) const = default;
     };
     // Lo que se edita en la configuración avanzada.
     struct Advanced {
@@ -48,8 +50,13 @@ private:
     };
 
     void schedule();
+    // Pone en los controles las opciones 'o' (Predeterminado y Reiniciar).
+    void loadOptions(const ImageIO::SaveOptions& o);
     void updateControls();
     void showAdvanced();
+    // "Mostrar capas ocultas": añade o quita sus fotogramas de la lista.
+    void setShowHidden(bool on);
+    void updateHiddenButton();
     // Los fotogramas que quedan con 'a' (sin omitidos, con copias y duraciones).
     QList<Gif::Frame> framesOf(const Advanced& a) const;
     // 'o' con las opciones del GIF de 'a' (paleta, apilado, efectos).
@@ -73,8 +80,15 @@ private:
     QSpinBox* m_loops = nullptr;
     QList<QCheckBox*> m_icoSizes;
     QList<Gif::Frame> m_frames;
+    // Las opciones con las que se abrió (Reiniciar vuelve a ellas).
+    ImageIO::SaveOptions m_initial;
     Advanced m_advanced;
     QPushButton* m_advancedButton = nullptr;
+    QPushButton* m_hiddenButton = nullptr;
+    bool m_showHidden = false;
+    // Se editaron los fotogramas en la configuración avanzada con las capas ocultas a la vista:
+    // se quedan en la lista hasta cerrar este diálogo.
+    bool m_hiddenLocked = false;
     QLabel* m_size;
     EncodedPreview* m_previewPane;
 };

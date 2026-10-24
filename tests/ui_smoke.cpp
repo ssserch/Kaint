@@ -550,6 +550,43 @@ int main(int argc, char** argv)
         dlg.close();
     }
 
+    // Ctrl+Z / Ctrl+Y en el diálogo de un efecto: deshacen y rehacen sus cambios, también con el
+    // foco en una caja numérica (un arrastre seguido es un solo paso).
+    if (const Effect* blur = Effects::find(QStringLiteral("gaussianblur"))) {
+        EffectDialog dlg(*blur, Effects::defaults(*blur), doc->activeLayer()->image, doc->rect(), &w);
+        dlg.show();
+        settle();
+        QDoubleSpinBox* radius = nullptr;
+        for (QDoubleSpinBox* box : dlg.findChildren<QDoubleSpinBox*>())
+            if (std::abs(box->value() - 2.0) < 1e-9 && box->maximum() == 200)
+                radius = box;
+        CHECK(radius);
+        if (radius) {
+            radius->setValue(10);
+            radius->setValue(12);
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 800)
+                QApplication::processEvents(QEventLoop::AllEvents, 20);
+            radius->setValue(30);
+            radius->setFocus();
+            auto key = [](QWidget* target, int k, Qt::KeyboardModifiers mods) {
+                QKeyEvent over(QEvent::ShortcutOverride, k, mods);
+                QApplication::sendEvent(target, &over);
+                QKeyEvent press(QEvent::KeyPress, k, mods);
+                QApplication::sendEvent(target, &press);
+                settle();
+            };
+            key(radius, Qt::Key_Z, Qt::ControlModifier);
+            CHECK(std::abs(dlg.values().value(QStringLiteral("radius")).toDouble() - 12) < 1e-9 && std::abs(radius->value() - 12) < 1e-9);
+            key(radius, Qt::Key_Z, Qt::ControlModifier);
+            CHECK(std::abs(dlg.values().value(QStringLiteral("radius")).toDouble() - 2) < 1e-9);
+            key(radius, Qt::Key_Y, Qt::ControlModifier);
+            CHECK(std::abs(dlg.values().value(QStringLiteral("radius")).toDouble() - 12) < 1e-9);
+        }
+        dlg.close();
+    }
+
     tools->select(ToolId::Paintbrush);
     settle();
     if (!outDir.isEmpty()) {
@@ -1164,6 +1201,57 @@ int main(int argc, char** argv)
         settle();
         CHECK(player.animationFrames().size() == 3);
         player.close();
+
+        // "Mostrar capas ocultas": sus fotogramas entran en el GIF. Con el ojo cerrado en la
+        // configuración avanzada, ese fotograma no va; tras editar con las ocultas a la vista ya
+        // no se pueden quitar hasta volver a abrir el diálogo.
+        QList<Gif::Frame> layered = moving;
+        layered[1].hidden = true;
+        SaveConfigDialog hidden(layered.first().image, QStringLiteral("anim.gif"), ImageIO::SaveOptions(), &w, layered);
+        QPushButton* showHidden = nullptr;
+        for (QPushButton* b : hidden.findChildren<QPushButton*>())
+            if (b->text() == QStringLiteral("Mostrar capas ocultas"))
+                showHidden = b;
+        CHECK(showHidden && showHidden->isEnabled() && hidden.animationFrames().size() == 2);
+        if (showHidden) {
+            showHidden->click();
+            CHECK(showHidden->text() == QStringLiteral("Ocultar las capas ocultas") && hidden.animationFrames().size() == 3
+                  && hidden.options().gifHiddenLayers);
+            showHidden->click();
+            CHECK(hidden.animationFrames().size() == 2);
+            showHidden->click();
+        }
+        QPushButton* hiddenAdvanced = nullptr;
+        for (QPushButton* b : hidden.findChildren<QPushButton*>())
+            if (b->text().startsWith(QStringLiteral("Configuración avanzada")))
+                hiddenAdvanced = b;
+        QTimer::singleShot(300, [] {
+            auto* dlg = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            CHECK(dlg);
+            if (!dlg)
+                return;
+            const QList<QToolButton*> eyes = dlg->findChildren<QToolButton*>(QStringLiteral("frameEye"));
+            CHECK(eyes.size() == 3);
+            if (!eyes.isEmpty())
+                eyes.first()->click();
+            settle();
+            dlg->accept();
+        });
+        if (hiddenAdvanced)
+            hiddenAdvanced->click();
+        settle();
+        CHECK(hidden.animationFrames().size() == 2);
+        CHECK(showHidden && !showHidden->isEnabled());
+        // "Reiniciar": como cerrar y volver a abrir, sin cerrar la ventana.
+        QPushButton* restart = nullptr;
+        for (QPushButton* b : hidden.findChildren<QPushButton*>())
+            if (b->text() == QStringLiteral("Reiniciar"))
+                restart = b;
+        CHECK(restart);
+        if (restart)
+            restart->click();
+        CHECK(showHidden && showHidden->isEnabled() && showHidden->text() == QStringLiteral("Mostrar capas ocultas"));
+        CHECK(hidden.animationFrames().size() == 2 && !hidden.options().gifHiddenLayers);
     }
 
     // El color propio del fondo del lienzo va por tema: el que había antes (uno solo) pasa al
@@ -1362,8 +1450,10 @@ int main(int argc, char** argv)
         }
     }
 
-    // Deslizadores como en Paint.NET: un clic en la barra avanza hacia él, y si además se mueve
-    // el ratón el tirador sigue al puntero; mientras se pulsa cambia de color.
+    // Deslizadores como en Paint.NET: un clic en la barra lejos del tirador avanza un paso (una
+    // décima parte) hacia el puntero y varios clics llegan hasta él; manteniendo pulsado sigue a
+    // pasos hasta llegar; cerca del tirador va directo al puntero; arrastrando, lo sigue. Mientras
+    // se pulsa cambia de color.
     {
         QSlider slider(Qt::Horizontal);
         slider.setRange(0, 100);
@@ -1377,20 +1467,48 @@ int main(int argc, char** argv)
                           Qt::NoModifier);
             QApplication::sendEvent(&slider, &e);
         };
-        send(QEvent::MouseButtonPress, 200, Qt::LeftButton);
-        CHECK(slider.property("kaintPressed").toBool() && slider.value() > 50 && !slider.isSliderDown());
-        send(QEvent::MouseMove, 30, Qt::LeftButton);
+        auto click = [&send](int x) {
+            send(QEvent::MouseButtonPress, x, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, x, Qt::NoButton);
+        };
+        auto wait = [](int ms) {
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < ms)
+                QApplication::processEvents(QEventLoop::AllEvents, 10);
+        };
+        send(QEvent::MouseButtonPress, 205, Qt::LeftButton);
+        CHECK(slider.property("kaintPressed").toBool() && slider.value() == 60);
+        send(QEvent::MouseButtonRelease, 205, Qt::NoButton);
+        CHECK(!slider.property("kaintPressed").toBool());
+        wait(700);
+        CHECK(slider.value() == 60);
+        for (int i = 0; i < 6; ++i)
+            click(205);
+        const int end = slider.value();
+        CHECK(end > 90);
+        click(205);
+        CHECK(slider.value() == end);
+        // Manteniendo pulsado, a pasos hasta el puntero.
+        slider.setValue(0);
+        send(QEvent::MouseButtonPress, 205, Qt::LeftButton);
+        CHECK(slider.value() == 10);
+        wait(1300);
+        CHECK(slider.value() == end);
+        send(QEvent::MouseButtonRelease, 205, Qt::NoButton);
+        // Cerca del tirador, directo al puntero.
+        slider.setValue(50);
+        click(125);
+        CHECK(slider.value() > 50 && slider.value() < 60);
+        // Pulsado y moviendo, sigue al puntero.
+        slider.setValue(50);
+        send(QEvent::MouseButtonPress, 30, Qt::LeftButton);
+        send(QEvent::MouseMove, 35, Qt::LeftButton);
         CHECK(slider.isSliderDown() && slider.value() < 20);
         send(QEvent::MouseMove, 110, Qt::LeftButton);
         CHECK(std::abs(slider.value() - 50) <= 3);
         send(QEvent::MouseButtonRelease, 110, Qt::NoButton);
         CHECK(!slider.isSliderDown() && !slider.property("kaintPressed").toBool() && std::abs(slider.value() - 50) <= 3);
-        const int settled = slider.value();
-        QElapsedTimer t;
-        t.start();
-        while (t.elapsed() < 700)
-            QApplication::processEvents(QEventLoop::AllEvents, 20);
-        CHECK(slider.value() == settled);
     }
 
     // Las listas de tamaños (pincel, letra) se ven enteras.

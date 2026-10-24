@@ -46,6 +46,17 @@ void SliderBehavior::install()
     qApp->installEventFilter(instance);
 }
 
+SliderBehavior::SliderBehavior(QObject* parent)
+    : QObject(parent)
+{
+    // Manteniendo pulsado en la barra: un paso cada poco hasta llegar al puntero.
+    m_repeat.setSingleShot(true);
+    connect(&m_repeat, &QTimer::timeout, this, [this] {
+        if (m_slider && !stepToward(m_slider, m_lastPos))
+            m_repeat.start(60);
+    });
+}
+
 void SliderBehavior::setPressed(QSlider* slider, bool pressed)
 {
     slider->setProperty("kaintPressed", pressed);
@@ -69,6 +80,27 @@ int SliderBehavior::valueAt(QSlider* slider, QPoint pos)
                                            opt.upsideDown);
 }
 
+int SliderBehavior::stepFor(const QSlider* slider)
+{
+    // Un paso es una décima parte del recorrido (o el paso de página, si es mayor): de un
+    // extremo al otro son unos diez clics.
+    return std::max({1, slider->pageStep(), (slider->maximum() - slider->minimum() + 5) / 10});
+}
+
+bool SliderBehavior::stepToward(QSlider* slider, QPoint pos)
+{
+    // Un paso hacia el puntero; si el puntero queda a menos de un paso, el tirador va justo ahí.
+    const int target = valueAt(slider, pos);
+    const int step = stepFor(slider);
+    const int value = slider->value();
+    if (std::abs(target - value) <= step) {
+        slider->setValue(target);
+        return true;
+    }
+    slider->setValue(value + (target > value ? step : -step));
+    return false;
+}
+
 bool SliderBehavior::eventFilter(QObject* watched, QEvent* event)
 {
     switch (event->type()) {
@@ -81,51 +113,50 @@ bool SliderBehavior::eventFilter(QObject* watched, QEvent* event)
         const QStyleOptionSlider opt = sliderOption(slider);
         const QRect handle = slider->style()->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, slider);
         m_slider = slider;
-        m_pressPos = me->position().toPoint();
-        m_onGroove = !handle.contains(m_pressPos);
+        m_pressPos = m_lastPos = me->position().toPoint();
         m_following = false;
         setPressed(slider, true);
-        return false;
+        // Sobre el tirador, Qt lo arrastra como siempre.
+        m_onGroove = !handle.contains(m_pressPos);
+        if (!m_onGroove)
+            return false;
+        // En la barra: cerca del tirador va directo al puntero; lejos avanza un paso hacia él y,
+        // si se mantiene pulsado, sigue a pasos hasta llegar.
+        slider->setFocus(Qt::MouseFocusReason);
+        if (!stepToward(slider, m_pressPos))
+            m_repeat.start(500);
+        return true;
     }
     case QEvent::MouseMove: {
         const auto* me = static_cast<QMouseEvent*>(event);
-        if (!m_slider || watched != m_slider || !(me->buttons() & Qt::LeftButton))
+        if (!m_slider || watched != m_slider || !m_onGroove || !(me->buttons() & Qt::LeftButton))
             return false;
-        if (m_onGroove && !m_following) {
-            if ((me->position().toPoint() - m_pressPos).manhattanLength() < 2)
-                return false;
-            // El clic en la barra avanza a saltos hasta soltar: Qt lo deja al recibir la
-            // liberación, y desde aquí el tirador sigue al puntero.
-            m_following = true;
-            QMouseEvent release(QEvent::MouseButtonRelease, me->position(), me->globalPosition(), Qt::LeftButton,
-                                Qt::NoButton, me->modifiers());
-            m_synthetic = true;
-            QCoreApplication::sendEvent(m_slider, &release);
-            m_synthetic = false;
-            if (!m_slider)
+        m_lastPos = me->position().toPoint();
+        // Al mover el ratón con el botón pulsado, el tirador pasa a seguir al puntero.
+        if (!m_following) {
+            if ((m_lastPos - m_pressPos).manhattanLength() < 3)
                 return true;
+            m_repeat.stop();
+            m_following = true;
             m_slider->setSliderDown(true);
         }
-        if (!m_following)
-            return false;
-        m_slider->setSliderPosition(valueAt(m_slider, me->position().toPoint()));
+        m_slider->setSliderPosition(valueAt(m_slider, m_lastPos));
         return true;
     }
     case QEvent::MouseButtonRelease: {
         const auto* me = static_cast<QMouseEvent*>(event);
-        // La liberación que se envía al empezar a seguir al puntero pasa sin más.
-        if (m_synthetic || !m_slider || watched != m_slider || me->button() != Qt::LeftButton)
+        if (!m_slider || watched != m_slider || me->button() != Qt::LeftButton)
             return false;
         QSlider* slider = m_slider;
-        const bool following = m_following;
         m_slider = nullptr;
-        m_following = false;
+        m_repeat.stop();
         setPressed(slider, false);
-        if (following) {
+        if (!m_onGroove)
+            return false;
+        if (m_following)
             slider->setSliderDown(false);
-            return true;
-        }
-        return false;
+        m_following = false;
+        return true;
     }
     default:
         return false;

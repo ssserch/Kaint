@@ -371,7 +371,7 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
 
     QByteArray data;
     if (isAnimation(path) && options.animation && doc->layerCount() > 1)
-        return saveAnimation(animationFrames(doc, options.frameDelay), path, options, error);
+        return saveAnimation(animationFrames(doc, options.frameDelay, options.gifHiddenLayers), path, options, error);
     QImage image = prepare(doc->flattened(), path, options);
     const int dpm = int(std::round(doc->dpi() / 0.0254));
     image.setDotsPerMeterX(dpm);
@@ -405,14 +405,15 @@ bool saveAnimation(const QList<Gif::Frame>& frames, const QString& path, const S
     return !data.isEmpty() && writeFile(path, data, error);
 }
 
-QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay)
+QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay, bool withHidden)
 {
-    // Las capas visibles de abajo arriba, cada una con su opacidad.
+    // Las capas visibles (y las ocultas, si se piden) de abajo arriba, cada una con su opacidad.
     QList<Gif::Frame> frames;
     for (const LayerPtr& layer : doc->layers()) {
-        if (!layer->props.visible)
+        if (!layer->props.visible && !withHidden)
             continue;
         Gif::Frame f;
+        f.hidden = !layer->props.visible;
         f.delayMs = Gif::delayFromName(layer->props.name, defaultDelay);
         f.image = layer->image;
         if (layer->props.opacity < 255) {

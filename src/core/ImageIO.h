@@ -38,6 +38,8 @@ struct SaveOptions {
     // apilarlos en vez de borrar el anterior, fundidos y el primero como fondo.
     bool gifGlobalPalette = false;
     bool gifStack = false;
+    // Las capas ocultas también son fotogramas.
+    bool gifHiddenLayers = false;
     Gif::Effects gifEffects;
     QList<int> icoSizes{16, 24, 32, 48, 64, 128, 256};
 };
@@ -47,8 +49,9 @@ bool isIcon(const QString& path);
 // Paleta de 8 bits óptima (255 colores y uno transparente si hace falta; con 'transparentSlot'
 // siempre se reserva el transparente).
 QImage toIndexed8(const QImage& image, int dither, int alphaThreshold, bool transparentSlot = false, int algorithm = 1);
-// Fotogramas de un GIF animado: las capas visibles, la de abajo primero.
-QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay);
+// Fotogramas de un GIF animado: las capas visibles, la de abajo primero. Con 'withHidden',
+// también las ocultas (marcadas con Frame::hidden).
+QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay, bool withHidden = false);
 // GIF animado con las opciones: los fotogramas sin duración llevan la predeterminada, y luego
 // los efectos, la paleta y las repeticiones.
 QByteArray encodeAnimation(QList<Gif::Frame> frames, const SaveOptions& options, QString* error);

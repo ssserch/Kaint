@@ -13,6 +13,8 @@ namespace Gif {
 struct Frame {
     QImage image;
     int delayMs = 100;
+    // Viene de una capa oculta (solo va en el GIF si se piden las capas ocultas).
+    bool hidden = false;
 };
 
 struct Animation {

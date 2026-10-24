@@ -62,8 +62,8 @@ runs on Windows 10 and 11.
       <h4>Formats</h4>
       OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA, animated GIF
       and ICO. Opens Paint.NET <b>.pdn</b> files. Animated GIFs have a playable preview and
-      ezgif-style advanced settings: per-frame duration, skip and copy, global palette, crossfades
-      and a background frame.
+      ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
+      frames, global palette, crossfades and a background frame.
     </td>
   </tr>
   <tr>

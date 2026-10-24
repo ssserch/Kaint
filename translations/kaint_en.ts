@@ -3600,6 +3600,34 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Default</translation>
     </message>
     <message>
+        <source>Reiniciar</source>
+        <translation>Reset</translation>
+    </message>
+    <message>
+        <source>Vuelve a como estaba al abrir esta ventana: opciones, fotogramas de la configuración avanzada y capas ocultas.</source>
+        <translation>Goes back to how it was when this window opened: options, advanced frame settings and hidden layers.</translation>
+    </message>
+    <message>
+        <source>Ocultar las capas ocultas</source>
+        <translation>Hide the hidden layers</translation>
+    </message>
+    <message>
+        <source>Mostrar capas ocultas</source>
+        <translation>Show hidden layers</translation>
+    </message>
+    <message>
+        <source>La imagen no tiene capas ocultas.</source>
+        <translation>The image has no hidden layers.</translation>
+    </message>
+    <message>
+        <source>Editaste los fotogramas en la configuración avanzada con las capas ocultas: se quedan hasta que cierres este diálogo.</source>
+        <translation>You edited the frames in the advanced settings with the hidden layers shown: they stay until you close this dialog.</translation>
+    </message>
+    <message>
+        <source>Las capas ocultas también son fotogramas del GIF.</source>
+        <translation>Hidden layers are GIF frames too.</translation>
+    </message>
+    <message>
         <source>Configuración avanzada del GIF</source>
         <translation>Advanced GIF Settings</translation>
     </message>
@@ -3710,6 +3738,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Duración 0 para el primer fotograma (no mostrarlo solo)</source>
         <translation>0 duration for the first frame (don&apos;t show it alone)</translation>
+    </message>
+    <message>
+        <source>No se muestra: clic para mostrarlo</source>
+        <translation>Not shown: click to show it</translation>
+    </message>
+    <message>
+        <source>Se muestra: clic para ocultarlo</source>
+        <translation>Shown: click to hide it</translation>
+    </message>
+    <message>
+        <source>%1 · capa oculta</source>
+        <translation>%1 · hidden layer</translation>
     </message>
     <message>
         <source>Omitido: no va en el GIF</source>

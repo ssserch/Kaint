@@ -28,6 +28,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <functional>
 
 bool SaveConfigDialog::hasOptions(const QString& path)
@@ -42,6 +43,7 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     , m_image(flattened)
     , m_path(path)
     , m_frames(frames)
+    , m_initial(initial)
 {
     setWindowTitle(tr("Configuración de guardado: %1").arg(QFileInfo(path).suffix().toUpper()));
     setWindowIcon(Icons::theme({"document-save"}));
@@ -129,6 +131,11 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
             connect(m_loops, &QSpinBox::valueChanged, this, &SaveConfigDialog::schedule);
             form->addRow(m_loopForever);
             form->addRow(tr("Repeticiones:"), m_loops);
+            // Las capas ocultas, como fotogramas solo si se pide.
+            m_showHidden = initial.gifHiddenLayers;
+            m_hiddenButton = new QPushButton(this);
+            connect(m_hiddenButton, &QPushButton::clicked, this, [this] { setShowHidden(!m_showHidden); });
+            form->addRow(m_hiddenButton);
             m_advanced = defaultAdvanced();
             m_advanced.quantization = initial.quantization;
             m_advanced.globalPalette = initial.gifGlobalPalette;
@@ -181,33 +188,17 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
 
     auto* box = okCancelButtons(this);
     auto* defaults = box->addButton(tr("Predeterminado"), QDialogButtonBox::ResetRole);
-    connect(defaults, &QPushButton::clicked, this, [this] {
-        const ImageIO::SaveOptions d;
-        if (m_quality)
-            m_quality->setValue(d.quality);
-        if (m_depth)
-            m_depth->setCurrentIndex(0);
-        if (m_dither)
-            m_dither->setValue(d.dither);
-        if (m_threshold)
-            m_threshold->setValue(d.alphaThreshold);
-        if (m_quantization)
-            m_quantization->setCurrentIndex(m_quantization->findData(d.quantization));
-        if (m_interlaced)
-            m_interlaced->setChecked(d.interlaced);
-        if (m_animation)
-            m_animation->setChecked(d.animation);
-        if (m_delay)
-            m_delay->setValue(d.frameDelay);
-        if (m_loopForever)
-            m_loopForever->setChecked(d.loops == 0);
-        if (m_advancedButton) {
-            m_advanced = defaultAdvanced();
-            schedule();
-        }
-        for (QCheckBox* c : std::as_const(m_icoSizes))
-            c->setChecked(d.icoSizes.contains(c->property("kaintIcoSide").toInt()));
-    });
+    connect(defaults, &QPushButton::clicked, this, [this] { loadOptions(ImageIO::SaveOptions()); });
+    if (m_advancedButton) {
+        // Como cerrar y volver a abrir esta ventana, sin cerrarla.
+        auto* restart = box->addButton(tr("Reiniciar"), QDialogButtonBox::ResetRole);
+        restart->setToolTip(tr("Vuelve a como estaba al abrir esta ventana: opciones, fotogramas de la configuración "
+                               "avanzada y capas ocultas."));
+        connect(restart, &QPushButton::clicked, this, [this] {
+            m_hiddenLocked = false;
+            loadOptions(m_initial);
+        });
+    }
 
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(top, 1);
@@ -218,6 +209,43 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
 }
 
 SaveConfigDialog::~SaveConfigDialog() = default;
+
+void SaveConfigDialog::loadOptions(const ImageIO::SaveOptions& o)
+{
+    if (m_quality)
+        m_quality->setValue(o.quality);
+    if (m_depth)
+        m_depth->setCurrentIndex(std::max(0, m_depth->findData(o.bitDepth)));
+    if (m_dither)
+        m_dither->setValue(o.dither);
+    if (m_threshold)
+        m_threshold->setValue(o.alphaThreshold);
+    if (m_quantization)
+        m_quantization->setCurrentIndex(std::max(0, m_quantization->findData(o.quantization)));
+    if (m_interlaced)
+        m_interlaced->setChecked(o.interlaced);
+    if (m_animation)
+        m_animation->setChecked(o.animation);
+    if (m_delay)
+        m_delay->setValue(o.frameDelay);
+    if (m_loopForever) {
+        m_loopForever->setChecked(o.loops == 0);
+        m_loops->setValue(std::max(0, o.loops));
+    }
+    if (m_advancedButton) {
+        if (!m_hiddenLocked)
+            m_showHidden = o.gifHiddenLayers;
+        m_advanced = defaultAdvanced();
+        m_advanced.quantization = o.quantization;
+        m_advanced.globalPalette = o.gifGlobalPalette;
+        m_advanced.stack = o.gifStack;
+        m_advanced.effects = o.gifEffects;
+    }
+    for (QCheckBox* c : std::as_const(m_icoSizes))
+        c->setChecked(o.icoSizes.contains(c->property("kaintIcoSide").toInt()));
+    updateControls();
+    schedule();
+}
 
 ImageIO::SaveOptions SaveConfigDialog::options() const
 {
@@ -240,8 +268,10 @@ ImageIO::SaveOptions SaveConfigDialog::options() const
         o.frameDelay = m_delay->value();
     if (m_loopForever)
         o.loops = m_loopForever->isChecked() ? 0 : (m_loops->value() == 0 ? -1 : m_loops->value());
-    if (m_advancedButton)
+    if (m_advancedButton) {
         o = withAdvanced(o, m_advanced);
+        o.gifHiddenLayers = m_showHidden;
+    }
     if (!m_icoSizes.isEmpty()) {
         o.icoSizes.clear();
         for (QCheckBox* c : m_icoSizes)
@@ -295,8 +325,50 @@ SaveConfigDialog::Advanced SaveConfigDialog::defaultAdvanced() const
 {
     Advanced a;
     for (int i = 0; i < m_frames.size(); ++i)
-        a.entries << FrameEntry{i, m_frames[i].delayMs, false};
+        if (!m_frames[i].hidden || m_showHidden)
+            a.entries << FrameEntry{i, m_frames[i].delayMs, false};
     return a;
+}
+
+void SaveConfigDialog::setShowHidden(bool on)
+{
+    if (on == m_showHidden || (!on && m_hiddenLocked))
+        return;
+    m_showHidden = on;
+    QList<FrameEntry>& entries = m_advanced.entries;
+    if (on) {
+        // Cada capa oculta entra en su sitio: tras el último fotograma de una capa de debajo.
+        for (int i = 0; i < m_frames.size(); ++i) {
+            if (!m_frames[i].hidden)
+                continue;
+            int at = 0;
+            for (int k = 0; k < entries.size(); ++k)
+                if (entries[k].source < i)
+                    at = k + 1;
+            entries.insert(at, FrameEntry{i, m_frames[i].delayMs, false});
+        }
+    } else {
+        entries.removeIf([this](const FrameEntry& e) { return m_frames.value(e.source).hidden; });
+    }
+    updateHiddenButton();
+    schedule();
+}
+
+void SaveConfigDialog::updateHiddenButton()
+{
+    if (!m_hiddenButton)
+        return;
+    const bool any = std::any_of(m_frames.cbegin(), m_frames.cend(), [](const Gif::Frame& f) { return f.hidden; });
+    m_hiddenButton->setText(m_showHidden ? tr("Ocultar las capas ocultas") : tr("Mostrar capas ocultas"));
+    m_hiddenButton->setIcon(Icons::eye(!m_showHidden));
+    m_hiddenButton->setEnabled(any && (m_animation && m_animation->isChecked()) && !(m_showHidden && m_hiddenLocked));
+    if (!any)
+        m_hiddenButton->setToolTip(tr("La imagen no tiene capas ocultas."));
+    else if (m_showHidden && m_hiddenLocked)
+        m_hiddenButton->setToolTip(tr("Editaste los fotogramas en la configuración avanzada con las capas ocultas: se "
+                                      "quedan hasta que cierres este diálogo."));
+    else
+        m_hiddenButton->setToolTip(tr("Las capas ocultas también son fotogramas del GIF."));
 }
 
 void SaveConfigDialog::updateControls()
@@ -320,6 +392,7 @@ void SaveConfigDialog::updateControls()
         m_loops->setEnabled(animated && !m_loopForever->isChecked());
     if (m_advancedButton)
         m_advancedButton->setEnabled(animated);
+    updateHiddenButton();
 }
 
 void SaveConfigDialog::schedule()
@@ -517,25 +590,43 @@ void SaveConfigDialog::showAdvanced()
             const FrameEntry& e = adv.entries[i];
             auto* card = new QFrame(framesBox);
             card->setFrameShape(QFrame::StyledPanel);
+            // Los que no se muestran, algo más oscuros.
+            if (e.skip) {
+                QPalette pal = card->palette();
+                pal.setColor(QPalette::Window, pal.color(QPalette::Window).darker(118));
+                card->setPalette(pal);
+                card->setAutoFillBackground(true);
+            }
             auto* v = new QVBoxLayout(card);
             v->setContentsMargins(6, 4, 6, 6);
             v->setSpacing(4);
-            auto* number = new QLabel(QString::number(i + 1), card);
+            // El ojo, como en la lista de capas: abierto se muestra, cerrado no va en el GIF.
+            auto* eye = new QToolButton(card);
+            eye->setObjectName(QStringLiteral("frameEye"));
+            eye->setAutoRaise(true);
+            eye->setIcon(Icons::eye(!e.skip));
+            eye->setToolTip(e.skip ? tr("No se muestra: clic para mostrarlo") : tr("Se muestra: clic para ocultarlo"));
+            const bool fromHidden = m_frames.value(e.source).hidden;
+            auto* number = new QLabel(fromHidden ? tr("%1 · capa oculta").arg(i + 1) : QString::number(i + 1), card);
+            auto* head = new QHBoxLayout;
+            head->addWidget(number);
+            head->addStretch();
+            head->addWidget(eye);
             auto* thumb = new QLabel(card);
             thumb->setAlignment(Qt::AlignCenter);
             thumb->setFixedSize(100, 76);
             QPixmap pm = thumbs.value(e.source);
             if (e.skip && !pm.isNull()) {
-                QPixmap faded(pm.size());
-                faded.fill(Qt::transparent);
-                QPainter p(&faded);
-                p.setOpacity(0.25);
-                p.drawPixmap(0, 0, pm);
+                QPainter p(&pm);
+                p.fillRect(pm.rect(), QColor(0, 0, 0, 110));
                 p.end();
-                pm = faded;
             }
             thumb->setPixmap(pm);
             thumb->setToolTip(e.skip ? tr("Omitido: no va en el GIF") : QString());
+            connect(eye, &QToolButton::clicked, &dlg, [&adv, &rebuild, &dlg, i] {
+                adv.entries[i].skip = !adv.entries[i].skip;
+                QTimer::singleShot(0, &dlg, [&rebuild] { rebuild(); });
+            });
             auto* delay = new QSpinBox(card);
             delay->setRange(Gif::kMinDelayMs, 60000);
             delay->setSingleStep(10);
@@ -568,7 +659,7 @@ void SaveConfigDialog::showAdvanced()
             buttons->addWidget(skip);
             buttons->addWidget(copy);
             buttons->addStretch();
-            v->addWidget(number);
+            v->addLayout(head);
             v->addWidget(thumb, 0, Qt::AlignHCenter);
             v->addLayout(delayRow);
             v->addLayout(buttons);
@@ -704,7 +795,12 @@ void SaveConfigDialog::showAdvanced()
     if (dlg.exec() != QDialog::Accepted)
         return;
 
+    // Con las capas ocultas a la vista y algo cambiado en los fotogramas, ya no se pueden
+    // quitar de la lista hasta volver a abrir este diálogo.
+    if (m_showHidden && adv.entries != m_advanced.entries)
+        m_hiddenLocked = true;
     m_advanced = adv;
+    updateHiddenButton();
     if (m_delay)
         m_delay->setValue(allDelay);
     if (m_loopForever && m_loops) {

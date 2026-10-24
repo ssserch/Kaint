@@ -6,6 +6,7 @@
 #include "app/widgets/EffectControls.h"
 #include "core/Raster.h"
 
+#include <QAbstractSpinBox>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -15,6 +16,7 @@
 #include <QEventLoop>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -24,6 +26,7 @@
 #include <QPushButton>
 #include <QRandomGenerator>
 #include <QSet>
+#include <QShortcut>
 #include <QSlider>
 #include <QTabWidget>
 #include <QSpinBox>
@@ -334,6 +337,15 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
                 *syncing = false;
                 set(key, v);
             });
+            m_setters.insert(key, [ball, boxes, syncing](const QVariant& value) {
+                const QVector3D v = value.value<QVector3D>();
+                *syncing = true;
+                for (int i = 0; i < 3; ++i)
+                    (*boxes)[size_t(i)]->setValue(v[i]);
+                *syncing = false;
+                const QSignalBlocker b(ball);
+                ball->setValue(v);
+            });
             row->addLayout(sliders, 1);
             layout->addLayout(row);
             break;
@@ -367,6 +379,11 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
                 set(key, v);
             });
             connect(reset, &QToolButton::clicked, d, [d, def = p.def] { d->setValue(def); });
+            m_setters.insert(key, [chooser, d](const QVariant& v) {
+                const QSignalBlocker b1(chooser), b2(d);
+                chooser->setValue(v.toDouble());
+                d->setValue(v.toDouble());
+            });
             row->addWidget(chooser);
             row->addStretch();
             row->addWidget(d);
@@ -434,6 +451,10 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             auto* button = new ColorButton(this);
             button->setColor(m_values.value(key).value<QColor>());
             connect(button, &ColorButton::colorChanged, this, [this, key](const QColor& c) { set(key, c); });
+            m_setters.insert(key, [button](const QVariant& v) {
+                const QSignalBlocker b(button);
+                button->setColor(v.value<QColor>());
+            });
             auto* row = new QHBoxLayout;
             row->addWidget(button);
             row->addStretch();
@@ -446,6 +467,10 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             editor->setValue(m_values.value(key).value<CurvesValue>());
             connect(editor, &CurvesEditor::valueChanged, this,
                     [this, key, editor] { set(key, QVariant::fromValue(editor->value())); });
+            m_setters.insert(key, [editor](const QVariant& v) {
+                const QSignalBlocker b(editor);
+                editor->setValue(v.value<CurvesValue>());
+            });
             layout->addWidget(editor, 1);
             break;
         }
@@ -456,6 +481,10 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             editor->setValue(m_values.value(key).value<LevelsValue>());
             connect(editor, &LevelsEditor::valueChanged, this,
                     [this, key, editor] { set(key, QVariant::fromValue(editor->value())); });
+            m_setters.insert(key, [editor](const QVariant& v) {
+                const QSignalBlocker b(editor);
+                editor->setValue(v.value<LevelsValue>());
+            });
             layout->addWidget(editor, 1);
             break;
         }
@@ -515,6 +544,68 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
     }
     root->addWidget(box);
     setMinimumWidth(380);
+
+    // Ctrl+Z / Ctrl+Y deshacen y rehacen los cambios del diálogo. Las cajas numéricas usan esas
+    // teclas para su propio texto: se les quitan para que lleguen aquí.
+    m_committed = m_values;
+    m_stepTimer.setSingleShot(true);
+    m_stepTimer.setInterval(600);
+    connect(&m_stepTimer, &QTimer::timeout, this, [this] { closeStep(); });
+    auto* undo = new QShortcut(QKeySequence::Undo, this);
+    auto* redo = new QShortcut(QKeySequence::Redo, this);
+    auto* redoAlt = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Y")), this);
+    connect(undo, &QShortcut::activated, this, [this] { stepHistory(false); });
+    connect(redo, &QShortcut::activated, this, [this] { stepHistory(true); });
+    connect(redoAlt, &QShortcut::activated, this, [this] { stepHistory(true); });
+    for (QAbstractSpinBox* box : findChildren<QAbstractSpinBox*>()) {
+        box->installEventFilter(this);
+        for (QLineEdit* edit : box->findChildren<QLineEdit*>())
+            edit->installEventFilter(this);
+    }
+}
+
+bool EffectDialog::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::ShortcutOverride || event->type() == QEvent::KeyPress) {
+        auto* key = static_cast<QKeyEvent*>(event);
+        const bool undo = key->matches(QKeySequence::Undo);
+        const bool redo = key->matches(QKeySequence::Redo)
+                          || key->keyCombination() == QKeyCombination(Qt::ControlModifier, Qt::Key_Y);
+        if (undo || redo) {
+            if (event->type() == QEvent::KeyPress)
+                stepHistory(redo);
+            event->accept();
+            return true;
+        }
+    }
+    return QDialog::eventFilter(watched, event);
+}
+
+void EffectDialog::closeStep()
+{
+    m_stepTimer.stop();
+    m_stepOpen = false;
+    m_committed = m_values;
+}
+
+void EffectDialog::stepHistory(bool redo)
+{
+    closeStep();
+    QList<ParamValues>& from = redo ? m_redo : m_undo;
+    QList<ParamValues>& to = redo ? m_undo : m_redo;
+    if (from.isEmpty())
+        return;
+    to << m_values;
+    const ParamValues target = from.takeLast();
+    m_restoring = true;
+    for (auto it = target.cbegin(); it != target.cend(); ++it)
+        if (auto setter = m_setters.value(it.key()))
+            setter(it.value());
+    m_restoring = false;
+    m_values = target;
+    m_committed = target;
+    updateReadOnly();
+    emit valuesChanged(m_values);
 }
 
 void EffectDialog::updateReadOnly()
@@ -563,6 +654,15 @@ void EffectDialog::set(const QString& key, const QVariant& value)
         m_linking = false;
     }
     updateReadOnly();
+    // Un paso del historial del diálogo por cada cambio (un arrastre seguido cuenta como uno).
+    if (!m_restoring && m_values != m_committed) {
+        if (!m_stepOpen) {
+            m_undo << m_committed;
+            m_redo.clear();
+            m_stepOpen = true;
+        }
+        m_stepTimer.start();
+    }
     emit valuesChanged(m_values);
 }
 

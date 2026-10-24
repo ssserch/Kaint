@@ -396,9 +396,10 @@ void MoveSelectedTool::paintOverlay(QPainter& p)
         return;
     if (!m_active)
         syncBox();
-    // Como en Paint.NET: mientras se arrastra solo queda el icono de mover (y, al girar, el punto
-    // de giro).
-    int parts = TransformBox::AllParts;
+    // El contorno es el de la selección (lo dibuja el lienzo): el del cuadro encima se veía
+    // como una línea doble. Como en Paint.NET, mientras se arrastra solo queda el icono de
+    // mover (y, al girar, el punto de giro).
+    int parts = TransformBox::AllParts & ~TransformBox::Outline;
     if (hidesSelectionOutline())
         parts = TransformBox::MoveIcon | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
     m_box.draw(p, canvas()->imageToViewTransform(), parts);
@@ -572,11 +573,10 @@ void MoveSelectionTool::paintOverlay(QPainter& p)
         return;
     if (!m_active)
         syncBox();
-    // Mientras se arrastra la selección solo desaparecen los tiradores (el punto de giro sigue a
-    // la vista al girar).
-    int parts = TransformBox::AllParts;
+    // El contorno es el de la selección (lo dibuja el lienzo). Mientras se arrastra solo
+    // desaparecen los tiradores (el punto de giro sigue a la vista al girar).
+    int parts = TransformBox::AllParts & ~TransformBox::Outline;
     if (m_active && !m_pivotDrag && AppState::instance()->preferences().hideBoxWhileDragging)
-        parts = TransformBox::Outline | TransformBox::MoveIcon
-              | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
+        parts = TransformBox::MoveIcon | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
     m_box.draw(p, canvas()->imageToViewTransform(), parts);
 }

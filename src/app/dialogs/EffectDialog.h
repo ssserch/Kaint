@@ -26,9 +26,15 @@ public:
 signals:
     void valuesChanged(const ParamValues& values);
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     void set(const QString& key, const QVariant& value);
     void updateReadOnly();
+    // Historial del diálogo (Ctrl+Z / Ctrl+Y): cada paso guarda los valores de antes.
+    void closeStep();
+    void stepHistory(bool redo);
 
     ParamValues m_values;
     QList<EffectParam> m_params;
@@ -37,6 +43,12 @@ private:
     QHash<QString, QWidget*> m_containers;
     QHash<QString, QWidget*> m_bodies;
     QList<class QPushButton*> m_extraButtons;
+    QList<ParamValues> m_undo;
+    QList<ParamValues> m_redo;
+    ParamValues m_committed;
+    bool m_stepOpen = false;
+    bool m_restoring = false;
+    QTimer m_stepTimer;
 };
 
 // Calcula la vista previa en un hilo aparte (cancelando la anterior si el usuario sigue

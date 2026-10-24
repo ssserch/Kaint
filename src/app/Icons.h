@@ -50,6 +50,8 @@ QIcon fillAccumulate(bool on);
 QIcon textAlign(TextAlign align);
 QIcon smoothing(bool on);
 QIcon gamma(bool corrected);
+// Ojo de visibilidad (abierto: se muestra).
+QIcon eye(bool open);
 QIcon fontMetric(FontMetric metric);
 QIcon recolorSampling(RecolorSampling sampling);
 QIcon rectSelectMode(RectSelectMode mode);

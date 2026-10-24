@@ -206,6 +206,15 @@ Selection Selection::fromRect(const QRect& rect, QSize canvas)
     return fromPath(p, canvas, false);
 }
 
+QPainterPath Selection::smoothOutline(const QImage& source)
+{
+    if (source.isNull())
+        return {};
+    const QImage mask = source.format() == QImage::Format_Alpha8 ? source : source.convertToFormat(QImage::Format_Alpha8);
+    const QRect bounds = maskBounds(mask);
+    return bounds.isEmpty() ? QPainterPath() : smoothContour(mask, bounds);
+}
+
 Selection Selection::fromMaskSmooth(const QImage& source)
 {
     if (source.isNull())

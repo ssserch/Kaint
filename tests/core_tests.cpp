@@ -596,6 +596,36 @@ static void testBucketAccumulate()
     CHECK(opaque(clicks(false, 6)) == opaque(clicks(false, 1)));
     // Un píxel lejano no cambia: crece medio píxel por clic, no se desborda.
     CHECK(qAlpha(clicks(true, 6).pixel(2, 2)) == 0);
+
+    // Rellenar muchas veces dentro de un contorno suavizado lo va comiendo con un borde limpio:
+    // sin "dientes" (píxeles oscuros con rojo a ambos lados en línea).
+    QImage ring(160, 160, QImage::Format_ARGB32_Premultiplied);
+    ring.fill(Qt::white);
+    {
+        QPainter p(&ring);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(Qt::black, 7));
+        p.drawEllipse(QPointF(80.3, 79.6), 60.2, 58.7);
+    }
+    QImage eaten = ring.convertToFormat(kLayerFormat);
+    FloodFill::BucketOptions red;
+    red.primary = Qt::red;
+    for (int i = 0; i < 12; ++i) {
+        const QImage before = eaten;
+        FloodFill::paintBucket(eaten, before, before, QPoint(80, 80), red, Selection());
+    }
+    auto redness = [&eaten](int x, int y) {
+        const QRgb c = eaten.pixel(x, y);
+        return qRed(c) - std::max(qGreen(c), qBlue(c));
+    };
+    int teeth = 0;
+    for (int y = 1; y < eaten.height() - 1; ++y)
+        for (int x = 1; x < eaten.width() - 1; ++x)
+            if (redness(x, y) < 160
+                && ((redness(x - 1, y) > 200 && redness(x + 1, y) > 200) || (redness(x, y - 1) > 200 && redness(x, y + 1) > 200)))
+                ++teeth;
+    CHECK(teeth == 0);
+    CHECK(redness(80, 22) > 200 && qRed(ring.pixel(80, 22)) < 60);
 }
 
 // Contorno suavizado de una máscara (varita mágica con antidentado): escalones como diagonales.

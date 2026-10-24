@@ -5,6 +5,8 @@
 #include "core/Pixels.h"
 #include "core/Raster.h"
 
+#include <QPainter>
+
 #include <cmath>
 
 #include <vector>
@@ -243,24 +245,41 @@ QRgb replaceInterior(QRgb pixel, QRgb interior, QRgb fill, int coverage)
     return qUnpremultiply(result);
 }
 
-// Cobertura de cada píxel de fuera de la máscara si esta se ensancha medio píxel con suavizado:
-// cada cuarto del píxel cuenta si toca un píxel de la máscara (borde 1/2, esquina 1/4).
+// Cobertura de cada píxel de fuera de la máscara si esta se ensancha medio píxel con suavizado.
+// Se parte del contorno suavizado: con los escalones de píxel, los bordes inclinados alternan
+// coberturas y, al repetir el relleno, la tolerancia deja dientes que crecen con cada clic. Con
+// un borde enorme (ruido de una foto) sería muy lento y no se notaría: cada cuarto del píxel
+// cuenta si toca un píxel de la máscara.
 static QImage halfPixelRing(const QImage& m, const QRect& bounds)
 {
-    QImage ring(bounds.size(), QImage::Format_Grayscale8);
+    QImage ring(bounds.size(), QImage::Format_Alpha8);
     ring.fill(0);
     const ConstMask mask(m);
     auto in = [&](int x, int y) { return x >= 0 && y >= 0 && x < m.width() && y < m.height() && mask.row(y)[x]; };
+    qsizetype edge = 0;
+    for (int y = bounds.top(); y <= bounds.bottom(); ++y)
+        for (int x = bounds.left(); x <= bounds.right(); ++x)
+            edge += !in(x, y) && (in(x - 1, y) || in(x + 1, y) || in(x, y - 1) || in(x, y + 1));
+    if (edge <= 60000) {
+        QPainter p(&ring);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.translate(-bounds.topLeft());
+        p.setPen(QPen(Qt::black, 1.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::black);
+        p.drawPath(Selection::smoothOutline(m));
+    }
     for (int y = bounds.top(); y <= bounds.bottom(); ++y) {
         uchar* out = ring.scanLine(y - bounds.top());
         for (int x = bounds.left(); x <= bounds.right(); ++x) {
-            if (in(x, y))
-                continue;
-            int quarters = 0;
-            for (int sy : {-1, 1})
-                for (int sx : {-1, 1})
-                    quarters += in(x + sx, y) || in(x, y + sy) || in(x + sx, y + sy);
-            out[x - bounds.left()] = uchar(std::min(255, quarters * 64));
+            if (in(x, y)) {
+                out[x - bounds.left()] = 0;
+            } else if (edge > 60000) {
+                int quarters = 0;
+                for (int sy : {-1, 1})
+                    for (int sx : {-1, 1})
+                        quarters += in(x + sx, y) || in(x, y + sy) || in(x + sx, y + sy);
+                out[x - bounds.left()] = uchar(std::min(255, quarters * 64));
+            }
         }
     }
     return ring;
@@ -309,6 +328,10 @@ QRect paintBucket(QImage& layer, const QImage& before, const QImage& sample, QPo
         const ConstMask sel(selection.mask());
         for (const EdgePixel& e : edge) {
             const int x = e.pos.x(), y = e.pos.y();
+            // Acumulando, lo que entra en la tolerancia queda relleno del todo (como en Paint.NET):
+            // así el borde avanza parejo con cada clic.
+            if (accumulate && m.constScanLine(y)[x])
+                continue;
             const QRgb p = before.pixel(x, y);
             const QRgb f = source.pixel(x - bounds.left(), y - bounds.top());
             const QRgb unmixed = replaceInterior(p, e.interior, f, e.coverage);

@@ -21,6 +21,8 @@ public:
     static Selection fromMask(const QImage& mask);
     // Máscara con el contorno suavizado (escalones como diagonales), como el lazo con antidentado.
     static Selection fromMaskSmooth(const QImage& mask);
+    // Ese contorno suavizado, en coordenadas de la imagen.
+    static QPainterPath smoothOutline(const QImage& mask);
 
     bool isEmpty() const { return !d; }
     bool isPathBased() const { return d && d->hasPath; }

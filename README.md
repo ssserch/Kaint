@@ -12,13 +12,6 @@
 
   [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/E1E5ZOEH6)
 
-  <p>
-    <a href="#-features">Features</a> •
-    <a href="#-themes">Themes</a> •
-    <a href="#-install">Install</a> •
-    <a href="#-contributing">Contributing</a> •
-    <a href="#-license">License</a>
-  </p>
 </div>
 
 <div align="center">

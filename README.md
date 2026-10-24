@@ -21,8 +21,8 @@
 ---
 
 **Kaint** recreates the look, the tools and the workflow of [Paint.NET](https://www.getpaint.net/)
-as a native application: no Wine, no .NET runtime. It is made for KDE Plasma on Wayland, it also
-runs on Windows 10 and 11, and it should feel like home if you come from Paint.NET.
+as a native application. It is made for KDE Plasma on Wayland, it also
+runs on Windows 10 and 11.
 
 ## Features
 

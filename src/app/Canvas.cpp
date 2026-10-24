@@ -37,6 +37,15 @@ Canvas::Canvas(QWidget* parent)
     m_vRuler = new Ruler(Qt::Vertical, this, this);
     m_rulerCorner = new QWidget(this);
     m_rulerCorner->setAutoFillBackground(true);
+    // La esquina entre las reglas, del mismo color que ellas.
+    auto paintCorner = [this] {
+        QPalette pal = m_rulerCorner->palette();
+        pal.setColor(QPalette::Window, Theme::active().toolBar);
+        m_rulerCorner->setPalette(pal);
+    };
+    paintCorner();
+    connect(Theme::notifier(), &Theme::Notifier::changed, m_rulerCorner, paintCorner);
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, &Canvas::updateRulers);
     m_hRuler->hide();
     m_vRuler->hide();
     m_rulerCorner->hide();
@@ -582,7 +591,7 @@ void Canvas::paintEvent(QPaintEvent* e)
 void Canvas::drawSelection(QPainter& p) const
 {
     const Selection& sel = m_doc->selection();
-    if (sel.isEmpty())
+    if (sel.isEmpty() || (m_tool && m_tool->hidesSelectionOutline()))
         return;
     p.save();
     const QTransform t = imageToViewTransform();
@@ -900,7 +909,8 @@ void Canvas::wheelEvent(QWheelEvent* e)
         const QPoint ad = e->angleDelta();
         const int delta = ad.y() != 0 ? ad.y() : ad.x();
         if (delta != 0) {
-            qreal z = m_zoom * std::pow(1.2, delta / 120.0);
+            // Pasos más finos que los de los botones, como la rueda en Paint.NET.
+            qreal z = m_zoom * std::pow(1.12, delta / 120.0);
             if ((m_zoom < 1.0 && z > 1.0) || (m_zoom > 1.0 && z < 1.0))
                 z = 1.0;
             setZoom(z, e->position());

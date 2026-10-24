@@ -405,6 +405,44 @@ QRect FloatingPixels::boundsFor(const QTransform& t) const
     return r.intersected(base.rect());
 }
 
+Selection FloatingPixels::placedSelection(const QTransform& t) const
+{
+    if (m_placed.isEmpty() || m_placedFor != t) {
+        m_placed = selectionBase.transformed(t);
+        m_placedFor = t;
+    }
+    return m_placed;
+}
+
+namespace {
+
+// Píxeles flotantes ya colocados ('src', premultiplicados, del tamaño de 'r') que sustituyen a
+// los de la capa según la cobertura de la selección: dentro, aunque sean transparentes; en el
+// borde suavizado, mezclados en proporción.
+void replaceInto(QImage& img, const QRect& r, const QImage& src, const QImage& mask)
+{
+    for (int y = 0; y < r.height(); ++y) {
+        QRgb* dst = reinterpret_cast<QRgb*>(img.scanLine(r.top() + y)) + r.left();
+        const QRgb* s = reinterpret_cast<const QRgb*>(src.constScanLine(y));
+        const uchar* m = mask.constScanLine(r.top() + y) + r.left();
+        for (int x = 0; x < r.width(); ++x) {
+            const int c = m[x];
+            if (c == 0)
+                continue;
+            if (c == 255) {
+                dst[x] = qUnpremultiply(s[x]);
+                continue;
+            }
+            const QRgb b = qPremultiply(dst[x]);
+            auto lerp = [c](int from, int to) { return (to * c + from * (255 - c) + 127) / 255; };
+            dst[x] = qUnpremultiply(qRgba(lerp(qRed(b), qRed(s[x])), lerp(qGreen(b), qGreen(s[x])),
+                                          lerp(qBlue(b), qBlue(s[x])), lerp(qAlpha(b), qAlpha(s[x]))));
+        }
+    }
+}
+
+} // namespace
+
 void FloatingPixels::render(const QTransform& t, const QRect& region) const
 {
     const QRect r = region.intersected(base.rect());
@@ -414,13 +452,23 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
     Raster::copyRect(img, base, r);
     const QTransform m = pixelsToCanvas(t);
     const bool exact = m.type() <= QTransform::TxTranslate && m.dx() == std::floor(m.dx()) && m.dy() == std::floor(m.dy());
-    if (exact) {
+    const Selection placed = replace ? placedSelection(t) : Selection();
+    const bool replacing = !placed.isEmpty() && placed.canvasSize() == img.size();
+    if (exact && !replacing) {
         const QPoint at(int(m.dx()), int(m.dy()));
         blendImage(img, r.topLeft(), pixels, r.translated(-at), BlendMode::Normal);
         return;
     }
     QImage tmp(r.size(), kPremulFormat);
     tmp.fill(Qt::transparent);
+    if (exact) {
+        QPainter p(&tmp);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        p.drawImage(QPoint(int(m.dx()) - r.left(), int(m.dy()) - r.top()), pixels);
+        p.end();
+        replaceInto(img, r, tmp, placed.mask());
+        return;
+    }
     QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
     // Al reducir, antes se promedia por áreas (si no, sale pixelado); al ampliar, el vecino más
     // cercano (por defecto) deja los píxeles nítidos.
@@ -434,7 +482,10 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
         p.setTransform(toTmp);
         p.drawImage(0, 0, source);
     }
-    blendImage(img, r.topLeft(), tmp, BlendMode::Normal);
+    if (replacing)
+        replaceInto(img, r, tmp, placed.mask());
+    else
+        blendImage(img, r.topLeft(), tmp, BlendMode::Normal);
 }
 
 MovePixelsCommand::MovePixelsCommand(Document* doc, FloatingPtr floating, const QTransform& before,

@@ -224,6 +224,11 @@ ColorsPanel::ColorsPanel(QWidget* parent)
             app->setActiveColor(c);
     });
     connect(m_hex, &QLineEdit::editingFinished, this, [this] {
+        // Solo si se escribió algo: con el foco en el campo (p. ej. tras copiar el código), al
+        // salir de él no debe volver a poner su texto, que podía ser de un color anterior.
+        if (!m_hex->isModified())
+            return refresh();
+        m_hex->setModified(false);
         QString t = m_hex->text().remove(QLatin1Char('#'));
         if (t.size() != 6 && t.size() != 8)
             return refresh();
@@ -412,11 +417,12 @@ void ColorsPanel::refresh()
         const QSignalBlocker block(spin);
         spin->setValue(slider->value());
     }
-    if (!m_hex->hasFocus()) {
+    if (!m_hex->hasFocus() || !m_hex->isModified()) {
         QString hex = QStringLiteral("%1%2%3").arg(c.red(), 2, 16, QLatin1Char('0')).arg(c.green(), 2, 16, QLatin1Char('0')).arg(c.blue(), 2, 16, QLatin1Char('0'));
         if (c.alpha() < 255)
             hex += QStringLiteral("%1").arg(c.alpha(), 2, 16, QLatin1Char('0'));
-        m_hex->setText(hex.toUpper());
+        if (m_hex->text() != hex.toUpper())
+            m_hex->setText(hex.toUpper());
     }
     updateAddIcon();
 }

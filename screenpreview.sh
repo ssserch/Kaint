@@ -4,7 +4,8 @@
 # Cópialo dentro de la carpeta de compilación (junto al ejecutable kaint) y ejecútalo allí:
 #   ./screenpreview.sh
 # Pregunta las imágenes (la primera es la que se ve; las demás quedan abiertas en la barra de
-# arriba), el tema, la resolución y el formato, y guarda la captura en screenpreview-screenshots/.
+# arriba), el tema, si los iconos de herramientas llevan los colores activos, la resolución y el
+# formato, y guarda la captura en screenpreview-screenshots/.
 # No toca la configuración de Kaint: cada captura usa una configuración de fábrica temporal.
 set -euo pipefail
 
@@ -28,6 +29,8 @@ fi
 [[ -n "$KAINT" ]] || fail "No encuentro kaint: copia este script dentro de la carpeta de compilación (junto al ejecutable kaint)."
 QT_QPA_PLATFORM=offscreen "$KAINT" --help 2>/dev/null | grep -q -- "--screenpreview" \
     || fail "Este kaint ($KAINT) no tiene el modo de capturas: vuelve a compilarlo."
+QT_QPA_PLATFORM=offscreen "$KAINT" --help 2>/dev/null | grep -q -- "--preview-colored-icons" \
+    || fail "Este kaint ($KAINT) es anterior a la opción de los iconos de herramientas: vuelve a compilarlo."
 
 # --- Imágenes ---------------------------------------------------------------
 # Admite rutas arrastradas a la terminal: entre comillas, con espacios escapados o file://.
@@ -89,6 +92,19 @@ if [[ "$THEME" == kde && "${XDG_CURRENT_DESKTOP:-}" != *KDE* ]]; then
     warn "El tema KDE necesita Plasma (plasma-integration); fuera de KDE la captura saldrá con el estilo de Qt."
 fi
 
+# --- Iconos de herramientas -------------------------------------------------
+# El cubo, el pincel, cambiar color y el degradado pueden mostrar los colores activos.
+echo
+COLORED=""
+while [[ -z "$COLORED" ]]; do
+    read -r -p "¿Iconos de herramientas con los colores activos? [S/n] " choice
+    case "${choice,,}" in
+        ""|s|si|sí|y|yes) COLORED=yes ;;
+        n|no) COLORED=no ;;
+        *) warn "Escribe s o n." ;;
+    esac
+done
+
 # --- Resolución -------------------------------------------------------------
 RESOLUTIONS=(1280x720 1366x768 1600x900 1920x1080 2560x1440 3840x2160)
 echo
@@ -139,7 +155,7 @@ OUTPUT="$OUT_DIR/kaint-$THEME-$SIZE-$(date +%Y%m%d-%H%M%S).$FORMAT"
 echo
 echo "Creando la captura…"
 if "$KAINT" --screenpreview "$OUTPUT" --color-scheme "$THEME" --preview-size "$SIZE" --preview-scale "$SCALE" \
-        -- "${IMAGES[@]}" 2> >(grep -v "propagateSizeHints" >&2); then
+        --preview-colored-icons "$COLORED" -- "${IMAGES[@]}" 2> >(grep -v "propagateSizeHints" >&2); then
     echo "${c_green}Lista:${c_reset} $OUTPUT"
 else
     fail "No se pudo crear la captura."

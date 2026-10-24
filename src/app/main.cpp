@@ -79,8 +79,13 @@ int main(int argc, char** argv)
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, previewSettings.path());
         QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, previewSettings.path());
-        QSettings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"))
-            .setValue(QStringLiteral("settings/discordEnabled"), false);
+        QSettings preset(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"));
+        preset.setValue(QStringLiteral("settings/discordEnabled"), false);
+        // Iconos de herramientas con los colores activos (de fábrica, sí).
+        const QString colored = rawOption(argc, argv, QStringLiteral("--preview-colored-icons")).toLower();
+        if (!colored.isEmpty())
+            preset.setValue(QStringLiteral("settings/coloredToolIcons"),
+                            colored != QLatin1String("no") && colored != QLatin1String("false") && colored != QLatin1String("0"));
     }
 
     // Antes de crear la aplicación: salvo con el tema de KDE, el escritorio no debe imponer
@@ -129,6 +134,9 @@ int main(int argc, char** argv)
                                         QObject::tr("Tamaño de la captura en píxeles (ancho x alto)."), QStringLiteral("WxH")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-scale"), QObject::tr("Escala de la interfaz en la captura."),
                                         QStringLiteral("factor")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-colored-icons"),
+                                        QObject::tr("Iconos de herramientas con los colores activos en la captura (yes o no)."),
+                                        QStringLiteral("yes|no")));
     parser.process(app);
 
     AppState::instance()->load();

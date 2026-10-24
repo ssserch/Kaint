@@ -1,6 +1,7 @@
 #include "app/Ruler.h"
 
 #include "app/Canvas.h"
+#include "app/Theme.h"
 #include "core/Document.h"
 
 #include <QPainter>
@@ -51,7 +52,8 @@ void Ruler::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     const QPalette& pal = palette();
-    p.fillRect(rect(), pal.color(QPalette::Window));
+    // Como en Paint.NET, del color de la barra de herramientas que tiene encima.
+    p.fillRect(rect(), Theme::active().toolBar);
     const Document* doc = m_canvas->document();
     if (!doc)
         return;

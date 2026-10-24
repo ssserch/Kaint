@@ -53,11 +53,13 @@
 #include <QLocalSocket>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPrinter>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSettings>
+#include <QSlider>
 #include <QStatusBar>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
@@ -234,8 +236,8 @@ static void testTransformBox()
     CHECK(box.hit(QPointF(100, -25), view, false, nullptr) == TransformBox::Mode::Rotate);
     CHECK(box.hit(QPointF(150, 60), view, false, nullptr) == TransformBox::Mode::Translate);
 
-    // Píxel a píxel: sin giro, las esquinas caen en píxeles enteros; con giro, solo se redondea
-    // el desplazamiento.
+    // Píxel a píxel: sin giro, las esquinas caen en píxeles enteros; girado 90°, también; con
+    // otros giros no se toca (si se redondeara el desplazamiento, temblaría al girar).
     const QTransform loose = QTransform::fromScale(1.37, 0.81) * QTransform::fromTranslate(10.4, 7.3);
     const QTransform snapped = TransformBox::snappedToPixels(loose, QRectF(0, 0, 100, 50));
     for (const QPointF corner : {QPointF(0, 0), QPointF(100, 50)}) {
@@ -245,7 +247,11 @@ static void testTransformBox()
     QTransform turned;
     turned.translate(5.6, 3.2).rotate(30);
     const QTransform turnedSnap = TransformBox::snappedToPixels(turned, QRectF(0, 0, 100, 50));
-    CHECK(near(turnedSnap.map(QPointF(0, 0)), QPointF(6, 3)) && std::abs(turnedSnap.m11() - turned.m11()) < 1e-9);
+    CHECK(turnedSnap == turned);
+    QTransform quarter;
+    quarter.translate(5.6, 3.2).rotate(90);
+    const QRectF quarterRect = TransformBox::snappedToPixels(quarter, QRectF(0, 0, 100, 50)).mapRect(QRectF(0, 0, 100, 50));
+    CHECK(near(quarterRect.topLeft(), QPointF(std::round(quarterRect.left()), std::round(quarterRect.top()))));
 
     box.begin(TransformBox::Mode::Pivot, -1, QPointF(50, 25));
     box.update(QPointF(70, 30), Qt::NoModifier);
@@ -823,7 +829,7 @@ int main(int argc, char** argv)
             QWheelEvent wheel(v, canvas->viewport()->mapToGlobal(v), QPoint(), QPoint(0, 120), Qt::NoButton,
                               Qt::ControlModifier, Qt::NoScrollPhase, false);
             QApplication::sendEvent(canvas->viewport(), &wheel);
-            CHECK(std::abs(canvas->zoom() / before - 1.2) < 0.01);
+            CHECK(std::abs(canvas->zoom() / before - 1.12) < 0.01);
             CHECK(QLineF(canvas->viewToImage(v), img).length() < 0.5);
             QWheelEvent back(v, canvas->viewport()->mapToGlobal(v), QPoint(), QPoint(0, -360), Qt::NoButton,
                              Qt::ControlModifier, Qt::NoScrollPhase, false);
@@ -1127,6 +1133,177 @@ int main(int argc, char** argv)
         CHECK(!w.close());
         CHECK(w.isVisible());
     }
+
+    // Pegar con transparencia, como en Paint.NET: dentro del rectángulo pegado, lo transparente
+    // también reemplaza a lo de debajo (configurable); al arrastrar con Mover píxeles solo queda
+    // el icono de mover; Cortar necesita una selección; el portapapeles lleva también un PNG.
+    {
+        auto* strip = w.findChild<QTabBar*>(QStringLiteral("ImageStrip"));
+        const int first = strip ? strip->currentIndex() : -1;
+        w.newDefaultDocument();
+        settle();
+        Document* d = canvas->document();
+        QImage glass(120, 120, QImage::Format_ARGB32);
+        glass.fill(Qt::transparent);
+        for (int y = 0; y < 120; ++y)
+            for (int x = 60; x < 120; ++x)
+                glass.setPixelColor(x, y, QColor(200, 30, 30));
+        const ToolPreferences prefs = state->preferences();
+        CHECK(prefs.replacePixels && prefs.hideBoxWhileDragging && state->tools().moveInterpolation == Resample::Interpolation::Bicubic);
+        for (bool replace : {true, false}) {
+            ToolPreferences p = prefs;
+            p.replacePixels = replace;
+            state->setPreferences(p);
+            d->activeLayer()->image.fill(Qt::black);
+            d->notifyPixelsChanged(d->activeLayer(), d->rect());
+            QApplication::clipboard()->setImage(glass);
+            findAction(&w, QStringLiteral("Pegar"))->trigger();
+            settle();
+            const QPoint at = d->selection().bounds().topLeft();
+            CHECK(d->selection().bounds().size() == glass.size());
+            CHECK(QColor::fromRgba(d->activeLayer()->image.pixel(at + QPoint(90, 60))) == QColor(200, 30, 30));
+            const QRgb hole = d->activeLayer()->image.pixel(at + QPoint(20, 60));
+            CHECK(replace ? qAlpha(hole) == 0 : hole == qRgb(0, 0, 0));
+            // Moverlo también reemplaza (o mezcla) en el sitio nuevo.
+            drag(canvas, {QPointF(at + QPoint(30, 30)), QPointF(at + QPoint(230, 30))});
+            const QRgb moved = d->activeLayer()->image.pixel(at + QPoint(220, 60));
+            CHECK(replace ? qAlpha(moved) == 0 : moved == qRgb(0, 0, 0));
+            tools->select(ToolId::RectSelect);
+            findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+            settle();
+        }
+        state->setPreferences(prefs);
+
+        // Arrastrar con Mover píxeles oculta el contorno y los tiradores hasta soltar.
+        tools->select(ToolId::RectSelect);
+        drag(canvas, {QPointF(100, 100), QPointF(160, 150), QPointF(200, 180)});
+        tools->select(ToolId::MoveSelected);
+        auto send = [canvas](QEvent::Type type, const QPointF& img, Qt::MouseButtons buttons) {
+            const QPointF v = canvas->imageToView(img);
+            QMouseEvent e(type, v, canvas->viewport()->mapToGlobal(v), type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton,
+                          buttons, Qt::NoModifier);
+            QApplication::sendEvent(canvas->viewport(), &e);
+        };
+        CHECK(!tools->current()->hidesSelectionOutline());
+        send(QEvent::MouseButtonPress, QPointF(125, 120), Qt::LeftButton);
+        send(QEvent::MouseMove, QPointF(170, 150), Qt::LeftButton);
+        CHECK(tools->current()->hidesSelectionOutline());
+        if (!outDir.isEmpty())
+            w.grab().save(QDir(outDir).filePath(QStringLiteral("mover-arrastrando.png")));
+        send(QEvent::MouseButtonRelease, QPointF(170, 150), Qt::NoButton);
+        settle();
+        CHECK(!tools->current()->hidesSelectionOutline());
+        ToolPreferences show = prefs;
+        show.hideBoxWhileDragging = false;
+        state->setPreferences(show);
+        send(QEvent::MouseButtonPress, QPointF(185, 155), Qt::LeftButton);
+        send(QEvent::MouseMove, QPointF(190, 155), Qt::LeftButton);
+        CHECK(!tools->current()->hidesSelectionOutline());
+        send(QEvent::MouseButtonRelease, QPointF(165, 150), Qt::NoButton);
+        settle();
+        state->setPreferences(prefs);
+
+        // Cortar solo con algo seleccionado; al copiar, también va un PNG con la transparencia.
+        tools->select(ToolId::RectSelect);
+        QAction* cutAct = findAction(&w, QStringLiteral("Cortar"));
+        CHECK(cutAct && cutAct->isEnabled());
+        findAction(&w, QStringLiteral("Copiar"))->trigger();
+        const QMimeData* copied = QApplication::clipboard()->mimeData();
+        CHECK(copied && copied->hasImage() && copied->hasFormat(QStringLiteral("image/png")));
+        if (copied)
+            CHECK(QImage::fromData(copied->data(QStringLiteral("image/png")), "PNG").hasAlphaChannel());
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        settle();
+        CHECK(cutAct && !cutAct->isEnabled());
+
+        // Cerrar varias imágenes sin guardar: una sola pregunta con sus miniaturas, y "No guardar"
+        // las descarta todas a la vez.
+        w.newDefaultDocument();
+        settle();
+        tools->select(ToolId::Pencil);
+        drag(canvas, {QPointF(20, 20), QPointF(80, 60)});
+        CHECK(d->isModified() && canvas->document()->isModified());
+        const int before = strip ? strip->count() : 0;
+        int thumbnails = -1;
+        QTimer::singleShot(300, [&thumbnails, &outDir] {
+            auto* ask = qobject_cast<TaskDialog*>(QApplication::activeModalWidget());
+            CHECK(ask);
+            if (!ask)
+                return;
+            if (auto* list = ask->findChild<QListWidget*>())
+                thumbnails = list->count();
+            if (!outDir.isEmpty())
+                ask->grab().save(QDir(outDir).filePath(QStringLiteral("cambios-varias.png")));
+            if (auto* b = ask->findChild<QAbstractButton*>(QStringLiteral("choice1")))
+                b->click();
+        });
+        if (strip)
+            strip->setCurrentIndex(first);
+        settle();
+        findAction(&w, QStringLiteral("Cerrar todas menos esta"))->trigger();
+        settle();
+        CHECK(thumbnails == 2);
+        CHECK(strip && strip->count() == before - 2 && canvas->document() == doc);
+    }
+
+    // El campo hexadecimal de Colores no vuelve a poner su texto al perder el foco si no se
+    // escribió en él (antes, tras copiar el código, un clic en el lienzo devolvía el color viejo).
+    {
+        auto* colors = w.findChild<ColorsPanel*>();
+        QLineEdit* hex = nullptr;
+        const QString code = state->primary().name().mid(1).toUpper();
+        for (QLineEdit* e : colors ? colors->findChildren<QLineEdit*>() : QList<QLineEdit*>())
+            if (e->text() == code)
+                hex = e;
+        CHECK(hex);
+        if (hex) {
+            const QColor keep = state->primary();
+            hex->setFocus();
+            settle();
+            state->setPrimary(QColor(10, 200, 30));
+            CHECK(hex->text() == QStringLiteral("0AC81E"));
+            canvas->setFocus();
+            settle();
+            CHECK(state->primary() == QColor(10, 200, 30));
+            state->setPrimary(keep);
+        }
+    }
+
+    // Deslizadores como en Paint.NET: un clic en la barra avanza hacia él, y si además se mueve
+    // el ratón el tirador sigue al puntero; mientras se pulsa cambia de color.
+    {
+        QSlider slider(Qt::Horizontal);
+        slider.setRange(0, 100);
+        slider.setValue(50);
+        slider.resize(220, 24);
+        slider.show();
+        settle();
+        auto send = [&slider](QEvent::Type type, int x, Qt::MouseButtons buttons) {
+            const QPointF pos(x, slider.height() / 2);
+            QMouseEvent e(type, pos, slider.mapToGlobal(pos), type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton, buttons,
+                          Qt::NoModifier);
+            QApplication::sendEvent(&slider, &e);
+        };
+        send(QEvent::MouseButtonPress, 200, Qt::LeftButton);
+        CHECK(slider.property("kaintPressed").toBool() && slider.value() > 50 && !slider.isSliderDown());
+        send(QEvent::MouseMove, 30, Qt::LeftButton);
+        CHECK(slider.isSliderDown() && slider.value() < 20);
+        send(QEvent::MouseMove, 110, Qt::LeftButton);
+        CHECK(std::abs(slider.value() - 50) <= 3);
+        send(QEvent::MouseButtonRelease, 110, Qt::NoButton);
+        CHECK(!slider.isSliderDown() && !slider.property("kaintPressed").toBool() && std::abs(slider.value() - 50) <= 3);
+        const int settled = slider.value();
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 700)
+            QApplication::processEvents(QEventLoop::AllEvents, 20);
+        CHECK(slider.value() == settled);
+    }
+
+    // Las listas de tamaños (pincel, letra) se ven enteras.
+    for (QComboBox* c : w.findChildren<QComboBox*>())
+        if (c->isEditable() && c->findText(QStringLiteral("288")) >= 0)
+            CHECK(c->maxVisibleItems() >= c->count());
 
 
     // Colores: solo cambia de tamaño manteniendo la proporción, y "Más"/"Menos" conservan la
@@ -1775,19 +1952,20 @@ int main(int argc, char** argv)
         state->load();
     }
 
-    // Ranuras de color como en Paint.NET: la inactiva solo lleva un marco negro fino.
+    // Ranuras de color como en Paint.NET: el secundario inactivo solo lleva un marco negro fino;
+    // el principal inactivo conserva un marco blanco más fino.
     if (auto* swatches = w.findChild<ColorSwatches*>()) {
         state->setPrimary(Qt::red);
         state->setSecondary(Qt::blue);
         settle();
-        auto band = [swatches](bool secondary) {
+        auto band = [swatches](bool secondary, int inset = 2) {
             const QImage img = swatches->grab().toImage();
             const QRectF r = secondary ? swatches->secondaryRect() : swatches->primaryRect();
-            return QColor(img.pixel(int(secondary ? r.right() - 2 : r.left() + 2), int(r.center().y())));
+            return QColor(img.pixel(int(secondary ? r.right() - inset : r.left() + inset), int(r.center().y())));
         };
         CHECK(band(false) == QColor(Qt::white) && band(true) == QColor(Qt::blue));
         swatches->setEditingSecondary(true);
-        CHECK(band(false) == QColor(Qt::red) && band(true) == QColor(Qt::white));
+        CHECK(band(false, 1) == QColor(Qt::white) && band(false, 3) == QColor(Qt::red) && band(true) == QColor(Qt::white));
         swatches->setEditingSecondary(false);
         state->resetColors();
     }

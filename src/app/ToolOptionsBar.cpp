@@ -163,7 +163,8 @@ QComboBox* ToolOptionsEditor::numberCombo(const QList<double>& presets, double m
     auto* validator = new QDoubleValidator(min, max, decimals, c);
     validator->setNotation(QDoubleValidator::StandardNotation);
     c->lineEdit()->setValidator(validator);
-    c->setMaxVisibleItems(16);
+    // La lista entera; Qt solo la recorta (con barra de desplazamiento) si no cabe en la pantalla.
+    c->setMaxVisibleItems(std::max(1, int(presets.size())));
     c->setMinimumContentsLength(4);
     c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     auto apply = [c, min, max, set](const QString& text) {

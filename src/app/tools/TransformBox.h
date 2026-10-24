@@ -30,10 +30,13 @@ public:
     double rotationDegrees() const;
     QPointF pivot() const { return m_transform.map(m_localPivot); }
 
-    void draw(QPainter& p, const QTransform& imageToView, bool handles) const;
+    // Partes que se dibujan (al arrastrar, las herramientas Mover ocultan algunas).
+    enum Part { Outline = 1, BoxHandles = 2, PivotPoint = 4, MoveIcon = 8, AllParts = 15 };
+    void draw(QPainter& p, const QTransform& imageToView, int parts = AllParts) const;
 
-    // Píxel a píxel: sin giro, las esquinas del rectángulo transformado quedan en píxeles enteros
-    // (con giro, solo el desplazamiento).
+    // Píxel a píxel: sin giro (o girado 90° o 270°), las esquinas del rectángulo transformado
+    // quedan en píxeles enteros; con otros giros no se toca (girar alrededor del punto central no
+    // tiembla).
     static QTransform snappedToPixels(const QTransform& t, const QRectF& localRect);
 
 private:

@@ -110,6 +110,7 @@ void MoveSelectedTool::startPaste(Document* doc, const QImage& image, QPoint pos
     f->selectionBase = Selection::fromRect(QRect(pos, image.size()), doc->size());
     f->interpolation = AppState::instance()->tools().moveInterpolation;
     f->gammaCorrect = AppState::instance()->tools().moveGamma;
+    f->replace = AppState::instance()->preferences().replacePixels;
     HistoryIcons::registerIcon(text, QStringLiteral("edit-paste"));
     doc->undoStack()->push(new MovePixelsCommand(doc, f, QTransform(), QTransform(), true, true, doc->selection(), text));
 }
@@ -127,6 +128,7 @@ FloatingPtr MoveSelectedTool::lift(bool keepCopy, LayerPtr layer)
     f->base = f->original.copy();
     f->interpolation = AppState::instance()->tools().moveInterpolation;
     f->gammaCorrect = AppState::instance()->tools().moveGamma;
+    f->replace = AppState::instance()->preferences().replacePixels;
     if (!keepCopy)
         Raster::eraseSelection(f->base, sel);
     return f;
@@ -213,6 +215,7 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
     m_box.set(QRectF(m_float->pixels.rect()), m_float->pixelsToCanvas(m_startTransform));
     m_box.begin(mode, handle, e.pos);
     m_active = true;
+    repaint();
 }
 
 void MoveSelectedTool::applyLive(const QTransform& t)
@@ -228,7 +231,7 @@ void MoveSelectedTool::applyLive(const QTransform& t)
     }
     m_current = t;
     doc->notifyPixelsChanged(m_float->layer.get(), r);
-    doc->setSelection(m_float->selectionBase.transformed(t));
+    doc->setSelection(m_float->placedSelection(t));
 }
 
 void MoveSelectedTool::mouseMove(const ToolEvent& e)
@@ -379,6 +382,11 @@ void MoveSelectedTool::deactivate()
     Tool::deactivate();
 }
 
+bool MoveSelectedTool::hidesSelectionOutline() const
+{
+    return m_active && !m_pivotDrag && AppState::instance()->preferences().hideBoxWhileDragging;
+}
+
 void MoveSelectedTool::paintOverlay(QPainter& p)
 {
     Document* doc = document();
@@ -388,7 +396,12 @@ void MoveSelectedTool::paintOverlay(QPainter& p)
         return;
     if (!m_active)
         syncBox();
-    m_box.draw(p, canvas()->imageToViewTransform(), true);
+    // Como en Paint.NET: mientras se arrastra solo queda el icono de mover (y, al girar, el punto
+    // de giro).
+    int parts = TransformBox::AllParts;
+    if (hidesSelectionOutline())
+        parts = TransformBox::MoveIcon | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
+    m_box.draw(p, canvas()->imageToViewTransform(), parts);
 }
 
 // ---------------------------------------------------------------------------
@@ -456,6 +469,7 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
     m_pivotDrag = mode == TransformBox::Mode::Pivot;
     m_box.begin(mode, handle, e.pos);
     m_active = true;
+    repaint();
 }
 
 void MoveSelectionTool::mouseMove(const ToolEvent& e)
@@ -558,5 +572,11 @@ void MoveSelectionTool::paintOverlay(QPainter& p)
         return;
     if (!m_active)
         syncBox();
-    m_box.draw(p, canvas()->imageToViewTransform(), true);
+    // Mientras se arrastra la selección solo desaparecen los tiradores (el punto de giro sigue a
+    // la vista al girar).
+    int parts = TransformBox::AllParts;
+    if (m_active && !m_pivotDrag && AppState::instance()->preferences().hideBoxWhileDragging)
+        parts = TransformBox::Outline | TransformBox::MoveIcon
+              | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
+    m_box.draw(p, canvas()->imageToViewTransform(), parts);
 }

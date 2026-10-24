@@ -81,6 +81,9 @@ AppSettings AppSettings::load()
     a.canvasBorder = s.value(QStringLiteral("canvasBorder"), QColor()).value<QColor>();
     a.checkerBrightness = std::clamp(get("checkerboardBrightness", a.checkerBrightness), 0, 255);
     a.startTool = get("startTool", a.startTool);
+    a.hideMoveBox = get("hideMoveBox", a.hideMoveBox);
+    a.replacePixels = get("replacePixels", a.replacePixels);
+    a.askOnceOnClose = get("askOnceOnClose", a.askOnceOnClose);
     a.tabletEraser = get("tabletEraser", a.tabletEraser);
     a.historyLimitMB = std::max(0, get("historyLimitMB", a.historyLimitMB));
     a.checkUpdates = get("checkUpdates", a.checkUpdates);
@@ -117,6 +120,9 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("checkerboardBrightness"), checkerBrightness);
     s.remove(QStringLiteral("checkerBrightness"));
     s.setValue(QStringLiteral("startTool"), startTool);
+    s.setValue(QStringLiteral("hideMoveBox"), hideMoveBox);
+    s.setValue(QStringLiteral("replacePixels"), replacePixels);
+    s.setValue(QStringLiteral("askOnceOnClose"), askOnceOnClose);
     s.setValue(QStringLiteral("tabletEraser"), tabletEraser);
     s.setValue(QStringLiteral("historyLimitMB"), historyLimitMB);
     s.setValue(QStringLiteral("checkUpdates"), checkUpdates);
@@ -352,6 +358,10 @@ QWidget* SettingsDialog::createInterfacePage()
     page.layout->addWidget(sectionHeader(tr("Al iniciar"), page.widget));
     check(tr("Volver a abrir las imágenes de la última sesión"), &AppSettings::reopenLast);
 
+    page.layout->addWidget(sectionHeader(tr("Al cerrar"), page.widget));
+    check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), &AppSettings::askOnceOnClose,
+          tr("Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen."));
+
     // Copias de recuperación por si Kaint se cierra de golpe.
     page.layout->addWidget(sectionHeader(tr("Recuperación"), page.widget));
     auto* autosaveRow = new QHBoxLayout;
@@ -473,6 +483,25 @@ QWidget* SettingsDialog::createToolsPage(ToolManager* tools)
     startRow->addWidget(startTool);
     startRow->addStretch();
     page.layout->addLayout(startRow);
+
+    page.layout->addWidget(sectionHeader(tr("Mover y pegar"), page.widget));
+    auto check = [&](const QString& text, bool AppSettings::*field, const QString& tip) {
+        auto* c = new QCheckBox(text, page.widget);
+        c->setChecked(m_settings.*field);
+        c->setToolTip(tip);
+        connect(c, &QCheckBox::toggled, this, [this, field](bool on) {
+            m_settings.*field = on;
+            changed();
+        });
+        page.layout->addWidget(c);
+    };
+    check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), &AppSettings::hideMoveBox,
+          tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los "
+             "tiradores."));
+    check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"),
+          &AppSettings::replacePixels,
+          tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo "
+             "transparente. Desactivado, se mezclan con lo que hay debajo."));
 
     m_toolDefaults = new ToolOptionsPanel(defaults, page.widget);
     page.layout->addWidget(m_toolDefaults);

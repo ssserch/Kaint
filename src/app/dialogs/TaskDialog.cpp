@@ -37,6 +37,7 @@ TaskDialog::TaskDialog(const QString& title, const QIcon& icon, const QImage& th
         setWindowIcon(icon);
 
     auto* layout = new QVBoxLayout(this);
+    m_layout = layout;
     layout->setSizeConstraint(QLayout::SetFixedSize);
     auto* top = new QHBoxLayout;
     top->setSpacing(12);
@@ -77,6 +78,13 @@ int TaskDialog::addChoice(const QIcon& icon, const QString& title, const QString
     });
     m_choices->addWidget(button);
     return index;
+}
+
+void TaskDialog::addContent(QWidget* widget)
+{
+    widget->setParent(this);
+    m_layout->insertWidget(m_layout->indexOf(m_choices), widget);
+    m_layout->insertSpacing(m_layout->indexOf(m_choices), 6);
 }
 
 int TaskDialog::choose()

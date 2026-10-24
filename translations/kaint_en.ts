@@ -1170,6 +1170,26 @@ What do you want to do?</translation>
         <translation>Return to Kaint.</translation>
     </message>
     <message>
+        <source>Las siguientes imágenes abiertas contienen cambios que no se han guardado. Haga clic en una miniatura para mostrar la imagen en la ventana principal.</source>
+        <translation>The following open images have unsaved changes. Click on a thumbnail to show the image in the main window.</translation>
+    </message>
+    <message>
+        <source>Guardar las imágenes de la lista de arriba y, a continuación, salir.</source>
+        <translation>Save the images in the list above and then exit.</translation>
+    </message>
+    <message>
+        <source>Guardar las imágenes de la lista de arriba y, a continuación, cerrarlas.</source>
+        <translation>Save the images in the list above and then close them.</translation>
+    </message>
+    <message>
+        <source>Descartar todos los cambios no guardados y, a continuación, salir.</source>
+        <translation>Discard all unsaved changes and then exit.</translation>
+    </message>
+    <message>
+        <source>Descartar todos los cambios no guardados y, a continuación, cerrarlas.</source>
+        <translation>Discard all unsaved changes and then close the images.</translation>
+    </message>
+    <message>
         <source>pulgadas cuadradas</source>
         <translation>square inches</translation>
     </message>
@@ -1960,6 +1980,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Escala de la interfaz en la captura.</source>
         <translation>Interface scale in the screenshot.</translation>
+    </message>
+    <message>
+        <source>Iconos de herramientas con los colores activos en la captura (yes o no).</source>
+        <translation>Tool icons with the active colors in the screenshot (yes or no).</translation>
     </message>
     <message>
         <source>px</source>
@@ -3755,6 +3779,18 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Reopen the images from the last session</translation>
     </message>
     <message>
+        <source>Al cerrar</source>
+        <translation>On close</translation>
+    </message>
+    <message>
+        <source>Preguntar una sola vez por todas las imágenes sin guardar</source>
+        <translation>Ask once for all unsaved images</translation>
+    </message>
+    <message>
+        <source>Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.</source>
+        <translation>Like Paint.NET: “Don&apos;t Save” discards all of them at once. When off, Kaint asks image by image.</translation>
+    </message>
+    <message>
         <source>Recuperación</source>
         <translation>Recovery</translation>
     </message>
@@ -3809,6 +3845,26 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Herramienta predeterminada:</source>
         <translation>Default tool:</translation>
+    </message>
+    <message>
+        <source>Mover y pegar</source>
+        <translation>Move and paste</translation>
+    </message>
+    <message>
+        <source>Ocultar el contorno y los tiradores mientras se arrastra</source>
+        <translation>Hide the outline and handles while dragging</translation>
+    </message>
+    <message>
+        <source>Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.</source>
+        <translation>With Move Selected Pixels only the move icon stays; with Move Selection the handles disappear.</translation>
+    </message>
+    <message>
+        <source>Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes</source>
+        <translation>Pasted or moved pixels replace the ones underneath, transparent ones too</translation>
+    </message>
+    <message>
+        <source>Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.</source>
+        <translation>Like Paint.NET: pasting an image with transparency over another one on the same layer leaves that rectangle transparent. When off, they blend with what is underneath.</translation>
     </message>
     <message>
         <source>Usar la Goma con el extremo borrador del lápiz</source>

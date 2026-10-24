@@ -305,10 +305,22 @@ void ColorSwatches::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     // Como en Paint.NET: la ranura activa lleva marco negro, blanco y negro y un pico blanco
-    // recortado abajo en el centro; la otra, solo un marco negro fino.
-    auto swatch = [&](const QRectF& r, const QColor& c, bool active) {
+    // recortado abajo en el centro. El principal sin activar conserva el marco blanco, más fino
+    // y sin pico; el secundario sin activar, solo un marco negro fino.
+    auto swatch = [&](const QRectF& r, const QColor& c, bool active, bool framed) {
         p.setRenderHint(QPainter::Antialiasing, false);
         p.fillRect(r, Qt::black);
+        if (!active && framed) {
+            p.fillRect(r.adjusted(1, 1, -1, -1), Qt::white);
+            p.fillRect(r.adjusted(2, 2, -2, -2), Qt::black);
+            const QRectF inner = r.adjusted(3, 3, -3, -3);
+            p.save();
+            p.setClipRect(inner);
+            paintCheckerboard(p, inner, 5);
+            p.fillRect(inner, c);
+            p.restore();
+            return;
+        }
         if (!active) {
             const QRectF inner = r.adjusted(1, 1, -1, -1);
             p.save();
@@ -339,8 +351,8 @@ void ColorSwatches::paintEvent(QPaintEvent*)
         p.fillRect(inner, c);
         p.restore();
     };
-    swatch(secondaryRect(), m_secondary, m_editingSecondary);
-    swatch(primaryRect(), m_primary, !m_editingSecondary);
+    swatch(secondaryRect(), m_secondary, m_editingSecondary, false);
+    swatch(primaryRect(), m_primary, !m_editingSecondary, true);
 
     // Flecha doble para intercambiar, pequeña y azul como la de Paint.NET: punta a la izquierda
     // arriba y punta hacia abajo a la derecha.

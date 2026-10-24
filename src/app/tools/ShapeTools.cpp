@@ -631,7 +631,7 @@ void ShapesTool::paintOverlay(QPainter& p)
 {
     if (!m_edit.isActive() || m_creating)
         return;
-    m_box.draw(p, canvas()->imageToViewTransform(), true);
+    m_box.draw(p, canvas()->imageToViewTransform());
     if (m_box.mode() == TransformBox::Mode::None)
         Handles::draw(p, moveIcon(), Handles::Shape::Move);
 }

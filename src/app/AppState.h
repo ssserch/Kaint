@@ -84,9 +84,20 @@ struct ToolSettings {
     int pickerSize = 1;
     PickerAfter pickerAfter = PickerAfter::DoNotSwitch;
     RecolorSampling recolorSampling = RecolorSampling::SecondaryColor;
-    Resample::Interpolation moveInterpolation = Resample::Interpolation::NearestNeighbor;
+    Resample::Interpolation moveInterpolation = Resample::Interpolation::Bicubic;
     bool moveGamma = true;
     AfterSelect afterSelect = AfterSelect::DoNotSwitch;
+};
+
+// Preferencias de Configuración que usan las herramientas (las pone MainWindow al aplicar la
+// configuración).
+struct ToolPreferences {
+    // Al arrastrar con las herramientas Mover se ocultan el contorno y los tiradores (con Mover
+    // selección, solo los tiradores); queda el icono de mover, como en Paint.NET.
+    bool hideBoxWhileDragging = true;
+    // Los píxeles que se pegan o se mueven reemplazan a los de debajo, también donde son
+    // transparentes (como en Paint.NET); si no, se mezclan con ellos.
+    bool replacePixels = true;
 };
 
 class AppState : public QObject {
@@ -109,6 +120,9 @@ public:
     QList<QColor> palette() const { return m_palette; }
     void setPalette(const QList<QColor>& colors);
     void setPaletteColor(int index, const QColor& c);
+
+    const ToolPreferences& preferences() const { return m_preferences; }
+    void setPreferences(const ToolPreferences& preferences) { m_preferences = preferences; }
 
     const ToolSettings& tools() const { return m_tools; }
     template <typename F>
@@ -143,6 +157,7 @@ private:
     bool m_secondaryActive = false;
     QList<QColor> m_palette;
     ToolSettings m_tools;
+    ToolPreferences m_preferences;
     QStringList m_recent;
     QHash<QString, QIcon> m_thumbs;
 };

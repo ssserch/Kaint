@@ -599,15 +599,29 @@ void drawRedo(QPainter& p)
 
 void drawCut(QPainter& p)
 {
+    // Tijeras abiertas hacia arriba, como en Paint.NET: hojas grises en V que se cruzan en el
+    // eje y mangos azules con dos anillas abajo.
     aa(p);
-    p.setPen(QPen(QColor(60, 60, 60), 1.3));
+    const QColor blade(112, 112, 112), handle(60, 118, 178);
+    p.setBrush(blade);
+    p.setPen(Qt::NoPen);
+    QPainterPath left;
+    left.moveTo(1.9, 0.2); left.lineTo(3.6, 0.2); left.lineTo(9.2, 8.4); left.lineTo(7.4, 9.6); left.closeSubpath();
+    p.drawPath(left);
+    QPainterPath right;
+    right.moveTo(14.1, 0.2); right.lineTo(12.4, 0.2); right.lineTo(6.8, 8.4); right.lineTo(8.6, 9.6); right.closeSubpath();
+    p.drawPath(right);
+
     p.setBrush(Qt::NoBrush);
-    p.drawEllipse(1, 10, 5, 5);
-    p.drawLine(4, 11, 10, 3);
-    p.drawEllipse(10, 10, 5, 5);
-    p.drawLine(12, 11, 6, 3);
-    p.setBrush(QColor(60, 60, 60));
-    p.drawEllipse(QPointF(8, 7), 1.2, 1.2);
+    p.setPen(QPen(handle, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawEllipse(QPointF(3.5, 12.8), 2.4, 2.2);
+    p.drawEllipse(QPointF(12.5, 12.8), 2.4, 2.2);
+    p.setPen(QPen(handle, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawLine(QPointF(7.4, 9.6), QPointF(5.7, 12.6));
+    p.drawLine(QPointF(8.6, 9.6), QPointF(10.3, 12.6));
+    p.setPen(Qt::NoPen);
+    p.setBrush(handle);
+    p.drawRoundedRect(QRectF(6.3, 9.0, 3.4, 2.4), 0.8, 0.8);
 }
 
 void drawCopy(QPainter& p)

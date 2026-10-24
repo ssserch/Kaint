@@ -595,10 +595,10 @@ Spec preset(bool dark)
         s.border = rgb(0x5f5f5f);
         s.menuBar = rgb(0x000000);
         s.menuBarText = rgb(0xf0f0f0);
-        s.toolBar = rgb(0x1f1f1f);
+        s.toolBar = rgb(0x202020);
         s.statusBar = rgb(0x202020);
-        s.panel = rgb(0x2b2b2b);
-        s.panelTitle = rgb(0x2b2b2b);
+        s.panel = rgb(0x262626);
+        s.panelTitle = rgb(0x262626);
         s.panelTitleText = rgb(0xd6d6d6);
         s.panelClose = rgb(0xa84646);
         s.selection = rgb(0x1c476d);
@@ -618,14 +618,14 @@ Spec preset(bool dark)
         s.menuBarText = rgb(0x000000);
         s.toolBar = rgb(0xffffff);
         s.statusBar = rgb(0xf3f3f3);
-        s.panel = rgb(0xf3f3f3);
-        s.panelTitle = rgb(0xf3f3f3);
+        s.panel = rgb(0xf0f0f0);
+        s.panelTitle = rgb(0xf0f0f0);
         s.panelTitleText = rgb(0x3c3c3c);
         s.panelClose = rgb(0xc75050);
         s.selection = rgb(0xcce4f7);
         s.selectionBorder = rgb(0x3c7fb1);
         s.hover = rgb(0xe5f3ff);
-        s.workspace = rgb(0xcbcbcb);
+        s.workspace = rgb(0xcfcfcf);
         s.radius = 0;
         s.panelTitleEnd = s.panelTitle;
     }
@@ -1062,6 +1062,9 @@ QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image:
         qss.remove(QRegularExpression(QStringLiteral("^QPushButton[^\n]*\n"), QRegularExpression::MultilineOption));
         qss += classicStyleSheet(s);
     }
+    // Tirador de los deslizadores mientras se pulsa (SliderBehavior): del color del texto, como el
+    // blanco de Paint.NET en el tema oscuro.
+    qss += QStringLiteral("QSlider[kaintPressed=\"true\"]::handle { background: %1; }\n").arg(css(s.text));
     return qss;
 }
 

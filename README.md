@@ -32,7 +32,9 @@ runs on Windows 10 and 11.
       <h4>Paint.NET tools</h4>
       Selections with their combine modes, move pixels or the selection (scale, rotate, movable
       pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, gradients, lines and
-      curves, shapes and text, all with the same options bar.
+      curves, shapes and text, all with the same options bar. Pasted pixels replace what is
+      underneath, transparency included, like in Paint.NET (optional), and copied images keep
+      their transparency in other apps such as Discord or a web browser.
     </td>
     <td width="50%" valign="top">
       <h4>Editable history</h4>

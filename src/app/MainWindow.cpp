@@ -22,6 +22,7 @@
 #include "app/tools/MoveTools.h"
 #include "app/tools/ToolManager.h"
 #include "app/widgets/FontChooser.h"
+#include "app/widgets/SliderBehavior.h"
 #include "core/Commands.h"
 #include "core/Document.h"
 #include "core/ImageIO.h"
@@ -31,6 +32,7 @@
 
 #include <QActionGroup>
 #include <QApplication>
+#include <QBuffer>
 #include <QElapsedTimer>
 #include <QCollator>
 #include <QClipboard>
@@ -75,6 +77,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScreen>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
 #include <QStandardPaths>
@@ -350,8 +353,9 @@ protected:
         const QColor arrow = isDown() || underMouse() ? palette().color(QPalette::ButtonText)
                                                       : (band.lightness() < 128 ? QColor(Qt::white) : QColor(Qt::black));
         p.setPen(QPen(arrow, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        // Algo más abajo que los menús, como en Paint.NET.
         const qreal cx = width() / 2.0;
-        p.drawPolyline(QPolygonF{QPointF(cx - 3.5, 9.5), QPointF(cx, 13), QPointF(cx + 3.5, 9.5)});
+        p.drawPolyline(QPolygonF{QPointF(cx - 3.5, 14.5), QPointF(cx, 18), QPointF(cx + 3.5, 14.5)});
     }
 };
 
@@ -369,6 +373,7 @@ MainWindow::MainWindow()
 {
     setWindowIcon(Icons::app());
     setAcceptDrops(true);
+    SliderBehavior::install();
     m_lastDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
 
     m_tools = new ToolManager(m_canvas, this);
@@ -508,7 +513,8 @@ void MainWindow::createActions()
     A["undo"] = makeAction(tr("&Deshacer"), {"edit-undo"}, QKeySequence::Undo, [this] { undo(); });
     A["redo"] = makeAction(tr("&Rehacer"), {"edit-redo"}, QKeySequence(), [this] { redo(); });
     A["redo"]->setShortcut(QKeySequence(QStringLiteral("Ctrl+Y")));
-    A["cut"] = makeAction(tr("Cor&tar"), {"edit-cut"}, QKeySequence::Cut, [this] { cut(); }, doc);
+    // Como en Paint.NET, Cortar solo se activa con algo seleccionado.
+    A["cut"] = makeAction(tr("Cor&tar"), {"edit-cut"}, QKeySequence::Cut, [this] { cut(); }, sel);
     A["cut"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+X")), QKeySequence(QStringLiteral("Shift+Del"))});
     A["copy"] = makeAction(tr("&Copiar"), {"edit-copy"}, QKeySequence::Copy, [this] { copy(false); }, doc);
     A["copy"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+C")), QKeySequence(QStringLiteral("Ctrl+Ins"))});
@@ -1269,12 +1275,12 @@ void MainWindow::setCurrentDocument(Document* doc, bool force)
     updateStatus();
 }
 
-bool MainWindow::closeDocument(Document* doc)
+bool MainWindow::closeDocument(Document* doc, bool ask)
 {
     if (!doc)
         return true;
     finishTool();
-    if (!maybeSave(doc))
+    if (ask && !maybeSave(doc))
         return false;
     const int index = int(m_docs.indexOf(doc));
     Document* next = doc == m_doc ? m_docs.value(index + 1, m_docs.value(index - 1)) : m_doc;
@@ -1308,6 +1314,69 @@ bool MainWindow::maybeSave(Document* doc)
     const int answer = dlg.choose();
     if (answer == saveChoice)
         return save(doc);
+    return answer == discard;
+}
+
+bool MainWindow::maybeSaveAll(const QList<Document*>& docs, bool quitting)
+{
+    QList<Document*> modified;
+    for (Document* d : docs)
+        if (d->isModified())
+            modified << d;
+    if (modified.size() < 2 || !m_settings.askOnceOnClose) {
+        for (Document* d : std::as_const(modified))
+            if (!maybeSave(d))
+                return false;
+        return true;
+    }
+
+    // Como Paint.NET 5: las miniaturas de todas (un clic muestra esa imagen) y una sola respuesta.
+    TaskDialog dlg(tr("Cambios no guardados"), Icons::theme({"dialog-warning"}), QImage(),
+                   tr("Las siguientes imágenes abiertas contienen cambios que no se han guardado. Haga clic en una "
+                      "miniatura para mostrar la imagen en la ventana principal."),
+                   this);
+    auto* list = new QListWidget;
+    list->setViewMode(QListView::IconMode);
+    list->setFlow(QListView::LeftToRight);
+    list->setWrapping(false);
+    list->setMovement(QListView::Static);
+    list->setIconSize(m_tabs->iconSize());
+    list->setSpacing(4);
+    list->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    for (Document* d : std::as_const(modified)) {
+        auto* item = new QListWidgetItem(m_tabs->tabIcon(int(m_docs.indexOf(d))), QString(), list);
+        item->setToolTip(d->displayName());
+        item->setSizeHint(m_tabs->iconSize() + QSize(8, 8));
+        if (d == m_doc)
+            list->setCurrentItem(item);
+    }
+    // Una fila de miniaturas; la barra de desplazamiento solo si no caben (el ancho de las opciones).
+    const QSize cell = m_tabs->iconSize() + QSize(8 + 2 * list->spacing(), 8 + 2 * list->spacing());
+    const bool scrolls = cell.width() * modified.size() > 440;
+    list->setFixedHeight(cell.height() + 2 * list->frameWidth() + (scrolls ? list->horizontalScrollBar()->sizeHint().height() : 0));
+    connect(list, &QListWidget::currentRowChanged, this, [this, modified](int row) {
+        if (Document* d = modified.value(row))
+            setCurrentDocument(d);
+    });
+    dlg.addContent(list);
+    const int saveChoice = dlg.addChoice(Icons::theme({"document-save"}), tr("Guardar"),
+                                         quitting ? tr("Guardar las imágenes de la lista de arriba y, a continuación, salir.")
+                                                  : tr("Guardar las imágenes de la lista de arriba y, a continuación, cerrarlas."),
+                                         true);
+    const int discard = dlg.addChoice(Icons::theme({"edit-delete", "user-trash"}), tr("No guardar"),
+                                      quitting ? tr("Descartar todos los cambios no guardados y, a continuación, salir.")
+                                               : tr("Descartar todos los cambios no guardados y, a continuación, cerrarlas."));
+    dlg.addChoice(Icons::theme({"edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
+    const int answer = dlg.choose();
+    if (answer == saveChoice) {
+        for (Document* d : std::as_const(modified)) {
+            setCurrentDocument(d);
+            if (!save(d))
+                return false;
+        }
+        return true;
+    }
     return answer == discard;
 }
 
@@ -1697,12 +1766,13 @@ bool MainWindow::saveAll()
 
 bool MainWindow::closeAll(Document* except)
 {
-    for (Document* d : QList<Document*>(m_docs)) {
-        if (d == except)
-            continue;
-        if (!closeDocument(d))
-            return false;
-    }
+    finishTool();
+    QList<Document*> closing = m_docs;
+    closing.removeAll(except);
+    if (!maybeSaveAll(closing, false))
+        return false;
+    for (Document* d : std::as_const(closing))
+        closeDocument(d, false);
     if (except)
         setCurrentDocument(except);
     return true;
@@ -1900,11 +1970,9 @@ void MainWindow::pageSetup()
 void MainWindow::closeEvent(QCloseEvent* e)
 {
     finishTool();
-    for (Document* d : QList<Document*>(m_docs)) {
-        if (!maybeSave(d)) {
-            e->ignore();
-            return;
-        }
+    if (!maybeSaveAll(m_docs, true)) {
+        e->ignore();
+        return;
     }
     QSettings s;
     QStringList session;
@@ -2020,7 +2088,20 @@ void MainWindow::copy(bool merged)
     finishTool();
     const QImage source = merged ? m_doc->flattened() : m_doc->activeLayer()->image;
     const QImage out = Raster::extractSelection(source, m_doc->selection()).convertToFormat(QImage::Format_ARGB32);
-    QApplication::clipboard()->setImage(out);
+    // Además de la imagen, un PNG: Discord, los navegadores y otros programas leen ese formato y
+    // conservan la transparencia (con el mapa de bits de Windows, CF_DIB, sale en blanco o negro).
+    // Paint.NET hace lo mismo.
+    auto* data = new QMimeData;
+    data->setImageData(out);
+    QByteArray png;
+    QBuffer buffer(&png);
+    if (buffer.open(QIODevice::WriteOnly) && out.save(&buffer, "PNG")) {
+        data->setData(QStringLiteral("image/png"), png);
+#ifdef Q_OS_WIN
+        data->setData(QStringLiteral("application/x-qt-windows-mime;value=\"PNG\""), png);
+#endif
+    }
+    QApplication::clipboard()->setMimeData(data);
     m_copyOrigin = m_doc->selection().isEmpty() ? QPoint(0, 0) : m_doc->selection().bounds().topLeft();
     m_copySignature = imageSignature(out);
 }
@@ -2826,6 +2907,11 @@ void MainWindow::applySettings()
     m_canvas->setAppearance(m_settings.dropShadow, m_settings.canvasBorder, m_settings.checkerBrightness);
     m_canvas->setOverscroll(m_settings.overscroll);
     m_canvas->setAutoScroll(m_settings.autoScroll);
+    ToolPreferences preferences;
+    preferences.hideBoxWhileDragging = m_settings.hideMoveBox;
+    preferences.replacePixels = m_settings.replacePixels;
+    AppState::instance()->setPreferences(preferences);
+    m_canvas->viewport()->update();
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme))
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     // Los efectos de menús y listas de Qt son ventanas aparte: el de las listas desplegables

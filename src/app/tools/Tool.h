@@ -122,6 +122,8 @@ public:
 
     // Tiñe de azul el interior de la selección (herramientas de selección).
     virtual bool highlightSelection() const { return false; }
+    // Oculta el contorno de la selección (Mover píxeles seleccionados mientras se arrastra).
+    virtual bool hidesSelectionOutline() const { return false; }
 
     // Termina la operación en curso (botón "Terminar", Intro, cambio de herramienta...).
     virtual void finish() {}

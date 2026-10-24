@@ -372,6 +372,30 @@ static void testMovePixels()
     doc->undoStack()->undo();
     CHECK(sameImage(doc->layer(0)->image, original));
     CHECK(doc->selection().bounds() == QRect(5, 5, 10, 10));
+
+    // Reemplazar (como Paint.NET): lo transparente de los píxeles flotantes deja transparente la
+    // capa dentro de la selección; mezclando, se ve lo de debajo. También al girar.
+    for (bool replace : {true, false}) {
+        auto g = std::make_shared<FloatingPixels>();
+        g->layer = doc->layerPtr(0);
+        g->original = g->layer->image;
+        g->base = g->original.copy();
+        g->pixels = QImage(10, 10, kLayerFormat);
+        g->pixels.fill(Qt::transparent);
+        g->origin = QPoint(20, 20);
+        g->selectionBase = Selection::fromRect(QRect(20, 20, 10, 10), doc->size());
+        g->replace = replace;
+        g->render(QTransform(), g->boundsFor(QTransform()));
+        const QRgb at = doc->layer(0)->image.pixel(25, 25);
+        CHECK(replace ? qAlpha(at) == 0 : QColor(at) == QColor(Qt::white));
+        QTransform turn;
+        turn.translate(25, 25).rotate(30).translate(-25, -25);
+        g->render(turn, g->boundsFor(QTransform()) | g->boundsFor(turn));
+        CHECK(g->placedSelection(turn).bounds().contains(QPoint(25, 25)));
+        const QRgb turned = doc->layer(0)->image.pixel(25, 25);
+        CHECK(replace ? qAlpha(turned) == 0 : QColor(turned) == QColor(Qt::white));
+        g->layer->image = g->original;
+    }
 }
 
 static void testBlendModes()

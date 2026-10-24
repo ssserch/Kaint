@@ -83,8 +83,12 @@ private:
     // Documentos
     void addDocument(Document* doc);
     void setCurrentDocument(Document* doc, bool force = false);
-    bool closeDocument(Document* doc);
+    // 'ask' en falso cierra sin preguntar (ya se preguntó por todas con maybeSaveAll).
+    bool closeDocument(Document* doc, bool ask = true);
     bool maybeSave(Document* doc);
+    // Pregunta por las imágenes sin guardar de 'docs': con varias, una sola vez por todas (como
+    // Paint.NET) o una por una, según la configuración. Falso si se cancela.
+    bool maybeSaveAll(const QList<Document*>& docs, bool quitting);
     void updateTab(Document* doc);
     void updateTitle();
     void updateActions();

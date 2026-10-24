@@ -17,10 +17,13 @@ public:
 
     // Devuelve el índice de la opción. La predeterminada responde a Intro.
     int addChoice(const QIcon& icon, const QString& title, const QString& description, bool isDefault = false);
+    // Contenido extra entre el texto y las opciones (las miniaturas de "Cambios no guardados").
+    void addContent(QWidget* widget);
     int choose();
     int chosen() const { return m_chosen; }
 
 private:
+    QVBoxLayout* m_layout = nullptr;
     QVBoxLayout* m_choices = nullptr;
     int m_count = 0;
     int m_chosen = -1;

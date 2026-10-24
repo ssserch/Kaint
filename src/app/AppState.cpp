@@ -140,7 +140,9 @@ ToolSettings AppState::toolDefaults() const
     t.shapeStyle = ShapeStyle(num("shapeStyle", int(t.shapeStyle)));
     t.gradient = GradientType(num("gradient", int(t.gradient)));
     t.curveType = CurveType(num("curveType", int(t.curveType)));
-    t.moveInterpolation = Resample::Interpolation(num("moveSampling", int(t.moveInterpolation)));
+    // Clave nueva al pasar a bicúbico por defecto (la anterior guardaba el vecino más próximo de
+    // fábrica).
+    t.moveInterpolation = Resample::Interpolation(num("moveResampling", int(t.moveInterpolation)));
     t.moveGamma = num("moveGamma", t.moveGamma);
     t.afterSelect = AfterSelect(std::clamp(num("afterSelect", int(t.afterSelect)), 0, 2));
     return t;
@@ -196,7 +198,8 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.setValue(QStringLiteral("shapeStyle"), int(t.shapeStyle));
     s.setValue(QStringLiteral("gradient"), int(t.gradient));
     s.setValue(QStringLiteral("curveType"), int(t.curveType));
-    s.setValue(QStringLiteral("moveSampling"), int(t.moveInterpolation));
+    s.setValue(QStringLiteral("moveResampling"), int(t.moveInterpolation));
+    s.remove(QStringLiteral("moveSampling"));
     s.remove(QStringLiteral("moveInterpolation"));
     s.setValue(QStringLiteral("moveGamma"), t.moveGamma);
     s.setValue(QStringLiteral("afterSelect"), int(t.afterSelect));

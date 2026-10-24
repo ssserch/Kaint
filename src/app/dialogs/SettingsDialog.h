@@ -38,6 +38,13 @@ struct AppSettings {
     QColor canvasBorder;
     int checkerBrightness = 191;
     int startTool = -1;
+    // Herramientas Mover: ocultar contorno y tiradores al arrastrar; pegar y mover reemplazando
+    // los píxeles de debajo (también los transparentes). Ambas como Paint.NET.
+    bool hideMoveBox = true;
+    bool replacePixels = true;
+    // Al cerrar con varias imágenes sin guardar: una sola pregunta para todas (como Paint.NET)
+    // o una por imagen.
+    bool askOnceOnClose = true;
     bool tabletEraser = true;
     int historyLimitMB = 4096;
     bool checkUpdates = true;

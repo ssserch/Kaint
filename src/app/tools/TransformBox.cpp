@@ -37,8 +37,18 @@ void TransformBox::set(const QRectF& localRect, const QTransform& toCanvas)
 
 QTransform TransformBox::snappedToPixels(const QTransform& t, const QRectF& local)
 {
-    if (std::abs(t.m12()) > 1e-9 || std::abs(t.m21()) > 1e-9 || local.width() <= 0 || local.height() <= 0)
-        return QTransform(t.m11(), t.m12(), t.m21(), t.m22(), std::round(t.dx()), std::round(t.dy()));
+    if (local.width() <= 0 || local.height() <= 0)
+        return t;
+    if (std::abs(t.m12()) > 1e-9 || std::abs(t.m21()) > 1e-9) {
+        // Girada 90° o 270°: el rectángulo sigue recto y se lleva entero a píxeles enteros.
+        if (std::abs(t.m11()) < 1e-9 && std::abs(t.m22()) < 1e-9) {
+            const QPointF corner = t.mapRect(local).topLeft();
+            return t * QTransform::fromTranslate(std::round(corner.x()) - corner.x(), std::round(corner.y()) - corner.y());
+        }
+        // Con cualquier otro giro la imagen se remuestrea igualmente: redondear el desplazamiento
+        // solo hacía que temblara alrededor del punto de giro a cada paso.
+        return t;
+    }
     const QPointF a = t.map(local.topLeft()), b = t.map(local.bottomRight());
     auto axis = [](double from, double to) {
         double x0 = std::round(from), x1 = std::round(to);
@@ -179,17 +189,20 @@ QTransform TransformBox::update(const QPointF& pos, Qt::KeyboardModifiers mods)
     return m_transform;
 }
 
-void TransformBox::draw(QPainter& p, const QTransform& imageToView, bool handles) const
+void TransformBox::draw(QPainter& p, const QTransform& imageToView, int parts) const
 {
     const QTransform toView = m_transform * imageToView;
     const QPolygonF poly = toView.map(QPolygonF(m_rect));
-    Handles::drawBox(p, poly);
-    if (!handles)
-        return;
-    for (int i = 0; i < 8; ++i)
-        Handles::draw(p, toView.map(Handles::boxHandle(m_rect, i)), Handles::Shape::Circle);
-    Handles::drawPivot(p, toView.map(m_localPivot), rotationDegrees());
-    if (pivotMoved())
-        Handles::draw(p, resetButtonView(imageToView), Handles::Shape::ResetPivot);
-    Handles::draw(p, Handles::moveIconPos(poly.boundingRect()), Handles::Shape::Move);
+    if (parts & Outline)
+        Handles::drawBox(p, poly);
+    if (parts & BoxHandles)
+        for (int i = 0; i < 8; ++i)
+            Handles::draw(p, toView.map(Handles::boxHandle(m_rect, i)), Handles::Shape::Circle);
+    if (parts & PivotPoint) {
+        Handles::drawPivot(p, toView.map(m_localPivot), rotationDegrees());
+        if (pivotMoved())
+            Handles::draw(p, resetButtonView(imageToView), Handles::Shape::ResetPivot);
+    }
+    if (parts & MoveIcon)
+        Handles::draw(p, Handles::moveIconPos(poly.boundingRect()), Handles::Shape::Move);
 }

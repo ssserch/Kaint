@@ -24,6 +24,7 @@ public:
     void mouseRelease(const ToolEvent& e) override;
     bool keyPress(QKeyEvent* e) override;
     void paintOverlay(QPainter& p) override;
+    bool hidesSelectionOutline() const override;
     void finish() override;
     void deactivate() override;
 

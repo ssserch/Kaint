@@ -186,10 +186,19 @@ struct FloatingPixels {
     QTransform transform;
     Resample::Interpolation interpolation = Resample::Interpolation::Bicubic;
     bool gammaCorrect = true;
+    // Como en Paint.NET: dentro de la selección, los píxeles reemplazan a los de la capa (también
+    // los transparentes) en lugar de mezclarse con ellos.
+    bool replace = false;
 
     QTransform pixelsToCanvas(const QTransform& t) const;
     QRect boundsFor(const QTransform& t) const;
+    // La selección colocada con 't' (se guarda la última, que se pide en cada paso del arrastre).
+    Selection placedSelection(const QTransform& t) const;
     void render(const QTransform& t, const QRect& region) const;
+
+private:
+    mutable QTransform m_placedFor;
+    mutable Selection m_placed;
 };
 using FloatingPtr = std::shared_ptr<FloatingPixels>;
 

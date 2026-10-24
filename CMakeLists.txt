@@ -381,6 +381,16 @@ install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 if(WIN32)
     qt_generate_deploy_app_script(TARGET kaint OUTPUT_SCRIPT KAINT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT "${KAINT_DEPLOY_SCRIPT}")
+
+    # Copia las DLL y plugins de Qt junto a kaint.exe para poder ejecutarlo
+    # directamente desde la carpeta de compilación.
+    find_program(KAINT_WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")
+    if(KAINT_WINDEPLOYQT)
+        add_custom_command(TARGET kaint POST_BUILD
+            COMMAND "${KAINT_WINDEPLOYQT}" --no-translations --no-system-d3d-compiler
+                    --no-opengl-sw "$<TARGET_FILE:kaint>"
+            COMMENT "Copiando las DLL de Qt junto a kaint.exe" VERBATIM)
+    endif()
 endif()
 if(UNIX AND NOT APPLE)
     configure_file(data/io.github.kaint.Kaint.desktop.in io.github.kaint.Kaint.desktop @ONLY)

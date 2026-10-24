@@ -10,6 +10,8 @@
   [![Paint.NET plugins](https://img.shields.io/badge/Paint.NET-plugins-8a2be2.svg)](#-features)
   [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
+  [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/E1E5ZOEH6)
+
   <p>
     <a href="#-features">Features</a> •
     <a href="#-themes">Themes</a> •

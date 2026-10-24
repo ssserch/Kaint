@@ -23,6 +23,7 @@
 #include "app/tools/Handles.h"
 #include "app/tools/ToolManager.h"
 #include "app/tools/TransformBox.h"
+#include "app/widgets/ColorWidgets.h"
 #include "app/widgets/FontChooser.h"
 #include "app/widgets/WaveLabel.h"
 #include "core/CustomShapes.h"
@@ -1734,6 +1735,50 @@ int main(int argc, char** argv)
             print->setCurrentIndex(1);
             emit print->activated(1);
         }
+    }
+
+    // Cada inicio empieza como Paint.NET: negro y blanco y las opciones predeterminadas
+    // (Configuración > Herramientas). Las opciones guardadas por versiones anteriores (lo último
+    // usado, sin versión) se descartan; las predeterminadas que se eligen se conservan.
+    {
+        state->setPrimary(QColor(10, 200, 30));
+        state->setSecondary(QColor(200, 10, 30));
+        state->save();
+        QSettings settings;
+        settings.setValue(QStringLiteral("colors/primary"), QColor(1, 2, 3));
+        settings.remove(QStringLiteral("tools"));
+        settings.setValue(QStringLiteral("tools/tolerance"), 64);
+        settings.sync();
+        state->load();
+        CHECK(state->primary() == QColor(Qt::black) && state->secondary() == QColor(Qt::white));
+        CHECK(state->tools().tolerance == 50 && !QSettings().contains(QStringLiteral("colors/primary")));
+        ToolSettings defaults;
+        defaults.tolerance = 70;
+        defaults.hardness = 40;
+        state->setToolDefaults(defaults);
+        state->updateTools([](ToolSettings& t) { t.tolerance = 12; });
+        state->save();
+        state->load();
+        CHECK(state->tools().tolerance == 70 && state->tools().hardness == 40);
+        state->setToolDefaults(ToolSettings());
+        state->load();
+    }
+
+    // Ranuras de color como en Paint.NET: la inactiva solo lleva un marco negro fino.
+    if (auto* swatches = w.findChild<ColorSwatches*>()) {
+        state->setPrimary(Qt::red);
+        state->setSecondary(Qt::blue);
+        settle();
+        auto band = [swatches](bool secondary) {
+            const QImage img = swatches->grab().toImage();
+            const QRectF r = secondary ? swatches->secondaryRect() : swatches->primaryRect();
+            return QColor(img.pixel(int(secondary ? r.right() - 2 : r.left() + 2), int(r.center().y())));
+        };
+        CHECK(band(false) == QColor(Qt::white) && band(true) == QColor(Qt::blue));
+        swatches->setEditingSecondary(true);
+        CHECK(band(false) == QColor(Qt::red) && band(true) == QColor(Qt::white));
+        swatches->setEditingSecondary(false);
+        state->resetColors();
     }
 
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());

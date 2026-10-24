@@ -1246,6 +1246,14 @@ What do you want to do?</translation>
 %2</translation>
     </message>
     <message>
+        <source>No se pudo abrir «%1»: %2</source>
+        <translation>Could not open “%1”: %2</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar «%1».</source>
+        <translation>Could not save “%1”.</translation>
+    </message>
+    <message>
         <source>Sin título</source>
         <translation>Untitled</translation>
     </message>
@@ -1940,6 +1948,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Tema: system, light, dark, kde o custom (se guarda).</source>
         <translation>Theme: system, light, dark, kde or custom (saved).</translation>
+    </message>
+    <message>
+        <source>Guarda una captura de la ventana con la configuración de fábrica (la primera imagen es la actual) y sale.</source>
+        <translation>Saves a screenshot of the window with the factory settings (the first image is the current one) and exits.</translation>
+    </message>
+    <message>
+        <source>Tamaño de la captura en píxeles (ancho x alto).</source>
+        <translation>Screenshot size in pixels (width x height).</translation>
+    </message>
+    <message>
+        <source>Escala de la interfaz en la captura.</source>
+        <translation>Interface scale in the screenshot.</translation>
     </message>
     <message>
         <source>px</source>

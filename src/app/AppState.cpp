@@ -88,6 +88,9 @@ void AppState::resetTools()
     emit toolSettingsChanged();
 }
 
+// Las opciones de "tools/" sin esta versión son de cuando se guardaba lo último usado.
+constexpr int kToolDefaultsVersion = 2;
+
 ToolSettings AppState::toolDefaults() const
 {
     QSettings s;
@@ -147,6 +150,7 @@ void AppState::setToolDefaults(const ToolSettings& t)
 {
     QSettings s;
     s.beginGroup(QStringLiteral("tools"));
+    s.setValue(QStringLiteral("defaultsVersion"), kToolDefaultsVersion);
     s.setValue(QStringLiteral("brushSize"), t.brushSize);
     s.setValue(QStringLiteral("hardness"), t.hardness);
     s.setValue(QStringLiteral("spacing"), t.spacing);
@@ -273,8 +277,16 @@ void AppState::clearRecentFiles()
 void AppState::load()
 {
     QSettings s;
-    m_primary = s.value(QStringLiteral("colors/primary"), QColor(Qt::black)).value<QColor>();
-    m_secondary = s.value(QStringLiteral("colors/secondary"), QColor(Qt::white)).value<QColor>();
+    // Como en Paint.NET, cada inicio empieza con negro y blanco y con las opciones
+    // predeterminadas de las herramientas. Las versiones anteriores guardaban los colores y lo
+    // último usado de cada herramienta como si fuera lo predeterminado: se descarta una vez.
+    s.remove(QStringLiteral("colors/primary"));
+    s.remove(QStringLiteral("colors/secondary"));
+    if (s.value(QStringLiteral("tools/defaultsVersion")).toInt() < kToolDefaultsVersion)
+        s.remove(QStringLiteral("tools"));
+    m_primary = Qt::black;
+    m_secondary = Qt::white;
+    m_secondaryActive = false;
     m_recent = s.value(QStringLiteral("recentFiles")).toStringList();
     const QString palette = s.value(QStringLiteral("colors/palette")).toString();
     if (!palette.isEmpty())
@@ -289,13 +301,11 @@ void AppState::load()
 void AppState::save() const
 {
     QSettings s;
-    s.setValue(QStringLiteral("colors/primary"), m_primary);
-    s.setValue(QStringLiteral("colors/secondary"), m_secondary);
     s.setValue(QStringLiteral("colors/palette"), Palette::serialize(m_palette));
     s.setValue(QStringLiteral("recentFiles"), m_recent);
 
-    // Las opciones de las herramientas no se guardan al salir: al arrancar se usan los valores
-    // predeterminados (Configuración > Herramientas).
+    // Ni los colores ni las opciones de las herramientas se guardan al salir: al arrancar se usan
+    // negro y blanco y los valores predeterminados (Configuración > Herramientas).
 }
 
 // ---------------------------------------------------------------------------

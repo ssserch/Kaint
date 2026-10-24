@@ -31,6 +31,7 @@
 
 #include <QActionGroup>
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QCollator>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -1604,6 +1605,35 @@ void MainWindow::openFiles(const QStringList& paths)
         AppState::instance()->addRecentFile(abs, m_canvas->composite());
         m_lastDir = QFileInfo(abs).absolutePath();
     }
+}
+
+QString MainWindow::screenPreview(const QStringList& files, const QString& output)
+{
+    Document* first = nullptr;
+    for (const QString& path : files) {
+        QString error;
+        Document* doc = ImageIO::load(QFileInfo(path).absoluteFilePath(), &error);
+        if (!doc)
+            return tr("No se pudo abrir «%1»: %2").arg(path, error);
+        addDocument(doc);
+        if (!first)
+            first = doc;
+    }
+    if (first)
+        setCurrentDocument(first);
+    else
+        newDefaultDocument();
+    // Tiempo para que se pinte todo (miniaturas, ventanas, barra de opciones).
+    QElapsedTimer wait;
+    wait.start();
+    while (wait.elapsed() < 800)
+        QApplication::processEvents(QEventLoop::AllEvents, 20);
+    const QImage shot = grab().toImage();
+    const QString suffix = QFileInfo(output).suffix().toLower();
+    const bool jpeg = suffix == QLatin1String("jpg") || suffix == QLatin1String("jpeg");
+    if (!shot.convertToFormat(jpeg ? QImage::Format_RGB32 : QImage::Format_ARGB32).save(output, nullptr, jpeg ? 95 : -1))
+        return tr("No se pudo guardar «%1».").arg(output);
+    return {};
 }
 
 bool MainWindow::save(Document* doc)

@@ -494,31 +494,37 @@ void drawZoom(QPainter& p)
 
 void drawPan(QPainter& p)
 {
-    // Mano abierta de color carne con el contorno marrón, como la de Paint.NET.
+    // Mano abierta como la de Paint.NET: cuatro dedos rectos, el pulgar en diagonal a la
+    // izquierda, color tostado y contorno marrón. Coordenadas en medios píxeles para que el
+    // contorno quede nítido a 20 px.
     aa(p);
     QPainterPath hand;
     hand.setFillRule(Qt::WindingFill);
-    hand.addRoundedRect(QRectF(5.8, 3.4, 2.8, 9.0), 1.4, 1.4);
-    hand.addRoundedRect(QRectF(8.7, 2.2, 2.8, 10.0), 1.4, 1.4);
-    hand.addRoundedRect(QRectF(11.6, 2.8, 2.8, 9.5), 1.4, 1.4);
-    hand.addRoundedRect(QRectF(14.4, 4.8, 2.6, 7.6), 1.3, 1.3);
-    hand.addRoundedRect(QRectF(5.8, 8.4, 11.2, 9.6), 3.6, 3.6);
+    hand.addRoundedRect(QRectF(5.5, 4.5, 3, 9), 1.5, 1.5);
+    hand.addRoundedRect(QRectF(8.5, 2.5, 3, 11), 1.5, 1.5);
+    hand.addRoundedRect(QRectF(11.5, 3.5, 3, 10), 1.5, 1.5);
+    hand.addRoundedRect(QRectF(14.5, 5.5, 3, 8), 1.5, 1.5);
+    hand.addRoundedRect(QRectF(5.5, 9.5, 12, 8.5), 3, 3);
     QTransform thumb;
-    thumb.translate(4.6, 12.6);
-    thumb.rotate(-38);
+    thumb.translate(6.4, 14.2);
+    thumb.rotate(50);
     QPainterPath thumbPath;
-    thumbPath.addRoundedRect(QRectF(-4.2, -1.5, 6.2, 3.0), 1.5, 1.5);
+    thumbPath.addRoundedRect(QRectF(-6, -1.6, 7.5, 3.2), 1.6, 1.6);
     hand.addPath(thumb.map(thumbPath));
     hand = hand.simplified();
+
+    const QColor outline(110, 66, 28);
     QLinearGradient skin(0, 2, 0, 18);
-    skin.setColorAt(0, QColor(255, 222, 180));
-    skin.setColorAt(1, QColor(236, 172, 110));
-    p.setPen(QPen(QColor(138, 88, 40), 1.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    skin.setColorAt(0, QColor(246, 206, 148));
+    skin.setColorAt(1, QColor(222, 160, 88));
+    p.setPen(QPen(outline, 1.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     p.setBrush(skin);
     p.drawPath(hand);
-    p.setPen(QPen(QColor(176, 118, 64), 0.8, Qt::SolidLine, Qt::RoundCap));
-    for (qreal x : {8.65, 11.55, 14.4})
-        p.drawLine(QPointF(x, 8.6), QPointF(x, 11.2));
+    // Separaciones entre los dedos, desde la punta del más corto hasta la palma.
+    p.setPen(QPen(outline, 1.0, Qt::SolidLine, Qt::FlatCap));
+    p.drawLine(QPointF(8.5, 6), QPointF(8.5, 11));
+    p.drawLine(QPointF(11.5, 5), QPointF(11.5, 11));
+    p.drawLine(QPointF(14.5, 7), QPointF(14.5, 11));
 }
 
 void drawNewDoc(QPainter& p)

@@ -75,6 +75,8 @@ public:
     void setColors(const QColor& primary, const QColor& secondary);
     void setEditingSecondary(bool secondary);
     QSize sizeHint() const override { return {56, 56}; }
+    QRectF primaryRect() const;
+    QRectF secondaryRect() const;
 
 signals:
     void primaryClicked();
@@ -90,8 +92,6 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* e) override;
 
 private:
-    QRectF primaryRect() const;
-    QRectF secondaryRect() const;
     QRectF swapRect() const;
     QRectF resetRect() const;
 

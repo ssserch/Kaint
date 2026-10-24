@@ -57,6 +57,9 @@ public:
     void autosave();
     // Se cerró para reiniciar Kaint (tema KDE o idioma).
     bool restartRequested() const { return m_restartRequested; }
+    // Captura de muestra (--screenpreview): abre las imágenes (la primera queda como actual, las
+    // demás en la barra de arriba) y guarda la ventana en 'output'. Devuelve el error, si lo hay.
+    QString screenPreview(const QStringList& files, const QString& output);
 
 protected:
     void changeEvent(QEvent* e) override;

@@ -304,27 +304,34 @@ QRectF ColorSwatches::resetRect() const { return QRectF(1, 39, 16, 16); }
 void ColorSwatches::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
-    // Como en Paint.NET: marco negro, blanco y negro alrededor del color; la ranura activa lleva
-    // un pico blanco recortado abajo en el centro.
+    // Como en Paint.NET: la ranura activa lleva marco negro, blanco y negro y un pico blanco
+    // recortado abajo en el centro; la otra, solo un marco negro fino.
     auto swatch = [&](const QRectF& r, const QColor& c, bool active) {
         p.setRenderHint(QPainter::Antialiasing, false);
         p.fillRect(r, Qt::black);
+        if (!active) {
+            const QRectF inner = r.adjusted(1, 1, -1, -1);
+            p.save();
+            p.setClipRect(inner);
+            paintCheckerboard(p, inner, 5);
+            p.fillRect(inner, c);
+            p.restore();
+            return;
+        }
         p.fillRect(r.adjusted(1, 1, -1, -1), Qt::white);
         const QRectF inner = r.adjusted(3, 3, -3, -3);
         QPainterPath frame;
         frame.addRect(inner);
         QPainterPath fill;
         fill.addRect(inner.adjusted(1, 1, -1, -1));
-        if (active) {
-            const qreal cx = inner.center().x(), bottom = inner.bottom();
-            QPainterPath notch;
-            notch.addPolygon(QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom - 6), QPointF(cx + 5, bottom + 1)});
-            QPainterPath notchOutline;
-            notchOutline.addPolygon(QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom - 7.5), QPointF(cx + 6.5, bottom + 1)});
-            frame = frame.subtracted(notch);
-            fill = fill.subtracted(notchOutline);
-            p.setRenderHint(QPainter::Antialiasing);
-        }
+        const qreal cx = inner.center().x(), bottom = inner.bottom();
+        QPainterPath notch;
+        notch.addPolygon(QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom - 6), QPointF(cx + 5, bottom + 1)});
+        QPainterPath notchOutline;
+        notchOutline.addPolygon(QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom - 7.5), QPointF(cx + 6.5, bottom + 1)});
+        frame = frame.subtracted(notch);
+        fill = fill.subtracted(notchOutline);
+        p.setRenderHint(QPainter::Antialiasing);
         p.fillPath(frame, Qt::black);
         p.save();
         p.setClipPath(fill);

@@ -624,6 +624,115 @@ void drawCut(QPainter& p)
     p.drawRoundedRect(QRectF(6.3, 9.0, 3.4, 2.4), 0.8, 0.8);
 }
 
+// Iconos de la ventana Capas de Paint.NET: una hoja (cuadrado) azul o gris con un símbolo
+// abajo a la derecha. Los colores siguen al tema (en el oscuro, grises oscuros como Paint.NET).
+struct LayerColors {
+    QColor grayFill, grayBorder, glyph, glyphEdge, blueFill, blueBorder, backFill, backBorder, wrench;
+};
+
+LayerColors layerColors()
+{
+    if (Theme::isDark())
+        return {QColor(0x4a, 0x4a, 0x4a), QColor(0x6a, 0x6a, 0x6a), QColor(0x80, 0x80, 0x80), QColor(0x2a, 0x2a, 0x2a),
+                QColor(0x6c, 0x84, 0x9c), QColor(0x7d, 0xa2, 0xc8), QColor(0x38, 0x50, 0x68), QColor(0x5b, 0x7e, 0xa3),
+                QColor(0x4a, 0x80, 0xb8)};
+    return {QColor(0xd8, 0xd8, 0xd8), QColor(0x8a, 0x8a, 0x8a), QColor(0x70, 0x70, 0x70), QColor(0xff, 0xff, 0xff),
+            QColor(0xa9, 0xc9, 0xee), QColor(0x3f, 0x7b, 0xc4), QColor(0x8f, 0xb3, 0xdd), QColor(0x3f, 0x7b, 0xc4),
+            QColor(0x2f, 0x6d, 0xb5)};
+}
+
+void layerSheet(QPainter& p, const QRectF& r, const QColor& fill, const QColor& border)
+{
+    p.setPen(QPen(border, 1));
+    p.setBrush(fill);
+    p.drawRect(r);
+}
+
+// Trazo con borde: primero el borde más grueso y encima el color.
+void edgedPath(QPainter& p, const QPainterPath& path, const QColor& color, const QColor& edge, qreal width)
+{
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(edge, width + 1.6, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+    p.drawPath(path);
+    p.setPen(QPen(color, width, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+    p.drawPath(path);
+}
+
+void drawLayerNew(QPainter& p)
+{
+    aa(p);
+    const LayerColors c = layerColors();
+    layerSheet(p, QRectF(1.5, 1.5, 10, 10), c.blueFill, c.blueBorder);
+    QPainterPath plus;
+    plus.moveTo(11.5, 8); plus.lineTo(11.5, 15);
+    plus.moveTo(8, 11.5); plus.lineTo(15, 11.5);
+    edgedPath(p, plus, QColor(0xe6, 0xf6, 0xea), QColor(0x2f, 0x9a, 0x55), 1.6);
+}
+
+void drawLayerDelete(QPainter& p)
+{
+    aa(p);
+    const LayerColors c = layerColors();
+    layerSheet(p, QRectF(1.5, 1.5, 10, 10), c.grayFill, c.grayBorder);
+    QPainterPath cross;
+    cross.moveTo(9, 9); cross.lineTo(14.5, 14.5);
+    cross.moveTo(14.5, 9); cross.lineTo(9, 14.5);
+    edgedPath(p, cross, c.glyph, c.glyphEdge, 2.2);
+}
+
+void drawLayerDuplicate(QPainter& p)
+{
+    aa(p);
+    const LayerColors c = layerColors();
+    layerSheet(p, QRectF(1.5, 1.5, 9, 9), c.backFill, c.backBorder);
+    layerSheet(p, QRectF(5.5, 5.5, 9, 9), c.blueFill.darker(Theme::isDark() ? 140 : 115), c.blueBorder);
+}
+
+void drawLayerMergeDown(QPainter& p)
+{
+    // La capa de arriba baja (flecha) sobre la de abajo.
+    aa(p);
+    const LayerColors c = layerColors();
+    layerSheet(p, QRectF(2.5, 1.5, 11, 6), c.grayFill, c.grayBorder);
+    layerSheet(p, QRectF(2.5, 11.5, 11, 3), c.grayFill, c.grayBorder);
+    QPainterPath arrow;
+    arrow.moveTo(8, 3.5); arrow.lineTo(8, 11);
+    arrow.moveTo(5, 8); arrow.lineTo(8, 11); arrow.lineTo(11, 8);
+    edgedPath(p, arrow, c.glyph, c.glyphEdge, 2);
+}
+
+void drawLayerMove(QPainter& p, bool up)
+{
+    aa(p);
+    const LayerColors c = layerColors();
+    layerSheet(p, QRectF(1.5, 1.5, 10, 10), c.grayFill, c.grayBorder);
+    QPainterPath arrow;
+    const qreal tip = up ? 8 : 15, tail = up ? 15 : 8, head = up ? 11 : 12;
+    arrow.moveTo(12, tail); arrow.lineTo(12, tip);
+    arrow.moveTo(9, head); arrow.lineTo(12, tip); arrow.lineTo(15, head);
+    edgedPath(p, arrow, c.glyph, c.glyphEdge, 2);
+}
+
+void drawLayerRaise(QPainter& p) { drawLayerMove(p, true); }
+void drawLayerLower(QPainter& p) { drawLayerMove(p, false); }
+
+void drawLayerProperties(QPainter& p)
+{
+    // Llave inglesa azul en diagonal, como en Paint.NET.
+    aa(p);
+    const LayerColors c = layerColors();
+    p.translate(8, 8);
+    p.rotate(-45);
+    p.setPen(Qt::NoPen);
+    p.setBrush(c.wrench);
+    p.drawRoundedRect(QRectF(-1.6, -1, 3.2, 8.5), 1.4, 1.4);
+    QPainterPath jaw;
+    jaw.addEllipse(QPointF(0, -3.5), 3.6, 3.6);
+    QPainterPath notch;
+    notch.addRect(QRectF(-1.3, -8, 2.6, 4.6));
+    p.drawPath(jaw.subtracted(notch));
+}
+
 void drawCopy(QPainter& p)
 {
     // Dos hojas con la esquina doblada, como en Paint.NET.
@@ -875,6 +984,13 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("edit-cut"), {16, drawCut, true}},
         {QStringLiteral("edit-copy"), {16, drawCopy, true}},
         {QStringLiteral("edit-paste"), {16, drawPaste, true}},
+        {QStringLiteral("layer-new"), {16, drawLayerNew, false}},
+        {QStringLiteral("layer-delete"), {16, drawLayerDelete, false}},
+        {QStringLiteral("layer-duplicate"), {16, drawLayerDuplicate, false}},
+        {QStringLiteral("layer-merge-down"), {16, drawLayerMergeDown, false}},
+        {QStringLiteral("layer-raise"), {16, drawLayerRaise, false}},
+        {QStringLiteral("layer-lower"), {16, drawLayerLower, false}},
+        {QStringLiteral("layer-properties"), {16, drawLayerProperties, false}},
         {QStringLiteral("edit-undo"), {16, drawUndo, false}},
         {QStringLiteral("edit-redo"), {16, drawRedo, false}},
         {QStringLiteral("transform-crop"), {16, cropAction, true}},

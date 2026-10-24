@@ -1242,16 +1242,21 @@ int main(int argc, char** argv)
         settle();
         CHECK(hidden.animationFrames().size() == 2);
         CHECK(showHidden && !showHidden->isEnabled());
-        // "Reiniciar": como cerrar y volver a abrir, sin cerrar la ventana.
+        // "Predeterminado" lo reinicia todo, como cerrar y volver a abrir (sin cerrar la ventana).
         QPushButton* restart = nullptr;
-        for (QPushButton* b : hidden.findChildren<QPushButton*>())
-            if (b->text() == QStringLiteral("Reiniciar"))
+        for (QPushButton* b : hidden.findChildren<QPushButton*>()) {
+            CHECK(b->text() != QStringLiteral("Reiniciar"));
+            if (b->text() == QStringLiteral("Predeterminado"))
                 restart = b;
+        }
         CHECK(restart);
         if (restart)
             restart->click();
         CHECK(showHidden && showHidden->isEnabled() && showHidden->text() == QStringLiteral("Mostrar capas ocultas"));
         CHECK(hidden.animationFrames().size() == 2 && !hidden.options().gifHiddenLayers);
+        // En las cajas numéricas solo va el número (la unidad, al lado).
+        for (QSpinBox* box : hidden.findChildren<QSpinBox*>())
+            CHECK(box->suffix().isEmpty() && box->prefix().isEmpty() && box->specialValueText().isEmpty());
     }
 
     // El color propio del fondo del lienzo va por tema: el que había antes (uno solo) pasa al

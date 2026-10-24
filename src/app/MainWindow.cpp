@@ -642,7 +642,7 @@ void MainWindow::createActions()
                                   [this] { deleteLayer(); });
     A["duplicateLayer"] = makeAction(tr("&Duplicar la capa"), {"layer-duplicate"}, QKeySequence(QStringLiteral("Ctrl+Shift+D")),
                                      [this] { duplicateLayer(); }, doc);
-    A["mergeDown"] = makeAction(tr("&Combinar capa con la inferior"), {"merge", "layer-bottom"},
+    A["mergeDown"] = makeAction(tr("&Combinar capa con la inferior"), {"layer-merge-down", "merge", "layer-bottom"},
                                 QKeySequence(QStringLiteral("Ctrl+M")), [this] { mergeLayerDown(); });
     A["toggleLayer"] = makeAction(tr("Alternar &visibilidad de capa"), {"layer-visible-on"}, QKeySequence(QStringLiteral("Ctrl+,")),
                                   [this] { if (m_doc) toggleLayerVisibility(m_doc->activeIndex()); }, doc);
@@ -669,7 +669,7 @@ void MainWindow::createActions()
     A["layerDown"] = makeAction(tr("&Bajar capa"), {"layer-lower"}, {}, [this] { moveLayer(-1); });
     A["layerToBottom"] = makeAction(tr("Enviar capa al &final"), {"layer-bottom", "go-bottom"}, {},
                                     [this] { if (m_doc) moveLayerTo(m_doc->activeIndex(), 0); });
-    A["layerProps"] = makeAction(tr("&Propiedades de la capa..."), {"document-properties", "configure"},
+    A["layerProps"] = makeAction(tr("&Propiedades de la capa..."), {"layer-properties", "document-properties", "configure"},
                                  QKeySequence(Qt::Key_F4), [this] { layerProperties(); }, doc);
 
     // Imágenes abiertas y paneles: sin menú, como en Paint.NET (atajos, la tira de imágenes y
@@ -2596,7 +2596,7 @@ void MainWindow::mergeLayerDown()
     after.images.removeAt(i);
     after.props.removeAt(i);
     after.active = i - 1;
-    push(new DocumentStateCommand(m_doc, before, after, tr("Combinar capa con la inferior")), QStringLiteral("merge"));
+    push(new DocumentStateCommand(m_doc, before, after, tr("Combinar capa con la inferior")), QStringLiteral("layer-merge-down"));
 }
 
 void MainWindow::importLayer()
@@ -2725,7 +2725,7 @@ void MainWindow::layerProperties()
     doc->setLayerProps(index, before);
     if (accepted && after != before)
         push(new LayerPropsCommand(doc, index, before, after, tr("Propiedades de la capa")),
-             QStringLiteral("document-properties"));
+             QStringLiteral("layer-properties"));
 }
 
 void MainWindow::toggleLayerVisibility(int index)

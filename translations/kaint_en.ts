@@ -54,12 +54,8 @@
         <translation>Layer</translation>
     </message>
     <message>
-        <source>Duración</source>
-        <translation>Duration</translation>
-    </message>
-    <message>
-        <source> ms</source>
-        <translation> ms</translation>
+        <source>Duración (ms)</source>
+        <translation>Duration (ms)</translation>
     </message>
     <message>
         <source>Reproducir</source>
@@ -72,6 +68,10 @@
     <message>
         <source>Duración de todos los fotogramas:</source>
         <translation>Duration of all frames:</translation>
+    </message>
+    <message>
+        <source>ms</source>
+        <translation>ms</translation>
     </message>
     <message>
         <source>Pausa</source>
@@ -3556,10 +3556,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The bottom layer is the first frame. Each frame&apos;s duration goes in the layer name, e.g. “Frame 1 (100ms)” (Image &gt; Animation).</translation>
     </message>
     <message>
-        <source> ms</source>
-        <translation> ms</translation>
-    </message>
-    <message>
         <source>Para las capas que no indican su duración en el nombre</source>
         <translation>For layers that do not give their duration in the name</translation>
     </message>
@@ -3568,20 +3564,24 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Frame duration:</translation>
     </message>
     <message>
+        <source>ms</source>
+        <translation>ms</translation>
+    </message>
+    <message>
         <source>Repetir sin fin</source>
         <translation>Loop forever</translation>
     </message>
     <message>
-        <source>Una sola vez</source>
-        <translation>Only once</translation>
-    </message>
-    <message>
-        <source> veces más</source>
-        <translation> more times</translation>
-    </message>
-    <message>
         <source>Repeticiones:</source>
         <translation>Repetitions:</translation>
+    </message>
+    <message>
+        <source>veces más</source>
+        <translation>more times</translation>
+    </message>
+    <message>
+        <source>(0: una sola vez)</source>
+        <translation>(0: play once)</translation>
     </message>
     <message>
         <source>Configuración avanzada…</source>
@@ -3598,14 +3598,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Predeterminado</source>
         <translation>Default</translation>
-    </message>
-    <message>
-        <source>Reiniciar</source>
-        <translation>Reset</translation>
-    </message>
-    <message>
-        <source>Vuelve a como estaba al abrir esta ventana: opciones, fotogramas de la configuración avanzada y capas ocultas.</source>
-        <translation>Goes back to how it was when this window opened: options, advanced frame settings and hidden layers.</translation>
     </message>
     <message>
         <source>Ocultar las capas ocultas</source>
@@ -3666,10 +3658,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Opciones del GIF</source>
         <translation>GIF options</translation>
-    </message>
-    <message>
-        <source>Sin fin</source>
-        <translation>Forever</translation>
     </message>
     <message>
         <source>Usar una paleta global</source>
@@ -3994,16 +3982,16 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Recovery</translation>
     </message>
     <message>
-        <source> min</source>
-        <translation> min</translation>
-    </message>
-    <message>
-        <source>Nunca</source>
-        <translation>Never</translation>
-    </message>
-    <message>
         <source>Guardar una copia de recuperación de las imágenes sin guardar cada:</source>
         <translation>Save a recovery copy of unsaved images every:</translation>
+    </message>
+    <message>
+        <source>min</source>
+        <translation>min</translation>
+    </message>
+    <message>
+        <source>(0: nunca)</source>
+        <translation>(0: never)</translation>
     </message>
     <message>
         <source>Proyectar una sombra bajo el lienzo</source>
@@ -4092,16 +4080,16 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>History</translation>
     </message>
     <message>
-        <source> MB</source>
-        <translation> MB</translation>
-    </message>
-    <message>
-        <source>Sin límite</source>
-        <translation>No limit</translation>
-    </message>
-    <message>
         <source>Memoria máxima del historial de cada imagen:</source>
         <translation>Maximum history memory per image:</translation>
+    </message>
+    <message>
+        <source>MB</source>
+        <translation>MB</translation>
+    </message>
+    <message>
+        <source>(0: sin límite)</source>
+        <translation>(0: no limit)</translation>
     </message>
     <message>
         <source>Si el historial de una imagen ocupa más, se descartan los pasos más antiguos (y se avisa en la barra de estado).</source>
@@ -4738,6 +4726,10 @@ Do you want to replace them?</translation>
         <translation>Corner rounding:</translation>
     </message>
     <message>
+        <source>px</source>
+        <translation>px</translation>
+    </message>
+    <message>
         <source>Bordes clásicos en relieve (como Windows 98)</source>
         <translation>Classic 3D borders (like Windows 98)</translation>
     </message>
@@ -4760,6 +4752,10 @@ Do you want to replace them?</translation>
     <message>
         <source>La del sistema</source>
         <translation>System font</translation>
+    </message>
+    <message>
+        <source>pt</source>
+        <translation>pt</translation>
     </message>
     <message>
         <source>Fuente:</source>
@@ -5384,8 +5380,8 @@ Do you want to replace them?</translation>
         <translation>The selection edges are smoothed when it is scaled or rotated.</translation>
     </message>
     <message>
-        <source> px</source>
-        <translation> px</translation>
+        <source>px</source>
+        <translation>px</translation>
     </message>
 </context>
 <context>

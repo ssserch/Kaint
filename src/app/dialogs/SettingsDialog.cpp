@@ -10,6 +10,7 @@
 #include "app/dialogs/ThemeDialog.h"
 #include "app/tools/ToolManager.h"
 #include "app/widgets/EffectControls.h"
+#include "app/widgets/UnitField.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
@@ -375,11 +376,9 @@ QWidget* SettingsDialog::createInterfacePage()
     auto* autosaveRow = new QHBoxLayout;
     auto* autosave = new QSpinBox(page.widget);
     autosave->setRange(0, 120);
-    autosave->setSuffix(tr(" min"));
-    autosave->setSpecialValueText(tr("Nunca"));
     autosave->setValue(m_settings.autosaveMinutes);
     autosaveRow->addWidget(new QLabel(tr("Guardar una copia de recuperación de las imágenes sin guardar cada:"), page.widget));
-    autosaveRow->addWidget(autosave);
+    autosaveRow->addWidget(withUnit(autosave, tr("min"), tr("(0: nunca)"), page.widget));
     autosaveRow->addStretch();
     page.layout->addLayout(autosaveRow);
     connect(autosave, &QSpinBox::valueChanged, this, [this](int v) {
@@ -582,15 +581,13 @@ QWidget* SettingsDialog::createPerformancePage()
     auto* limit = new QSpinBox(page.widget);
     limit->setRange(0, 1024 * 1024);
     limit->setSingleStep(256);
-    limit->setSuffix(tr(" MB"));
-    limit->setSpecialValueText(tr("Sin límite"));
     limit->setValue(m_settings.historyLimitMB);
     connect(limit, &QSpinBox::valueChanged, this, [this](int v) {
         m_settings.historyLimitMB = v;
         changed();
     });
     row->addWidget(new QLabel(tr("Memoria máxima del historial de cada imagen:"), page.widget));
-    row->addWidget(limit);
+    row->addWidget(withUnit(limit, tr("MB"), tr("(0: sin límite)"), page.widget));
     row->addStretch();
     page.layout->addLayout(row);
     page.layout->addWidget(wrapped(tr("Si el historial de una imagen ocupa más, se descartan los pasos más antiguos "

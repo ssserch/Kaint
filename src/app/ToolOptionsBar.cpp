@@ -370,8 +370,11 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_fixedHeight = makeFixed(&ToolSettings::fixedHeight);
     m_fixedWidth->setToolTip(tr("Ancho"));
     m_fixedHeight->setToolTip(tr("Alto"));
+    // La unidad va fuera de la caja ("px" solo con tamaño fijo; con proporción fija no hay).
+    m_fixedWidthUnit = new QLabel(parent);
+    m_fixedHeightUnit = new QLabel(parent);
     add(QStringLiteral("rectSize"), Tool::OptRectMode, Select,
-        {label(tr("Ancho:")), m_fixedWidth, label(tr("Alto:")), m_fixedHeight});
+        {label(tr("Ancho:")), m_fixedWidth, m_fixedWidthUnit, label(tr("Alto:")), m_fixedHeight, m_fixedHeightUnit});
 
     m_afterSelect = new ChoiceButton(tr("Después de seleccionar"), parent);
     m_afterSelect->addChoice(Icons::afterSelect(AfterSelect::DoNotSwitch), tr("No cambiar de herramienta"),
@@ -696,8 +699,8 @@ void ToolOptionsEditor::sync()
         const QSignalBlocker b(m_font);
         m_font->setCurrentFont(QFont(s.fontFamily));
     }
-    m_fixedWidth->setSuffix(s.rectMode == RectSelectMode::FixedSize ? tr(" px") : QString());
-    m_fixedHeight->setSuffix(s.rectMode == RectSelectMode::FixedSize ? tr(" px") : QString());
+    m_fixedWidthUnit->setText(s.rectMode == RectSelectMode::FixedSize ? tr("px") : QString());
+    m_fixedHeightUnit->setText(s.rectMode == RectSelectMode::FixedSize ? tr("px") : QString());
     for (auto [group, id] : {std::pair{m_gradientTypes, int(s.gradient)}, std::pair{m_align, int(s.textAlign)},
                              std::pair{m_selectionModes, int(s.selectionMode)}, std::pair{m_curves, int(s.curveType)},
                              std::pair{m_recolorSampling, int(s.recolorSampling)}})

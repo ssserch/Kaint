@@ -2,6 +2,7 @@
 
 #include "app/Icons.h"
 #include "app/dialogs/DialogButtons.h"
+#include "app/widgets/UnitField.h"
 #include "core/Gif.h"
 #include "core/Raster.h"
 
@@ -69,10 +70,9 @@ SizeEditor::SizeEditor(QSize original, double dpi, bool allowPercent, QWidget* p
         m_percent = new QSpinBox(this);
         m_percent->setRange(1, 10000);
         m_percent->setValue(100);
-        m_percent->setSuffix(QStringLiteral(" %"));
         m_byPercent->setChecked(true);
         row->addWidget(m_byPercent);
-        row->addWidget(m_percent);
+        row->addWidget(withUnit(m_percent, QStringLiteral("%"), QString(), this));
         row->addStretch();
         layout->addLayout(row);
         layout->addWidget(m_byAbsolute);
@@ -213,7 +213,7 @@ void SizeEditor::updateMode()
 {
     const bool percent = m_byPercent && m_byPercent->isChecked();
     if (m_percent)
-        m_percent->setEnabled(percent);
+        m_percent->parentWidget()->setEnabled(percent);
     for (QWidget* w : std::initializer_list<QWidget*>{m_width, m_height, m_printWidth, m_printHeight, m_keepAspect})
         w->setEnabled(!percent);
     if (percent)
@@ -441,7 +441,7 @@ LayerPropertiesDialog::LayerPropertiesDialog(const LayerProps& props, std::funct
     , m_base(props)
 {
     setWindowTitle(tr("Propiedades de la capa"));
-    setWindowIcon(Icons::theme({"document-properties"}));
+    setWindowIcon(Icons::theme({"layer-properties", "document-properties"}));
     m_name = new QLineEdit(props.name, this);
     m_visible = new QCheckBox(tr("Visible"), this);
     m_visible->setChecked(props.visible);
@@ -646,7 +646,7 @@ AnimationDialog::AnimationDialog(const QList<LayerPtr>& layers, int defaultDelay
 
     auto* top = new QHBoxLayout;
     m_list = new QTreeWidget(this);
-    m_list->setHeaderLabels({tr("Fotograma"), tr("Capa"), tr("Duración")});
+    m_list->setHeaderLabels({tr("Fotograma"), tr("Capa"), tr("Duración (ms)")});
     m_list->setRootIsDecorated(false);
     m_list->setIconSize(QSize(48, 36));
     m_list->header()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -666,7 +666,6 @@ AnimationDialog::AnimationDialog(const QList<LayerPtr>& layers, int defaultDelay
         auto* spin = new QSpinBox(m_list);
         spin->setRange(Gif::kMinDelayMs, 60000);
         spin->setSingleStep(10);
-        spin->setSuffix(tr(" ms"));
         spin->setValue(Gif::delayFromName(layer->props.name, defaultDelay));
         m_list->setItemWidget(item, 2, spin);
         m_delays << spin;
@@ -693,7 +692,6 @@ AnimationDialog::AnimationDialog(const QList<LayerPtr>& layers, int defaultDelay
     auto* all = new QSpinBox(this);
     all->setRange(Gif::kMinDelayMs, 60000);
     all->setSingleStep(10);
-    all->setSuffix(tr(" ms"));
     all->setValue(defaultDelay);
     auto* apply = new QPushButton(tr("Aplicar a todos"), this);
     connect(apply, &QPushButton::clicked, this, [this, all] {
@@ -702,6 +700,7 @@ AnimationDialog::AnimationDialog(const QList<LayerPtr>& layers, int defaultDelay
     });
     row->addWidget(new QLabel(tr("Duración de todos los fotogramas:"), this));
     row->addWidget(all);
+    row->addWidget(new QLabel(tr("ms"), this));
     row->addWidget(apply);
     row->addStretch();
     layout->addLayout(row);

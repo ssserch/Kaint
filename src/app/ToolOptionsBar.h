@@ -13,6 +13,7 @@ class FontChooser;
 class QButtonGroup;
 class QComboBox;
 class QDoubleSpinBox;
+class QLabel;
 class QSpinBox;
 class QToolButton;
 class Tool;
@@ -106,6 +107,8 @@ private:
     ChoiceButton* m_rectMode;
     QDoubleSpinBox* m_fixedWidth;
     QDoubleSpinBox* m_fixedHeight;
+    QLabel* m_fixedWidthUnit;
+    QLabel* m_fixedHeightUnit;
     ChoiceButton* m_afterSelect;
     QComboBox* m_size;
     BarSlider* m_hardness;

@@ -3,6 +3,7 @@
 #include "app/Icons.h"
 #include "app/dialogs/DialogButtons.h"
 #include "app/widgets/EffectControls.h"
+#include "app/widgets/UnitField.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -265,9 +266,8 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     m_imageScale = new QSpinBox(content);
     m_imageScale->setRange(10, 400);
     m_imageScale->setSingleStep(10);
-    m_imageScale->setSuffix(QStringLiteral(" %"));
     m_imageScale->setToolTip(tr("Tamaño de la imagen en mosaico o a tamaño original."));
-    backForm->addRow(tr("Escala:"), m_imageScale);
+    backForm->addRow(tr("Escala:"), withUnit(m_imageScale, QStringLiteral("%")));
     m_imageOpacity = new QSlider(Qt::Horizontal, content);
     m_imageOpacity->setRange(0, 100);
     backForm->addRow(tr("Opacidad de la imagen:"), sliderRow(m_imageOpacity, content));
@@ -335,8 +335,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     designForm->addRow(tr("Espaciado:"), m_density);
     m_radius = new QSpinBox(content);
     m_radius->setRange(0, 16);
-    m_radius->setSuffix(QStringLiteral(" px"));
-    designForm->addRow(tr("Redondeo de las esquinas:"), m_radius);
+    designForm->addRow(tr("Redondeo de las esquinas:"), withUnit(m_radius, tr("px")));
     m_classic = new QCheckBox(tr("Bordes clásicos en relieve (como Windows 98)"), content);
     designForm->addRow(tr("Estilo:"), m_classic);
     connect(m_classic, &QCheckBox::toggled, this, [this](bool on) {
@@ -363,10 +362,9 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     m_font = new QFontComboBox(content);
     m_fontSize = new QSpinBox(content);
     m_fontSize->setRange(6, 24);
-    m_fontSize->setSuffix(QStringLiteral(" pt"));
     fontRow->addWidget(m_systemFont);
     fontRow->addWidget(m_font, 1);
-    fontRow->addWidget(m_fontSize);
+    fontRow->addWidget(withUnit(m_fontSize, tr("pt")));
     designForm->addRow(tr("Fuente:"), fontRow);
     m_iconTheme = new QComboBox(content);
     m_iconTheme->addItem(tr("Automático (Breeze)"), QString());
@@ -409,7 +407,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         m_spec.fontFamily = system ? QString() : m_font->currentFont().family();
         m_spec.fontSize = system ? 0 : m_fontSize->value();
         m_font->setEnabled(!system);
-        m_fontSize->setEnabled(!system);
+        m_fontSize->parentWidget()->setEnabled(!system);
         changed();
     };
     connect(m_systemFont, &QCheckBox::toggled, this, updateFont);
@@ -496,7 +494,7 @@ void ThemeDialog::refresh()
     m_imageAnchor->setCurrentIndex(m_spec.imageAnchor);
     m_imageScale->setValue(m_spec.imageScale);
     const bool hasImage = !m_spec.workspaceImage.isEmpty();
-    m_imageScale->setEnabled(hasImage
+    m_imageScale->parentWidget()->setEnabled(hasImage
                              && (m_spec.imageMode == Theme::ImageMode::Tile || m_spec.imageMode == Theme::ImageMode::Center));
     m_imageAnchor->setEnabled(hasImage && m_spec.imageMode != Theme::ImageMode::Stretch);
     m_imageOpacity->setValue(m_spec.imageOpacity);
@@ -521,7 +519,7 @@ void ThemeDialog::refresh()
     m_font->setCurrentFont(systemFont ? QApplication::font() : QFont(m_spec.fontFamily));
     m_fontSize->setValue(m_spec.fontSize > 0 ? m_spec.fontSize : std::max(6, QApplication::font().pointSize()));
     m_font->setEnabled(!systemFont);
-    m_fontSize->setEnabled(!systemFont);
+    m_fontSize->parentWidget()->setEnabled(!systemFont);
     m_iconTheme->setCurrentIndex(std::max(0, m_iconTheme->findData(m_spec.iconTheme)));
     m_refreshing = false;
 }

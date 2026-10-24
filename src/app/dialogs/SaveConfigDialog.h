@@ -50,7 +50,7 @@ private:
     };
 
     void schedule();
-    // Pone en los controles las opciones 'o' (Predeterminado y Reiniciar).
+    // Pone en los controles las opciones 'o' (Predeterminado).
     void loadOptions(const ImageIO::SaveOptions& o);
     void updateControls();
     void showAdvanced();
@@ -80,8 +80,6 @@ private:
     QSpinBox* m_loops = nullptr;
     QList<QCheckBox*> m_icoSizes;
     QList<Gif::Frame> m_frames;
-    // Las opciones con las que se abrió (Reiniciar vuelve a ellas).
-    ImageIO::SaveOptions m_initial;
     Advanced m_advanced;
     QPushButton* m_advancedButton = nullptr;
     QPushButton* m_hiddenButton = nullptr;

@@ -4,6 +4,7 @@
 #include "app/Theme.h"
 #include "app/dialogs/DialogButtons.h"
 #include "app/widgets/BarSlider.h"
+#include "app/widgets/UnitField.h"
 #include "core/Raster.h"
 
 #include <QBuffer>
@@ -43,7 +44,6 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     , m_image(flattened)
     , m_path(path)
     , m_frames(frames)
-    , m_initial(initial)
 {
     setWindowTitle(tr("Configuración de guardado: %1").arg(QFileInfo(path).suffix().toUpper()));
     setWindowIcon(Icons::theme({"document-save"}));
@@ -112,17 +112,14 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
             m_delay = new QSpinBox(this);
             m_delay->setRange(Gif::kMinDelayMs, 60000);
             m_delay->setSingleStep(10);
-            m_delay->setSuffix(tr(" ms"));
             m_delay->setValue(initial.frameDelay);
             m_delay->setToolTip(tr("Para las capas que no indican su duración en el nombre"));
             connect(m_delay, &QSpinBox::valueChanged, this, &SaveConfigDialog::schedule);
-            form->addRow(tr("Duración de los fotogramas:"), m_delay);
+            form->addRow(tr("Duración de los fotogramas:"), withUnit(m_delay, tr("ms")));
             m_loopForever = new QCheckBox(tr("Repetir sin fin"), this);
             m_loopForever->setChecked(initial.loops == 0);
             m_loops = new QSpinBox(this);
             m_loops->setRange(0, 65535);
-            m_loops->setSpecialValueText(tr("Una sola vez"));
-            m_loops->setSuffix(tr(" veces más"));
             m_loops->setValue(std::max(0, initial.loops));
             connect(m_loopForever, &QCheckBox::toggled, this, [this] {
                 updateControls();
@@ -130,7 +127,7 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
             });
             connect(m_loops, &QSpinBox::valueChanged, this, &SaveConfigDialog::schedule);
             form->addRow(m_loopForever);
-            form->addRow(tr("Repeticiones:"), m_loops);
+            form->addRow(tr("Repeticiones:"), withUnit(m_loops, tr("veces más"), tr("(0: una sola vez)")));
             // Las capas ocultas, como fotogramas solo si se pide.
             m_showHidden = initial.gifHiddenLayers;
             m_hiddenButton = new QPushButton(this);
@@ -187,18 +184,13 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     top->addWidget(m_previewPane, 1);
 
     auto* box = okCancelButtons(this);
+    // Predeterminado deja la ventana como recién abierta con los valores de fábrica: también
+    // los fotogramas de la configuración avanzada y las capas ocultas.
     auto* defaults = box->addButton(tr("Predeterminado"), QDialogButtonBox::ResetRole);
-    connect(defaults, &QPushButton::clicked, this, [this] { loadOptions(ImageIO::SaveOptions()); });
-    if (m_advancedButton) {
-        // Como cerrar y volver a abrir esta ventana, sin cerrarla.
-        auto* restart = box->addButton(tr("Reiniciar"), QDialogButtonBox::ResetRole);
-        restart->setToolTip(tr("Vuelve a como estaba al abrir esta ventana: opciones, fotogramas de la configuración "
-                               "avanzada y capas ocultas."));
-        connect(restart, &QPushButton::clicked, this, [this] {
-            m_hiddenLocked = false;
-            loadOptions(m_initial);
-        });
-    }
+    connect(defaults, &QPushButton::clicked, this, [this] {
+        m_hiddenLocked = false;
+        loadOptions(ImageIO::SaveOptions());
+    });
 
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(top, 1);
@@ -384,12 +376,13 @@ void SaveConfigDialog::updateControls()
     if (m_quantization)
         m_quantization->setEnabled(eight);
     const bool animated = m_animation && m_animation->isChecked();
+    // Con su unidad al lado: se activa la fila entera.
     if (m_delay)
-        m_delay->setEnabled(animated);
+        m_delay->parentWidget()->setEnabled(animated);
     if (m_loopForever)
         m_loopForever->setEnabled(animated);
     if (m_loops)
-        m_loops->setEnabled(animated && !m_loopForever->isChecked());
+        m_loops->parentWidget()->setEnabled(animated && !m_loopForever->isChecked());
     if (m_advancedButton)
         m_advancedButton->setEnabled(animated);
     updateHiddenButton();
@@ -480,7 +473,6 @@ void SaveConfigDialog::showAdvanced()
     auto* delayAll = new QSpinBox(gifBox);
     delayAll->setRange(Gif::kMinDelayMs, 60000);
     delayAll->setSingleStep(10);
-    delayAll->setSuffix(tr(" ms"));
     auto* fps = new QLabel(gifBox);
     auto hint = [gifBox](const QString& text) {
         auto* l = new QLabel(text, gifBox);
@@ -490,7 +482,6 @@ void SaveConfigDialog::showAdvanced()
     };
     auto* loopsEdit = new QLineEdit(gifBox);
     loopsEdit->setValidator(new QIntValidator(1, 65536, loopsEdit));
-    loopsEdit->setPlaceholderText(tr("Sin fin"));
     loopsEdit->setMaximumWidth(90);
     auto* globalPalette = new QCheckBox(tr("Usar una paleta global"), gifBox);
     auto* quantization = new QComboBox(gifBox);
@@ -500,6 +491,7 @@ void SaveConfigDialog::showAdvanced()
                                 "mediana reparte mejor los degradados."));
     auto* delayRow = new QHBoxLayout;
     delayRow->addWidget(delayAll);
+    delayRow->addWidget(new QLabel(tr("ms"), gifBox));
     delayRow->addWidget(fps);
     delayRow->addWidget(hint(tr("(cambiarla pone esta duración a todos los fotogramas)")), 1);
     gifGrid->addWidget(new QLabel(tr("Duración:"), gifBox), 0, 0);
@@ -539,12 +531,11 @@ void SaveConfigDialog::showAdvanced()
     auto* fadeDelay = new QSpinBox(fadeFrame);
     fadeDelay->setRange(Gif::kMinDelayMs, 2000);
     fadeDelay->setSingleStep(10);
-    fadeDelay->setSuffix(tr(" ms"));
     auto* fadeCount = new QSpinBox(fadeFrame);
     fadeCount->setRange(2, 20);
     auto* fadeLast = new QCheckBox(tr("No fundir el último fotograma con el primero"), fadeFrame);
     auto* fadeForm = new QFormLayout;
-    fadeForm->addRow(tr("Duración del fundido:"), fadeDelay);
+    fadeForm->addRow(tr("Duración del fundido:"), withUnit(fadeDelay, tr("ms")));
     auto* countRow = new QHBoxLayout;
     countRow->addWidget(fadeCount);
     countRow->addWidget(new QLabel(QStringLiteral("(2-20)"), fadeFrame));
@@ -630,7 +621,6 @@ void SaveConfigDialog::showAdvanced()
             auto* delay = new QSpinBox(card);
             delay->setRange(Gif::kMinDelayMs, 60000);
             delay->setSingleStep(10);
-            delay->setSuffix(tr(" ms"));
             delay->setValue(e.delayMs > 0 ? e.delayMs : allDelay);
             delay->setEnabled(!e.skip);
             connect(delay, &QSpinBox::valueChanged, &dlg, [&adv, &refresh, i](int ms) {
@@ -640,6 +630,7 @@ void SaveConfigDialog::showAdvanced()
             auto* delayRow = new QHBoxLayout;
             delayRow->addWidget(new QLabel(tr("Duración:"), card));
             delayRow->addWidget(delay);
+            delayRow->addWidget(new QLabel(tr("ms"), card));
             auto* skip = new QPushButton(e.skip ? tr("Activar") : tr("Omitir"), card);
             skip->setStyleSheet(e.skip ? enableStyle : skipStyle);
             auto* copy = new QPushButton(tr("Copiar"), card);

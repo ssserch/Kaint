@@ -123,7 +123,10 @@ bool systemPrefersDark();
 // Color de la barra de título del sistema cuando no es la del tema (Windows con el color de
 // énfasis en las barras de título), o no válido.
 QColor titleBarColor();
-// Barra de título nativa a juego con el tema: en Windows, modo oscuro y el color 'band'.
+// 'spec' con las cabeceras de las ventanas flotantes del color 'titleBar' (si es válido).
+Spec withTitleBarColor(Spec spec, const QColor& titleBar);
+// Barra de título nativa a juego con el tema: en Windows, modo oscuro y el color 'band' (no
+// válido: el del sistema).
 void styleTitleBar(QWidget* window, const QColor& band);
 
 // Fondo del área de trabajo (alrededor de la imagen): color e imagen del tema. 'color' no válido

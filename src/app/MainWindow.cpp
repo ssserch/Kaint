@@ -964,6 +964,9 @@ void MainWindow::createTopRow()
         menu.addActions({m_act["resetPanels"], m_act["translucent"]});
         menu.exec(m_cornerButtons->mapToGlobal(pos));
     });
+    // Breeze pide menuBar() al pulir la ventana y Qt cambiaría esta fila por una barra de menús
+    // vacía (se perdían los menús y la barra principal con el tema de KDE): se pule antes.
+    ensurePolished();
     setMenuWidget(top);
 }
 
@@ -2976,8 +2979,10 @@ void MainWindow::checkForUpdates(bool interactive)
 
 void MainWindow::startupChecks()
 {
+#ifdef KAINT_UPDATE_CHECK
     if (m_settings.checkUpdates)
         QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
+#endif
     offerRecovery();
 }
 

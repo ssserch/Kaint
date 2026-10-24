@@ -814,6 +814,9 @@ void SettingsDialog::setDiscordStatus(const QString& text)
 QWidget* SettingsDialog::createUpdatesPage()
 {
     PageBox page = makePage(this);
+    QStringList info;
+    info << tr("Versión instalada: %1").arg(QStringLiteral(KAINT_VERSION));
+#ifdef KAINT_UPDATE_CHECK
     auto* automatic = new QCheckBox(tr("Buscar actualizaciones automáticamente al iniciar Kaint"), page.widget);
     automatic->setChecked(m_settings.checkUpdates);
     connect(automatic, &QCheckBox::toggled, this, [this](bool on) {
@@ -834,13 +837,17 @@ QWidget* SettingsDialog::createUpdatesPage()
         changed();
     });
     page.layout->addWidget(beta);
-    QStringList info;
-    info << tr("Versión instalada: %1").arg(QStringLiteral(KAINT_VERSION));
     info << tr("Las versiones nuevas se publican en %1").arg(QStringLiteral(KAINT_REPOSITORY));
     if (m_settings.lastUpdateCheck.isValid())
         info << tr("Última comprobación: %1 · versión más reciente: %2")
                     .arg(QLocale().toString(m_settings.lastUpdateCheck, QLocale::ShortFormat),
                          m_settings.latestVersion.isEmpty() ? tr("ninguna publicada") : m_settings.latestVersion);
+#else
+    // Compilado sin la búsqueda en GitHub (Flatpak, paquetes de distribuciones): las versiones
+    // nuevas llegan con el gestor de software.
+    info << tr("Kaint se actualiza desde el gestor de software del sistema (Discover, GNOME Software "
+               "o «flatpak update»).");
+#endif
     m_updateStatus = wrapped(info.join(QLatin1Char('\n')), page.widget);
     page.layout->addWidget(m_updateStatus);
     page.layout->addStretch();

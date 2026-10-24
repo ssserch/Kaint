@@ -8,6 +8,9 @@ string(REGEX REPLACE "^https?://github.com/" "" KAINT_GITHUB "${KAINT_REPOSITORY
 string(REGEX REPLACE "/$" "" KAINT_GITHUB "${KAINT_GITHUB}")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS version.json)
 
+# ID de la aplicación (archivo .desktop, icono, metainfo y Flathub)
+set(KAINT_APP_ID "io.github.ssserch.Kaint")
+
 # Rich Presence de Discord (discord.json)
 set(KAINT_DISCORD_CLIENT_ID "")
 set(KAINT_DISCORD_LARGE_IMAGE "kaint")
@@ -160,10 +163,16 @@ if(TARGET Qt6::DBus)
     target_link_libraries(kaintui PUBLIC Qt6::DBus)
     target_compile_definitions(kaintui PRIVATE KAINT_HAVE_DBUS)
 endif()
-target_compile_definitions(kaintui PUBLIC KAINT_VERSION="${PROJECT_VERSION}"
+target_compile_definitions(kaintui PUBLIC KAINT_VERSION="${PROJECT_VERSION}" KAINT_APP_ID="${KAINT_APP_ID}"
                            KAINT_REPOSITORY="${KAINT_REPOSITORY}" KAINT_GITHUB="${KAINT_GITHUB}"
                            KAINT_DISCORD_CLIENT_ID="${KAINT_DISCORD_CLIENT_ID}"
                            KAINT_DISCORD_LARGE_IMAGE="${KAINT_DISCORD_LARGE_IMAGE}")
+# Búsqueda de versiones nuevas en GitHub (sin ella, Kaint lo deja en manos de Flathub o del
+# gestor de paquetes y no usa la red)
+option(KAINT_UPDATE_CHECK "Buscar versiones nuevas de Kaint en GitHub" ON)
+if(KAINT_UPDATE_CHECK)
+    target_compile_definitions(kaintui PUBLIC KAINT_UPDATE_CHECK)
+endif()
 
 # ---------------------------------------------------------------------------
 # Iconos (img/ o, si no hay, data/)
@@ -350,7 +359,8 @@ if(BUILD_TESTING)
     target_link_libraries(kaint_core_tests PRIVATE kaintcore)
     target_compile_definitions(kaint_core_tests PRIVATE
         KAINT_TEST_PLUGIN="$<TARGET_FILE:kaint_example_plugin>"
-        KAINT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        KAINT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        KAINT_APP_ID="${KAINT_APP_ID}" KAINT_VERSION="${PROJECT_VERSION}")
     add_dependencies(kaint_core_tests kaint_example_plugin)
     if(TARGET pdnbridge)
         set(PDN_TEST_PLUGIN "${CMAKE_BINARY_DIR}/test-plugins/KaintTestEffect.dll")
@@ -371,6 +381,17 @@ if(BUILD_TESTING)
     target_link_libraries(kaint_ui_smoke PRIVATE kaintui)
     add_test(NAME ui_smoke COMMAND kaint_ui_smoke)
     set_tests_properties(ui_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # Ficha de la aplicación y archivo .desktop (si están las herramientas de freedesktop)
+    find_program(KAINT_APPSTREAMCLI appstreamcli)
+    if(KAINT_APPSTREAMCLI)
+        add_test(NAME metainfo COMMAND ${KAINT_APPSTREAMCLI} validate --no-net
+                 "${CMAKE_CURRENT_SOURCE_DIR}/data/${KAINT_APP_ID}.metainfo.xml")
+    endif()
+    find_program(KAINT_DESKTOP_FILE_VALIDATE desktop-file-validate)
+    if(KAINT_DESKTOP_FILE_VALIDATE AND UNIX AND NOT APPLE)
+        add_test(NAME desktop_file COMMAND ${KAINT_DESKTOP_FILE_VALIDATE} "${CMAKE_CURRENT_BINARY_DIR}/${KAINT_APP_ID}.desktop")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -383,18 +404,20 @@ if(WIN32)
     install(SCRIPT "${KAINT_DEPLOY_SCRIPT}")
 endif()
 if(UNIX AND NOT APPLE)
-    configure_file(data/io.github.kaint.Kaint.desktop.in io.github.kaint.Kaint.desktop @ONLY)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/io.github.kaint.Kaint.desktop
+    configure_file(data/${KAINT_APP_ID}.desktop.in ${KAINT_APP_ID}.desktop @ONLY)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${KAINT_APP_ID}.desktop
             DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    # Ficha de la aplicación para Flathub, Discover y GNOME Software
+    install(FILES data/${KAINT_APP_ID}.metainfo.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
     if(KAINT_ICON_SVG)
         install(FILES "${KAINT_ICON_SVG}"
                 DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-                RENAME io.github.kaint.Kaint.svg)
+                RENAME ${KAINT_APP_ID}.svg)
     endif()
     foreach(size ${KAINT_ICON_PNG_SIZES})
         install(FILES img/kaint-${size}.png
                 DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
-                RENAME io.github.kaint.Kaint.png)
+                RENAME ${KAINT_APP_ID}.png)
     endforeach()
 endif()
 

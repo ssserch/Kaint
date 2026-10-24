@@ -93,6 +93,42 @@ colors, toolbar layout and a canvas background image with placement, scale, blur
 ## 📦 Install
 
 Kaint needs **Qt 6.5 or newer**: Arch Linux, Debian 13, Ubuntu 25.04 or newer, or Windows 10/11.
+The Flatpak and the AppImage run on other distributions too.
+
+<details open>
+<summary><b>📦 Flatpak (any distribution)</b></summary>
+
+Kaint is on its way to [Flathub](https://flathub.org) as `io.github.ssserch.Kaint`. Until it's
+there, build and install the Flatpak from the source code (needs `flatpak-builder`):
+
+```bash
+./build.sh --flatpak        # builds and installs io.github.ssserch.Kaint for your user
+flatpak run io.github.ssserch.Kaint
+```
+
+Paint.NET plugins work out of the box, because the Flatpak includes mono. Plugins that bring their
+own settings window (made with WinForms) need X11, which the Flatpak only gets on Wayland if you
+allow it:
+
+```bash
+flatpak override --user --socket=x11 io.github.ssserch.Kaint
+```
+
+</details>
+
+<details open>
+<summary><b>📦 AppImage (any distribution)</b></summary>
+
+```bash
+./build.sh --appimage       # builds build-appimage/Kaint-<version>-x86_64.AppImage
+chmod +x build-appimage/Kaint-*.AppImage && ./build-appimage/Kaint-*.AppImage
+```
+
+The AppImage bundles Qt, so it runs on distributions whose glibc is at least as new as the one it
+was built on: build it on the oldest distribution you want to support. Paint.NET plugins use the
+system's mono if it's installed, and the KDE theme option needs the native build or the Flatpak.
+
+</details>
 
 <details open>
 <summary><b>🐧 Arch Linux</b></summary>
@@ -147,8 +183,11 @@ from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to d
 | Build and run | `--run` | `--run` |
 | Run the tests | `--test` | `--test` |
 | Debug build | `--debug` | `--debug` |
-| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) | `--zip` |
+| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) · `--flatpak` · `--appimage` | `--zip` |
 | Every option | `--help` | `--help` |
+
+Packagers can build with `-DKAINT_UPDATE_CHECK=OFF` so that Kaint leaves updates to the package
+manager and never looks for new versions on GitHub (the Flatpak does this).
 
 ## License
 

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 SSSerch -->
+<component type="desktop-application">
+  <id>io.github.ssserch.Kaint</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <name>Kaint</name>
+  <summary>Edit images with layers and effects</summary>
+  <summary xml:lang="es">Edita imágenes con capas y efectos</summary>
+
+  <developer id="io.github.ssserch">
+    <name>SSSerch</name>
+  </developer>
+
+  <description>
+    <p>
+      Kaint is a raster image editor that recreates the look, the tools and the workflow of
+      Paint.NET as a native Qt application. It is made for KDE Plasma and also follows the
+      light or dark style of other desktops.
+    </p>
+    <p xml:lang="es">
+      Kaint es un editor de imágenes que recrea el aspecto, las herramientas y la forma de
+      trabajar de Paint.NET como una aplicación nativa de Qt. Está hecho para KDE Plasma y también
+      sigue el estilo claro u oscuro de otros escritorios.
+    </p>
+    <p>Features:</p>
+    <p xml:lang="es">Funciones:</p>
+    <ul>
+      <li>Selections with combine modes, move pixels with scale and rotation, brushes, clone stamp, recolor, paint bucket, gradients, lines, curves, shapes and text</li>
+      <li xml:lang="es">Selecciones con modos de combinación, mover píxeles con escala y giro, pinceles, tampón de clonar, recolorear, bote de pintura, degradados, líneas, curvas, formas y texto</li>
+      <li>Editable history: gradients, lines, shapes, text and fills stay editable when you go back to their step</li>
+      <li xml:lang="es">Historial editable: degradados, líneas, formas, texto y rellenos se pueden seguir editando al volver a su paso</li>
+      <li>Layers with blend modes, opacity and live thumbnails</li>
+      <li xml:lang="es">Capas con modos de fusión, opacidad y miniaturas en directo</li>
+      <li>Adjustments and effects with live preview</li>
+      <li xml:lang="es">Ajustes y efectos con vista previa en directo</li>
+      <li>Paint.NET effect plugins and native plugins with a C API</li>
+      <li xml:lang="es">Complementos de efectos de Paint.NET y complementos nativos con una API en C</li>
+      <li>OpenRaster projects with layers, PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA, animated GIF and ICO, and opens Paint.NET .pdn files</li>
+      <li xml:lang="es">Proyectos OpenRaster con capas, PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA, GIF animado e ICO, y abre archivos .pdn de Paint.NET</li>
+      <li>Light, dark and custom themes, and recovery copies of unsaved images</li>
+      <li xml:lang="es">Temas claro, oscuro y personalizados, y copias de recuperación de las imágenes sin guardar</li>
+    </ul>
+    <p>
+      Kaint is an independent project, not affiliated with or endorsed by dotPDN LLC. Paint.NET is
+      a trademark of dotPDN LLC.
+    </p>
+    <p xml:lang="es">
+      Kaint es un proyecto independiente, sin relación con dotPDN LLC ni respaldado por ella.
+      Paint.NET es una marca registrada de dotPDN LLC.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.ssserch.Kaint.desktop</launchable>
+  <provides>
+    <binary>kaint</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/ssserch/Kaint</url>
+  <url type="bugtracker">https://github.com/ssserch/Kaint/issues</url>
+  <url type="vcs-browser">https://github.com/ssserch/Kaint</url>
+  <url type="donation">https://ko-fi.com/E1E5ZOEH6</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>The dark theme with the tools, colors, history and layers windows</caption>
+      <caption xml:lang="es">El tema oscuro con las ventanas de herramientas, colores, historial y capas</caption>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.0.3/img/other/screenshot.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The light theme</caption>
+      <caption xml:lang="es">El tema claro</caption>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.0.3/img/other/screenshot-light.png</image>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f6c49f</color>
+    <color type="primary" scheme_preference="dark">#6b2410</color>
+  </branding>
+
+  <content_rating type="oars-1.1"/>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>tablet</control>
+  </supports>
+
+  <categories>
+    <category>Graphics</category>
+    <category>2DGraphics</category>
+    <category>RasterGraphics</category>
+  </categories>
+  <keywords>
+    <keyword>paint</keyword>
+    <keyword>draw</keyword>
+    <keyword>image</keyword>
+    <keyword>photo</keyword>
+    <keyword>layers</keyword>
+    <keyword xml:lang="es">pintar</keyword>
+    <keyword xml:lang="es">dibujar</keyword>
+    <keyword xml:lang="es">imagen</keyword>
+    <keyword xml:lang="es">capas</keyword>
+  </keywords>
+
+  <releases>
+    <release version="1.0.3" date="2026-10-24">
+      <description>
+        <p>Flatpak and Flathub support.</p>
+        <ul>
+          <li>New application ID: io.github.ssserch.Kaint</li>
+          <li>Paint.NET plugins work in the Flatpak, with mono included</li>
+          <li>Paint bucket and pixel art fixes</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.0.2" date="2026-10-23">
+      <description>
+        <p>Fixes for the Windows version and nicer effect previews.</p>
+      </description>
+    </release>
+    <release version="1.0.1" date="2026-10-23">
+      <description>
+        <p>Windows support with build.bat, Paint.NET plugins on Windows, new icons and a restart when the language changes.</p>
+      </description>
+    </release>
+    <release version="1.0.0" date="2026-10-22">
+      <description>
+        <p>First stable release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

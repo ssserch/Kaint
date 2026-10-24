@@ -1,0 +1,72 @@
+# Kaint on Flathub. Local build of the working tree: ./build.sh --flatpak
+id: io.github.ssserch.Kaint
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.mono6
+command: kaint
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # Printing: Qt talks to CUPS directly
+  - --socket=cups
+  # Image editor: recent files, drag and drop from file managers and plugins added from any folder
+  - --filesystem=home
+  # Colors and font of the KDE theme
+  - --filesystem=xdg-config/kdeglobals:ro
+  # Optional Discord Rich Presence (native and Flatpak Discord)
+  - --filesystem=xdg-run/discord-ipc-0
+  - --filesystem=xdg-run/app/com.discordapp.Discord:create
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - '*.la'
+
+modules:
+  # Mono runs the Paint.NET plugins (System.Drawing and Windows Forms)
+  - name: mono
+    buildsystem: simple
+    build-commands:
+      - /usr/lib/sdk/mono6/install.sh System.Drawing System.Windows.Forms System.Data
+        System.Runtime.Serialization.Formatters.Soap Mono.WebBrowser System.Xml.Linq System.Numerics
+
+  # System.Drawing in mono needs libgdiplus
+  - name: libgdiplus
+    config-opts:
+      - --disable-static
+      - --without-libexif
+    sources:
+      - type: archive
+        url: https://dl.winehq.org/mono/sources/libgdiplus/libgdiplus-6.2.tar.gz
+        sha256: 683adb7d99d03f6ee7985173a206a2243f76632682334ced4cae2fcd20c83bc9
+        x-checker-data:
+          type: html
+          url: https://dl.winehq.org/mono/sources/libgdiplus/
+          version-pattern: libgdiplus-([\d.]+)\.tar\.gz
+          url-template: https://dl.winehq.org/mono/sources/libgdiplus/libgdiplus-$version.tar.gz
+
+  # Keep kaint as the last module: ./build.sh --flatpak replaces its sources with the working tree
+  - name: kaint
+    buildsystem: cmake-ninja
+    build-options:
+      # mcs and mono build the Paint.NET compatibility layer
+      append-path: /usr/lib/sdk/mono6/bin
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTING=OFF
+      # Updates come from Flathub, so Kaint does not need network access
+      - -DKAINT_UPDATE_CHECK=OFF
+    sources:
+      - type: git
+        url: https://github.com/ssserch/Kaint.git
+        tag: v1.0.3
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([\d.]+)$

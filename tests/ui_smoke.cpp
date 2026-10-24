@@ -52,6 +52,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMouseEvent>
 #include <QPrinter>
 #include <QPushButton>
@@ -63,6 +64,7 @@
 #include <QTabBar>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QToolBar>
 #include <QToolButton>
 #include <QtEndian>
 #include <QUndoStack>
@@ -287,6 +289,15 @@ static void testTheme()
     CHECK(qApp->styleSheet().contains(QStringLiteral("QMenuBar")));
     Theme::apply(Theme::Scheme::Dark);
     CHECK(Theme::isDark() && Theme::workspaceColor() == Theme::preset(true).workspace);
+    // Sin color de énfasis en las barras de título (fuera de Windows), cabeceras del tema.
+    CHECK(!Theme::titleBarColor().isValid() && Theme::active().panelTitle == Theme::preset(true).panelTitle);
+    // Con él (morado de Windows), las cabeceras de las ventanas flotantes lo llevan, como en Paint.NET.
+    const QColor purple(0x74, 0x4d, 0xa9);
+    const Theme::Spec accented = Theme::withTitleBarColor(Theme::preset(true), purple);
+    CHECK(accented.panelTitle == purple && accented.panelTitleEnd == purple);
+    CHECK(accented.panelTitleText == QColor(Qt::white) && accented.panel == Theme::preset(true).panel);
+    CHECK(Theme::withTitleBarColor(Theme::preset(false), QColor(0xff, 0xd8, 0x6a)).panelTitleText == QColor(Qt::black));
+    CHECK(Theme::withTitleBarColor(Theme::preset(false), QColor()) == Theme::preset(false));
 
     Theme::Spec custom;
     custom.dark = true;
@@ -1779,6 +1790,28 @@ int main(int argc, char** argv)
         CHECK(band(false) == QColor(Qt::red) && band(true) == QColor(Qt::white));
         swatches->setEditingSecondary(false);
         state->resetColors();
+    }
+
+    // Breeze (su ToolsAreaManager) pide QMainWindow::menuBar() al pulir la ventana: los menús y
+    // la barra principal no se deben perder.
+    {
+        struct BreezeLike : QObject {
+            bool eventFilter(QObject* watched, QEvent* event) override
+            {
+                if (event->type() == QEvent::Polish)
+                    if (auto* window = qobject_cast<QMainWindow*>(watched))
+                        window->menuBar();
+                return false;
+            }
+        } breeze;
+        qApp->installEventFilter(&breeze);
+        MainWindow second;
+        second.show();
+        settle();
+        qApp->removeEventFilter(&breeze);
+        CHECK(second.menuWidget() && second.menuWidget()->objectName() == QLatin1String("TopRow"));
+        auto* mainBar = second.findChild<QToolBar*>(QStringLiteral("MainToolBar"));
+        CHECK(mainBar && mainBar->isVisible() && mainBar->height() > 0);
     }
 
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());

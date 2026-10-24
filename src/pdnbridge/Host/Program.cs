@@ -803,8 +803,17 @@ namespace Kaint.PdnHost
             Rectangle bounds = new Rectangle(0, 0, width, height);
             Rectangle roi = Rectangle.Intersect(bounds, RectFrom(request, "roi", bounds));
             if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
+            {
+                // En Flatpak, X11 solo llega si se da el permiso a mano.
+                string flatpak = Environment.GetEnvironmentVariable("FLATPAK_ID");
+                if (!string.IsNullOrEmpty(flatpak))
+                    return Error(L("El diálogo de este complemento usa WinForms y necesita X11 (XWayland). "
+                                       + "Para permitirlo, ejecuta: flatpak override --user --socket=x11 " + flatpak,
+                                   "This plugin's dialog uses WinForms and needs X11 (XWayland). "
+                                       + "To allow it, run: flatpak override --user --socket=x11 " + flatpak));
                 return Error(L("El diálogo de este complemento usa WinForms y necesita X11 (XWayland).",
                                "This plugin's dialog uses WinForms and needs X11 (XWayland)."));
+            }
 
             using (SharedPixels pixels = new SharedPixels(Json.Str(request, "shm"), width, height))
             {

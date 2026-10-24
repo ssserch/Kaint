@@ -31,6 +31,7 @@
 #include <QPainter>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QXmlStreamReader>
 
 #include <cmath>
 #include <cstdio>
@@ -1160,6 +1161,37 @@ static void testColorBalance()
     CHECK(Effects::apply(*balance, src, Selection(), Effects::defaults(*balance), EffectContext(), cancel) == src);
 }
 
+// Empaquetado: el ID y la versión coinciden en el metainfo, el .desktop y el manifiesto de Flatpak.
+static void testPackaging()
+{
+    const QString id = QStringLiteral(KAINT_APP_ID);
+    QFile metainfo(QStringLiteral(KAINT_SOURCE_DIR "/data/" KAINT_APP_ID ".metainfo.xml"));
+    CHECK(metainfo.open(QIODevice::ReadOnly));
+    QXmlStreamReader xml(&metainfo);
+    QString componentId, launchable, newestRelease;
+    while (!xml.atEnd()) {
+        if (xml.readNext() != QXmlStreamReader::StartElement)
+            continue;
+        if (xml.name() == u"id" && componentId.isEmpty())
+            componentId = xml.readElementText();
+        else if (xml.name() == u"launchable")
+            launchable = xml.readElementText();
+        else if (xml.name() == u"release" && newestRelease.isEmpty())
+            newestRelease = xml.attributes().value(u"version").toString();
+    }
+    CHECK(!xml.hasError());
+    CHECK(componentId == id);
+    CHECK(launchable == id + QStringLiteral(".desktop"));
+    CHECK(newestRelease == QStringLiteral(KAINT_VERSION));
+    CHECK(QFileInfo::exists(QStringLiteral(KAINT_SOURCE_DIR "/data/" KAINT_APP_ID ".desktop.in")));
+
+    QFile manifest(QStringLiteral(KAINT_SOURCE_DIR "/packaging/flatpak/" KAINT_APP_ID ".yml"));
+    CHECK(manifest.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString text = QString::fromUtf8(manifest.readAll());
+    CHECK(text.contains(QStringLiteral("\nid: ") + id + QLatin1Char('\n')));
+    CHECK(text.contains(QStringLiteral("tag: v" KAINT_VERSION "\n")));
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1190,6 +1222,7 @@ int main(int argc, char** argv)
     testPngWriter();
     testSelectionReshape();
     testColorBalance();
+    testPackaging();
     if (g_failures == 0)
         std::printf("Todas las pruebas del núcleo pasaron.\n");
     return g_failures == 0 ? 0 : 1;

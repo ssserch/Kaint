@@ -95,7 +95,7 @@ int main(int argc, char** argv)
     QApplication::setApplicationName(QStringLiteral("Kaint"));
     QApplication::setOrganizationName(QStringLiteral("Kaint"));
     QApplication::setApplicationVersion(QStringLiteral(KAINT_VERSION));
-    QGuiApplication::setDesktopFileName(QStringLiteral("io.github.kaint.Kaint"));
+    QGuiApplication::setDesktopFileName(QStringLiteral(KAINT_APP_ID));
 
     Icons::setupTheme();
     QImageReader::setAllocationLimit(4096);

@@ -680,7 +680,7 @@ QIcon app()
         icon.addFile(QStringLiteral(":/kaint/icons/kaint.svg"));
     if (!icon.isNull())
         return icon;
-    return QIcon::fromTheme(QStringLiteral("io.github.kaint.Kaint"), theme({"applications-graphics", "kolourpaint"}));
+    return QIcon::fromTheme(QStringLiteral(KAINT_APP_ID), theme({"applications-graphics", "kolourpaint"}));
 }
 
 } // namespace Icons

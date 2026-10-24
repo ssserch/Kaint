@@ -9,3 +9,6 @@ paintnet sourcecode/
 paintnetrecreation/
 fonts/
 screenpreview-screenshots/
+build-flatpak/
+.flatpak-builder/
+build-appimage/

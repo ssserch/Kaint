@@ -33,6 +33,7 @@
 #include <algorithm>
 
 #ifdef Q_OS_WIN
+#include <QAbstractNativeEventFilter>
 #include <windows.h>
 #include <dwmapi.h>
 #endif
@@ -74,6 +75,7 @@ QFont g_baseFont;
 bool g_baseFontSet = false;
 bool g_fusion = false;
 int g_systemDark = -1;
+QColor g_titleBar;
 QFileSystemWatcher* g_watcher = nullptr;
 
 // Imagen de fondo cargada y su copia escalada (se crea con la aplicación ya en marcha).
@@ -212,6 +214,52 @@ QString configStamp()
     return stamp;
 }
 
+#ifdef Q_OS_WIN
+class AccentWatcher : public QAbstractNativeEventFilter {
+public:
+    bool nativeEventFilter(const QByteArray& type, void* message, qintptr*) override
+    {
+        if (type != "windows_generic_MSG")
+            return false;
+        const UINT msg = static_cast<const MSG*>(message)->message;
+        if (msg == WM_DWMCOLORIZATIONCOLORCHANGED || msg == WM_SETTINGCHANGE) {
+            // Llega una vez por ventana: se comprueba una sola vez, un poco después.
+            if (!m_timer) {
+                m_timer = new QTimer(notifier());
+                m_timer->setSingleShot(true);
+                m_timer->setInterval(200);
+                QObject::connect(m_timer, &QTimer::timeout, notifier(), &Notifier::systemSettingChanged);
+            }
+            m_timer->start();
+        }
+        return false;
+    }
+
+private:
+    QTimer* m_timer = nullptr;
+};
+
+// Diálogos y demás ventanas: barra de título del sistema en el modo claro u oscuro del tema (la
+// ventana principal la ajusta ella misma, con la franja de los menús).
+bool ownTitleBar(const QWidget* w)
+{
+    const Qt::WindowType type = w->windowType();
+    return w->isWindow() && (type == Qt::Window || type == Qt::Dialog) && !w->inherits("QMainWindow");
+}
+
+class DialogTitleBars : public QObject {
+public:
+    using QObject::QObject;
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::Show && watched->isWidgetType() && ownTitleBar(static_cast<QWidget*>(watched)))
+            styleTitleBar(static_cast<QWidget*>(watched), QColor());
+        return false;
+    }
+};
+#endif
+
 void watchSystem()
 {
     if (g_watcher || !QCoreApplication::instance())
@@ -240,6 +288,12 @@ void watchSystem()
     // Windows (y cualquier plataforma que lo avise): el cambio de modo claro u oscuro.
     QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, notifier(),
                      &Notifier::systemSettingChanged);
+#ifdef Q_OS_WIN
+    // El color de énfasis y si va en las barras de título: Windows lo avisa a cada ventana.
+    static AccentWatcher accentWatcher;
+    qApp->installNativeEventFilter(&accentWatcher);
+    qApp->installEventFilter(new DialogTitleBars(notifier()));
+#endif
 #ifdef KAINT_HAVE_DBUS
     QDBusConnection::sessionBus().connect(QStringLiteral("org.freedesktop.portal.Desktop"),
                                           QStringLiteral("/org/freedesktop/portal/desktop"),
@@ -1051,6 +1105,7 @@ void initStyle(Scheme scheme)
 void apply(Scheme scheme)
 {
     g_current = scheme;
+    g_titleBar = titleBarColor();
     if (g_systemIconTheme.isEmpty())
         captureSystemDefaults();
     if (scheme == Scheme::Kde) {
@@ -1074,7 +1129,8 @@ void apply(Scheme scheme)
     else if (scheme == Scheme::Windows98)
         g_active = windows98();
     else
-        g_active = preset(scheme == Scheme::Dark || (scheme == Scheme::System && systemPrefersDark()));
+        g_active = withTitleBarColor(preset(scheme == Scheme::Dark || (scheme == Scheme::System && systemPrefersDark())),
+                                     g_titleBar);
 
     if (g_baseFontSet) {
         // Fuente propia: la del personalizado o la de Windows 98.
@@ -1096,6 +1152,11 @@ void apply(Scheme scheme)
     const QString qss = styleSheet(g_active);
     if (qApp->styleSheet() != qss)
         qApp->setStyleSheet(qss);
+#ifdef Q_OS_WIN
+    for (QWidget* w : QApplication::topLevelWidgets())
+        if (w->isVisible() && ownTitleBar(w))
+            styleTitleBar(w, QColor());
+#endif
     emit notifier()->changed();
 }
 
@@ -1146,6 +1207,17 @@ QColor titleBarColor()
     return {};
 }
 
+Spec withTitleBarColor(Spec spec, const QColor& titleBar)
+{
+    // Como Paint.NET: con el color de énfasis en las barras de título, las cabeceras de las
+    // ventanas flotantes lo llevan también.
+    if (titleBar.isValid()) {
+        spec.panelTitle = spec.panelTitleEnd = titleBar;
+        spec.panelTitleText = contrast(titleBar);
+    }
+    return spec;
+}
+
 void styleTitleBar(QWidget* window, const QColor& band)
 {
 #ifdef Q_OS_WIN
@@ -1154,12 +1226,18 @@ void styleTitleBar(QWidget* window, const QColor& band)
     const auto hwnd = reinterpret_cast<HWND>(window->winId());
     const BOOL dark = isDark();
     DwmSetWindowAttribute(hwnd, 20, &dark, sizeof dark);
+    // Con el color de énfasis, o sin franja (diálogos), el color es el del sistema
+    // (DWMWA_COLOR_DEFAULT), también si se activó con Kaint abierto.
+    COLORREF caption = 0xFFFFFFFF, text = 0xFFFFFFFF;
     if (!titleBarColor().isValid() && band.isValid()) {
-        const COLORREF caption = RGB(band.red(), band.green(), band.blue());
-        const COLORREF text = band.lightness() < 128 ? RGB(255, 255, 255) : RGB(0, 0, 0);
-        DwmSetWindowAttribute(hwnd, 35, &caption, sizeof caption);
-        DwmSetWindowAttribute(hwnd, 36, &text, sizeof text);
+        caption = RGB(band.red(), band.green(), band.blue());
+        text = band.lightness() < 128 ? RGB(255, 255, 255) : RGB(0, 0, 0);
     }
+    DwmSetWindowAttribute(hwnd, 35, &caption, sizeof caption);
+    DwmSetWindowAttribute(hwnd, 36, &text, sizeof text);
+    // Windows 10 no repinta la barra de una ventana ya abierta hasta que se le pide.
+    if (window->isVisible())
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 #else
     Q_UNUSED(window);
     Q_UNUSED(band);
@@ -1183,8 +1261,10 @@ void Notifier::systemSettingChanged()
 {
     const int before = g_systemDark;
     g_systemDark = readSystemScheme() == 1 ? 1 : 0;
-    if (before != g_systemDark && g_current == Scheme::System)
-        apply(Scheme::System);
+    // Claro, oscuro y sistema llevan el color de énfasis de las barras de título (Windows).
+    const bool accented = g_current == Scheme::System || g_current == Scheme::Light || g_current == Scheme::Dark;
+    if ((before != g_systemDark && g_current == Scheme::System) || (accented && titleBarColor() != g_titleBar))
+        apply(g_current);
 }
 
 Notifier* notifier()

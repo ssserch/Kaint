@@ -4076,6 +4076,10 @@ Do you want to replace them?</translation>
         <translation>none published</translation>
     </message>
     <message>
+        <source>Kaint se actualiza desde el gestor de software del sistema (Discover, GNOME Software o «flatpak update»).</source>
+        <translation>Kaint is updated from the system software manager (Discover, GNOME Software or “flatpak update”).</translation>
+    </message>
+    <message>
         <source>Copiar en el portapapeles</source>
         <translation>Copy to clipboard</translation>
     </message>

@@ -128,6 +128,7 @@ add_library(kaintui STATIC
     src/app/widgets/ColorWidgets.cpp
     src/app/widgets/CurvesEditor.cpp
     src/app/widgets/EffectControls.cpp
+    src/app/widgets/EncodedPreview.cpp
     src/app/widgets/FlowLayout.cpp
     src/app/widgets/FontChooser.cpp
     src/app/widgets/SliderBehavior.cpp

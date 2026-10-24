@@ -24,6 +24,7 @@
 #include "app/tools/ToolManager.h"
 #include "app/tools/TransformBox.h"
 #include "app/widgets/ColorWidgets.h"
+#include "app/widgets/EncodedPreview.h"
 #include "app/widgets/FontChooser.h"
 #include "app/widgets/WaveLabel.h"
 #include "core/CustomShapes.h"
@@ -1142,6 +1143,9 @@ int main(int argc, char** argv)
                     copies << b;
             }
             CHECK(skips.size() == 3 && copies.size() == 3);
+            // También aquí, la vista previa con su botón de reproducir.
+            auto* livePreview = dlg->findChild<EncodedPreview*>();
+            CHECK(livePreview && livePreview->findChild<QToolButton*>());
             if (skips.size() == 3)
                 skips[1]->click();
             settle();
@@ -1160,6 +1164,21 @@ int main(int argc, char** argv)
         settle();
         CHECK(player.animationFrames().size() == 3);
         player.close();
+    }
+
+    // El color propio del fondo del lienzo va por tema: el que había antes (uno solo) pasa al
+    // claro o al oscuro según su brillo, y el tema claro ya no se queda con un fondo oscuro.
+    {
+        QSettings s;
+        s.setValue(QStringLiteral("settings/canvasBorder"), QColor(0x2c, 0x2c, 0x2c));
+        AppSettings migrated = AppSettings::load();
+        CHECK(migrated.canvasBorderDark == QColor(0x2c, 0x2c, 0x2c) && !migrated.canvasBorderLight.isValid());
+        migrated.save();
+        CHECK(!s.contains(QStringLiteral("settings/canvasBorder")));
+        const AppSettings back = AppSettings::load();
+        CHECK(back.canvasBorderDark == QColor(0x2c, 0x2c, 0x2c) && !back.canvasBorderLight.isValid());
+        s.remove(QStringLiteral("settings/canvasBorderDark"));
+        s.remove(QStringLiteral("settings/canvasBorderLight"));
     }
 
     // Reconstruir el menú Efectos y luego deshabilitar la ventana no debe tocar acciones ya

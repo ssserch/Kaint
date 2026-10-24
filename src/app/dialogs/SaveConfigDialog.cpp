@@ -167,27 +167,8 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     }
 
     m_size = new QLabel(this);
-    m_preview = new QLabel(this);
-    m_preview->setAlignment(Qt::AlignCenter);
-    auto* scroll = new QScrollArea(this);
-    scroll->setWidget(m_preview);
-    scroll->setWidgetResizable(true);
-    scroll->setMinimumSize(360, 280);
-    m_zoom = new QComboBox(this);
-    m_zoom->addItem(tr("Ajustar"), 0);
-    for (int z : {100, 200, 400})
-        m_zoom->addItem(QStringLiteral("%1 %").arg(z), z);
-    connect(m_zoom, &QComboBox::currentIndexChanged, this, [this] { showFrame(m_previewIndex); });
-
-    // Reproducir el GIF en la vista previa (con sus duraciones y repeticiones).
-    m_play = new QToolButton(this);
-    m_play->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    m_play->setAutoRaise(true);
-    m_frameLabel = new QLabel(this);
-    m_playTimer.setSingleShot(true);
-    connect(&m_playTimer, &QTimer::timeout, this, &SaveConfigDialog::nextFrame);
-    connect(m_play, &QToolButton::clicked, this, [this] { setPlaying(!m_playTimer.isActive()); });
-    setPlaying(false);
+    m_previewPane = new EncodedPreview(path, this);
+    connect(m_previewPane, &EncodedPreview::statusChanged, m_size, &QLabel::setText);
 
     auto* side = new QVBoxLayout;
     side->addLayout(form);
@@ -196,21 +177,7 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
 
     auto* top = new QHBoxLayout;
     top->addLayout(side);
-    auto* right = new QVBoxLayout;
-    auto* zoomRow = new QHBoxLayout;
-    zoomRow->addWidget(new QLabel(tr("Vista previa:"), this));
-    zoomRow->addStretch();
-    zoomRow->addWidget(m_zoom);
-    right->addLayout(zoomRow);
-    right->addWidget(scroll, 1);
-    auto* playRow = new QHBoxLayout;
-    playRow->addWidget(m_play);
-    playRow->addWidget(m_frameLabel);
-    playRow->addStretch();
-    right->addLayout(playRow);
-    m_play->setVisible(ImageIO::isAnimation(path));
-    m_frameLabel->setVisible(ImageIO::isAnimation(path));
-    top->addLayout(right, 1);
+    top->addWidget(m_previewPane, 1);
 
     auto* box = okCancelButtons(this);
     auto* defaults = box->addButton(tr("Predeterminado"), QDialogButtonBox::ResetRole);
@@ -246,21 +213,11 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     layout->addLayout(top, 1);
     layout->addWidget(box);
     resize(720, 440);
-
-    m_debounce.setSingleShot(true);
-    m_debounce.setInterval(120);
-    connect(&m_debounce, &QTimer::timeout, this, &SaveConfigDialog::start);
     updateControls();
     schedule();
 }
 
-SaveConfigDialog::~SaveConfigDialog()
-{
-    m_playTimer.stop();
-    ++m_generation;
-    if (m_thread.joinable())
-        m_thread.join();
-}
+SaveConfigDialog::~SaveConfigDialog() = default;
 
 ImageIO::SaveOptions SaveConfigDialog::options() const
 {
@@ -283,15 +240,8 @@ ImageIO::SaveOptions SaveConfigDialog::options() const
         o.frameDelay = m_delay->value();
     if (m_loopForever)
         o.loops = m_loopForever->isChecked() ? 0 : (m_loops->value() == 0 ? -1 : m_loops->value());
-    if (m_advancedButton) {
-        o.quantization = m_advanced.quantization;
-        o.gifGlobalPalette = m_advanced.globalPalette;
-        o.gifStack = m_advanced.stack;
-        o.gifEffects = m_advanced.effects;
-        // Como en ezgif, el primero como fondo solo cuenta si no se apilan los fotogramas.
-        if (m_advanced.stack)
-            o.gifEffects.firstAsBackground = o.gifEffects.firstOnlyAsBackground = false;
-    }
+    if (m_advancedButton)
+        o = withAdvanced(o, m_advanced);
     if (!m_icoSizes.isEmpty()) {
         o.icoSizes.clear();
         for (QCheckBox* c : m_icoSizes)
@@ -301,18 +251,44 @@ ImageIO::SaveOptions SaveConfigDialog::options() const
     return o;
 }
 
+ImageIO::SaveOptions SaveConfigDialog::withAdvanced(ImageIO::SaveOptions o, const Advanced& a)
+{
+    o.quantization = a.quantization;
+    o.gifGlobalPalette = a.globalPalette;
+    o.gifStack = a.stack;
+    o.gifEffects = a.effects;
+    // Como en ezgif, el primero como fondo solo cuenta si no se apilan los fotogramas.
+    if (a.stack)
+        o.gifEffects.firstAsBackground = o.gifEffects.firstOnlyAsBackground = false;
+    return o;
+}
+
+QList<Gif::Frame> SaveConfigDialog::framesOf(const Advanced& a) const
+{
+    QList<Gif::Frame> frames;
+    for (const FrameEntry& e : a.entries)
+        if (!e.skip && e.source >= 0 && e.source < m_frames.size())
+            frames << Gif::Frame{m_frames[e.source].image, e.delayMs};
+    // Con todos omitidos se guarda al menos el primero.
+    if (frames.isEmpty() && !a.entries.isEmpty())
+        frames << Gif::Frame{m_frames.value(a.entries.first().source).image, a.entries.first().delayMs};
+    return frames;
+}
+
 QList<Gif::Frame> SaveConfigDialog::animationFrames() const
 {
     if (!m_animation || !m_animation->isChecked())
         return {};
-    QList<Gif::Frame> frames;
-    for (const FrameEntry& e : m_advanced.entries)
-        if (!e.skip && e.source >= 0 && e.source < m_frames.size())
-            frames << Gif::Frame{m_frames[e.source].image, e.delayMs};
-    // Con todos omitidos se guarda al menos el primero.
-    if (frames.isEmpty() && !m_advanced.entries.isEmpty())
-        frames << Gif::Frame{m_frames.value(m_advanced.entries.first().source).image, m_advanced.entries.first().delayMs};
-    return frames;
+    return framesOf(m_advanced);
+}
+
+EncodedPreview::Encoder SaveConfigDialog::encoder(const ImageIO::SaveOptions& options, const QList<Gif::Frame>& frames) const
+{
+    return [image = m_image, path = m_path, options, frames](QString* error) {
+        if (!frames.isEmpty())
+            return ImageIO::encodeAnimation(frames, options, error);
+        return ImageIO::encode(ImageIO::prepare(image, path, options), path, options, error);
+    };
 }
 
 SaveConfigDialog::Advanced SaveConfigDialog::defaultAdvanced() const
@@ -348,140 +324,16 @@ void SaveConfigDialog::updateControls()
 
 void SaveConfigDialog::schedule()
 {
-    m_size->setText(tr("Tamaño del archivo: calculando…"));
-    m_pending = true;
-    m_debounce.start();
-}
-
-void SaveConfigDialog::start()
-{
-    if (m_running || !m_pending)
-        return;
-    if (m_thread.joinable())
-        m_thread.join();
-    m_pending = false;
-    m_running = true;
-    const int generation = ++m_generation;
-    const QList<Gif::Frame> frames = animationFrames();
-    m_thread = std::thread([this, generation, image = m_image, path = m_path, opts = options(), frames]() mutable {
-        QString error;
-        QByteArray data;
-        if (!frames.isEmpty()) {
-            data = ImageIO::encodeAnimation(frames, opts, &error);
-        } else {
-            const QImage prepared = ImageIO::prepare(image, path, opts);
-            data = ImageIO::encode(prepared, path, opts, &error);
-        }
-        // Se vuelve a leer lo codificado: así la vista previa es exactamente el archivo (en el
-        // GIF, todos sus fotogramas para reproducirlo).
-        QList<Gif::Frame> decodedFrames;
-        QImage decoded;
-        if (!data.isEmpty() && ImageIO::isAnimation(path)) {
-            decodedFrames = Gif::decode(data).frames;
-        } else if (!data.isEmpty() && ImageIO::isIcon(path)) {
-            QBuffer buffer(&data);
-            QImageReader reader(&buffer, "ico");
-            for (int i = 0; i < std::max(1, reader.imageCount()); ++i) {
-                if (i > 0 && !reader.jumpToImage(i))
-                    break;
-                const QImage img = reader.read();
-                if (img.width() > decoded.width())
-                    decoded = img;
-            }
-        } else if (!data.isEmpty()) {
-            decoded.loadFromData(data);
-        }
-        if (decodedFrames.isEmpty() && !decoded.isNull())
-            decodedFrames << Gif::Frame{decoded, 100};
-        const qint64 bytes = data.size();
-        QMetaObject::invokeMethod(
-            this, [this, decodedFrames, bytes, error, generation] { onEncoded(decodedFrames, bytes, error, generation); },
-            Qt::QueuedConnection);
-    });
-}
-
-void SaveConfigDialog::onEncoded(const QList<Gif::Frame>& preview, qint64 bytes, const QString& error, int generation)
-{
-    if (generation != m_generation)
-        return;
-    m_running = false;
-    if (m_thread.joinable())
-        m_thread.join();
-    m_previewFrames = preview;
-    if (!error.isEmpty())
-        m_size->setText(tr("No se pudo codificar: %1").arg(error));
-    else
-        m_size->setText(tr("Tamaño del archivo: %1").arg(QLocale().formattedDataSize(bytes)));
-    m_previewIndex = std::clamp(m_previewIndex, 0, std::max(0, int(m_previewFrames.size()) - 1));
-    m_play->setEnabled(m_previewFrames.size() > 1);
-    if (m_previewFrames.size() < 2)
-        setPlaying(false);
-    showFrame(m_previewIndex);
-    if (m_pending && !m_debounce.isActive())
-        start();
-}
-
-void SaveConfigDialog::showFrame(int index)
-{
-    m_frameLabel->setText(m_previewFrames.size() > 1
-                              ? tr("Fotograma %1 de %2").arg(index + 1).arg(m_previewFrames.size())
-                              : QString());
-    if (index < 0 || index >= m_previewFrames.size())
-        return;
-    m_previewIndex = index;
-    const QImage& image = m_previewFrames[index].image;
-    const int zoom = m_zoom->currentData().toInt();
-    QSize s = image.size();
-    if (zoom == 0)
-        s = s.scaled(QSize(340, 260), Qt::KeepAspectRatio).boundedTo(image.size()).expandedTo(QSize(1, 1));
-    else
-        s = s * zoom / 100;
-    QPixmap pm(s);
-    pm.fill(Qt::transparent);
-    QPainter p(&pm);
-    p.fillRect(pm.rect(), QBrush(Raster::checkerboard(8)));
-    p.setRenderHint(QPainter::SmoothPixmapTransform, zoom == 0);
-    p.drawImage(pm.rect(), image);
-    p.end();
-    m_preview->setPixmap(pm);
-}
-
-void SaveConfigDialog::setPlaying(bool playing)
-{
-    if (playing && m_previewFrames.size() > 1) {
-        // Las repeticiones del archivo: sin fin, una vez o tantas más.
-        const int loops = options().loops;
-        m_playsLeft = loops == 0 ? -1 : (loops < 0 ? 1 : loops + 1);
-        if (m_previewIndex >= m_previewFrames.size() - 1)
-            showFrame(0);
-        m_playTimer.start(std::max(Gif::kMinDelayMs, m_previewFrames[m_previewIndex].delayMs));
-    } else {
-        m_playTimer.stop();
-    }
-    const bool on = m_playTimer.isActive();
-    m_play->setIcon(Icons::theme({on ? "media-playback-pause" : "media-playback-start"}));
-    m_play->setText(on ? tr("Pausa") : tr("Reproducir"));
-}
-
-void SaveConfigDialog::nextFrame()
-{
-    if (m_previewFrames.size() < 2)
-        return setPlaying(false);
-    int next = m_previewIndex + 1;
-    if (next >= m_previewFrames.size()) {
-        if (m_playsLeft > 0 && --m_playsLeft == 0)
-            return setPlaying(false);
-        next = 0;
-    }
-    showFrame(next);
-    m_playTimer.start(std::max(Gif::kMinDelayMs, m_previewFrames[next].delayMs));
+    const ImageIO::SaveOptions o = options();
+    m_previewPane->request(encoder(o, animationFrames()), o.loops);
 }
 
 void SaveConfigDialog::showAdvanced()
 {
     // Como el editor de GIF de ezgif: los fotogramas uno por uno (duración, omitir, copiar),
-    // rangos, opciones del GIF y efectos. Se edita una copia; Aceptar la aplica.
-    setPlaying(false);
+    // rangos, opciones del GIF y efectos, con su vista previa. Se edita una copia; Aceptar la
+    // aplica.
+    m_previewPane->setPlaying(false);
     QDialog dlg(this);
     dlg.setWindowTitle(tr("Configuración avanzada del GIF"));
     dlg.setWindowIcon(Icons::theme({"configure", "settings-configure"}));
@@ -642,6 +494,18 @@ void SaveConfigDialog::showAdvanced()
     auto* firstOnly = new QCheckBox(tr("Duración 0 para el primer fotograma (no mostrarlo solo)"), zeroFrame);
     zeroLayout->addWidget(firstOnly);
 
+    // Vista previa con lo que hay en la ventana (aún sin aplicar), para ir viendo cada cambio.
+    auto* preview = new EncodedPreview(m_path, &dlg);
+    auto* status = new QLabel(&dlg);
+    connect(preview, &EncodedPreview::statusChanged, status, &QLabel::setText);
+    auto refresh = [&] {
+        ImageIO::SaveOptions o = withAdvanced(options(), adv);
+        o.frameDelay = allDelay;
+        const int count = plays.toInt();
+        o.loops = plays.isEmpty() ? 0 : (count <= 1 ? -1 : count - 1);
+        preview->request(encoder(o, framesOf(adv)), o.loops);
+    };
+
     // Tarjeta de cada fotograma (se rehacen al omitir, copiar o cambiar la duración de todos).
     std::function<void()> rebuild = [&] {
         const int scroll = framesScroll->horizontalScrollBar()->value();
@@ -678,7 +542,10 @@ void SaveConfigDialog::showAdvanced()
             delay->setSuffix(tr(" ms"));
             delay->setValue(e.delayMs > 0 ? e.delayMs : allDelay);
             delay->setEnabled(!e.skip);
-            connect(delay, &QSpinBox::valueChanged, &dlg, [&adv, i](int ms) { adv.entries[i].delayMs = ms; });
+            connect(delay, &QSpinBox::valueChanged, &dlg, [&adv, &refresh, i](int ms) {
+                adv.entries[i].delayMs = ms;
+                refresh();
+            });
             auto* delayRow = new QHBoxLayout;
             delayRow->addWidget(new QLabel(tr("Duración:"), card));
             delayRow->addWidget(delay);
@@ -713,6 +580,7 @@ void SaveConfigDialog::showAdvanced()
         to->setRange(1, n);
         every->setRange(2, std::max(2, n));
         QTimer::singleShot(0, framesScroll, [framesScroll, scroll] { framesScroll->horizontalScrollBar()->setValue(scroll); });
+        refresh();
     };
     auto updateEffects = [&] {
         fadeFrame->setVisible(crossfade->isChecked());
@@ -758,25 +626,49 @@ void SaveConfigDialog::showAdvanced()
         updateFps();
         rebuild();
     });
-    connect(loopsEdit, &QLineEdit::textChanged, &dlg, [&](const QString& text) { plays = text; });
-    connect(globalPalette, &QCheckBox::toggled, &dlg, [&](bool on) { adv.globalPalette = on; });
-    connect(quantization, &QComboBox::currentIndexChanged, &dlg, [&] { adv.quantization = quantization->currentData().toInt(); });
+    connect(loopsEdit, &QLineEdit::textChanged, &dlg, [&](const QString& text) {
+        plays = text;
+        refresh();
+    });
+    connect(globalPalette, &QCheckBox::toggled, &dlg, [&](bool on) {
+        adv.globalPalette = on;
+        refresh();
+    });
+    connect(quantization, &QComboBox::currentIndexChanged, &dlg, [&] {
+        adv.quantization = quantization->currentData().toInt();
+        refresh();
+    });
     connect(crossfade, &QCheckBox::toggled, &dlg, [&](bool on) {
         adv.effects.crossfade = on;
         updateEffects();
+        refresh();
     });
-    connect(fadeDelay, &QSpinBox::valueChanged, &dlg, [&](int ms) { adv.effects.fadeDelayMs = ms; });
-    connect(fadeCount, &QSpinBox::valueChanged, &dlg, [&](int n) { adv.effects.fadeFrames = n; });
-    connect(fadeLast, &QCheckBox::toggled, &dlg, [&](bool on) { adv.effects.fadeLastToFirst = !on; });
+    connect(fadeDelay, &QSpinBox::valueChanged, &dlg, [&](int ms) {
+        adv.effects.fadeDelayMs = ms;
+        refresh();
+    });
+    connect(fadeCount, &QSpinBox::valueChanged, &dlg, [&](int n) {
+        adv.effects.fadeFrames = n;
+        refresh();
+    });
+    connect(fadeLast, &QCheckBox::toggled, &dlg, [&](bool on) {
+        adv.effects.fadeLastToFirst = !on;
+        refresh();
+    });
     connect(noStack, &QCheckBox::toggled, &dlg, [&](bool on) {
         adv.stack = !on;
         updateEffects();
+        refresh();
     });
     connect(firstBackground, &QCheckBox::toggled, &dlg, [&](bool on) {
         adv.effects.firstAsBackground = on;
         updateEffects();
+        refresh();
     });
-    connect(firstOnly, &QCheckBox::toggled, &dlg, [&](bool on) { adv.effects.firstOnlyAsBackground = on; });
+    connect(firstOnly, &QCheckBox::toggled, &dlg, [&](bool on) {
+        adv.effects.firstOnlyAsBackground = on;
+        refresh();
+    });
 
     auto* box = okCancelButtons(&dlg);
     auto* defaults = box->addButton(tr("Predeterminado"), QDialogButtonBox::ResetRole);
@@ -798,10 +690,16 @@ void SaveConfigDialog::showAdvanced()
     page->setWidget(content);
     page->setWidgetResizable(true);
     page->setFrameShape(QFrame::NoFrame);
+    auto* side = new QVBoxLayout;
+    side->addWidget(preview, 1);
+    side->addWidget(status);
+    auto* columns = new QHBoxLayout;
+    columns->addWidget(page, 1);
+    columns->addLayout(side);
     auto* outer = new QVBoxLayout(&dlg);
-    outer->addWidget(page, 1);
+    outer->addLayout(columns, 1);
     outer->addWidget(box);
-    dlg.resize(760, 720);
+    dlg.resize(1160, 720);
     load();
     if (dlg.exec() != QDialog::Accepted)
         return;

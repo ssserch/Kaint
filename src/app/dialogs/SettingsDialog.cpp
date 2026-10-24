@@ -78,7 +78,13 @@ AppSettings AppSettings::load()
     a.unit = get("unit", a.unit);
     a.rulers = get("rulers", a.rulers);
     a.dropShadow = get("dropShadow", a.dropShadow);
-    a.canvasBorder = s.value(QStringLiteral("canvasBorder"), QColor()).value<QColor>();
+    a.canvasBorderLight = s.value(QStringLiteral("canvasBorderLight"), QColor()).value<QColor>();
+    a.canvasBorderDark = s.value(QStringLiteral("canvasBorderDark"), QColor()).value<QColor>();
+    // Antes había un solo color para todos los temas: pasa al tema que le corresponde por su
+    // brillo (así un fondo oscuro ya no se queda en el tema claro).
+    const QColor old = s.value(QStringLiteral("canvasBorder"), QColor()).value<QColor>();
+    if (old.isValid() && !s.contains(QStringLiteral("canvasBorderLight")) && !s.contains(QStringLiteral("canvasBorderDark")))
+        (old.lightness() < 128 ? a.canvasBorderDark : a.canvasBorderLight) = old;
     a.checkerBrightness = std::clamp(get("checkerboardBrightness", a.checkerBrightness), 0, 255);
     a.startTool = get("startTool", a.startTool);
     a.hideMoveBox = get("hideMoveBox", a.hideMoveBox);
@@ -116,7 +122,9 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("unit"), unit);
     s.setValue(QStringLiteral("rulers"), rulers);
     s.setValue(QStringLiteral("dropShadow"), dropShadow);
-    s.setValue(QStringLiteral("canvasBorder"), canvasBorder);
+    s.setValue(QStringLiteral("canvasBorderLight"), canvasBorderLight);
+    s.setValue(QStringLiteral("canvasBorderDark"), canvasBorderDark);
+    s.remove(QStringLiteral("canvasBorder"));
     s.setValue(QStringLiteral("checkerboardBrightness"), checkerBrightness);
     s.remove(QStringLiteral("checkerBrightness"));
     s.setValue(QStringLiteral("startTool"), startTool);
@@ -393,23 +401,31 @@ QWidget* SettingsDialog::createCanvasPage()
     });
     page.layout->addWidget(shadow);
 
-    auto* borderRow = new QHBoxLayout;
-    auto* custom = new QCheckBox(tr("Usar un color personalizado para el borde del lienzo"), page.widget);
-    custom->setChecked(m_settings.canvasBorder.isValid());
-    auto* border = new ColorButton(page.widget);
-    border->setColor(m_settings.canvasBorder.isValid() ? m_settings.canvasBorder : palette().color(QPalette::Dark));
-    border->setEnabled(custom->isChecked());
-    borderRow->addWidget(custom);
-    borderRow->addWidget(border);
-    borderRow->addStretch();
-    page.layout->addLayout(borderRow);
-    auto applyBorder = [this, custom, border] {
-        m_settings.canvasBorder = custom->isChecked() ? border->color() : QColor();
+    // Color del fondo alrededor de la imagen, por separado para los temas claros y los oscuros
+    // (al cambiar de tema se usa el suyo).
+    auto borderRow = [&](const QString& text, QColor AppSettings::*field, bool dark) {
+        auto* row = new QHBoxLayout;
+        auto* custom = new QCheckBox(text, page.widget);
+        custom->setChecked((m_settings.*field).isValid());
+        auto* border = new ColorButton(page.widget);
+        border->setColor((m_settings.*field).isValid() ? m_settings.*field : Theme::preset(dark).workspace);
         border->setEnabled(custom->isChecked());
-        changed();
+        row->addWidget(custom);
+        row->addWidget(border);
+        row->addStretch();
+        page.layout->addLayout(row);
+        auto apply = [this, custom, border, field] {
+            m_settings.*field = custom->isChecked() ? border->color() : QColor();
+            border->setEnabled(custom->isChecked());
+            changed();
+        };
+        connect(custom, &QCheckBox::toggled, this, apply);
+        connect(border, &ColorButton::colorChanged, this, apply);
     };
-    connect(custom, &QCheckBox::toggled, this, applyBorder);
-    connect(border, &ColorButton::colorChanged, this, applyBorder);
+    borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas claros"), &AppSettings::canvasBorderLight,
+              false);
+    borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas oscuros"), &AppSettings::canvasBorderDark,
+              true);
 
     // Brillo del tablero de transparencia (0..1 como en Paint.NET).
     page.layout->addWidget(new QLabel(tr("Brillo de tablero de ajedrez de transparencia"), page.widget));

@@ -35,7 +35,10 @@ struct AppSettings {
     int unit = 0;
     bool rulers = false;
     bool dropShadow = true;
-    QColor canvasBorder;
+    // Color propio del fondo alrededor de la imagen, uno para los temas claros y otro para los
+    // oscuros (no válido: el del tema).
+    QColor canvasBorderLight;
+    QColor canvasBorderDark;
     int checkerBrightness = 191;
     int startTool = -1;
     // Herramientas Mover: ocultar contorno y tiradores al arrastrar; pegar y mover reemplazando

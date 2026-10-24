@@ -488,6 +488,41 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>EncodedPreview</name>
+    <message>
+        <source>Ajustar</source>
+        <translation>Fit</translation>
+    </message>
+    <message>
+        <source>Vista previa:</source>
+        <translation>Preview:</translation>
+    </message>
+    <message>
+        <source>Tamaño del archivo: calculando…</source>
+        <translation>File size: calculating…</translation>
+    </message>
+    <message>
+        <source>Tamaño del archivo: %1</source>
+        <translation>File size: %1</translation>
+    </message>
+    <message>
+        <source>No se pudo codificar: %1</source>
+        <translation>Could not encode: %1</translation>
+    </message>
+    <message>
+        <source>Fotograma %1 de %2</source>
+        <translation>Frame %1 of %2</translation>
+    </message>
+    <message>
+        <source>Pausa</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>Reproducir</source>
+        <translation>Play</translation>
+    </message>
+</context>
+<context>
     <name>EraserTool</name>
     <message>
         <source>Goma de borrar</source>
@@ -3561,40 +3596,8 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Sizes:</translation>
     </message>
     <message>
-        <source>Ajustar</source>
-        <translation>Fit</translation>
-    </message>
-    <message>
-        <source>Vista previa:</source>
-        <translation>Preview:</translation>
-    </message>
-    <message>
         <source>Predeterminado</source>
         <translation>Default</translation>
-    </message>
-    <message>
-        <source>Tamaño del archivo: calculando…</source>
-        <translation>File size: calculating…</translation>
-    </message>
-    <message>
-        <source>No se pudo codificar: %1</source>
-        <translation>Could not encode: %1</translation>
-    </message>
-    <message>
-        <source>Tamaño del archivo: %1</source>
-        <translation>File size: %1</translation>
-    </message>
-    <message>
-        <source>Fotograma %1 de %2</source>
-        <translation>Frame %1 of %2</translation>
-    </message>
-    <message>
-        <source>Pausa</source>
-        <translation>Pause</translation>
-    </message>
-    <message>
-        <source>Reproducir</source>
-        <translation>Play</translation>
     </message>
     <message>
         <source>Configuración avanzada del GIF</source>
@@ -3967,10 +3970,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Cast a shadow under the canvas</translation>
     </message>
     <message>
-        <source>Usar un color personalizado para el borde del lienzo</source>
-        <translation>Use a custom color for the canvas border</translation>
-    </message>
-    <message>
         <source>Brillo de tablero de ajedrez de transparencia</source>
         <translation>Transparency checkerboard brightness</translation>
     </message>
@@ -4274,6 +4273,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Versión instalada: %1</source>
         <translation>Installed version: %1</translation>
+    </message>
+    <message>
+        <source>Usar un color personalizado para el fondo del lienzo con los temas claros</source>
+        <translation>Use a custom canvas background color with light themes</translation>
+    </message>
+    <message>
+        <source>Usar un color personalizado para el fondo del lienzo con los temas oscuros</source>
+        <translation>Use a custom canvas background color with dark themes</translation>
     </message>
     <message>
         <source>Las versiones nuevas se publican en %1</source>

@@ -2899,8 +2899,16 @@ void MainWindow::changeEvent(QEvent* e)
     QMainWindow::changeEvent(e);
 }
 
+void MainWindow::applyCanvasAppearance()
+{
+    // El color propio del fondo es el del brillo del tema (también al cambiar el del sistema).
+    m_canvas->setAppearance(m_settings.dropShadow, Theme::isDark() ? m_settings.canvasBorderDark : m_settings.canvasBorderLight,
+                            m_settings.checkerBrightness);
+}
+
 void MainWindow::applyThemeLayout()
 {
+    applyCanvasAppearance();
     const Theme::Spec spec = Theme::active();
     Theme::styleTitleBar(this, TopRow::bandColor());
     if (QWidget* top = menuWidget())
@@ -2923,7 +2931,6 @@ void MainWindow::applySettings()
     }
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
     m_canvas->setRulersVisible(m_settings.rulers);
-    m_canvas->setAppearance(m_settings.dropShadow, m_settings.canvasBorder, m_settings.checkerBrightness);
     m_canvas->setOverscroll(m_settings.overscroll);
     m_canvas->setAutoScroll(m_settings.autoScroll);
     ToolPreferences preferences;
@@ -2933,6 +2940,7 @@ void MainWindow::applySettings()
     m_canvas->viewport()->update();
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme))
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
+    applyCanvasAppearance();
     // Los efectos de menús y listas de Qt son ventanas aparte: el de las listas desplegables
     // se ve primero en otro sitio y salta a su lugar (y en Wayland, todos).
     const bool wayland = QGuiApplication::platformName().startsWith(QLatin1String("wayland"));

@@ -171,6 +171,7 @@ private:
     void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
     void applySettings();
     void updateToolIconColors();
+    void applyCanvasAppearance();
     void showImageList();
     void syncLayerWithHistory();
     void applyThemeLayout();

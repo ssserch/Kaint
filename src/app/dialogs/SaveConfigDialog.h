@@ -1,23 +1,17 @@
 #pragma once
 
+#include "app/widgets/EncodedPreview.h"
 #include "core/ImageIO.h"
 
 #include <QDialog>
 #include <QImage>
-#include <QTimer>
-
-#include <atomic>
-#include <memory>
-#include <thread>
 
 class BarSlider;
 class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
-class QScrollArea;
 class QSpinBox;
-class QToolButton;
 
 // "Configuración de guardado" de Paint.NET: opciones del formato (calidad, profundidad de
 // bits, tramado, umbral de transparencia) con una vista previa del resultado y el tamaño que
@@ -54,13 +48,14 @@ private:
     };
 
     void schedule();
-    void start();
-    void onEncoded(const QList<Gif::Frame>& preview, qint64 bytes, const QString& error, int generation);
-    void showFrame(int index);
-    void setPlaying(bool playing);
-    void nextFrame();
     void updateControls();
     void showAdvanced();
+    // Los fotogramas que quedan con 'a' (sin omitidos, con copias y duraciones).
+    QList<Gif::Frame> framesOf(const Advanced& a) const;
+    // 'o' con las opciones del GIF de 'a' (paleta, apilado, efectos).
+    static ImageIO::SaveOptions withAdvanced(ImageIO::SaveOptions o, const Advanced& a);
+    // Lo que codifica la vista previa con esas opciones y fotogramas (vacíos: la imagen acoplada).
+    EncodedPreview::Encoder encoder(const ImageIO::SaveOptions& options, const QList<Gif::Frame>& frames) const;
     Advanced defaultAdvanced() const;
 
     QImage m_image;
@@ -81,17 +76,5 @@ private:
     Advanced m_advanced;
     QPushButton* m_advancedButton = nullptr;
     QLabel* m_size;
-    QLabel* m_preview;
-    QComboBox* m_zoom;
-    QToolButton* m_play = nullptr;
-    QLabel* m_frameLabel = nullptr;
-    QTimer m_debounce;
-    QTimer m_playTimer;
-    std::thread m_thread;
-    int m_generation = 0;
-    bool m_running = false;
-    bool m_pending = false;
-    QList<Gif::Frame> m_previewFrames;
-    int m_previewIndex = 0;
-    int m_playsLeft = 0;
+    EncodedPreview* m_previewPane;
 };

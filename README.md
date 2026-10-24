@@ -98,8 +98,7 @@ The Flatpak and the AppImage run on other distributions too.
 <details open>
 <summary><b>📦 Flatpak (any distribution)</b></summary>
 
-Kaint is on its way to [Flathub](https://flathub.org) as `io.github.ssserch.Kaint`. Until it's
-there, build and install the Flatpak from the source code (needs `flatpak-builder`):
+Build and install the Flatpak from the source code (needs `flatpak-builder`):
 
 ```bash
 ./build.sh --flatpak        # builds and installs io.github.ssserch.Kaint for your user

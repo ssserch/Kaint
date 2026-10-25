@@ -24,6 +24,9 @@ DEB_REQUIRED=(build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools 
               qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev
               breeze-icon-theme)
 DEB_OPTIONAL=(qt6-image-formats-plugins kimageformat6-plugins qt6-translations-l10n mono-devel libgdiplus)
+# --deb: CPack calcula las dependencias del paquete con file y dpkg-shlibdeps
+ARCH_DEB_TOOLS=(file dpkg)
+DEB_DEB_TOOLS=(file dpkg-dev)
 
 # --- Herramientas del AppImage (versiones fijas, comprobadas con su SHA-256) -------------------
 LINUXDEPLOY_URL=https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1
@@ -95,6 +98,12 @@ check_packages() {
         elif [[ " ${optional_missing[*]} " == *" libgdiplus "* ]]; then
             echo "  Sin libgdiplus muchos complementos de Paint.NET no pueden cargarse (usan System.Drawing)."
         fi
+        # El .deb se reparte: mejor decidir antes de crearlo sin esas funciones.
+        if (( DO_DEB )) && [[ -t 0 ]]; then
+            local answer
+            read -r -p "¿Crear el .deb sin ellos? [s/N] " answer
+            [[ "$answer" == [sSyY]* ]] || { echo "Cancelado."; exit 1; }
+        fi
     fi
 }
 pacman_installed() { pacman -Qq "$1" >/dev/null 2>&1; }
@@ -105,8 +114,10 @@ if (( DO_FLATPAK )); then
 elif [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
     echo "${c_yellow}CMAKE_PREFIX_PATH definido (Qt propio): se omite la comprobación de paquetes.${c_reset}"
 elif command -v pacman >/dev/null 2>&1; then
+    (( DO_DEB )) && ARCH_REQUIRED+=("${ARCH_DEB_TOOLS[@]}")
     check_packages pacman_installed "sudo pacman -S --needed" ARCH_REQUIRED ARCH_OPTIONAL
 elif command -v dpkg-query >/dev/null 2>&1; then
+    (( DO_DEB )) && DEB_REQUIRED+=("${DEB_DEB_TOOLS[@]}")
     check_packages dpkg_installed "sudo apt install" DEB_REQUIRED DEB_OPTIONAL
 else
     echo "${c_yellow}No se encontró pacman ni apt; se omite la comprobación de dependencias.${c_reset}"

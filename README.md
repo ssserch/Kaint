@@ -155,7 +155,7 @@ sudo pacman -U build-pkg/kaint-*.pkg.tar.zst
 
 ```bash
 sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-    qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev breeze-icon-theme
+    qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev breeze-icon-theme file
 ./build.sh --deb            # builds build-deb/kaint_<version>_amd64.deb
 sudo apt install ./build-deb/kaint_*_amd64.deb
 ```

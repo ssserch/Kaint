@@ -70,25 +70,7 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     m_paletteMenu = new QToolButton(this);
     m_paletteMenu->setAutoRaise(true);
     m_paletteMenu->setPopupMode(QToolButton::InstantPopup);
-    {
-        // Como en Paint.NET: nueve colores en un marco blanco.
-        QPixmap pm(32, 32);
-        pm.fill(Qt::transparent);
-        QPainter p(&pm);
-        p.setPen(QPen(QColor(60, 60, 64), 2));
-        p.setBrush(Qt::white);
-        p.drawRect(QRectF(2, 2, 27, 27));
-        const QColor grid[] = {QColor(220, 70, 50),  QColor(130, 50, 160), QColor(60, 70, 180),
-                               QColor(240, 140, 30), Qt::white,             QColor(60, 140, 240),
-                               QColor(250, 200, 40), QColor(100, 180, 70),  QColor(30, 140, 110)};
-        p.setPen(Qt::NoPen);
-        for (int i = 0; i < 9; ++i) {
-            p.setBrush(grid[i]);
-            p.drawRect(QRectF(5 + (i % 3) * 7.3, 5 + (i / 3) * 7.3, 7.3, 7.3));
-        }
-        p.end();
-        m_paletteMenu->setIcon(QIcon(pm));
-    }
+    m_paletteMenu->setIcon(Icons::theme({"palette"}));
     m_paletteMenu->setToolTip(tr("Paletas"));
     auto* paletteMenu = new QMenu(m_paletteMenu);
     m_paletteMenu->setMenu(paletteMenu);

@@ -1,5 +1,6 @@
 #include "app/panels/LayersPanel.h"
 
+#include "app/Animations.h"
 #include "core/Document.h"
 #include "core/Raster.h"
 
@@ -13,6 +14,7 @@
 #include <QStyledItemDelegate>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QVariantAnimation>
 
 #include <functional>
 
@@ -23,6 +25,8 @@ constexpr int kThumb = 42;
 constexpr int VisibleRole = Qt::UserRole + 1;
 constexpr int ThumbRole = Qt::UserRole + 2;
 constexpr int LinkedRole = Qt::UserRole + 3;
+// Desplazamiento vertical de la fila mientras se desliza a su sitio nuevo.
+constexpr int OffsetRole = Qt::UserRole + 4;
 
 class LayerDelegate : public QStyledItemDelegate {
 public:
@@ -36,8 +40,10 @@ public:
 
     QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override { return {180, kRowHeight}; }
 
-    void paint(QPainter* p, const QStyleOptionViewItem& option, const QModelIndex& index) const override
+    void paint(QPainter* p, const QStyleOptionViewItem& optionIn, const QModelIndex& index) const override
     {
+        QStyleOptionViewItem option(optionIn);
+        option.rect.translate(0, qRound(index.data(OffsetRole).toReal()));
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
         const QWidget* w = option.widget;
@@ -262,6 +268,9 @@ void LayersPanel::setDocument(Document* doc)
 {
     if (m_doc)
         disconnect(m_doc, nullptr, this, nullptr);
+    // Al cambiar de imagen no se anima nada.
+    if (doc != m_doc)
+        m_rowLayers.clear();
     m_doc = doc;
     if (m_doc) {
         connect(m_doc, &Document::layersChanged, this, &LayersPanel::rebuild);
@@ -285,10 +294,12 @@ void LayersPanel::rebuild()
     const bool sameCount = m_doc && m_list->count() == m_doc->layerCount();
     m_list->clear();
     m_dirty.clear();
+    const QList<const Layer*> before = std::exchange(m_rowLayers, {});
     if (!m_doc)
         return;
     for (int row = 0; row < m_doc->layerCount(); ++row) {
         const Layer* l = m_doc->layer(layerForRow(row));
+        m_rowLayers.append(l);
         auto* item = new QListWidgetItem(l->props.name, m_list);
         item->setData(VisibleRole, l->props.visible);
         item->setToolTip(tr("%1\nOpacidad: %2 · Fusión: %3")
@@ -304,6 +315,32 @@ void LayersPanel::rebuild()
         m_list->doItemsLayout();
         m_list->verticalScrollBar()->setValue(scroll);
     }
+    slideMovedRows(before);
+}
+
+void LayersPanel::slideMovedRows(const QList<const Layer*>& before)
+{
+    // Como la lista de capas de paint.js: las que cambian de sitio (al subirlas, bajarlas,
+    // arrastrarlas o al añadir y quitar otras) se deslizan desde donde estaban.
+    if (m_slide)
+        m_slide->stop();
+    if (before.isEmpty() || m_list->count() == 0 || !Animations::enabled())
+        return;
+    const int rowHeight = m_list->visualRect(m_list->model()->index(0, 0)).height();
+    QHash<int, qreal> start;
+    for (int row = 0; row < m_rowLayers.size(); ++row) {
+        const int old = int(before.indexOf(m_rowLayers[row]));
+        if (old >= 0 && old != row)
+            start.insert(row, qreal(old - row) * rowHeight);
+    }
+    if (start.isEmpty())
+        return;
+    m_slide = Animations::run(this, 1.0, 0.0, Animations::kListMove, Animations::listMoveCurve(), [this, start](qreal v) {
+        for (auto it = start.constBegin(); it != start.constEnd(); ++it)
+            if (QListWidgetItem* item = m_list->item(it.key()))
+                item->setData(OffsetRole, it.value() * v);
+        m_list->viewport()->update();
+    });
 }
 
 void LayersPanel::syncSelection()

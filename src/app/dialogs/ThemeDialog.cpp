@@ -448,7 +448,7 @@ ThemeDialog::ColorRow ThemeDialog::addColor(const Theme::ColorRole& role, QWidge
 {
     ColorRow row{role.color, new QLabel(QCoreApplication::translate("Theme", role.label), parent), new ColorButton(parent),
                  new QToolButton(parent)};
-    row.reset->setIcon(Icons::theme({"edit-undo", "edit-reset"}));
+    row.reset->setIcon(Icons::theme({"edit-reset", "edit-undo"}));
     row.reset->setToolTip(tr("Restablecer"));
     row.reset->setAutoRaise(true);
     const auto member = role.color;

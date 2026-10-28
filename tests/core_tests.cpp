@@ -1276,6 +1276,20 @@ static void testPackaging()
     const QString text = QString::fromUtf8(manifest.readAll());
     CHECK(text.contains(QStringLiteral("\nid: ") + id + QLatin1Char('\n')));
     CHECK(text.contains(QStringLiteral("tag: v" KAINT_VERSION "\n")));
+
+    // Windows: el instalador (build.bat --setup) y build.bat --install usan la misma entrada de
+    // "Aplicaciones instaladas", y el instalador deja su desinstalador.
+    QFile nsis(QStringLiteral(KAINT_SOURCE_DIR "/packaging/windows/kaint.nsi"));
+    QFile bat(QStringLiteral(KAINT_SOURCE_DIR "/build.bat"));
+    CHECK(nsis.open(QIODevice::ReadOnly | QIODevice::Text) && bat.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString script = QString::fromUtf8(nsis.readAll());
+    const QString batch = QString::fromUtf8(bat.readAll());
+    const QString key = QStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Kaint");
+    CHECK(script.contains(key) && batch.contains(QStringLiteral("HKCU\\") + key));
+    CHECK(script.contains(QStringLiteral("WriteUninstaller \"$INSTDIR\\Uninstall.exe\"")));
+    CHECK(script.contains(QStringLiteral("\"UninstallString\""))
+          && script.contains(QStringLiteral("DeleteRegKey HKCU \"${UNINSTALL_KEY}\"")));
+    CHECK(batch.contains(QStringLiteral("--setup")) && batch.contains(QStringLiteral("packaging\\windows\\kaint.nsi")));
 }
 
 int main(int argc, char** argv)

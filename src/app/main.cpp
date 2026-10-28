@@ -1,3 +1,4 @@
+#include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Icons.h"
 #include "app/MainWindow.h"
@@ -103,6 +104,7 @@ int main(int argc, char** argv)
     QGuiApplication::setDesktopFileName(QStringLiteral(KAINT_APP_ID));
 
     Icons::setupTheme();
+    Animations::install();
     QImageReader::setAllocationLimit(4096);
 
     // Idioma: los textos del código están en español; el inglés (el predeterminado) es una

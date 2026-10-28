@@ -42,7 +42,7 @@ private:
     bool insideSelection(QPoint pixel) const;
 
     LayerEdit m_edit;
-    StepRecorder m_steps{ToolId::PaintBucket, QStringLiteral("fill-color")};
+    StepRecorder m_steps{ToolId::PaintBucket, QStringLiteral("paintbucket")};
     QImage m_sample;
     QPoint m_seed;
     bool m_secondary = false;

@@ -398,7 +398,7 @@ void GradientTool::pushStep()
         delete cmd;
         return;
     }
-    HistoryIcons::registerIcon(text, QStringLiteral("color-gradient"));
+    HistoryIcons::registerIcon(text, QStringLiteral("gradient"));
     m_pushing = true;
     doc->undoStack()->push(cmd);
     m_pushing = false;
@@ -481,7 +481,7 @@ void GradientTool::finish()
         m_edit.cancel();
     } else {
         const QString text = tr("Finalizar degradado");
-        HistoryIcons::registerIcon(text, QStringLiteral("color-gradient"));
+        HistoryIcons::registerIcon(text, QStringLiteral("gradient"));
         m_pushing = true;
         m_edit.document()->undoStack()->push(new QUndoCommand(text));
         m_pushing = false;

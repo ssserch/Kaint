@@ -1,5 +1,6 @@
 #include "app/Canvas.h"
 
+#include "app/Icons.h"
 #include "app/Theme.h"
 #include "app/tools/Tool.h"
 #include "core/Document.h"
@@ -54,11 +55,16 @@ Canvas::Canvas(QWidget* parent)
     connect(&m_autoScrollTimer, &QTimer::timeout, this, &Canvas::autoScrollStep);
 
     connect(&m_antsTimer, &QTimer::timeout, this, [this] {
-        if (!m_doc || m_doc->selection().isEmpty()) {
+        const bool selection = m_doc && !m_doc->selection().isEmpty();
+        if (!selection && !m_overlayAnts) {
             m_antsTimer.stop();
             return;
         }
         m_antsOffset = (m_antsOffset + 1) % 8;
+        if (m_overlayAnts) {
+            viewport()->update();
+            return;
+        }
         const QRect r = imageToView(QRectF(m_doc->selection().bounds())).toAlignedRect().adjusted(-2, -2, 2, 2);
         viewport()->update(r.intersected(viewport()->rect()));
     });
@@ -180,13 +186,19 @@ void Canvas::onSizeChanged()
 
 void Canvas::onSelectionChanged()
 {
-    if (m_doc && !m_doc->selection().isEmpty()) {
+    if ((m_doc && !m_doc->selection().isEmpty()) || m_overlayAnts) {
         if (!m_antsTimer.isActive())
             m_antsTimer.start(120);
     } else {
         m_antsTimer.stop();
     }
     viewport()->update();
+}
+
+void Canvas::setOverlayAnts(bool on)
+{
+    m_overlayAnts = on;
+    onSelectionChanged();
 }
 
 // ---------------------------------------------------------------------------
@@ -449,9 +461,9 @@ void Canvas::updateOverlay()
 void Canvas::updateCursor()
 {
     if (m_panning)
-        viewport()->setCursor(Qt::ClosedHandCursor);
+        viewport()->setCursor(Icons::handCursor(true));
     else if (m_spaceDown)
-        viewport()->setCursor(Qt::OpenHandCursor);
+        viewport()->setCursor(Icons::handCursor(false));
     else
         viewport()->setCursor(m_tool && m_doc ? m_tool->cursor() : QCursor(Qt::ArrowCursor));
 }
@@ -604,17 +616,7 @@ void Canvas::drawSelection(QPainter& p) const
     black.setDashPattern({4, 4});
     black.setDashOffset(m_antsOffset);
     if (sel.isRectangular() && !t.isRotating()) {
-        // Rectángulo: líneas nítidas en píxeles enteros de la pantalla, con el mismo grosor y
-        // trazos con cualquier zum (suavizadas salían grises y borrosas).
-        const QRectF v = t.mapRect(sel.path().boundingRect());
-        const QRect r(QPoint(int(std::lround(v.left())), int(std::lround(v.top()))),
-                      QPoint(int(std::lround(v.right())), int(std::lround(v.bottom()))));
-        p.setRenderHint(QPainter::Antialiasing, false);
-        p.setBrush(Qt::NoBrush);
-        p.setPen(white);
-        p.drawRect(r);
-        p.setPen(black);
-        p.drawRect(r);
+        drawMarchingRect(p, sel.path().boundingRect(), false);
     } else if (sel.isPathBased()) {
         p.setRenderHint(QPainter::Antialiasing);
         const QPainterPath path = t.map(sel.path());
@@ -634,6 +636,46 @@ void Canvas::drawSelection(QPainter& p) const
         p.setPen(black);
         p.drawLines(mapped);
     }
+    p.restore();
+}
+
+void Canvas::drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) const
+{
+    p.save();
+    const QTransform t = imageToViewTransform();
+    QPen white(Qt::white, 0);
+    QPen black(Qt::black, 0);
+    black.setDashPattern({4, 4});
+    black.setDashOffset(m_antsOffset);
+    p.setBrush(Qt::NoBrush);
+    if (t.isRotating()) {
+        const QPolygonF poly = t.map(QPolygonF(imageRect));
+        p.setRenderHint(QPainter::Antialiasing);
+        if (tint) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(0, 120, 215, 45));
+            p.drawPolygon(poly);
+            p.setBrush(Qt::NoBrush);
+        }
+        p.setPen(white);
+        p.drawPolygon(poly);
+        p.setPen(black);
+        p.drawPolygon(poly);
+        p.restore();
+        return;
+    }
+    // Líneas nítidas en píxeles enteros de la pantalla, con el mismo grosor y trazos con
+    // cualquier zum (suavizadas salían grises y borrosas).
+    const QRectF v = t.mapRect(imageRect);
+    const QRect r(QPoint(int(std::lround(v.left())), int(std::lround(v.top()))),
+                  QPoint(int(std::lround(v.right())), int(std::lround(v.bottom()))));
+    if (tint)
+        p.fillRect(r, QColor(0, 120, 215, 45));
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.setPen(white);
+    p.drawRect(r);
+    p.setPen(black);
+    p.drawRect(r);
     p.restore();
 }
 

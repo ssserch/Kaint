@@ -2,6 +2,7 @@
 
 #include "app/AppState.h"
 
+#include <QCursor>
 #include <QIcon>
 #include <QPainterPath>
 
@@ -25,8 +26,20 @@ QIcon tool(const QString& name, const QIcon& fallback);
 QIcon theme(std::initializer_list<const char*> names);
 QIcon theme(const QString& name);
 
-// Icono de estilo Paint.NET dibujado por código (herramientas, barras, ventanas), o nulo.
+// Icono de estilo Paint.NET: el PNG de la interfaz (named) o, si no hay, uno dibujado por código
+// (las herramientas que llevan los colores activos y la mano); si no, nulo.
 QIcon pdn(const QString& name);
+// Icono de la interfaz en PNG (data/ui-icons/<archivo>.png), en gris si está desactivado; onFile
+// es el del estado marcado de los botones que se activan y desactivan.
+QIcon png(const QString& file, const QString& onFile = {});
+// El PNG que corresponde a un nombre de Kaint ("document-save", "layer-new"...), o nulo.
+QIcon named(const QString& name);
+// Nombres de la tabla de PNG cuyo archivo no está entre los recursos (para las pruebas).
+QStringList missingNamedIcons();
+// Nombre del icono de un ajuste o efecto ("effect-" + su identificador) si hay PNG; si no, fallback.
+QString effectIcon(const QString& id, const QString& fallback);
+// Cursores de la mano (Mano, botón central y barra espaciadora): abierta o agarrando.
+QCursor handCursor(bool grabbing);
 // Colores con los que se tiñen el cubo de pintura, el pincel, cambiar color y el degradado
 // (inválidos: sus colores de siempre). Los iconos ya creados cambian al volver a dibujarse.
 void setActiveColors(const QColor& primary, const QColor& secondary);
@@ -61,7 +74,6 @@ QIcon sampleSize(int pixels);
 QIcon stepper(bool plus);
 QIcon blendMode();
 QIcon swatch(const QColor& color);
-QIcon cloneStamp();
 QIcon app();
 
 } // namespace Icons

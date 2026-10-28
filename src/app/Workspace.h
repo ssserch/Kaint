@@ -39,6 +39,8 @@ public:
     void restoreState(Corner defaultCorner, QPoint defaultOffset, QSize defaultSize);
     void resetToDefault();
     void setTranslucent(bool on);
+    // Se muestra delante de las demás con un fundido (si hay animaciones).
+    void showAnimated();
     void fitToContent();
 
     // Grosor del borde que se puede arrastrar para cambiar el tamaño.
@@ -67,6 +69,8 @@ private:
     QSize chromeSize() const;
     int titleInset() const;
     void updateTitleText();
+    qreal restingOpacity() const;
+    void fadeOpacity(qreal from, qreal to);
 
     QString m_id;
     QString m_fullTitle;
@@ -86,6 +90,8 @@ private:
     QPoint m_defaultOffset;
     QSize m_defaultSize;
     class QGraphicsOpacityEffect* m_opacity = nullptr;
+    bool m_translucent = false;
+    QPointer<class QVariantAnimation> m_fade;
 };
 
 // Contenedor: el lienzo ocupa todo y los paneles flotan encima.

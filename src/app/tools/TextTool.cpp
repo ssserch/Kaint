@@ -1,5 +1,6 @@
 #include "app/tools/TextTool.h"
 
+#include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
@@ -86,8 +87,9 @@ TextTool::TextTool(QObject* parent)
     : Tool(parent)
 {
     m_blink.setInterval(530);
+    // Sin animaciones el cursor no parpadea (como en paint.js).
     connect(&m_blink, &QTimer::timeout, this, [this] {
-        m_caretOn = !m_caretOn;
+        m_caretOn = !m_caretOn || !Animations::enabled();
         repaint();
     });
     auto refresh = [this] {
@@ -467,7 +469,7 @@ void TextTool::changed()
     if ((m_lines.join(QString()).isEmpty() && !m_resumed) || m_edit.liveStep())
         return;
     m_pushing = true;
-    m_edit.showInHistory(m_resumed ? tr("Editar texto") : name(), QStringLiteral("draw-text"), new TextStepCommand);
+    m_edit.showInHistory(m_resumed ? tr("Editar texto") : name(), QStringLiteral("text"), new TextStepCommand);
     m_pushing = false;
 }
 
@@ -491,7 +493,7 @@ bool TextTool::commitLive()
     }
     // Sin paso en vivo (retomado sin cambios) solo se registra lo que haya cambiado.
     m_pushing = true;
-    const bool done = m_edit.commit(text, QStringLiteral("draw-text"));
+    const bool done = m_edit.commit(text, QStringLiteral("text"));
     m_pushing = false;
     m_edit.resume(doc, layer, base, area);
     m_resumed = true;
@@ -524,7 +526,7 @@ void TextTool::finish()
         Document* doc = m_edit.document();
         if (commitLive()) {
             const QString text = tr("Finalizar texto");
-            HistoryIcons::registerIcon(text, QStringLiteral("draw-text"));
+            HistoryIcons::registerIcon(text, QStringLiteral("text"));
             m_pushing = true;
             doc->undoStack()->push(new QUndoCommand(text));
             m_pushing = false;

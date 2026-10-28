@@ -43,7 +43,7 @@ public:
 
 protected:
     StrokeParams params(const ToolEvent& e) const override;
-    QString historyIcon() const override { return QStringLiteral("draw-brush"); }
+    QString historyIcon() const override { return QStringLiteral("paintbrush"); }
 };
 
 class EraserTool : public StrokeTool {
@@ -65,7 +65,7 @@ public:
 
 protected:
     StrokeParams params(const ToolEvent& e) const override;
-    QString historyIcon() const override { return QStringLiteral("draw-eraser"); }
+    QString historyIcon() const override { return QStringLiteral("eraser"); }
 };
 
 class PencilTool : public StrokeTool {
@@ -85,7 +85,7 @@ public:
 
 protected:
     StrokeParams params(const ToolEvent& e) const override;
-    QString historyIcon() const override { return QStringLiteral("draw-freehand"); }
+    QString historyIcon() const override { return QStringLiteral("pencil"); }
 };
 
 class CloneStampTool : public StrokeTool {
@@ -109,7 +109,7 @@ public:
 protected:
     bool canStart(const ToolEvent& e) override;
     StrokeParams params(const ToolEvent& e) const override;
-    QString historyIcon() const override { return QStringLiteral("edit-clone"); }
+    QString historyIcon() const override { return QStringLiteral("clonestamp"); }
 
 private:
     bool m_hasSource = false;
@@ -138,5 +138,5 @@ public:
 
 protected:
     StrokeParams params(const ToolEvent& e) const override;
-    QString historyIcon() const override { return QStringLiteral("color-mode-hue-shift-positive"); }
+    QString historyIcon() const override { return QStringLiteral("recolor"); }
 };

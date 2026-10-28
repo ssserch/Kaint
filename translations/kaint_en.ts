@@ -3826,10 +3826,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Animations</translation>
     </message>
     <message>
-        <source>Menús, listas desplegables y ayudas emergentes animados.</source>
-        <translation>Animated menus, drop-down lists and tooltips.</translation>
-    </message>
-    <message>
         <source>Ventanas translúcidas</source>
         <translation>Translucent windows</translation>
     </message>
@@ -3924,6 +3920,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.</source>
+        <translation>Menus and windows that fade in, layers that slide when you reorder them and other transitions.</translation>
     </message>
     <message>
         <source>Iconos de herramientas con los colores activos</source>
@@ -5324,10 +5324,6 @@ Do you want to replace them?</translation>
         <translation>The brush stroke will be smoothed using a centripetal Catmull-Rom spline.</translation>
     </message>
     <message>
-        <source>Presión</source>
-        <translation>Pressure</translation>
-    </message>
-    <message>
         <source>La presión del lápiz de la tableta controla el tamaño del pincel</source>
         <translation>The tablet pen pressure controls the brush size</translation>
     </message>
@@ -5389,6 +5385,10 @@ Do you want to replace them?</translation>
     <message>
         <source>Clic izquierdo: acercar · clic derecho: alejar · arrastrar: acercar a un rectángulo.</source>
         <translation>Left click: zoom in · right click: zoom out · drag: zoom to a rectangle.</translation>
+    </message>
+    <message>
+        <source>Zum a: %1, %2 · %3 × %4</source>
+        <translation>Zoom to: %1, %2 · %3 × %4</translation>
     </message>
     <message>
         <source>Zum</source>

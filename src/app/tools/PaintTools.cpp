@@ -114,7 +114,7 @@ StrokeParams PencilTool::params(const ToolEvent& e) const
 
 // ---------------------------------------------------------------------------
 
-QIcon CloneStampTool::icon() const { return Icons::tool(QStringLiteral("clonestamp"), Icons::cloneStamp()); }
+QIcon CloneStampTool::icon() const { return Icons::tool(QStringLiteral("clonestamp"), Icons::theme({"edit-clone"})); }
 
 QString CloneStampTool::hint() const
 {

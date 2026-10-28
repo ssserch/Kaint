@@ -270,7 +270,7 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
 void MoveSelectedTool::push()
 {
     Document* doc = document();
-    HistoryIcons::registerIcon(name(), QStringLiteral("transform-move"));
+    HistoryIcons::registerIcon(name(), QStringLiteral("moveselectedpixels"));
     if (m_extra.isEmpty()) {
         doc->undoStack()->push(new MovePixelsCommand(doc, m_float, m_startTransform, m_current, m_first, false,
                                                      m_selectionBefore, name()));
@@ -505,7 +505,7 @@ void MoveSelectionTool::push()
     Document* doc = document();
     if (doc->selection() == m_before)
         return;
-    HistoryIcons::registerIcon(name(), QStringLiteral("edit-select"));
+    HistoryIcons::registerIcon(name(), QStringLiteral("moveselection"));
     doc->undoStack()->push(new SelectionCommand(doc, m_before, doc->selection(), name(), kMergeMoveSelection));
 }
 

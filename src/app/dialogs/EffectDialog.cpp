@@ -86,7 +86,7 @@ private:
 QToolButton* resetButton(QWidget* parent)
 {
     auto* b = new QToolButton(parent);
-    b->setIcon(Icons::theme({"edit-undo", "view-refresh"}));
+    b->setIcon(Icons::theme({"edit-reset", "edit-undo", "view-refresh"}));
     b->setToolTip(QObject::tr("Restablecer"));
     b->setAutoRaise(true);
     return b;
@@ -140,7 +140,8 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
     , m_params(effect.params())
 {
     setWindowTitle(effect.name());
-    setWindowIcon(effect.iconImage().isNull() ? Icons::theme(effect.iconName()) : QIcon(QPixmap::fromImage(effect.iconImage())));
+    setWindowIcon(effect.iconImage().isNull() ? Icons::theme(Icons::effectIcon(effect.id(), effect.iconName()))
+                                              : QIcon(QPixmap::fromImage(effect.iconImage())));
     auto* root = new QVBoxLayout(this);
 
     QImage thumbnail;

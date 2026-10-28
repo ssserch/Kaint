@@ -208,15 +208,15 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
         m_sections->addItem(new QListWidgetItem(Icons::theme(icon), name));
         m_pages->addWidget(page);
     };
-    addPage(tr("Interfaz de usuario"), {"preferences-desktop-theme", "preferences-desktop"}, createInterfacePage());
-    addPage(tr("Lienzo"), {"image-x-generic", "view-preview"}, createCanvasPage());
-    addPage(tr("Herramientas"), {"tools", "draw-brush"}, createToolsPage(tools));
-    addPage(tr("Lápiz y tableta"), {"input-tablet", "draw-calligraphic"}, createTabletPage());
-    addPage(tr("Rendimiento"), {"speedometer", "preferences-system-performance", "cpu"}, createPerformancePage());
-    addPage(tr("Complementos"), {"plugins", "preferences-plugin", "application-x-addon"}, createPluginsPage());
+    addPage(tr("Interfaz de usuario"), {"settings-interface", "preferences-desktop-theme", "preferences-desktop"}, createInterfacePage());
+    addPage(tr("Lienzo"), {"settings-canvas", "image-x-generic", "view-preview"}, createCanvasPage());
+    addPage(tr("Herramientas"), {"settings-tools", "tools", "draw-brush"}, createToolsPage(tools));
+    addPage(tr("Lápiz y tableta"), {"settings-tablet", "input-tablet", "draw-calligraphic"}, createTabletPage());
+    addPage(tr("Rendimiento"), {"settings-performance", "speedometer", "preferences-system-performance", "cpu"}, createPerformancePage());
+    addPage(tr("Complementos"), {"settings-plugins", "preferences-plugin", "application-x-addon"}, createPluginsPage());
     addPage(tr("Discord"), {"discord", "im-user-online", "user-online", "network-connect"}, createDiscordPage());
-    addPage(tr("Actualizaciones"), {"update-none", "system-software-update"}, createUpdatesPage());
-    addPage(tr("Diagnósticos"), {"tools-report-bug", "dialog-information"}, createDiagnosticsPage());
+    addPage(tr("Actualizaciones"), {"settings-updates", "update-none", "system-software-update"}, createUpdatesPage());
+    addPage(tr("Diagnósticos"), {"settings-diagnostics", "tools-report-bug", "dialog-information"}, createDiagnosticsPage());
 
     connect(m_sections, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
     m_sections->setCurrentRow(0);
@@ -268,7 +268,8 @@ QWidget* SettingsDialog::createInterfacePage()
         page.layout->addWidget(c);
         return c;
     };
-    check(tr("Animaciones"), &AppSettings::animations, tr("Menús, listas desplegables y ayudas emergentes animados."));
+    check(tr("Animaciones"), &AppSettings::animations,
+          tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones."));
     check(tr("Ventanas translúcidas"), &AppSettings::translucentPanels,
           tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
     check(tr("Desplazamiento más allá del borde de la imagen (overscroll)"), &AppSettings::overscroll,
@@ -436,7 +437,7 @@ QWidget* SettingsDialog::createCanvasPage()
     spin->setSingleStep(0.05);
     spin->setDecimals(2);
     auto* reset = new QToolButton(page.widget);
-    reset->setIcon(Icons::theme({"edit-undo", "edit-reset"}));
+    reset->setIcon(Icons::theme({"edit-reset", "edit-undo"}));
     reset->setToolTip(tr("Restablecer"));
     reset->setAutoRaise(true);
     row->addWidget(slider, 1);

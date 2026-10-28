@@ -83,6 +83,11 @@ runs on Windows 10 and 11.
 Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
 colors, toolbar layout and a canvas background image with placement, scale, blur and tint.
 
+Menus and windows fade in, layers slide into place when you reorder them, the active color slot
+and the close buttons of the image tabs animate, and a modal dialog blinks when you click the
+window behind it (on X11 and Windows). Turn it all off with **Settings → User interface →
+Animations**.
+
 <table>
   <tr>
     <td width="50%"><img src="img/other/screenshot-light.png" alt="Light theme"></td>
@@ -170,6 +175,12 @@ Kaint and installs it in `%LOCALAPPDATA%\Programs\Kaint` with a Start menu entry
 from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to download them
 (about 1.5 GB) into `%LOCALAPPDATA%\Kaint\toolchain`.
 
+`build.bat --setup` makes `Kaint-<version>-windows-x64-setup.exe`, a regular installer for
+sharing: it installs Kaint for the current user (no administrator rights), adds it to the Start
+menu (and optionally the desktop) and registers it in *Installed apps*, so it can be removed like
+any other application. Its uninstaller can also delete your settings, palettes, plugins and
+recovery copies. If NSIS is missing, it offers to download it (about 2 MB).
+
 `build.bat --zip` makes a portable `Kaint-<version>-windows-x64.zip`: unzip it anywhere and run
 `Kaint\bin\kaint.exe`.
 
@@ -186,7 +197,7 @@ from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to d
 | Build and run | `--run` | `--run` |
 | Run the tests | `--test` | `--test` |
 | Debug build | `--debug` | `--debug` |
-| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) · `--flatpak` · `--appimage` | `--zip` |
+| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) · `--flatpak` · `--appimage` | `--setup` (installer) · `--zip` |
 | Every option | `--help` | `--help` |
 
 Packagers can build with `-DKAINT_UPDATE_CHECK=OFF` so that Kaint leaves updates to the package
@@ -195,8 +206,9 @@ manager and never looks for new versions on GitHub (the Flatpak does this).
 ## License
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
-`src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, and `data/icons/` bundles KDE's
-Breeze icons (LGPL-3.0-or-later).
+`src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, `data/icons/` bundles KDE's
+Breeze icons (LGPL-3.0-or-later), and the interface icons in `data/ui-icons/` come from SSSerch's
+fork of [paint.js](https://github.com/LabyStudio/paintdotjs), used with permission.
 
 ## Disclaimer
 

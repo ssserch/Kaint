@@ -98,6 +98,8 @@ private:
     QColor m_primary;
     QColor m_secondary;
     bool m_editingSecondary = false;
+    // Altura del pico de la ranura activa (0 a 1), animada al cambiar de ranura.
+    qreal m_notch = 1.0;
 };
 
 // Paleta de 96 colores (32 con la ventana reducida): clic izquierdo = ranura activa, derecho =

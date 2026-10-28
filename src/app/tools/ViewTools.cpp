@@ -8,6 +8,8 @@
 #include <QLineF>
 #include <QPainter>
 
+#include <cmath>
+
 namespace {
 
 QCursor iconCursor(const QIcon& icon, QPoint hotspot, Qt::CursorShape fallback)
@@ -37,17 +39,37 @@ void ZoomTool::mousePress(const ToolEvent& e)
 {
     m_pressed = true;
     m_dragging = false;
-    m_start = m_current = e.viewPos;
+    m_start = m_current = e.pos;
+    m_startView = e.viewPos;
+}
+
+QRect ZoomTool::dragRect() const
+{
+    // Esquinas en el borde de píxel más cercano y dentro del lienzo, como la selección
+    // rectangular.
+    if (!m_dragging || !document())
+        return {};
+    const QPoint a(int(std::lround(m_start.x())), int(std::lround(m_start.y())));
+    const QPoint b(int(std::lround(m_current.x())), int(std::lround(m_current.y())));
+    const QRect r(QPoint(std::min(a.x(), b.x()), std::min(a.y(), b.y())),
+                  QSize(std::abs(b.x() - a.x()), std::abs(b.y() - a.y())));
+    return r.intersected(document()->rect());
 }
 
 void ZoomTool::mouseMove(const ToolEvent& e)
 {
     if (!m_pressed)
         return;
-    m_current = e.viewPos;
-    m_dragging = m_dragging || QLineF(m_start, m_current).length() > 4;
-    if (m_dragging)
-        repaint();
+    m_current = e.pos;
+    if (!m_dragging && QLineF(m_startView, e.viewPos).length() > 4) {
+        m_dragging = true;
+        canvas()->setOverlayAnts(true);
+    }
+    if (!m_dragging)
+        return;
+    const QRect r = dragRect();
+    emit hintChanged(tr("Zum a: %1, %2 · %3 × %4").arg(r.left()).arg(r.top()).arg(r.width()).arg(r.height()));
+    repaint();
 }
 
 void ZoomTool::mouseRelease(const ToolEvent& e)
@@ -55,30 +77,50 @@ void ZoomTool::mouseRelease(const ToolEvent& e)
     if (!m_pressed)
         return;
     m_pressed = false;
-    if (m_dragging && e.button == Qt::LeftButton) {
-        m_dragging = false;
-        canvas()->zoomToRect(QRectF(canvas()->viewToImage(m_start), canvas()->viewToImage(m_current)).normalized());
-    } else if (e.button == Qt::LeftButton) {
+    const QRect r = dragRect();
+    const bool dragged = m_dragging;
+    stopDragging();
+    if (dragged && e.button == Qt::LeftButton && !r.isEmpty())
+        canvas()->zoomToRect(QRectF(r));
+    else if (e.button == Qt::LeftButton)
         canvas()->zoomIn(e.viewPos);
-    } else if (e.button == Qt::RightButton) {
+    else if (e.button == Qt::RightButton)
         canvas()->zoomOut(e.viewPos);
-    }
+}
+
+void ZoomTool::deactivate()
+{
+    m_pressed = false;
+    stopDragging();
+    Tool::deactivate();
+}
+
+void ZoomTool::stopDragging()
+{
+    if (!m_dragging)
+        return;
     m_dragging = false;
+    canvas()->setOverlayAnts(false);
+    emit hintChanged(hint());
     repaint();
 }
 
 void ZoomTool::paintOverlay(QPainter& p)
 {
-    if (!m_dragging)
-        return;
-    p.setPen(QPen(QColor(0, 120, 215), 0, Qt::DashLine));
-    p.setBrush(QColor(0, 120, 215, 40));
-    p.drawRect(QRectF(m_start, m_current).normalized());
+    const QRect r = dragRect();
+    if (!r.isEmpty())
+        canvas()->drawMarchingRect(p, QRectF(r), true);
 }
 
 // ---------------------------------------------------------------------------
 
 QIcon PanTool::icon() const { return Icons::tool(QStringLiteral("pan"), Icons::theme({"transform-browse", "hand"})); }
+
+QCursor PanTool::cursor() const
+{
+    // La mano de la herramienta, abierta o agarrando mientras se arrastra.
+    return Icons::handCursor(m_dragging);
+}
 
 void PanTool::mousePress(const ToolEvent& e)
 {

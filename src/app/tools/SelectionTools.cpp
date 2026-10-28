@@ -234,7 +234,7 @@ void ShapeSelectTool::mouseRelease(const ToolEvent& e)
 {
     if (!m_active)
         return;
-    done(name(), ellipse() ? QStringLiteral("tool_elliptical_selection") : QStringLiteral("select-rectangular"),
+    done(name(), ellipse() ? QStringLiteral("ellipseselect") : QStringLiteral("rectangleselect"),
          e.modifiers);
 }
 
@@ -300,7 +300,7 @@ void LassoSelectTool::mouseRelease(const ToolEvent& e)
 {
     if (!m_active)
         return;
-    done(name(), QStringLiteral("edit-select-lasso"), e.modifiers);
+    done(name(), QStringLiteral("lassoselect"), e.modifiers);
     m_points.clear();
 }
 
@@ -417,7 +417,7 @@ void MagicWandTool::finish()
     m_session = false;
     m_draggingSeed = false;
     m_sample = QImage();
-    commit(name(), QStringLiteral("tools-wizard"));
+    commit(name(), QStringLiteral("magicwand"));
     emit hintChanged(hint());
     repaint();
 }

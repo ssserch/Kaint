@@ -2,6 +2,7 @@
 // varias herramientas como lo haría el ratón, comprueba el resultado y guarda capturas para
 // revisarlas a mano.
 
+#include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/DiscordPresence.h"
@@ -23,6 +24,7 @@
 #include "app/tools/Handles.h"
 #include "app/tools/ToolManager.h"
 #include "app/tools/TransformBox.h"
+#include "app/tools/ViewTools.h"
 #include "app/widgets/ColorWidgets.h"
 #include "app/widgets/EncodedPreview.h"
 #include "app/widgets/FontChooser.h"
@@ -30,6 +32,7 @@
 #include "core/CustomShapes.h"
 #include "core/Document.h"
 #include "core/Ora.h"
+#include "core/effects/Effect.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QAbstractButton>
@@ -42,6 +45,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGraphicsBlurEffect>
+#include <QGraphicsOpacityEffect>
 #include <QImage>
 #include <QJsonDocument>
 #include <QKeyEvent>
@@ -71,6 +75,7 @@
 #include <QToolButton>
 #include <QtEndian>
 #include <QUndoStack>
+#include <QVariantAnimation>
 #include <QWheelEvent>
 
 #include <cmath>
@@ -1100,6 +1105,131 @@ int main(int argc, char** argv)
         CHECK(!blur || blur->blurRadius() < startBlur);
         if (!outDir.isEmpty())
             about.grab().save(QDir(outDir).filePath(QStringLiteral("acerca.png")));
+    }
+
+    // Iconos de la interfaz (los PNG de paint.js): existen todos los de la tabla, los
+    // desactivados son grises, los ajustes y efectos tienen el suyo y la mano tiene su versión
+    // agarrando.
+    {
+        CHECK(Icons::missingNamedIcons().isEmpty());
+        const QIcon layerNew = Icons::theme({"layer-new"});
+        const QImage normal = layerNew.pixmap(QSize(16, 16)).toImage().convertToFormat(QImage::Format_ARGB32);
+        const QImage disabled =
+            layerNew.pixmap(QSize(16, 16), QIcon::Disabled).toImage().convertToFormat(QImage::Format_ARGB32);
+        bool colored = false, gray = !disabled.isNull();
+        for (int y = 0; y < normal.height(); ++y)
+            for (int x = 0; x < normal.width(); ++x) {
+                const QRgb n = normal.pixel(x, y), d = disabled.pixel(x, y);
+                colored = colored || (qAlpha(n) > 200 && (qRed(n) != qGreen(n) || qGreen(n) != qBlue(n)));
+                gray = gray && (qAlpha(d) == 0 || (qRed(d) == qGreen(d) && qGreen(d) == qBlue(d)));
+            }
+        CHECK(colored && gray);
+        int builtIn = 0, withIcon = 0;
+        for (const Effect* e : Effects::all()) {
+            if (!e->pluginName().isEmpty())
+                continue;
+            ++builtIn;
+            if (Icons::effectIcon(e->id(), {}).startsWith(QLatin1String("effect-")))
+                ++withIcon;
+        }
+        CHECK(builtIn > 40 && withIcon >= builtIn - 1);
+        CHECK(!Icons::pdn(QStringLiteral("pan-grab")).isNull());
+        CHECK(!Icons::handCursor(true).pixmap().isNull() && !Icons::handCursor(false).pixmap().isNull());
+        const QIcon pressure = Icons::png(QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_false"),
+                                          QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_true"));
+        CHECK(pressure.pixmap(QSize(16, 16), QIcon::Normal, QIcon::Off).toImage()
+              != pressure.pixmap(QSize(16, 16), QIcon::Normal, QIcon::On).toImage());
+    }
+
+    // Zum: el recuadro que se arrastra va de borde a borde de píxel, como la selección
+    // rectangular, y se acerca a ese rectángulo.
+    {
+        tools->select(ToolId::Zoom);
+        canvas->setZoom(4.0);
+        settle();
+        auto send = [&](QEvent::Type type, const QPointF& img, Qt::MouseButton b, Qt::MouseButtons bs) {
+            const QPointF v = canvas->imageToView(img);
+            QMouseEvent e(type, v, canvas->viewport()->mapToGlobal(v), b, bs, Qt::NoModifier);
+            QApplication::sendEvent(canvas->viewport(), &e);
+        };
+        send(QEvent::MouseButtonPress, QPointF(40.3, 30.2), Qt::LeftButton, Qt::LeftButton);
+        send(QEvent::MouseMove, QPointF(50.2, 38.4), Qt::NoButton, Qt::LeftButton);
+        send(QEvent::MouseMove, QPointF(60.4, 45.6), Qt::NoButton, Qt::LeftButton);
+        settle();
+        auto* zoomTool = qobject_cast<ZoomTool*>(tools->current());
+        CHECK(zoomTool && zoomTool->dragRect() == QRect(40, 30, 20, 16));
+        if (!outDir.isEmpty())
+            canvas->viewport()->grab().save(QDir(outDir).filePath(QStringLiteral("zum.png")));
+        send(QEvent::MouseButtonRelease, QPointF(60.4, 45.6), Qt::LeftButton, Qt::NoButton);
+        settle();
+        const QPointF center = canvas->viewToImage(QPointF(canvas->viewport()->width() / 2.0, canvas->viewport()->height() / 2.0));
+        CHECK(canvas->zoom() > 4.0 && QLineF(center, QPointF(50, 38)).length() < 1.0);
+        CHECK(zoomTool && zoomTool->dragRect().isEmpty());
+        canvas->zoomToWindow();
+        tools->select(ToolId::RectSelect);
+        settle();
+    }
+
+    // Animaciones (Configuración > Animaciones), como las de paint.js: las capas que cambian de
+    // sitio se deslizan, las ventanas flotantes y los menús aparecen con un fundido y, sin
+    // animaciones, todo cambia al momento.
+    {
+        auto wait = [](int ms) {
+            QElapsedTimer clock;
+            clock.start();
+            while (clock.elapsed() < ms)
+                QApplication::processEvents(QEventLoop::AllEvents, 10);
+        };
+        auto animating = [](QObject* o) {
+            for (QVariantAnimation* a : o->findChildren<QVariantAnimation*>())
+                if (a->state() == QAbstractAnimation::Running)
+                    return true;
+            return false;
+        };
+        Animations::install();
+        CHECK(Animations::enabled());
+        auto* layersPanel = w.findChild<LayersPanel*>();
+        FloatingPanel* history = nullptr;
+        for (FloatingPanel* p : w.findChildren<FloatingPanel*>())
+            if (p->id() == QLatin1String("history"))
+                history = p;
+        CHECK(layersPanel && history);
+        if (layersPanel && history) {
+            findAction(&w, QStringLiteral("Agregar nueva capa"))->trigger();
+            settle();
+            findAction(&w, QStringLiteral("Bajar capa"))->trigger();
+            CHECK(animating(layersPanel));
+            wait(Animations::kListMove + 120);
+            CHECK(!animating(layersPanel));
+
+            history->hide();
+            history->showAnimated();
+            auto* fade = qobject_cast<QGraphicsOpacityEffect*>(history->graphicsEffect());
+            CHECK(fade && fade->opacity() < 0.5);
+            wait(Animations::kPanelFade + 120);
+            fade = qobject_cast<QGraphicsOpacityEffect*>(history->graphicsEffect());
+            CHECK(!fade || fade->opacity() > 0.5);
+
+            QMenu menu;
+            menu.addAction(QStringLiteral("Uno"));
+            menu.popup(w.mapToGlobal(QPoint(40, 40)));
+            settle();
+            CHECK(menu.graphicsEffect() && menu.graphicsEffect()->property("kaintFade").toBool());
+            wait(Animations::kPopupFade + 120);
+            CHECK(!menu.graphicsEffect());
+            menu.close();
+
+            Animations::setEnabled(false);
+            findAction(&w, QStringLiteral("Subir capa"))->trigger();
+            CHECK(!animating(layersPanel));
+            history->hide();
+            history->showAnimated();
+            fade = qobject_cast<QGraphicsOpacityEffect*>(history->graphicsEffect());
+            CHECK(!fade || fade->opacity() > 0.5);
+            Animations::setEnabled(true);
+            findAction(&w, QStringLiteral("Eliminar la capa"))->trigger();
+            settle();
+        }
     }
 
     // Impresión: la imagen se dibuja centrada en la página (aquí, en un PDF).

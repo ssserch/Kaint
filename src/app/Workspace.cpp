@@ -1,5 +1,6 @@
 #include "app/Workspace.h"
 
+#include "app/Animations.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
 #include "app/Theme.h"
@@ -15,6 +16,7 @@
 #include <QSettings>
 #include <QStyle>
 #include <QVBoxLayout>
+#include <QVariantAnimation>
 
 namespace {
 
@@ -139,8 +141,8 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
         event(&relayout);
         const int inset = titleInset();
         m_titleBar->setGeometry(inset, inset, width() - 2 * inset, m_titleBar->sizeHint().height());
-        if (m_opacity && !underMouse())
-            m_opacity->setOpacity(Theme::active().panelOpacity / 100.0);
+        if (m_opacity && !m_fade)
+            m_opacity->setOpacity(restingOpacity());
         update();
     });
     updateGeometry();
@@ -560,27 +562,69 @@ void FloatingPanel::resetToDefault()
 
 void FloatingPanel::setTranslucent(bool on)
 {
-    if (on && !m_opacity) {
-        m_opacity = new QGraphicsOpacityEffect(this);
-        m_opacity->setOpacity(underMouse() ? 1.0 : Theme::active().panelOpacity / 100.0);
-        setGraphicsEffect(m_opacity);
-    } else if (!on && m_opacity) {
+    m_translucent = on;
+    if (m_fade)
+        m_fade->stop();
+    if (on) {
+        if (!m_opacity) {
+            m_opacity = new QGraphicsOpacityEffect(this);
+            setGraphicsEffect(m_opacity);
+        }
+        m_opacity->setOpacity(restingOpacity());
+    } else if (m_opacity) {
         setGraphicsEffect(nullptr);
         m_opacity = nullptr;
     }
 }
 
+qreal FloatingPanel::restingOpacity() const
+{
+    return m_translucent && !underMouse() ? Theme::active().panelOpacity / 100.0 : 1.0;
+}
+
+void FloatingPanel::fadeOpacity(qreal from, qreal to)
+{
+    // Como las ventanas de paint.js: la opacidad cambia en 180 ms. Sin translucidez, el efecto
+    // solo existe mientras dura el fundido.
+    if (m_fade)
+        m_fade->stop();
+    if (!m_opacity) {
+        m_opacity = new QGraphicsOpacityEffect(this);
+        setGraphicsEffect(m_opacity);
+    }
+    m_fade = Animations::run(this, from, to, Animations::kPanelFade, QEasingCurve::OutCubic,
+                             [this](qreal v) {
+                                 if (m_opacity)
+                                     m_opacity->setOpacity(v);
+                             },
+                             [this] {
+                                 if (!m_translucent && m_opacity) {
+                                     setGraphicsEffect(nullptr);
+                                     m_opacity = nullptr;
+                                 }
+                             });
+}
+
+void FloatingPanel::showAnimated()
+{
+    show();
+    raise();
+    reposition();
+    if (Animations::enabled())
+        fadeOpacity(0.0, restingOpacity());
+}
+
 void FloatingPanel::enterEvent(QEnterEvent* e)
 {
-    if (m_opacity)
-        m_opacity->setOpacity(1.0);
+    if (m_translucent && m_opacity)
+        fadeOpacity(m_opacity->opacity(), 1.0);
     QFrame::enterEvent(e);
 }
 
 void FloatingPanel::leaveEvent(QEvent* e)
 {
-    if (m_opacity)
-        m_opacity->setOpacity(Theme::active().panelOpacity / 100.0);
+    if (m_translucent && m_opacity)
+        fadeOpacity(m_opacity->opacity(), restingOpacity());
     QFrame::leaveEvent(e);
 }
 

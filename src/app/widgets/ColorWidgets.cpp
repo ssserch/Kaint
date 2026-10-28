@@ -1,5 +1,8 @@
 #include "app/widgets/ColorWidgets.h"
 
+#include "app/Animations.h"
+#include "app/Icons.h"
+
 #include <QHelpEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -291,8 +294,14 @@ void ColorSwatches::setColors(const QColor& primary, const QColor& secondary)
 
 void ColorSwatches::setEditingSecondary(bool secondary)
 {
+    if (secondary == m_editingSecondary)
+        return;
     m_editingSecondary = secondary;
-    update();
+    // El pico de la ranura activa sale desde abajo (como el indicador de paint.js).
+    Animations::run(this, 0.0, 1.0, Animations::kIndicator, QEasingCurve::OutCubic, [this](qreal v) {
+        m_notch = v;
+        update();
+    });
 }
 
 // Medidas de la ventana Colores de Paint.NET.
@@ -338,9 +347,10 @@ void ColorSwatches::paintEvent(QPaintEvent*)
         fill.addRect(inner.adjusted(1, 1, -1, -1));
         const qreal cx = inner.center().x(), bottom = inner.bottom();
         QPainterPath notch;
-        notch.addPolygon(QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom - 6), QPointF(cx + 5, bottom + 1)});
+        notch.addPolygon(QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom + 1 - 7 * m_notch), QPointF(cx + 5, bottom + 1)});
         QPainterPath notchOutline;
-        notchOutline.addPolygon(QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom - 7.5), QPointF(cx + 6.5, bottom + 1)});
+        notchOutline.addPolygon(
+            QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom + 1 - 8.5 * m_notch), QPointF(cx + 6.5, bottom + 1)});
         frame = frame.subtracted(notch);
         fill = fill.subtracted(notchOutline);
         p.setRenderHint(QPainter::Antialiasing);
@@ -354,20 +364,9 @@ void ColorSwatches::paintEvent(QPaintEvent*)
     swatch(secondaryRect(), m_secondary, m_editingSecondary, false);
     swatch(primaryRect(), m_primary, !m_editingSecondary, true);
 
-    // Flecha doble para intercambiar, pequeña y azul como la de Paint.NET: punta a la izquierda
-    // arriba y punta hacia abajo a la derecha.
+    // Flecha doble para intercambiar (el icono de paint.js).
     p.setRenderHint(QPainter::Antialiasing);
-    const QRectF sw = swapRect();
-    const QPointF a(sw.left() + 1.5, sw.top() + 3.5), b(sw.right() - 3, sw.bottom() - 1.5);
-    QPainterPath arc(a);
-    arc.lineTo(b.x() - 3, a.y());
-    arc.quadTo(b.x(), a.y(), b.x(), a.y() + 3);
-    arc.lineTo(b);
-    p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(QColor(70, 140, 215), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.drawPath(arc);
-    p.drawPolyline(QPolygonF{a + QPointF(2.5, -2.5), a, a + QPointF(2.5, 2.5)});
-    p.drawPolyline(QPolygonF{b + QPointF(-2.5, -2.5), b, b + QPointF(2.5, -2.5)});
+    Icons::named(QStringLiteral("color-swap")).paint(&p, swapRect().toAlignedRect());
 
     // Mini muestras negro y blanco para restablecer, con borde gris.
     p.setRenderHint(QPainter::Antialiasing, false);
@@ -442,8 +441,9 @@ void PaletteWidget::setAddMode(bool on)
 
 void PaletteWidget::timerEvent(QTimerEvent* e)
 {
+    // Sin animaciones, el recuadro se queda fijo.
     if (e->timerId() == m_blinkTimer) {
-        m_blinkOn = !m_blinkOn;
+        m_blinkOn = !m_blinkOn || !Animations::enabled();
         update();
     }
 }

@@ -21,6 +21,9 @@ exit /b %RC%
 set "QT_VERSION=6.10.3"
 set "MINGW_TOOL=mingw1310"
 set "AQT_URL=https://github.com/miurahr/aqtinstall/releases/download/v3.3.0/aqt_x64.exe"
+set "NSIS_VERSION=3.11"
+set "NSIS_URL=https://downloads.sourceforge.net/project/nsis/NSIS%%203/%NSIS_VERSION%/nsis-%NSIS_VERSION%.zip"
+set "NSIS_SHA256=c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1"
 set "TOOLCHAIN=%LOCALAPPDATA%\Kaint\toolchain"
 set "PREFIX=%LOCALAPPDATA%\Programs\Kaint"
 set "BUILD_TYPE=Release"
@@ -31,6 +34,7 @@ set "DO_INSTALL=0"
 set "DO_RUN=0"
 set "DO_UNINSTALL=0"
 set "DO_ZIP=0"
+set "DO_SETUP=0"
 set "ASSUME_YES=0"
 if "%~1"=="" if "%INTERACTIVE%"=="1" set "DO_INSTALL=1"
 
@@ -47,6 +51,7 @@ if /i "%~1"=="-i"          (set "DO_INSTALL=1" & shift & goto args)
 if /i "%~1"=="--install"   (set "DO_INSTALL=1" & shift & goto args)
 if /i "%~1"=="--uninstall" (set "DO_UNINSTALL=1" & shift & goto args)
 if /i "%~1"=="--zip"       (set "DO_ZIP=1" & shift & goto args)
+if /i "%~1"=="--setup"     (set "DO_SETUP=1" & shift & goto args)
 if /i "%~1"=="-r"          (set "DO_RUN=1" & shift & goto args)
 if /i "%~1"=="--run"       (set "DO_RUN=1" & shift & goto args)
 if /i "%~1"=="-y"          (set "ASSUME_YES=1" & shift & goto args)
@@ -105,6 +110,7 @@ if "%DO_TEST%"=="1" (
 
 if "%DO_INSTALL%"=="1" call :install || exit /b 1
 if "%DO_ZIP%"=="1" call :zip || exit /b 1
+if "%DO_SETUP%"=="1" call :setup || exit /b 1
 
 echo Listo: %BUILD_DIR%\kaint.exe
 if "%DO_RUN%"=="1" (
@@ -137,20 +143,71 @@ reg add "%UNINSTALL_KEY%" /v NoRepair /t REG_DWORD /d 1 /f >nul
 echo Instalado: %PREFIX%\bin\kaint.exe (también en el menú Inicio)
 exit /b 0
 
+rem --- Copia de la instalación para empaquetar (%1: carpeta) --------------------
+:stage
+if exist "%~1" rmdir /s /q "%~1"
+cmake --install "%BUILD_DIR%" --prefix "%~1" || exit /b 1
+for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
+    if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%~1\bin\" >nul
+)
+exit /b 0
+
 rem --- Paquete portable (.zip) ------------------------------------------------
 :zip
 for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content version.json -Raw | ConvertFrom-Json).version"`) do set "KAINT_VERSION=%%V"
 set "PACKAGE=%CD%\%BUILD_DIR%\package\Kaint"
 set "ZIP=%CD%\%BUILD_DIR%\Kaint-%KAINT_VERSION%-windows-x64.zip"
 echo Creando %ZIP%...
-if exist "%BUILD_DIR%\package" rmdir /s /q "%BUILD_DIR%\package"
-cmake --install "%BUILD_DIR%" --prefix "%PACKAGE%" || exit /b 1
-for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
-    if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%PACKAGE%\bin\" >nul
-)
+call :stage "%PACKAGE%" || exit /b 1
 if exist "%ZIP%" del /q "%ZIP%"
 powershell -NoProfile -Command "Compress-Archive -Path '%PACKAGE%' -DestinationPath '%ZIP%'" || exit /b 1
 echo Paquete: %ZIP% (descomprimir y abrir Kaint\bin\kaint.exe)
+exit /b 0
+
+rem --- Instalador con desinstalador (NSIS) ------------------------------------
+:setup
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content version.json -Raw | ConvertFrom-Json).version"`) do set "KAINT_VERSION=%%V"
+call :find_nsis
+if not defined MAKENSIS (
+    echo.
+    echo Para crear el instalador hace falta NSIS. Se puede descargar ahora en %TOOLCHAIN% ^(unos 2 MB^).
+    if not "%ASSUME_YES%"=="1" (
+        choice /c SN /m "¿Descargarlo"
+        if errorlevel 2 exit /b 1
+    )
+    call :download_nsis || exit /b 1
+    call :find_nsis
+    if not defined MAKENSIS (
+        echo No se encontró makensis.exe después de descargar NSIS.
+        exit /b 1
+    )
+)
+set "PACKAGE=%CD%\%BUILD_DIR%\setup\Kaint"
+set "SETUP=%CD%\%BUILD_DIR%\Kaint-%KAINT_VERSION%-windows-x64-setup.exe"
+echo Creando %SETUP%...
+call :stage "%PACKAGE%" || exit /b 1
+"%MAKENSIS%" /V2 "/DVERSION=%KAINT_VERSION%" "/DSOURCE=%PACKAGE%" "/DOUTFILE=%SETUP%" "/DROOT=%CD%" packaging\windows\kaint.nsi || exit /b 1
+echo Instalador: %SETUP% (Kaint se desinstala desde "Aplicaciones instaladas")
+exit /b 0
+
+rem --- Buscar NSIS (makensis.exe) ---------------------------------------------
+:find_nsis
+set "MAKENSIS="
+for /f "delims=" %%G in ('where makensis 2^>nul') do if not defined MAKENSIS set "MAKENSIS=%%~fG"
+for %%N in ("%TOOLCHAIN%\nsis-%NSIS_VERSION%\makensis.exe" "%ProgramFiles(x86)%\NSIS\makensis.exe" "%ProgramFiles%\NSIS\makensis.exe") do (
+    if not defined MAKENSIS if exist "%%~N" set "MAKENSIS=%%~N"
+)
+exit /b 0
+
+rem --- Descargar NSIS (comprobado con su SHA-256) ------------------------------
+:download_nsis
+if not exist "%TOOLCHAIN%" mkdir "%TOOLCHAIN%"
+set "NSIS_ZIP=%TOOLCHAIN%\nsis-%NSIS_VERSION%.zip"
+echo Descargando NSIS %NSIS_VERSION%...
+curl -L --fail -o "%NSIS_ZIP%" "%NSIS_URL%" || exit /b 1
+powershell -NoProfile -Command "if ((Get-FileHash -Algorithm SHA256 '%NSIS_ZIP%').Hash -ne '%NSIS_SHA256%') { Write-Host 'El NSIS descargado no es el esperado (SHA-256 distinto).'; exit 1 }" || (del /q "%NSIS_ZIP%" & exit /b 1)
+powershell -NoProfile -Command "Expand-Archive -Force -Path '%NSIS_ZIP%' -DestinationPath '%TOOLCHAIN%'" || exit /b 1
+del /q "%NSIS_ZIP%"
 exit /b 0
 
 rem --- Desinstalar ------------------------------------------------------------
@@ -220,10 +277,11 @@ echo   -i, --install        instala en %%LOCALAPPDATA%%\Programs\Kaint con acces
 echo       --uninstall      quita la instalación (también desde "Aplicaciones instaladas")
 echo       --prefix RUTA    carpeta de instalación
 echo       --zip            crea un .zip portable para publicar (build-windows\Kaint-VERSIÓN-windows-x64.zip)
+echo       --setup          crea el instalador con desinstalador (build-windows\Kaint-VERSIÓN-windows-x64-setup.exe)
 echo   -r, --run            ejecuta Kaint al terminar
 echo   -y, --yes            descarga las herramientas que falten sin preguntar
 echo   -h, --help           muestra esta ayuda
 echo.
-echo Si faltan Qt, MinGW, CMake o Ninja, se descargan en %%LOCALAPPDATA%%\Kaint\toolchain.
+echo Si faltan Qt, MinGW, CMake o Ninja (o NSIS para --setup), se descargan en %%LOCALAPPDATA%%\Kaint\toolchain.
 echo Para usar un Qt propio para MinGW: set KAINT_QT=C:\Qt\6.10.3\mingw_64
 exit /b 0

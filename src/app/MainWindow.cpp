@@ -2,6 +2,7 @@
 
 #include "app/Theme.h"
 
+#include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
@@ -165,6 +166,11 @@ public:
         : QTabBar(parent)
     {
         setMouseTracking(true);
+        // La X aparece y desaparece con un fundido de 200 ms (como en paint.js).
+        m_closeTimer.setInterval(16);
+        connect(&m_closeTimer, &QTimer::timeout, this, &ImageStrip::stepCloseFade);
+        connect(this, &QTabBar::currentChanged, this, &ImageStrip::fadeCloseButtons);
+        connect(this, &QTabBar::tabMoved, this, [this] { resetCloseButtons(); });
     }
 
     QSize minimumSizeHint() const override
@@ -207,6 +213,17 @@ public:
     }
 
 protected:
+    void tabInserted(int index) override
+    {
+        QTabBar::tabInserted(index);
+        resetCloseButtons();
+    }
+    void tabRemoved(int index) override
+    {
+        QTabBar::tabRemoved(index);
+        resetCloseButtons();
+    }
+
     QSize tabSizeHint(int) const override { return iconSize() + QSize(2 * kPadX, 2 * kPadY); }
     QSize minimumTabSizeHint(int index) const override { return tabSizeHint(index); }
 
@@ -231,12 +248,11 @@ protected:
             p.setBrush(QColor(255, 170, 20));
             p.drawEllipse(QRectF(unsavedRect(i)).adjusted(1, 1, -1, -1));
         }
-        QList<int> shown{currentIndex()};
-        if (m_hoverTab != currentIndex())
-            shown << m_hoverTab;
-        for (int i : std::as_const(shown)) {
-            if (i < 0 || i >= count())
+        for (int i = 0; i < count(); ++i) {
+            const qreal level = closeLevel(i);
+            if (level <= 0)
                 continue;
+            p.setOpacity(level);
             const QRectF r = QRectF(closeRect(i)).adjusted(0.5, 0.5, -0.5, -0.5);
             const bool hot = i == m_hoverTab && m_hoverClose;
             p.setPen(QPen(QColor(150, 30, 30), 1));
@@ -282,7 +298,7 @@ protected:
             m_hoverTab = hover;
             m_hoverClose = onClose;
             setToolTip(onClose ? QCoreApplication::translate("MainWindow", "Cerrar") : QString());
-            update();
+            fadeCloseButtons();
         }
         QTabBar::mouseMoveEvent(e);
     }
@@ -306,11 +322,56 @@ protected:
     {
         m_hoverTab = -1;
         m_hoverClose = false;
-        update();
+        fadeCloseButtons();
         QTabBar::leaveEvent(e);
     }
 
 private:
+    // La X se ve en la imagen actual y en la que tiene el puntero.
+    qreal closeTarget(int index) const { return index == currentIndex() || index == m_hoverTab ? 1.0 : 0.0; }
+    qreal closeLevel(int index) const { return m_closeLevel.value(index, closeTarget(index)); }
+
+    void resetCloseButtons()
+    {
+        m_closeLevel.clear();
+        m_closeTimer.stop();
+        m_closeShown.clear();
+        for (int i = 0; i < count(); ++i)
+            if (closeTarget(i) > 0)
+                m_closeShown.insert(i);
+        update();
+    }
+
+    void fadeCloseButtons()
+    {
+        if (!Animations::enabled()) {
+            resetCloseButtons();
+            return;
+        }
+        for (int i = 0; i < count(); ++i)
+            if (!m_closeLevel.contains(i))
+                m_closeLevel.insert(i, m_closeShown.contains(i) ? 1.0 : 0.0);
+        m_closeClock.start();
+        m_closeTimer.start();
+        stepCloseFade();
+    }
+
+    void stepCloseFade()
+    {
+        const qreal step = std::max<qreal>(m_closeClock.restart(), 1) / Animations::kCloseFade;
+        bool moving = false;
+        for (int i = 0; i < count(); ++i) {
+            const qreal target = closeTarget(i);
+            qreal level = m_closeLevel.value(i, target);
+            level = level < target ? std::min(target, level + step) : std::max(target, level - step);
+            m_closeLevel.insert(i, level);
+            moving = moving || level != target;
+        }
+        if (!moving)
+            resetCloseButtons();
+        update();
+    }
+
     static constexpr int kClose = 14;
     static constexpr int kDot = 12;
     // Margen, borde y relleno de la pestaña (los de la hoja de estilo) alrededor de la miniatura.
@@ -321,6 +382,11 @@ private:
     int m_closeTab = -1;
     int m_pressedTab = -1;
     QPoint m_pressPos;
+    // Opacidad de la X de cada pestaña mientras cambia y las que se veían antes del cambio.
+    QHash<int, qreal> m_closeLevel;
+    QSet<int> m_closeShown;
+    QTimer m_closeTimer;
+    QElapsedTimer m_closeClock;
 };
 
 // Fila superior al estilo de Paint.NET 5: menús con la barra principal debajo, la tira de
@@ -540,15 +606,15 @@ void MainWindow::createActions()
     A["cut"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+X")), QKeySequence(QStringLiteral("Shift+Del"))});
     A["copy"] = makeAction(tr("&Copiar"), {"edit-copy"}, QKeySequence::Copy, [this] { copy(false); }, doc);
     A["copy"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+C")), QKeySequence(QStringLiteral("Ctrl+Ins"))});
-    A["copyMerged"] = makeAction(tr("Copiar co&mbinado"), {"edit-copy"}, QKeySequence(QStringLiteral("Ctrl+Shift+C")),
+    A["copyMerged"] = makeAction(tr("Copiar co&mbinado"), {"edit-copy-merged", "edit-copy"}, QKeySequence(QStringLiteral("Ctrl+Shift+C")),
                                  [this] { copy(true); }, doc);
     A["paste"] = makeAction(tr("&Pegar"), {"edit-paste"}, QKeySequence::Paste, [this] { paste(); });
     A["paste"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+V")), QKeySequence(QStringLiteral("Shift+Ins"))});
-    A["pasteLayer"] = makeAction(tr("Pegar en capa &nueva"), {"edit-paste-in-place", "edit-paste"},
+    A["pasteLayer"] = makeAction(tr("Pegar en capa &nueva"), {"edit-paste-new-layer", "edit-paste-in-place", "edit-paste"},
                                  QKeySequence(QStringLiteral("Ctrl+Shift+V")), [this] { pasteIntoNewLayer(); }, doc);
-    A["pasteImage"] = makeAction(tr("Pegar en una &imagen nueva"), {"window-new", "edit-paste"},
+    A["pasteImage"] = makeAction(tr("Pegar en una &imagen nueva"), {"edit-paste-new-image", "window-new", "edit-paste"},
                                  QKeySequence(QStringLiteral("Ctrl+Alt+V")), [this] { pasteIntoNewImage(); });
-    A["copySelection"] = makeAction(tr("Copiar &selección"), {"edit-copy-path", "edit-copy"},
+    A["copySelection"] = makeAction(tr("Copiar &selección"), {"edit-copy-selection", "edit-copy"},
                                     QKeySequence(QStringLiteral("Ctrl+Alt+Shift+C")), [this] { copySelection(); }, sel);
     const QList<std::tuple<SelectionMode, QString, const char*>> pasteModes{
         {SelectionMode::Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V"},
@@ -561,9 +627,9 @@ void MainWindow::createActions()
         A[id] = makeAction(name, {}, QKeySequence(QString::fromLatin1(key)), [this, m = mode] { pasteSelection(m); }, doc);
         A[id]->setIcon(Icons::selectionMode(mode));
     }
-    A["eraseSel"] = makeAction(tr("&Borrar la selección"), {"edit-delete"}, QKeySequence(Qt::Key_Delete),
+    A["eraseSel"] = makeAction(tr("&Borrar la selección"), {"edit-erase-selection", "edit-delete"}, QKeySequence(Qt::Key_Delete),
                                [this] { eraseSelection(tr("Borrar la selección")); }, sel);
-    A["fillSel"] = makeAction(tr("&Rellenar la selección"), {"fill-color"}, QKeySequence(Qt::Key_Backspace),
+    A["fillSel"] = makeAction(tr("&Rellenar la selección"), {"edit-fill-selection", "fill-color"}, QKeySequence(Qt::Key_Backspace),
                               [this] { fillSelection(); }, doc);
     A["invertSel"] = makeAction(tr("&Invertir la selección"), {"edit-select-invert"}, QKeySequence(QStringLiteral("Ctrl+I")),
                                 [this] { invertSelection(); }, sel);
@@ -627,12 +693,12 @@ void MainWindow::createActions()
                             [this] { rotateImage(90); }, doc);
     A["rotCCW"] = makeAction(tr("Girar 90° en sentido &antihorario"), {"object-rotate-left"},
                              QKeySequence(QStringLiteral("Ctrl+G")), [this] { rotateImage(270); }, doc);
-    A["rot180"] = makeAction(tr("Girar &180°"), {"object-rotate-right"}, {}, [this] { rotateImage(180); }, doc);
+    A["rot180"] = makeAction(tr("Girar &180°"), {"image-rotate-180", "object-rotate-right"}, {}, [this] { rotateImage(180); }, doc);
     A["colorProfile"] = makeAction(tr("&Perfil de colores..."), {"color-profile", "color-management"}, {},
                                    [this] { colorProfile(); }, doc);
     A["animation"] = makeAction(tr("A&nimación..."), {"media-playback-start", "video-x-generic"}, {},
                                 [this] { editAnimation(); }, doc);
-    A["flatten"] = makeAction(tr("&Acoplar"), {"layer-bottom", "merge"}, QKeySequence(QStringLiteral("Ctrl+Shift+F")),
+    A["flatten"] = makeAction(tr("&Acoplar"), {"image-flatten", "merge"}, QKeySequence(QStringLiteral("Ctrl+Shift+F")),
                               [this] { flatten(); }, doc);
 
     // Capas
@@ -646,22 +712,22 @@ void MainWindow::createActions()
                                 QKeySequence(QStringLiteral("Ctrl+M")), [this] { mergeLayerDown(); });
     A["toggleLayer"] = makeAction(tr("Alternar &visibilidad de capa"), {"layer-visible-on"}, QKeySequence(QStringLiteral("Ctrl+,")),
                                   [this] { if (m_doc) toggleLayerVisibility(m_doc->activeIndex()); }, doc);
-    A["importLayer"] = makeAction(tr("&Importar desde archivo..."), {"document-import", "insert-image"}, {},
+    A["importLayer"] = makeAction(tr("&Importar desde archivo..."), {"layer-import", "document-import", "insert-image"}, {},
                                   [this] { importLayer(); }, doc);
-    A["flipLayerH"] = makeAction(tr("Voltear &horizontalmente"), {"object-flip-horizontal"}, {},
+    A["flipLayerH"] = makeAction(tr("Voltear &horizontalmente"), {"layer-flip-horizontal", "object-flip-horizontal"}, {},
                                  [this] { flipLayer(true); }, doc);
-    A["flipLayerV"] = makeAction(tr("Voltear &verticalmente"), {"object-flip-vertical"}, {},
+    A["flipLayerV"] = makeAction(tr("Voltear &verticalmente"), {"layer-flip-vertical", "object-flip-vertical"}, {},
                                  [this] { flipLayer(false); }, doc);
-    A["rotateLayer180"] = makeAction(tr("Girar &180°"), {"object-rotate-right"}, {}, [this] { rotateLayer180(); }, doc);
-    A["rotateZoom"] = makeAction(tr("&Giro y zum..."), {"transform-rotate", "object-rotate-right"},
+    A["rotateLayer180"] = makeAction(tr("Girar &180°"), {"layer-rotate-180", "object-rotate-right"}, {}, [this] { rotateLayer180(); }, doc);
+    A["rotateZoom"] = makeAction(tr("&Giro y zum..."), {"layer-rotate-zoom", "transform-rotate", "object-rotate-right"},
                                  QKeySequence(QStringLiteral("Ctrl+Shift+Z")), [this] { rotateZoomLayer(); }, doc);
-    A["layerTop"] = makeAction(tr("Ir a capa &superior"), {"go-top"}, QKeySequence(QStringLiteral("Ctrl+Alt+PgUp")),
+    A["layerTop"] = makeAction(tr("Ir a capa &superior"), {"layer-go-top", "go-top"}, QKeySequence(QStringLiteral("Ctrl+Alt+PgUp")),
                                [this] { if (m_doc) selectLayer(m_doc->layerCount() - 1); }, doc);
-    A["layerAbove"] = makeAction(tr("Ir a capa de &encima"), {"go-up"}, QKeySequence(QStringLiteral("Alt+PgUp")),
+    A["layerAbove"] = makeAction(tr("Ir a capa de &encima"), {"layer-go-up", "go-up"}, QKeySequence(QStringLiteral("Alt+PgUp")),
                                  [this] { if (m_doc) selectLayer(m_doc->activeIndex() + 1); }, doc);
-    A["layerBelow"] = makeAction(tr("Ir a capa de de&bajo"), {"go-down"}, QKeySequence(QStringLiteral("Alt+PgDown")),
+    A["layerBelow"] = makeAction(tr("Ir a capa de de&bajo"), {"layer-go-down", "go-down"}, QKeySequence(QStringLiteral("Alt+PgDown")),
                                  [this] { if (m_doc) selectLayer(m_doc->activeIndex() - 1); }, doc);
-    A["layerBottom"] = makeAction(tr("Ir a capa in&ferior"), {"go-bottom"}, QKeySequence(QStringLiteral("Ctrl+Alt+PgDown")),
+    A["layerBottom"] = makeAction(tr("Ir a capa in&ferior"), {"layer-go-bottom", "go-bottom"}, QKeySequence(QStringLiteral("Ctrl+Alt+PgDown")),
                                   [this] { selectLayer(0); }, doc);
     A["layerToTop"] = makeAction(tr("Enviar capa al &principio"), {"layer-top", "go-top"}, {},
                                  [this] { if (m_doc) moveLayerTo(m_doc->activeIndex(), m_doc->layerCount() - 1); });
@@ -711,9 +777,9 @@ void MainWindow::createActions()
 
     // Ayuda (botón "?" de la esquina), como la de Paint.NET con los enlaces de Kaint.
     auto openUrl = [](const QString& url) { return [url] { QDesktopServices::openUrl(QUrl(url)); }; };
-    A["website"] = makeAction(tr("Sitio web de &Kaint"), {"internet-services", "applications-internet", "globe"}, {},
+    A["website"] = makeAction(tr("Sitio web de &Kaint"), {"help-website", "internet-services", "applications-internet", "globe"}, {},
                               openUrl(QStringLiteral(KAINT_REPOSITORY)));
-    A["donate"] = makeAction(tr("&Donar"), {"face-smile", "emblem-favorite"}, {},
+    A["donate"] = makeAction(tr("&Donar"), {"help-donate", "face-smile", "emblem-favorite"}, {},
                              openUrl(QStringLiteral("https://ko-fi.com/opposition")));
     {
         QFont italic = A["donate"]->font();
@@ -722,7 +788,7 @@ void MainWindow::createActions()
     }
     A["pluginsSite"] = makeAction(tr("&Complementos"), {"plugins", "preferences-plugin", "application-x-addon"}, {},
                                   openUrl(QStringLiteral("https://www.getpaint.net/redirect/plugins_hm.html")));
-    A["feedback"] = makeAction(tr("&Enviar comentarios o informe de errores..."), {"mail-message-new", "mail-send"}, {},
+    A["feedback"] = makeAction(tr("&Enviar comentarios o informe de errores..."), {"help-feedback", "mail-message-new", "mail-send"}, {},
                                openUrl(QStringLiteral(KAINT_REPOSITORY "/issues")));
     A["about"] = makeAction(tr("&Acerca de"), {"help-about"}, {}, [this] {
         AboutDialog dlg(this);
@@ -790,7 +856,7 @@ void MainWindow::createMenus()
     edit->addActions({A["cut"], A["copy"], A["copyMerged"], A["paste"], A["pasteLayer"], A["pasteImage"]});
     edit->addSeparator();
     edit->addAction(A["copySelection"]);
-    QMenu* pasteSel = edit->addMenu(Icons::theme({"edit-paste"}), tr("Pegar s&elección"));
+    QMenu* pasteSel = edit->addMenu(Icons::theme({"edit-paste-selection", "edit-paste"}), tr("Pegar s&elección"));
     for (int m : {int(SelectionMode::Replace), int(SelectionMode::Union), int(SelectionMode::Exclude),
                   int(SelectionMode::Intersect), int(SelectionMode::Xor)})
         pasteSel->addAction(A[QStringLiteral("pasteSelection%1").arg(m)]);
@@ -889,7 +955,7 @@ void MainWindow::rebuildEffectMenus()
     }
     for (const Effect* e : std::as_const(effects)) {
         QMenu* menu = e->isAdjustment() ? m_adjustmentsMenu : submenus.value(e->category(), m_effectsMenu);
-        QIcon icon = Icons::theme(e->iconName());
+        QIcon icon = Icons::theme(Icons::effectIcon(e->id(), e->iconName()));
         if (icon.isNull() && !e->iconImage().isNull())
             icon = QIcon(QPixmap::fromImage(e->iconImage()));
         const bool hasDialog = !e->params().isEmpty() || e->hasCustomDialog();
@@ -1041,11 +1107,10 @@ void MainWindow::createPanels()
         a->setChecked(!panel->isHidden());
         a->setToolTip(QStringLiteral("%1 (%2)").arg(name, QKeySequence(key).toString(QKeySequence::NativeText)));
         connect(a, &QAction::toggled, panel, [panel](bool on) {
-            panel->setVisible(on);
-            if (on) {
-                panel->raise();
-                panel->reposition();
-            }
+            if (on)
+                panel->showAnimated();
+            else
+                panel->hide();
         });
         connect(panel, &FloatingPanel::closed, a, [a] { a->setChecked(false); });
         addAction(a);
@@ -1111,8 +1176,8 @@ void MainWindow::createStatusBar()
     m_progress->setTextVisible(false);
     m_progress->hide();
     bar->addPermanentWidget(m_progress);
-    m_selLabel = item({"select-rectangular"}, tr("Tamaño de la selección"));
-    m_posLabel = item({"tool-pointer", "edit-select"}, tr("Posición del cursor"));
+    m_selLabel = item({"status-selection", "select-rectangular"}, tr("Tamaño de la selección"));
+    m_posLabel = item({"status-cursor", "tool-pointer", "edit-select"}, tr("Posición del cursor"));
 
     // Unidades: botón compacto ("px", "in", "cm") con menú.
     m_unitButton = new QToolButton(bar);
@@ -1332,7 +1397,7 @@ bool MainWindow::maybeSave(Document* doc)
                                          tr("Guardar la imagen y, a continuación, cerrarla."), true);
     const int discard = dlg.addChoice(Icons::theme({"edit-delete", "user-trash"}), tr("No guardar"),
                                       tr("Descartar los cambios no guardados."));
-    dlg.addChoice(Icons::theme({"edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
+    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
     const int answer = dlg.choose();
     if (answer == saveChoice)
         return save(doc);
@@ -1389,7 +1454,7 @@ bool MainWindow::maybeSaveAll(const QList<Document*>& docs, bool quitting)
     const int discard = dlg.addChoice(Icons::theme({"edit-delete", "user-trash"}), tr("No guardar"),
                                       quitting ? tr("Descartar todos los cambios no guardados y, a continuación, salir.")
                                                : tr("Descartar todos los cambios no guardados y, a continuación, cerrarlas."));
-    dlg.addChoice(Icons::theme({"edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
+    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
     const int answer = dlg.choose();
     if (answer == saveChoice) {
         for (Document* d : std::as_const(modified)) {
@@ -1860,7 +1925,7 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
                        tr("Para guardar en este formato de archivo primero tiene que acoplar la imagen, lo que la "
                           "reducirá a una única capa."),
                        this);
-        const int flattenChoice = ask.addChoice(Icons::theme({"layer-bottom", "merge"}), tr("Acoplar"),
+        const int flattenChoice = ask.addChoice(Icons::theme({"image-flatten", "merge"}), tr("Acoplar"),
                                                 tr("Se acoplará la imagen y, a continuación, se guardará. El "
                                                    "acoplamiento queda en el historial, pero el archivo tendrá una "
                                                    "sola capa."),
@@ -2226,7 +2291,7 @@ bool MainWindow::ensureCanvasFits(const QImage& image, const QString& title, boo
     const int keep = dlg.addChoice(Icons::theme({"transform-crop"}), tr("Mantener el tamaño del lienzo"),
                                    tr("No expande el lienzo. Tendrá que mover la imagen para asegurarse de que la "
                                       "parte que desea se encuentra en los límites del lienzo."));
-    dlg.addChoice(Icons::theme({"edit-undo"}), tr("Cancelar"),
+    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"),
                   importing ? tr("Cancela la importación.") : tr("Cancela la acción de pegado."));
     const int answer = dlg.choose();
     if (answer == expand) {
@@ -2542,7 +2607,7 @@ void MainWindow::flattenDocument(Document* doc)
     after.props = {layer->props};
     after.active = 0;
     after.selection = before.selection;
-    HistoryIcons::registerIcon(tr("Acoplar"), QStringLiteral("layer-bottom"));
+    HistoryIcons::registerIcon(tr("Acoplar"), QStringLiteral("image-flatten"));
     doc->undoStack()->push(new DocumentStateCommand(doc, before, after, tr("Acoplar")));
 }
 
@@ -2828,12 +2893,12 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
     m_doc->clearPreview();
     const QRect r = m_doc->selection().isEmpty() ? m_doc->rect() : m_doc->selection().bounds();
     m_doc->notifyPixelsChanged(layer.get(), r);
-    pushPixelPatch(m_doc, layer, before, r, effect->name(), effect->iconName());
+    pushPixelPatch(m_doc, layer, before, r, effect->name(), Icons::effectIcon(effect->id(), effect->iconName()));
 
     if (!effect->hidden()) {
         m_lastEffect = effect;
         m_act["repeatEffect"]->setText(tr("Repetir «%1»").arg(effect->name()));
-        QIcon icon = Icons::theme(effect->iconName());
+        QIcon icon = Icons::theme(Icons::effectIcon(effect->id(), effect->iconName()));
         if (icon.isNull() && !effect->iconImage().isNull())
             icon = QIcon(QPixmap::fromImage(effect->iconImage()));
         m_act["repeatEffect"]->setIcon(icon);
@@ -2941,14 +3006,12 @@ void MainWindow::applySettings()
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme))
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     applyCanvasAppearance();
-    // Los efectos de menús y listas de Qt son ventanas aparte: el de las listas desplegables
-    // se ve primero en otro sitio y salta a su lugar (y en Wayland, todos).
-    const bool wayland = QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
-    for (auto effect : {Qt::UI_AnimateMenu, Qt::UI_FadeMenu, Qt::UI_AnimateTooltip, Qt::UI_FadeTooltip})
-        QApplication::setEffectEnabled(effect, m_settings.animations && !wayland);
-    QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
+    // Las animaciones son las de Kaint (Animations), también en Wayland: los efectos de menús y
+    // listas de Qt son ventanas aparte que se ven primero en otro sitio y saltan a su lugar.
+    for (auto effect : {Qt::UI_AnimateMenu, Qt::UI_FadeMenu, Qt::UI_AnimateTooltip, Qt::UI_FadeTooltip, Qt::UI_AnimateCombo})
+        QApplication::setEffectEnabled(effect, false);
     QApplication::setEffectEnabled(Qt::UI_AnimateToolBox, m_settings.animations);
-    QApplication::setEffectEnabled(Qt::UI_General, m_settings.animations);
+    Animations::setEnabled(m_settings.animations);
     if (m_settings.autosaveMinutes > 0)
         m_autosaveTimer.start(m_settings.autosaveMinutes * 60 * 1000);
     else

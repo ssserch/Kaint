@@ -50,7 +50,7 @@ private:
     void commitStep();
 
     LayerEdit m_edit;
-    StepRecorder m_steps{ToolId::Line, QStringLiteral("draw-line")};
+    StepRecorder m_steps{ToolId::Line, QStringLiteral("linecurve")};
     bool m_restoring = false;
     std::array<QPointF, 4> m_pts;
     std::array<QPointF, 4> m_ptsStart;

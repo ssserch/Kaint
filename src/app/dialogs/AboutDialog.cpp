@@ -1,5 +1,6 @@
 #include "app/dialogs/AboutDialog.h"
 
+#include "app/Animations.h"
 #include "app/Icons.h"
 #include "app/widgets/WaveLabel.h"
 
@@ -136,7 +137,7 @@ AboutDialog::AboutDialog(QWidget* parent)
     resize(520, 500);
 
     // El logo se aclara desde muy desenfocado cada vez que se abre (sin animaciones, ya nítido).
-    if (QApplication::isEffectEnabled(Qt::UI_General)) {
+    if (Animations::enabled()) {
         auto* blur = new QGraphicsBlurEffect(logo);
         blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
         blur->setBlurRadius(28);

@@ -112,12 +112,14 @@ target_link_libraries(kaintcore PUBLIC Qt6::Gui ZLIB::ZLIB Threads::Threads)
 # Aplicación (interfaz Qt Widgets)
 # ---------------------------------------------------------------------------
 add_library(kaintui STATIC
+    src/app/Animations.cpp
     src/app/AppState.cpp
     src/app/Canvas.cpp
     src/app/DiscordPresence.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp
+    src/app/PngIcons.cpp
     src/app/Recovery.cpp
     src/app/Ruler.cpp
     src/app/Theme.cpp
@@ -216,6 +218,10 @@ qt_add_resources(kaintui kaint_icons PREFIX "/kaint" FILES ${KAINT_ICON_RESOURCE
 # Iconos de Breeze incluidos (data/icons)
 file(GLOB_RECURSE KAINT_THEME_ICONS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/icons/kaint-breeze*/*")
 qt_add_resources(kaintui kaint_icon_themes PREFIX "/kaint/icon-themes" BASE data/icons FILES ${KAINT_THEME_ICONS})
+
+# Iconos de la interfaz en PNG (data/ui-icons)
+file(GLOB KAINT_UI_ICONS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/ui-icons/*.png")
+qt_add_resources(kaintui kaint_ui_icons PREFIX "/kaint/ui-icons" BASE data/ui-icons FILES ${KAINT_UI_ICONS})
 
 
 qt_add_executable(kaint src/app/main.cpp)

@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPainterPathStroker>
+#include <QSettings>
 #include <QStyle>
 #include <QStyleOption>
 #include <QtMath>
@@ -699,6 +700,12 @@ int cursorSize()
         if (ok && env >= 16 && env <= 256)
             return env;
 #ifdef Q_OS_WIN
+        // El tamaño del puntero de Configuración > Accesibilidad (32 de fábrica) o, si no está, el
+        // de las métricas del sistema.
+        const QSettings reg(QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Cursors"), QSettings::NativeFormat);
+        const int base = reg.value(QStringLiteral("CursorBaseSize")).toInt(&ok);
+        if (ok && base >= 16 && base <= 256)
+            return base;
         const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
         return std::max(16, int(std::lround(GetSystemMetrics(SM_CXCURSOR) / dpr)));
 #else

@@ -117,18 +117,22 @@ u {
     min-width: 0;
 }
 
+/* Como la fila de arriba de Kaint, bajo la barra de título de la ventana: una franja del color de
+   los menús encima (si no, los menús y la miniatura quedaban pegados al borde, como cortados),
+   los menús de 26 px y la barra principal de 33 px. */
 #top-row {
     display: flex;
     align-items: stretch;
     gap: 6px;
     background: var(--menubar);
-    padding-right: 4px;
+    padding: 6px 4px 0 0;
     min-width: 0;
 }
 
 #top-row .top-left {
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
     flex: none;
     min-width: 0;
 }
@@ -141,7 +145,11 @@ u {
     border-bottom: none;
     border-radius: var(--radius) var(--radius) 0 0;
     padding: 1px 2px;
-    margin-top: 2px;
+    min-height: 26px;
+}
+
+#main-toolbar {
+    min-height: 33px;
 }
 
 .menubar > .menu-title {
@@ -906,6 +914,18 @@ input[type="checkbox"] {
     flex: none;
 }
 
+.colors-panel .wheel-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 90px;
+}
+
+.colors-panel .wheel-column .more-button {
+    align-self: flex-end;
+}
+
 .colors-panel .wheel-box {
     flex: 1;
     position: relative;
@@ -1471,35 +1491,116 @@ input[type="checkbox"] {
 .about {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    width: min(460px, calc(100vw - 60px));
+    gap: 2px;
+    width: min(500px, calc(100vw - 60px));
 }
 
-.about .head {
+.about a, .welcome a {
+    color: var(--accent);
+}
+
+/* Logo de Acerca de (como el de Kaint): icono de 56 px y el nombre con la letra fina de Paint.NET,
+   que se aclara desde muy desenfocado. */
+.kaint-logo {
     display: flex;
-    gap: 14px;
     align-items: center;
+    gap: 10px;
+    padding: 4px;
+    animation: kaint-reveal 1.5s cubic-bezier(.33, 1, .68, 1) both;
 }
 
-.about .head img.logo {
-    width: 96px;
-    height: 96px;
-    animation: kaint-reveal 1.5s cubic-bezier(.2, .7, .2, 1) both;
+.kaint-logo img {
+    width: 56px;
+    height: 56px;
+}
+
+.kaint-logo span {
+    font: 300 44px "Segoe UI Light", "Segoe UI", var(--font);
+    line-height: 1;
+    white-space: nowrap;
 }
 
 @keyframes kaint-reveal {
-    0% { filter: blur(14px) saturate(.7); opacity: 0.2; }
-    100% { filter: blur(0) saturate(1); opacity: 1; }
+    0% { filter: blur(14px); }
+    100% { filter: blur(0); }
 }
 
-.about h2 {
-    margin: 0;
-    font-weight: 300;
-    font-size: 28px;
+/* Firma con una ola: cada letra sube y baja, desfasada de la anterior (0,7 vueltas por segundo). */
+.wave {
+    display: inline-flex;
+    white-space: pre;
+    padding: 2px 0;
 }
 
-.about a {
-    color: var(--accent);
+.wave span {
+    display: inline-block;
+    animation: kaint-wave 1.43s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 0.125s - 20s);
+}
+
+.wave a {
+    display: inline-flex;
+    text-decoration: none;
+}
+
+.wave a:hover {
+    text-decoration: underline;
+}
+
+@keyframes kaint-wave {
+    0%, 100% { transform: translateY(0); }
+    25% { transform: translateY(2px); }
+    75% { transform: translateY(-2px); }
+}
+
+.welcome .author {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Donar: discreto, junto al autor. */
+.welcome .donate {
+    font-size: 11px;
+    color: var(--text);
+    opacity: 0.75;
+    text-decoration: none;
+    padding: 1px 5px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+}
+
+.welcome .donate:hover {
+    opacity: 1;
+    border-color: var(--line);
+}
+
+.welcome hr {
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 8px 0 4px;
+}
+
+.welcome .form {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+    align-items: center;
+    gap: 6px 10px;
+    margin: 6px 0 2px;
+}
+
+.about .credits {
+    background: var(--base);
+    border: 1px solid var(--field);
+    border-radius: var(--radius);
+    padding: 3px 4px;
+    min-height: 170px;
+    max-height: 220px;
+    overflow: auto;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 /* Capa de soltar archivos */
@@ -1536,6 +1637,197 @@ input[type="checkbox"] {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+}
+
+/* --- Aspecto de Paint.NET (Configuración > Estilo de la interfaz) ---------------------------
+   Recreación de Paint.NET 5: más compacto, menús sin marco y más juntos, ventanas sin borde ni
+   esquinas redondeadas, la selección de las listas y la pestaña de la imagen en su azul, las
+   casillas de las capas blancas y el botón «Más >>» claro. Solo cambia lo visual. */
+:root.pdn {
+    --radius: 0px;
+}
+
+:root.pdn.dark {
+    --selection: #195ba0;
+    --selection-border: #0078d7;
+}
+
+:root.pdn:not(.dark) {
+    --selection: #cce8ff;
+    --selection-border: #99d1ff;
+}
+
+:root.pdn .menubar {
+    border: none;
+    padding: 0 3px;
+}
+
+:root.pdn .menubar > .menu-title {
+    padding: 3px 4px;
+}
+
+:root.pdn .menubar u {
+    text-decoration: none;
+}
+
+:root.pdn #main-toolbar {
+    gap: 0;
+    padding: 0 2px;
+    border: none;
+}
+
+:root.pdn .toolbar .tbutton {
+    min-width: 22px;
+    min-height: 22px;
+    padding: 1px;
+}
+
+:root.pdn .tool-options {
+    gap: 0;
+}
+
+:root.pdn .image-tab.current {
+    background: #3a63c0;
+    border-color: #0078d7;
+}
+
+:root.pdn:not(.dark) .image-tab.current {
+    background: #cce8ff;
+    border-color: #99d1ff;
+}
+
+/* La X de cerrar solo en la imagen que tiene el puntero. */
+:root.pdn .image-tab.current:not(:hover) .close {
+    opacity: 0;
+}
+
+:root.pdn .floating-panel {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+:root.pdn .floating-panel > .title {
+    padding: 3px 3px 3px 8px;
+    border-radius: 0;
+    min-height: 25px;
+}
+
+:root.pdn .floating-panel > .title .close {
+    width: 18px;
+    height: 18px;
+    border-radius: 0;
+}
+
+:root.pdn .floating-panel > .title .close::before {
+    content: "x";
+    position: static;
+    display: block;
+    height: auto;
+    background: none;
+    transform: none;
+    color: #fff;
+    font: bold 10px/17px Arial, sans-serif;
+    text-align: center;
+}
+
+:root.pdn .floating-panel > .title .close::after {
+    display: none;
+}
+
+:root.pdn .floating-panel > .content {
+    padding: 0 2px 2px;
+}
+
+:root.pdn .list {
+    border: none;
+    background: var(--panel);
+}
+
+:root.pdn .history-list .row {
+    height: 19px;
+    gap: 3px;
+    padding: 0 2px;
+}
+
+:root.pdn .history-jump {
+    display: none;
+}
+
+:root.pdn .panel-buttons {
+    background: var(--toolbar);
+    border-top: 1px solid var(--line);
+    margin: 0 -2px -2px;
+    padding: 2px;
+}
+
+:root.pdn .tools-grid {
+    grid-template-columns: repeat(var(--columns, 2), 24px);
+    padding: 2px 0;
+}
+
+:root.pdn .tools-grid .tbutton {
+    width: 24px;
+    height: 24px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+}
+
+:root.pdn .tools-grid .tbutton .kicon {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+/* Casillas de las capas: blancas con la marca oscura, como en Paint.NET. */
+:root.pdn .layer-list .row input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border: 1px solid #333;
+}
+
+:root.pdn .layer-list .row input[type="checkbox"]:checked {
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.2l2.6 2.6L10 3.4' fill='none' stroke='%231e1e1e' stroke-width='1.6'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+
+/* Colores: sin el selector de ranura ni el brillo vertical; «Más >>» claro con borde azul, encima
+   de la rueda (más alta para hacerle sitio). */
+:root.pdn .colors-panel:not(.expanded) .middle {
+    height: calc(144px * var(--s));
+}
+
+:root.pdn .colors-panel:not(.expanded) .top {
+    display: none;
+}
+/* Colores: sin el selector de ranura ni el brillo vertical; «Más >>» claro con borde azul. */
+:root.pdn .colors-panel .top select,
+:root.pdn .colors-panel .channel-slider.vertical {
+    display: none !important;
+}
+
+:root.pdn .colors-panel .more-button {
+    background: #e1e1e1;
+    color: #000;
+    border: 1px solid #0078d7;
+    border-radius: 0;
+    padding: 1px 8px;
+}
+
+:root.pdn .colors-panel .more-button:hover {
+    background: #e5f1fb;
+}
+
+:root.pdn .status-bar .zoom-box {
+    background: transparent;
+    border-color: transparent;
+}
+
+:root.pdn .status-bar .zoom-box:hover {
+    border-color: var(--line);
 }
 
 /* --- Windows 98 (tema clásico): relieves de 98.css ----------------------------------------- */

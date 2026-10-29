@@ -9,7 +9,7 @@ import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 import { kIndicator, outCubic, run, slideRows } from "./Animations.js";
 import { remember, Settings } from "../Settings.js";
-import { plain, tr } from "../i18n.js";
+import { plain, tr, trc } from "../i18n.js";
 
 export class FloatingPanel {
     constructor(workspace, id, title, content, { corner = "tl", offset = { x: 8, y: 8 }, size = null, onClose = null } = {}) {
@@ -213,7 +213,8 @@ export function toolsPanel(app) {
     const sync = () => buttons.forEach((b, id) => b.classList.toggle("checked", app.tools.current?.id === id));
     app.tools.addEventListener("changed", sync);
     sync();
-    const count = buttons.size, cell = 30, gap = 1;
+    // Lado de los botones (30 px; 24 con el aspecto de Paint.NET) y su separación.
+    const count = buttons.size, gap = 1, cell = () => grid.firstElementChild?.offsetWidth || 30;
     let columns = 2;
     grid.fit = {
         initial: 2,
@@ -226,10 +227,10 @@ export function toolsPanel(app) {
         },
         fromSize(w, h, horizontal, vertical) {
             if (vertical && !horizontal) {
-                const rows = Math.min(count, Math.max(1, Math.floor((h + gap) / (cell + gap))));
+                const rows = Math.min(count, Math.max(1, Math.floor((h + gap) / (cell() + gap))));
                 return Math.ceil(count / rows);
             }
-            return Math.floor((w + gap) / (cell + gap));
+            return Math.floor((w + gap) / (cell() + gap));
         },
     };
     return grid;
@@ -263,7 +264,9 @@ export function historyPanel(app) {
     app.addEventListener("document", refresh);
     const buttons = el("div", { className: "panel-buttons" });
     const jump = (text, iconName, fn, tip) => {
-        const b = el("button", { className: "tbutton", title: tip }, [iconName ? icon(iconName, 16) : el("span", { textContent: text })]);
+        // Ir al principio y al final no están con el aspecto de Paint.NET (solo deshacer y rehacer).
+        const b = el("button", { className: iconName ? "tbutton" : "tbutton history-jump", title: tip },
+                     [iconName ? icon(iconName, 16) : el("span", { textContent: text })]);
         b.addEventListener("click", fn);
         buttons.appendChild(b);
     };
@@ -706,9 +709,16 @@ class ColorWheel {
         return { x: (w - side) / 2, y: (h - side) / 2, side };
     }
 
+    // Con el aspecto de Paint.NET, el tono va en el sentido de las agujas del reloj (el amarillo
+    // abajo), como la rueda de Paint.NET 5.
+    get clockwise() {
+        return Settings.get("uiStyle") === 1;
+    }
+
     resized() {
-        const dpr = window.devicePixelRatio || 1, side = Math.round(this.rect().side * dpr);
-        if (side > 0 && (!this.image || this.image.width !== side)) {
+        const dpr = window.devicePixelRatio || 1, side = Math.round(this.rect().side * dpr), clockwise = this.clockwise;
+        if (side > 0 && (!this.image || this.image.width !== side || this.imageClockwise !== clockwise)) {
+            this.imageClockwise = clockwise;
             this.image = el("canvas", { width: side, height: side });
             const ctx = this.image.getContext("2d"), img = ctx.createImageData(side, side), c = side / 2;
             for (let y = 0; y < side; ++y)
@@ -716,7 +726,7 @@ class ColorWheel {
                     const dx = x + 0.5 - c, dy = y + 0.5 - c, d = Math.hypot(dx, dy), alpha = Math.min(1, Math.max(0, c - d));
                     if (alpha <= 0)
                         continue;
-                    const col = hsvToRgb(((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360, Math.min(1, d / c), 1);
+                    const col = hsvToRgb(((Math.atan2(clockwise ? dy : -dy, dx) * 180) / Math.PI + 360) % 360, Math.min(1, d / c), 1);
                     const i = (y * side + x) * 4;
                     img.data[i] = col.r; img.data[i + 1] = col.g; img.data[i + 2] = col.b; img.data[i + 3] = alpha * 255;
                 }
@@ -742,7 +752,7 @@ class ColorWheel {
         const r = this.rect();
         p.drawImage(this.image, r.x, r.y, r.side, r.side);
         const radius = r.side / 2, a = (this.hsv.h * Math.PI) / 180, d = this.hsv.s * radius;
-        const mx = r.x + radius + Math.cos(a) * d, my = r.y + radius - Math.sin(a) * d;
+        const mx = r.x + radius + Math.cos(a) * d, my = r.y + radius + (this.clockwise ? 1 : -1) * Math.sin(a) * d;
         p.lineWidth = 1.5;
         p.strokeStyle = "#000";
         p.beginPath();
@@ -757,7 +767,7 @@ class ColorWheel {
     pick(e) {
         const b = this.canvas.getBoundingClientRect(), r = this.rect(), radius = r.side / 2;
         const dx = e.clientX - b.left - (r.x + radius), dy = e.clientY - b.top - (r.y + radius);
-        let h = ((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360, s = Math.min(1, Math.hypot(dx, dy) / radius);
+        let h = ((Math.atan2(this.clockwise ? dy : -dy, dx) * 180) / Math.PI + 360) % 360, s = Math.min(1, Math.hypot(dx, dy) / radius);
         // Ctrl: solo el tono · Alt: solo la saturación · Mayús: pasos de 15°.
         if (e.ctrlKey)
             s = this.press.hsv.s;
@@ -808,7 +818,9 @@ export function colorsPanel(app) {
     });
     const value = new ChannelSlider("v", true, (v) => setHsv({ ...hsv, v: v / 100 }));
     value.canvas.title = tr("Brillo");
-    const middle = el("div", { className: "middle" }, [swatchColumn, wheel.box, value.canvas]);
+    // La rueda (y encima, con el aspecto de Paint.NET, el botón «Más >>»).
+    const wheelColumn = el("div", { className: "wheel-column" }, [wheel.box]);
+    const middle = el("div", { className: "middle" }, [swatchColumn, wheelColumn, value.canvas]);
     left.append(topRow, middle);
 
     // Paleta: clic izquierdo = ranura activa, derecho = inactiva.
@@ -919,7 +931,7 @@ export function colorsPanel(app) {
     section("RGB");
     row("r", tr("R:")); row("g", tr("V:")); row("b", tr("A:"));
     section(tr("MSV (HSV)"));
-    row("h", tr("M:")); row("s", tr("S:")); row("v", tr("V:"));
+    row("h", tr("M:")); row("s", tr("S:")); row("v", trc("valor (MSV)", "V:"));
     section(tr("Opacidad (canal alfa)"));
     row("a", "");
     // Solo si se escribió algo: al salir del campo no se vuelve a poner un color de antes.
@@ -970,13 +982,24 @@ export function colorsPanel(app) {
             swatchColumn.prepend(swatches.canvas);
         extended.style.display = on ? "" : "none";
         panel.classList.toggle("expanded", on);
-        more.textContent = on ? tr("« Menos") : tr("Más »");
+        moreText();
         drawPalette();
         applyScale(scale);
         app.panels.colors.reposition();
         app.panels.colors.save();
     };
     more.addEventListener("click", () => setExpanded(!expanded));
+    // Con el aspecto de Paint.NET, «Más >>» y «<< Menos».
+    const moreText = () => {
+        const pdn = Settings.get("uiStyle") === 1;
+        more.textContent = pdn ? (expanded ? tr("<< Menos") : tr("Más >>")) : expanded ? tr("« Menos") : tr("Más »");
+        // Paint.NET compacto: «Más >>» a la derecha de las muestras, encima de la rueda.
+        if (pdn && !expanded)
+            wheelColumn.prepend(more);
+        else if (more.parentElement !== topRow)
+            topRow.appendChild(more);
+    };
+    moreText();
 
     const sync = () => {
         const c = active(), fromHsv = hsvToRgb(hsv.h, hsv.s, hsv.v);
@@ -1020,7 +1043,11 @@ export function colorsPanel(app) {
     AppState.addEventListener("colors", sync);
     window.addEventListener("kaint-settings", () => {
         swatches.paint();
+        moreText();
+        wheel.resized();
         sync();
+        // El selector de ranura y el brillo aparecen o desaparecen: el tamaño de la ventana cambia.
+        app.panels?.colors.reposition();
     });
     sync();
     return panel;

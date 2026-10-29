@@ -15,3 +15,8 @@ await UserFonts.load();
 const { Plugins } = await import("./plugins/Plugins.js");
 Plugins.installApi(window.kaint);
 await Plugins.load();
+// La primera vez, la bienvenida con lo básico de la configuración.
+if (!Settings.get("welcomed")) {
+    const { welcomeDialog } = await import("./ui/Dialogs.js");
+    welcomeDialog();
+}

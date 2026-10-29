@@ -12,4 +12,7 @@ public:
 
     // Texto de la lista "Bibliotecas de software y contribuciones" (HTML).
     static QString credits();
+    // El logo (icono y "kaint.qt6"), que se aclara desde muy desenfocado al mostrarse (sin
+    // animaciones, ya nítido). También lo usa la bienvenida.
+    static QWidget* createLogo(QWidget* parent);
 };

@@ -7,7 +7,7 @@ import { Settings } from "../Settings.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
-import { VERSION } from "../version.js";
+import { REPOSITORY, VERSION } from "../version.js";
 import { ColorRoles, Presets } from "./Themes.js";
 import { plain, tr } from "../i18n.js";
 
@@ -119,8 +119,12 @@ export class Dialog {
     exec() {
         openDialogs++;
         document.body.appendChild(this.backdrop);
-        const focus = this.element.querySelector("input, select, textarea") || this.element.querySelector(".pushbutton.default");
-        setTimeout(() => focus?.focus(), 0);
+        // El foco entra ya (si no, un Esc o un Intro pulsado justo al abrirse se perdía); se repite
+        // tras el primer pintado por si el navegador aún no lo aceptaba.
+        const focus = this.element.querySelector("input, select, textarea") || this.element.querySelector(".pushbutton.default")
+            || this.element.querySelector(".title .close");
+        focus?.focus({ preventScroll: true });
+        setTimeout(() => this.backdrop.contains(document.activeElement) || focus?.focus({ preventScroll: true }), 0);
         return new Promise((resolve) => (this.resolve = resolve));
     }
 
@@ -386,6 +390,9 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [4, tr("Windows 98")], [5, tr("Personalizado")]],
                                   Settings.get("colorScheme"));
             scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
+            const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));
+            look.title = tr("Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.");
+            look.addEventListener("change", () => Settings.set("uiStyle", Number(look.value)));
             const customize = button(tr("Personalizar…"), tr("Editar el tema personalizado."), async () => {
                 Settings.set("colorScheme", 5);
                 scheme.value = "5";
@@ -423,6 +430,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 check(tr("Al arrastrar una capa, marcar con una línea dónde quedará"), "layerDropLine",
                       tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra.")),
                 el("label", {}, [tr("Tema:"), scheme, customize]),
+                el("label", {}, [tr("Estilo de la interfaz:"), look]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
                 note(tr("Los cambios de idioma se aplican al recargar la página.")),
                 el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
@@ -868,17 +876,96 @@ function shortcutsPage(app) {
     ];
 }
 
+// Logo de Kaint como el de Acerca de del programa: el icono y "kaint.html" con la letra fina del
+// logo de Paint.NET; se aclara desde muy desenfocado al abrirse.
+export function kaintLogo() {
+    return el("div", { className: "kaint-logo" }, [el("img", { src: "assets/kaint-64.png", alt: "" }), el("span", { textContent: "kaint.html" })]);
+}
+
+// Texto con una ola suave en bucle (WaveLabel de Kaint): cada letra sube y baja un poco, desfasada
+// de la anterior; la segunda parte es un enlace. Sin animaciones, quieto.
+export function waveLabel(text, link, url) {
+    const box = el("span", { className: "wave" });
+    let i = 0;
+    const letter = (ch) => {
+        const span = el("span", { textContent: ch });
+        span.style.setProperty("--i", i++);
+        return span;
+    };
+    for (const ch of text)
+        box.appendChild(letter(ch));
+    const a = el("a", { href: url, target: "_blank", rel: "noopener", title: url });
+    for (const ch of link)
+        a.appendChild(letter(ch));
+    box.appendChild(a);
+    return box;
+}
+
+// Bibliotecas y contribuciones de la versión web (no usa ninguna biblioteca: todo es JavaScript).
+const credits = [
+    ["Kaint", "SSSerch", "https://github.com/ssserch/Kaint"],
+    ["Paint.NET", "dotPDN LLC, Rick Brewster", "https://www.getpaint.net/"],
+    ["Paint.NET API", "dotPDN LLC", "https://paintdotnet.github.io/apidocs/"],
+    ["Breeze Icons", "KDE", "https://invent.kde.org/frameworks/breeze-icons"],
+];
+
+// Como el Acerca de de Kaint: el logo, la versión, los derechos, el enlace al repositorio, la firma
+// con la ola, la traducción y las contribuciones.
 export async function aboutDialog(version) {
     const dlg = new Dialog(tr("Acerca de Kaint"), { iconName: "help-about" });
+    const list = el("div", { className: "credits" }, credits.map(([name, author, url]) =>
+        el("div", {}, [`• ${name} – ${author} `, el("a", { href: url, target: "_blank", rel: "noopener", textContent: url })])));
     dlg.body.appendChild(el("div", { className: "about" }, [
-        el("div", { className: "head" }, [
-            el("img", { className: "logo", src: "assets/kaint-256.png", alt: "" }),
-            el("div", {}, [el("h2", { textContent: "Kaint" }), el("div", { textContent: `${tr("Versión web de Kaint")} ${version}` })]),
-        ]),
-        el("p", { textContent: tr("Kaint para la web: el editor de imágenes al estilo Paint.NET, en el navegador.") }),
-        el("p", {}, [el("a", { href: "https://github.com/ssserch/Kaint", target: "_blank", rel: "noopener", textContent: "github.com/ssserch/Kaint" })]),
-        el("small", { textContent: "© SSSerch · GPL-3.0. Paint.NET is a trademark of dotPDN LLC.", style: { opacity: 0.75 } }),
+        kaintLogo(),
+        el("div", { textContent: `Kaint v${version}`, style: { marginTop: "4px" } }),
+        el("div", {}, [tr("Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores."), el("br"), tr("Software libre con licencia GPL-3.0.")]),
+        el("a", { href: REPOSITORY, target: "_blank", rel: "noopener", textContent: REPOSITORY }),
+        el("div", {}, [waveLabel("By ", "Y2Kerchy", "https://ssserch.com")]),
+        el("div", { textContent: tr("Traducido al español por SSSerch"), style: { marginTop: "6px" } }),
+        el("div", { textContent: tr("Bibliotecas de software y contribuciones:"), style: { marginTop: "6px" } }),
+        list,
+        el("small", { textContent: "Paint.NET is a trademark of dotPDN LLC.", style: { opacity: 0.7 } }),
     ]));
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
+}
+
+// Bienvenida de la primera vez (como la de Kaint): el logo, la versión y el autor (con un botón
+// discreto para donar) y lo básico de la configuración: tema, estilo de la interfaz e idioma. El
+// tema y el estilo se ven al momento; el idioma, al recargar la página.
+export async function welcomeDialog() {
+    const dlg = new Dialog(tr("Te damos la bienvenida a Kaint"));
+    const startLanguage = Settings.get("language");
+    const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [4, tr("Windows 98")], [5, tr("Personalizado")]],
+                          Settings.get("colorScheme"));
+    scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
+    const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));
+    look.title = tr("Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.");
+    look.addEventListener("change", () => Settings.set("uiStyle", Number(look.value)));
+    const language = select([["en", "English"], ["es", "Español"]], startLanguage);
+    const note = el("small", { textContent: tr("El idioma se aplica al recargar la página."), style: { opacity: 0.7, display: "none" } });
+    language.addEventListener("change", () => {
+        Settings.set("language", language.value);
+        note.style.display = language.value !== startLanguage ? "" : "none";
+    });
+    const donate = el("a", { className: "donate", href: "https://ko-fi.com/opposition", target: "_blank", rel: "noopener",
+                             textContent: tr("♥ Donar"), title: tr("Apoyar el desarrollo de Kaint en Ko-fi") });
+    dlg.body.appendChild(el("div", { className: "about welcome" }, [
+        kaintLogo(),
+        el("div", { textContent: `Kaint v${VERSION}`, style: { marginTop: "4px" } }),
+        el("div", { className: "author" }, [waveLabel(tr("Por "), "SSSerch", "https://ssserch.com"), donate]),
+        el("hr"),
+        el("div", { textContent: tr("Elige cómo quieres que se vea Kaint. Todo se puede cambiar más tarde en Configuración.") }),
+        el("div", { className: "form" }, [
+            el("span", { textContent: tr("Tema:") }), scheme,
+            el("span", { textContent: tr("Estilo de la interfaz:") }), look,
+            el("span", { textContent: tr("Idioma:") }), language,
+        ]),
+        note,
+    ]));
+    dlg.addButton(tr("Empezar"), "ok", { isDefault: true });
+    await dlg.exec();
+    Settings.set("welcomed", true);
+    if (Settings.get("language") !== startLanguage)
+        location.reload();
 }

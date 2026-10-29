@@ -41,9 +41,20 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(`${e.message}\n${e.stack}`));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 await page.goto(url);
+// La primera vez sale la bienvenida (logo, versión, autor y lo básico de la configuración).
 await page.evaluate(() => localStorage.setItem("kaint.settings", JSON.stringify({ language: "es", colorScheme: 1 })));
 await page.reload();
+await page.waitForSelector(".welcome");
+const welcome = await page.evaluate(() => ({ logo: document.querySelector(".welcome .kaint-logo")?.textContent,
+                                             selects: document.querySelectorAll(".welcome select").length,
+                                             donate: !!document.querySelector(".welcome .donate") }));
+await page.click(".dialog .pushbutton.default");
+const welcomed = await page.evaluate(() => JSON.parse(localStorage.getItem("kaint.settings")).welcomed);
+await page.reload();
 await page.waitForFunction(() => window.kaint?.doc);
+const again = await page.evaluate(() => !!document.querySelector(".welcome"));
+check(welcome.logo === "kaint.html" && welcome.selects === 3 && welcome.donate && welcomed === true && !again,
+      `bienvenida la primera vez (${JSON.stringify(welcome)}, ${welcomed}, ${again})`);
 
 const at = (x, y) => page.evaluate(([x, y]) => {
     const k = window.kaint, r = k.view.canvas.getBoundingClientRect(), p = k.view.imageToView(x, y);
@@ -282,7 +293,7 @@ check(await page.evaluate(() => !document.getElementById("workspace").classList.
 await translucent.check();
 await page.click(".dialog .pushbutton.default");
 page.evaluate(() => window.kaint.actions.get("about").trigger());
-await page.waitForSelector(".dialog .about img.logo");
+await page.waitForSelector(".dialog .about .kaint-logo img");
 await page.keyboard.press("Escape");
 check(await page.evaluate(() => !document.querySelector(".dialog")), "Esc cierra Acerca de");
 await page.evaluate(() => window.kaint.closeDocument(window.kaint.doc, false));
@@ -633,6 +644,42 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
         return { small: small.inCursor && small.cursor.includes("image-set"), big };
     });
     check(brush.small && !brush.big, `el contorno del pincel va en el cursor si cabe (${JSON.stringify(brush)})`);
+}
+
+// Estilo de la interfaz como Paint.NET: más compacto, ventanas sin borde, sin ir al principio ni al
+// final en Historial, Colores sin el selector de ranura y «Más >>» junto a la rueda.
+{
+    const pdn = await page.evaluate(async () => {
+        const { Settings } = await import("./js/Settings.js");
+        Settings.set("uiStyle", 1);
+        const panel = document.querySelector('.floating-panel[data-panel="history"]');
+        const out = {
+            root: document.documentElement.classList.contains("pdn"),
+            border: getComputedStyle(panel).borderTopWidth,
+            jumps: [...document.querySelectorAll(".history-jump")].every((b) => getComputedStyle(b).display === "none"),
+            select: getComputedStyle(document.querySelector(".colors-panel .top")).display,
+            more: document.querySelector(".colors-panel .more-button").textContent,
+            beside: !!document.querySelector(".colors-panel .wheel-column .more-button"),
+            tool: document.querySelector(".tools-grid .tbutton").offsetWidth,
+        };
+        Settings.set("uiStyle", 0);
+        out.back = !document.documentElement.classList.contains("pdn") && document.querySelector(".colors-panel .more-button").textContent === "Más »"
+            && !document.querySelector(".colors-panel .wheel-column .more-button");
+        return out;
+    });
+    check(pdn.root && pdn.border === "0px" && pdn.jumps && pdn.select === "none" && pdn.more === "Más >>" && pdn.beside && pdn.tool === 24 && pdn.back,
+          `estilo de Paint.NET (${JSON.stringify(pdn)})`);
+}
+
+// Acerca de como el de Kaint: el logo «kaint.html», la firma con la ola y las contribuciones.
+{
+    await page.evaluate(() => { void window.kaint.actions.get("about").run(); });
+    await page.waitForSelector(".about .credits");
+    const about = await page.evaluate(() => ({ logo: document.querySelector(".about .kaint-logo")?.textContent,
+                                               wave: document.querySelectorAll(".about .wave span").length,
+                                               credits: document.querySelectorAll(".about .credits > div").length }));
+    await page.keyboard.press("Escape");
+    check(about.logo === "kaint.html" && about.wave > 8 && about.credits >= 3, `Acerca de (${JSON.stringify(about)})`);
 }
 
 // Todas las páginas de Configuración se abren sin errores.

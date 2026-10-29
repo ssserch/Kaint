@@ -93,13 +93,35 @@ QString AboutDialog::credits()
     return html;
 }
 
+QWidget* AboutDialog::createLogo(QWidget* parent)
+{
+    auto* logo = new AboutLogo(parent);
+    // Se aclara desde muy desenfocado cada vez que se abre (sin animaciones, ya nítido).
+    if (Animations::enabled()) {
+        auto* blur = new QGraphicsBlurEffect(logo);
+        blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
+        blur->setBlurRadius(28);
+        logo->setGraphicsEffect(blur);
+        auto* reveal = new QVariantAnimation(logo);
+        reveal->setDuration(1500);
+        reveal->setStartValue(28.0);
+        reveal->setEndValue(0.0);
+        reveal->setEasingCurve(QEasingCurve::OutCubic);
+        QObject::connect(reveal, &QVariantAnimation::valueChanged, blur,
+                         [blur](const QVariant& v) { blur->setBlurRadius(v.toReal()); });
+        QObject::connect(reveal, &QVariantAnimation::finished, logo, [logo] { logo->setGraphicsEffect(nullptr); });
+        reveal->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+    return logo;
+}
+
 AboutDialog::AboutDialog(QWidget* parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("Acerca de Kaint"));
     setWindowIcon(Icons::theme({"help-about"}));
 
-    auto* logo = new AboutLogo(this);
+    QWidget* logo = createLogo(this);
     auto* version = new QLabel(QStringLiteral("Kaint v%1").arg(QStringLiteral(KAINT_VERSION)), this);
     auto* copyright = new QLabel(tr("Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores.") + QLatin1Char('\n')
                                      + tr("Software libre con licencia GPL-3.0."),
@@ -135,20 +157,4 @@ AboutDialog::AboutDialog(QWidget* parent)
     layout->addWidget(creditsList, 1);
     layout->addWidget(box);
     resize(520, 500);
-
-    // El logo se aclara desde muy desenfocado cada vez que se abre (sin animaciones, ya nítido).
-    if (Animations::enabled()) {
-        auto* blur = new QGraphicsBlurEffect(logo);
-        blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
-        blur->setBlurRadius(28);
-        logo->setGraphicsEffect(blur);
-        auto* reveal = new QVariantAnimation(this);
-        reveal->setDuration(1500);
-        reveal->setStartValue(28.0);
-        reveal->setEndValue(0.0);
-        reveal->setEasingCurve(QEasingCurve::OutCubic);
-        connect(reveal, &QVariantAnimation::valueChanged, blur, [blur](const QVariant& v) { blur->setBlurRadius(v.toReal()); });
-        connect(reveal, &QVariantAnimation::finished, logo, [logo] { logo->setGraphicsEffect(nullptr); });
-        reveal->start(QAbstractAnimation::DeleteWhenStopped);
-    }
 }

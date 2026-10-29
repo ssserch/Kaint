@@ -11,6 +11,13 @@
 #include <cmath>
 #include <cstdlib>
 
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace SystemCursors {
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
@@ -165,6 +172,51 @@ Image load(Shape shape, int pixelSize)
         if (file.isEmpty())
             file = findFile(t, names, paths, 0);
     const Image image = file.isEmpty() ? Image() : parse(file, pixelSize);
+    cache.insert(key, image);
+    return image;
+}
+
+#elif defined(Q_OS_WIN)
+
+QString themeName()
+{
+    // El esquema de punteros de Windows (Configuración del mouse), si se cambió.
+    const QSettings reg(QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Cursors"), QSettings::NativeFormat);
+    return reg.value(QStringLiteral("."), QStringLiteral("Windows")).toString();
+}
+
+Image load(Shape shape, int pixelSize)
+{
+    static QHash<QString, Image> cache;
+    const QString key = QStringLiteral("%1/%2/%3").arg(themeName()).arg(int(shape)).arg(pixelSize);
+    if (const auto it = cache.constFind(key); it != cache.cend())
+        return *it;
+    // El puntero actual del sistema (con el esquema, el tamaño y el color elegidos en Windows), a
+    // ese tamaño; si no se puede cargar así, el de tamaño normal.
+    const LPCWSTR id = MAKEINTRESOURCEW(shape == Shape::IBeam ? 32513 : 32512); // IDC_IBEAM, IDC_ARROW
+    HCURSOR owned = static_cast<HCURSOR>(LoadImageW(nullptr, id, IMAGE_CURSOR, pixelSize, pixelSize, LR_DEFAULTCOLOR));
+    const HCURSOR cursor = owned ? owned : LoadCursorW(nullptr, id);
+    Image image;
+    if (cursor) {
+        image.image = QImage::fromHICON(static_cast<HICON>(cursor)).convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        ICONINFO info{};
+        if (GetIconInfo(static_cast<HICON>(cursor), &info)) {
+            image.hotSpot = QPoint(int(info.xHotspot), int(info.yHotspot));
+            if (info.hbmColor)
+                DeleteObject(info.hbmColor);
+            if (info.hbmMask)
+                DeleteObject(info.hbmMask);
+        }
+    }
+    if (owned)
+        DestroyCursor(owned);
+    // Un puntero cargado a otro tamaño (el de siempre) se escala al pedido.
+    if (!image.image.isNull() && image.image.width() != pixelSize && image.image.width() > 0) {
+        const qreal k = qreal(pixelSize) / image.image.width();
+        image.image = image.image.scaled(QSize(pixelSize, std::max(1, int(std::lround(image.image.height() * k)))),
+                                         Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        image.hotSpot = QPoint(int(std::lround(image.hotSpot.x() * k)), int(std::lround(image.hotSpot.y() * k)));
+    }
     cache.insert(key, image);
     return image;
 }

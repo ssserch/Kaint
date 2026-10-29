@@ -42,10 +42,12 @@ private:
     void buildPaletteMenu();
     void updateAddIcon();
     void setExpanded(bool on);
+    void applyLook();
     double minimumScale() const;
 
     QHBoxLayout* m_topRow;
     QVBoxLayout* m_swatchColumn;
+    QVBoxLayout* m_wheelColumn;
     QComboBox* m_target;
     QPushButton* m_more;
     ColorSwatches* m_swatches;

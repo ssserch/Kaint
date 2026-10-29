@@ -129,11 +129,13 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
     m_list->setUniformItemSizes(true);
     m_list->viewport()->installEventFilter(this);
 
-    auto* buttons = new QHBoxLayout;
+    auto* strip = new QWidget(this);
+    strip->setObjectName(QStringLiteral("PanelButtons"));
+    auto* buttons = new QHBoxLayout(strip);
     buttons->setContentsMargins(2, 2, 2, 2);
     buttons->setSpacing(0);
     for (QAction* a : actions) {
-        auto* b = new QToolButton(this);
+        auto* b = new QToolButton(strip);
         b->setDefaultAction(a);
         b->setAutoRaise(true);
         b->setIconSize(QSize(16, 16));
@@ -145,7 +147,7 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
     layout->addWidget(m_list, 1);
-    layout->addLayout(buttons);
+    layout->addWidget(strip);
 
     connect(m_list, &QListWidget::currentRowChanged, this, [this](int row) {
         if (m_doc && row >= 0)

@@ -24,4 +24,6 @@ protected:
 private:
     QUndoGroup* m_group;
     QUndoView* m_view;
+    // Ir al principio y al final (no están con el aspecto de Paint.NET).
+    QList<QWidget*> m_jumps;
 };

@@ -79,6 +79,8 @@ AppSettings AppSettings::load()
     a.layerDropLine = get("layerDropLine", a.layerDropLine);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
+    a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
+    a.welcomed = get("welcomed", a.welcomed);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 5);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
@@ -133,6 +135,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
     s.setValue(QStringLiteral("panelBorder"), panelBorder);
+    s.setValue(QStringLiteral("uiStyle"), uiStyle);
+    s.setValue(QStringLiteral("welcomed"), welcomed);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
     s.setValue(QStringLiteral("autosaveMinutes"), autosaveMinutes);
     s.setValue(QStringLiteral("language"), language);
@@ -335,6 +339,25 @@ QWidget* SettingsDialog::createInterfacePage()
     schemeRow->addWidget(customize);
     schemeRow->addStretch();
     page.layout->addLayout(schemeRow);
+
+    // Aspecto: el de Kaint o la recreación de Paint.NET (solo lo visual).
+    auto* lookRow = new QHBoxLayout;
+    auto* look = new QComboBox(page.widget);
+    look->addItem(QStringLiteral("Kaint"), 0);
+    look->setItemData(0, tr("El aspecto propio de Kaint."), Qt::ToolTipRole);
+    look->addItem(QStringLiteral("Paint.NET"), 1);
+    look->setItemData(1, tr("Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos."),
+                      Qt::ToolTipRole);
+    look->setCurrentIndex(std::max(0, look->findData(m_settings.uiStyle)));
+    look->setToolTip(tr("No se aplica con el tema KDE."));
+    lookRow->addWidget(new QLabel(tr("Estilo de la interfaz:"), page.widget));
+    lookRow->addWidget(look);
+    lookRow->addStretch();
+    page.layout->addLayout(lookRow);
+    connect(look, &QComboBox::activated, this, [this, look](int i) {
+        m_settings.uiStyle = look->itemData(i).toInt();
+        changed();
+    });
 
     auto* languageRow = new QHBoxLayout;
     auto* language = new QComboBox(page.widget);

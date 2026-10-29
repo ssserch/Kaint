@@ -22,6 +22,7 @@ const extra = {
     "Pegar desde el portapapeles": "Paste from Clipboard",
     "Los cambios de idioma se aplican al recargar la página.": "Language changes apply when the page reloads.",
     "Recargar": "Reload",
+    "El idioma se aplica al recargar la página.": "The language is applied when the page reloads.",
     "Ctrl": "Ctrl",
     "Mayús": "Shift",
     "Supr": "Del",
@@ -118,6 +119,19 @@ export function tr(text, ...args) {
     let out = text;
     if (language === "en")
         out = en[text] ?? extra[text] ?? text;
+    args.forEach((a, i) => {
+        out = out.split(`%${i + 1}`).join(String(a));
+    });
+    return out;
+}
+
+// Como tr() para un texto que se repite con otro sentido ('comment', el de tr(texto, comentario)
+// en Kaint): "V:" es el verde en RGB y el valor en MSV.
+export function trc(comment, text, ...args) {
+    const key = `${comment}\u0004${text}`;
+    if (language !== "en" || !(key in en))
+        return tr(text, ...args);
+    let out = en[key];
     args.forEach((a, i) => {
         out = out.split(`%${i + 1}`).join(String(a));
     });

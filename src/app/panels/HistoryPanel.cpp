@@ -1,6 +1,7 @@
 #include "app/panels/HistoryPanel.h"
 
 #include "app/Icons.h"
+#include "app/Theme.h"
 #include "core/Commands.h"
 #include "core/Document.h"
 
@@ -61,7 +62,10 @@ HistoryPanel::HistoryPanel(QUndoGroup* group, QAction* undo, QAction* redo, QWid
     m_view->setUniformItemSizes(true);
     m_view->viewport()->installEventFilter(this);
 
-    auto* buttons = new QHBoxLayout;
+    // Franja de botones de abajo (con el aspecto de Paint.NET, de otro color y con una línea).
+    auto* strip = new QWidget(this);
+    strip->setObjectName(QStringLiteral("PanelButtons"));
+    auto* buttons = new QHBoxLayout(strip);
     buttons->setContentsMargins(2, 2, 2, 2);
     buttons->setSpacing(0);
     auto jumpButton = [this](const char* icon, const QString& tip, bool toEnd) {
@@ -78,21 +82,31 @@ HistoryPanel::HistoryPanel(QUndoGroup* group, QAction* undo, QAction* redo, QWid
         });
         return b;
     };
-    buttons->addWidget(jumpButton("media-skip-backward", tr("Volver al principio"), false));
+    m_jumps.append(jumpButton("media-skip-backward", tr("Volver al principio"), false));
+    buttons->addWidget(m_jumps.last());
     for (QAction* a : {undo, redo}) {
         auto* b = new QToolButton(this);
         b->setDefaultAction(a);
         b->setAutoRaise(true);
         buttons->addWidget(b);
     }
-    buttons->addWidget(jumpButton("media-skip-forward", tr("Avanzar hasta el final"), true));
+    m_jumps.append(jumpButton("media-skip-forward", tr("Avanzar hasta el final"), true));
+    buttons->addWidget(m_jumps.last());
     buttons->addStretch();
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
     layout->addWidget(m_view, 1);
-    layout->addLayout(buttons);
+    layout->addWidget(strip);
+
+    // Paint.NET solo tiene deshacer y rehacer.
+    auto applyLook = [this] {
+        for (QWidget* b : std::as_const(m_jumps))
+            b->setVisible(!Theme::paintNetLook());
+    };
+    applyLook();
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, applyLook);
 }
 
 void HistoryPanel::setDocument(Document* doc)

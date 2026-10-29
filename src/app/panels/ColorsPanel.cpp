@@ -2,6 +2,7 @@
 
 #include "app/AppState.h"
 #include "app/Icons.h"
+#include "app/Theme.h"
 #include "core/Palette.h"
 
 #include <QColorDialog>
@@ -53,6 +54,7 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     m_target->addItems({tr("Principal"), tr("Secundario")});
     m_target->setToolTip(tr("Ranura de color que se edita (C)"));
     m_more = new QPushButton(tr("Más »"), this);
+    m_more->setObjectName(QStringLiteral("ColorsMoreButton"));
     m_more->setCheckable(true);
     m_swatches = new ColorSwatches(this);
     m_wheel = new ColorWheel(this);
@@ -86,7 +88,10 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     m_swatchColumn->addWidget(m_swatches);
     m_swatchColumn->addStretch();
     middle->addLayout(m_swatchColumn);
-    middle->addWidget(m_wheel, 1);
+    // La rueda (y encima, con el aspecto de Paint.NET, el botón «Más >>»).
+    m_wheelColumn = new QVBoxLayout;
+    m_wheelColumn->addWidget(m_wheel, 1);
+    middle->addLayout(m_wheelColumn, 1);
     middle->addWidget(m_value);
 
     // Columna derecha de la vista ampliada, con las secciones de Paint.NET.
@@ -110,7 +115,8 @@ ColorsPanel::ColorsPanel(QWidget* parent)
         {ColorSlider::Blue, tr("A:"), {}},
         {ColorSlider::Hue, tr("M:"), tr("MSV (HSV)")},
         {ColorSlider::Saturation, tr("S:"), {}},
-        {ColorSlider::Value, tr("V:"), {}},
+        // "V:" también es el verde de RGB: en inglés este es el valor (V) y aquel, el verde (G).
+        {ColorSlider::Value, tr("V:", "valor (MSV)"), {}},
         {ColorSlider::Alpha, QString(), tr("Opacidad (canal alfa)")},
     };
     int row = 0;
@@ -221,7 +227,30 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     });
     connect(app, &AppState::colorsChanged, this, &ColorsPanel::refresh);
     connect(app, &AppState::paletteChanged, this, [this] { m_palette->setColors(AppState::instance()->palette()); });
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, &ColorsPanel::applyLook);
+    applyLook();
     refresh();
+}
+
+void ColorsPanel::applyLook()
+{
+    // Paint.NET 5: sin el selector de ranura ni el brillo vertical (la ranura se elige en las
+    // muestras), «Más >>» y la rueda con el tono en el sentido de las agujas del reloj.
+    const bool paintNet = Theme::paintNetLook();
+    const bool expanded = isExpanded();
+    m_target->setVisible(!expanded && !paintNet);
+    m_value->setVisible(!expanded && !paintNet);
+    // Paint.NET compacto: «Más >>» a la derecha de las muestras, encima de la rueda.
+    const bool beside = paintNet && !expanded;
+    if (beside && m_topRow->indexOf(m_more) >= 0) {
+        m_topRow->removeWidget(m_more);
+        m_wheelColumn->insertWidget(0, m_more, 0, Qt::AlignRight);
+    } else if (!beside && m_wheelColumn->indexOf(m_more) >= 0) {
+        m_wheelColumn->removeWidget(m_more);
+        m_topRow->addWidget(m_more, 0, Qt::AlignTop);
+    }
+    m_more->setText(paintNet ? (expanded ? tr("<< Menos") : tr("Más >>")) : (expanded ? tr("« Menos") : tr("Más »")));
+    m_wheel->setClockwise(paintNet);
 }
 
 double ColorsPanel::scale() const
@@ -271,8 +300,6 @@ void ColorsPanel::setExpanded(bool on)
     // Ampliado: las muestras suben junto al botón, sin el selector de ranura ni el brillo
     // vertical (ya están los deslizadores). La escala se mantiene.
     const double keep = scale();
-    m_target->setVisible(!on);
-    m_value->setVisible(!on);
     if (on) {
         m_swatchColumn->removeWidget(m_swatches);
         m_topRow->insertWidget(0, m_swatches, 0, Qt::AlignTop);
@@ -281,7 +308,7 @@ void ColorsPanel::setExpanded(bool on)
         m_swatchColumn->insertWidget(0, m_swatches);
     }
     m_extended->setVisible(on);
-    m_more->setText(on ? tr("« Menos") : tr("Más »"));
+    applyLook();
     m_palette->setVisibleCount(on ? Palette::kColorCount : 32);
     emit layoutChanged(keep);
 }

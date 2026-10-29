@@ -19,6 +19,7 @@
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/TaskDialog.h"
+#include "app/dialogs/WelcomeDialog.h"
 #include "app/panels/ColorsPanel.h"
 #include "app/panels/HistoryPanel.h"
 #include "app/panels/LayersPanel.h"
@@ -270,8 +271,7 @@ protected:
     {
         const QPoint pos = e->position().toPoint();
         const int i = tabAt(pos);
-        if (e->button() == Qt::LeftButton && i >= 0 && (i == currentIndex() || i == m_hoverTab)
-            && closeRect(i).contains(pos)) {
+        if (e->button() == Qt::LeftButton && i >= 0 && closeTarget(i) > 0 && closeRect(i).contains(pos)) {
             m_closeTab = i;
             e->accept();
             return;
@@ -328,8 +328,12 @@ protected:
     }
 
 private:
-    // La X se ve en la imagen actual y en la que tiene el puntero.
-    qreal closeTarget(int index) const { return index == currentIndex() || index == m_hoverTab ? 1.0 : 0.0; }
+    // La X se ve en la imagen actual y en la que tiene el puntero (con el aspecto de Paint.NET,
+    // solo en la que tiene el puntero).
+    qreal closeTarget(int index) const
+    {
+        return (index == currentIndex() && !Theme::paintNetLook()) || index == m_hoverTab ? 1.0 : 0.0;
+    }
     qreal closeLevel(int index) const { return m_closeLevel.value(index, closeTarget(index)); }
 
     void resetCloseButtons()
@@ -1237,6 +1241,7 @@ void MainWindow::createStatusBar()
     bar->addPermanentWidget(m_unitButton);
 
     m_zoomBox = new QComboBox(bar);
+    m_zoomBox->setObjectName(QStringLiteral("ZoomBox"));
     m_zoomBox->setEditable(true);
     m_zoomBox->setInsertPolicy(QComboBox::NoInsert);
     m_zoomBox->setMinimumWidth(90);
@@ -2987,6 +2992,31 @@ void MainWindow::showSettings(SettingsDialog::Page page)
         restartWith(dlg.settings());
 }
 
+void MainWindow::showWelcome()
+{
+    finishTool();
+    WelcomeDialog dlg(m_settings, this);
+    // El tema y el estilo se ven al momento (menos entrar o salir del tema KDE, que reinicia).
+    connect(&dlg, &WelcomeDialog::previewRequested, this, [this](const AppSettings& s) {
+        m_settings.uiStyle = s.uiStyle;
+        if (!Theme::needsRestart(Theme::Scheme(s.colorScheme)))
+            m_settings.colorScheme = s.colorScheme;
+        applySettings();
+    });
+    dlg.exec();
+    const AppSettings chosen = dlg.settings();
+    m_settings.uiStyle = chosen.uiStyle;
+    m_settings.discordEnabled = chosen.discordEnabled;
+    m_settings.welcomed = true;
+    const bool restart = chosen.language != m_settings.language || Theme::needsRestart(Theme::Scheme(chosen.colorScheme));
+    if (!restart)
+        m_settings.colorScheme = chosen.colorScheme;
+    m_settings.save();
+    applySettings();
+    if (restart)
+        restartWith(chosen);
+}
+
 void MainWindow::restartWith(const AppSettings& settings)
 {
     // Se cierra como siempre (pregunta por los cambios sin guardar); main() abre Kaint de nuevo
@@ -3039,6 +3069,8 @@ void MainWindow::applyThemeLayout()
         b->setIconSize(icon);
     if (auto* tools = findChild<ToolsPanel*>())
         tools->setIconSize(spec.toolIconSize);
+    if (m_tabs)
+        m_tabs->update();
 }
 
 void MainWindow::applySettings()
@@ -3062,8 +3094,10 @@ void MainWindow::applySettings()
     preferences.replacePixels = m_settings.replacePixels;
     AppState::instance()->setPreferences(preferences);
     m_canvas->viewport()->update();
-    if (Theme::current() != Theme::Scheme(m_settings.colorScheme))
+    if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)) {
+        Theme::setLook(Theme::Look(m_settings.uiStyle));
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
+    }
     applyCanvasAppearance();
     // Las animaciones son las de Kaint (Animations), también en Wayland: los efectos de menús y
     // listas de Qt son ventanas aparte que se ven primero en otro sitio y saltan a su lugar.

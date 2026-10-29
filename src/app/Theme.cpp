@@ -74,6 +74,7 @@ Spec g_active = preset(false);
 QFont g_baseFont;
 bool g_baseFontSet = false;
 bool g_fusion = false;
+Look g_look = Look::Kaint;
 int g_systemDark = -1;
 QColor g_titleBar;
 QFileSystemWatcher* g_watcher = nullptr;
@@ -552,6 +553,9 @@ public:
         // como un menú con flechas para desplazarse.
         if (hint == SH_ComboBox_Popup && widget && widget->property("kaintScrollableList").toBool())
             return 0;
+        // Como Paint.NET en Windows: las letras de acceso de los menús, sin subrayar.
+        if (hint == SH_UnderlineShortcut && paintNetLook())
+            return 0;
         return QProxyStyle::styleHint(hint, option, widget, data);
     }
 
@@ -875,6 +879,42 @@ QPalette palette(const Spec& s)
     return p;
 }
 
+namespace {
+
+// Recreación de Paint.NET 5 sobre la hoja de siempre: menús sin marco y más juntos, barras sin
+// relleno de más, la pestaña de la imagen actual en azul, las listas con la selección de Paint.NET
+// (azul con borde de acento), las casillas de las capas blancas y el botón «Más >>» claro.
+QString paintNetStyleSheet(const Spec& s, const QColor& line)
+{
+    const QColor edge(0x00, 0x78, 0xd7);
+    const QColor tab = s.dark ? QColor(0x3a, 0x63, 0xc0) : QColor(0xcc, 0xe8, 0xff);
+    QString qss = QStringLiteral(R"(
+QMenuBar { border: none; border-radius: 0px; padding: 0px 3px; }
+QMenuBar::item { padding: 4px 4px; border-radius: 0px; }
+QToolBar { spacing: 0px; padding: 0px 2px; }
+QToolBar::separator { margin: 3px 2px; }
+QTabBar#ImageStrip::tab { border-radius: 0px; margin: 0px 1px; }
+QTabBar#ImageStrip::tab:selected { background: %1; border-color: %2; }
+QComboBox#ZoomBox { background: transparent; border: 1px solid transparent; }
+QComboBox#ZoomBox:hover { border-color: %3; }
+QPushButton#ColorsMoreButton { background: #e1e1e1; color: #000000; border: 1px solid %2; border-radius: 0px; padding: 2px 8px; }
+QPushButton#ColorsMoreButton:hover { background: #e5f1fb; }
+QPushButton#ColorsMoreButton:pressed, QPushButton#ColorsMoreButton:checked { background: #cce4f7; }
+QWidget#PanelButtons { background: %4; border-top: 1px solid %5; }
+FloatingPanel QAbstractItemView { background: %6; }
+)")
+                      .arg(css(tab), css(edge), css(line), css(s.toolBar), css(line), css(s.panel));
+    if (s.dark)
+        qss += QStringLiteral(R"(
+FloatingPanel QAbstractItemView::indicator { background: #ffffff; border: 1px solid #333333; border-radius: 0px; }
+FloatingPanel QAbstractItemView::indicator:checked { background: #ffffff; border-color: #333333; image: url("%1"); }
+)")
+                   .arg(indicatorImage("check", QColor(0x1e, 0x1e, 0x1e)));
+    return qss;
+}
+
+} // namespace
+
 QString styleSheet(const Spec& s)
 {
     const int d = int(s.density);
@@ -1086,6 +1126,8 @@ QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image:
     // Tirador de los deslizadores mientras se pulsa (SliderBehavior): del color del texto, como el
     // blanco de Paint.NET en el tema oscuro.
     qss += QStringLiteral("QSlider[kaintPressed=\"true\"]::handle { background: %1; }\n").arg(css(s.text));
+    if (s.paintNet)
+        qss += paintNetStyleSheet(s, line);
     return qss;
 }
 
@@ -1155,6 +1197,18 @@ void apply(Scheme scheme)
     else
         g_active = withTitleBarColor(preset(scheme == Scheme::Dark || (scheme == Scheme::System && systemPrefersDark())),
                                      g_titleBar);
+    g_active.paintNet = g_look == Look::PaintNet;
+    if (g_active.paintNet) {
+        // Paint.NET 5: todo más junto, esquinas rectas, iconos de herramientas algo más pequeños y,
+        // con sus temas claro y oscuro, la selección azul de sus listas.
+        g_active.radius = 0;
+        g_active.density = Density::Compact;
+        g_active.toolIconSize = std::min(g_active.toolIconSize, 20);
+        if (scheme != Scheme::Custom && scheme != Scheme::Windows98) {
+            g_active.selection = g_active.dark ? QColor(0x19, 0x5b, 0xa0) : QColor(0xcc, 0xe8, 0xff);
+            g_active.selectionBorder = g_active.dark ? QColor(0x00, 0x78, 0xd7) : QColor(0x99, 0xd1, 0xff);
+        }
+    }
 
     if (g_baseFontSet) {
         // Fuente propia: la del personalizado o la de Windows 98.
@@ -1182,6 +1236,21 @@ void apply(Scheme scheme)
             styleTitleBar(w, QColor());
 #endif
     emit notifier()->changed();
+}
+
+void setLook(Look look)
+{
+    g_look = look;
+}
+
+Look look()
+{
+    return g_look;
+}
+
+bool paintNetLook()
+{
+    return g_current != Scheme::Kde && g_active.paintNet;
 }
 
 void setCustom(const Spec& spec)

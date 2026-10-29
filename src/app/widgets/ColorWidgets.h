@@ -14,6 +14,9 @@ class ColorWheel : public QWidget {
 public:
     explicit ColorWheel(QWidget* parent = nullptr);
     void setColor(const QColor& c);
+    // Tono en el sentido de las agujas del reloj (el amarillo abajo), como la rueda de Paint.NET 5;
+    // si no, al revés (el amarillo arriba).
+    void setClockwise(bool on);
     QColor color() const { return m_color; }
     QSize sizeHint() const override { return {150, 150}; }
     bool hasHeightForWidth() const override { return true; }
@@ -37,6 +40,7 @@ private:
     QColor m_pressColor;
     Qt::MouseButton m_button = Qt::NoButton;
     QImage m_wheel;
+    bool m_clockwise = false;
 };
 
 // Deslizador con el degradado del canal que controla de fondo.

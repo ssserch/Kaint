@@ -29,10 +29,11 @@ Safari download the saved file and paste with Ctrl+V instead.
 ## What's in it
 
 - **The Kaint interface**: menus, the main toolbar and the tool options bar, Kaint's drawn tool
-  icons, image tabs with thumbnails, the Tools, History, Layers and Colors windows (dockable to a
-  corner, resizable and translucent, in paint.js's Windows 10 style or compact, with the border
-  width you choose), paint.js-style rulers and the status bar with the tool icon and the zoom
-  controls.
+  icons (also as cursors, with the hot spot on their tip), image tabs with thumbnails and the
+  orange star of unsaved images, the Tools, History, Layers and Colors windows (dockable to a
+  corner, resizable and translucent, in a Windows 10 inspired style or compact, with the border
+  width you choose), rulers and the status bar with the tool icon and the zoom controls. The view
+  scrolls past the edges of the image and Ctrl+wheel zooms toward the pointer, like in Kaint.
 - **All 19 tools**: rectangle, ellipse and lasso select, magic wand, move selected pixels and move
   selection (move, resize, rotate), zoom (with the pixel-snapped rectangle), pan, paint bucket,
   gradient, paintbrush, eraser, pencil, color picker, clone stamp, recolor, text, line/curve and
@@ -47,13 +48,20 @@ Safari download the saved file and paste with Ctrl+V instead.
   drop shadow; **Ctrl+F** repeats the last one.
 - **Files**: opens PNG, JPEG, WebP, GIF, BMP, AVIF and ICO images and **OpenRaster (.ora)** with
   its layers; saves PNG, JPEG, WebP and OpenRaster. Drop images onto the window to open them.
-- **Light and dark themes** (or follow the system), **English and Spanish** (Kaint's own
-  translations), and Kaint's **animations**, which you can turn off in Settings.
-- **paint.js icon packs** (.zip files with an `asset-pack.json`), stored in the browser, and
-  **editable keyboard shortcuts** (Settings).
+- **Plugins**: `.paintjs` packages (a ZIP with `plugin.json` and `plugin.js`) that add
+  adjustments, effects and file formats through the `paintDotJs.registerPlugin()` JavaScript API.
+  Install them from a file (or drop them onto the window) or from the plugin catalog in
+  **Settings → Plugins**; they are stored in the browser.
+- **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
+  editable colors; **English and Spanish** (Kaint's own translations) and Kaint's **animations**.
+- **Settings** like Kaint's: interface, canvas (custom background, checkerboard brightness,
+  rulers), tools, pen and tablet, plugins, updates, diagnostics, icon packs (.zip files with an
+  `asset-pack.json`, with a preview), fonts for the Text tool and editable keyboard shortcuts.
+- **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
+  palette file to open or save, Rainbow and Small.
 
-Not available on the web: Paint.NET and native plugins, recovery copies, extra fonts and custom
-shapes, inches and centimeters, `.pdn` files, GIF animation editing and scanning. Browsers keep
+Not available on the web: Paint.NET (.dll) and native plugins, recovery copies, custom shapes,
+brush fill patterns, inches and centimeters, `.pdn` files, GIF animation editing and scanning. Browsers keep
 some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use the menus for those.
 
 ## Development
@@ -70,5 +78,7 @@ some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use the menus for those.
 
 GPL-3.0, like Kaint. The interface icons in `assets/icons/` come from SSSerch's fork of
 [paint.js](https://github.com/LabyStudio/paintdotjs), used with permission;
-`assets/icons/face-smile.svg` is from KDE's Breeze icons (LGPL-3.0-or-later). Kaint is not
-affiliated with dotPDN LLC; Paint.NET is a trademark of dotPDN LLC.
+`assets/icons/face-smile.svg` is from KDE's Breeze icons (LGPL-3.0-or-later). The plugin API is
+compatible with paint.js plugins, and the plugin catalog is
+[paintdotjs-plugins](https://github.com/LabyStudio/paintdotjs-plugins). Kaint is not affiliated
+with dotPDN LLC; Paint.NET is a trademark of dotPDN LLC.

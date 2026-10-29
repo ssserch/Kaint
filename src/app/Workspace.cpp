@@ -87,10 +87,10 @@ protected:
         }
         const QColor bg = isDown() ? s.panelClose.darker(115) : underMouse() ? s.panelClose.lighter(118) : s.panelClose;
         if (windows10Chrome()) {
-            // Como paint.js: cuadrado rojo sin redondear con una «x» blanca en negrita.
-            p.setRenderHint(QPainter::Antialiasing, false);
-            p.fillRect(rect(), bg);
-            p.setRenderHint(QPainter::Antialiasing);
+            // Como en Paint.NET: cuadrado rojo apenas redondeado con una «x» blanca en negrita.
+            p.setPen(Qt::NoPen);
+            p.setBrush(bg);
+            p.drawRoundedRect(QRectF(rect()), 2, 2);
             QFont f = font();
             f.setBold(true);
             f.setPixelSize(std::max(10, height() / 2));
@@ -259,8 +259,9 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     }
     const Theme::Spec s = Theme::active();
     QPainter p(this);
-    // Con el estilo de Windows 10, esquinas rectas; el borde, del grosor elegido.
-    const qreal radius = windows10() ? 0 : s.radius;
+    // Con el estilo de Windows 10, las esquinas algo redondeadas de las ventanas de Paint.NET; el
+    // borde, del grosor elegido.
+    const qreal radius = windows10() ? 7 : s.radius;
     const qreal half = s.classic ? 0.5 : borderWidth() / 2.0;
     QPainterPath shape;
     shape.addRoundedRect(QRectF(rect()).adjusted(half, half, -half, -half), radius, radius);

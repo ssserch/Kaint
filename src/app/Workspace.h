@@ -25,8 +25,8 @@ class FloatingPanel : public QFrame {
     Q_OBJECT
 public:
     enum Corner { TopLeft, TopRight, BottomLeft, BottomRight };
-    // Aspecto del marco: como las ventanas de paint.js (Windows 10: cabecera alta, botón de cerrar
-    // cuadrado y esquinas rectas) o el compacto de Kaint.
+    // Aspecto del marco: inspirado en Windows 10 (cabecera alta, botón de cerrar cuadrado y
+    // esquinas algo redondeadas, como Paint.NET) o el compacto de Kaint.
     enum class Style { Windows10, Compact };
 
     FloatingPanel(const QString& id, const QString& title, QWidget* content, QWidget* parent);

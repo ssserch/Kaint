@@ -27,21 +27,21 @@ QPoint arrowDelta(QKeyEvent* e)
 }
 } // namespace
 
-QCursor transformCursor(TransformBox::Mode mode)
+QCursor transformCursor(TransformBox::Mode mode, const QCursor& translate, qreal angle)
 {
     switch (mode) {
     case TransformBox::Mode::Scale: return Qt::PointingHandCursor;
     case TransformBox::Mode::Pivot:
     case TransformBox::Mode::ResetPivot: return Qt::ArrowCursor;
-    case TransformBox::Mode::Rotate: {
-        static const QCursor rotate = [] {
-            const QIcon icon = Icons::theme({"transform-rotate", "object-rotate-right"});
-            return icon.isNull() ? QCursor(Qt::CrossCursor) : QCursor(icon.pixmap(QSize(22, 22)), 11, 11);
-        }();
-        return rotate;
+    case TransformBox::Mode::Rotate: return Icons::rotateCursor(angle);
+    default: return translate;
     }
-    default: return Qt::SizeAllCursor;
-    }
+}
+
+qreal rotateAngle(const TransformBox& box, const QTransform& imageToView, const QPointF& viewPos)
+{
+    const QPointF center = imageToView.map(box.pivot());
+    return std::atan2(center.y() - viewPos.y(), center.x() - viewPos.x());
 }
 
 // ---------------------------------------------------------------------------
@@ -240,13 +240,13 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
         if (!document())
             return;
         if (document()->selection().isEmpty() && !currentFloating(document())) {
-            canvas()->setToolCursor(transformCursor(TransformBox::Mode::Translate));
+            canvas()->setToolCursor(cursor());
             return;
         }
         syncBox();
         int handle = -1;
         const auto mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle);
-        canvas()->setToolCursor(transformCursor(mode));
+        canvas()->setToolCursor(transformCursor(mode, cursor(), rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
         return;
     }
     if (m_pivotDrag) {
@@ -262,8 +262,11 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
     }
     const QTransform t = QTransform::fromTranslate(-m_float->origin.x(), -m_float->origin.y()) * canvasMap;
     applyLive(t);
-    if (m_box.mode() == TransformBox::Mode::Rotate)
+    if (m_box.mode() == TransformBox::Mode::Rotate) {
         emit hintChanged(tr("Ángulo: %1°").arg(m_box.rotationDegrees(), 0, 'f', 2));
+        // La flecha de girar sigue al puntero alrededor del centro.
+        canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+    }
     repaint();
 }
 
@@ -480,7 +483,8 @@ void MoveSelectionTool::mouseMove(const ToolEvent& e)
             return;
         syncBox();
         int handle = -1;
-        canvas()->setToolCursor(transformCursor(m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle)));
+        const TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle);
+        canvas()->setToolCursor(transformCursor(mode, cursor(), rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
         return;
     }
     if (m_pivotDrag) {
@@ -495,8 +499,11 @@ void MoveSelectionTool::mouseMove(const ToolEvent& e)
     }
     m_result = m_base.transformed(m_transform, AppState::instance()->tools().moveSelectionAntialias);
     document()->setSelection(m_result);
-    if (m_box.mode() == TransformBox::Mode::Rotate)
+    if (m_box.mode() == TransformBox::Mode::Rotate) {
         emit hintChanged(tr("Ángulo: %1°").arg(m_box.rotationDegrees(), 0, 'f', 2));
+        // La flecha de girar sigue al puntero alrededor del centro.
+        canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+    }
     repaint();
 }
 

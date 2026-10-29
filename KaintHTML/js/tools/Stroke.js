@@ -6,7 +6,7 @@ import { threshold } from "../core/FloodFill.js";
 
 export class Stroke {
     // mode: "paint" | "erase" | "clone" | "recolor"
-    constructor(doc, layer, { mode = "paint", color = null, blend = "normal", antialias = true, hardness = 100,
+    constructor(doc, layer, { mode = "paint", color = null, blend = "normal", antialias = true, hardness = 100, spacing = 15,
                              cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50 } = {}) {
         this.doc = doc;
         this.layer = layer;
@@ -15,6 +15,7 @@ export class Stroke {
         this.blend = blend;
         this.antialias = antialias;
         this.hardness = hardness;
+        this.spacing = Math.max(1, spacing) / 100;
         this.cloneOffset = cloneOffset;
         this.recolorFrom = recolorFrom;
         this.recolorLimit = threshold(recolorTolerance);
@@ -62,14 +63,15 @@ export class Stroke {
         return rect;
     }
 
-    // Línea de sellos desde el último punto (separación del 15 % del diámetro, como Kaint).
+    // Línea de sellos desde el último punto (separación: el espaciado, del 15 % del diámetro por
+    // defecto, como Kaint).
     lineTo(x, y, size) {
         let changed = null;
         if (!this.last) {
             changed = this.stamp(x, y, size);
         } else {
             const dx = x - this.last.x, dy = y - this.last.y, dist = Math.hypot(dx, dy);
-            const step = Math.max(0.5, size * 0.15);
+            const step = Math.max(0.5, size * this.spacing);
             let t = this.last.carry ?? step;
             while (t <= dist) {
                 changed = unionRect(changed, this.stamp(this.last.x + (dx * t) / dist, this.last.y + (dy * t) / dist, size));
@@ -80,7 +82,7 @@ export class Stroke {
                 this.refresh(changed);
             return;
         }
-        this.last = { x, y, carry: Math.max(0.5, size * 0.15) };
+        this.last = { x, y, carry: Math.max(0.5, size * this.spacing) };
         this.refresh(changed);
     }
 

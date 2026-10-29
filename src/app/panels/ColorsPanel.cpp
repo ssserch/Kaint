@@ -333,21 +333,29 @@ void ColorsPanel::updateAddIcon()
 
 void ColorsPanel::buildPaletteMenu()
 {
+    // Como el menú de paletas de Paint.NET: las del usuario, guardar y abrir, la predeterminada y
+    // las de muestra; la paleta que se está usando lleva la marca.
     QMenu* menu = m_paletteMenu->menu();
     menu->clear();
-    AppState* app = AppState::instance();
-    const QStringList names = Palette::available();
-    for (const QString& name : names) {
-        menu->addAction(name, this, [this, name] {
+    const QList<QColor> current = AppState::instance()->palette();
+    auto item = [menu, &current](const QIcon& icon, const QString& text, const QList<QColor>& colors) {
+        const bool checked = !colors.isEmpty() && colors == current;
+        return menu->addAction(checked ? Icons::named(QStringLiteral("dialog-ok-apply")) : icon, text);
+    };
+    const QIcon swatch = Icons::theme({"palette", "color-management"});
+    for (const QString& name : Palette::available()) {
+        const QString path = QDir(Palette::userFolder()).filePath(name + QStringLiteral(".txt"));
+        const QList<QColor> colors = Palette::load(path);
+        connect(item(swatch, name, colors), &QAction::triggered, this, [this, name, path] {
             QString error;
-            const QList<QColor> colors = Palette::load(QDir(Palette::userFolder()).filePath(name + QStringLiteral(".txt")), &error);
-            if (colors.isEmpty())
+            const QList<QColor> loaded = Palette::load(path, &error);
+            if (loaded.isEmpty())
                 QMessageBox::warning(this, tr("Paletas"), tr("No se pudo abrir la paleta «%1»:\n%2").arg(name, error));
             else
-                AppState::instance()->setPalette(colors);
+                AppState::instance()->setPalette(loaded);
         });
     }
-    if (!names.isEmpty())
+    if (!menu->isEmpty())
         menu->addSeparator();
     menu->addAction(Icons::theme({"document-save-as"}), tr("Guardar la paleta actual como…"), this, [this] {
         bool ok = false;
@@ -362,7 +370,11 @@ void ColorsPanel::buildPaletteMenu()
                            &error))
             QMessageBox::warning(this, tr("Paletas"), tr("No se pudo guardar la paleta:\n%1").arg(error));
     });
-    menu->addAction(Icons::theme({"document-open"}), tr("Abrir paleta desde archivo…"), this, [this] {
+    menu->addAction(Icons::theme({"document-open"}), tr("Abrir la carpeta de paletas"), this, [] {
+        QDir().mkpath(Palette::userFolder());
+        QDesktopServices::openUrl(QUrl::fromLocalFile(Palette::userFolder()));
+    });
+    menu->addAction(Icons::theme({"document-import", "document-open-folder"}), tr("Abrir paleta desde archivo…"), this, [this] {
         const QString path = QFileDialog::getOpenFileName(this, tr("Abrir paleta"), Palette::userFolder(),
                                                           tr("Paletas de Paint.NET (*.txt);;Todos los archivos (*)"));
         if (path.isEmpty())
@@ -374,12 +386,14 @@ void ColorsPanel::buildPaletteMenu()
         else
             AppState::instance()->setPalette(colors);
     });
-    menu->addAction(Icons::theme({"folder-open"}), tr("Abrir la carpeta de paletas"), this, [] {
-        QDir().mkpath(Palette::userFolder());
-        QDesktopServices::openUrl(QUrl::fromLocalFile(Palette::userFolder()));
-    });
-    menu->addAction(Icons::theme({"edit-reset", "view-refresh"}), tr("Restablecer la paleta predeterminada"), app,
-                    [] { AppState::instance()->setPalette(Palette::defaultColors()); });
+    menu->addSeparator();
+    connect(item(Icons::theme({"edit-reset", "view-refresh"}), tr("Restablecer la paleta predeterminada"), Palette::defaultColors()),
+            &QAction::triggered, this, [] { AppState::instance()->setPalette(Palette::defaultColors()); });
+    menu->addSeparator();
+    connect(item(swatch, tr("Arcoíris"), Palette::rainbowColors()), &QAction::triggered, this,
+            [] { AppState::instance()->setPalette(Palette::rainbowColors()); });
+    connect(item(swatch, tr("Pequeña"), Palette::smallColors()), &QAction::triggered, this,
+            [] { AppState::instance()->setPalette(Palette::smallColors()); });
 }
 
 void ColorsPanel::refresh()

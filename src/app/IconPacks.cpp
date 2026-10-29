@@ -56,7 +56,7 @@ Pack builtin()
     pack.id = defaultId();
     pack.name = QCoreApplication::translate("IconPacks", "Kaint (predeterminado)");
     pack.author = QStringLiteral("SSSerch");
-    pack.description = QCoreApplication::translate("IconPacks", "Los iconos de Kaint: los de la interfaz de paint.js y los de las herramientas dibujados.");
+    pack.description = QCoreApplication::translate("IconPacks", "Los iconos de siempre de Kaint.");
     return pack;
 }
 
@@ -97,7 +97,7 @@ void load(ActiveState& s)
 
 QString defaultId()
 {
-    return QStringLiteral("paintjs-default");
+    return QStringLiteral("kaint-default");
 }
 
 QString root()

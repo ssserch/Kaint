@@ -6,6 +6,7 @@ import { el } from "./Dialogs.js";
 import { icon, ShapeTypes } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 import { tr } from "../i18n.js";
+import { UserFonts } from "../UserFonts.js";
 
 const brushPresets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85,
                       90, 95, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500];
@@ -117,6 +118,7 @@ export class ToolOptions {
         this.app = app;
         this.controls = [];
         app.tools.addEventListener("changed", () => this.rebuild());
+        window.addEventListener("kaint-fonts", () => this.rebuild());
         AppState.addEventListener("tools", () => this.refresh());
         // La rueda desplaza la barra cuando no cabe.
         element.addEventListener("wheel", (e) => {
@@ -168,6 +170,26 @@ export class ToolOptions {
                        barSlider("hardness", 0, 100, (v) => `${v}%`),
                        stepper(true, () => set({ hardness: Math.min(100, tools().hardness + 1) }), tr("Aumentar")));
             break;
+        case "spacing":
+            this.group(label(tr("Espaciado:")), stepper(false, () => set({ spacing: Math.max(1, tools().spacing - 1) }), tr("Reducir")),
+                       barSlider("spacing", 1, 100, (v) => `${v}%`),
+                       stepper(true, () => set({ spacing: Math.min(100, tools().spacing + 1) }), tr("Aumentar")));
+            break;
+        case "smoothing":
+            this.group(choice(tr("Trayectoria"), "smoothing", [[false, "opt-smoothing:0", tr("Trayectoria no suavizada")],
+                                                                [true, "opt-smoothing:1", tr("Trayectoria suavizada")]]));
+            break;
+        case "pressure": {
+            const b = button([icon("opt-pressure", 16)], tr("La presión del lápiz de la tableta controla el tamaño del pincel"),
+                             () => set({ pressure: !tools().pressure }));
+            b.refresh = () => {
+                b.classList.toggle("checked", tools().pressure !== false);
+                b.replaceChildren(icon(tools().pressure !== false ? "opt-pressure:1" : "opt-pressure:0", 16));
+            };
+            b.refresh();
+            this.group(b);
+            break;
+        }
         case "tolerance":
             this.group(label(tr("Tolerancia:")), barSlider("tolerance", 0, 100, (v) => `${v}%`));
             break;
@@ -258,7 +280,9 @@ export class ToolOptions {
                                              ["bezier", "opt-curve:bezier", tr("Bézier")]]));
             break;
         case "text": {
-            const family = el("select", { style: { width: "150px" } }, fonts.map((f) => el("option", { value: f, textContent: f.split(",")[0] })));
+            // Las fuentes del navegador y las que se añadieron en Configuración > Fuentes.
+            const family = el("select", { style: { width: "150px" } },
+                              [...fonts, ...UserFonts.families().map((f) => `"${f}"`)].map((f) => el("option", { value: f, textContent: f.split(",")[0].replace(/"/g, "") })));
             family.addEventListener("change", () => set({ fontFamily: family.value }));
             family.refresh = () => { family.value = tools().fontFamily; };
             const style = [["bold", "B", tr("Negrita")], ["italic", "I", tr("Cursiva")], ["underline", "U", tr("Subrayado")]].map(([key, t, tip]) => {

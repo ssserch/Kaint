@@ -2,8 +2,9 @@
 // barras, ventanas flotantes, barra de estado, teclado, portapapeles y archivos.
 import { AppState } from "../AppState.js";
 import { Document, Layer } from "../core/Document.js";
-import { Effects, Categories } from "../core/Effects.js";
+import { Effects, Categories, defaultValues } from "../core/Effects.js";
 import { download, encode, formatFor, openFile, OpenAccept, SaveFormats, baseName } from "../core/ImageIO.js";
+import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
 import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
 import { Selection } from "../core/Selection.js";
 import { Settings } from "../Settings.js";
@@ -12,12 +13,13 @@ import { tr } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
+import { applyThemeColors } from "./Themes.js";
 import {
-    aboutDialog, canvasSizeDialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, resizeDialog,
+    aboutDialog, canvasSizeDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, resizeDialog,
     saveOptionsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
 import { effectDialog, renderEffect } from "./EffectDialog.js";
-import { icon, refreshIcons, setActiveColors } from "./Icons.js";
+import { icon, iconUrl, refreshIcons, setActiveColors, unsavedStar } from "./Icons.js";
 import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
 import { ToolOptions } from "./ToolOptions.js";
@@ -55,6 +57,7 @@ export class App extends EventTarget {
         this.createToolBar();
         this.createPanels();
         this.createCornerButtons();
+        this.createImageList();
         this.createStatusBar();
         this.toolOptions = new ToolOptions(document.getElementById("tool-options"), this);
         this.tools.addEventListener("changed", () => {
@@ -74,6 +77,17 @@ export class App extends EventTarget {
             });
         this.view.addEventListener("zoom", () => this.updateZoomBox());
         this.view.addEventListener("cursor", (e) => this.updateCursorPos(e.detail));
+        // Extremo borrador del lápiz: la Goma y, al soltar, la herramienta de antes.
+        this.view.addEventListener("pen-eraser", (e) => {
+            if (e.detail) {
+                this.view.penEraser = this.tools.current.id;
+                this.tools.select("eraser");
+            } else {
+                const back = this.view.penEraser;
+                this.view.penEraser = null;
+                this.tools.select(back);
+            }
+        });
         AppState.addEventListener("colors", () => this.updateToolIconColors());
         window.addEventListener("kaint-settings", () => this.applySettings());
         window.addEventListener("kaint-iconpack", () => {
@@ -87,7 +101,10 @@ export class App extends EventTarget {
             }
         });
         this.applySettings();
-        this.tools.select("paintbrush");
+        this.tools.select(Settings.get("startTool") || Settings.get("lastTool") || "paintbrush");
+        if (!this.tools.current)
+            this.tools.select("paintbrush");
+        this.tools.addEventListener("changed", () => Settings.set("lastTool", this.tools.current.id));
         this.addDocument(new Document(800, 600));
         updateActions();
     }
@@ -95,11 +112,12 @@ export class App extends EventTarget {
     // --- Tema y configuración --------------------------------------------------------------
 
     applyTheme() {
-        const scheme = Settings.get("colorScheme");
-        const dark = scheme === 2 || (scheme === 0 && matchMedia("(prefers-color-scheme: dark)").matches);
         const root = document.documentElement;
-        if (root.classList.contains("dark") !== dark) {
-            root.classList.toggle("dark", dark);
+        const key = JSON.stringify([Settings.get("colorScheme"), Settings.get("customTheme"), Settings.get("canvasBorderLight"),
+                                    Settings.get("canvasBorderDark"), matchMedia("(prefers-color-scheme: dark)").matches]);
+        if (this.themeKey !== key) {
+            this.themeKey = key;
+            applyThemeColors(root, Settings.get("colorScheme"), matchMedia("(prefers-color-scheme: dark)").matches);
             refreshIcons();
             this.view?.update();
         }
@@ -125,6 +143,8 @@ export class App extends EventTarget {
     updateToolIconColors() {
         const on = Settings.get("coloredToolIcons");
         setActiveColors(on ? AppState.primary : null, on ? AppState.secondary : null);
+        // Los cursores del pincel, el cubo... llevan los colores activos.
+        this.view?.updateCursor();
     }
 
     // --- Documentos ------------------------------------------------------------------------
@@ -196,6 +216,18 @@ export class App extends EventTarget {
                 return;
     }
 
+    // Flecha al final de la tira: la lista de todas las imágenes abiertas.
+    createImageList() {
+        const button = document.getElementById("image-list");
+        button.title = tr("Imágenes abiertas");
+        button.appendChild(icon("image-list-menu", 16));
+        button.addEventListener("click", () => {
+            const r = button.getBoundingClientRect();
+            popupMenu(this.docs.map((doc) => ({ text: doc.displayName(), icon: doc === this.doc ? "dialog-ok-apply" : "document-new",
+                                                 run: () => this.setCurrent(doc) })), r.left, r.bottom);
+        });
+    }
+
     rebuildTabs() {
         const strip = document.getElementById("image-strip");
         strip.replaceChildren();
@@ -230,11 +262,11 @@ export class App extends EventTarget {
         if (!tab)
             return;
         const paint = () => {
-            tab.querySelector("canvas")?.remove();
+            tab.querySelector(":scope > canvas")?.remove();
             tab.querySelector(".unsaved")?.remove();
             tab.insertBefore(thumbnail(doc.flattened(), 64, 48), tab.firstChild);
             if (doc.isModified())
-                tab.appendChild(el("div", { className: "unsaved", title: tr("Cambios no guardados") }));
+                tab.appendChild(el("div", { className: "unsaved", title: tr("Cambios no guardados") }, [unsavedStar(12)]));
             tab.title = doc.displayName();
             if (doc === this.doc)
                 document.title = `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint`;
@@ -411,7 +443,7 @@ export class App extends EventTarget {
     createMenus() {
         const a = (id) => this.actions.get(id);
         const effectEntry = (e) => ({
-            text: tr(e.name) + (e.params.length ? "..." : ""), icon: `effect-${e.id}`, shortcut: e.shortcut || "",
+            text: tr(e.name) + (e.params.length || e.configure ? "..." : ""), icon: `effect-${e.id}`, shortcut: e.shortcut || "",
             enabled: !!this.doc, run: this.command(() => this.runEffect(e, false)),
         });
         const sorted = (list) => [...list].sort((x, y) => tr(x.name).localeCompare(tr(y.name)));
@@ -426,19 +458,32 @@ export class App extends EventTarget {
                                                     a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), "-", a("layerTop"),
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
                                                     a("layerDown"), a("layerToBottom"), "-", a("layerProps")] },
-            { title: tr("A&justes"), entries: () => sorted(Effects.filter((e) => !e.category)).map(effectEntry) },
+            { title: tr("A&justes"), entries: () => sorted(Effects.filter((e) => !e.category && e.menu !== "effects")).map(effectEntry) },
             { title: tr("Efe&ctos"), entries: () => {
-                // "Repetir" solo después de usar un efecto (la web no tiene complementos).
+                // Como en Kaint: "Repetir" solo después de usar un efecto y "Complementos..." solo con
+                // algún complemento activado.
                 const out = [];
                 if (this.lastEffect)
                     out.push({ text: tr("Repetir «%1»", tr(this.lastEffect.name)), icon: `effect-${this.lastEffect.id}`, shortcut: "Ctrl+F",
-                               enabled: !!this.doc, run: this.command(() => this.runEffect(this.lastEffect, true)) }, "-");
-                const cats = Object.entries(Categories).sort((x, y) => tr(x[1]).localeCompare(tr(y[1])));
-                for (const [key, name] of cats) {
+                               enabled: !!this.doc, run: this.command(() => this.runEffect(this.lastEffect, true)) });
+                if (Plugins.anyEffects())
+                    out.push({ text: tr("&Complementos..."), icon: "plugins", run: () => settingsDialog(this, "plugins") });
+                if (out.length)
+                    out.push("-");
+                const cats = Object.entries(Categories).map(([key, name]) => [key, tr(name), null]);
+                for (const e of Effects)
+                    if (e.category?.startsWith("plugin:") && !cats.some(([key]) => key === e.category))
+                        cats.push([e.category, e.categoryName, e.categoryIcon]);
+                cats.sort((x, y) => x[1].localeCompare(y[1]));
+                for (const [key, name, catIcon] of cats) {
                     const list = Effects.filter((e) => e.category === key);
                     if (list.length)
-                        out.push({ text: tr(name), submenu: () => sorted(list).map(effectEntry) });
+                        out.push({ text: name, icon: catIcon ? el("img", { src: catIcon, width: 16, height: 16, alt: "" }) : undefined,
+                                   submenu: () => sorted(list).map(effectEntry) });
                 }
+                const root = Effects.filter((e) => !e.category && e.menu === "effects");
+                if (root.length)
+                    out.push("-", ...sorted(root).map(effectEntry));
                 return out;
             } },
         ]);
@@ -474,7 +519,7 @@ export class App extends EventTarget {
             layers: new FloatingPanel(ws, "layers", tr("Capas"), layersPanel(this, ["addLayer", "deleteLayer", "duplicateLayer", "mergeDown",
                                                                                          "layerUp", "layerDown", "layerProps"]),
                                       { corner: "br", size: { w: 230, h: 260 }, onClose: closed }),
-            colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", size: { w: 230, h: 330 }, onClose: closed }),
+            colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", size: { w: 230 }, onClose: closed }),
         };
         new ResizeObserver(() => Object.values(this.panels).forEach((p) => p.reposition())).observe(ws);
         this.view.addEventListener("rulers", () => Object.values(this.panels).forEach((p) => p.reposition()));
@@ -704,7 +749,7 @@ export class App extends EventTarget {
 
     pickFiles(multiple = true) {
         return new Promise((resolve) => {
-            const input = el("input", { type: "file", accept: OpenAccept, multiple });
+            const input = el("input", { type: "file", accept: [OpenAccept, ...Plugins.openExtensions()].join(","), multiple });
             input.addEventListener("change", () => resolve([...input.files]));
             input.click();
         });
@@ -727,14 +772,101 @@ export class App extends EventTarget {
     }
 
     async openFile(file, handle = null) {
+        if (/\.paintjs$/i.test(file.name)) {
+            await this.installPlugin(file);
+            return;
+        }
         try {
-            const doc = await openFile(file);
+            const type = Plugins.fileTypeFor(file.name);
+            const doc = type ? await this.decodeWithPlugin(type, file) : await openFile(file);
             doc.fileHandle = handle;
             doc.markSaved();
             this.addDocument(doc);
         } catch {
             await message(tr("Abrir"), tr("No se pudo abrir «%1».", file.name));
         }
+    }
+
+    // Archivo de un formato de complemento: una capa o varias, en RGBA.
+    async decodeWithPlugin(type, file) {
+        const r = await type.decode({ bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name });
+        const w = Number(r.width), h = Number(r.height);
+        if (!(w > 0 && h > 0 && w <= 32768 && h <= 32768))
+            throw new Error(file.name);
+        const doc = new Document(w, h, { name: baseName(file.name), background: null, historyName: tr("Abrir imagen"), historyIcon: "document-open" });
+        const layers = r.layers || [{ name: tr("Fondo"), visible: true, opacity: 255, blendMode: "normal", data: r.data }];
+        doc.layers = layers.slice(0, 64).map((l, i) => {
+            const layer = new Layer(w, h, l.name || (i ? tr("Capa %1", i + 1) : tr("Fondo")));
+            layer.ctx.putImageData(new ImageData(new Uint8ClampedArray(l.data), w, h), 0, 0);
+            layer.visible = l.visible !== false;
+            layer.opacity = Math.max(0, Math.min(255, Number(l.opacity ?? 255)));
+            layer.blend = l.blendMode || "normal";
+            return layer;
+        });
+        doc.active = Math.min(Number(r.activeLayer ?? doc.layers.length - 1), doc.layers.length - 1);
+        doc.fileName = file.name;
+        return doc;
+    }
+
+    async installPlugin(file) {
+        try {
+            const record = await Plugins.install(file);
+            await message(tr("Complementos"), tr("Se instaló «%1».", record.name), "plugins");
+        } catch (e) {
+            await message(tr("Complementos"), e.message, "dialog-warning");
+        }
+    }
+
+    // Ventana para el diálogo propio de un complemento (paintDotJs.dialogs.create).
+    createPluginDialog(options) {
+        const dlg = new Dialog(String(options.title || ""), { iconName: null });
+        if (options.icon) {
+            const img = el("img", { src: String(options.icon), width: 16, height: 16, alt: "" });
+            dlg.element.querySelector(".title").prepend(img);
+        }
+        const form = el("form", { className: String(options.className || "") });
+        form.addEventListener("submit", (e) => e.preventDefault());
+        const content = el("div", { className: String(options.contentClassName || "") });
+        form.appendChild(content);
+        dlg.body.appendChild(form);
+        dlg.buttons.remove();
+        dlg.exec();
+        return Object.freeze({ backdrop: dlg.backdrop, dialog: form, content, closeButton: dlg.element.querySelector(".title .close"),
+                               destroy: () => dlg.close(null) });
+    }
+
+    // Valores de un efecto con su diálogo (el de Kaint o el propio del complemento); null si se cancela.
+    async configureEffect(effect, preview = null) {
+        if (effect.configure) {
+            const doc = this.doc, layer = doc.activeLayer, sel = doc.selection;
+            const source = layer.ctx.getImageData(0, 0, doc.width, doc.height).data;
+            const canvas = cloneCanvas(layer.canvas);
+            const values = this.effectValues[effect.id] || pluginValues(effect.params, defaultValues(effect));
+            const show = async (v) => {
+                if (preview)
+                    return preview(v);
+                if (v === null) {
+                    doc.setPreview(null);
+                    return;
+                }
+                const { rect, data } = renderEffect(doc, effect, v);
+                context(canvas).putImageData(data, rect.x, rect.y);
+                doc.setPreview({ layer, canvas }, rect);
+            };
+            try {
+                return await effect.configure({
+                    title: effect.dialogTitle || effect.name, icon: iconUrl(`effect-${effect.id}`), source: new Uint8ClampedArray(source),
+                    width: doc.width, height: doc.height, selection: sel.mask ? new Uint8Array(sel.mask) : null,
+                    selectionBounds: sel.bounds() ? { x: sel.bounds().x, y: sel.bounds().y, width: sel.bounds().w, height: sel.bounds().h }
+                        : { x: 0, y: 0, width: doc.width, height: doc.height },
+                    values: structuredClone(values), preview: show, showOriginal: () => show(null),
+                });
+            } finally {
+                doc.setPreview(null);
+            }
+        }
+        const values = await effectDialog(this, effect, this.effectValues[effect.id]);
+        return values && effect.pluginId ? pluginValues(effect.params, values) : values;
     }
 
     // Guarda en el archivo abierto (si el navegador lo permite) o lo descarga.
@@ -1146,6 +1278,16 @@ export class App extends EventTarget {
             doc.layers.forEach((l) => (l.visible = l === layer || !isolate));
         } else {
             layer.visible = !layer.visible;
+            // Como en Kaint (Configuración): al ocultar la capa activa, se elige la visible más cercana.
+            if (!layer.visible && index === doc.active && Settings.get("autoSelectVisibleLayer")) {
+                for (let d = 1; d < doc.layers.length; ++d) {
+                    const near = [index - d, index + d].find((i) => i >= 0 && i < doc.layers.length && doc.layers[i].visible);
+                    if (near !== undefined) {
+                        doc.setActiveIndex(near);
+                        break;
+                    }
+                }
+            }
         }
         doc.layersChanged();
         doc.pushLayers(before, solo ? tr("Visibilidad de las capas") : tr("Visibilidad de la capa"), "layer-visible-on");
@@ -1188,13 +1330,17 @@ export class App extends EventTarget {
         if (!effect || !doc)
             return;
         let values = this.effectValues[effect.id];
-        if (!repeat && effect.params.length) {
+        if (!repeat && effect.configure) {
+            values = await this.configureEffect(effect);
+            if (!values)
+                return;
+        } else if (!repeat && effect.params.length) {
             values = await effectDialog(this, effect, values);
             if (!values)
                 return;
         }
         values = values || {};
-        const full = { ...Object.fromEntries(effect.params.map((p) => [p.key, p.def])), ...values };
+        const full = effect.configure ? values : { ...Object.fromEntries(effect.params.map((p) => [p.key, p.def])), ...values };
         const { rect, data } = renderEffect(doc, effect, full);
         const layer = doc.activeLayer;
         const before = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);

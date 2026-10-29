@@ -6,7 +6,7 @@
 import { Tool } from "./Tool.js";
 import { Selection } from "../core/Selection.js";
 import { cloneCanvas, context, createCanvas } from "../core/Raster.js";
-import { iconCursor } from "../ui/Icons.js";
+import { iconCursor, rotateCursor } from "../ui/Icons.js";
 import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
 
@@ -106,7 +106,7 @@ class MoveToolBase extends Tool {
     }
 
     cursor() {
-        return iconCursor(this.icon, 2, 2, "move");
+        return iconCursor(this.icon, null, null, "move");
     }
 
     // La sesión (píxeles o selección levantados) sigue viva mientras su paso sea el último del
@@ -185,6 +185,7 @@ class MoveToolBase extends Tool {
                 a = Math.round(a / (Math.PI / 12)) * (Math.PI / 12);
             box.angle = a;
             this.setHint(tr("Ángulo: %1°", ((-a * 180) / Math.PI).toFixed(2)));
+            this.view.canvas.style.cursor = rotateCursor(this.angleTo(box, e));
         }
         this.render(d.session);
     }
@@ -211,7 +212,13 @@ class MoveToolBase extends Tool {
             return;
         }
         const hit = this.hit(e, box);
-        canvas.style.cursor = hit.kind === "resize" ? "pointer" : hit.kind === "rotate" ? iconCursor("object-rotate-right", 12, 12, "alias") : this.cursor();
+        canvas.style.cursor = hit.kind === "resize" ? "pointer" : hit.kind === "rotate" ? rotateCursor(this.angleTo(box, e)) : this.cursor();
+    }
+
+    // Dirección (en la vista) desde el puntero hacia el centro de la caja: la de la flecha de girar.
+    angleTo(box, e) {
+        const c = box.center(), v = this.view.imageToView(c.x, c.y);
+        return Math.atan2(v.y - e.vy, v.x - e.vx);
     }
 
     isBusy() {

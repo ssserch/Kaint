@@ -6,6 +6,10 @@ import { remember } from "./Settings.js";
 export const defaultTools = () => ({
     brushSize: 10,
     hardness: 75,
+    // Separación entre sellos (% del diámetro), suavizado del trazo y presión del lápiz (como Kaint).
+    spacing: 15,
+    smoothing: true,
+    pressure: true,
     antialias: true,
     selectionAntialias: false,
     blend: "normal",
@@ -50,6 +54,56 @@ const paletteRgb = [
     0xa17fff, 0xd67fff, 0xff7fed, 0xff7fb6, 0xc0c0c0, 0x606060, 0x7f3f3f, 0x7f593f, 0x7f743f, 0x6d7f3f, 0x527f3f,
     0x3f7f47, 0x3f7f62, 0x3f7f7f, 0x3f647f, 0x3f497f, 0x503f7f, 0x6b3f7f, 0x7f3f76, 0x7f3f5b,
 ];
+
+// Paletas de muestra del menú de paletas (como Kaint): el arcoíris (16 tonos con 6 luminosidades)
+// y la pequeña (los 32 primeros colores de la predeterminada y el resto en blanco).
+export function rainbowPalette() {
+    const colors = [];
+    for (const l of [0.2, 0.32, 0.44, 0.56, 0.68, 0.8])
+        for (let i = 0; i < 16; ++i) {
+            const h = i / 16, q = l < 0.5 ? l * 2 : 1, p = 2 * l - q;
+            const channel = (t) => {
+                t = (t + 1) % 1;
+                const v = t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p;
+                return Math.round(v * 255);
+            };
+            colors.push({ r: channel(h + 1 / 3), g: channel(h), b: channel(h - 1 / 3), a: 255 });
+        }
+    return colors;
+}
+
+export function smallPalette() {
+    const colors = defaultPalette().slice(0, 32);
+    while (colors.length < 96)
+        colors.push({ r: 255, g: 255, b: 255, a: 255 });
+    return colors;
+}
+
+// Paleta en el formato de texto de Paint.NET (aarrggbb por línea, ';' para comentarios).
+export function parsePalette(text) {
+    const colors = [];
+    for (const line of text.split(/\r?\n/)) {
+        const m = /^\s*([0-9a-f]{8}|[0-9a-f]{6})\s*$/i.exec(line.split(";")[0]);
+        if (!m)
+            continue;
+        const v = m[1].length === 6 ? `ff${m[1]}` : m[1];
+        colors.push({ a: parseInt(v.slice(0, 2), 16), r: parseInt(v.slice(2, 4), 16), g: parseInt(v.slice(4, 6), 16), b: parseInt(v.slice(6, 8), 16) });
+        if (colors.length === 96)
+            break;
+    }
+    while (colors.length && colors.length < 96)
+        colors.push({ r: 255, g: 255, b: 255, a: 255 });
+    return colors;
+}
+
+export function serializePalette(colors) {
+    const h = (n) => n.toString(16).padStart(2, "0").toUpperCase();
+    return "; Paint.NET Palette File\n" + colors.map((c) => h(c.a ?? 255) + h(c.r) + h(c.g) + h(c.b)).join("\n") + "\n";
+}
+
+export function samePalette(a, b) {
+    return a.length === b.length && a.every((c, i) => c.r === b[i].r && c.g === b[i].g && c.b === b[i].b && (c.a ?? 255) === (b[i].a ?? 255));
+}
 
 export function defaultPalette() {
     const color = (v, a) => ({ r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255, a });

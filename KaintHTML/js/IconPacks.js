@@ -9,7 +9,7 @@ import { tr } from "./i18n.js";
 const DB = "kaint", STORE = "iconPacks";
 const FOLDERS = ["icons", "cursors", "images"];
 const MANIFEST = "asset-pack.json";
-export const DEFAULT_PACK = "paintjs-default";
+export const DEFAULT_PACK = "kaint-default";
 
 function openDb() {
     return new Promise((resolve, reject) => {
@@ -34,7 +34,7 @@ const validId = (id) => typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,
 
 function builtin() {
     return { id: DEFAULT_PACK, name: tr("Kaint (predeterminado)"), author: "SSSerch", version: "",
-             description: tr("Los iconos de Kaint: los de la interfaz de paint.js y los de las herramientas dibujados."), images: 0 };
+             description: tr("Los iconos de siempre de Kaint."), images: 0 };
 }
 
 export const IconPacks = {
@@ -55,8 +55,11 @@ export const IconPacks = {
             // Sin IndexedDB (modo privado de algunos navegadores): solo el predeterminado.
         }
         packs.sort((a, b) => a.name.localeCompare(b.name));
+        // Para la vista previa, las imágenes de los iconos de los menús que trae cada paquete.
+        const urls = (p) => Object.fromEntries(Object.entries(p.files).filter(([k]) => k.startsWith("icons/menu_"))
+            .map(([k, blob]) => [k, URL.createObjectURL(blob)]));
         return [builtin(), ...packs.map((p) => ({ id: p.id, name: p.name, author: p.author, version: p.version,
-                                                  description: p.description, images: Object.keys(p.files).length }))];
+                                                  description: p.description, images: Object.keys(p.files).length, urls: urls(p) }))];
     },
 
     // Instala un ZIP (sustituye al que tenga el mismo id) y devuelve su id; si no vale, lanza un

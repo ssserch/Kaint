@@ -14,6 +14,7 @@
     --panel: #f0f0f0;
     --panel-title: #f0f0f0;
     --panel-title-text: #3c3c3c;
+    --panel-title-end: var(--panel-title);
     --panel-close: #c75050;
     --selection: #cce4f7;
     --selection-border: #3c7fb1;
@@ -47,6 +48,7 @@
     --panel: #262626;
     --panel-title: #262626;
     --panel-title-text: #d6d6d6;
+    --panel-title-end: var(--panel-title);
     --panel-close: #a84646;
     --selection: #1c476d;
     --selection-border: #2a6fb0;
@@ -60,6 +62,15 @@
     --menu: var(--window);
     --thumb: color-mix(in srgb, var(--window) 68%, var(--text));
     color-scheme: dark;
+}
+
+:root.classic {
+    --radius: 0px;
+    --font: "Microsoft Sans Serif", Tahoma, "DejaVu Sans", sans-serif;
+    --line: #808080;
+    --menu: var(--window);
+    --field: #808080;
+    color-scheme: light;
 }
 
 * {
@@ -221,11 +232,20 @@ u {
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
-    flex: 1 1 auto;
+    /* Solo lo que ocupan las miniaturas: la flecha de la lista va justo después (como Kaint). */
+    flex: 0 1 auto;
 }
 
 .image-strip::-webkit-scrollbar {
     display: none;
+}
+
+.image-list-button {
+    flex: none;
+    align-self: flex-start;
+    width: 18px;
+    height: 24px;
+    margin: 8px 0 0 -4px;
 }
 
 .image-tab {
@@ -288,13 +308,11 @@ u {
 
 .image-tab .unsaved {
     position: absolute;
-    top: 4px;
+    top: 3px;
     left: 2px;
     width: 12px;
     height: 12px;
-    border-radius: 50%;
-    background: #ffaa14;
-    border: 1.5px solid #fff;
+    line-height: 0;
 }
 
 .corner-buttons {
@@ -302,6 +320,12 @@ u {
     align-items: center;
     gap: 0;
     flex: none;
+    margin-left: auto;
+}
+
+.panel-buttons .tbutton > span {
+    font-size: 15px;
+    line-height: 1;
 }
 
 .corner-buttons .gap {
@@ -634,7 +658,7 @@ input[type="checkbox"] {
     align-items: center;
     gap: 2px;
     padding: 1px 1px 1px 7px;
-    background: var(--panel-title);
+    background: linear-gradient(90deg, var(--panel-title), var(--panel-title-end));
     color: var(--panel-title-text);
     border-radius: var(--radius) var(--radius) 0 0;
     cursor: move;
@@ -833,19 +857,28 @@ input[type="checkbox"] {
     cursor: ns-resize;
 }
 
+/* Como en Paint.NET: las muestras van pegadas, sin separación ni marco. */
 .colors-panel .palette {
     display: grid;
     grid-template-columns: repeat(16, 1fr);
     gap: 0;
-    border: 1px solid var(--line);
 }
 
 .colors-panel .palette .swatch {
     aspect-ratio: 1;
-    border: 1px solid rgba(0, 0, 0, 0.25);
     background-image: linear-gradient(var(--c), var(--c)),
         conic-gradient(#bfbfbf 25%, #fff 0 50%, #bfbfbf 0 75%, #fff 0);
     background-size: 100% 100%, 6px 6px;
+}
+
+.colors-panel .palette-menu {
+    width: auto;
+    padding: 0 2px;
+    gap: 1px;
+}
+
+.colors-panel .palette-menu .arrow {
+    font-size: 9px;
 }
 
 .colors-panel .palette.add-mode {
@@ -915,25 +948,25 @@ input[type="checkbox"] {
     width: 130px;
 }
 
-/* Ventanas al estilo de Windows 10, como las de paint.js: esquinas rectas, cabecera más alta,
-   cerrar con una «x» en un cuadrado rojo y sombra suave alrededor. */
-:root.win10 .floating-panel {
-    border-radius: 0;
+/* Ventanas inspiradas en Windows 10: cabecera más alta, cerrar con una «x» en un cuadrado rojo,
+   sombra suave alrededor y las esquinas algo redondeadas de las ventanas de Paint.NET. */
+:root.win10:not(.classic) .floating-panel {
+    border-radius: 7px;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
 }
 
-:root.win10 .floating-panel > .title {
-    padding: 5px 1px 5px 6px;
-    border-radius: 0;
+:root.win10:not(.classic) .floating-panel > .title {
+    padding: 5px 2px 5px 6px;
+    border-radius: 6px 6px 0 0;
 }
 
-:root.win10 .floating-panel > .title .close {
+:root.win10:not(.classic) .floating-panel > .title .close {
     width: 19px;
     height: 19px;
-    border-radius: 0;
+    border-radius: 2px;
 }
 
-:root.win10 .floating-panel > .title .close::before {
+:root.win10:not(.classic) .floating-panel > .title .close::before {
     content: "x";
     position: static;
     display: block;
@@ -945,34 +978,35 @@ input[type="checkbox"] {
     text-align: center;
 }
 
-:root.win10 .floating-panel > .title .close::after {
+:root.win10:not(.classic) .floating-panel > .title .close::after {
     display: none;
 }
 
-:root.win10 .dialog {
-    border-radius: 0;
+:root.win10:not(.classic) .dialog {
+    border-radius: 7px;
+    overflow: hidden;
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
 }
 
-:root.win10 .dialog > .title {
+:root.win10:not(.classic) .dialog > .title {
     background: var(--window);
     color: var(--text);
     padding: 0 0 0 10px;
     min-height: 31px;
 }
 
-:root.win10 .dialog > .title .close {
+:root.win10:not(.classic) .dialog > .title .close {
     width: 46px;
     height: 31px;
     border-radius: 0;
 }
 
-:root.win10 .dialog > .title .close:hover {
+:root.win10:not(.classic) .dialog > .title .close:hover {
     background: var(--panel-close);
     color: #fff;
 }
 
-:root.win10 .dialog > .title .close::before, :root.win10 .dialog > .title .close::after {
+:root.win10:not(.classic) .dialog > .title .close::before, :root.win10:not(.classic) .dialog > .title .close::after {
     left: 17px;
     right: 17px;
     top: 15px;
@@ -1208,6 +1242,10 @@ input[type="checkbox"] {
     gap: 6px;
 }
 
+.settings .page select {
+    max-width: 280px;
+}
+
 .settings .page label {
     display: flex;
     align-items: center;
@@ -1216,6 +1254,67 @@ input[type="checkbox"] {
 
 .settings .page p {
     margin: 0;
+    white-space: pre-line;
+}
+
+.settings .page h4.section {
+    margin: 8px 0 0;
+    font-weight: normal;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.settings .page h4.section::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--line);
+}
+
+.settings .pack-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.settings .pack-preview {
+    display: flex;
+    gap: 4px;
+}
+
+.settings .plugin-list, .settings .font-list {
+    flex: 1;
+    min-height: 120px;
+}
+
+.settings .diagnostics {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 12px;
+    word-break: break-all;
+}
+
+.theme-colors {
+    display: grid;
+    grid-template-columns: 1fr 60px;
+    gap: 4px 12px;
+    align-items: center;
+    max-height: 60vh;
+    overflow: auto;
+}
+
+.catalog-list {
+    width: min(560px, 80vw);
+    max-height: 60vh;
+}
+
+.catalog-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px;
+    border-bottom: 1px solid var(--line);
 }
 
 .settings .pack-list, .settings .shortcut-list {
@@ -1328,4 +1427,45 @@ input[type="checkbox"] {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+}
+
+/* --- Windows 98 (tema clásico): relieves de 98.css ----------------------------------------- */
+
+:root.classic body {
+    font-size: 11px;
+    -webkit-font-smoothing: none;
+}
+
+:root.classic .pushbutton, :root.classic .floating-panel, :root.classic .dialog,
+:root.classic .floating-panel > .title .close, :root.classic .popup-menu {
+    border: none;
+    border-radius: 0;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+}
+
+:root.classic .floating-panel, :root.classic .dialog {
+    padding: 3px;
+}
+
+:root.classic .floating-panel > .title, :root.classic .dialog > .title {
+    background: linear-gradient(90deg, var(--panel-title), var(--panel-title-end));
+    color: var(--panel-title-text);
+    font-weight: bold;
+}
+
+:root.classic .floating-panel > .title .close {
+    background: var(--panel-close);
+}
+
+:root.classic .floating-panel > .title .close::before, :root.classic .floating-panel > .title .close::after {
+    background: #000;
+}
+
+:root.classic input[type="text"], :root.classic input[type="number"], :root.classic select, :root.classic .list {
+    border-radius: 0;
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+}
+
+:root.classic .pushbutton:active {
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
 }

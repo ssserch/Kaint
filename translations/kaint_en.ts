@@ -356,6 +356,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
 %1</translation>
     </message>
     <message>
+        <source>Arcoíris</source>
+        <translation>Rainbow</translation>
+    </message>
+    <message>
+        <source>Pequeña</source>
+        <translation>Small</translation>
+    </message>
+    <message>
         <source>Abrir la carpeta de paletas</source>
         <translation>Open palettes folder</translation>
     </message>
@@ -581,8 +589,8 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Kaint (default)</translation>
     </message>
     <message>
-        <source>Los iconos de Kaint: los de la interfaz de paint.js y los de las herramientas dibujados.</source>
-        <translation>Kaint&apos;s icons: the paint.js interface icons and the drawn tool icons.</translation>
+        <source>Los iconos de siempre de Kaint.</source>
+        <translation>Kaint&apos;s own icons.</translation>
     </message>
     <message>
         <source>No se pudo abrir el archivo.</source>
@@ -4037,14 +4045,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Windows</translation>
     </message>
     <message>
-        <source>Windows 10 (como paint.js)</source>
-        <translation>Windows 10 (like paint.js)</translation>
-    </message>
-    <message>
-        <source>Cabecera más alta, botón de cerrar cuadrado y esquinas rectas.</source>
-        <translation>Taller title bar, square close button and square corners.</translation>
-    </message>
-    <message>
         <source>Compacto</source>
         <translation>Compact</translation>
     </message>
@@ -4131,10 +4131,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Restablecer</source>
         <translation>Reset</translation>
-    </message>
-    <message>
-        <source>Oscura (como paint.js)</source>
-        <translation>Dark (like paint.js)</translation>
     </message>
     <message>
         <source>Del color de la barra de herramientas</source>
@@ -4438,8 +4434,8 @@ Do you want to replace them?</translation>
         <translation>Also look for pre-release (beta) versions of Kaint</translation>
     </message>
     <message>
-        <source>Los paquetes de iconos de paint.js (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.</source>
-        <translation>paint.js icon packs (.zip files with an asset-pack.json) change Kaint&apos;s icons, the tool icons too. Icons a pack doesn&apos;t include stay as Kaint&apos;s. Packs are stored on this computer.</translation>
+        <source>Los paquetes de iconos (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.</source>
+        <translation>Icon packs (.zip files with an asset-pack.json) change Kaint&apos;s icons, the tool icons too. Icons a pack doesn&apos;t include stay as Kaint&apos;s. Packs are stored on this computer.</translation>
     </message>
     <message>
         <source>Usar</source>
@@ -4593,12 +4589,24 @@ Do you want to replace them?</translation>
         <translation>Installed version: %1</translation>
     </message>
     <message>
+        <source>Windows 10</source>
+        <translation>Windows 10</translation>
+    </message>
+    <message>
+        <source>Cabecera más alta, botón de cerrar cuadrado y esquinas algo redondeadas.</source>
+        <translation>Taller title bar, square close button and slightly rounded corners.</translation>
+    </message>
+    <message>
         <source>Usar un color personalizado para el fondo del lienzo con los temas claros</source>
         <translation>Use a custom canvas background color with light themes</translation>
     </message>
     <message>
         <source>Usar un color personalizado para el fondo del lienzo con los temas oscuros</source>
         <translation>Use a custom canvas background color with dark themes</translation>
+    </message>
+    <message>
+        <source>Oscura</source>
+        <translation>Dark</translation>
     </message>
     <message>
         <source>Las versiones nuevas se publican en %1</source>

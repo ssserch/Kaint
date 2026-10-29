@@ -27,6 +27,23 @@ QList<QColor> defaultColors()
     return colors;
 }
 
+QList<QColor> rainbowColors()
+{
+    QList<QColor> colors;
+    for (double lightness : {0.2, 0.32, 0.44, 0.56, 0.68, 0.8})
+        for (int column = 0; column < 16; ++column)
+            colors.append(QColor::fromHslF(float(column / 16.0), 1.0f, float(lightness)).toRgb());
+    return colors;
+}
+
+QList<QColor> smallColors()
+{
+    QList<QColor> colors = defaultColors().mid(0, 32);
+    while (colors.size() < kColorCount)
+        colors.append(Qt::white);
+    return colors;
+}
+
 QList<QColor> parse(const QString& text)
 {
     QList<QColor> colors;

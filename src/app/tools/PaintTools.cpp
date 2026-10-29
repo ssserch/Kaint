@@ -122,11 +122,6 @@ QString CloneStampTool::hint() const
                        : tr("Ctrl+clic para elegir el punto de origen y luego pinta donde quieras copiarlo.");
 }
 
-QCursor CloneStampTool::cursor() const
-{
-    return QCursor(Qt::CrossCursor);
-}
-
 bool CloneStampTool::canStart(const ToolEvent& e)
 {
     Document* doc = document();

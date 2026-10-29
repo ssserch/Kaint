@@ -11,7 +11,6 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_Z); }
-    QCursor cursor() const override;
 
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;
@@ -63,7 +62,6 @@ public:
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_K); }
     quint64 options() const override { return OptSampleSize | OptPicker | OptSelectionQuality; }
-    QCursor cursor() const override;
 
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;

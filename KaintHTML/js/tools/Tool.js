@@ -34,13 +34,13 @@ export class Tool {
         return "";
     }
 
+    // Como en Kaint, el icono actual de la herramienta con el punto activo en su punta.
     cursor() {
-        return "crosshair";
+        return iconCursor(this.icon);
     }
 
-    // Cursor con el icono de la herramienta (punto activo en hx, hy de 24 px).
-    iconCursor(hx, hy) {
-        return iconCursor(this.icon, hx, hy);
+    iconCursor() {
+        return iconCursor(this.icon);
     }
 
     activate() {}

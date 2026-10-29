@@ -1,10 +1,10 @@
 // Ventanas flotantes (src/app/Workspace.cpp y panels/): Herramientas, Historial, Capas y Colores.
 // Se anclan a una esquina del área de trabajo, se arrastran por la cabecera, cambian de tamaño
 // por los bordes y se vuelven translúcidas sin el puntero encima.
-import { AppState } from "../AppState.js";
+import { AppState, defaultPalette, parsePalette, rainbowPalette, samePalette, serializePalette, smallPalette } from "../AppState.js";
 import { hsvToRgb, hex, parseHex, rgbToHsv, thumbnail } from "../core/Raster.js";
 import { kRuler } from "./Canvas.js";
-import { el } from "./Dialogs.js";
+import { el, promptText } from "./Dialogs.js";
 import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 import { kIndicator, outCubic, run, slideRows } from "./Animations.js";
@@ -37,7 +37,8 @@ export class FloatingPanel {
         if (saved.size || size) {
             const s = saved.size || size;
             this.element.style.width = `${s.w}px`;
-            this.element.style.height = `${s.h}px`;
+            // Sin alto, la ventana mide lo que su contenido (Colores, como en Kaint).
+            this.element.style.height = s.h ? `${s.h}px` : "";
         }
         this.visible = saved.visible ?? true;
         this.element.style.display = this.visible ? "" : "none";
@@ -49,7 +50,7 @@ export class FloatingPanel {
     save() {
         remember(`panel.${this.id}`, {
             corner: this.corner, offset: this.offset, visible: this.visible,
-            size: this.element.style.width ? { w: this.element.offsetWidth, h: this.element.offsetHeight } : null,
+            size: this.element.style.width ? { w: this.element.offsetWidth, h: this.element.style.height ? this.element.offsetHeight : 0 } : null,
         });
     }
 
@@ -166,7 +167,7 @@ export class FloatingPanel {
         this.corner = this.defaults.corner;
         this.offset = { ...this.defaults.offset };
         this.element.style.width = this.defaults.size ? `${this.defaults.size.w}px` : "";
-        this.element.style.height = this.defaults.size ? `${this.defaults.size.h}px` : "";
+        this.element.style.height = this.defaults.size?.h ? `${this.defaults.size.h}px` : "";
         this.setVisible(true);
     }
 }
@@ -510,25 +511,61 @@ export function colorsPanel(app) {
     const addColor = el("button", { className: "tbutton", title: tr("Añadir el color activo a la paleta: haz clic después en la muestra que quieras sustituir") });
     const addIcon = el("canvas", { width: 16, height: 16, style: { width: "16px", height: "16px" } });
     addColor.appendChild(addIcon);
-    const paletteMenu = el("button", { className: "tbutton", title: tr("Paletas") }, [icon("palette", 16)]);
-    paletteRow.append(paletteMenu, addColor);
+    const paletteMenu = el("button", { className: "tbutton palette-menu", title: tr("Paletas") }, [icon("palette", 16), el("span", { className: "arrow", textContent: "▾" })]);
+    paletteRow.append(addColor, paletteMenu);
     panel.appendChild(paletteRow);
     const palette = el("div", { className: "palette" });
     panel.appendChild(palette);
+    let allColors = false;
     let addMode = false;
     addColor.addEventListener("click", () => {
         addMode = !addMode;
         addColor.classList.toggle("checked", addMode);
         palette.classList.toggle("add-mode", addMode);
     });
+    // Como el menú de paletas de Kaint: las guardadas, guardar y abrir, la predeterminada y las de
+    // muestra; la que se está usando lleva la marca.
     paletteMenu.addEventListener("click", () => {
-        const r = paletteMenu.getBoundingClientRect();
-        popupMenu([{ text: tr("Restablecer la paleta predeterminada"), icon: "edit-reset", run: () => AppState.resetPalette() }],
-                  r.left, r.bottom);
+        const r = paletteMenu.getBoundingClientRect(), current = AppState.palette;
+        const saved = remember("palettes") || {};
+        const entry = (text, iconName, colors, run) => ({ text, icon: colors && samePalette(colors, current) ? "dialog-ok-apply" : iconName, run });
+        const entries = Object.keys(saved).sort((a, b) => a.localeCompare(b))
+            .map((name) => entry(name, "palette", saved[name], () => AppState.setPalette(saved[name])));
+        if (entries.length)
+            entries.push("-");
+        entries.push(entry(tr("Guardar la paleta actual como…"), "document-save-as", null, async () => {
+            const name = (await promptText(tr("Guardar la paleta"), tr("Nombre de la paleta:"), ""))?.trim();
+            if (name)
+                remember("palettes", { ...(remember("palettes") || {}), [name]: AppState.palette });
+        }));
+        entries.push(entry(tr("Abrir paleta desde archivo…"), "document-open", null, () => {
+            const input = el("input", { type: "file", accept: ".txt,text/plain" });
+            input.addEventListener("change", async () => {
+                const f = input.files?.[0];
+                const colors = f ? parsePalette(await f.text()) : [];
+                if (!colors.length)
+                    return;
+                remember("palettes", { ...(remember("palettes") || {}), [f.name.replace(/\.txt$/i, "")]: colors });
+                AppState.setPalette(colors);
+            });
+            input.click();
+        }));
+        entries.push(entry(tr("Guardar la paleta en un archivo…"), "document-save", null, () => {
+            const a = el("a", { href: URL.createObjectURL(new Blob([serializePalette(AppState.palette)], { type: "text/plain" })), download: "Kaint.txt" });
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }));
+        entries.push("-");
+        entries.push(entry(tr("Restablecer la paleta predeterminada"), "edit-reset", defaultPalette(), () => AppState.resetPalette()));
+        entries.push("-");
+        entries.push(entry(tr("Arcoíris"), "palette", rainbowPalette(), () => AppState.setPalette(rainbowPalette())));
+        entries.push(entry(tr("Pequeña"), "palette", smallPalette(), () => AppState.setPalette(smallPalette())));
+        popupMenu(entries, r.left, r.bottom);
     });
+    // Como en Kaint: dos filas y, con «Más», los 96 colores.
     const drawPalette = () => {
         palette.replaceChildren();
-        AppState.palette.forEach((c, i) => {
+        AppState.palette.slice(0, allColors ? 96 : 32).forEach((c, i) => {
             const sw = el("div", { className: "swatch", title: `#${hex(c, true)}`, style: { "--c": `rgba(${c.r},${c.g},${c.b},${c.a / 255})` } });
             sw.style.setProperty("--c", `rgba(${c.r},${c.g},${c.b},${c.a / 255})`);
             sw.addEventListener("pointerdown", (e) => {
@@ -582,6 +619,8 @@ export function colorsPanel(app) {
         const open = moreBox.style.display === "none";
         moreBox.style.display = open ? "" : "none";
         more.textContent = open ? tr("« Menos") : tr("Más »");
+        allColors = open;
+        drawPalette();
         app.panels.colors.reposition();
     });
     const sync = () => {

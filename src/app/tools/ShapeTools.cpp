@@ -572,11 +572,14 @@ void ShapesTool::mouseMove(const ToolEvent& e)
     }
     if (m_box.mode() != TransformBox::Mode::None) {
         m_box.update(e.pos, e.modifiers);
+        if (m_box.mode() == TransformBox::Mode::Rotate)
+            canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
         render();
         return;
     }
     int handle = -1;
-    canvas()->setToolCursor(transformCursor(m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle)));
+    const TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle);
+    canvas()->setToolCursor(transformCursor(mode, cursor(), rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
 }
 
 void ShapesTool::mouseRelease(const ToolEvent&)

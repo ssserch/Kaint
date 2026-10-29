@@ -69,14 +69,15 @@ runs on Windows 10 and 11.
   <tr>
     <td valign="top">
       <h4>Icon packs, fonts and shortcuts</h4>
-      Install <a href="https://github.com/LabyStudio/paintdotjs">paint.js</a> icon packs (.zip),
+      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview,
       add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
       and change any keyboard shortcut in <b>Settings</b>.
     </td>
     <td valign="top">
-      <h4>Rulers and status bar</h4>
-      Dark rulers like paint.js's (or the toolbar color), with the floating windows kept clear of
-      them, and the current tool's icon next to its help in the status bar.
+      <h4>Cursors, rulers and status bar</h4>
+      Every tool's cursor is its icon, sized like the system cursor and with the hot spot on its
+      tip; the move tools show a curved arrow that turns as you rotate. Dark rulers (or the toolbar
+      color) that the floating windows never cover, and the tool's icon in the status bar.
     </td>
   </tr>
   <tr>
@@ -95,8 +96,10 @@ runs on Windows 10 and 11.
 
 Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
 colors, toolbar layout and a canvas background image with placement, scale, blur and tint. The
-floating windows look like paint.js's Windows 10 windows (or Kaint's compact ones), with the border
-width you choose in **Settings → User interface**.
+floating windows have a Windows 10 inspired style with slightly rounded corners (or Kaint's
+compact one), with the border width you choose in **Settings → User interface**. Unsaved images
+carry Paint.NET's orange star, and the Colors window has gap-free swatches and a palette menu with
+your saved palettes, Rainbow and Small.
 
 Menus and windows fade in, layers slide into place when you reorder them, the active color slot
 and the close buttons of the image tabs animate, and a modal dialog blinks when you click the
@@ -228,8 +231,7 @@ manager and never looks for new versions on GitHub (the Flatpak does this).
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
 `src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, `data/icons/` bundles KDE's
-Breeze icons (LGPL-3.0-or-later), and the interface icons in `data/ui-icons/` come from SSSerch's
-fork of [paint.js](https://github.com/LabyStudio/paintdotjs), used with permission.
+Breeze icons (LGPL-3.0-or-later), and the interface
 
 ## Disclaimer
 

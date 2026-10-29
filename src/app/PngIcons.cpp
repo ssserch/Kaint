@@ -25,22 +25,6 @@ namespace {
 const QHash<QString, QString>& files()
 {
     static const QHash<QString, QString> table{
-        // Herramientas (el pincel, el cubo, cambiar color, el degradado y la mano se dibujan:
-        // los cuatro primeros llevan los colores activos)
-        {QStringLiteral("rectangleselect"), QStringLiteral("rectangle_select_tool_icon")},
-        {QStringLiteral("ellipseselect"), QStringLiteral("ellipse_select_tool_icon")},
-        {QStringLiteral("lassoselect"), QStringLiteral("lasso_select_tool_icon")},
-        {QStringLiteral("magicwand"), QStringLiteral("magic_wand_tool_icon")},
-        {QStringLiteral("moveselectedpixels"), QStringLiteral("move_tool_icon")},
-        {QStringLiteral("moveselection"), QStringLiteral("move_selection_tool_icon")},
-        {QStringLiteral("zoom"), QStringLiteral("zoom_tool_icon")},
-        {QStringLiteral("eraser"), QStringLiteral("eraser_tool_icon")},
-        {QStringLiteral("pencil"), QStringLiteral("pencil_tool_icon")},
-        {QStringLiteral("colorpicker"), QStringLiteral("color_picker_tool_icon")},
-        {QStringLiteral("clonestamp"), QStringLiteral("clone_stamp_tool_icon")},
-        {QStringLiteral("text"), QStringLiteral("text_tool_icon")},
-        {QStringLiteral("linecurve"), QStringLiteral("line_tool_icon")},
-        {QStringLiteral("shapes"), QStringLiteral("shapes_tool_icon_16")},
         // Archivo
         {QStringLiteral("document-new"), QStringLiteral("menu_file_new_icon")},
         {QStringLiteral("document-open"), QStringLiteral("menu_file_open_icon")},
@@ -135,6 +119,11 @@ const QHash<QString, QString>& files()
         {QStringLiteral("status-selection"), QStringLiteral("selection_icon")},
         {QStringLiteral("status-cursor"), QStringLiteral("cursor_x_y_icon")},
         {QStringLiteral("palette"), QStringLiteral("swatch_icon")},
+        // Tira de imágenes y Tamaño del lienzo
+        {QStringLiteral("image-list-menu"), QStringLiteral("tool_bar_image_list_menu_open_button")},
+        {QStringLiteral("strip-scroll-left"), QStringLiteral("image_strip_scroll_left_arrow")},
+        {QStringLiteral("strip-scroll-right"), QStringLiteral("image_strip_scroll_right_arrow")},
+        {QStringLiteral("anchor"), QStringLiteral("anchor_chooser_control_anchor_image")},
         {QStringLiteral("color-swap"), QStringLiteral("swap_icon")},
         {QStringLiteral("dialog-warning"), QStringLiteral("warning_icon")},
         {QStringLiteral("dialog-cancel"), QStringLiteral("cancel_icon")},

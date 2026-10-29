@@ -17,7 +17,6 @@ public:
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
     quint64 options() const override { return OptInterpolation | OptGamma | OptSelectionQuality | OptFinish; }
-    QCursor cursor() const override { return Qt::SizeAllCursor; }
 
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;
@@ -65,7 +64,6 @@ public:
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }
-    QCursor cursor() const override { return Qt::SizeAllCursor; }
     bool highlightSelection() const override { return true; }
     quint64 options() const override { return OptMoveSelectionQuality | OptFinish; }
 
@@ -92,5 +90,7 @@ private:
     Selection m_pivotFor;
 };
 
-// Cursor de giro y cursor según la zona del cuadro bajo el puntero.
-QCursor transformCursor(TransformBox::Mode mode);
+// Cursor de cada zona de la caja: tiradores, girar (la flecha curva, según el ángulo hacia el
+// centro) o mover ('translate', el icono de la herramienta).
+QCursor transformCursor(TransformBox::Mode mode, const QCursor& translate, qreal angle = 0);
+qreal rotateAngle(const TransformBox& box, const QTransform& imageToView, const QPointF& viewPos);

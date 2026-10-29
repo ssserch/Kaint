@@ -370,6 +370,89 @@ const pack = await page.evaluate(async () => {
 });
 check(pack, "un paquete de iconos cambia los iconos y al quitarlo vuelven los de Kaint");
 
+// Complementos (.paintjs): uno de prueba con un efecto por píxel y un formato de archivo.
+const plugin = await page.evaluate(async () => {
+    const { zip } = await import("./js/core/Zip.js");
+    const { Plugins } = await import("./js/plugins/Plugins.js");
+    const { Effects } = await import("./js/core/Effects.js");
+    const enc = new TextEncoder();
+    const manifest = { id: "smoke.invert", name: "Prueba", version: "1.0.0", apiVersion: 1, author: "Kaint", website: "https://example.com/",
+                       description: "Prueba", category: "Effects", license: "MIT" };
+    const source = `paintDotJs.registerPlugin({ effects: [{ id: "invert-red", name: "Invert Red", category: "Color",
+        controls: [paintDotJs.controls.range("amount", "Amount", 0, 1, 1, 0.01)],
+        renderPixel({ r, g, b, a, values }) { return [r + (255 - 2 * r) * values.amount, g, b, a]; } }],
+        fileTypes: [{ id: "raw", name: "Raw", extensions: [".rawsmoke"], decode() { return { width: 2, height: 1, data: new Uint8Array([255,0,0,255, 0,0,255,255]) }; },
+                      encode({ document }) { return new Uint8Array(document.layers[0].data); } }] });`;
+    const file = new File([zip([{ name: "plugin.json", data: enc.encode(JSON.stringify(manifest)) }, { name: "plugin.js", data: enc.encode(source) }])], "p.paintjs");
+    await Plugins.install(file);
+    const app = window.kaint, layer = app.doc.activeLayer;
+    layer.ctx.fillStyle = "#ff0000";
+    layer.ctx.fillRect(0, 0, 4, 4);
+    await app.runEffect(Effects.find((e) => e.id === "plugin.smoke.invert.invert-red"), true);
+    const px = [...layer.ctx.getImageData(1, 1, 1, 1).data];
+    await app.openFile(new File([new Uint8Array(4)], "x.rawsmoke"));
+    const opened = app.doc.width === 2 && [...app.doc.activeLayer.ctx.getImageData(0, 0, 1, 1).data][0] === 255;
+    await app.closeDocument(app.doc, false);
+    return { px, opened, any: Plugins.anyEffects(), step: app.doc.history.steps[app.doc.history.index].name };
+});
+check(plugin.px[0] === 0 && plugin.any && plugin.step === "Invert Red" && plugin.opened, `complementos (${JSON.stringify(plugin)})`);
+await page.click("#menubar >> text=Efectos");
+const effectsMenu = await page.evaluate(() => [...document.querySelectorAll(".popup-menu")].pop()?.textContent || "");
+check(effectsMenu.includes("Complementos") && effectsMenu.includes("Color"), "el menú Efectos muestra «Complementos...» y la categoría del complemento");
+await page.keyboard.press("Escape");
+
+// Paleta como la de Kaint: dos filas (32 colores) y el menú con las paletas de muestra.
+const palette = await page.evaluate(async () => {
+    const before = document.querySelectorAll(".colors-panel .palette .swatch").length;
+    document.querySelector(".colors-panel .palette-menu").click();
+    const items = [...document.querySelectorAll(".popup-menu .item")].map((i) => i.textContent);
+    [...document.querySelectorAll(".popup-menu .item")].find((i) => i.textContent.includes("Arcoíris"))?.click();
+    const { AppState, rainbowPalette, samePalette } = await import("./js/AppState.js");
+    const rainbow = samePalette(AppState.palette, rainbowPalette());
+    AppState.resetPalette();
+    return { before, items: items.length, rainbow };
+});
+check(palette.before === 32 && palette.items >= 6 && palette.rainbow, `paleta (${JSON.stringify(palette)})`);
+
+// Tablero de transparencia como el de Kaint, temas Windows 98 y personalizado, cursores con icono
+// y overscroll.
+const misc = await page.evaluate(async () => {
+    const { checkerPattern } = await import("./js/core/Raster.js");
+    const { Settings } = await import("./js/Settings.js");
+    const c = document.createElement("canvas");
+    c.width = c.height = 16;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = checkerPattern(ctx, 200);
+    ctx.fillRect(0, 0, 16, 16);
+    const light = ctx.getImageData(12, 2, 1, 1).data[0], dark = ctx.getImageData(2, 2, 1, 1).data[0];
+    Settings.set("colorScheme", 4);
+    const classic = document.documentElement.classList.contains("classic");
+    Settings.set("customTheme", { base: "dark", colors: { accent: "#ff0000" } });
+    Settings.set("colorScheme", 5);
+    const custom = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() === "#ff0000"
+        && document.documentElement.classList.contains("dark");
+    Settings.set("colorScheme", 1);
+    window.kaint.tools.select("pencil");
+    const cursor = document.getElementById("view").style.cursor;
+    const view = window.kaint.view;
+    view.zoomToWindow();
+    view.scrollBy(-5000, 0);
+    const over = view.origin.x > 24;
+    view.zoomToWindow();
+    return { light, dark, classic, custom, cursor: cursor.includes("image-set") && cursor.includes(" 2 18"), over };
+});
+check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && misc.cursor && misc.over, `apariencia y cámara (${JSON.stringify(misc)})`);
+
+// Todas las páginas de Configuración se abren sin errores.
+for (const id of ["interface", "canvas", "tools", "tablet", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
+    // Sin esperar al diálogo (se resuelve al cerrarlo).
+    await page.evaluate(async (id) => {
+        (await import("./js/ui/Dialogs.js")).settingsDialog(window.kaint, id);
+    }, id);
+    await page.waitForSelector(".settings .page > *");
+    await page.keyboard.press("Escape");
+}
+
 await shot("final.png");
 for (const e of errors) {
     failures++;

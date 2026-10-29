@@ -66,12 +66,12 @@
     <screenshot type="default">
       <caption>The dark theme with the tools, colors, history and layers windows</caption>
       <caption xml:lang="es">El tema oscuro con las ventanas de herramientas, colores, historial y capas</caption>
-      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.0.3/img/other/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.0/img/other/screenshot.png</image>
     </screenshot>
     <screenshot>
       <caption>The light theme</caption>
       <caption xml:lang="es">El tema claro</caption>
-      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.0.3/img/other/screenshot-light.png</image>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.0/img/other/screenshot-light.png</image>
     </screenshot>
   </screenshots>
 
@@ -109,6 +109,20 @@
   </keywords>
 
   <releases>
+    <release version="1.1.0" date="2026-10-29">
+      <description>
+        <p>Animations, icon packs, editable shortcuts and a web version.</p>
+        <ul>
+          <li>Animations for menus, windows, layers and colors, with a switch in Settings</li>
+          <li>New interface icons, icon packs and editable keyboard shortcuts</li>
+          <li>Fonts and Paint.NET shapes can be added from Settings</li>
+          <li>Windows 10 style floating windows with a configurable border, and new rulers</li>
+          <li>Tool cursors with their icons and an exact zoom to a rectangle</li>
+          <li>Windows installer with an uninstaller</li>
+          <li>KaintHTML, Kaint for the web</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.3" date="2026-10-24">
       <description>
         <p>Flatpak and Flathub support.</p>

@@ -5,6 +5,10 @@ import { shortcutLabel } from "./Actions.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
 import { Settings } from "../Settings.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
+import { Plugins } from "../plugins/Plugins.js";
+import { UserFonts } from "../UserFonts.js";
+import { VERSION } from "../version.js";
+import { ColorRoles, Presets } from "./Themes.js";
 import { plain, tr } from "../i18n.js";
 
 let openDialogs = 0;
@@ -346,31 +350,47 @@ export async function saveOptionsDialog(formats, chosen, quality) {
     return r ? { format: formats.find((x) => x.ext === format.value), quality: q.value() } : null;
 }
 
+// Pide un texto (nombre de una paleta...): devuelve el texto o null si se cancela.
+export async function promptText(title, label, value = "") {
+    const dlg = new Dialog(title, { iconName: "palette" });
+    const input = el("input", { type: "text", value, style: { width: "260px" } });
+    dlg.body.appendChild(el("label", { style: { display: "flex", gap: "8px", alignItems: "center" } }, [plain(label), input]));
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    setTimeout(() => input.select(), 0);
+    return (await dlg.exec()) === "ok" ? input.value : null;
+}
+
 // --- Configuración -----------------------------------------------------------------------
 
-export async function settingsDialog(app = null, startPage = 0) {
+export async function settingsDialog(app = null, startPage = "interface") {
     const dlg = new Dialog(tr("Configuración"), { iconName: "configure" });
     const sections = el("div", { className: "sections" });
     const page = el("div", { className: "page" });
     const check = (text, key, tip = "") => {
-        const c = checkbox(text, Settings.get(key));
+        const c = checkbox(text, Settings.get(key) !== false && Settings.get(key) !== undefined ? !!Settings.get(key) : false);
         c.title = tip;
         c.input.addEventListener("change", () => Settings.set(key, c.input.checked));
         return c;
     };
-    const heading = (text) => el("h4", { textContent: text, style: { margin: "8px 0 0", fontWeight: "normal" } });
+    const heading = (text) => el("h4", { className: "section", textContent: text });
     const note = (text) => el("small", { textContent: text, style: { opacity: 0.75 } });
-    let show = null;
-    // Paquete de iconos: el desplegable de la interfaz y la página que los administra.
-    const packChoice = (packs) => {
-        const s = select(packs.map((p) => [p.id, p.name]), IconPacks.activeId());
-        s.addEventListener("change", () => IconPacks.activate(s.value));
-        return s;
+    const button = (text, tip, run) => {
+        const b = el("button", { className: "pushbutton", textContent: plain(text), title: tip || "" });
+        b.addEventListener("click", run);
+        return b;
     };
+    let show = null;
     const pages = [
-        ["settings-interface", tr("Interfaz de usuario"), async () => {
-            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")]], Settings.get("colorScheme"));
+        ["interface", "settings-interface", tr("Interfaz de usuario"), async () => {
+            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [4, tr("Windows 98")], [5, tr("Personalizado")]],
+                                  Settings.get("colorScheme"));
             scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
+            const customize = button(tr("Personalizar…"), tr("Editar el tema personalizado."), async () => {
+                Settings.set("colorScheme", 5);
+                scheme.value = "5";
+                await customThemeDialog();
+            });
             const language = select([["en", "English"], ["es", "Español"]], Settings.get("language"));
             const reload = el("button", { className: "pushbutton", textContent: tr("Recargar"), style: { visibility: "hidden" } });
             reload.addEventListener("click", () => location.reload());
@@ -378,9 +398,10 @@ export async function settingsDialog(app = null, startPage = 0) {
                 Settings.set("language", language.value);
                 reload.style.visibility = "visible";
             });
-            const manage = el("button", { className: "pushbutton", textContent: plain(tr("Administrar…")), title: tr("Añadir o quitar paquetes de iconos.") });
-            manage.addEventListener("click", () => show(4));
-            const panelStyle = select([[0, tr("Windows 10 (como paint.js)")], [1, tr("Compacto")]], Settings.get("panelStyle"));
+            const packs = await IconPacks.list();
+            const pack = select(packs.map((p) => [p.id, p.name]), IconPacks.activeId());
+            pack.addEventListener("change", () => IconPacks.activate(pack.value));
+            const panelStyle = select([[0, tr("Windows 10")], [1, tr("Compacto")]], Settings.get("panelStyle"));
             panelStyle.addEventListener("change", () => Settings.set("panelStyle", Number(panelStyle.value)));
             const border = numberInput(Settings.get("panelBorder"), 1, 12);
             border.style.width = "60px";
@@ -391,43 +412,116 @@ export async function settingsDialog(app = null, startPage = 0) {
                       tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.")),
                 check(tr("Ventanas translúcidas"), "translucentPanels",
                       tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima.")),
+                check(tr("Desplazamiento más allá del borde de la imagen (overscroll)"), "overscroll",
+                      tr("Permite ver un margen alrededor de la imagen; así el zum hacia el cursor funciona también en las esquinas.")),
+                check(tr("Desplazamiento automático al dibujar en el borde de la ventana"), "autoScroll"),
+                check(tr("Seleccionar automáticamente la capa visible más cercana tras ocultar una capa"), "autoSelectVisibleLayer"),
                 check(tr("Iconos de herramientas con los colores activos"), "coloredToolIcons",
                       tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario.")),
-                el("label", {}, [tr("Tema:"), scheme]),
+                el("label", {}, [tr("Tema:"), scheme, customize]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
                 note(tr("Los cambios de idioma se aplican al recargar la página.")),
-                el("label", {}, [tr("Paquete de iconos:"), packChoice(await IconPacks.list()), manage]),
+                el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
                 heading(tr("Ventanas")),
                 el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
                 el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
                 heading(tr("Al cerrar")),
-                check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), "askOnceOnClose"),
+                check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), "askOnceOnClose",
+                      tr("Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.")),
             ];
         }],
-        ["settings-canvas", tr("Lienzo"), () => {
-            const brightness = slider(Settings.get("checkerBrightness"), 0, 255, 1, (v) => Settings.set("checkerBrightness", v));
-            const ruler = select([[0, tr("Oscura (como paint.js)")], [1, tr("Del color de la barra de herramientas")]], Settings.get("rulerStyle"));
+        ["canvas", "settings-canvas", tr("Lienzo"), () => {
+            // Fondo alrededor de la imagen, uno para los temas claros y otro para los oscuros.
+            const borderRow = (text, key, fallback) => {
+                const c = checkbox(text, !!Settings.get(key));
+                const color = el("input", { type: "color", value: Settings.get(key) || fallback });
+                color.disabled = !c.input.checked;
+                const apply = () => {
+                    color.disabled = !c.input.checked;
+                    Settings.set(key, c.input.checked ? color.value : null);
+                };
+                c.input.addEventListener("change", apply);
+                color.addEventListener("input", apply);
+                return el("div", { className: "row-buttons" }, [c, color]);
+            };
+            // Brillo del tablero de transparencia de 0,25 a 1, como en Kaint (191 / 255 por defecto).
+            const value = Math.max(0.25, Math.min(1, (Settings.get("checkerBrightness") ?? 191) / 255));
+            const brightness = slider(Number(value.toFixed(2)), 0.25, 1, 0.01, (v) => Settings.set("checkerBrightness", Math.round(v * 255)));
+            const reset = el("button", { className: "tbutton", title: tr("Restablecer") }, [icon("edit-reset", 16)]);
+            reset.addEventListener("click", () => {
+                brightness.set(0.75);
+                Settings.set("checkerBrightness", 191);
+            });
+            const ruler = select([[0, tr("Oscura")], [1, tr("Del color de la barra de herramientas")]], Settings.get("rulerStyle"));
             ruler.addEventListener("change", () => Settings.set("rulerStyle", Number(ruler.value)));
             return [check(tr("Proyectar una sombra bajo el lienzo"), "dropShadow"),
-                    el("label", {}, [tr("Brillo de tablero de ajedrez de transparencia")]), brightness,
+                    borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas claros"), "canvasBorderLight", "#cfcfcf"),
+                    borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas oscuros"), "canvasBorderDark", "#303030"),
+                    el("label", {}, [tr("Brillo de tablero de ajedrez de transparencia")]),
+                    el("div", { className: "row-buttons" }, [brightness, reset]),
                     el("label", {}, [tr("Reglas:"), ruler])];
         }],
-        ["settings-tools", tr("Herramientas"), () => [
-            heading(tr("Mover y pegar")),
-            check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
-                  tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+        ["tools", "settings-tools", tr("Herramientas"), () => {
+            const tools = app ? app.tools.tools : [];
+            const start = select([["", tr("La última que se usó")], ...tools.map((t) => [t.id, t.name])], Settings.get("startTool") || "");
+            start.addEventListener("change", () => Settings.set("startTool", start.value));
+            return [
+                el("label", {}, [tr("Herramienta predeterminada:"), start]),
+                heading(tr("Mover y pegar")),
+                check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
+                      tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+            ];
+        }],
+        ["tablet", "settings-tablet", tr("Lápiz y tableta"), () => [
+            check(tr("La presión del lápiz de la tableta controla el tamaño del pincel"), "penPressure"),
+            check(tr("Usar la Goma con el extremo borrador del lápiz"), "tabletEraser"),
+            note(tr("Al dar la vuelta al lápiz se activa la herramienta Goma de borrar, y al volver a la punta, la herramienta de antes.")),
+            note("PointerEvent" in window ? tr("El navegador admite lápices y tabletas.") : tr("No se detectó ningún lápiz ni tableta de dibujo.")),
         ]],
-        ["configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
-        ["document-open", tr("Paquetes de iconos"), () => iconPacksPage(() => show(4))],
+        ["plugins", "settings-plugins", tr("Complementos"), () => pluginsPage(() => show("plugins"))],
+        ["updates", "settings-updates", tr("Actualizaciones"), () => {
+            const status = el("p", { textContent: "" });
+            const now = button(tr("Buscar ahora"), "", async () => {
+                status.textContent = tr("Buscando…");
+                try {
+                    const r = await fetch("https://raw.githubusercontent.com/ssserch/Kaint/main/version.json", { cache: "no-store" });
+                    const latest = (await r.json()).version;
+                    status.textContent = latest && latest !== VERSION ? tr("Hay una versión nueva: %1. Recarga la página para usarla.", latest)
+                        : tr("Kaint está al día.");
+                } catch {
+                    status.textContent = tr("No se pudo comprobar. Inténtalo más tarde.");
+                }
+            });
+            return [el("p", { textContent: tr("Versión instalada: %1", VERSION) }),
+                    el("p", { textContent: tr("La versión web se actualiza sola: al recargar la página se usa la última publicada.") }),
+                    el("div", { className: "row-buttons" }, [now]), status];
+        }],
+        ["diagnostics", "settings-diagnostics", tr("Diagnósticos"), () => {
+            const rows = [
+                ["Kaint", `${tr("Versión web de Kaint")} ${VERSION}`], [tr("Navegador"), navigator.userAgent],
+                [tr("Plataforma"), navigator.platform || "?"], [tr("Idioma"), navigator.language || "?"],
+                [tr("Procesadores lógicos"), String(navigator.hardwareConcurrency || "?")],
+                [tr("Memoria"), navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "?"],
+                [tr("Pantalla"), `${screen.width} × ${screen.height} · ${window.devicePixelRatio || 1}×`],
+                [tr("Lápiz y tableta"), "PointerEvent" in window ? tr("Sí") : tr("No")],
+                [tr("Archivos del sistema"), window.showOpenFilePicker ? tr("Sí") : tr("No")],
+            ];
+            const copy = button(tr("Copiar en el portapapeles"), "", () => navigator.clipboard?.writeText(rows.map((r) => r.join(": ")).join("\n")));
+            return [el("div", { className: "diagnostics" }, rows.flatMap(([k, v]) => [el("span", { textContent: k }), el("span", { textContent: v })])),
+                    el("div", { className: "row-buttons" }, [copy])];
+        }],
+        ["iconpacks", "document-open", tr("Paquetes de iconos"), () => iconPacksPage(() => show("iconpacks"))],
+        ["fonts", "text", tr("Fuentes"), () => fontsPage(() => show("fonts"))],
+        ["keyboard", "configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
     ];
-    show = async (i) => {
+    show = async (id) => {
+        const i = Math.max(0, typeof id === "number" ? id : pages.findIndex((p) => p[0] === id));
         [...sections.children].forEach((row, k) => row.classList.toggle("selected", k === i));
-        const content = await pages[i][2]();
-        page.replaceChildren(...content);
+        page.replaceChildren(...(await pages[i][3]()));
     };
-    pages.forEach(([iconName, name], i) => {
+    pages.forEach(([id, iconName, name]) => {
         const row = el("div", { className: "row" }, [icon(iconName, 24), name]);
-        row.addEventListener("click", () => show(i));
+        row.addEventListener("click", () => show(id));
         sections.appendChild(row);
     });
     dlg.body.appendChild(el("div", { className: "settings" }, [sections, page]));
@@ -436,7 +530,209 @@ export async function settingsDialog(app = null, startPage = 0) {
     return dlg.exec();
 }
 
-// Paquetes de iconos de paint.js (.zip con asset-pack.json): instalar, usar y quitar.
+// Tema personalizado: parte de claro, oscuro o Windows 98 y cambia los colores que se quiera.
+async function customThemeDialog() {
+    const dlg = new Dialog(tr("Tema personalizado"), { iconName: "configure" });
+    const current = Settings.get("customTheme") || { base: "dark", colors: {} };
+    let theme = { base: current.base || "dark", colors: { ...(current.colors || {}) } };
+    const save = () => Settings.set("customTheme", { base: theme.base, colors: { ...theme.colors } });
+    const base = select([["light", tr("Claro")], ["dark", tr("Oscuro")], ["win98", tr("Windows 98")]], theme.base);
+    const grid = el("div", { className: "theme-colors" });
+    const fill = () => {
+        grid.replaceChildren();
+        for (const [key, , label] of ColorRoles) {
+            const input = el("input", { type: "color", value: theme.colors[key] || Presets[theme.base][key] });
+            input.addEventListener("input", () => {
+                theme.colors[key] = input.value;
+                save();
+            });
+            grid.append(el("span", { textContent: tr(label) }), input);
+        }
+    };
+    base.addEventListener("change", () => {
+        theme = { base: base.value, colors: {} };
+        save();
+        fill();
+    });
+    const reset = el("button", { className: "pushbutton", textContent: tr("Restablecer") });
+    reset.addEventListener("click", () => {
+        theme.colors = {};
+        save();
+        fill();
+    });
+    fill();
+    dlg.body.append(el("label", { style: { display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px" } }, [tr("Basado en:"), base, reset]), grid);
+    dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
+    save();
+    return dlg.exec();
+}
+
+// Complementos (.paintjs): activar, instalar desde un archivo o desde el catálogo, y quitar.
+function pluginsPage(refresh) {
+    const list = el("div", { className: "list plugin-list" });
+    let selected = Plugins.records[0]?.id || null;
+    const details = el("p", { className: "plugin-details" });
+    const sync = () => {
+        for (const row of list.children)
+            row.classList.toggle("selected", row.dataset.id === selected);
+        const r = Plugins.records.find((x) => x.id === selected);
+        const error = Plugins.errors.find((e) => e.id === selected);
+        details.textContent = r ? [r.description, `${tr("Versión")}: ${r.version}`, `${tr("Autor")}: ${r.author}`,
+                                   tr("%1 efectos · %2 formatos", r.effectCount, r.fileTypeCount), error ? `${tr("Problemas:")} ${error.message}` : ""]
+            .filter(Boolean).join("\n") : tr("No hay complementos instalados.");
+        remove.disabled = !r;
+    };
+    for (const r of Plugins.records) {
+        const enabled = el("input", { type: "checkbox", checked: r.enabled, title: tr("Activado") });
+        enabled.addEventListener("change", async () => {
+            try {
+                await Plugins.setEnabled(r.id, enabled.checked);
+            } catch (e) {
+                enabled.checked = !enabled.checked;
+                status.textContent = e.message;
+            }
+        });
+        const row = el("div", { className: "row", dataset: { id: r.id } }, [enabled, icon("plugins", 16), el("span", { textContent: `${r.name} ${r.version}` })]);
+        row.addEventListener("click", (e) => {
+            if (e.target === enabled)
+                return;
+            selected = r.id;
+            sync();
+        });
+        list.appendChild(row);
+    }
+    const status = el("p", { className: "plugin-status", style: { minHeight: "1.2em" } });
+    const file = el("input", { type: "file", accept: ".paintjs", hidden: true });
+    file.addEventListener("change", async () => {
+        const f = file.files?.[0];
+        if (!f)
+            return;
+        try {
+            const r = await Plugins.install(f);
+            selected = r.id;
+            refresh();
+        } catch (e) {
+            status.textContent = e.message;
+        }
+    });
+    const install = el("button", { className: "pushbutton", textContent: plain(tr("Instalar complemento…")), title: tr("Instalar un complemento (.paintjs)") });
+    install.addEventListener("click", () => file.click());
+    const browse = el("button", { className: "pushbutton", textContent: plain(tr("Explorar complementos…")), title: tr("El catálogo de complementos") });
+    browse.addEventListener("click", async () => {
+        await pluginCatalogDialog();
+        refresh();
+    });
+    const remove = el("button", { className: "pushbutton", textContent: tr("Quitar"), title: tr("Desinstalar el complemento elegido") });
+    remove.addEventListener("click", async () => {
+        if (!selected || !confirm(tr("¿Quieres quitar este complemento?")))
+            return;
+        await Plugins.remove(selected);
+        refresh();
+    });
+    sync();
+    return [
+        el("p", { textContent: tr("Complementos de efectos y formatos de archivo (.paintjs). Se guardan en este navegador. Tienen el mismo acceso que Kaint: instala solo los que sean de confianza.") }),
+        list, details, el("div", { className: "row-buttons" }, [install, browse, remove, file]), status,
+    ];
+}
+
+// El catálogo de complementos: cada uno con su botón de instalar.
+async function pluginCatalogDialog() {
+    const dlg = new Dialog(tr("Explorar complementos"), { iconName: "plugins" });
+    const list = el("div", { className: "list catalog-list" }, [el("p", { textContent: tr("Cargando el catálogo…") })]);
+    dlg.body.appendChild(list);
+    dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
+    const pending = dlg.exec();
+    try {
+        const entries = await Plugins.catalog();
+        list.replaceChildren();
+        for (const entry of entries) {
+            const installed = Plugins.records.find((r) => r.id === entry.id);
+            const b = el("button", { className: "pushbutton", textContent: installed?.version === entry.version ? tr("Instalado") : tr("Instalar") });
+            b.disabled = installed?.version === entry.version;
+            const status = el("small");
+            b.addEventListener("click", async () => {
+                b.disabled = true;
+                try {
+                    await Plugins.installFromCatalog(entry);
+                    b.textContent = tr("Instalado");
+                } catch (e) {
+                    status.textContent = e.message;
+                    b.disabled = false;
+                }
+            });
+            list.appendChild(el("div", { className: "catalog-row" }, [
+                el("div", {}, [el("b", { textContent: `${entry.name} ${entry.version}` }), el("div", { textContent: `${entry.author} · ${entry.license}` }),
+                               el("div", { textContent: entry.description, style: { opacity: 0.8 } }), status]), b]));
+        }
+        if (!entries.length)
+            list.replaceChildren(el("p", { textContent: tr("El catálogo está vacío.") }));
+    } catch (e) {
+        list.replaceChildren(el("p", { textContent: tr("No se pudo cargar el catálogo: %1", e.message) }));
+    }
+    return pending;
+}
+
+// Fuentes para la herramienta Texto, guardadas en el navegador.
+function fontsPage(refresh) {
+    const list = el("div", { className: "list font-list" });
+    let selected = null;
+    for (const f of UserFonts.loaded) {
+        const row = el("div", { className: "row", dataset: { file: f.file }, style: { fontFamily: `"${f.family}"` } },
+                       [el("span", { textContent: `${f.family} (${f.file})` })]);
+        row.addEventListener("click", () => {
+            selected = f.file;
+            for (const r of list.children) r.classList.toggle("selected", r.dataset.file === selected);
+        });
+        list.appendChild(row);
+    }
+    if (!UserFonts.loaded.length)
+        list.appendChild(el("p", { textContent: tr("Todavía no has añadido ninguna fuente."), style: { margin: "4px" } }));
+    const status = el("p", { style: { minHeight: "1.2em" } });
+    const file = el("input", { type: "file", accept: ".ttf,.otf,.woff,.woff2", multiple: true, hidden: true });
+    file.addEventListener("change", async () => {
+        const errors = await UserFonts.add([...file.files]);
+        if (errors.length)
+            alert(tr("No se pudieron añadir:\n\n%1", errors.join("\n")));
+        refresh();
+    });
+    const add = el("button", { className: "pushbutton", textContent: plain(tr("Añadir fuentes…")) });
+    add.addEventListener("click", () => file.click());
+    const remove = el("button", { className: "pushbutton", textContent: tr("Quitar") });
+    remove.addEventListener("click", async () => {
+        if (selected) {
+            await UserFonts.remove(selected);
+            refresh();
+        }
+    });
+    const clear = el("button", { className: "pushbutton", textContent: tr("Quitar todas") });
+    clear.addEventListener("click", async () => {
+        if (UserFonts.loaded.length && confirm(tr("¿Quieres quitar todas las fuentes añadidas?"))) {
+            await UserFonts.removeAll();
+            refresh();
+        }
+    });
+    return [el("p", { textContent: tr("Añade fuentes para la herramienta Texto (.ttf, .otf, .woff). Se guardan en este navegador y solo las usa Kaint.") }),
+            list, el("div", { className: "row-buttons" }, [add, remove, clear, file]), status];
+}
+
+// Vista previa de un paquete: algunos de sus iconos de los menús y de las herramientas (los de
+// Kaint si no los trae).
+function packPreview(pack) {
+    const files = ["menu_file_new_icon", "menu_file_open_icon", "menu_file_save_icon", "menu_edit_cut_icon", "menu_edit_copy_icon",
+                   "menu_edit_paste_icon", "menu_edit_undo_icon", "menu_layers_add_new_layer_icon", "menu_image_crop_icon",
+                   "menu_utilities_settings_icon"];
+    const strip = el("span", { className: "pack-preview" });
+    for (const f of files) {
+        const own = pack.id !== DEFAULT_PACK ? pack.urls?.[`icons/${f}`] : null;
+        strip.appendChild(el("img", { src: own || `assets/icons/${f}.png`, width: 18, height: 18, alt: "" }));
+    }
+    for (const tool of ["paintbrush", "zoom"])
+        strip.appendChild(icon(tool, 18));
+    return strip;
+}
+
+// Paquetes de iconos (.zip con asset-pack.json): instalar, usar y quitar.
 async function iconPacksPage(refresh) {
     const packs = await IconPacks.list();
     const active = IconPacks.activeId();
@@ -459,7 +755,7 @@ async function iconPacksPage(refresh) {
     for (const p of packs) {
         const extra = [p.author, p.version].filter(Boolean).join(", ");
         const text = `${p.name}${extra ? ` (${extra})` : ""}${p.id === active ? ` · ${tr("en uso")}` : ""}`;
-        const row = el("div", { className: "row", dataset: { id: p.id }, title: p.description }, [el("span", { textContent: text })]);
+        const row = el("div", { className: "row pack-row", dataset: { id: p.id }, title: p.description }, [packPreview(p), el("span", { textContent: text })]);
         if (p.id === active)
             row.style.fontWeight = "bold";
         row.addEventListener("click", () => {
@@ -497,7 +793,7 @@ async function iconPacksPage(refresh) {
     });
     sync();
     return [
-        el("p", { textContent: tr("Los paquetes de iconos de paint.js (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.") }),
+        el("p", { textContent: tr("Los paquetes de iconos (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.") }),
         list, details, el("div", { className: "row-buttons" }, [use, add, remove, file]), status,
     ];
 }

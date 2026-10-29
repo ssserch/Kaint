@@ -52,9 +52,11 @@ const files = {
     "face-smile": "face-smile.svg", "help-feedback": "menu_help_send_feedback_icon",
     "help-docs": "menu_help_help_topics_icon", "help-forum": "menu_help_forum_icon", "help-tutorials": "menu_help_tutorials_icon",
     "settings-interface": "settings_u_i_24", "settings-canvas": "settings_canvas_24", "settings-tools": "settings_tools_24",
-    "settings-diagnostics": "settings_diagnostics_24",
+    "settings-diagnostics": "settings_diagnostics_24", "settings-tablet": "settings_pen_and_tablet_24",
+    "settings-plugins": "settings_plugins_24", "settings-updates": "settings_updates_24",
     "status-selection": "selection_icon", "status-cursor": "cursor_x_y_icon", palette: "swatch_icon", "color-swap": "swap_icon",
-    "dialog-warning": "warning_icon", "dialog-cancel": "cancel_icon",
+    "dialog-warning": "warning_icon", "dialog-cancel": "cancel_icon", "dialog-ok-apply": "tool_strip_checked",
+    "image-list-menu": "tool_bar_image_list_menu_open_button", "anchor": "anchor_chooser_control_anchor_image",
     "selection-replace": "enum_selection_combine_mode_replace", "selection-union": "enum_selection_combine_mode_union",
     "selection-exclude": "enum_selection_combine_mode_exclude", "selection-intersect": "enum_selection_combine_mode_intersect",
     "selection-xor": "enum_selection_combine_mode_xor",
@@ -107,6 +109,10 @@ const optionFiles = {
     "opt-align:left": "enum_text_alignment_left", "opt-align:center": "enum_text_alignment_center",
     "opt-align:right": "enum_text_alignment_right",
     "opt-sample:1": "enum_pixel_sample_mode_point_sample",
+    "opt-smoothing:1": "enum_input_path_smoothing_enabled", "opt-smoothing:0": "enum_input_path_smoothing_disabled",
+    "opt-pressure:1": "tool_config_strip_brush_enable_pressure_sensitivity_true",
+    "opt-pressure:0": "tool_config_strip_brush_enable_pressure_sensitivity_false",
+    "opt-pressure": "tool_config_strip_brush_enable_pressure_sensitivity_true",
     "opt-recolor:once": "enum_recolor_tool_sampling_mode_once",
     "opt-recolor:secondary": "enum_recolor_tool_sampling_mode_secondary_color",
 };
@@ -664,9 +670,6 @@ export const shapeFillRule = (type) => (type === "gear" ? "evenodd" : "nonzero")
 
 // --- Creación ------------------------------------------------------------------------------
 
-// Las que llevan los colores activos y la mano: su cursor es el dibujo.
-const drawnColored = new Set(["paintbrush", "paintbucket", "recolor", "gradient", "pan"]);
-
 const drawn = {
     rectangleselect: [20, drawRectSelect], ellipseselect: [20, drawEllipseSelect], lassoselect: [20, drawLasso],
     magicwand: [20, drawMagicWand], moveselectedpixels: [20, drawMove], moveselection: [20, drawMoveSelection],
@@ -702,8 +705,17 @@ function paintCanvas(canvas) {
     painter.paint(ctx);
 }
 
+// Iconos con su propia imagen (los de los efectos de los complementos).
+const customIcons = new Map();
+export function setCustomIcon(name, url) {
+    if (url)
+        customIcons.set(name, url);
+    else
+        customIcons.delete(name);
+}
+
 export function hasIcon(name) {
-    return !!(files[name] || painterFor(name));
+    return !!(files[name] || painterFor(name) || customIcons.has(name));
 }
 
 // El PNG de un paquete de iconos que sustituye al dibujo de una herramienta, si lo trae.
@@ -713,7 +725,7 @@ function packedTool(name) {
 
 // Un icono de 'size' px: <img> para los PNG y <canvas> para los dibujados.
 export function icon(name, size = 16) {
-    if (files[name] || packedTool(name)) {
+    if (files[name] || packedTool(name) || customIcons.has(name)) {
         const img = document.createElement("img");
         img.className = "kicon";
         img.dataset.icon = name;
@@ -740,6 +752,8 @@ export function icon(name, size = 16) {
 }
 
 export function iconUrl(name, size = 24) {
+    if (customIcons.has(name))
+        return customIcons.get(name);
     const packed = files[name] ? IconPacks.file("icons", files[name]) : packedTool(name);
     if (packed)
         return packed;
@@ -753,7 +767,7 @@ export function iconUrl(name, size = 24) {
 // se repintan y, si un paquete cambia un dibujo por su PNG (o al revés), se sustituye el elemento.
 export function refreshIcons(root = document) {
     for (const element of root.querySelectorAll(".kicon[data-icon]")) {
-        const name = element.dataset.icon, wantsImage = !!(files[name] || packedTool(name));
+        const name = element.dataset.icon, wantsImage = !!(files[name] || packedTool(name) || customIcons.has(name));
         if (wantsImage && element.tagName === "IMG")
             element.src = iconUrl(name);
         else if (!wantsImage && element.tagName === "CANVAS")
@@ -787,10 +801,108 @@ export function handCursor(grabbing) {
     return cursorCache[key];
 }
 
-// Cursor con el icono de una herramienta y su punto activo: como en Kaint, el PNG de paint.js de
-// las herramientas que no llevan los colores activos (el botón lleva el dibujado).
-const pngCursors = new Set(Object.keys(toolFiles).filter((k) => !drawnColored.has(k)));
-export function iconCursor(name, hx, hy, fallback = "crosshair") {
-    const url = pngCursors.has(name) ? packedTool(name) || `assets/icons/${toolFiles[name]}.png` : iconUrl(name, 24);
-    return `url(${url}) ${hx} ${hy}, ${fallback}`;
+// Punta de cada icono de herramienta en su rejilla de 20 px (como toolCursor de Kaint).
+const cursorTips = {
+    rectangleselect: [3, 3], ellipseselect: [3, 3], lassoselect: [12.2, 18.6], magicwand: [15.5, 4],
+    moveselectedpixels: [2, 1], moveselection: [2, 1], zoom: [8, 8], paintbucket: [4, 18.6], gradient: [2.4, 2.4],
+    paintbrush: [2.4, 18.4], eraser: [3.1, 14.8], pencil: [2, 18], colorpicker: [2.2, 17.8], clonestamp: [10, 17.2],
+    recolor: [6, 14], linecurve: [3.4, 16.4], shapes: [1.6, 2.8],
+};
+const kCursor = 20;
+
+// Imagen del icono a 'px' píxeles (el del paquete de iconos, si lo trae, o el dibujado).
+function cursorImage(name, px) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = px;
+    const painter = painterFor(name);
+    if (painter) {
+        const ctx = canvas.getContext("2d");
+        ctx.scale(px / painter.design, px / painter.design);
+        painter.paint(ctx);
+    }
+    return canvas.toDataURL();
+}
+
+// Cursor con el icono actual de una herramienta, del tamaño del puntero y con el punto activo en
+// su punta; nítido también en pantallas de alta densidad.
+export function iconCursor(name, hx = null, hy = null, fallback = "crosshair") {
+    const tip = cursorTips[name] || [10, 10];
+    const x = hx ?? Math.round((tip[0] * kCursor) / 20), y = hy ?? Math.round((tip[1] * kCursor) / 20);
+    const packed = packedTool(name);
+    if (packed)
+        return `url(${packed}) ${x} ${y}, ${fallback}`;
+    const key = `${name}/${primary ? css(primary) : ""}/${secondary ? css(secondary) : ""}`;
+    if (!cursorCache[key])
+        cursorCache[key] = { one: cursorImage(name, kCursor), two: cursorImage(name, kCursor * 2) };
+    const c = cursorCache[key];
+    return `-webkit-image-set(url(${c.one}) 1x, url(${c.two}) 2x) ${x} ${y}, ${fallback}`;
+}
+
+// Flecha curva de girar (como la de paint.js): 'angle' es la dirección, en radianes, desde el
+// puntero hacia el centro del giro.
+export function rotateCursor(angle) {
+    const steps = 72, index = ((Math.round((angle / (2 * Math.PI)) * steps) % steps) + steps) % steps;
+    const key = `rotate/${index}`;
+    if (!cursorCache[key]) {
+        const a = (index * 2 * Math.PI) / steps;
+        const draw = (scale) => {
+            const side = 40 * scale, canvas = document.createElement("canvas");
+            canvas.width = canvas.height = side;
+            const ctx = canvas.getContext("2d");
+            ctx.translate(side / 2, side / 2);
+            ctx.scale(scale, scale);
+            const radius = 50, half = (16 * Math.PI) / 180, cx = Math.cos(a) * radius, cy = Math.sin(a) * radius;
+            const middle = a + Math.PI, start = middle - half, end = middle + half;
+            const on = (t) => [cx + Math.cos(t) * radius, cy + Math.sin(t) * radius];
+            const trace = () => {
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, start, end);
+                for (const [t, d] of [[start, -1], [end, 1]]) {
+                    const [tx, ty] = on(t), gx = d * -Math.sin(t), gy = d * Math.cos(t), nx = -gy, ny = gx;
+                    const bx = tx - gx * 4, by = ty - gy * 4;
+                    ctx.moveTo(bx + nx * 2.25, by + ny * 2.25);
+                    ctx.lineTo(tx, ty);
+                    ctx.lineTo(bx - nx * 2.25, by - ny * 2.25);
+                }
+            };
+            ctx.lineCap = ctx.lineJoin = "round";
+            trace();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 3.5;
+            ctx.stroke();
+            trace();
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            return canvas.toDataURL();
+        };
+        cursorCache[key] = `-webkit-image-set(url(${draw(1)}) 1x, url(${draw(2)}) 2x) 20 20, alias`;
+    }
+    return cursorCache[key];
+}
+
+// Estrella naranja de ocho rayos de las imágenes con cambios sin guardar (como Paint.NET).
+export function unsavedStar(size = 12) {
+    const dpr = window.devicePixelRatio || 1, canvas = document.createElement("canvas");
+    canvas.width = canvas.height = Math.round(size * dpr);
+    canvas.style.width = canvas.style.height = `${size}px`;
+    const ctx = canvas.getContext("2d");
+    const px = size * dpr, scale = px / 32, c = px / 2;
+    ctx.lineCap = "butt";
+    for (const [color, width] of [["#fff", 8], ["#ffa500", 3]]) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width * scale;
+        ctx.beginPath();
+        for (let i = 0; i < 8; ++i) {
+            const r = (i * 2 * Math.PI) / 8;
+            ctx.moveTo(c, c);
+            ctx.lineTo(c + c * Math.sin(r), c + c * Math.cos(r));
+        }
+        ctx.stroke();
+    }
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(c, c, 3 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    return canvas;
 }

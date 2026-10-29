@@ -507,6 +507,18 @@ public:
 
     void drawPrimitive(PrimitiveElement element, const QStyleOption* option, QPainter* p, const QWidget* widget) const override
     {
+        // Flechas de desplazamiento de la tira de imágenes: las de Paint.NET.
+        if ((element == PE_IndicatorArrowLeft || element == PE_IndicatorArrowRight) && widget && widget->parentWidget()
+            && widget->parentWidget()->objectName() == QLatin1String("ImageStrip")) {
+            const QIcon icon = Icons::named(element == PE_IndicatorArrowLeft ? QStringLiteral("strip-scroll-left")
+                                                                              : QStringLiteral("strip-scroll-right"));
+            if (!icon.isNull()) {
+                const int side = std::min({option->rect.width(), option->rect.height(), 18});
+                icon.paint(p, QRect(QPoint(0, 0), QSize(side, side)).translated(option->rect.center() - QPoint(side / 2, side / 2)),
+                           Qt::AlignCenter, option->state & State_Enabled ? QIcon::Normal : QIcon::Disabled);
+                return;
+            }
+        }
         if (classicButtons()) {
             if (element == PE_PanelButtonCommand) {
                 drawClassicButton(option, p);

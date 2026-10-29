@@ -44,13 +44,16 @@ export function intersectRect(a, b) {
 // Damero de la transparencia: cuadros de 8 px blancos y grises (el gris es el brillo elegido en
 // Configuración, 191 por omisión, como en Kaint).
 let checkerCache = null;
+// Damero de transparencia como el de Kaint: el gris claro es el brillo elegido (191 por defecto,
+// como Paint.NET) y el oscuro, sus tres cuartas partes.
 export function checkerPattern(ctx, brightness = 191) {
     if (!checkerCache || checkerCache.brightness !== brightness) {
+        const light = Math.max(0, Math.min(255, Math.round(brightness))), dark = Math.round(light * 0.75);
         const tile = createCanvas(16, 16);
         const c = tile.getContext("2d");
-        c.fillStyle = "#fff";
+        c.fillStyle = `rgb(${light},${light},${light})`;
         c.fillRect(0, 0, 16, 16);
-        c.fillStyle = `rgb(${brightness},${brightness},${brightness})`;
+        c.fillStyle = `rgb(${dark},${dark},${dark})`;
         c.fillRect(0, 0, 8, 8);
         c.fillRect(8, 8, 8, 8);
         checkerCache = { brightness, tile };

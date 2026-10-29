@@ -8,6 +8,8 @@
 
 #include <initializer_list>
 
+class QPainter;
+
 namespace Icons {
 
 // Asegura que se encuentran los temas de iconos del sistema (Breeze) aunque no haya un tema de
@@ -40,8 +42,18 @@ QString pngFile(const QString& name);
 QStringList missingNamedIcons();
 // Nombre del icono de un ajuste o efecto ("effect-" + su identificador) si hay PNG; si no, fallback.
 QString effectIcon(const QString& id, const QString& fallback);
+// Estrella naranja de ocho rayos que marca las imágenes con cambios sin guardar (como Paint.NET).
+void paintUnsavedStar(QPainter& p, const QRectF& r);
 // Cursores de la mano (Mano, botón central y barra espaciadora): abierta o agarrando.
 QCursor handCursor(bool grabbing);
+// Tamaño de los cursores del sistema (XCURSOR_SIZE, o el de Windows), en píxeles lógicos.
+int cursorSize();
+// Cursor con el icono actual de una herramienta ("paintbrush", "zoom"...), a la medida del cursor
+// del sistema y con el punto activo en su punta; si no hay icono, 'fallback'.
+QCursor toolCursor(const QString& name, Qt::CursorShape fallback = Qt::CrossCursor);
+// Flecha curva de girar (como la de paint.js) apuntando a lo largo del giro: 'angle' es la
+// dirección, en radianes, desde el puntero hacia el centro del giro.
+QCursor rotateCursor(qreal angle);
 // Colores con los que se tiñen el cubo de pintura, el pincel, cambiar color y el degradado
 // (inválidos: sus colores de siempre). Los iconos ya creados cambian al volver a dibujarse.
 void setActiveColors(const QColor& primary, const QColor& secondary);

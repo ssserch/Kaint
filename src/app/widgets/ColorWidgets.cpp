@@ -464,15 +464,16 @@ int PaletteWidget::heightForWidth(int w) const
 
 QRect PaletteWidget::cellRect(int index) const
 {
+    // Como en Paint.NET, las muestras van pegadas, sin separación ni marco.
     const int cell = cellSize();
-    return QRect(2 + (index % 16) * cell, 2 + (index / 16) * cell, cell - 1, cell - 1);
+    return QRect(2 + (index % 16) * cell, 2 + (index / 16) * cell, cell, cell);
 }
 
 int PaletteWidget::indexAt(const QPoint& p) const
 {
     const int count = int(std::min<qsizetype>(m_visible, m_colors.size()));
     for (int i = 0; i < count; ++i)
-        if (cellRect(i).adjusted(0, 0, 1, 1).contains(p))
+        if (cellRect(i).contains(p))
             return i;
     return -1;
 }
@@ -486,8 +487,6 @@ void PaletteWidget::paintEvent(QPaintEvent*)
         if (m_colors[i].alpha() < 255)
             paintCheckerboard(p, r, 3);
         p.fillRect(r, m_colors[i]);
-        p.setPen(QColor(0, 0, 0, 60));
-        p.drawRect(r.adjusted(0, 0, -1, -1));
     }
     if (m_addMode && m_blinkOn) {
         p.setPen(QPen(palette().color(QPalette::Highlight), 2));

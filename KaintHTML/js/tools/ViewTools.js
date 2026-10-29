@@ -11,7 +11,6 @@ export class ZoomTool extends Tool {
     get icon() { return "zoom"; }
     get letter() { return "Z"; }
     hint() { return tr("Clic izquierdo: acercar · clic derecho: alejar · arrastrar: acercar a un rectángulo."); }
-    cursor() { return this.iconCursor(9, 9); }
 
     onPointerDown(e) {
         this.pressed = true;
@@ -101,7 +100,6 @@ export class ColorPickerTool extends Tool {
         return tr("Clic izquierdo: tomar el color principal · clic derecho: el secundario. "
                   + "Ctrl: muestrear la imagen en lugar de la capa (o al revés).");
     }
-    cursor() { return this.iconCursor(2, 21); }
 
     pick(e) {
         const doc = this.doc;

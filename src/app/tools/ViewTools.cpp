@@ -10,17 +10,6 @@
 
 #include <cmath>
 
-namespace {
-
-QCursor iconCursor(const QIcon& icon, QPoint hotspot, Qt::CursorShape fallback)
-{
-    if (icon.isNull())
-        return QCursor(fallback);
-    return QCursor(icon.pixmap(QSize(24, 24)), hotspot.x(), hotspot.y());
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 
 QIcon ZoomTool::icon() const { return Icons::tool(QStringLiteral("zoom"), Icons::theme({"zoom-in"})); }
@@ -30,11 +19,6 @@ QString ZoomTool::hint() const
     return tr("Clic izquierdo: acercar · clic derecho: alejar · arrastrar: acercar a un rectángulo.");
 }
 
-QCursor ZoomTool::cursor() const
-{
-    // El cursor es la lupa de paint.js (la del botón es la dibujada de Kaint).
-    return iconCursor(Icons::named(QStringLiteral("zoom")), QPoint(9, 9), Qt::CrossCursor);
-}
 
 void ZoomTool::mousePress(const ToolEvent& e)
 {
@@ -154,11 +138,6 @@ QString ColorPickerTool::hint() const
               "Ctrl: muestrear la imagen en lugar de la capa (o al revés).");
 }
 
-QCursor ColorPickerTool::cursor() const
-{
-    // El cuentagotas de paint.js, como el de la lupa.
-    return iconCursor(Icons::named(QStringLiteral("colorpicker")), QPoint(2, 21), Qt::CrossCursor);
-}
 
 void ColorPickerTool::pick(const ToolEvent& e, Qt::MouseButton button)
 {

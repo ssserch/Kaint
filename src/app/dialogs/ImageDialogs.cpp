@@ -417,14 +417,17 @@ void CanvasSizeDialog::updateArrows()
     static const QString arrows[3][3] = {{QStringLiteral("↖"), QStringLiteral("↑"), QStringLiteral("↗")},
                                          {QStringLiteral("←"), QStringLiteral("●"), QStringLiteral("→")},
                                          {QStringLiteral("↙"), QStringLiteral("↓"), QStringLiteral("↘")}};
+    // En el anclaje, el icono del ancla de Paint.NET.
+    const QIcon anchor = Icons::named(QStringLiteral("anchor"));
     for (int i = 0; i < buttons.size(); ++i) {
         const int dr = i / 3 - cr, dc = i % 3 - cc;
         QString text;
         if (dr == 0 && dc == 0)
-            text = arrows[1][1];
+            text = anchor.isNull() ? arrows[1][1] : QString();
         else if (std::abs(dr) <= 1 && std::abs(dc) <= 1)
             text = arrows[dr + 1][dc + 1];
         buttons[i]->setText(text);
+        buttons[i]->setIcon(dr == 0 && dc == 0 ? anchor : QIcon());
     }
 }
 

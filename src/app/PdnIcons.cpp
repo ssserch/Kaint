@@ -11,9 +11,17 @@
 #include <QPainterPathStroker>
 #include <QStyle>
 #include <QStyleOption>
+#include <QtMath>
 
 #include <algorithm>
 #include <cmath>
+
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 // Iconos de las herramientas dibujados por código imitando los de Paint.NET (el pincel, el cubo
 // de pintura, cambiar color y el degradado llevan los colores activos) y la mano, abierta y
@@ -652,6 +660,142 @@ QIcon pdn(const QString& name)
     if (it != table().constEnd())
         return QIcon(new PdnIconEngine(*it));
     return named(name);
+}
+
+void paintUnsavedStar(QPainter& p, const QRectF& r)
+{
+    // Ocho rayos desde el centro con un contorno blanco y un punto blanco en medio, dibujados en
+    // una rejilla de 32 px.
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const qreal scale = std::min(r.width(), r.height()) / 32.0;
+    const QPointF c = r.center();
+    const qreal radius = std::min(r.width(), r.height()) / 2.0;
+    QPainterPath rays;
+    for (int i = 0; i < 8; ++i) {
+        const qreal a = i * 2 * M_PI / 8;
+        rays.moveTo(c);
+        rays.lineTo(c + QPointF(std::sin(a), std::cos(a)) * radius);
+    }
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(Qt::white, 8 * scale, Qt::SolidLine, Qt::FlatCap));
+    p.drawPath(rays);
+    p.setPen(QPen(QColor(0xff, 0xa5, 0x00), 3 * scale, Qt::SolidLine, Qt::FlatCap));
+    p.drawPath(rays);
+    p.setPen(Qt::NoPen);
+    p.setBrush(Qt::white);
+    p.drawEllipse(c, 3 * scale, 3 * scale);
+    p.restore();
+}
+
+int cursorSize()
+{
+    static const int size = [] {
+        bool ok = false;
+        const int env = qEnvironmentVariableIntValue("XCURSOR_SIZE", &ok);
+        if (ok && env >= 16 && env <= 256)
+            return env;
+#ifdef Q_OS_WIN
+        const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
+        return std::max(16, int(std::lround(GetSystemMetrics(SM_CXCURSOR) / dpr)));
+#else
+        return 24;
+#endif
+    }();
+    return size;
+}
+
+QCursor toolCursor(const QString& name, Qt::CursorShape fallback)
+{
+    // Punta de cada icono en su rejilla de 20 px (la del lápiz, la del pincel, el chorro del cubo...).
+    static const QHash<QString, QPointF> tips{
+        {QStringLiteral("rectangleselect"), {3, 3}},      {QStringLiteral("ellipseselect"), {3, 3}},
+        {QStringLiteral("lassoselect"), {12.2, 18.6}},    {QStringLiteral("magicwand"), {15.5, 4}},
+        {QStringLiteral("moveselectedpixels"), {2, 1}},   {QStringLiteral("moveselection"), {2, 1}},
+        {QStringLiteral("zoom"), {8, 8}},                 {QStringLiteral("paintbucket"), {4, 18.6}},
+        {QStringLiteral("gradient"), {2.4, 2.4}},         {QStringLiteral("paintbrush"), {2.4, 18.4}},
+        {QStringLiteral("eraser"), {3.1, 14.8}},          {QStringLiteral("pencil"), {2, 18}},
+        {QStringLiteral("colorpicker"), {2.2, 17.8}},     {QStringLiteral("clonestamp"), {10, 17.2}},
+        {QStringLiteral("recolor"), {6, 14}},             {QStringLiteral("linecurve"), {3.4, 16.4}},
+        {QStringLiteral("shapes"), {1.6, 2.8}},
+    };
+    const QIcon icon = pdn(name);
+    if (icon.isNull())
+        return QCursor(fallback);
+    // Como el puntero del sistema: el dibujo ocupa unos 5/6 del tamaño del cursor (20 px con 24).
+    const int side = std::max(16, cursorSize() * 5 / 6);
+    const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
+    const QString key = QStringLiteral("%1/%2/%3/%4/%5/%6")
+                            .arg(name)
+                            .arg(side)
+                            .arg(dpr)
+                            .arg(g_primary.rgba())
+                            .arg(g_secondary.rgba())
+                            .arg(IconPacks::generation());
+    static QHash<QString, QCursor> cache;
+    if (const auto it = cache.constFind(key); it != cache.cend())
+        return *it;
+    QPixmap pm = icon.pixmap(QSize(side, side), dpr);
+    pm.setDevicePixelRatio(dpr);
+    const QPointF tip = tips.value(name, QPointF(10, 10)) * side / 20.0;
+    const QCursor cursor(pm, int(std::lround(tip.x())), int(std::lround(tip.y())));
+    if (cache.size() > 256)
+        cache.clear();
+    cache.insert(key, cursor);
+    return cursor;
+}
+
+QCursor rotateCursor(qreal angle)
+{
+    // La flecha de girar de paint.js: un trozo de circunferencia de 32° con una punta en cada
+    // extremo, que pasa por el puntero y se curva alrededor del centro del giro.
+    const int steps = 72;
+    const int index = ((int(std::lround(angle / (2 * M_PI) * steps)) % steps) + steps) % steps;
+    static QHash<int, QCursor> cache;
+    if (const auto it = cache.constFind(index); it != cache.cend())
+        return *it;
+    const qreal a = index * 2 * M_PI / steps;
+    const qreal scale = cursorSize() / 24.0;
+    const int side = int(std::ceil(40 * scale));
+    const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
+    QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
+    image.setDevicePixelRatio(dpr);
+    image.fill(Qt::transparent);
+    {
+        QPainter p(&image);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.translate(side / 2.0, side / 2.0);
+        p.scale(scale, scale);
+        const qreal radius = 50, halfArc = qDegreesToRadians(16.0);
+        const QPointF center(std::cos(a) * radius, std::sin(a) * radius);
+        const qreal middle = a + M_PI, start = middle - halfArc, end = middle + halfArc;
+        auto onArc = [&](qreal t) { return center + QPointF(std::cos(t), std::sin(t)) * radius; };
+        QPainterPath path;
+        const int segments = 12;
+        for (int i = 0; i <= segments; ++i) {
+            const QPointF q = onArc(start + (end - start) * i / segments);
+            i ? path.lineTo(q) : path.moveTo(q);
+        }
+        auto arrow = [&](qreal t, qreal direction) {
+            const QPointF tip = onArc(t);
+            const QPointF tangent(direction * -std::sin(t), direction * std::cos(t));
+            const QPointF normal(-tangent.y(), tangent.x());
+            const QPointF base = tip - tangent * 4;
+            path.moveTo(base + normal * 2.25);
+            path.lineTo(tip);
+            path.lineTo(base - normal * 2.25);
+        };
+        arrow(start, -1);
+        arrow(end, 1);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(Qt::white, 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(path);
+        p.setPen(QPen(Qt::black, 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(path);
+    }
+    const QCursor cursor(QPixmap::fromImage(image), side / 2, side / 2);
+    cache.insert(index, cursor);
+    return cursor;
 }
 
 QCursor handCursor(bool grabbing)

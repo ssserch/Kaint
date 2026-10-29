@@ -42,7 +42,10 @@ export class CanvasView extends EventTarget {
         this.installEvents();
         this.installScrollbars();
         setInterval(() => this.stepAnts(), 120);
-        window.addEventListener("kaint-settings", () => this.update());
+        window.addEventListener("kaint-settings", () => {
+            this.clampOrigin();
+            this.update();
+        });
     }
 
     get dpr() {
@@ -134,14 +137,23 @@ export class CanvasView extends EventTarget {
         this.dispatchEvent(new Event("zoom"));
     }
 
+    // Límites del origen como en Kaint: con overscroll (Configuración), la imagen se puede llevar
+    // hasta que su borde llega al centro de la vista; si no, centrada si cabe o con un margen.
+    originLimits(content, view) {
+        if (Settings.get("overscroll") !== false)
+            return [view / 2 - content, view / 2];
+        if (content + 2 * kMargin <= view)
+            return [(view - content) / 2, (view - content) / 2];
+        return [view - content - kMargin, kMargin];
+    }
+
     clampOrigin() {
         if (!this.doc)
             return;
         const v = this.viewSize();
         const clampAxis = (pos, content, view) => {
-            if (content + 2 * kMargin <= view)
-                return (view - content) / 2;
-            return Math.min(kMargin, Math.max(view - content - kMargin, pos));
+            const [lo, hi] = this.originLimits(content, view);
+            return Math.min(hi, Math.max(lo, pos));
         };
         this.origin.x = Math.round(clampAxis(this.origin.x, this.doc.width * this.scale, v.w));
         this.origin.y = Math.round(clampAxis(this.origin.y, this.doc.height * this.scale, v.h));
@@ -245,11 +257,10 @@ export class CanvasView extends EventTarget {
             thumb.addEventListener("pointermove", (e) => {
                 if (!start || !this.doc)
                     return;
-                const v = this.viewSize();
-                const content = (horizontal ? this.doc.width : this.doc.height) * this.scale + 2 * kMargin;
+                const v = this.viewSize(), view = horizontal ? v.w : v.h;
+                const [lo, hi] = this.originLimits((horizontal ? this.doc.width : this.doc.height) * this.scale, view);
                 const track = horizontal ? bar.clientWidth : bar.clientHeight;
-                const delta = ((horizontal ? e.clientX : e.clientY) - start.pos) * (content / track);
-                void v;
+                const delta = ((horizontal ? e.clientX : e.clientY) - start.pos) * ((hi - lo + view) / track);
                 if (horizontal) this.origin.x = start.origin.x - delta;
                 else this.origin.y = start.origin.y - delta;
                 this.fitOnResize = false;
@@ -276,16 +287,18 @@ export class CanvasView extends EventTarget {
                 thumb.style.display = "none";
                 continue;
             }
+            // Como las barras de Kaint: recorren todo lo que se puede desplazar el origen.
             const view = horizontal ? v.w : v.h;
-            const content = (horizontal ? this.doc.width : this.doc.height) * this.scale + 2 * kMargin;
+            const [lo, hi] = this.originLimits((horizontal ? this.doc.width : this.doc.height) * this.scale, view);
             const track = horizontal ? bar.clientWidth : bar.clientHeight;
-            if (content <= view + 1) {
+            if (hi - lo < 1) {
                 thumb.style.display = "none";
                 continue;
             }
-            const pos = kMargin - (horizontal ? this.origin.x : this.origin.y);
-            const size = Math.max(24, (track * view) / content);
-            const at = Math.min(track - size, Math.max(0, (pos / (content - view)) * (track - size)));
+            const total = hi - lo + view;
+            const pos = hi - (horizontal ? this.origin.x : this.origin.y);
+            const size = Math.max(24, (track * view) / total);
+            const at = Math.min(track - size, Math.max(0, (pos / (hi - lo)) * (track - size)));
             thumb.style.display = "block";
             if (horizontal) { thumb.style.left = `${at}px`; thumb.style.width = `${size}px`; }
             else { thumb.style.top = `${at}px`; thumb.style.height = `${size}px`; }
@@ -375,6 +388,48 @@ export class CanvasView extends EventTarget {
             }
         }
         this.updateScrollbars();
+    }
+
+    // --- Desplazamiento automático ------------------------------------------------------------
+
+    // Como en Kaint: al arrastrar con una herramienta junto al borde (o fuera) de la vista, se
+    // desplaza más deprisa cuanto más lejos esté el puntero.
+    updateAutoScroll(te, buttons) {
+        const tool = this.tool;
+        if (!buttons || !Settings.get("autoScroll") || !tool || tool.id === "pan" || tool.id === "zoom" || this.panning) {
+            this.stopAutoScroll();
+            return;
+        }
+        const v = this.viewSize(), margin = 20;
+        const axis = (p, size) => (p < margin ? -(margin - p) : p > size - margin ? p - (size - margin) : 0);
+        const clamp = (d) => Math.max(-40, Math.min(40, d * 0.6));
+        this.autoScroll = { dx: clamp(axis(te.vx, v.w)), dy: clamp(axis(te.vy, v.h)), event: te };
+        if (!this.autoScroll.dx && !this.autoScroll.dy) {
+            this.stopAutoScroll();
+            return;
+        }
+        if (!this.autoScrollTimer)
+            this.autoScrollTimer = setInterval(() => this.autoScrollStep(), 16);
+    }
+
+    autoScrollStep() {
+        const a = this.autoScroll;
+        if (!a || !this.doc || !this.tool) {
+            this.stopAutoScroll();
+            return;
+        }
+        const before = { ...this.origin };
+        this.scrollBy(a.dx, a.dy);
+        if (before.x === this.origin.x && before.y === this.origin.y)
+            return;
+        const p = this.viewToImage(a.event.vx, a.event.vy);
+        this.tool.onPointerMove?.({ ...a.event, x: p.x, y: p.y });
+    }
+
+    stopAutoScroll() {
+        clearInterval(this.autoScrollTimer);
+        this.autoScrollTimer = null;
+        this.autoScroll = null;
     }
 
     // --- Reglas ------------------------------------------------------------------------------
@@ -614,6 +669,11 @@ export class CanvasView extends EventTarget {
                 this.tool?.extraButton?.(te, true);
                 return;
             }
+            // Como en Kaint: el extremo borrador del lápiz usa la Goma mientras se pinta.
+            if (e.pointerType === "pen" && (e.button === 5 || (e.buttons & 32)) && Settings.get("tabletEraser") !== false && this.tool?.id !== "eraser") {
+                this.dispatchEvent(new CustomEvent("pen-eraser", { detail: true }));
+                te.button = "left";
+            }
             this.tool?.onPointerDown?.(te);
             this.update();
         });
@@ -628,6 +688,7 @@ export class CanvasView extends EventTarget {
                 this.panning = { x: e.clientX, y: e.clientY };
                 return;
             }
+            this.updateAutoScroll(te, e.buttons);
             // Eventos agrupados (trazos más finos con lápices y ratones rápidos).
             const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
             for (const ce of events.length ? events : [e])
@@ -635,6 +696,7 @@ export class CanvasView extends EventTarget {
             this.update();
         });
         const up = (e) => {
+            this.stopAutoScroll();
             if (!this.doc)
                 return;
             if (this.panning) {
@@ -647,6 +709,8 @@ export class CanvasView extends EventTarget {
                 return;
             }
             this.tool?.onPointerUp?.(this.toolEvent(e));
+            if (this.penEraser)
+                this.dispatchEvent(new CustomEvent("pen-eraser", { detail: false }));
             this.update();
         };
         c.addEventListener("pointerup", up);
@@ -664,13 +728,16 @@ export class CanvasView extends EventTarget {
             const rect = c.getBoundingClientRect();
             const anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
             const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+            // Como en Kaint: Ctrl+rueda acerca o aleja hacia el puntero con pasos de 1,12 por
+            // muesca (parando en el 100 %), Mayús+rueda desplaza en horizontal y la rueda sola, en
+            // vertical.
             if (e.ctrlKey || e.metaKey) {
-                const factor = Math.exp((-e.deltaY * unit) / 300);
-                if (Math.abs(e.deltaY * unit) >= 50)
-                    e.deltaY < 0 ? this.zoomIn(anchor) : this.zoomOut(anchor);
-                else
-                    this.setZoom(this.zoom * factor, anchor);
-            } else if (e.shiftKey) {
+                const notches = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaMode === 2 ? e.deltaY : e.deltaY / 100;
+                let z = this.zoom * Math.pow(1.12, -notches);
+                if ((this.zoom < 1 && z > 1) || (this.zoom > 1 && z < 1))
+                    z = 1;
+                this.setZoom(z, anchor);
+            } else if (e.shiftKey && !e.deltaX) {
                 this.scrollBy(e.deltaY * unit, 0);
             } else {
                 this.scrollBy(e.deltaX * unit, e.deltaY * unit);

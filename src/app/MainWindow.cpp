@@ -247,9 +247,7 @@ protected:
         for (int i = 0; i < count(); ++i) {
             if (!tabData(i).toBool())
                 continue;
-            p.setPen(QPen(Qt::white, 1.5));
-            p.setBrush(QColor(255, 170, 20));
-            p.drawEllipse(QRectF(unsavedRect(i)).adjusted(1, 1, -1, -1));
+            Icons::paintUnsavedStar(p, QRectF(unsavedRect(i)));
         }
         for (int i = 0; i < count(); ++i) {
             const qreal level = closeLevel(i);
@@ -439,12 +437,17 @@ protected:
         opt.arrowType = Qt::NoArrow;
         opt.features &= ~QStyleOptionToolButton::HasMenu;
         p.drawComplexControl(QStyle::CC_ToolButton, opt);
+        // El triángulo con raya de Paint.NET, algo más abajo que los menús.
+        const QIcon arrow = Icons::named(QStringLiteral("image-list-menu"));
+        if (!arrow.isNull()) {
+            arrow.paint(&p, QRect(width() / 2 - 7, 9, 14, 16));
+            return;
+        }
         p.setRenderHint(QPainter::Antialiasing);
         const QColor band = TopRow::bandColor();
-        const QColor arrow = isDown() || underMouse() ? palette().color(QPalette::ButtonText)
+        const QColor color = isDown() || underMouse() ? palette().color(QPalette::ButtonText)
                                                       : (band.lightness() < 128 ? QColor(Qt::white) : QColor(Qt::black));
-        p.setPen(QPen(arrow, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        // Algo más abajo que los menús, como en Paint.NET.
+        p.setPen(QPen(color, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         const qreal cx = width() / 2.0;
         p.drawPolyline(QPolygonF{QPointF(cx - 3.5, 14.5), QPointF(cx, 18), QPointF(cx + 3.5, 14.5)});
     }
@@ -3087,6 +3090,8 @@ void MainWindow::updateToolIconColors()
         bar->update();
     if (m_hint)
         refreshHint();
+    // Los cursores del pincel, el cubo... llevan los colores activos.
+    m_canvas->updateCursor();
 }
 
 PresenceInfo MainWindow::presenceInfo() const

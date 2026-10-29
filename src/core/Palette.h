@@ -12,6 +12,10 @@ namespace Palette {
 constexpr int kColorCount = 96;
 
 QList<QColor> defaultColors();
+// Paletas de muestra del menú de paletas: el arcoíris (16 tonos con 6 luminosidades) y la pequeña
+// (los 32 primeros colores de la predeterminada y el resto en blanco).
+QList<QColor> rainbowColors();
+QList<QColor> smallColors();
 QList<QColor> parse(const QString& text);
 QString serialize(const QList<QColor>& colors);
 

@@ -143,7 +143,6 @@ export class PaintBucketTool extends EditableFill {
             : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.");
     }
 
-    cursor() { return this.iconCursor(3, 20); }
 
     // Tirador para mover el origen del relleno, abajo a la derecha del punto (como Kaint).
     handlePos() {

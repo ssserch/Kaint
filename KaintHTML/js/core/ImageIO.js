@@ -84,6 +84,8 @@ function canvasBlob(canvas, mime = "image/png", quality) {
 export async function encode(doc, format, quality = 95) {
     if (format.layered)
         return encodeOra(doc);
+    if (format.plugin)
+        return encodePlugin(doc, format);
     const flat = doc.flattened();
     if (format.mime === "image/jpeg") {
         // Sin transparencia: sobre blanco, como al guardar JPEG en Kaint.
@@ -93,6 +95,21 @@ export async function encode(doc, format, quality = 95) {
         ctx.fillRect(0, 0, flat.width, flat.height);
     }
     return canvasBlob(flat, format.mime, format.quality ? quality / 100 : undefined);
+}
+
+// Formato de un complemento: recibe las capas (o la imagen combinada) en RGBA y devuelve los bytes.
+async function encodePlugin(doc, format) {
+    const pixelsOf = (canvas) => canvas.getContext("2d").getImageData(0, 0, doc.width, doc.height).data;
+    const layers = format.supportsLayers
+        ? doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blendMode: l.blend, data: pixelsOf(l.canvas) }))
+        : [{ name: doc.layers[0]?.name || "", visible: true, opacity: 255, blendMode: "normal", data: pixelsOf(doc.flattened()) }];
+    const values = Object.fromEntries((format.saveParams || []).map((p) => [p.key, p.type === "choice" ? p.values[p.def] : p.def]));
+    const result = await format.encode({ document: { width: doc.width, height: doc.height, resolution: 96, activeLayer: doc.active, layers }, values });
+    if (result instanceof Blob)
+        return result;
+    if (result instanceof ArrayBuffer || ArrayBuffer.isView(result))
+        return new Blob([result], { type: format.mime });
+    throw new Error(format.name);
 }
 
 async function encodeOra(doc) {

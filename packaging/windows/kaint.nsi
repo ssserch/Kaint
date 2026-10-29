@@ -1,6 +1,6 @@
 ; Instalador de Kaint para Windows 10 y 11 (NSIS 3). Lo crea "build.bat --setup":
 ;
-;   makensis /DVERSION=1.0.3 /DSOURCE=<carpeta con bin\kaint.exe> /DOUTFILE=<instalador.exe>
+;   makensis /DVERSION=1.1.0 /DSOURCE=<carpeta con bin\kaint.exe> /DOUTFILE=<instalador.exe>
 ;            /DROOT=<carpeta del código> kaint.nsi
 ;
 ; Se instala para el usuario actual (sin pedir permisos de administrador) en

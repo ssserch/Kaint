@@ -102,7 +102,6 @@ public:
         return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptBlend
              | OptSelectionQuality;
     }
-    QCursor cursor() const override;
     void mouseMove(const ToolEvent& e) override;
     void paintOverlay(QPainter& p) override;
 

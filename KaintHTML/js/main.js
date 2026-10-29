@@ -9,3 +9,9 @@ await IconPacks.load();
 // La ventana se carga después de fijar el idioma: sus textos se traducen al crearse.
 const { App } = await import("./ui/App.js");
 window.kaint = new App();
+// Fuentes añadidas y complementos (sus efectos y formatos), guardados en el navegador.
+const { UserFonts } = await import("./UserFonts.js");
+await UserFonts.load();
+const { Plugins } = await import("./plugins/Plugins.js");
+Plugins.installApi(window.kaint);
+await Plugins.load();

@@ -196,7 +196,6 @@ export class MagicWandTool extends SelectTool {
     get icon() { return "magicwand"; }
     get letter() { return "S"; }
     get options() { return ["selectionMode", "flood", "tolerance", "sampling", "afterSelect"]; }
-    cursor() { return this.iconCursor(4, 20); }
 
     hint() {
         return this.session

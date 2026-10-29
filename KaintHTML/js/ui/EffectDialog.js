@@ -12,7 +12,7 @@ export function renderEffect(doc, effect, values) {
     const layer = doc.activeLayer, sel = doc.selection;
     const rect = sel.bounds() || { x: 0, y: 0, w: doc.width, h: doc.height };
     const src = layer.ctx.getImageData(0, 0, doc.width, doc.height);
-    const info = { primary: AppState.primary, secondary: AppState.secondary };
+    const info = { primary: AppState.primary, secondary: AppState.secondary, selection: sel.mask || null };
     const out = effect.render(src, values, rect, info);
     const data = new ImageData(rect.w, rect.h);
     const o = out.data, s = src.data, d = data.data, w = doc.width;
@@ -131,7 +131,7 @@ export async function effectDialog(app, effect, initial) {
         if (p.label && p.type !== "bool" && p.type !== "seed")
             box.appendChild(el("div", { className: "label", textContent: tr(p.label) }));
         if (p.type === "int" || p.type === "real" || p.type === "angle") {
-            const step = p.type === "real" ? 1 / 10 ** (p.decimals ?? 2) : 1;
+            const step = p.step ?? (p.type === "real" ? 1 / 10 ** (p.decimals ?? 2) : 1);
             const range = el("input", { type: "range", min: p.min, max: p.max, step, value: values[p.key] });
             const num = el("input", { type: "number", min: p.min, max: p.max, step, value: values[p.key] });
             const setValue = (v) => {
@@ -164,6 +164,10 @@ export async function effectDialog(app, effect, initial) {
             const input = el("input", { type: "color", value: `#${hex(values[p.key])}` });
             input.addEventListener("input", () => { values[p.key] = { ...parseHex(input.value), a: 255 }; update(); });
             box.append(input);
+        } else if (p.type === "text") {
+            const input = el("input", { type: "text", value: values[p.key], maxLength: 4096 });
+            input.addEventListener("input", () => { values[p.key] = input.value; update(); });
+            box.append(input, el("span"), resetButton(() => { input.value = values[p.key] = p.def; update(); }));
         } else if (p.type === "seed") {
             const b = el("button", { className: "pushbutton", textContent: tr("Reiniciar") });
             b.addEventListener("click", () => { values.seed = Math.floor(Math.random() * 1e9); update(); });

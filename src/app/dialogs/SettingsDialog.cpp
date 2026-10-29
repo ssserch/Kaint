@@ -41,6 +41,7 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
@@ -348,13 +349,13 @@ QWidget* SettingsDialog::createInterfacePage()
     });
     connect(managePacks, &QPushButton::clicked, this, [this] { showPage(Page::IconPacks); });
 
-    // Ventanas flotantes: el estilo de las de paint.js (Windows 10) o el compacto, y su borde.
+    // Ventanas flotantes: el estilo inspirado en Windows 10 o el compacto, y su borde.
     page.layout->addWidget(sectionHeader(tr("Ventanas"), page.widget));
     auto* panelForm = new QFormLayout;
     panelForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
     auto* panelStyle = new QComboBox(page.widget);
-    panelStyle->addItem(tr("Windows 10 (como paint.js)"), 0);
-    panelStyle->setItemData(0, tr("Cabecera más alta, botón de cerrar cuadrado y esquinas rectas."), Qt::ToolTipRole);
+    panelStyle->addItem(tr("Windows 10"), 0);
+    panelStyle->setItemData(0, tr("Cabecera más alta, botón de cerrar cuadrado y esquinas algo redondeadas."), Qt::ToolTipRole);
     panelStyle->addItem(tr("Compacto"), 1);
     panelStyle->setItemData(1, tr("La cabecera fina de siempre de Kaint."), Qt::ToolTipRole);
     panelStyle->setCurrentIndex(std::max(0, panelStyle->findData(m_settings.panelStyle)));
@@ -520,10 +521,10 @@ QWidget* SettingsDialog::createCanvasPage()
     connect(spin, &QDoubleSpinBox::valueChanged, this, set);
     connect(reset, &QToolButton::clicked, this, [set] { set(191 / 255.0); });
 
-    // Regla (Ver > Reglas): oscura como la de paint.js o del color de la barra de herramientas.
+    // Regla (Ver > Reglas): oscura o del color de la barra de herramientas.
     auto* rulerRow = new QHBoxLayout;
     auto* ruler = new QComboBox(page.widget);
-    ruler->addItem(tr("Oscura (como paint.js)"), 0);
+    ruler->addItem(tr("Oscura"), 0);
     ruler->addItem(tr("Del color de la barra de herramientas"), 1);
     ruler->setCurrentIndex(std::max(0, ruler->findData(m_settings.rulerStyle)));
     rulerRow->addWidget(new QLabel(tr("Reglas:"), page.widget));
@@ -1094,15 +1095,63 @@ void openFolder(const QString& dir)
 
 } // namespace
 
+namespace {
+
+// Vista previa de un paquete: una tira con iconos de los menús y de las herramientas, los del
+// paquete o, si no los trae, los de Kaint.
+QPixmap iconPackPreview(const QString& folder)
+{
+    static const char* const files[] = {
+        "menu_file_new_icon", "menu_file_open_icon", "menu_file_save_icon", "menu_edit_cut_icon",
+        "menu_edit_copy_icon", "menu_edit_paste_icon", "menu_edit_undo_icon", "menu_layers_add_new_layer_icon",
+        "menu_image_crop_icon", "menu_utilities_settings_icon", "paint_brush_tool_icon", "zoom_tool_icon",
+    };
+    constexpr int side = 20, gap = 4;
+    const int count = int(std::size(files));
+    const qreal dpr = qApp->devicePixelRatio();
+    QPixmap strip(QSize(count * (side + gap) - gap, side) * dpr);
+    strip.setDevicePixelRatio(dpr);
+    strip.fill(Qt::transparent);
+    QPainter p(&strip);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    for (int i = 0; i < count; ++i) {
+        const QString name = QString::fromLatin1(files[i]);
+        QImage image;
+        for (const QString& ext : {QStringLiteral("png"), QStringLiteral("webp")}) {
+            if (!folder.isEmpty() && image.isNull())
+                image.load(QStringLiteral("%1/icons/%2.%3").arg(folder, name, ext));
+        }
+        // Las herramientas de Kaint son dibujos; los menús, los PNG incluidos.
+        if (image.isNull() && name.endsWith(QLatin1String("_tool_icon")))
+            image = Icons::pdn(name == QLatin1String("zoom_tool_icon") ? QStringLiteral("zoom") : QStringLiteral("paintbrush"))
+                        .pixmap(QSize(side, side), dpr)
+                        .toImage();
+        if (image.isNull())
+            image.load(QStringLiteral(":/kaint/ui-icons/%1.png").arg(name));
+        if (image.isNull())
+            continue;
+        const QImage scaled = image.scaled(QSize(side, side) * dpr, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        p.drawImage(QRectF(i * (side + gap) + (side - scaled.width() / dpr) / 2, (side - scaled.height() / dpr) / 2,
+                           scaled.width() / dpr, scaled.height() / dpr),
+                    scaled);
+    }
+    return strip;
+}
+
+} // namespace
+
 QWidget* SettingsDialog::createIconPacksPage()
 {
     PageBox page = makePage(this);
-    page.layout->addWidget(wrapped(tr("Los paquetes de iconos de paint.js (archivos .zip con asset-pack.json) cambian los "
+    page.layout->addWidget(wrapped(tr("Los paquetes de iconos (archivos .zip con asset-pack.json) cambian los "
                                       "iconos de Kaint, también los de las herramientas. Los iconos que no traiga un "
                                       "paquete siguen siendo los de Kaint. Se guardan en este equipo."),
                                    page.widget));
     m_iconPacks = new QListWidget(page.widget);
-    m_iconPacks->setIconSize(QSize(24, 24));
+    // Cada paquete con su nombre y, debajo, una tira con algunos de sus iconos.
+    m_iconPacks->setIconSize(QSize(12 * 24 - 4, 20));
+    m_iconPacks->setViewMode(QListView::ListMode);
+    m_iconPacks->setSpacing(2);
     m_iconPacks->setMinimumHeight(180);
     page.layout->addWidget(m_iconPacks, 1);
     m_iconPackDetails = wrapped(QString(), page.widget);
@@ -1212,9 +1261,7 @@ void SettingsDialog::refreshIconPacks()
         auto* item = new QListWidgetItem(text, m_iconPacks);
         item->setData(Qt::UserRole, p.id);
         item->setToolTip(p.description);
-        // Vista previa: el icono de Abrir del paquete (o el de Kaint).
-        const QString preview = QDir(p.folder).filePath(QStringLiteral("icons/menu_file_open_icon.png"));
-        item->setIcon(!p.folder.isEmpty() && QFile::exists(preview) ? QIcon(preview) : Icons::named(QStringLiteral("document-open")));
+        item->setIcon(QIcon(iconPackPreview(p.folder)));
         QFont f = item->font();
         f.setBold(p.id == active);
         item->setFont(f);

@@ -117,7 +117,8 @@ public:
 
     // Dibujo de ayudas sobre el lienzo, en coordenadas del widget.
     virtual void paintOverlay(QPainter&) {}
-    virtual QCursor cursor() const { return Qt::CrossCursor; }
+    // Como en Paint.NET, el icono de la herramienta con el punto activo en su punta.
+    virtual QCursor cursor() const;
     virtual qreal brushOutlineDiameter() const { return 0; }
 
     // Tiñe de azul el interior de la selección (herramientas de selección).

@@ -4,6 +4,11 @@ const KEY = "kaint.settings";
 const defaults = {
     animations: true,
     translucentPanels: true,
+    // Desplazamiento más allá del borde de la imagen, desplazamiento automático al dibujar en el
+    // borde y elegir la capa visible más cercana al ocultar una (como en Kaint).
+    overscroll: true,
+    autoScroll: true,
+    autoSelectVisibleLayer: false,
     coloredToolIcons: true,
     colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro
     language: navigator.language?.toLowerCase().startsWith("es") ? "es" : "en",
@@ -21,6 +26,17 @@ const defaults = {
     rulerStyle: 0,
     // Atajos cambiados en Configuración > Atajos de teclado (id de la acción → combinación).
     shortcuts: {},
+    // Herramienta al abrir Kaint ("" = la última que se usó).
+    startTool: "",
+    lastTool: "paintbrush",
+    // Lápiz y tableta: la presión cambia el tamaño; el extremo borrador activa la Goma.
+    penPressure: true,
+    tabletEraser: true,
+    // Color propio del fondo alrededor de la imagen con los temas claros y con los oscuros.
+    canvasBorderLight: null,
+    canvasBorderDark: null,
+    // Tema personalizado: { base: "light" | "dark" | "win98", colors: { rol: "#rrggbb" } }.
+    customTheme: null,
 };
 
 function load() {

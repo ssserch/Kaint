@@ -35,6 +35,7 @@
 #include "core/CustomShapes.h"
 #include "core/Document.h"
 #include "core/Ora.h"
+#include "core/Palette.h"
 #include "core/effects/Effect.h"
 #include "core/Zip.h"
 #include "core/plugins/PluginManager.h"
@@ -78,6 +79,7 @@
 #include <QToolBar>
 #include <QBuffer>
 #include <QLayout>
+#include <QPainter>
 #include <QToolButton>
 #include <QtEndian>
 #include <QUndoStack>
@@ -1155,7 +1157,7 @@ int main(int argc, char** argv)
         for (const QString& name : {QStringLiteral("rectangleselect"), QStringLiteral("zoom"), QStringLiteral("text"),
                                     QStringLiteral("shapes"), QStringLiteral("colorpicker")}) {
             const QImage drawn = Icons::tool(name, QIcon()).pixmap(QSize(24, 24)).toImage();
-            CHECK(!drawn.isNull() && drawn != Icons::named(name).pixmap(QSize(24, 24)).toImage());
+            CHECK(!drawn.isNull() && Icons::named(name).isNull());
         }
         if (auto* toolsPanel = w.findChild<ToolsPanel*>()) {
             const QList<QToolButton*> buttons = toolsPanel->findChildren<QToolButton*>();
@@ -1229,6 +1231,29 @@ int main(int argc, char** argv)
             CHECK(f.open(QIODevice::WriteOnly) && f.write(bad.finish()) > 0);
         }
         CHECK(IconPacks::install(packFile, &error).isEmpty() && !error.isEmpty());
+    }
+
+    // Cursores con el icono actual de cada herramienta (punto activo en la punta), la flecha de
+    // girar que cambia con el ángulo, las paletas de muestra y la estrella de cambios sin guardar.
+    {
+        const QCursor pencil = Icons::toolCursor(QStringLiteral("pencil"));
+        CHECK(pencil.shape() == Qt::BitmapCursor && !pencil.pixmap().isNull());
+        CHECK(pencil.hotSpot().x() < pencil.pixmap().width() / 3 && pencil.hotSpot().y() > pencil.pixmap().height() * 2 / 3);
+        const QCursor move = Icons::toolCursor(QStringLiteral("moveselectedpixels"));
+        CHECK(move.hotSpot().x() < 4 && move.hotSpot().y() < 4);
+        tools->select(ToolId::Paintbrush);
+        settle();
+        CHECK(canvas->viewport()->cursor().shape() == Qt::BitmapCursor);
+        CHECK(Icons::rotateCursor(0).pixmap().toImage() != Icons::rotateCursor(M_PI / 2).pixmap().toImage());
+        CHECK(Palette::rainbowColors().size() == Palette::kColorCount && Palette::smallColors().size() == Palette::kColorCount);
+        CHECK(Palette::smallColors().value(40) == QColor(Qt::white) && Palette::rainbowColors().value(0) != Palette::rainbowColors().value(1));
+        QImage star(32, 32, QImage::Format_ARGB32_Premultiplied);
+        star.fill(Qt::transparent);
+        {
+            QPainter p(&star);
+            Icons::paintUnsavedStar(p, QRectF(0, 0, 32, 32));
+        }
+        CHECK(star.pixelColor(16, 3).red() > 200 && star.pixelColor(16, 3).blue() < 80 && star.pixelColor(16, 16) == QColor(Qt::white));
     }
 
     // Atajos de teclado editables: cambiar uno lo quita de la acción que lo usaba; restablecer

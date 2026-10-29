@@ -252,7 +252,7 @@ export class MagicWandTool extends SelectTool {
     onPointerMove(e) {
         if (!this.draggingSeed) {
             if (this.session)
-                this.view.canvas.style.cursor = nearPoint(e, this.seedHandle(), 11) ? "move" : this.cursor();
+                this.view.setCursor(nearPoint(e, this.seedHandle(), 11) ? "move" : this.cursor());
             return;
         }
         const doc = this.doc;

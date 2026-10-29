@@ -90,6 +90,31 @@ class TransformBox {
         this.sx = sx;
         this.sy = sy;
     }
+
+    // Píxel a píxel (TransformBox::snappedToPixels de Kaint): sin giro, o girada 90°, 180° o
+    // 270°, las esquinas caen en píxeles enteros y el tamaño cambia de píxel en píxel. Con otros
+    // giros no se toca (la imagen se remuestrea igualmente).
+    snapToPixels() {
+        const quarter = this.angle / (Math.PI / 2), k = Math.round(quarter);
+        if (Math.abs(quarter - k) > 1e-9 || this.base.w <= 0 || this.base.h <= 0)
+            return;
+        const m = this.matrix(), b = this.base;
+        const a = m.transformPoint({ x: b.x, y: b.y }), c = m.transformPoint({ x: b.x + b.w, y: b.y + b.h });
+        const axis = (from, to) => {
+            const x0 = Math.round(from);
+            let x1 = Math.round(to);
+            if (x0 === x1)
+                x1 = x0 + (to >= from ? 1 : -1);
+            return [x0, x1];
+        };
+        const [x0, x1] = axis(a.x, c.x), [y0, y1] = axis(a.y, c.y);
+        // La mitad de la diagonal, vuelta a los ejes de la caja (sin el giro), da la escala.
+        const hx = (x1 - x0) / 2, hy = (y1 - y0) / 2, cs = Math.cos(-this.angle), sn = Math.sin(-this.angle);
+        this.sx = (2 * (hx * cs - hy * sn)) / b.w;
+        this.sy = (2 * (hx * sn + hy * cs)) / b.h;
+        this.tx = (x0 + x1) / 2 - (b.x + b.w / 2);
+        this.ty = (y0 + y1) / 2 - (b.y + b.h / 2);
+    }
 }
 
 class MoveToolBase extends Tool {
@@ -173,19 +198,30 @@ class MoveToolBase extends Tool {
             return;
         }
         const p = { x: e.x, y: e.y }, d = this.drag, box = d.session.box;
+        // Píxel a píxel (por defecto, como la selección): nada queda a medio píxel.
+        const snap = !this.settings.selectionAntialias;
         if (d.kind === "move") {
             box.tx = Math.round(d.start.tx + p.x - d.from.x);
             box.ty = Math.round(d.start.ty + p.y - d.from.y);
+            if (snap)
+                box.snapToPixels();
         } else if (d.kind === "resize") {
             box.resize(d.handle, p, e.shift);
+            if (snap)
+                box.snapToPixels();
         } else {
             const c = box.center();
             let a = d.start.angle + Math.atan2(p.y - c.y, p.x - c.x) - d.fromAngle;
             if (e.shift)
                 a = Math.round(a / (Math.PI / 12)) * (Math.PI / 12);
             box.angle = a;
+            // El giro es alrededor del centro de antes (si no, el ajuste a píxeles lo iría moviendo).
+            box.tx = d.start.tx;
+            box.ty = d.start.ty;
+            if (snap)
+                box.snapToPixels();
             this.setHint(tr("Ángulo: %1°", ((-a * 180) / Math.PI).toFixed(2)));
-            this.view.canvas.style.cursor = rotateCursor(this.angleTo(box, e));
+            this.view.setCursor(rotateCursor(this.angleTo(box, e)));
         }
         this.render(d.session);
     }
@@ -208,11 +244,11 @@ class MoveToolBase extends Tool {
         const box = this.restBox();
         const canvas = this.view.canvas;
         if (!box || this.doc.selection.isEmpty()) {
-            canvas.style.cursor = this.cursor();
+            this.view.setCursor(this.cursor());
             return;
         }
         const hit = this.hit(e, box);
-        canvas.style.cursor = hit.kind === "resize" ? "pointer" : hit.kind === "rotate" ? rotateCursor(this.angleTo(box, e)) : this.cursor();
+        this.view.setCursor(hit.kind === "resize" ? "pointer" : hit.kind === "rotate" ? rotateCursor(this.angleTo(box, e)) : this.cursor());
     }
 
     // Dirección (en la vista) desde el puntero hacia el centro de la caja: la de la flecha de girar.

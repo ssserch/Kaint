@@ -3,7 +3,7 @@
 // píxeles, la selección con hormigas y lo que dibuje la herramienta; reparte el ratón a la
 // herramienta y se desplaza con la rueda, el botón central o la barra espaciadora.
 import { checkerPattern, clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
-import { handCursor } from "./Icons.js";
+import { handCursor, outlineCursor, paintMini } from "./Icons.js";
 import { Settings } from "../Settings.js";
 
 const kMargin = 24;
@@ -36,6 +36,10 @@ export class CanvasView extends EventTarget {
         this.vScroll = workspace.querySelector(".scrollbar.v");
         this.hRuler = workspace.querySelector("canvas.ruler.h");
         this.vRuler = workspace.querySelector("canvas.ruler.v");
+        // Miniatura que acompaña al puntero del sistema (Icons.miniCursor).
+        this.miniIcon = document.createElement("canvas");
+        this.miniIcon.className = "mini-pointer";
+        workspace.appendChild(this.miniIcon);
         this.rulersVisible = !!Settings.get("rulers");
         workspace.classList.toggle("rulers", this.rulersVisible);
         new ResizeObserver(() => this.resized()).observe(workspace);
@@ -134,6 +138,7 @@ export class CanvasView extends EventTarget {
     // --- Zum y desplazamiento --------------------------------------------------------------
 
     emitZoom() {
+        this.updateCursor();
         this.dispatchEvent(new Event("zoom"));
     }
 
@@ -372,7 +377,7 @@ export class CanvasView extends EventTarget {
             this.tool.paintOverlay?.(ctx, this);
             ctx.restore();
             const diameter = this.tool.brushDiameter?.() ?? 0;
-            if (diameter > 0 && this.mouse && !this.panning) {
+            if (diameter > 0 && this.mouse && !this.panning && !this.outlineInCursor) {
                 const r = (diameter * this.scale) / 2;
                 if (r >= 2) {
                     ctx.beginPath();
@@ -424,6 +429,18 @@ export class CanvasView extends EventTarget {
             return;
         const p = this.viewToImage(a.event.vx, a.event.vy);
         this.tool.onPointerMove?.({ ...a.event, x: p.x, y: p.y });
+    }
+
+    // La vista se movió (rueda) bajo el puntero mientras se arrastra con una herramienta: le
+    // llega la nueva posición en la imagen, como si se hubiera movido el ratón.
+    followPointer(view) {
+        const te = this.dragEvent;
+        if (!te || !this.tool || this.panning)
+            return;
+        const p = this.viewToImage(view.x, view.y);
+        this.dragEvent = { ...te, vx: view.x, vy: view.y, x: p.x, y: p.y };
+        this.tool.onPointerMove?.(this.dragEvent);
+        this.update();
     }
 
     stopAutoScroll() {
@@ -642,12 +659,58 @@ export class CanvasView extends EventTarget {
     }
 
     updateCursor() {
-        if (this.panning)
-            this.canvas.style.cursor = handCursor(true);
-        else if (this.spaceDown)
-            this.canvas.style.cursor = handCursor(false);
-        else
-            this.canvas.style.cursor = this.doc && this.tool ? this.tool.cursor?.() || "default" : "default";
+        this.outlineInCursor = false;
+        if (this.panning) {
+            this.setCursor(handCursor(true));
+        } else if (this.spaceDown) {
+            this.setCursor(handCursor(false));
+        } else {
+            const outline = this.brushCursor();
+            this.outlineInCursor = !!outline && !this.outlineNearEdge;
+            this.setCursor(this.outlineInCursor ? outline.css : this.doc && this.tool ? this.tool.cursor?.() || "default" : "default");
+        }
+    }
+
+    // Cursor del lienzo; uno con miniatura sobre el puntero del sistema (miniCursor) lleva al
+    // lado la miniatura, que sigue al ratón.
+    setCursor(css) {
+        this.canvas.style.cursor = css;
+        const mini = css?.mini || null;
+        // Se repinta siempre: algunas llevan los colores activos (el degradado).
+        if (mini)
+            paintMini(this.miniIcon, mini.name);
+        this.mini = mini;
+        this.placeMini();
+    }
+
+    // Abajo a la derecha de la flecha (o de la I), como en los cursores de Kaint.
+    placeMini() {
+        const show = !!(this.mini && this.mouse && !this.panning && !this.spaceDown);
+        this.miniIcon.style.display = show ? "block" : "none";
+        if (!show)
+            return;
+        const [dx, dy] = this.mini.ibeam ? [5, 3] : [12, 13];
+        this.miniIcon.style.transform = `translate(${Math.round(this.canvas.offsetLeft + this.mouse.vx + dx)}px, ${Math.round(this.canvas.offsetTop + this.mouse.vy + dy)}px)`;
+    }
+
+    // Con los pinceles, el contorno va en el propio cursor si cabe: así no se queda atrás del
+    // puntero (dibujado en el lienzo, llega un fotograma o más tarde).
+    brushCursor() {
+        const diameter = this.doc ? this.tool?.brushDiameter?.() ?? 0 : 0;
+        const r = (diameter * this.scale) / 2;
+        return r >= 2 ? outlineCursor(this.tool.icon, r) : null;
+    }
+
+    // Los navegadores no dejan que un cursor de más de 32 px tape su propia interfaz: junto al
+    // borde de la ventana el contorno vuelve a dibujarse en el lienzo.
+    checkOutlineEdge(e) {
+        const half = this.brushCursor()?.half ?? 0;
+        const near = half > 16 && (e.clientX < half || e.clientY < half || window.innerWidth - e.clientX < half
+                                   || window.innerHeight - e.clientY < half);
+        if (near !== !!this.outlineNearEdge) {
+            this.outlineNearEdge = near;
+            this.updateCursor();
+        }
     }
 
     installEvents() {
@@ -674,6 +737,7 @@ export class CanvasView extends EventTarget {
                 this.dispatchEvent(new CustomEvent("pen-eraser", { detail: true }));
                 te.button = "left";
             }
+            this.dragEvent = te;
             this.tool?.onPointerDown?.(te);
             this.update();
         });
@@ -682,6 +746,8 @@ export class CanvasView extends EventTarget {
                 return;
             const te = this.toolEvent(e);
             this.mouse = te;
+            this.placeMini();
+            this.checkOutlineEdge(e);
             this.dispatchEvent(new CustomEvent("cursor", { detail: te }));
             if (this.panning) {
                 this.scrollBy(this.panning.x - e.clientX, this.panning.y - e.clientY);
@@ -689,6 +755,8 @@ export class CanvasView extends EventTarget {
                 return;
             }
             this.updateAutoScroll(te, e.buttons);
+            if (this.dragEvent)
+                this.dragEvent = te;
             // Eventos agrupados (trazos más finos con lápices y ratones rápidos).
             const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
             for (const ce of events.length ? events : [e])
@@ -699,6 +767,8 @@ export class CanvasView extends EventTarget {
             this.stopAutoScroll();
             if (!this.doc)
                 return;
+            if (e.button === 0 || e.button === 2 || e.type === "pointercancel")
+                this.dragEvent = null;
             if (this.panning) {
                 this.panning = null;
                 this.updateCursor();
@@ -717,6 +787,7 @@ export class CanvasView extends EventTarget {
         c.addEventListener("pointercancel", up);
         c.addEventListener("pointerleave", () => {
             this.mouse = null;
+            this.placeMini();
             this.dispatchEvent(new CustomEvent("cursor", { detail: null }));
             this.update();
         });
@@ -742,6 +813,7 @@ export class CanvasView extends EventTarget {
             } else {
                 this.scrollBy(e.deltaX * unit, e.deltaY * unit);
             }
+            this.followPointer(anchor);
         }, { passive: false });
     }
 }

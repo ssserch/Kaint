@@ -4021,6 +4021,30 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The Paint Bucket, Paintbrush, Recolor and Gradient icons show the primary and secondary colors.</translation>
     </message>
     <message>
+        <source>Usar el puntero del sistema en los cursores con la herramienta en miniatura</source>
+        <translation>Use the system pointer in cursors with a tool thumbnail</translation>
+    </message>
+    <message>
+        <source>La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores del escritorio con su icono al lado. Desactivado, la flecha de Kaint.</source>
+        <translation>The selection tools, Gradient, Line, Text and Shapes show the arrow (or I-beam) of the desktop cursor theme with their icon beside it. When off, Kaint&apos;s own arrow.</translation>
+    </message>
+    <message>
+        <source>Usar el diálogo de archivos del sistema para abrir y guardar</source>
+        <translation>Use the system file dialog to open and save</translation>
+    </message>
+    <message>
+        <source>El mismo que usan Firefox y los demás programas del escritorio. Desactivado, se usa el de Qt que trae Kaint.</source>
+        <translation>The same one Firefox and other desktop apps use. When off, Kaint uses the Qt dialog it comes with.</translation>
+    </message>
+    <message>
+        <source>Al arrastrar una capa, marcar con una línea dónde quedará</source>
+        <translation>When dragging a layer, mark with a line where it will go</translation>
+    </message>
+    <message>
+        <source>Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra.</source>
+        <translation>When off, the layer moves along the list with the mouse while you drag it.</translation>
+    </message>
+    <message>
         <source>Windows 98</source>
         <translation>Windows 98</translation>
     </message>

@@ -647,7 +647,10 @@ void ToolOptionsEditor::sync()
     const ToolSettings& s = m_model->tools();
     auto setNumber = [](QComboBox* c, double v, int decimals) {
         const QString text = numberText(v, decimals);
-        if (c->lineEdit()->hasFocus() || c->currentText() == text)
+        // Solo se respeta lo que se está escribiendo (tras un doble clic): con un clic el campo
+        // se queda con el foco, y los botones − y + también tienen que cambiar el número.
+        const auto* click = c->findChild<ComboClickToOpen*>();
+        if ((click && click->isEditing()) || c->currentText() == text)
             return;
         const QSignalBlocker b(c);
         c->setEditText(text);

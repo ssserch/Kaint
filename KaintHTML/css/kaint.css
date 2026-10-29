@@ -271,7 +271,7 @@ u {
     border-color: var(--selection-border);
 }
 
-.image-tab canvas {
+.image-tab > canvas {
     max-width: 64px;
     max-height: 48px;
     box-shadow: 0 0 0 1px var(--line);
@@ -578,6 +578,16 @@ input[type="checkbox"] {
     border-color: var(--line);
 }
 
+/* Miniatura de la herramienta junto al puntero del sistema. */
+.mini-pointer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+}
+
 .workspace.rulers #view {
     inset: 20px 14px 14px 20px;
     width: calc(100% - 34px);
@@ -665,8 +675,11 @@ input[type="checkbox"] {
     min-height: 20px;
 }
 
+/* El título no ensancha la ventana (en Herramientas se recorta, como en Kaint). */
 .floating-panel > .title span {
     flex: 1;
+    width: 0;
+    min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -736,9 +749,9 @@ input[type="checkbox"] {
     height: 30px;
 }
 
-/* Como en Paint.NET, el último botón (Formas) ocupa lo que quede de su fila, con el icono centrado. */
-.tools-grid .tbutton:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+/* Como en Paint.NET, el último botón (Formas) ocupa lo que quede de su fila (lo calcula
+   toolsPanel), con el icono centrado. */
+.tools-grid .tbutton:last-child {
     width: auto;
 }
 
@@ -815,6 +828,17 @@ input[type="checkbox"] {
     opacity: 0.6;
 }
 
+/* Arrastre en vivo: la fila sigue al ratón por encima de las demás, que se apartan deslizándose. */
+.layer-list .row.live {
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.layer-list .row.making-room {
+    transition: transform 140ms cubic-bezier(.2, .8, .2, 1);
+}
+
 .drop-line {
     position: absolute;
     left: 2px;
@@ -830,31 +854,90 @@ input[type="checkbox"] {
     padding-top: 2px;
 }
 
-/* Colores */
+/* Colores (ColorsPanel de Kaint). --s es la escala de la ventana. */
 .colors-panel {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    --s: 1;
+}
+
+.colors-panel .left {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: none;
+    width: calc(220px * var(--s));
 }
 
 .colors-panel .top {
     display: flex;
     gap: 4px;
-    align-items: center;
+    align-items: flex-start;
+}
+
+.colors-panel .top select {
+    flex: 1;
+    min-width: 0;
+}
+
+.colors-panel .more-button {
+    min-width: 0;
 }
 
 .colors-panel .middle {
     display: flex;
     gap: 6px;
-    align-items: flex-start;
+    height: calc(120px * var(--s));
+}
+
+/* Ampliada, la rueda ocupa todo el ancho de la columna. */
+.colors-panel.expanded .middle {
+    height: auto;
+    aspect-ratio: 1;
+}
+
+.colors-panel .swatch-column {
+    flex: none;
+}
+
+.colors-panel .swatches {
+    display: block;
+    flex: none;
+}
+
+.colors-panel .wheel-box {
+    flex: 1;
+    position: relative;
+    min-width: 90px;
 }
 
 .colors-panel .wheel {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     cursor: crosshair;
 }
 
-.colors-panel .value-slider {
-    cursor: ns-resize;
+.colors-panel .channel-slider {
+    display: block;
+    width: 100%;
+    min-width: 90px;
+    height: 16px;
+}
+
+.colors-panel .channel-slider.vertical {
+    width: 16px;
+    min-width: 0;
+    height: auto;
+    flex: none;
+}
+
+.colors-panel .palette-row {
+    display: flex;
+    gap: 0;
+    align-items: center;
 }
 
 /* Como en Paint.NET: las muestras van pegadas, sin separación ni marco. */
@@ -867,7 +950,7 @@ input[type="checkbox"] {
 .colors-panel .palette .swatch {
     aspect-ratio: 1;
     background-image: linear-gradient(var(--c), var(--c)),
-        conic-gradient(#bfbfbf 25%, #fff 0 50%, #bfbfbf 0 75%, #fff 0);
+        conic-gradient(#8f8f8f 25%, #bfbfbf 0 50%, #8f8f8f 0 75%, #bfbfbf 0);
     background-size: 100% 100%, 6px 6px;
 }
 
@@ -890,19 +973,45 @@ input[type="checkbox"] {
     50%, 100% { outline: 2px solid var(--accent); }
 }
 
-.colors-panel .more {
+/* Columna derecha de la vista ampliada, con las secciones de Paint.NET. */
+.colors-panel .extended {
+    flex: 1;
+    min-width: 0;
     display: grid;
-    grid-template-columns: auto 1fr 50px;
-    gap: 3px 6px;
+    grid-template-columns: auto minmax(90px, 1fr) auto;
+    gap: 2px 6px;
     align-items: center;
 }
 
-.colors-panel .more input[type="range"] {
-    width: 100%;
+.colors-panel .extended .section {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 2px;
 }
 
-.colors-panel .more input[type="number"] {
-    width: 50px;
+.colors-panel .extended .section::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid color-mix(in srgb, var(--panel) 55%, var(--text));
+    border-bottom: 1px solid color-mix(in srgb, var(--panel) 80%, #fff);
+}
+
+.colors-panel .extended input[type="number"] {
+    width: 64px;
+    text-align: right;
+}
+
+.colors-panel .extended input[type="number"]::-webkit-inner-spin-button {
+    opacity: 1;
+}
+
+.colors-panel .extended .hex {
+    grid-column: 2 / 4;
+    justify-self: end;
+    width: 80px;
+    text-align: right;
 }
 
 /* --- Barra de estado ---------------------------------------------------------------------- */

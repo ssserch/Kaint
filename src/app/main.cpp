@@ -96,8 +96,21 @@ int main(int argc, char** argv)
     if (preview && scheme == Theme::Scheme::Kde && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORMTHEME"))
         qputenv("QT_QPA_PLATFORMTHEME", "kde");
     Theme::prepare(scheme);
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
+    // Abrir y Guardar como con el diálogo del sistema, como Firefox: a través del portal de
+    // freedesktop (sin la integración del escritorio, que Kaint deja fuera por su estilo propio,
+    // Qt usaría el suyo). Sin portal, Qt vuelve al suyo; en Configuración se puede elegir siempre
+    // el de Qt. Solo para Kaint: los programas que abra no heredan la variable.
+    const bool portalTheme = !preview && scheme != Theme::Scheme::Kde && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORMTHEME");
+    if (portalTheme)
+        qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
+#endif
     QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
     QApplication app(argc, argv);
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
+    if (portalTheme)
+        qunsetenv("QT_QPA_PLATFORMTHEME");
+#endif
     QApplication::setApplicationName(QStringLiteral("Kaint"));
     QApplication::setOrganizationName(QStringLiteral("Kaint"));
     QApplication::setApplicationVersion(QStringLiteral(KAINT_VERSION));

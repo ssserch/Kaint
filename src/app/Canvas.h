@@ -127,6 +127,7 @@ private:
     bool keyboardScroll(QKeyEvent* e);
     void updateAutoScroll(const QPointF& viewPos);
     void autoScrollStep();
+    void followPointer();
     const QImage& selectionTint() const;
 
     Document* m_doc = nullptr;

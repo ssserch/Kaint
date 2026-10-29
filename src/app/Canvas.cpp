@@ -584,8 +584,14 @@ void Canvas::paintEvent(QPaintEvent* e)
         const QRect src = QRectF(viewToImage(visible.topLeft()), viewToImage(visible.bottomRight()))
                               .toAlignedRect()
                               .intersected(m_doc->rect());
+        // Siempre la imagen entera, recortada a lo que se repinta: un trozo suelto (lo que cambia
+        // al mover píxeles, por ejemplo) Qt lo colocaba con otro redondeo que el resto, y con zum
+        // o escalas fraccionarias el fondo de alrededor parecía moverse un píxel.
+        p.save();
+        p.setClipRect(visible, Qt::IntersectClip);
         p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1.0);
-        p.drawImage(imageToView(QRectF(src)), m_composite, QRectF(src));
+        p.drawImage(imgView, m_composite);
+        p.restore();
         if (m_pixelGrid && m_zoom >= 2)
             drawPixelGrid(p, src);
     }
@@ -618,7 +624,12 @@ void Canvas::drawSelection(QPainter& p) const
         return;
     p.save();
     const QTransform t = imageToViewTransform();
-    if (m_tool && m_tool->highlightSelection()) {
+    const bool highlight = m_tool && m_tool->highlightSelection();
+    // Un rectángulo en píxeles enteros lleva el interior y el contorno en los mismos píxeles de
+    // la pantalla (la imagen del interior, escalada, podía quedar un píxel corrida).
+    const QRectF box = sel.isRectangular() && !t.isRotating() ? sel.path().boundingRect() : QRectF();
+    const bool pixelBox = !box.isNull() && box == QRectF(box.toAlignedRect());
+    if (highlight && !pixelBox) {
         p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1);
         p.drawImage(imageToView(QRectF(sel.bounds())), selectionTint());
     }
@@ -626,8 +637,8 @@ void Canvas::drawSelection(QPainter& p) const
     QPen black(Qt::black, 0);
     black.setDashPattern({4, 4});
     black.setDashOffset(m_antsOffset);
-    if (sel.isRectangular() && !t.isRotating()) {
-        drawMarchingRect(p, sel.path().boundingRect(), false);
+    if (!box.isNull()) {
+        drawMarchingRect(p, box, highlight && pixelBox);
     } else if (sel.isPathBased()) {
         p.setRenderHint(QPainter::Antialiasing);
         const QPainterPath path = t.map(sel.path());
@@ -675,11 +686,15 @@ void Canvas::drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) c
         p.restore();
         return;
     }
-    // Líneas nítidas en píxeles enteros de la pantalla, con el mismo grosor y trazos con
-    // cualquier zum (suavizadas salían grises y borrosas).
+    // Líneas nítidas en píxeles enteros de la pantalla (también con escalas fraccionarias), con
+    // el mismo grosor y trazos con cualquier zum (suavizadas salían grises y borrosas). Como el
+    // contorno de las demás selecciones, los bordes izquierdo y de arriba van en el primer píxel
+    // de dentro y el derecho y el de abajo en el primero de fuera.
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
     const QRectF v = t.mapRect(imageRect);
-    const QRect r(QPoint(int(std::lround(v.left())), int(std::lround(v.top()))),
-                  QPoint(int(std::lround(v.right())), int(std::lround(v.bottom()))));
+    const int left = int(std::lround(v.left() * dpr)), top = int(std::lround(v.top() * dpr));
+    const QRect r(left, top, int(std::lround(v.right() * dpr)) - left, int(std::lround(v.bottom() * dpr)) - top);
+    p.scale(1 / dpr, 1 / dpr);
     if (tint)
         p.fillRect(r, QColor(0, 120, 215, 45));
     p.setRenderHint(QPainter::Antialiasing, false);
@@ -860,6 +875,9 @@ void Canvas::mousePressEvent(QMouseEvent* e)
         return;
     }
     m_toolButton = e->button();
+    m_lastToolPos = e->position();
+    m_lastButtons = e->buttons();
+    m_lastModifiers = e->modifiers();
     if (m_tool)
         m_tool->mousePress(makeEvent(e));
 }
@@ -937,6 +955,15 @@ void Canvas::autoScrollStep()
         m_autoScrollTimer.stop();
         return;
     }
+    followPointer();
+}
+
+void Canvas::followPointer()
+{
+    // La vista se movió bajo el puntero quieto mientras se arrastra con una herramienta: le
+    // llega la nueva posición en la imagen, como si se hubiera movido el ratón.
+    if (!m_doc || !m_tool || m_toolButton == Qt::NoButton || m_panning)
+        return;
     ToolEvent ev;
     ev.viewPos = m_lastToolPos;
     ev.pos = viewToImage(m_lastToolPos);
@@ -970,6 +997,10 @@ void Canvas::mouseReleaseEvent(QMouseEvent* e)
 void Canvas::wheelEvent(QWheelEvent* e)
 {
     m_fitPending = false;
+    // Con un botón pulsado (seleccionando, pintando...), lo que se hace sigue al puntero sobre la
+    // imagen que se desplaza o se acerca debajo.
+    if (m_toolButton != Qt::NoButton)
+        m_lastToolPos = e->position();
     if (e->modifiers() & Qt::ControlModifier) {
         const QPoint ad = e->angleDelta();
         const int delta = ad.y() != 0 ? ad.y() : ad.x();
@@ -981,14 +1012,17 @@ void Canvas::wheelEvent(QWheelEvent* e)
             setZoom(z, e->position());
         }
         e->accept();
+        followPointer();
         return;
     }
     if ((e->modifiers() & Qt::ShiftModifier) && e->angleDelta().x() == 0) {
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - e->angleDelta().y());
         e->accept();
+        followPointer();
         return;
     }
     QAbstractScrollArea::wheelEvent(e);
+    followPointer();
 }
 
 void Canvas::keyPressEvent(QKeyEvent* e)

@@ -3,9 +3,10 @@
 // los colores activos, la mano y las demás con sus dibujos de siempre) y las formas. Los dibujados
 // se vuelven a pintar al cambiar de tema o de colores.
 import { IconPacks } from "../IconPacks.js";
+import { Settings } from "../Settings.js";
 
-// PNG de paint.js de las herramientas: solo para los cursores (los botones llevan los dibujados de
-// Kaint) y para que un paquete de iconos sustituya también los botones.
+// Nombre de los PNG de las herramientas en los paquetes de iconos de paint.js: si el activo trae
+// uno, sustituye al dibujo de Kaint en el botón y en el cursor.
 const toolFiles = {
     rectangleselect: "rectangle_select_tool_icon", ellipseselect: "ellipse_select_tool_icon",
     lassoselect: "lasso_select_tool_icon", magicwand: "magic_wand_tool_icon", moveselectedpixels: "move_tool_icon",
@@ -838,6 +839,49 @@ export function iconCursor(name, hx = null, hy = null, fallback = "crosshair") {
     return `-webkit-image-set(url(${c.one}) 1x, url(${c.two}) 2x) ${x} ${y}, ${fallback}`;
 }
 
+// Cursor de los pinceles con su contorno: el círculo del tamaño del pincel ('r' en píxeles CSS)
+// alrededor del punto activo y el icono con la punta en el centro. Lo mueve el sistema, así que
+// sigue al ratón sin el retraso de volver a dibujar el lienzo. Si no cabe en un cursor (128 px),
+// devuelve null y el contorno se dibuja en el lienzo. Devuelve el cursor y la mitad de su lado.
+export function outlineCursor(name, r) {
+    const tip = cursorTips[name] || [10, 10];
+    r = Math.round(r * 2) / 2;
+    const half = Math.ceil(Math.max(r + 1.5, tip[0], kCursor - tip[0], tip[1], kCursor - tip[1]));
+    if (2 * half > 128)
+        return null;
+    const key = `outline/${name}/${r}/${primary ? css(primary) : ""}/${secondary ? css(secondary) : ""}/${packedTool(name) || ""}`;
+    if (!cursorCache[key]) {
+        const packed = packedTool(name), img = packed && packImage(packed);
+        const draw = (scale) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = canvas.height = 2 * half * scale;
+            const ctx = canvas.getContext("2d");
+            ctx.scale(scale, scale);
+            // Como el contorno que se dibujaba en el lienzo: blanco por fuera y negro por dentro.
+            for (const [color, radius] of [["rgba(255,255,255,0.75)", r + 1], ["rgba(0,0,0,0.75)", r]]) {
+                ctx.beginPath();
+                ctx.arc(half, half, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            ctx.translate(half - tip[0], half - tip[1]);
+            if (img) {
+                ctx.drawImage(img, 0, 0, kCursor, kCursor);
+            } else {
+                const painter = painterFor(name);
+                if (painter) {
+                    ctx.scale(kCursor / painter.design, kCursor / painter.design);
+                    painter.paint(ctx);
+                }
+            }
+            return canvas.toDataURL();
+        };
+        cursorCache[key] = { css: `-webkit-image-set(url(${draw(1)}) 1x, url(${draw(2)}) 2x) ${half} ${half}, crosshair`, half };
+    }
+    return cursorCache[key];
+}
+
 // Imágenes de los iconos de paquete para dibujarlas en los cursores: hasta que cargan se usa el
 // icono dibujado y luego se avisa para rehacer el cursor.
 const packImages = new Map();
@@ -847,7 +891,7 @@ function packImage(url) {
         img = new Image();
         img.onload = () => {
             for (const key of Object.keys(cursorCache))
-                if (key.startsWith("mini/"))
+                if (key.startsWith("mini/") || key.startsWith("outline/"))
                     delete cursorCache[key];
             window.dispatchEvent(new Event("kaint-cursor"));
         };
@@ -888,8 +932,18 @@ function miniCursorImage(name, ibeam, scale) {
         stroke(ctx, "#000", 1);
     }
     ctx.restore();
-    const [ix, iy, side] = ibeam ? [9, 11, 14] : [12, 13, 14];
+    const [ix, iy] = ibeam ? [9, 11] : [12, 13];
     ctx.translate(ix, iy);
+    drawMini(ctx, name, kMini);
+    return canvas.toDataURL();
+}
+
+// Lado de la miniatura junto al puntero.
+const kMini = 14;
+
+// La miniatura de 'name' de 'side' px desde (0, 0): el icono de la herramienta o, con Formas, la
+// figura elegida.
+function drawMini(ctx, name, side) {
     if (name.startsWith("opt-shape:")) {
         // La figura elegida, en negro con borde blanco para verse sobre cualquier imagen.
         for (const [color, width] of [["#fff", 3], ["#000", 1.2]]) {
@@ -897,7 +951,7 @@ function miniCursorImage(name, ibeam, scale) {
             shapePath(ctx, name.slice(10), 1, 2, side - 2, side - 4, 2.5);
             stroke(ctx, color, width, "round", "round");
         }
-        return canvas.toDataURL();
+        return;
     }
     const packed = packedTool(name), img = packed && packImage(packed);
     if (img) {
@@ -909,12 +963,28 @@ function miniCursorImage(name, ibeam, scale) {
             painter.paint(ctx);
         }
     }
-    return canvas.toDataURL();
+}
+
+// La miniatura que acompaña al puntero del sistema (la dibuja el lienzo en 'canvas').
+export function paintMini(canvas, name) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.height = Math.round(kMini * dpr);
+    canvas.style.width = canvas.style.height = `${kMini}px`;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    drawMini(ctx, name, kMini);
 }
 
 // Como en Paint.NET: el puntero se sigue viendo y la herramienta va a su lado en miniatura (la
-// selección, el degradado, la línea, el texto y las figuras).
+// selección, el degradado, la línea, el texto y las figuras). Con el puntero del sistema
+// (Configuración), el cursor es la flecha o la I del sistema y la miniatura va aparte, junto a
+// él: los navegadores no dejan leer la imagen del cursor del sistema para dibujarla al lado.
 export function miniCursor(name, ibeam = false) {
+    if (Settings.get("systemPointer") !== false) {
+        const system = new String(ibeam ? "text" : "default");
+        system.mini = { name, ibeam };
+        return system;
+    }
     const key = `mini/${ibeam ? "i" : "a"}/${name}/${primary ? css(primary) : ""}/${secondary ? css(secondary) : ""}`;
     if (!cursorCache[key])
         cursorCache[key] = { one: miniCursorImage(name, ibeam, 1), two: miniCursorImage(name, ibeam, 2) };

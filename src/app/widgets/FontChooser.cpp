@@ -156,6 +156,8 @@ FontChooser::FontChooser(QWidget* parent)
     setSizePolicy(QSizePolicy::Fixed, sizePolicy().verticalPolicy());
     view()->setMinimumWidth(460);
     setMaxVisibleItems(24);
+    // La lista lleva barra de desplazamiento (el estilo la cambiaba por flechas arriba y abajo).
+    setProperty("kaintScrollableList", true);
     lineEdit()->setReadOnly(true);
     lineEdit()->installEventFilter(this);
     completer()->setCaseSensitivity(Qt::CaseInsensitive);
@@ -221,7 +223,7 @@ bool FontChooser::eventFilter(QObject* watched, QEvent* event)
     if (m_editing && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
         auto* w = static_cast<QWidget*>(watched);
         if (w != this && !isAncestorOf(w) && w->window() != view()->window() && w->window() != completer()->popup()->window())
-            stopEditing(false);
+            stopEditing(true);
     }
     if (watched != lineEdit())
         return QFontComboBox::eventFilter(watched, event);
@@ -252,7 +254,7 @@ bool FontChooser::eventFilter(QObject* watched, QEvent* event)
         break;
     case QEvent::FocusOut:
         if (static_cast<QFocusEvent*>(event)->reason() != Qt::PopupFocusReason)
-            stopEditing(false);
+            stopEditing(true);
         break;
     default:
         break;

@@ -28,6 +28,9 @@ QIcon tool(const QString& name, const QIcon& fallback);
 // sistema (Breeze en KDE).
 QIcon theme(std::initializer_list<const char*> names);
 QIcon theme(const QString& name);
+// Primer icono disponible del tema del sistema (Breeze en KDE o el incluido), sin los de estilo
+// Paint.NET.
+QIcon system(std::initializer_list<const char*> names);
 
 // Icono de estilo Paint.NET: el de herramienta dibujado por código (el del paquete de iconos
 // activo si trae ese archivo) o, si no hay, el PNG de la interfaz (named); si no, nulo.
@@ -61,6 +64,9 @@ QCursor rotateCursor(qreal angle);
 QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam = false);
 // El de una herramienta ("gradient", "text"...): su icono actual en miniatura.
 QCursor miniToolCursor(const QString& name, bool ibeam = false);
+// Con 'on' (por defecto), esos cursores usan la flecha y la I del tema de cursores del sistema
+// (donde se puede leer, como los temas XCursor de Linux); si no, las que dibuja Kaint.
+void setSystemPointer(bool on);
 // Colores con los que se tiñen el cubo de pintura, el pincel, cambiar color y el degradado
 // (inválidos: sus colores de siempre). Los iconos ya creados cambian al volver a dibujarse.
 void setActiveColors(const QColor& primary, const QColor& secondary);

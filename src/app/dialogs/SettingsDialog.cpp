@@ -74,6 +74,9 @@ AppSettings AppSettings::load()
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
     a.coloredToolIcons = get("coloredToolIcons", a.coloredToolIcons);
+    a.systemFileDialogs = get("systemFileDialogs", a.systemFileDialogs);
+    a.systemPointer = get("systemPointer", a.systemPointer);
+    a.layerDropLine = get("layerDropLine", a.layerDropLine);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 5);
@@ -125,6 +128,9 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("autoScroll"), autoScroll);
     s.setValue(QStringLiteral("autoSelectVisibleLayer"), autoSelectVisibleLayer);
     s.setValue(QStringLiteral("coloredToolIcons"), coloredToolIcons);
+    s.setValue(QStringLiteral("systemFileDialogs"), systemFileDialogs);
+    s.setValue(QStringLiteral("systemPointer"), systemPointer);
+    s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
     s.setValue(QStringLiteral("panelBorder"), panelBorder);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
@@ -297,6 +303,13 @@ QWidget* SettingsDialog::createInterfacePage()
           &AppSettings::autoSelectVisibleLayer);
     check(tr("Iconos de herramientas con los colores activos"), &AppSettings::coloredToolIcons,
           tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario."));
+    check(tr("Usar el puntero del sistema en los cursores con la herramienta en miniatura"), &AppSettings::systemPointer,
+          tr("La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores "
+             "del escritorio con su icono al lado. Desactivado, la flecha de Kaint."));
+    check(tr("Usar el diálogo de archivos del sistema para abrir y guardar"), &AppSettings::systemFileDialogs,
+          tr("El mismo que usan Firefox y los demás programas del escritorio. Desactivado, se usa el de Qt que trae Kaint."));
+    check(tr("Al arrastrar una capa, marcar con una línea dónde quedará"), &AppSettings::layerDropLine,
+          tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra."));
 
     // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
     // tema nativo aparte: claro y oscuro ya son los de Windows, como en Paint.NET.

@@ -90,9 +90,10 @@ export class App extends EventTarget {
         });
         AppState.addEventListener("colors", () => this.updateToolIconColors());
         window.addEventListener("kaint-settings", () => this.applySettings());
-        // La miniatura del cursor de Formas sigue a la forma elegida.
+        // La miniatura del cursor de Formas sigue a la forma elegida y el contorno de los pinceles,
+        // a su tamaño.
         AppState.addEventListener("tools", () => {
-            if (this.tools.current?.id === "shapes")
+            if (this.tools.current?.id === "shapes" || this.tools.current?.brushDiameter)
                 this.view.updateCursor();
         });
         window.addEventListener("kaint-cursor", () => this.view.updateCursor());
@@ -525,7 +526,7 @@ export class App extends EventTarget {
             layers: new FloatingPanel(ws, "layers", tr("Capas"), layersPanel(this, ["addLayer", "deleteLayer", "duplicateLayer", "mergeDown",
                                                                                          "layerUp", "layerDown", "layerProps"]),
                                       { corner: "br", size: { w: 230, h: 260 }, onClose: closed }),
-            colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", size: { w: 230 }, onClose: closed }),
+            colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", onClose: closed }),
         };
         new ResizeObserver(() => Object.values(this.panels).forEach((p) => p.reposition())).observe(ws);
         this.view.addEventListener("rulers", () => Object.values(this.panels).forEach((p) => p.reposition()));

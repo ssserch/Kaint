@@ -116,7 +116,9 @@ const QHash<QString, QString>& files()
         {QStringLiteral("help-contents"), QStringLiteral("menu_help_icon")},
         {QStringLiteral("help-about"), QStringLiteral("menu_help_about_icon")},
         {QStringLiteral("help-website"), QStringLiteral("menu_help_pdn_website_icon")},
-        {QStringLiteral("help-donate"), QStringLiteral("menu_help_donate_icon")},
+        {QStringLiteral("help-docs"), QStringLiteral("menu_help_help_topics_icon")},
+        {QStringLiteral("help-forum"), QStringLiteral("menu_help_forum_icon")},
+        {QStringLiteral("help-tutorials"), QStringLiteral("menu_help_tutorials_icon")},
         {QStringLiteral("help-feedback"), QStringLiteral("menu_help_send_feedback_icon")},
         {QStringLiteral("settings-interface"), QStringLiteral("settings_u_i_24")},
         {QStringLiteral("settings-canvas"), QStringLiteral("settings_canvas_24")},
@@ -133,15 +135,12 @@ const QHash<QString, QString>& files()
         {QStringLiteral("color-swap"), QStringLiteral("swap_icon")},
         {QStringLiteral("dialog-warning"), QStringLiteral("warning_icon")},
         {QStringLiteral("dialog-cancel"), QStringLiteral("cancel_icon")},
-        {QStringLiteral("dialog-ok-apply"), QStringLiteral("tool_strip_checked")},
-        // Opciones de herramientas sin función propia en Icons
-        {QStringLiteral("sample-image"), QStringLiteral("sample_all_layers_true")},
-        {QStringLiteral("sample-layer"), QStringLiteral("sample_all_layers_false")},
-        {QStringLiteral("picker-stay"), QStringLiteral("enum_color_picker_click_behavior_no_tool_switch")},
-        {QStringLiteral("picker-previous-tool"), QStringLiteral("enum_color_picker_click_behavior_switch_to_last_tool")},
-        {QStringLiteral("picker-pencil"), QStringLiteral("enum_color_picker_click_behavior_switch_to_pencil_tool")},
-        {QStringLiteral("gradient-color-mode"), QStringLiteral("gradient_is_alpha_only_false")},
-        {QStringLiteral("gradient-transparency-mode"), QStringLiteral("gradient_is_alpha_only_true")},
+        // Modos de selección (menú Edición > Pegar selección)
+        {QStringLiteral("selection-replace"), QStringLiteral("enum_selection_combine_mode_replace")},
+        {QStringLiteral("selection-union"), QStringLiteral("enum_selection_combine_mode_union")},
+        {QStringLiteral("selection-exclude"), QStringLiteral("enum_selection_combine_mode_exclude")},
+        {QStringLiteral("selection-intersect"), QStringLiteral("enum_selection_combine_mode_intersect")},
+        {QStringLiteral("selection-xor"), QStringLiteral("enum_selection_combine_mode_xor")},
         // Ajustes y efectos ("effect-" + su identificador)
         {QStringLiteral("effect-addnoise"), QStringLiteral("add_noise_effect")},
         {QStringLiteral("effect-autolevel"), QStringLiteral("auto_level")},
@@ -222,9 +221,8 @@ QImage disabledImage(QImage image)
 
 class PngIconEngine : public QIconEngine {
 public:
-    PngIconEngine(const QString& file, const QString& onFile)
+    explicit PngIconEngine(const QString& file)
         : m_file(file)
-        , m_onFile(onFile)
     {
     }
 
@@ -239,7 +237,7 @@ public:
         return scaledPixmap(size, mode, state, 1.0);
     }
 
-    QPixmap scaledPixmap(const QSize& size, QIcon::Mode mode, QIcon::State state, qreal scale) override
+    QPixmap scaledPixmap(const QSize& size, QIcon::Mode mode, QIcon::State, qreal scale) override
     {
         const qreal dpr = std::max<qreal>(1.0, scale);
         const QSize pixels = (QSizeF(size) * dpr).toSize();
@@ -248,11 +246,10 @@ public:
         // Sin el tinte de "seleccionado" de algunos estilos: el icono es el mismo en una fila
         // marcada y en una normal.
         const bool disabled = mode == QIcon::Disabled;
-        const QString file = state == QIcon::On && !m_onFile.isEmpty() ? m_onFile : m_file;
-        const QString key = QStringLiteral("kaint-png/%1/%2x%3/%4").arg(file).arg(pixels.width()).arg(pixels.height()).arg(disabled);
+        const QString key = QStringLiteral("kaint-png/%1/%2x%3/%4").arg(m_file).arg(pixels.width()).arg(pixels.height()).arg(disabled);
         QPixmap pm;
         if (!QPixmapCache::find(key, &pm)) {
-            const QImage source(resourcePath(file));
+            const QImage source(resourcePath(m_file));
             QImage image(pixels, QImage::Format_ARGB32_Premultiplied);
             image.fill(Qt::transparent);
             if (!source.isNull()) {
@@ -269,22 +266,21 @@ public:
     }
 
     QSize actualSize(const QSize& size, QIcon::Mode, QIcon::State) override { return size; }
-    QIconEngine* clone() const override { return new PngIconEngine(m_file, m_onFile); }
+    QIconEngine* clone() const override { return new PngIconEngine(m_file); }
     QString key() const override { return QStringLiteral("KaintPng"); }
 
 private:
     QString m_file;
-    QString m_onFile;
 };
 
-} // namespace
-
-QIcon png(const QString& file, const QString& onFile)
+QIcon png(const QString& file)
 {
     if (!QFile::exists(resourcePath(file)))
         return {};
-    return QIcon(new PngIconEngine(file, onFile));
+    return QIcon(new PngIconEngine(file));
 }
+
+} // namespace
 
 QIcon named(const QString& name)
 {

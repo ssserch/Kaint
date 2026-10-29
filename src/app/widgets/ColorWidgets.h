@@ -3,7 +3,10 @@
 #include <QColor>
 #include <QImage>
 #include <QList>
+#include <QPointer>
 #include <QWidget>
+
+class QVariantAnimation;
 
 // Rueda de tono/saturación (el brillo va en un deslizador aparte).
 class ColorWheel : public QWidget {
@@ -98,8 +101,9 @@ private:
     QColor m_primary;
     QColor m_secondary;
     bool m_editingSecondary = false;
-    // Altura del pico de la ranura activa (0 a 1), animada al cambiar de ranura.
-    qreal m_notch = 1.0;
+    // Cuánto está activa la ranura principal (1) o la secundaria (0); intermedio mientras se anima.
+    qreal m_primaryLevel = 1.0;
+    QPointer<QVariantAnimation> m_switch;
 };
 
 // Paleta de 96 colores (32 con la ventana reducida): clic izquierdo = ranura activa, derecho =

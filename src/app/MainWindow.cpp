@@ -32,6 +32,7 @@
 #include "core/plugins/PluginManager.h"
 
 #include <QActionGroup>
+#include <QActionEvent>
 #include <QApplication>
 #include <QBuffer>
 #include <QElapsedTimer>
@@ -389,6 +390,34 @@ private:
     QElapsedTimer m_closeClock;
 };
 
+// Botón de la barra principal: hace lo mismo que su acción, pero con el icono de la barra (el
+// dibujado al estilo de Paint.NET) aunque en los menús la acción lleve el PNG de la interfaz. Qt
+// vuelve a poner el de la acción cada vez que esta cambia, así que se repone siempre.
+class ToolBarButton : public QToolButton {
+public:
+    ToolBarButton(QAction* action, const QIcon& icon, QToolBar* bar)
+        : QToolButton(bar)
+        , m_icon(icon)
+    {
+        setAutoRaise(true);
+        setFocusPolicy(Qt::NoFocus);
+        setIconSize(bar->iconSize());
+        connect(bar, &QToolBar::iconSizeChanged, this, &QToolButton::setIconSize);
+        setDefaultAction(action);
+        setIcon(m_icon);
+    }
+
+protected:
+    void actionEvent(QActionEvent* e) override
+    {
+        QToolButton::actionEvent(e);
+        setIcon(m_icon);
+    }
+
+private:
+    QIcon m_icon;
+};
+
 // Fila superior al estilo de Paint.NET 5: menús con la barra principal debajo, la tira de
 // imágenes a lo alto de las dos filas y los botones de las ventanas a la derecha. La franja de
 // los menús lleva el color de la barra de título y la de abajo el de las barras.
@@ -616,16 +645,15 @@ void MainWindow::createActions()
                                  QKeySequence(QStringLiteral("Ctrl+Alt+V")), [this] { pasteIntoNewImage(); });
     A["copySelection"] = makeAction(tr("Copiar &selección"), {"edit-copy-selection", "edit-copy"},
                                     QKeySequence(QStringLiteral("Ctrl+Alt+Shift+C")), [this] { copySelection(); }, sel);
-    const QList<std::tuple<SelectionMode, QString, const char*>> pasteModes{
-        {SelectionMode::Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V"},
-        {SelectionMode::Union, tr("&Sumar (unión)"), ""},
-        {SelectionMode::Exclude, tr("&Excluir"), ""},
-        {SelectionMode::Intersect, tr("&Intersecar"), ""},
-        {SelectionMode::Xor, tr("In&vertir («xor»)"), ""}};
-    for (const auto& [mode, name, key] : pasteModes) {
+    const QList<std::tuple<SelectionMode, QString, const char*, const char*>> pasteModes{
+        {SelectionMode::Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V", "selection-replace"},
+        {SelectionMode::Union, tr("&Sumar (unión)"), "", "selection-union"},
+        {SelectionMode::Exclude, tr("&Excluir"), "", "selection-exclude"},
+        {SelectionMode::Intersect, tr("&Intersecar"), "", "selection-intersect"},
+        {SelectionMode::Xor, tr("In&vertir («xor»)"), "", "selection-xor"}};
+    for (const auto& [mode, name, key, icon] : pasteModes) {
         const QString id = QStringLiteral("pasteSelection%1").arg(int(mode));
-        A[id] = makeAction(name, {}, QKeySequence(QString::fromLatin1(key)), [this, m = mode] { pasteSelection(m); }, doc);
-        A[id]->setIcon(Icons::selectionMode(mode));
+        A[id] = makeAction(name, {icon}, QKeySequence(QString::fromLatin1(key)), [this, m = mode] { pasteSelection(m); }, doc);
     }
     A["eraseSel"] = makeAction(tr("&Borrar la selección"), {"edit-erase-selection", "edit-delete"}, QKeySequence(Qt::Key_Delete),
                                [this] { eraseSelection(tr("Borrar la selección")); }, sel);
@@ -779,8 +807,14 @@ void MainWindow::createActions()
     auto openUrl = [](const QString& url) { return [url] { QDesktopServices::openUrl(QUrl(url)); }; };
     A["website"] = makeAction(tr("Sitio web de &Kaint"), {"help-website", "internet-services", "applications-internet", "globe"}, {},
                               openUrl(QStringLiteral(KAINT_REPOSITORY)));
-    A["donate"] = makeAction(tr("&Donar"), {"help-donate", "face-smile", "emblem-favorite"}, {},
+    A["docs"] = makeAction(tr("&Documentación"), {"help-docs", "help-contents"}, QKeySequence(Qt::Key_F1),
+                           openUrl(QStringLiteral("https://www.getpaint.net/doc/latest/index.html")));
+    A["donate"] = makeAction(tr("&Donar"), {"face-smile", "emblem-favorite"}, {},
                              openUrl(QStringLiteral("https://ko-fi.com/opposition")));
+    A["forum"] = makeAction(tr("&Foro"), {"help-forum", "im-user", "system-users"}, {},
+                            openUrl(QStringLiteral("https://forums.getpaint.net/")));
+    A["tutorials"] = makeAction(tr("&Tutoriales"), {"help-tutorials", "help-contents"}, {},
+                                openUrl(QStringLiteral("https://forums.getpaint.net/forum/20-publishing-only/")));
     {
         QFont italic = A["donate"]->font();
         italic.setItalic(true);
@@ -926,10 +960,16 @@ void MainWindow::rebuildEffectMenus()
     }
     m_adjustmentsMenu->clear();
     m_effectsMenu->clear();
-    // Arriba, como en Paint.NET: repetir el último efecto (Ctrl+F) y los complementos.
+    // Arriba, como en Paint.NET: repetir el último efecto (Ctrl+F, solo después de usar uno) y
+    // los complementos (solo si hay alguno activado). Sin ninguno de los dos, el separador no se
+    // ve (QMenu oculta los separadores del principio).
     m_effectsMenu->addAction(m_act["repeatEffect"]);
     m_effectsMenu->addAction(m_act["plugins"]);
     m_effectsMenu->addSeparator();
+    bool anyPlugin = false;
+    for (const Effect* e : Effects::all())
+        anyPlugin = anyPlugin || !e->pluginName().isEmpty();
+    m_act["plugins"]->setVisible(anyPlugin);
 
     QList<const Effect*> effects;
     for (const Effect* e : Effects::all())
@@ -978,17 +1018,21 @@ void MainWindow::createToolBars()
     main->setObjectName(QStringLiteral("MainToolBar"));
     main->setMovable(false);
     main->setIconSize(QSize(16, 16));
-    main->addActions({A["new"], A["open"], A["save"]});
-    main->addSeparator();
-    main->addAction(A["print"]);
-    main->addSeparator();
-    main->addActions({A["cut"], A["copy"], A["paste"]});
-    main->addSeparator();
-    main->addActions({A["crop"], A["deselect"]});
-    main->addSeparator();
-    main->addActions({A["undo"], A["redo"]});
-    main->addSeparator();
-    main->addActions({A["pixelGrid"], A["rulers"]});
+    const QList<QList<std::pair<const char*, const char*>>> groups{
+        {{"new", "document-new"}, {"open", "document-open"}, {"save", "document-save"}},
+        {{"print", "document-print"}},
+        {{"cut", "edit-cut"}, {"copy", "edit-copy"}, {"paste", "edit-paste"}},
+        {{"crop", "transform-crop"}, {"deselect", "edit-select-none"}},
+        {{"undo", "edit-undo"}, {"redo", "edit-redo"}},
+        {{"pixelGrid", "view-grid"}, {"rulers", "measure"}}};
+    for (const auto& group : groups) {
+        if (&group != &groups.first())
+            main->addSeparator();
+        for (const auto& [id, icon] : group) {
+            const QIcon drawn = Icons::pdn(QStringLiteral("toolbar-") + QLatin1String(icon));
+            main->addWidget(new ToolBarButton(A[id], drawn, main));
+        }
+    }
     m_topLayout->addWidget(main, 1, 0, Qt::AlignLeft | Qt::AlignTop);
 
     m_options = new ToolOptionsBar(m_tools, this);
@@ -1133,9 +1177,14 @@ void MainWindow::createPanels()
     help->setIconSize(QSize(16, 16));
     help->setPopupMode(QToolButton::InstantPopup);
     auto* helpMenu = new QMenu(help);
-    helpMenu->addActions({m_act["website"], m_act["donate"], m_act["pluginsSite"], m_act["feedback"]});
+    // Como la de paint.js: documentación y web, y después donar, foro, tutoriales, complementos y
+    // comentarios.
+    helpMenu->addActions({m_act["docs"], m_act["website"]});
+    helpMenu->addSeparator();
+    helpMenu->addActions({m_act["donate"], m_act["forum"], m_act["tutorials"], m_act["pluginsSite"], m_act["feedback"]});
     helpMenu->addSeparator();
     helpMenu->addAction(m_act["about"]);
+    addAction(m_act["docs"]);
     help->setMenu(helpMenu);
     m_cornerLayout->addWidget(help);
 
@@ -1579,6 +1628,7 @@ void MainWindow::updateActions()
     m_act["undo"]->setEnabled(m_undoGroup->canUndo());
     m_act["redo"]->setEnabled(m_undoGroup->canRedo());
     m_act["repeatEffect"]->setEnabled(has && m_lastEffect);
+    m_act["repeatEffect"]->setVisible(m_lastEffect != nullptr);
 }
 
 void MainWindow::showToolHint(const QString& hint)

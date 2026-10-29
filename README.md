@@ -99,6 +99,12 @@ Animations**.
   </tr>
 </table>
 
+## 🌐 Web version
+
+[**KaintHTML**](KaintHTML/README.md) is Kaint ported to the web: the same interface, tools,
+windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
+`KaintHTML` folder with any static web server (`python3 -m http.server`) and open it.
+
 ## 📦 Install
 
 Kaint needs **Qt 6.5 or newer**: Arch Linux, Debian 13, Ubuntu 25.04 or newer, or Windows 10/11.

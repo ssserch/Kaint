@@ -458,6 +458,11 @@ int main(int argc, char** argv)
         return 1;
     Document* doc = canvas->document();
     AppState* state = AppState::instance();
+    // Sin haber usado ningún efecto, Efectos no muestra "Repetir".
+    if (QAction* repeat = findAction(&w, QStringLiteral("Repetir el último efecto")))
+        CHECK(!repeat->isVisible());
+    else
+        CHECK(false);
 
     // Pincel rojo
     state->setPrimary(QColor(220, 30, 40));
@@ -1135,10 +1140,22 @@ int main(int argc, char** argv)
         CHECK(builtIn > 40 && withIcon >= builtIn - 1);
         CHECK(!Icons::pdn(QStringLiteral("pan-grab")).isNull());
         CHECK(!Icons::handCursor(true).pixmap().isNull() && !Icons::handCursor(false).pixmap().isNull());
-        const QIcon pressure = Icons::png(QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_false"),
-                                          QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_true"));
-        CHECK(pressure.pixmap(QSize(16, 16), QIcon::Normal, QIcon::Off).toImage()
-              != pressure.pixmap(QSize(16, 16), QIcon::Normal, QIcon::On).toImage());
+        // La barra principal lleva los iconos dibujados de siempre, aunque los menús lleven los PNG.
+        if (auto* mainBar = w.findChild<QToolBar*>(QStringLiteral("MainToolBar"))) {
+            QAction* save = findAction(&w, QStringLiteral("Guardar"));
+            QToolButton* saveButton = nullptr;
+            for (QToolButton* b : mainBar->findChildren<QToolButton*>())
+                if (b->defaultAction() == save)
+                    saveButton = b;
+            CHECK(save && saveButton);
+            if (save && saveButton) {
+                const QImage menuIcon = save->icon().pixmap(QSize(16, 16)).toImage();
+                CHECK(saveButton->icon().pixmap(QSize(16, 16)).toImage() != menuIcon);
+                save->setEnabled(!save->isEnabled());
+                save->setEnabled(!save->isEnabled());
+                CHECK(saveButton->icon().pixmap(QSize(16, 16)).toImage() != menuIcon);
+            }
+        }
     }
 
     // Zum: el recuadro que se arrastra va de borde a borde de píxel, como la selección
@@ -1887,11 +1904,17 @@ int main(int argc, char** argv)
         }
         CHECK(sizesFound);
 
-        // Efectos: "Repetir" arriba del todo con el último efecto; Ayuda con los enlaces de Kaint.
+        // Efectos: "Repetir" arriba del todo, solo después de usar un efecto; "Complementos..."
+        // solo con algún complemento activado. Ayuda con los enlaces de Kaint y los de paint.js.
+        QAction* pluginsAction = findAction(&w, QStringLiteral("Complementos..."));
+        bool anyPlugin = false;
+        for (const Effect* e : Effects::all())
+            anyPlugin = anyPlugin || !e->pluginName().isEmpty();
+        CHECK(pluginsAction && pluginsAction->isVisible() == anyPlugin);
         findAction(&w, QStringLiteral("Invertir colores"))->trigger();
         settle();
         QAction* repeat = findAction(&w, QStringLiteral("Repetir «Invertir colores»"));
-        CHECK(repeat && repeat->isEnabled());
+        CHECK(repeat && repeat->isEnabled() && repeat->isVisible());
         QAction* effectsMenu = findAction(&w, QStringLiteral("Efectos"));
         CHECK(effectsMenu && effectsMenu->menu() && effectsMenu->menu()->actions().value(0) == repeat);
         QStringList help;
@@ -1901,7 +1924,8 @@ int main(int argc, char** argv)
                     help << a->text().remove(QLatin1Char('&'));
         CHECK(help.contains(QStringLiteral("Sitio web de Kaint")) && help.contains(QStringLiteral("Donar"))
               && help.contains(QStringLiteral("Enviar comentarios o informe de errores...")) && help.contains(QStringLiteral("Acerca de")));
-        CHECK(!help.join(QString()).contains(QStringLiteral("Documentación")));
+        CHECK(help.value(0) == QStringLiteral("Documentación") && help.contains(QStringLiteral("Foro"))
+              && help.contains(QStringLiteral("Tutoriales")));
 
         // Con una selección y una herramienta de selección: posición, tamaño y área.
         tools->select(ToolId::RectSelect);
@@ -2310,9 +2334,23 @@ int main(int argc, char** argv)
             return QColor(img.pixel(int(secondary ? r.right() - inset : r.left() + inset), int(r.center().y())));
         };
         CHECK(band(false) == QColor(Qt::white) && band(true) == QColor(Qt::blue));
+        // El cambio se anima en las dos a la vez (con las animaciones activadas).
+        auto waitSwitch = [] {
+            QElapsedTimer clock;
+            clock.start();
+            while (clock.elapsed() < Animations::kIndicator + 100)
+                QApplication::processEvents(QEventLoop::AllEvents, 10);
+        };
         swatches->setEditingSecondary(true);
+        bool switching = false;
+        for (QVariantAnimation* a : swatches->findChildren<QVariantAnimation*>())
+            switching = switching || a->state() == QAbstractAnimation::Running;
+        CHECK(switching);
+        waitSwitch();
         CHECK(band(false, 1) == QColor(Qt::white) && band(false, 3) == QColor(Qt::red) && band(true) == QColor(Qt::white));
         swatches->setEditingSecondary(false);
+        waitSwitch();
+        CHECK(band(false) == QColor(Qt::white) && band(true) == QColor(Qt::blue));
         state->resetColors();
     }
 

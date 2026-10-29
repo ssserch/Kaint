@@ -1,0 +1,147 @@
+// Zum, mano y selector de color (src/app/tools/ViewTools.cpp).
+import { Tool } from "./Tool.js";
+import { AppState } from "../AppState.js";
+import { context } from "../core/Raster.js";
+import { handCursor } from "../ui/Icons.js";
+import { tr } from "../i18n.js";
+
+export class ZoomTool extends Tool {
+    get id() { return "zoom"; }
+    get name() { return tr("Zum"); }
+    get icon() { return "zoom"; }
+    get letter() { return "Z"; }
+    hint() { return tr("Clic izquierdo: acercar · clic derecho: alejar · arrastrar: acercar a un rectángulo."); }
+    cursor() { return this.iconCursor(9, 9); }
+
+    onPointerDown(e) {
+        this.pressed = true;
+        this.dragging = false;
+        this.start = { x: e.x, y: e.y };
+        this.current = { x: e.x, y: e.y };
+        this.startView = { x: e.vx, y: e.vy };
+    }
+
+    // El recuadro va de borde a borde de píxel y se queda dentro del lienzo, como la selección
+    // rectangular.
+    dragRect() {
+        if (!this.dragging || !this.doc)
+            return null;
+        const ax = Math.round(this.start.x), ay = Math.round(this.start.y);
+        const bx = Math.round(this.current.x), by = Math.round(this.current.y);
+        const x0 = Math.max(0, Math.min(ax, bx)), y0 = Math.max(0, Math.min(ay, by));
+        const x1 = Math.min(this.doc.width, Math.max(ax, bx)), y1 = Math.min(this.doc.height, Math.max(ay, by));
+        return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+    }
+
+    onPointerMove(e) {
+        if (!this.pressed)
+            return;
+        this.current = { x: e.x, y: e.y };
+        if (!this.dragging && Math.hypot(e.vx - this.startView.x, e.vy - this.startView.y) > 4) {
+            this.dragging = true;
+            this.view.setOverlayAnts(true);
+        }
+        const r = this.dragRect();
+        if (r)
+            this.setHint(tr("Zum a: %1, %2 · %3 × %4", r.x, r.y, r.w, r.h));
+    }
+
+    onPointerUp(e) {
+        if (!this.pressed)
+            return;
+        this.pressed = false;
+        const r = this.dragRect(), dragged = this.dragging;
+        this.stop();
+        const anchor = { x: e.vx, y: e.vy };
+        if (dragged && e.button === "left" && r)
+            this.view.zoomToRect(r);
+        else if (e.button === "left")
+            this.view.zoomIn(anchor);
+        else if (e.button === "right")
+            this.view.zoomOut(anchor);
+    }
+
+    stop() {
+        if (this.dragging) {
+            this.dragging = false;
+            this.view.setOverlayAnts(false);
+            this.setHint(this.hint());
+        }
+    }
+
+    deactivate() {
+        this.pressed = false;
+        this.stop();
+    }
+
+    paintOverlay(ctx, view) {
+        const r = this.dragRect();
+        if (r)
+            view.drawMarchingRect(ctx, r, true);
+    }
+}
+
+export class PanTool extends Tool {
+    get id() { return "pan"; }
+    get name() { return tr("Mano"); }
+    get icon() { return "pan"; }
+    get letter() { return "H"; }
+    hint() { return tr("Arrastra para desplazar la vista. También: botón central o barra espaciadora."); }
+    // El lienzo desplaza la vista al arrastrar con esta herramienta (y pone la mano agarrando).
+    cursor() { return handCursor(false); }
+}
+
+export class ColorPickerTool extends Tool {
+    get id() { return "colorpicker"; }
+    get name() { return tr("Selector de color"); }
+    get icon() { return "colorpicker"; }
+    get letter() { return "K"; }
+    get options() { return ["picker"]; }
+    hint() {
+        return tr("Clic izquierdo: tomar el color principal · clic derecho: el secundario. "
+                  + "Ctrl: muestrear la imagen en lugar de la capa (o al revés).");
+    }
+    cursor() { return this.iconCursor(2, 21); }
+
+    pick(e) {
+        const doc = this.doc;
+        const image = this.settings.pickerSampleImage !== e.ctrl;
+        const source = image ? doc.flattened() : doc.activeLayer.canvas;
+        const half = Math.floor(this.settings.pickerSize / 2);
+        const x0 = Math.max(0, Math.floor(e.x) - half), y0 = Math.max(0, Math.floor(e.y) - half);
+        const x1 = Math.min(doc.width, Math.floor(e.x) + half + 1), y1 = Math.min(doc.height, Math.floor(e.y) + half + 1);
+        if (x1 <= x0 || y1 <= y0)
+            return;
+        const d = context(source).getImageData(x0, y0, x1 - x0, y1 - y0).data;
+        let r = 0, g = 0, b = 0, a = 0;
+        for (let i = 0; i < d.length; i += 4) {
+            r += d[i] * d[i + 3]; g += d[i + 1] * d[i + 3]; b += d[i + 2] * d[i + 3]; a += d[i + 3];
+        }
+        const n = d.length / 4, k = a > 0 ? 1 / a : 0;
+        const color = { r: Math.round(r * k), g: Math.round(g * k), b: Math.round(b * k), a: Math.round(a / n) };
+        this.button === "right" ? AppState.setSecondary(color) : AppState.setPrimary(color);
+    }
+
+    onPointerDown(e) {
+        if (!this.doc || (e.button !== "left" && e.button !== "right"))
+            return;
+        this.button = e.button;
+        this.pick(e);
+    }
+
+    onPointerMove(e) {
+        if (this.button)
+            this.pick(e);
+    }
+
+    onPointerUp() {
+        if (!this.button)
+            return;
+        this.button = null;
+        const after = this.settings.pickerAfter;
+        if (after === "previous" && this.app.tools.previous)
+            this.app.tools.select(this.app.tools.previous.id);
+        else if (after === "pencil")
+            this.app.tools.select("pencil");
+    }
+}

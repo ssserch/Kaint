@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QToolTip>
+#include <QVariantAnimation>
 #include <QWheelEvent>
 
 #include <cmath>
@@ -297,9 +298,13 @@ void ColorSwatches::setEditingSecondary(bool secondary)
     if (secondary == m_editingSecondary)
         return;
     m_editingSecondary = secondary;
-    // El pico de la ranura activa sale desde abajo (como el indicador de paint.js).
-    Animations::run(this, 0.0, 1.0, Animations::kIndicator, QEasingCurve::OutCubic, [this](qreal v) {
-        m_notch = v;
+    // Las dos ranuras cambian a la vez (como el indicador de paint.js): la que deja de estar
+    // activa pierde el pico y su marco adelgaza; la otra gana el pico y su marco crece.
+    if (m_switch)
+        m_switch->stop();
+    const qreal target = secondary ? 0.0 : 1.0;
+    m_switch = Animations::run(this, m_primaryLevel, target, Animations::kIndicator, QEasingCurve::OutCubic, [this](qreal v) {
+        m_primaryLevel = v;
         update();
     });
 }
@@ -315,45 +320,32 @@ void ColorSwatches::paintEvent(QPaintEvent*)
     QPainter p(this);
     // Como en Paint.NET: la ranura activa lleva marco negro, blanco y negro y un pico blanco
     // recortado abajo en el centro. El principal sin activar conserva el marco blanco, más fino
-    // y sin pico; el secundario sin activar, solo un marco negro fino.
-    auto swatch = [&](const QRectF& r, const QColor& c, bool active, bool framed) {
-        p.setRenderHint(QPainter::Antialiasing, false);
+    // y sin pico; el secundario sin activar, solo un marco negro fino. level va de 0 (sin
+    // activar) a 1 (activa) y pasa por los valores intermedios mientras se anima el cambio.
+    auto swatch = [&](const QRectF& r, const QColor& c, qreal level, bool framed) {
+        const qreal ring = framed ? 1 + level : 2 * level;  // anillo blanco
+        const qreal line = framed ? 1 : level;              // marco negro de dentro
+        p.setRenderHint(QPainter::Antialiasing, level > 0);
         p.fillRect(r, Qt::black);
-        if (!active && framed) {
-            p.fillRect(r.adjusted(1, 1, -1, -1), Qt::white);
-            p.fillRect(r.adjusted(2, 2, -2, -2), Qt::black);
-            const QRectF inner = r.adjusted(3, 3, -3, -3);
-            p.save();
-            p.setClipRect(inner);
-            paintCheckerboard(p, inner, 5);
-            p.fillRect(inner, c);
-            p.restore();
-            return;
-        }
-        if (!active) {
-            const QRectF inner = r.adjusted(1, 1, -1, -1);
-            p.save();
-            p.setClipRect(inner);
-            paintCheckerboard(p, inner, 5);
-            p.fillRect(inner, c);
-            p.restore();
-            return;
-        }
-        p.fillRect(r.adjusted(1, 1, -1, -1), Qt::white);
-        const QRectF inner = r.adjusted(3, 3, -3, -3);
+        const QRectF white = r.adjusted(1, 1, -1, -1);
+        if (ring > 0)
+            p.fillRect(white, Qt::white);
+        const QRectF inner = white.adjusted(ring, ring, -ring, -ring);
         QPainterPath frame;
         frame.addRect(inner);
         QPainterPath fill;
-        fill.addRect(inner.adjusted(1, 1, -1, -1));
-        const qreal cx = inner.center().x(), bottom = inner.bottom();
-        QPainterPath notch;
-        notch.addPolygon(QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom + 1 - 7 * m_notch), QPointF(cx + 5, bottom + 1)});
-        QPainterPath notchOutline;
-        notchOutline.addPolygon(
-            QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom + 1 - 8.5 * m_notch), QPointF(cx + 6.5, bottom + 1)});
-        frame = frame.subtracted(notch);
-        fill = fill.subtracted(notchOutline);
-        p.setRenderHint(QPainter::Antialiasing);
+        fill.addRect(inner.adjusted(line, line, -line, -line));
+        if (level > 0) {
+            const qreal cx = inner.center().x(), bottom = inner.bottom();
+            QPainterPath notch;
+            notch.addPolygon(
+                QPolygonF{QPointF(cx - 5, bottom + 1), QPointF(cx, bottom + 1 - 7 * level), QPointF(cx + 5, bottom + 1)});
+            QPainterPath notchOutline;
+            notchOutline.addPolygon(
+                QPolygonF{QPointF(cx - 6.5, bottom + 1), QPointF(cx, bottom + 1 - 8.5 * level), QPointF(cx + 6.5, bottom + 1)});
+            frame = frame.subtracted(notch);
+            fill = fill.subtracted(notchOutline);
+        }
         p.fillPath(frame, Qt::black);
         p.save();
         p.setClipPath(fill);
@@ -361,8 +353,8 @@ void ColorSwatches::paintEvent(QPaintEvent*)
         p.fillRect(inner, c);
         p.restore();
     };
-    swatch(secondaryRect(), m_secondary, m_editingSecondary, false);
-    swatch(primaryRect(), m_primary, !m_editingSecondary, true);
+    swatch(secondaryRect(), m_secondary, 1 - m_primaryLevel, false);
+    swatch(primaryRect(), m_primary, m_primaryLevel, true);
 
     // Flecha doble para intercambiar (el icono de paint.js).
     p.setRenderHint(QPainter::Antialiasing);

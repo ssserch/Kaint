@@ -1071,6 +1071,18 @@ Opacity: %2 · Blend: %3</translation>
         <translation>Swap colors</translation>
     </message>
     <message>
+        <source>&amp;Documentación</source>
+        <translation>&amp;Documentation</translation>
+    </message>
+    <message>
+        <source>&amp;Foro</source>
+        <translation>&amp;Forum</translation>
+    </message>
+    <message>
+        <source>&amp;Tutoriales</source>
+        <translation>&amp;Tutorials</translation>
+    </message>
+    <message>
         <source>Cambiar la ranura de color activa</source>
         <translation>Toggle the active color slot</translation>
     </message>
@@ -5322,6 +5334,10 @@ Do you want to replace them?</translation>
     <message>
         <source>El trazo del pincel se suavizará utilizando una curva segmentaria Catmull-Rom centrípeta.</source>
         <translation>The brush stroke will be smoothed using a centripetal Catmull-Rom spline.</translation>
+    </message>
+    <message>
+        <source>Presión</source>
+        <translation>Pressure</translation>
     </message>
     <message>
         <source>La presión del lápiz de la tableta controla el tamaño del pincel</source>

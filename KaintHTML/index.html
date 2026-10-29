@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kaint</title>
+    <meta name="description" content="Kaint for the web: the Paint.NET-style image editor, in your browser.">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/kaint-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="assets/kaint-64.png">
+    <link rel="apple-touch-icon" href="assets/kaint-256.png">
+    <link rel="stylesheet" href="css/kaint.css">
+</head>
+<body>
+    <div id="app">
+        <header id="top-row">
+            <div class="top-left">
+                <nav id="menubar" class="menubar"></nav>
+                <div id="main-toolbar" class="toolbar"></div>
+            </div>
+            <div id="image-strip" class="image-strip"></div>
+            <div id="corner-buttons" class="corner-buttons"></div>
+        </header>
+        <div id="tool-options" class="toolbar tool-options"></div>
+        <main id="workspace" class="workspace">
+            <canvas id="view" tabindex="0"></canvas>
+            <div class="scrollbar h"><div class="thumb"></div></div>
+            <div class="scrollbar v"><div class="thumb"></div></div>
+            <div class="scroll-corner"></div>
+            <div class="drop-hint"></div>
+        </main>
+        <footer id="status-bar" class="status-bar"></footer>
+    </div>
+    <textarea class="text-input" id="text-input" spellcheck="false" autocomplete="off"></textarea>
+    <noscript>Kaint needs JavaScript.</noscript>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

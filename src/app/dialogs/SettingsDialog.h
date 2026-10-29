@@ -28,6 +28,15 @@ struct AppSettings {
     bool autoScroll = true;
     bool autoSelectVisibleLayer = false;
     bool coloredToolIcons = true;
+    // Abrir y Guardar como con el diálogo del sistema (el de Firefox y los demás programas) o con
+    // el de Qt.
+    bool systemFileDialogs = true;
+    // Cursores con una miniatura al lado (selección, degradado, línea, texto y formas): la flecha
+    // del tema de cursores del sistema o la de Kaint.
+    bool systemPointer = true;
+    // Capas: al arrastrar una, se mueve en la lista con el ratón; con esto, se queda en su sitio
+    // y una línea marca dónde quedará.
+    bool layerDropLine = false;
     // Ventanas flotantes: 0, como las de paint.js (Windows 10); 1, compactas. Grosor del borde
     // en píxeles.
     int panelStyle = 0;

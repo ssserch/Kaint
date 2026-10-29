@@ -108,26 +108,36 @@ check((await pixel(20, 10))[3] < 255, "la goma borra");
 }
 
 // Selección, degradado, línea, texto y formas: el puntero con la herramienta en miniatura al lado
-// (en Formas, la forma elegida).
+// (en Formas, la forma elegida): el del sistema con la miniatura aparte (por defecto) o el de Kaint.
 {
     const cursors = await page.evaluate(async () => {
         const { AppState } = await import("./js/AppState.js");
-        const k = window.kaint, out = {};
-        for (const id of ["rectangleselect", "lassoselect", "ellipseselect", "gradient", "linecurve", "text", "shapes"]) {
-            k.tools.select(id);
-            out[id] = k.view.canvas.style.cursor;
+        const { Settings } = await import("./js/Settings.js");
+        const k = window.kaint, out = { system: {}, kaint: {} };
+        for (const mode of ["system", "kaint"]) {
+            Settings.set("systemPointer", mode === "system");
+            const read = () => ({ cursor: k.view.canvas.style.cursor, mini: k.view.mini?.name ?? null });
+            for (const id of ["rectangleselect", "lassoselect", "ellipseselect", "gradient", "linecurve", "text", "shapes"]) {
+                k.tools.select(id);
+                out[mode][id] = read();
+            }
+            const old = AppState.tools.shape;
+            AppState.updateTools({ shape: "heart" });
+            out[mode].heart = read();
+            AppState.updateTools({ shape: old });
         }
-        const old = AppState.tools.shape;
-        AppState.updateTools({ shape: "heart" });
-        out.heart = k.view.canvas.style.cursor;
-        AppState.updateTools({ shape: old });
+        Settings.set("systemPointer", true);
         k.tools.select("pencil");
         return out;
     });
     const arrows = ["rectangleselect", "lassoselect", "ellipseselect", "gradient", "linecurve", "shapes"];
-    check(arrows.every((id) => cursors[id].includes("image-set") && cursors[id].endsWith(" 0 0, default"))
-          && cursors.text.endsWith(" 4 8, text") && cursors.heart !== cursors.shapes && cursors.gradient !== cursors.linecurve,
-          "las herramientas con miniatura muestran el puntero con su icono al lado");
+    const sys = cursors.system, own = cursors.kaint;
+    check(arrows.every((id) => sys[id].cursor === "default" && sys[id].mini) && sys.text.cursor === "text" && sys.text.mini === "text"
+          && sys.heart.mini !== sys.shapes.mini && sys.gradient.mini !== sys.linecurve.mini,
+          "con el puntero del sistema, las herramientas con miniatura la llevan al lado");
+    check(arrows.every((id) => own[id].cursor.includes("image-set") && own[id].cursor.endsWith(" 0 0, default") && !own[id].mini)
+          && own.text.cursor.endsWith(" 4 8, text") && own.heart.cursor !== own.shapes.cursor && own.gradient.cursor !== own.linecurve.cursor,
+          "las herramientas con miniatura muestran el puntero de Kaint con su icono al lado");
 }
 
 // Cubo de pintura (relleno global y contiguo) y varita mágica
@@ -481,6 +491,149 @@ const misc = await page.evaluate(async () => {
     return { light, dark, classic, custom, cursor: cursor.includes("image-set") && cursor.includes(" 2 18"), over };
 });
 check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && misc.cursor && misc.over, `apariencia y cámara (${JSON.stringify(misc)})`);
+
+// Ventanas como las de Kaint: Herramientas empieza estrecha, con dos columnas, y al ensancharla se
+// queda con las columnas enteras que caben.
+{
+    await page.evaluate(() => Object.values(window.kaint.panels).forEach((p) => p.reset()));
+    const columns = () => page.evaluate(() => getComputedStyle(document.querySelector(".tools-grid")).getPropertyValue("--columns").trim());
+    const before = await columns();
+    const b = await page.evaluate(() => {
+        const r = document.querySelector('.floating-panel[data-panel="tools"]').getBoundingClientRect();
+        return { x: r.right, y: r.top + r.height / 2, w: r.width };
+    });
+    await page.mouse.move(b.x + 1, b.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x + 64, b.y, { steps: 6 });
+    await page.mouse.up();
+    const after = await columns();
+    await page.evaluate(() => window.kaint.panels.tools.reset());
+    check(before === "2" && b.w < 90 && after === "4", `Herramientas: dos columnas al empezar y columnas enteras al ensancharla (${before}, ${b.w}, ${after})`);
+}
+
+// Colores con «Más», como en Kaint: RGB, MSV y opacidad con un deslizador y una caja por canal, el
+// código hexadecimal y los 96 colores.
+{
+    const colors = await page.evaluate(async () => {
+        const { AppState } = await import("./js/AppState.js");
+        AppState.setSecondaryActive(false);
+        const panel = document.querySelector(".colors-panel"), more = panel.querySelector(".more-button");
+        more.click();
+        const ext = panel.querySelector(".extended");
+        const out = { shown: getComputedStyle(ext).display !== "none", sliders: ext.querySelectorAll(".channel-slider").length,
+                      spins: ext.querySelectorAll('input[type="number"]').length, sections: ext.querySelectorAll(".section").length,
+                      palette: panel.querySelectorAll(".palette .swatch").length, wide: panel.offsetWidth };
+        const hex = ext.querySelector(".hex");
+        hex.value = "12AB34";
+        hex.dispatchEvent(new Event("input"));
+        hex.dispatchEvent(new Event("change"));
+        out.hex = AppState.primary.r === 0x12 && AppState.primary.g === 0xab && AppState.primary.b === 0x34;
+        const red = ext.querySelector('input[type="number"]');
+        red.value = "200";
+        red.dispatchEvent(new Event("input"));
+        out.red = AppState.primary.r === 200;
+        more.click();
+        out.back = getComputedStyle(ext).display === "none" && panel.querySelectorAll(".palette .swatch").length === 32;
+        AppState.resetColors();
+        return out;
+    });
+    check(colors.shown && colors.sliders === 7 && colors.spins === 7 && colors.sections === 3 && colors.palette === 96 && colors.wide > 400
+          && colors.hex && colors.red && colors.back, `Colores ampliada como en Kaint (${JSON.stringify(colors)})`);
+}
+
+// Capas: al arrastrar una, se mueve con el ratón y queda donde se suelta.
+{
+    await page.evaluate(() => {
+        window.kaint.actions.get("addLayer").run();
+        window.kaint.actions.get("addLayer").run();
+    });
+    await page.waitForTimeout(200);
+    const names = () => page.evaluate(() => window.kaint.doc.layers.map((l) => l.id));
+    const before = await names();
+    const rows = await page.evaluate(() => [...document.querySelectorAll(".layer-list .row")].map((r) => {
+        const b = r.getBoundingClientRect();
+        return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+    }));
+    await page.mouse.move(rows[0].x, rows[0].y);
+    await page.mouse.down();
+    await page.mouse.move(rows[0].x, rows[2].y, { steps: 10 });
+    const live = await page.evaluate(() => !!document.querySelector(".layer-list .row.live"));
+    await page.mouse.up();
+    const after = await names();
+    for (let i = 0; i < 3; ++i)
+        await page.evaluate(() => window.kaint.undo());
+    const n = before.length;
+    check(live && after[n - 3] === before[n - 1] && after[n - 2] === before[n - 3] && after[n - 1] === before[n - 2],
+          `las capas se arrastran en vivo (${before} → ${after})`);
+}
+
+// Seleccionando, la rueda desplaza la vista y la selección sigue al puntero sobre la imagen.
+{
+    await tool("rectangleselect");
+    await page.evaluate(() => {
+        window.kaint.view.setZoom(4);
+        window.kaint.view.centerOn(20, 20);
+    });
+    const p = await at(20, 20);
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    await page.mouse.move(p.x + 40, p.y + 40, { steps: 4 });
+    const before = await page.evaluate(() => window.kaint.doc.selection.bounds()?.h ?? 0);
+    await page.mouse.wheel(0, 120);
+    await page.waitForTimeout(50);
+    const after = await page.evaluate(() => window.kaint.doc.selection.bounds()?.h ?? 0);
+    await page.mouse.up();
+    await page.evaluate(() => {
+        window.kaint.view.zoomToWindow();
+        window.kaint.undo();
+    });
+    check(after > before, `la rueda desplaza la vista durante la selección y esta sigue al puntero (${before} → ${after})`);
+}
+
+// Mover píxeles seleccionados: al cambiar el tamaño, píxel a píxel (las esquinas en píxeles
+// enteros).
+{
+    const corners = await page.evaluate(async () => {
+        const { Selection } = await import("./js/core/Selection.js");
+        const k = window.kaint, doc = k.doc;
+        doc.setSelection(Selection.rect(doc.width, doc.height, 10, 10, 1, 20));
+        k.tools.select("moveselectedpixels");
+        const tool = k.tools.current, view = k.view;
+        const ev = (x, y, button = "left") => { const v = view.imageToView(x, y); return { x, y, vx: v.x, vy: v.y, button, shift: false, ctrl: false, alt: false }; };
+        tool.onPointerDown(ev(11, 20));
+        tool.drag = { ...tool.drag, kind: "resize", handle: 3 };
+        tool.onPointerMove(ev(14.37, 20));
+        tool.onPointerMove(ev(16.71, 20.4));
+        const box = tool.drag.session.box, m = box.matrix(), b = box.base;
+        const pts = [m.transformPoint({ x: b.x, y: b.y }), m.transformPoint({ x: b.x + b.w, y: b.y + b.h })];
+        tool.onPointerUp(ev(16.71, 20.4));
+        k.undo();
+        k.undo();
+        return pts.flatMap((q) => [q.x, q.y]);
+    });
+    check(corners.every((v) => Math.abs(v - Math.round(v)) < 1e-6) && corners[2] - corners[0] > 1,
+          `al cambiar el tamaño con Mover, píxel a píxel (${corners})`);
+}
+
+// Pincel y goma: el contorno va en el propio cursor (sin el retraso del lienzo) si cabe.
+{
+    const brush = await page.evaluate(async () => {
+        const { AppState } = await import("./js/AppState.js");
+        const k = window.kaint;
+        k.view.setZoom(1);
+        const size = AppState.tools.brushSize;
+        AppState.updateTools({ brushSize: 30 });
+        k.tools.select("eraser");
+        const small = { inCursor: k.view.outlineInCursor, cursor: k.view.canvas.style.cursor };
+        AppState.updateTools({ brushSize: 400 });
+        const big = k.view.outlineInCursor;
+        AppState.updateTools({ brushSize: size });
+        k.view.zoomToWindow();
+        k.tools.select("pencil");
+        return { small: small.inCursor && small.cursor.includes("image-set"), big };
+    });
+    check(brush.small && !brush.big, `el contorno del pincel va en el cursor si cabe (${JSON.stringify(brush)})`);
+}
 
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {

@@ -10,6 +10,11 @@ const defaults = {
     autoScroll: true,
     autoSelectVisibleLayer: false,
     coloredToolIcons: true,
+    // Capas: al arrastrar una, se mueve en la lista con el ratón; con esto, se queda en su sitio
+    // y una línea marca dónde quedará.
+    layerDropLine: false,
+    // Cursores con la herramienta en miniatura al lado: el puntero del sistema o el de Kaint.
+    systemPointer: true,
     colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro
     language: navigator.language?.toLowerCase().startsWith("es") ? "es" : "en",
     dropShadow: true,

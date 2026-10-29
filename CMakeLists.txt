@@ -119,6 +119,7 @@ add_library(kaintui STATIC
     src/app/DiscordPresence.cpp
     src/app/IconPacks.cpp
     src/app/Shortcuts.cpp
+    src/app/SystemCursors.cpp
     src/app/UserFonts.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp

@@ -178,7 +178,7 @@ export class PaintBucketTool extends EditableFill {
     onPointerMove(e) {
         if (!this.drag) {
             if (this.editing)
-                this.view.canvas.style.cursor = nearPoint(e, this.handlePos(), 11) ? "move" : this.cursor();
+                this.view.setCursor(nearPoint(e, this.handlePos(), 11) ? "move" : this.cursor());
             return;
         }
         const doc = this.doc;
@@ -350,7 +350,7 @@ export class GradientTool extends EditableFill {
     onPointerMove(e) {
         if (!this.drag) {
             if (this.editing)
-                this.view.canvas.style.cursor = nearPoint(e, this.moveHandle(), 11) ? "move" : this.cursor();
+                this.view.setCursor(nearPoint(e, this.moveHandle(), 11) ? "move" : this.cursor());
             return;
         }
         let p = { x: e.x, y: e.y };

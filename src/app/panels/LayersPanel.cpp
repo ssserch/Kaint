@@ -7,6 +7,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QListWidget>
 #include <QScrollBar>
 #include <QMouseEvent>
@@ -27,6 +28,8 @@ constexpr int ThumbRole = Qt::UserRole + 2;
 constexpr int LinkedRole = Qt::UserRole + 3;
 // Desplazamiento vertical de la fila mientras se desliza a su sitio nuevo.
 constexpr int OffsetRole = Qt::UserRole + 4;
+// Fila que se arrastra en vivo: no se pinta (la sustituye su imagen, que sigue al ratón).
+constexpr int DraggedRole = Qt::UserRole + 5;
 
 class LayerDelegate : public QStyledItemDelegate {
 public:
@@ -42,8 +45,14 @@ public:
 
     void paint(QPainter* p, const QStyleOptionViewItem& optionIn, const QModelIndex& index) const override
     {
+        if (index.data(DraggedRole).toBool())
+            return;
         QStyleOptionViewItem option(optionIn);
-        option.rect.translate(0, qRound(index.data(OffsetRole).toReal()));
+        // Una fila que se desliza no está donde el puntero: no se resalta al pasar por encima.
+        const int offset = qRound(index.data(OffsetRole).toReal());
+        option.rect.translate(0, offset);
+        if (offset != 0)
+            option.state &= ~QStyle::State_MouseOver;
         QStyleOptionViewItem opt(option);
         initStyleOption(&opt, index);
         const QWidget* w = option.widget;
@@ -154,6 +163,23 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
     m_thumbTimer.setSingleShot(true);
     m_thumbTimer.setInterval(250);
     connect(&m_thumbTimer, &QTimer::timeout, this, &LayersPanel::updateThumbnails);
+
+    // Con el ratón por encima o por debajo de la lista, se desplaza mientras se arrastra.
+    m_dragScroll.setInterval(60);
+    connect(&m_dragScroll, &QTimer::timeout, this, [this] {
+        QScrollBar* bar = m_list->verticalScrollBar();
+        const int h = m_list->viewport()->height();
+        const int step = m_lastDragY < 0 ? -1 : m_lastDragY >= h ? 1 : 0;
+        if (!m_dragging || step == 0 || bar->value() + step < bar->minimum() || bar->value() + step > bar->maximum()) {
+            m_dragScroll.stop();
+            return;
+        }
+        bar->setValue(bar->value() + step);
+        if (m_ghost)
+            updateLiveDrag(m_lastDragY);
+        else
+            showDropLine(targetRowAt(m_lastDragY));
+    });
 }
 
 bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
@@ -185,11 +211,21 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
     case QEvent::MouseMove: {
         auto* me = static_cast<QMouseEvent*>(e);
         if (m_dragRow >= 0 && (me->buttons() & Qt::LeftButton)) {
-            if (!m_dragging && (me->position().toPoint() - m_pressPos).manhattanLength() > QApplication::startDragDistance())
+            if (!m_dragging && (me->position().toPoint() - m_pressPos).manhattanLength() > QApplication::startDragDistance()) {
                 m_dragging = true;
+                if (!m_dropLineMode)
+                    startLiveDrag();
+            }
             if (m_dragging) {
-                m_list->viewport()->setCursor(Qt::DragMoveCursor);
-                showDropLine(m_list->indexAt(me->position().toPoint()).row());
+                m_lastDragY = me->position().toPoint().y();
+                if (m_ghost) {
+                    updateLiveDrag(m_lastDragY);
+                } else {
+                    m_list->viewport()->setCursor(Qt::DragMoveCursor);
+                    showDropLine(targetRowAt(m_lastDragY));
+                }
+                if (m_lastDragY < 0 || m_lastDragY >= m_list->viewport()->height())
+                    m_dragScroll.start();
                 return true;
             }
         }
@@ -202,17 +238,22 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
             return true;
         }
         if (m_dragging) {
+            m_dragScroll.stop();
             m_list->viewport()->unsetCursor();
             m_dropLine->hide();
-            int target = m_list->indexAt(me->position().toPoint()).row();
-            if (target < 0)
-                target = me->position().y() < 0 ? 0 : m_list->count() - 1;
+            const int target = m_ghost ? m_liveTarget : targetRowAt(me->position().toPoint().y());
             const int from = layerForRow(m_dragRow);
             const int to = layerForRow(target);
+            if (m_ghost)
+                finishLiveDrag();
             m_dragging = false;
             m_dragRow = -1;
-            if (from != to)
+            if (from != to) {
+                // Las filas ya se ven en su sitio nuevo: al rehacer la lista no se deslizan.
+                if (!m_dropLineMode)
+                    m_rowLayers.clear();
                 emit moveRequested(from, to);
+            }
             return true;
         }
         m_dragRow = -1;
@@ -222,6 +263,91 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
         break;
     }
     return QWidget::eventFilter(obj, e);
+}
+
+int LayersPanel::targetRowAt(int y) const
+{
+    // La fila bajo el puntero o, por encima o por debajo de la lista, la primera o la última.
+    const int row = m_list->indexAt(QPoint(m_list->viewport()->width() / 2, y)).row();
+    if (row >= 0)
+        return row;
+    const QRect first = m_list->visualRect(m_list->model()->index(0, 0));
+    return y < first.top() ? 0 : m_list->count() - 1;
+}
+
+void LayersPanel::startLiveDrag()
+{
+    // La fila se cambia por su imagen, que sigue al ratón; las demás se apartan para dejarle
+    // sitio donde quedaría (como en paint.js).
+    if (m_dragRow < 0 || m_dragRow >= m_list->count())
+        return;
+    // Las filas que aún se deslizaban (una capa recién añadida) se quedan en su sitio.
+    if (m_slide)
+        m_slide->stop();
+    for (int row = 0; row < m_list->count(); ++row)
+        m_list->item(row)->setData(OffsetRole, 0.0);
+    const QRect r = m_list->visualRect(m_list->model()->index(m_dragRow, 0));
+    m_ghost = new QLabel(m_list->viewport());
+    m_ghost->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_ghost->setPixmap(m_list->viewport()->grab(r));
+    m_ghost->setGeometry(r);
+    m_ghost->setFrameShape(QFrame::NoFrame);
+    m_ghost->show();
+    m_ghost->raise();
+    m_grabOffset = m_pressPos.y() - r.top();
+    m_liveTarget = m_dragRow;
+    m_list->item(m_dragRow)->setData(DraggedRole, true);
+    m_list->viewport()->setCursor(Qt::ClosedHandCursor);
+}
+
+void LayersPanel::updateLiveDrag(int y)
+{
+    if (!m_ghost)
+        return;
+    const int h = m_ghost->height();
+    const int top = std::clamp(y - m_grabOffset, -h / 2, m_list->viewport()->height() - h / 2);
+    m_ghost->move(m_ghost->x(), top);
+    const int target = targetRowAt(top + h / 2);
+    if (target == m_liveTarget)
+        return;
+    m_liveTarget = target;
+    // Las filas entre la de origen y la de destino se mueven una fila hacia el hueco.
+    const int rowHeight = h;
+    QHash<int, std::pair<qreal, qreal>> moves;
+    for (int row = 0; row < m_list->count(); ++row) {
+        if (row == m_dragRow)
+            continue;
+        qreal want = 0;
+        if (m_dragRow < target && row > m_dragRow && row <= target)
+            want = -rowHeight;
+        else if (m_dragRow > target && row >= target && row < m_dragRow)
+            want = rowHeight;
+        const qreal now = m_list->item(row)->data(OffsetRole).toReal();
+        if (now != want)
+            moves.insert(row, {now, want});
+    }
+    if (m_makeRoom)
+        m_makeRoom->stop();
+    m_makeRoom = Animations::run(this, 0.0, 1.0, Animations::kListMove, Animations::listMoveCurve(), [this, moves](qreal v) {
+        for (auto it = moves.constBegin(); it != moves.constEnd(); ++it)
+            if (QListWidgetItem* item = m_list->item(it.key()))
+                item->setData(OffsetRole, it->first + (it->second - it->first) * v);
+        m_list->viewport()->update();
+    });
+}
+
+void LayersPanel::finishLiveDrag()
+{
+    if (m_makeRoom)
+        m_makeRoom->stop();
+    delete m_ghost;
+    m_ghost = nullptr;
+    for (int row = 0; row < m_list->count(); ++row) {
+        m_list->item(row)->setData(OffsetRole, 0.0);
+        m_list->item(row)->setData(DraggedRole, false);
+    }
+    m_liveTarget = -1;
+    m_list->viewport()->update();
 }
 
 void LayersPanel::showDropLine(int targetRow)
@@ -288,6 +414,14 @@ void LayersPanel::setDocument(Document* doc)
 
 void LayersPanel::rebuild()
 {
+    // Si la lista cambia mientras se arrastra (deshacer, otra imagen...), el arrastre se anula.
+    if (m_ghost) {
+        finishLiveDrag();
+        m_dragging = false;
+        m_dragRow = -1;
+        m_dragScroll.stop();
+        m_list->viewport()->unsetCursor();
+    }
     // Se conserva el desplazamiento: marcar la casilla de otra capa no debe saltar a la activa.
     const QSignalBlocker block(m_list);
     const int scroll = m_list->verticalScrollBar()->value();

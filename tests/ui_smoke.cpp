@@ -12,6 +12,7 @@
 #include "app/Recovery.h"
 #include "app/Ruler.h"
 #include "app/Shortcuts.h"
+#include "app/SystemCursors.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
@@ -1260,7 +1261,9 @@ int main(int argc, char** argv)
         CHECK(canvas->viewport()->cursor().shape() == Qt::BitmapCursor);
         CHECK(Icons::rotateCursor(0).pixmap().toImage() != Icons::rotateCursor(M_PI / 2).pixmap().toImage());
         // Selección, degradado y línea: la flecha (punto activo en la punta) con el icono en
-        // miniatura; el texto, la I; las formas, la forma elegida.
+        // miniatura; el texto, la I; las formas, la forma elegida. Con la flecha de Kaint (la del
+        // sistema se prueba más abajo con un tema de cursores de prueba).
+        Icons::setSystemPointer(false);
         for (ToolId id : {ToolId::RectSelect, ToolId::LassoSelect, ToolId::EllipseSelect, ToolId::Gradient, ToolId::Line}) {
             tools->select(id);
             const QCursor c = tools->current()->cursor();
@@ -1289,6 +1292,7 @@ int main(int argc, char** argv)
             Icons::paintUnsavedStar(p, QRectF(0, 0, 32, 32));
         }
         CHECK(star.pixelColor(16, 3).red() > 200 && star.pixelColor(16, 3).blue() < 80 && star.pixelColor(16, 16) == QColor(Qt::white));
+        Icons::setSystemPointer(true);
     }
 
     // Atajos de teclado editables: cambiar uno lo quita de la acción que lo usaba; restablecer
@@ -2352,8 +2356,10 @@ int main(int argc, char** argv)
         settle();
         CHECK(QColor(d->layer(0)->image.pixel(140, 140)) == QColor(0, 0, 200) && qAlpha(d->layer(1)->image.pixel(140, 160)) == 0);
 
-        // Arrastrar una capa en la lista muestra la línea de dónde quedará.
+        // Con la opción de Configuración, arrastrar una capa en la lista muestra la línea de dónde
+        // quedará (por defecto, la fila sigue al ratón).
         if (list) {
+            w.findChild<LayersPanel*>()->setDropLineMode(true);
             const QPoint from = list->visualItemRect(list->item(0)).center();
             const QPoint to = list->visualItemRect(list->item(1)).center();
             auto send = [list](QEvent::Type type, QPoint at, Qt::MouseButtons buttons) {
@@ -2369,6 +2375,7 @@ int main(int argc, char** argv)
                 lineShown = lineShown || (child->isVisible() && child->height() <= 4 && child->width() > 50);
             CHECK(lineShown);
             send(QEvent::MouseButtonRelease, to, Qt::NoButton);
+            w.findChild<LayersPanel*>()->setDropLineMode(false);
         }
     }
 
@@ -2571,6 +2578,213 @@ int main(int argc, char** argv)
         waitSwitch();
         CHECK(band(false) == QColor(Qt::white) && band(true) == QColor(Qt::blue));
         state->resetColors();
+    }
+
+    // Contorno de una selección rectangular: el interior azul y las hormigas en los mismos
+    // píxeles, sin quedarse un píxel de más a la derecha ni abajo.
+    {
+        Document* d = canvas->document();
+        QPainter(&d->activeLayer()->image).fillRect(d->rect(), QColor(200, 60, 40));
+        d->notifyPixelsChanged(d->activeLayer(), d->rect());
+        canvas->setZoom(1);
+        tools->select(ToolId::RectSelect);
+        settle();
+        drag(canvas, {QPointF(10, 10), QPointF(30, 25), QPointF(60, 40)});
+        const QImage view = canvas->viewport()->grab().toImage();
+        const QRectF v = canvas->imageToView(QRectF(10, 10, 50, 30));
+        const int right = int(std::lround(v.right())), bottom = int(std::lround(v.bottom())), midY = int(v.center().y());
+        const int midX = int(v.center().x());
+        auto tinted = [&](int x, int y) { const QColor c(view.pixel(x, y)); return c.blue() > 60 && c.red() < 200; };
+        auto layerColor = [&](int x, int y) { return QColor(view.pixel(x, y)) == QColor(200, 60, 40); };
+        CHECK(tinted(right - 1, midY) && layerColor(right + 1, midY));
+        CHECK(tinted(midX, bottom - 1) && layerColor(midX, bottom + 1));
+        CHECK(!layerColor(right, midY) && !tinted(right, midY));
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        settle();
+    }
+
+    // Seleccionando, la rueda desplaza la vista y la selección sigue al puntero sobre la imagen.
+    {
+        canvas->setZoom(4);
+        canvas->scrollByView(canvas->imageToView(QPointF(40, 40)) - QRectF(canvas->viewport()->rect()).center());
+        tools->select(ToolId::RectSelect);
+        settle();
+        QWidget* vp = canvas->viewport();
+        auto mouse = [&](QEvent::Type type, const QPointF& img, Qt::MouseButton b, Qt::MouseButtons bs) {
+            const QPointF p = canvas->imageToView(img);
+            QMouseEvent e(type, p, vp->mapToGlobal(p), b, bs, Qt::NoModifier);
+            QApplication::sendEvent(vp, &e);
+        };
+        mouse(QEvent::MouseButtonPress, QPointF(30, 30), Qt::LeftButton, Qt::LeftButton);
+        mouse(QEvent::MouseMove, QPointF(40, 40), Qt::NoButton, Qt::LeftButton);
+        const QPointF at = canvas->imageToView(QPointF(40, 40));
+        const int before = canvas->document()->selection().bounds().height();
+        QWheelEvent wheel(at, vp->mapToGlobal(at), QPoint(), QPoint(0, -120), Qt::LeftButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(vp, &wheel);
+        settle();
+        const int after = canvas->document()->selection().bounds().height();
+        QMouseEvent release(QEvent::MouseButtonRelease, at, vp->mapToGlobal(at), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(vp, &release);
+        settle();
+        CHECK(after > before);
+        findAction(&w, QStringLiteral("Anular la selección"))->trigger();
+        canvas->zoomToWindow();
+        settle();
+    }
+
+    // Al mover píxeles con zum, repintar solo lo que cambia deja el fondo de alrededor igual que
+    // al repintarlo todo (antes se corría un píxel).
+    {
+        Document* d = canvas->document();
+        QImage& bg = d->activeLayer()->image;
+        for (int y = 0; y < 120; ++y)
+            for (int x = 0; x < 120; ++x)
+                bg.setPixel(x, y, ((x / 3 + y / 2) % 2) ? qRgba(20, 20, 160, 255) : qRgba(240, 200, 30, 255));
+        d->notifyPixelsChanged(d->activeLayer(), QRect(0, 0, 120, 120));
+        canvas->setZoom(2.33);
+        canvas->scrollByView(canvas->imageToView(QPointF(60, 60)) - QRectF(canvas->viewport()->rect()).center());
+        settle();
+        const QImage before = canvas->viewport()->grab().toImage();
+        const QRect dirty = canvas->imageToView(QRectF(40, 40, 30, 30)).toAlignedRect();
+        QPixmap partial = QPixmap::fromImage(before);
+        canvas->viewport()->render(&partial, dirty.topLeft(), QRegion(dirty), QWidget::DrawChildren);
+        CHECK(partial.toImage() == canvas->viewport()->grab().toImage());
+        canvas->zoomToWindow();
+        settle();
+    }
+
+    // Capas: al arrastrar una, la fila sigue al ratón, las demás le dejan sitio y queda donde se
+    // suelta.
+    if (auto* list = w.findChild<LayersPanel*>()->findChild<QListWidget*>()) {
+        Document* d = canvas->document();
+        while (d->layerCount() < 3)
+            findAction(&w, QStringLiteral("Agregar nueva capa"))->trigger();
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < Animations::kListMove + 60)
+            QApplication::processEvents(QEventLoop::AllEvents, 10);
+        const int n = d->layerCount();
+        QList<const Layer*> before;
+        for (int i = 0; i < n; ++i)
+            before << d->layer(i);
+        QWidget* vp = list->viewport();
+        const QRect r0 = list->visualRect(list->model()->index(0, 0)), r2 = list->visualRect(list->model()->index(2, 0));
+        auto send = [vp](QEvent::Type type, QPoint p, Qt::MouseButton b, Qt::MouseButtons bs) {
+            QMouseEvent e(type, QPointF(p), vp->mapToGlobal(QPointF(p)), b, bs, Qt::NoModifier);
+            QApplication::sendEvent(vp, &e);
+        };
+        send(QEvent::MouseButtonPress, r0.center(), Qt::LeftButton, Qt::LeftButton);
+        for (int y = r0.center().y(); y <= r2.center().y(); y += 4)
+            send(QEvent::MouseMove, QPoint(r0.center().x(), y), Qt::NoButton, Qt::LeftButton);
+        CHECK(list->findChild<QLabel*>() != nullptr);
+        send(QEvent::MouseButtonRelease, QPoint(r0.center().x(), r2.center().y()), Qt::LeftButton, Qt::NoButton);
+        settle();
+        // La de arriba del todo pasa a la tercera fila; las dos de debajo suben una.
+        CHECK(d->layer(n - 3) == before[n - 1] && d->layer(n - 1) == before[n - 2] && d->layer(n - 2) == before[n - 3]);
+        CHECK(list->findChild<QLabel*>() == nullptr);
+        d->undoStack()->undo();
+        settle();
+    }
+
+    // Tamaño de letra: con el campo enfocado tras un clic, los botones − y + también cambian el
+    // número que se ve.
+    {
+        tools->select(ToolId::Text);
+        settle();
+        QComboBox* size = nullptr;
+        for (QComboBox* c : w.findChildren<QComboBox*>())
+            if (c->findText(QStringLiteral("288")) >= 0 && c->isVisible())
+                size = c;
+        CHECK(size);
+        if (size) {
+            QToolButton* plus = nullptr;
+            for (QToolButton* b : size->parentWidget()->findChildren<QToolButton*>())
+                if (b->toolTip() == QLatin1String("Aumentar"))
+                    plus = b;
+            CHECK(plus);
+            size->lineEdit()->setFocus();
+            settle();
+            const QString before = size->currentText();
+            if (plus)
+                plus->click();
+            settle();
+            CHECK(size->currentText() != before && size->currentText() == QString::number(state->tools().fontSize));
+        }
+    }
+
+    // Fuente escrita a mano: un clic fuera la aplica (antes volvía a la de antes). La lista lleva
+    // barra de desplazamiento.
+    if (auto* font = w.findChild<FontChooser*>()) {
+        CHECK(font->style()->styleHint(QStyle::SH_ComboBox_Popup, nullptr, font) == 0);
+        const QString target = font->itemText(font->count() > 1 ? 1 : 0);
+        if (font->currentText() == target && font->count() > 2)
+            font->setCurrentIndex(2);
+        QLineEdit* edit = font->lineEdit();
+        QMouseEvent dbl(QEvent::MouseButtonDblClick, QPointF(5, 5), edit->mapToGlobal(QPointF(5, 5)), Qt::LeftButton, Qt::LeftButton,
+                        Qt::NoModifier);
+        QApplication::sendEvent(edit, &dbl);
+        CHECK(font->isEditingName());
+        edit->setText(target);
+        QWidget* vp = canvas->viewport();
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(5, 5), vp->mapToGlobal(QPointF(5, 5)), Qt::LeftButton, Qt::LeftButton,
+                          Qt::NoModifier);
+        QApplication::sendEvent(vp, &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(5, 5), vp->mapToGlobal(QPointF(5, 5)), Qt::LeftButton,
+                            Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(vp, &release);
+        settle();
+        CHECK(!font->isEditingName() && font->currentText() == target && state->tools().fontFamily == font->currentFont().family());
+        tools->select(ToolId::RectSelect);
+        settle();
+    }
+
+    // Diálogos de archivos del sistema por defecto.
+    CHECK(!QApplication::testAttribute(Qt::AA_DontUseNativeDialogs));
+    CHECK(!Icons::system({"edit-undo"}).isNull());
+
+    // Cursores con miniatura: la flecha del tema de cursores del sistema (XCursor) con la
+    // miniatura al lado, o la de Kaint si no hay tema.
+    {
+        QTemporaryDir icons;
+        QDir().mkpath(icons.filePath(QStringLiteral("Prueba/cursors")));
+        QByteArray file("Xcur");
+        auto u32 = [&file](quint32 v) { file.append(reinterpret_cast<const char*>(&v), 4); };
+        const quint32 side = 24;
+        u32(16); u32(0x10000); u32(1);
+        u32(0xfffd0002); u32(side); u32(16 + 12);
+        u32(36); u32(0xfffd0002); u32(side); u32(1); u32(side); u32(side); u32(5); u32(4); u32(0);
+        for (quint32 y = 0; y < side; ++y)
+            for (quint32 x = 0; x < side; ++x)
+                u32(x >= 5 && y >= 4 && x - 5 <= (y - 4) / 2 && y < 20 ? 0xff1e78dcu : 0u);
+        QFile out(icons.filePath(QStringLiteral("Prueba/cursors/left_ptr")));
+        CHECK(out.open(QIODevice::WriteOnly) && out.write(file) == file.size());
+        out.close();
+        const QByteArray oldPath = qgetenv("XCURSOR_PATH"), oldTheme = qgetenv("XCURSOR_THEME");
+        qputenv("XCURSOR_PATH", QFile::encodeName(icons.path()));
+        qputenv("XCURSOR_THEME", "Prueba");
+        const SystemCursors::Image sys = SystemCursors::load(SystemCursors::Shape::Arrow, Icons::cursorSize());
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
+        CHECK(!sys.image.isNull() && sys.hotSpot == QPoint(5, 4) * Icons::cursorSize() / int(side));
+        auto mini = [](QPainter& p, const QRectF& r) { p.fillRect(r, Qt::green); };
+        const QCursor withSystem = Icons::miniCursor(QStringLiteral("prueba-sistema"), mini);
+        CHECK(withSystem.hotSpot() == QPoint(5, 4) * Icons::cursorSize() / int(side));
+        const QImage img = withSystem.pixmap().toImage();
+        bool blue = false, green = false;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x) {
+                const QColor c(img.pixel(x, y));
+                blue = blue || (c.blue() > 200 && c.red() < 60 && qAlpha(img.pixel(x, y)) > 200);
+                green = green || (c.green() > 200 && c.red() < 60 && qAlpha(img.pixel(x, y)) > 200);
+            }
+        CHECK(blue && green);
+        Icons::setSystemPointer(false);
+        CHECK(Icons::miniCursor(QStringLiteral("prueba-sistema"), mini).hotSpot() == QPoint(0, 0));
+        Icons::setSystemPointer(true);
+#else
+        CHECK(sys.image.isNull());
+#endif
+        qputenv("XCURSOR_PATH", oldPath);
+        qputenv("XCURSOR_THEME", oldTheme);
     }
 
     // Breeze (su ToolsAreaManager) pide QMainWindow::menuBar() al pulir la ventana: los menús y

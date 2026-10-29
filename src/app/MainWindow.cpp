@@ -1437,13 +1437,14 @@ bool MainWindow::maybeSave(Document* doc)
     if (!doc->isModified())
         return true;
     setCurrentDocument(doc);
-    TaskDialog dlg(tr("Cambios no guardados"), Icons::theme({"dialog-warning"}), doc->flattened(),
+    // Con los iconos del tema del sistema, como siempre tuvo este diálogo.
+    TaskDialog dlg(tr("Cambios no guardados"), Icons::system({"dialog-warning"}), doc->flattened(),
                    tr("«%1» tiene cambios sin guardar.\n¿Qué quiere hacer?").arg(doc->displayName()), this);
-    const int saveChoice = dlg.addChoice(Icons::theme({"document-save"}), tr("Guardar"),
+    const int saveChoice = dlg.addChoice(Icons::system({"document-save"}), tr("Guardar"),
                                          tr("Guardar la imagen y, a continuación, cerrarla."), true);
-    const int discard = dlg.addChoice(Icons::theme({"edit-delete", "user-trash"}), tr("No guardar"),
+    const int discard = dlg.addChoice(Icons::system({"edit-delete", "user-trash"}), tr("No guardar"),
                                       tr("Descartar los cambios no guardados."));
-    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
+    dlg.addChoice(Icons::system({"edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
     const int answer = dlg.choose();
     if (answer == saveChoice)
         return save(doc);
@@ -1464,7 +1465,7 @@ bool MainWindow::maybeSaveAll(const QList<Document*>& docs, bool quitting)
     }
 
     // Como Paint.NET 5: las miniaturas de todas (un clic muestra esa imagen) y una sola respuesta.
-    TaskDialog dlg(tr("Cambios no guardados"), Icons::theme({"dialog-warning"}), QImage(),
+    TaskDialog dlg(tr("Cambios no guardados"), Icons::system({"dialog-warning"}), QImage(),
                    tr("Las siguientes imágenes abiertas contienen cambios que no se han guardado. Haga clic en una "
                       "miniatura para mostrar la imagen en la ventana principal."),
                    this);
@@ -1493,14 +1494,14 @@ bool MainWindow::maybeSaveAll(const QList<Document*>& docs, bool quitting)
             setCurrentDocument(d);
     });
     dlg.addContent(list);
-    const int saveChoice = dlg.addChoice(Icons::theme({"document-save"}), tr("Guardar"),
+    const int saveChoice = dlg.addChoice(Icons::system({"document-save"}), tr("Guardar"),
                                          quitting ? tr("Guardar las imágenes de la lista de arriba y, a continuación, salir.")
                                                   : tr("Guardar las imágenes de la lista de arriba y, a continuación, cerrarlas."),
                                          true);
-    const int discard = dlg.addChoice(Icons::theme({"edit-delete", "user-trash"}), tr("No guardar"),
+    const int discard = dlg.addChoice(Icons::system({"edit-delete", "user-trash"}), tr("No guardar"),
                                       quitting ? tr("Descartar todos los cambios no guardados y, a continuación, salir.")
                                                : tr("Descartar todos los cambios no guardados y, a continuación, cerrarlas."));
-    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
+    dlg.addChoice(Icons::system({"edit-undo"}), tr("Cancelar"), tr("Volver a Kaint."));
     const int answer = dlg.choose();
     if (answer == saveChoice) {
         for (Document* d : std::as_const(modified)) {
@@ -3053,6 +3054,9 @@ void MainWindow::applySettings()
     m_canvas->setRulersVisible(m_settings.rulers);
     m_canvas->setOverscroll(m_settings.overscroll);
     m_canvas->setAutoScroll(m_settings.autoScroll);
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, !m_settings.systemFileDialogs);
+    Icons::setSystemPointer(m_settings.systemPointer);
+    m_layers->setDropLineMode(m_settings.layerDropLine);
     ToolPreferences preferences;
     preferences.hideBoxWhileDragging = m_settings.hideMoveBox;
     preferences.replacePixels = m_settings.replacePixels;

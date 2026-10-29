@@ -29,12 +29,15 @@ Safari download the saved file and paste with Ctrl+V instead.
 ## What's in it
 
 - **The Kaint interface**: menus, the main toolbar and the tool options bar, Kaint's drawn tool
-  icons (also as cursors, with the hot spot on their tip, or small beside the pointer for the
-  selection tools, gradient, line, text and shapes), image tabs with thumbnails and the
-  orange star of unsaved images, the Tools, History, Layers and Colors windows (dockable to a
-  corner, resizable and translucent, in a Windows 10 inspired style or compact, with the border
-  width you choose), rulers and the status bar with the tool icon and the zoom controls. The view
-  scrolls past the edges of the image and Ctrl+wheel zooms toward the pointer, like in Kaint.
+  icons (also as cursors, with the hot spot on their tip, or small beside the system pointer for
+  the selection tools, gradient, line, text and shapes), brush outlines drawn as part of the
+  cursor so they follow the mouse without delay, image tabs with thumbnails and the orange star
+  of unsaved images, the Tools, History, Layers and Colors windows (dockable to a corner,
+  translucent, in a Windows 10 inspired style or compact, with the border width you choose;
+  resizing Tools keeps whole columns and Colors scales, like in Kaint), rulers and the status bar
+  with the tool icon and the zoom controls. The view scrolls past the edges of the image,
+  Ctrl+wheel zooms toward the pointer and the wheel keeps a selection or stroke following the
+  pointer while you drag, like in Kaint.
 - **All 19 tools**: rectangle, ellipse and lasso select, magic wand, move selected pixels and move
   selection (move, resize, rotate), zoom (with the pixel-snapped rectangle), pan, paint bucket,
   gradient, paintbrush, eraser, pencil, color picker, clone stamp, recolor, text, line/curve and
@@ -42,8 +45,9 @@ Safari download the saved file and paste with Ctrl+V instead.
   follows the tolerance until you press Enter. Like in Kaint, shapes, lines, text, gradients and
   paint bucket fills stay editable: every change is a history step, and going back to one of them
   lets you keep editing it. A click with Move Selected Pixels selects the whole layer.
-- **Layers** with the 14 Paint.NET blend modes, opacity, visibility, drag to reorder and their
-  properties dialog; full **history** you can click through.
+- **Layers** with the 14 Paint.NET blend modes, opacity, visibility, drag to reorder (the layer
+  follows the mouse, or a line marks where it will go) and their properties dialog; full
+  **history** you can click through.
 - **Adjustments and effects** with live preview, including Curves, Levels, Hue/Saturation,
   Gaussian, motion, radial and zoom blur, distortions, noise, photo effects, clouds, fractals and
   drop shadow; **Ctrl+F** repeats the last one.
@@ -55,7 +59,8 @@ Safari download the saved file and paste with Ctrl+V instead.
   rulers), tools, pen and tablet, plugins, updates, diagnostics, icon packs (.zip files with an
   `asset-pack.json`, with a preview), fonts for the Text tool and editable keyboard shortcuts.
 - **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
-  palette file to open or save, Rainbow and Small.
+  palette file to open or save, Rainbow and Small; **More** widens it with the RGB, HSV and
+  opacity sliders, their number boxes and the hex code.
 
 Not available on the web: Paint.NET (.dll) and native plugins, recovery copies, custom shapes,
 brush fill patterns, inches and centimeters, `.pdn` files, GIF animation editing and scanning. Browsers keep

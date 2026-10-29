@@ -8,7 +8,7 @@ import { el, promptText } from "./Dialogs.js";
 import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 import { kIndicator, outCubic, run, slideRows } from "./Animations.js";
-import { remember } from "../Settings.js";
+import { remember, Settings } from "../Settings.js";
 import { plain, tr } from "../i18n.js";
 
 export class FloatingPanel {
@@ -17,6 +17,9 @@ export class FloatingPanel {
         this.id = id;
         this.defaults = { corner, offset, size };
         this.onClose = onClose;
+        // Contenido que decide su tamaño (PanelContent de Kaint): las columnas de Herramientas o
+        // la escala de Colores. Se guarda eso y la ventana mide lo que su contenido.
+        this.fit = content.fit || null;
         this.element = el("div", { className: "floating-panel", dataset: { panel: id } });
         const head = el("div", { className: "title" }, [el("span", { textContent: title })]);
         const close = el("button", { className: "close", title: tr("Cerrar"), style: { border: "none", padding: 0 } });
@@ -34,7 +37,9 @@ export class FloatingPanel {
         const saved = remember(`panel.${id}`) || {};
         this.corner = saved.corner || corner;
         this.offset = saved.offset || offset;
-        if (saved.size || size) {
+        if (this.fit) {
+            this.fit.apply(saved.layout ?? this.fit.initial);
+        } else if (saved.size || size) {
             const s = saved.size || size;
             this.element.style.width = `${s.w}px`;
             // Sin alto, la ventana mide lo que su contenido (Colores, como en Kaint).
@@ -51,6 +56,7 @@ export class FloatingPanel {
         remember(`panel.${this.id}`, {
             corner: this.corner, offset: this.offset, visible: this.visible,
             size: this.element.style.width ? { w: this.element.offsetWidth, h: this.element.style.height ? this.element.offsetHeight : 0 } : null,
+            layout: this.fit ? this.fit.state() : undefined,
         });
     }
 
@@ -128,6 +134,21 @@ export class FloatingPanel {
                 if (start.edge.includes("s")) h += dy;
                 if (start.edge.includes("w")) { w -= dx; l += dx; }
                 if (start.edge.includes("n")) { h -= dy; t += dy; }
+                if (this.fit) {
+                    // Como en Kaint: el contenido elige su tamaño (columnas enteras, la misma
+                    // proporción) y el borde contrario al que se arrastra se queda quieto.
+                    const content = this.content.firstElementChild;
+                    const chromeW = this.element.offsetWidth - content.offsetWidth, chromeH = this.element.offsetHeight - content.offsetHeight;
+                    const horizontal = /[ew]/.test(start.edge), vertical = /[ns]/.test(start.edge);
+                    this.fit.apply(this.fit.fromSize(w - chromeW, h - chromeH, horizontal, vertical));
+                    const a = this.area();
+                    const fw = this.element.offsetWidth, fh = this.element.offsetHeight;
+                    l = start.edge.includes("w") ? start.l + start.w - fw : start.l;
+                    t = start.edge.includes("n") ? start.t + start.h - fh : start.t;
+                    this.element.style.left = `${Math.max(a.x, Math.min(a.x + a.w - fw, l))}px`;
+                    this.element.style.top = `${Math.max(a.y, Math.min(a.y + a.h - fh, t))}px`;
+                    return;
+                }
                 w = Math.max(80, w);
                 h = Math.max(60, h);
                 Object.assign(this.element.style, { left: `${l}px`, top: `${t}px`, width: `${w}px`, height: `${h}px` });
@@ -166,14 +187,20 @@ export class FloatingPanel {
     reset() {
         this.corner = this.defaults.corner;
         this.offset = { ...this.defaults.offset };
-        this.element.style.width = this.defaults.size ? `${this.defaults.size.w}px` : "";
-        this.element.style.height = this.defaults.size?.h ? `${this.defaults.size.h}px` : "";
+        if (this.fit) {
+            this.fit.apply(this.fit.initial);
+        } else {
+            this.element.style.width = this.defaults.size ? `${this.defaults.size.w}px` : "";
+            this.element.style.height = this.defaults.size?.h ? `${this.defaults.size.h}px` : "";
+        }
         this.setVisible(true);
     }
 }
 
 // --- Herramientas -------------------------------------------------------------------------
 
+// Rejilla de botones como la de Paint.NET; al cambiar el tamaño de la ventana se queda con las
+// columnas enteras que quepan (ToolsPanel::fitSize de Kaint). Empieza con dos.
 export function toolsPanel(app) {
     const grid = el("div", { className: "tools-grid" });
     const buttons = new Map();
@@ -186,6 +213,25 @@ export function toolsPanel(app) {
     const sync = () => buttons.forEach((b, id) => b.classList.toggle("checked", app.tools.current?.id === id));
     app.tools.addEventListener("changed", sync);
     sync();
+    const count = buttons.size, cell = 30, gap = 1;
+    let columns = 2;
+    grid.fit = {
+        initial: 2,
+        state: () => columns,
+        apply(c) {
+            columns = Math.min(count, Math.max(1, Math.round(Number(c) || 2)));
+            grid.style.setProperty("--columns", columns);
+            // Como en Paint.NET, el último botón (Formas) ocupa lo que quede de su fila.
+            grid.lastElementChild.style.gridColumn = `span ${columns - ((count - 1) % columns)}`;
+        },
+        fromSize(w, h, horizontal, vertical) {
+            if (vertical && !horizontal) {
+                const rows = Math.min(count, Math.max(1, Math.floor((h + gap) / (cell + gap))));
+                return Math.ceil(count / rows);
+            }
+            return Math.floor((w + gap) / (cell + gap));
+        },
+    };
     return grid;
 }
 
@@ -280,49 +326,121 @@ export function layersPanel(app, actionIds) {
             pending = new Set();
         }, 250);
     });
-    app.addEventListener("layers", refresh);
-    app.addEventListener("document", refresh);
-    // Clic: capa activa · arrastrar: mover la capa (una línea marca dónde quedará).
+    app.addEventListener("layers", () => {
+        endDrag();
+        refresh();
+    });
+    app.addEventListener("document", () => {
+        endDrag();
+        refresh();
+    });
+    // Clic: capa activa · arrastrar: mover la capa. Como en Kaint, la fila sigue al ratón y las
+    // demás le van dejando sitio; con la opción de Configuración, se queda en su sitio y una línea
+    // marca dónde quedará.
     let drag = null;
+    const rows = () => [...list.querySelectorAll(".row")];
+    // Fila (de arriba abajo) bajo la posición y de la ventana; fuera de la lista, la primera o la última.
+    const slotAt = (y) => {
+        const all = rows();
+        const i = all.findIndex((r) => {
+            const b = r.getBoundingClientRect(), shift = Number(r.dataset.shift || 0);
+            return y >= b.top - shift && y < b.bottom - shift;
+        });
+        if (i >= 0)
+            return i;
+        return all.length && y < all[0].getBoundingClientRect().top - Number(all[0].dataset.shift || 0) ? 0 : all.length - 1;
+    };
+    const setShift = (row, px) => {
+        row.dataset.shift = px;
+        row.style.transform = px ? `translateY(${px}px)` : "";
+    };
+    const endDrag = () => {
+        if (!drag)
+            return;
+        clearInterval(drag.scroll);
+        for (const r of rows()) {
+            r.classList.remove("dragging", "live", "making-room");
+            setShift(r, 0);
+        }
+        dropLine.style.display = "none";
+        drag = null;
+    };
     list.addEventListener("pointerdown", (e) => {
         const row = e.target.closest(".row");
         if (!row || e.button !== 0)
             return;
         app.doc.setActiveIndex(row.index);
-        drag = { row, y: e.clientY, moving: false };
+        const all = rows();
+        drag = { row, y: e.clientY, from: all.indexOf(row), slot: all.indexOf(row), moving: false, live: !Settings.get("layerDropLine") };
         list.setPointerCapture(e.pointerId);
     });
+    const dragTo = (y) => {
+        const all = rows(), h = drag.row.offsetHeight;
+        if (drag.live) {
+            // La fila sigue al ratón (sin salirse de la lista) y las demás se apartan.
+            const top = drag.row.offsetTop, scroll = list.scrollTop;
+            const dy = Math.max(-top + scroll - h / 2, Math.min(list.clientHeight + scroll - top - h / 2, y - drag.y));
+            setShift(drag.row, dy);
+            const slot = Math.min(all.length - 1, Math.max(0, drag.from + Math.round(dy / h)));
+            if (slot === drag.slot)
+                return;
+            drag.slot = slot;
+            all.forEach((r, i) => {
+                if (r === drag.row)
+                    return;
+                setShift(r, drag.from < slot && i > drag.from && i <= slot ? -h : drag.from > slot && i >= slot && i < drag.from ? h : 0);
+            });
+            return;
+        }
+        const slot = slotAt(y);
+        drag.slot = slot;
+        if (slot === drag.from) {
+            dropLine.style.display = "none";
+            return;
+        }
+        const target = all[slot];
+        dropLine.style.display = "block";
+        dropLine.style.top = `${target.offsetTop + (slot > drag.from ? target.offsetHeight - 2 : -1)}px`;
+    };
     list.addEventListener("pointermove", (e) => {
         if (!drag)
             return;
         if (!drag.moving && Math.abs(e.clientY - drag.y) > 4) {
             drag.moving = true;
-            drag.row.classList.add("dragging");
+            drag.row.classList.add(drag.live ? "live" : "dragging");
+            if (drag.live)
+                rows().forEach((r) => r !== drag.row && r.classList.add("making-room"));
         }
         if (!drag.moving)
             return;
-        const target = rowAt(e.clientY);
-        if (!target || target === drag.row) {
-            dropLine.style.display = "none";
-            return;
-        }
-        const below = target.index < drag.row.index;
-        dropLine.style.display = "block";
-        dropLine.style.top = `${target.offsetTop + (below ? target.offsetHeight - 2 : -1)}px`;
-        drag.target = target;
+        drag.lastY = e.clientY;
+        dragTo(e.clientY);
+        // Por encima o por debajo de la lista, se desplaza mientras se arrastra.
+        const b = list.getBoundingClientRect(), step = e.clientY < b.top ? -10 : e.clientY > b.bottom ? 10 : 0;
+        clearInterval(drag.scroll);
+        if (step)
+            drag.scroll = setInterval(() => {
+                const before = list.scrollTop;
+                list.scrollTop += step;
+                if (list.scrollTop !== before && drag) {
+                    if (drag.live)
+                        drag.y -= list.scrollTop - before;
+                    dragTo(drag.lastY);
+                }
+            }, 50);
     });
     list.addEventListener("pointerup", () => {
-        if (drag?.moving) {
-            drag.row.classList.remove("dragging");
-            dropLine.style.display = "none";
-            if (drag.target && drag.target !== drag.row)
-                app.moveLayerTo(drag.row.index, drag.target.index);
-        }
-        drag = null;
-    });
-    const rowAt = (y) => [...list.querySelectorAll(".row")].find((r) => {
-        const b = r.getBoundingClientRect();
-        return y >= b.top && y < b.bottom;
+        if (!drag)
+            return;
+        const { row, from, slot, moving, live } = drag;
+        endDrag();
+        if (!moving || slot === from)
+            return;
+        // Las filas ya se ven en su sitio nuevo: al rehacer la lista no se deslizan.
+        if (live)
+            lastDoc = null;
+        const layers = app.doc.layers.length;
+        app.moveLayerTo(row.index, layers - 1 - slot);
     });
     const buttons = el("div", { className: "panel-buttons" });
     for (const id of actionIds)
@@ -332,11 +450,30 @@ export function layersPanel(app, actionIds) {
 
 // --- Colores ------------------------------------------------------------------------------
 
+// Damero de Kaint (paintCheckerboard): grises 191 y 143.
+function paintChecker(p, x, y, w, h, cell) {
+    p.save();
+    p.beginPath();
+    p.rect(x, y, w, h);
+    p.clip();
+    p.fillStyle = "#bfbfbf";
+    p.fillRect(x, y, w, h);
+    p.fillStyle = "#8f8f8f";
+    for (let yy = 0; yy * cell < h; ++yy)
+        for (let xx = yy % 2; xx * cell < w; xx += 2)
+            p.fillRect(x + xx * cell, y + yy * cell, cell, cell);
+    p.restore();
+}
+
+const cssColor = (c) => `rgba(${c.r},${c.g},${c.b},${(c.a ?? 255) / 255})`;
+const themeColor = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 // Ranuras principal y secundaria como las de Paint.NET: la activa lleva marco grueso y un pico
 // abajo; al cambiar, las dos se animan a la vez (una adelgaza y pierde el pico, la otra crece).
 class ColorSwatches {
     constructor() {
-        this.canvas = el("canvas", { width: 64, height: 64, style: { width: "64px", height: "64px" } });
+        this.canvas = el("canvas", { className: "swatches", width: 64, height: 64, style: { width: "64px", height: "64px" },
+                                     title: tr("Color principal (arriba) y secundario (abajo). La muesca marca la ranura activa (C).\nDoble clic para editarlos. X intercambia.") });
         this.level = AppState.secondaryActive ? 0 : 1;
         this.anim = null;
         this.canvas.addEventListener("pointerdown", (e) => {
@@ -372,13 +509,6 @@ class ColorSwatches {
         const p = c.getContext("2d");
         p.setTransform(dpr, 0, 0, dpr, 0, 0);
         p.clearRect(0, 0, 64, 64);
-        const checker = (x, y, w, h) => {
-            for (let yy = 0; yy < h; yy += 5)
-                for (let xx = 0; xx < w; xx += 5) {
-                    p.fillStyle = (Math.floor(xx / 5) + Math.floor(yy / 5)) % 2 ? "#bfbfbf" : "#fff";
-                    p.fillRect(x + xx, y + yy, Math.min(5, w - xx), Math.min(5, h - yy));
-                }
-        };
         const swatch = (x, y, color, level, framed) => {
             const s = 35, ring = framed ? 1 + level : 2 * level, line = framed ? 1 : level;
             p.fillStyle = "#000";
@@ -388,39 +518,43 @@ class ColorSwatches {
                 p.fillRect(x + 1, y + 1, s - 2, s - 2);
             }
             const ix = x + 1 + ring, iy = y + 1 + ring, iw = s - 2 - 2 * ring;
+            const cx = ix + iw / 2, bottom = iy + iw;
+            // Recorta el pico (que sale un poco por debajo del marco) como subtracted() en Kaint:
+            // solo dentro del rectángulo, sin pintar nada fuera de él.
+            const cutNotch = (half, depth) => {
+                if (level <= 0)
+                    return;
+                p.beginPath();
+                p.rect(0, 0, 64, 64);
+                p.moveTo(cx - half, bottom + 1);
+                p.lineTo(cx, bottom + 1 - depth * level);
+                p.lineTo(cx + half, bottom + 1);
+                p.closePath();
+                p.clip("evenodd");
+            };
             // Marco negro de dentro con el pico de la ranura activa recortado abajo.
             p.save();
-            p.beginPath();
-            p.rect(ix, iy, iw, iw);
-            const cx = ix + iw / 2, bottom = iy + iw;
-            if (level > 0) {
-                p.moveTo(cx - 5, bottom + 1);
-                p.lineTo(cx, bottom + 1 - 7 * level);
-                p.lineTo(cx + 5, bottom + 1);
-                p.closePath();
-            }
+            cutNotch(5, 7);
             p.fillStyle = "#000";
-            p.fill("evenodd");
+            p.fillRect(ix, iy, iw, iw);
             p.restore();
             p.save();
             p.beginPath();
             p.rect(ix + line, iy + line, iw - 2 * line, iw - 2 * line);
-            if (level > 0) {
-                p.moveTo(cx - 6.5, bottom + 1);
-                p.lineTo(cx, bottom + 1 - 8.5 * level);
-                p.lineTo(cx + 6.5, bottom + 1);
-                p.closePath();
-            }
-            p.clip("evenodd");
-            checker(ix, iy, iw, iw);
-            p.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a / 255})`;
+            p.clip();
+            cutNotch(6.5, 8.5);
+            paintChecker(p, ix, iy, iw, iw, 5);
+            p.fillStyle = cssColor(color);
             p.fillRect(ix, iy, iw, iw);
             p.restore();
         };
         swatch(19, 19, AppState.secondary, 1 - this.level, false);
         swatch(1, 1, AppState.primary, this.level, true);
-        if (this.swap.complete)
+        if (this.swap.complete && this.swap.naturalWidth) {
+            p.imageSmoothingQuality = "high";
             p.drawImage(this.swap, 40, 3, 14, 13);
+        }
+        // Mini muestras negro y blanco para restablecer, con borde gris.
         p.strokeStyle = "#787878";
         p.fillStyle = "#000";
         p.fillRect(1.5, 39.5, 10, 10);
@@ -431,92 +565,261 @@ class ColorSwatches {
     }
 }
 
+// Deslizador de un canal (ColorSlider de Kaint): la barra con el degradado del canal y un
+// triángulo a cada lado que marca el valor. Se arrastra o se mueve con la rueda.
+class ChannelSlider {
+    constructor(channel, vertical, onChange) {
+        this.channel = channel;
+        this.vertical = vertical;
+        this.onChange = onChange;
+        this.color = { r: 0, g: 0, b: 0, a: 255 };
+        this.hsv = { h: 0, s: 0, v: 0 };
+        this.canvas = el("canvas", { className: `channel-slider${vertical ? " vertical" : ""}` });
+        const pick = (e) => {
+            const r = this.canvas.getBoundingClientRect();
+            const t = vertical ? 1 - (e.clientY - r.top - 4) / Math.max(1, r.height - 8)
+                               : (e.clientX - r.left - 4) / Math.max(1, r.width - 8);
+            this.onChange(Math.round(Math.min(1, Math.max(0, t)) * this.maximum));
+        };
+        this.canvas.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0)
+                return;
+            this.canvas.setPointerCapture(e.pointerId);
+            pick(e);
+        });
+        this.canvas.addEventListener("pointermove", (e) => {
+            if (this.canvas.hasPointerCapture(e.pointerId))
+                pick(e);
+        });
+        this.canvas.addEventListener("wheel", (e) => {
+            e.preventDefault();
+            const step = e.deltaY < 0 ? 1 : e.deltaY > 0 ? -1 : 0;
+            if (step)
+                this.onChange(Math.min(this.maximum, Math.max(0, this.value() + step)));
+        }, { passive: false });
+        new ResizeObserver(() => this.paint()).observe(this.canvas);
+    }
+
+    get maximum() {
+        return this.channel === "h" ? 359 : this.channel === "s" || this.channel === "v" ? 100 : 255;
+    }
+
+    value() {
+        switch (this.channel) {
+        case "h": return Math.min(359, Math.round(this.hsv.h));
+        case "s": return Math.round(this.hsv.s * 100);
+        case "v": return Math.round(this.hsv.v * 100);
+        default: return this.color[this.channel];
+        }
+    }
+
+    set(color, hsv) {
+        this.color = color;
+        this.hsv = hsv;
+        this.paint();
+    }
+
+    colorAt(t) {
+        const c = this.color, hsv = this.hsv;
+        switch (this.channel) {
+        case "h": return hsvToRgb(t * 0.999 * 360, 1, 1);
+        case "s": return hsvToRgb(hsv.h, t, Math.max(0.25, hsv.v));
+        case "v": return hsvToRgb(hsv.h, hsv.s, t);
+        case "a": return { ...c, a: Math.round(t * 255) };
+        default: return { ...c, [this.channel]: Math.round(t * 255), a: 255 };
+        }
+    }
+
+    paint() {
+        const c = this.canvas, dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+        if (!w || !h)
+            return;
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(h * dpr);
+        const p = c.getContext("2d");
+        p.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const v = this.vertical;
+        const bar = v ? { x: 3, y: 4, w: w - 6, h: h - 8 } : { x: 4, y: 3, w: w - 8, h: h - 6 };
+        if (this.channel === "a")
+            paintChecker(p, bar.x, bar.y, bar.w, bar.h, 4);
+        const g = v ? p.createLinearGradient(0, bar.y + bar.h, 0, bar.y) : p.createLinearGradient(bar.x, 0, bar.x + bar.w, 0);
+        const stops = this.channel === "h" ? 12 : 2;
+        for (let i = 0; i <= stops; ++i)
+            g.addColorStop(i / stops, cssColor(this.colorAt(i / stops)));
+        p.fillStyle = g;
+        p.fillRect(bar.x, bar.y, bar.w, bar.h);
+        p.strokeStyle = themeColor("--border");
+        p.lineWidth = 1;
+        p.strokeRect(bar.x - 0.5, bar.y - 0.5, bar.w + 1, bar.h + 1);
+        const t = this.value() / this.maximum;
+        p.fillStyle = themeColor("--panel");
+        p.strokeStyle = themeColor("--text");
+        const triangle = (pts) => {
+            p.beginPath();
+            pts.forEach(([x, y], i) => (i ? p.lineTo(x, y) : p.moveTo(x, y)));
+            p.closePath();
+            p.fill();
+            p.stroke();
+        };
+        if (v) {
+            const y = bar.y + bar.h - t * bar.h;
+            triangle([[0, y - 4], [0, y + 4], [bar.x + 2, y]]);
+            triangle([[w, y - 4], [w, y + 4], [bar.x + bar.w - 2, y]]);
+        } else {
+            const x = bar.x + t * bar.w;
+            triangle([[x - 4, h], [x + 4, h], [x, bar.y + bar.h - 2]]);
+            triangle([[x - 4, 0], [x + 4, 0], [x, bar.y + 2]]);
+        }
+    }
+}
+
+// Rueda de color (ColorWheel de Kaint): el tono alrededor y la saturación hacia fuera, siempre
+// con el brillo máximo; ocupa el cuadrado más grande que cabe en su caja.
+class ColorWheel {
+    constructor(onPick) {
+        this.onPick = onPick;
+        this.hsv = { h: 0, s: 0, v: 0 };
+        this.box = el("div", { className: "wheel-box" });
+        this.canvas = el("canvas", { className: "wheel",
+                                     title: tr("Clic izquierdo: ranura activa · derecho: inactiva\nCtrl: solo tono · Alt: solo saturación · Mayús: radios de 15°") });
+        this.box.appendChild(this.canvas);
+        this.image = null;
+        this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+        this.canvas.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0 && e.button !== 2)
+                return;
+            this.canvas.setPointerCapture(e.pointerId);
+            this.press = { button: e.button, hsv: { ...this.hsv } };
+            this.pick(e);
+        });
+        this.canvas.addEventListener("pointermove", (e) => {
+            if (this.press && this.canvas.hasPointerCapture(e.pointerId))
+                this.pick(e);
+        });
+        this.canvas.addEventListener("pointerup", () => (this.press = null));
+        new ResizeObserver(() => this.resized()).observe(this.box);
+    }
+
+    // Lado de la rueda, centrada en la caja con 3 px de margen.
+    rect() {
+        const w = this.box.clientWidth, h = this.box.clientHeight, side = Math.max(1, Math.min(w, h) - 6);
+        return { x: (w - side) / 2, y: (h - side) / 2, side };
+    }
+
+    resized() {
+        const dpr = window.devicePixelRatio || 1, side = Math.round(this.rect().side * dpr);
+        if (side > 0 && (!this.image || this.image.width !== side)) {
+            this.image = el("canvas", { width: side, height: side });
+            const ctx = this.image.getContext("2d"), img = ctx.createImageData(side, side), c = side / 2;
+            for (let y = 0; y < side; ++y)
+                for (let x = 0; x < side; ++x) {
+                    const dx = x + 0.5 - c, dy = y + 0.5 - c, d = Math.hypot(dx, dy), alpha = Math.min(1, Math.max(0, c - d));
+                    if (alpha <= 0)
+                        continue;
+                    const col = hsvToRgb(((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360, Math.min(1, d / c), 1);
+                    const i = (y * side + x) * 4;
+                    img.data[i] = col.r; img.data[i + 1] = col.g; img.data[i + 2] = col.b; img.data[i + 3] = alpha * 255;
+                }
+            ctx.putImageData(img, 0, 0);
+        }
+        this.paint();
+    }
+
+    set(hsv) {
+        this.hsv = hsv;
+        this.paint();
+    }
+
+    paint() {
+        const dpr = window.devicePixelRatio || 1, w = this.box.clientWidth, h = this.box.clientHeight;
+        if (!w || !h || !this.image)
+            return;
+        const c = this.canvas;
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(h * dpr);
+        const p = c.getContext("2d");
+        p.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const r = this.rect();
+        p.drawImage(this.image, r.x, r.y, r.side, r.side);
+        const radius = r.side / 2, a = (this.hsv.h * Math.PI) / 180, d = this.hsv.s * radius;
+        const mx = r.x + radius + Math.cos(a) * d, my = r.y + radius - Math.sin(a) * d;
+        p.lineWidth = 1.5;
+        p.strokeStyle = "#000";
+        p.beginPath();
+        p.arc(mx, my, 5, 0, Math.PI * 2);
+        p.stroke();
+        p.strokeStyle = "#fff";
+        p.beginPath();
+        p.arc(mx, my, 3.5, 0, Math.PI * 2);
+        p.stroke();
+    }
+
+    pick(e) {
+        const b = this.canvas.getBoundingClientRect(), r = this.rect(), radius = r.side / 2;
+        const dx = e.clientX - b.left - (r.x + radius), dy = e.clientY - b.top - (r.y + radius);
+        let h = ((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360, s = Math.min(1, Math.hypot(dx, dy) / radius);
+        // Ctrl: solo el tono · Alt: solo la saturación · Mayús: pasos de 15°.
+        if (e.ctrlKey)
+            s = this.press.hsv.s;
+        if (e.altKey && !e.ctrlKey)
+            h = this.press.hsv.h;
+        if (e.shiftKey)
+            h = (Math.round(h / 15) * 15) % 360;
+        // Con negro elegido, la rueda da el color con todo su brillo.
+        const v = this.hsv.v < 0.02 ? 1 : this.hsv.v;
+        this.hsv = { h, s, v };
+        this.paint();
+        this.onPick(this.hsv, this.press.button === 2);
+    }
+}
+
+// Ventana Colores (ColorsPanel de Kaint). Con «Más» crece a lo ancho como la de Paint.NET: las
+// ranuras suben junto al botón y a la derecha van RGB, MSV, la opacidad y el código hexadecimal.
+// Al cambiar el tamaño de la ventana todo se escala a la vez (fit).
 export function colorsPanel(app) {
     const panel = el("div", { className: "colors-panel" });
-    // Cabecera: ranura activa y más opciones
-    const target = el("select", {}, [el("option", { value: "0", textContent: tr("Principal") }),
-                                     el("option", { value: "1", textContent: tr("Secundario") })]);
+    const left = el("div", { className: "left" });
+    const extended = el("div", { className: "extended", style: { display: "none" } });
+    panel.append(left, extended);
+    const active = () => AppState.activeColor();
+    const setActive = (c) => AppState.setActiveColor(c);
+    const setInactive = (c) => (AppState.secondaryActive ? AppState.setPrimary(c) : AppState.setSecondary(c));
+    let hsv = rgbToHsv(active());
+    const setHsv = (h) => {
+        hsv = h;
+        setActive({ ...hsvToRgb(h.h, h.s, h.v), a: active().a });
+    };
+
+    // Cabecera: ranura que se edita y más opciones.
+    const target = el("select", { title: tr("Ranura de color que se edita (C)") },
+                      [el("option", { value: "0", textContent: tr("Principal") }), el("option", { value: "1", textContent: tr("Secundario") })]);
     target.addEventListener("change", () => AppState.setSecondaryActive(target.value === "1"));
-    const more = el("button", { className: "pushbutton", textContent: tr("Más »"), style: { minWidth: "0" } });
-    panel.appendChild(el("div", { className: "top" }, [target, el("span", { style: { flex: 1 } }), more]));
-    // Ranuras, rueda de color y brillo
+    const more = el("button", { className: "pushbutton more-button", textContent: tr("Más »") });
+    const topRow = el("div", { className: "top" }, [target, el("span", { style: { flex: 1 } }), more]);
+    // Ranuras, rueda y brillo.
     const swatches = new ColorSwatches();
-    const wheel = el("canvas", { className: "wheel", width: 116, height: 116, style: { width: "116px", height: "116px" } });
-    const value = el("canvas", { className: "value-slider", width: 14, height: 116, style: { width: "14px", height: "116px" } });
-    panel.appendChild(el("div", { className: "middle" }, [swatches.canvas, wheel, value]));
-    let hsv = rgbToHsv(AppState.activeColor());
-    const setActive = (c) => AppState.setActiveColor({ ...c, a: AppState.activeColor().a });
-    // La rueda va siempre con el brillo máximo (el brillo es el deslizador de al lado).
-    const drawWheel = () => {
-        const dpr = window.devicePixelRatio || 1, size = 116;
-        wheel.width = wheel.height = Math.round(size * dpr);
-        const ctx = wheel.getContext("2d"), img = ctx.createImageData(wheel.width, wheel.height), R = wheel.width / 2;
-        for (let y = 0; y < wheel.height; ++y)
-            for (let x = 0; x < wheel.width; ++x) {
-                const dx = x + 0.5 - R, dy = y + 0.5 - R, d = Math.hypot(dx, dy) / (R - 1);
-                if (d > 1.01) continue;
-                const c = hsvToRgb(((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360, Math.min(1, d), 1);
-                const i = (y * wheel.width + x) * 4;
-                img.data[i] = c.r; img.data[i + 1] = c.g; img.data[i + 2] = c.b; img.data[i + 3] = d > 1 ? (1.01 - d) * 2550 : 255;
-            }
-        ctx.putImageData(img, 0, 0);
-        const a = (hsv.h * Math.PI) / 180, mx = R + Math.cos(a) * hsv.s * (R - 1), my = R - Math.sin(a) * hsv.s * (R - 1);
-        ctx.lineWidth = dpr;
-        ctx.strokeStyle = "#fff";
-        ctx.beginPath(); ctx.arc(mx, my, 5 * dpr, 0, Math.PI * 2); ctx.stroke();
-        ctx.strokeStyle = "#000";
-        ctx.beginPath(); ctx.arc(mx, my, 4 * dpr, 0, Math.PI * 2); ctx.stroke();
-        // Brillo
-        value.width = Math.round(14 * dpr);
-        value.height = Math.round(116 * dpr);
-        const v = value.getContext("2d"), g = v.createLinearGradient(0, 0, 0, value.height);
-        const top = hsvToRgb(hsv.h, hsv.s, 1);
-        g.addColorStop(0, `rgb(${top.r},${top.g},${top.b})`);
-        g.addColorStop(1, "#000");
-        v.fillStyle = g;
-        v.fillRect(2 * dpr, 0, value.width - 4 * dpr, value.height);
-        const y = (1 - hsv.v) * (value.height - 1);
-        v.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--text");
-        v.beginPath(); v.moveTo(0, y - 4 * dpr); v.lineTo(3 * dpr, y); v.lineTo(0, y + 4 * dpr); v.fill();
-        v.beginPath(); v.moveTo(value.width, y - 4 * dpr); v.lineTo(value.width - 3 * dpr, y); v.lineTo(value.width, y + 4 * dpr); v.fill();
-    };
-    const dragOn = (canvasEl, fn) => {
-        canvasEl.addEventListener("pointerdown", (e) => {
-            canvasEl.setPointerCapture(e.pointerId);
-            fn(e);
-            const move = (ev) => fn(ev);
-            const up = () => {
-                canvasEl.removeEventListener("pointermove", move);
-                canvasEl.removeEventListener("pointerup", up);
-            };
-            canvasEl.addEventListener("pointermove", move);
-            canvasEl.addEventListener("pointerup", up);
-        });
-    };
-    dragOn(wheel, (e) => {
-        const r = wheel.getBoundingClientRect(), R = r.width / 2;
-        const dx = e.clientX - r.left - R, dy = e.clientY - r.top - R;
-        let h = ((Math.atan2(-dy, dx) * 180) / Math.PI + 360) % 360;
-        if (e.shiftKey) h = Math.round(h / 15) * 15;
-        hsv = { ...hsv, h, s: Math.min(1, Math.hypot(dx, dy) / (R - 1)) };
-        setActive(hsvToRgb(hsv.h, hsv.s, hsv.v));
+    const swatchColumn = el("div", { className: "swatch-column" }, [swatches.canvas]);
+    const wheel = new ColorWheel((h, inactive) => {
+        if (inactive) {
+            setInactive({ ...hsvToRgb(h.h, h.s, h.v), a: (AppState.secondaryActive ? AppState.primary : AppState.secondary).a });
+            return;
+        }
+        setHsv(h);
     });
-    dragOn(value, (e) => {
-        const r = value.getBoundingClientRect();
-        hsv = { ...hsv, v: Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height)) };
-        setActive(hsvToRgb(hsv.h, hsv.s, hsv.v));
-    });
+    const value = new ChannelSlider("v", true, (v) => setHsv({ ...hsv, v: v / 100 }));
+    value.canvas.title = tr("Brillo");
+    const middle = el("div", { className: "middle" }, [swatchColumn, wheel.box, value.canvas]);
+    left.append(topRow, middle);
+
     // Paleta: clic izquierdo = ranura activa, derecho = inactiva.
-    const paletteRow = el("div", { style: { display: "flex", gap: "2px", alignItems: "center" } });
     const addColor = el("button", { className: "tbutton", title: tr("Añadir el color activo a la paleta: haz clic después en la muestra que quieras sustituir") });
     const addIcon = el("canvas", { width: 16, height: 16, style: { width: "16px", height: "16px" } });
     addColor.appendChild(addIcon);
     const paletteMenu = el("button", { className: "tbutton palette-menu", title: tr("Paletas") }, [icon("palette", 16), el("span", { className: "arrow", textContent: "▾" })]);
-    paletteRow.append(addColor, paletteMenu);
-    panel.appendChild(paletteRow);
-    const palette = el("div", { className: "palette" });
-    panel.appendChild(palette);
-    let allColors = false;
+    left.appendChild(el("div", { className: "palette-row" }, [addColor, paletteMenu]));
+    const palette = el("div", { className: "palette", title: tr("Clic izquierdo: ranura activa · clic derecho: ranura inactiva") });
+    left.appendChild(palette);
+    let expanded = false;
     let addMode = false;
     addColor.addEventListener("click", () => {
         addMode = !addMode;
@@ -565,22 +868,21 @@ export function colorsPanel(app) {
     // Como en Kaint: dos filas y, con «Más», los 96 colores.
     const drawPalette = () => {
         palette.replaceChildren();
-        AppState.palette.slice(0, allColors ? 96 : 32).forEach((c, i) => {
-            const sw = el("div", { className: "swatch", title: `#${hex(c, true)}`, style: { "--c": `rgba(${c.r},${c.g},${c.b},${c.a / 255})` } });
-            sw.style.setProperty("--c", `rgba(${c.r},${c.g},${c.b},${c.a / 255})`);
+        AppState.palette.slice(0, expanded ? 96 : 32).forEach((c, i) => {
+            const sw = el("div", { className: "swatch", title: `#${hex(c, (c.a ?? 255) < 255)}\n${tr("Clic izquierdo: ranura activa · clic derecho: ranura inactiva")}` });
+            sw.style.setProperty("--c", cssColor(c));
             sw.addEventListener("pointerdown", (e) => {
                 if (addMode) {
                     const colors = [...AppState.palette];
-                    colors[i] = { ...AppState.activeColor() };
+                    colors[i] = { ...active() };
                     AppState.setPalette(colors);
                     addMode = false;
                     addColor.classList.remove("checked");
                     palette.classList.remove("add-mode");
                     return;
                 }
-                const active = e.button !== 2;
-                if (active === !AppState.secondaryActive) AppState.setPrimary(c);
-                else AppState.setSecondary(c);
+                if (e.button === 2) setInactive(c);
+                else setActive(c);
             });
             sw.addEventListener("contextmenu", (e) => e.preventDefault());
             palette.appendChild(sw);
@@ -588,65 +890,138 @@ export function colorsPanel(app) {
     };
     AppState.addEventListener("palette", drawPalette);
     drawPalette();
-    // Más: RGB, HSV, alfa y hexadecimal
-    const moreBox = el("div", { className: "more", style: { display: "none" } });
-    const fields = {};
-    const field = (key, label, max) => {
-        const range = el("input", { type: "range", min: 0, max, step: 1 });
-        const num = el("input", { type: "number", min: 0, max, step: 1 });
-        const set = (v) => {
-            const c = { ...AppState.activeColor() }, h = { ...hsv };
-            if ("rgba".includes(key)) { c[key] = v; AppState.setActiveColor(c); return; }
-            if (key === "h") h.h = v; else if (key === "s") h.s = v / 100; else h.v = v / 100;
-            hsv = h;
-            AppState.setActiveColor({ ...hsvToRgb(h.h, h.s, h.v), a: c.a });
+
+    // Vista ampliada: secciones de Paint.NET con un deslizador y una caja numérica por canal.
+    const channels = [];
+    const section = (text) => extended.appendChild(el("div", { className: "section", textContent: text }));
+    const hexInput = el("input", { type: "text", className: "hex", maxLength: 9, title: tr("RRGGBB o RRGGBBAA") });
+    const row = (channel, label) => {
+        const apply = (v) => {
+            const c = { ...active() };
+            if (channel === "h") setHsv({ ...hsv, h: v });
+            else if (channel === "s") setHsv({ ...hsv, s: v / 100 });
+            else if (channel === "v") setHsv({ ...hsv, v: v / 100 });
+            else setActive({ ...c, [channel]: v });
         };
-        range.addEventListener("input", () => set(Number(range.value)));
-        num.addEventListener("change", () => set(Math.min(max, Math.max(0, Number(num.value) || 0))));
-        moreBox.append(el("span", { textContent: label }), range, num);
-        fields[key] = (v) => { range.value = num.value = Math.round(v); };
+        const slider = new ChannelSlider(channel, false, apply);
+        const spin = el("input", { type: "number", min: 0, max: slider.maximum, step: 1 });
+        spin.addEventListener("input", () => {
+            const v = Number(spin.value);
+            if (spin.value !== "" && Number.isFinite(v))
+                apply(Math.min(slider.maximum, Math.max(0, Math.round(v))));
+        });
+        spin.addEventListener("change", () => (spin.value = slider.value()));
+        extended.append(el("span", { textContent: label }), slider.canvas, spin);
+        channels.push({ slider, spin });
+        if (channel === "b")
+            extended.append(el("span", { textContent: tr("Hex:") }), hexInput);
     };
-    field("r", tr("Rojo"), 255); field("g", tr("Verde"), 255); field("b", tr("Azul"), 255);
-    field("h", tr("Matiz"), 360); field("s", tr("Saturación"), 100); field("v", tr("Brillo"), 100); field("a", tr("Alfa"), 255);
-    const hexInput = el("input", { type: "text", style: { width: "100%" } });
-    hexInput.addEventListener("change", () => {
-        const c = parseHex(hexInput.value);
-        if (c) AppState.setActiveColor(c);
+    section("RGB");
+    row("r", tr("R:")); row("g", tr("V:")); row("b", tr("A:"));
+    section(tr("MSV (HSV)"));
+    row("h", tr("M:")); row("s", tr("S:")); row("v", tr("V:"));
+    section(tr("Opacidad (canal alfa)"));
+    row("a", "");
+    // Solo si se escribió algo: al salir del campo no se vuelve a poner un color de antes.
+    let hexEdited = false;
+    hexInput.addEventListener("input", () => {
+        hexEdited = true;
+        hexInput.value = hexInput.value.replace(/[^#0-9a-f]/gi, "");
     });
-    moreBox.append(el("span", { textContent: tr("Hex:") }), hexInput, el("span"));
-    panel.appendChild(moreBox);
-    more.addEventListener("click", () => {
-        const open = moreBox.style.display === "none";
-        moreBox.style.display = open ? "" : "none";
-        more.textContent = open ? tr("« Menos") : tr("Más »");
-        allColors = open;
+    const applyHex = () => {
+        if (!hexEdited)
+            return;
+        hexEdited = false;
+        const t = hexInput.value.replace(/#/g, "");
+        const c = t.length === 6 || t.length === 8 ? parseHex(t) : null;
+        if (c)
+            setActive(t.length === 6 ? { ...c, a: active().a } : c);
+        sync();
+    };
+    hexInput.addEventListener("change", applyHex);
+    hexInput.addEventListener("keydown", (e) => e.key === "Enter" && applyHex());
+
+    // Escala (como el ajuste de Kaint al cambiar el tamaño de la ventana) y ancho de cada vista.
+    let scale = 1;
+    const baseWidth = () => (expanded ? 466 : 220);
+    const applyScale = (s) => {
+        scale = Math.min(3, Math.max(0.8, Number(s) || 1));
+        panel.style.setProperty("--s", scale);
+        panel.style.width = `${Math.round(baseWidth() * scale)}px`;
+    };
+    panel.fit = {
+        initial: 1,
+        state: () => scale,
+        apply: applyScale,
+        fromSize(w, h, horizontal, vertical) {
+            const sx = w / baseWidth(), sy = h / Math.max(1, panel.offsetHeight / scale);
+            return vertical && !horizontal ? sy : horizontal && !vertical ? sx : Math.max(sx, sy);
+        },
+    };
+    applyScale(1);
+
+    const setExpanded = (on) => {
+        expanded = on;
+        target.style.display = on ? "none" : "";
+        value.canvas.style.display = on ? "none" : "";
+        if (on)
+            topRow.prepend(swatches.canvas);
+        else
+            swatchColumn.prepend(swatches.canvas);
+        extended.style.display = on ? "" : "none";
+        panel.classList.toggle("expanded", on);
+        more.textContent = on ? tr("« Menos") : tr("Más »");
         drawPalette();
+        applyScale(scale);
         app.panels.colors.reposition();
-    });
+        app.panels.colors.save();
+    };
+    more.addEventListener("click", () => setExpanded(!expanded));
+
     const sync = () => {
-        const c = AppState.activeColor(), fromHsv = hsvToRgb(hsv.h, hsv.s, hsv.v);
+        const c = active(), fromHsv = hsvToRgb(hsv.h, hsv.s, hsv.v);
         if (fromHsv.r !== c.r || fromHsv.g !== c.g || fromHsv.b !== c.b) {
             const n = rgbToHsv(c);
             // Sin saturación o sin brillo, el tono y la saturación de antes se conservan.
             hsv = { h: n.s > 0 && n.v > 0 ? n.h : hsv.h, s: n.v > 0 ? n.s : hsv.s, v: n.v };
         }
         target.value = AppState.secondaryActive ? "1" : "0";
-        drawWheel();
-        for (const k of ["r", "g", "b", "a"]) fields[k](c[k]);
-        fields.h(hsv.h); fields.s(hsv.s * 100); fields.v(hsv.v * 100);
-        if (document.activeElement !== hexInput) hexInput.value = hex(c, c.a < 255);
+        wheel.set(hsv);
+        value.set(c, hsv);
+        for (const { slider, spin } of channels) {
+            slider.set(c, hsv);
+            if (document.activeElement !== spin)
+                spin.value = slider.value();
+        }
+        if (document.activeElement !== hexInput || !hexEdited)
+            hexInput.value = hex(c, (c.a ?? 255) < 255);
+        // Como en Paint.NET: el color activo con un «+».
         const ctx = addIcon.getContext("2d"), dpr = window.devicePixelRatio || 1;
         addIcon.width = addIcon.height = 16 * dpr;
-        ctx.scale(dpr, dpr);
+        ctx.setTransform(dpr / 2, 0, 0, dpr / 2, 0, 0);
         ctx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
-        ctx.fillRect(1, 1, 12, 12);
-        ctx.strokeStyle = "#3c3c40";
-        ctx.strokeRect(1.5, 1.5, 11, 11);
+        ctx.strokeStyle = "rgb(60,60,64)";
+        ctx.lineWidth = 2;
+        ctx.fillRect(2, 2, 24, 24);
+        ctx.strokeRect(2, 2, 24, 24);
+        ctx.beginPath();
+        for (const [x, y, w, h] of [[20, 13, 5, 18], [13.5, 19.5, 18, 5]])
+            ctx.rect(x, y, w, h);
         ctx.fillStyle = "#fff";
-        ctx.strokeStyle = "#326e64";
-        ctx.fillRect(10, 6.5, 2.5, 9); ctx.fillRect(6.75, 9.75, 9, 2.5);
+        ctx.fill("nonzero");
+        ctx.beginPath();
+        ctx.moveTo(20, 13); ctx.lineTo(25, 13); ctx.lineTo(25, 19.5); ctx.lineTo(31.5, 19.5); ctx.lineTo(31.5, 24.5);
+        ctx.lineTo(25, 24.5); ctx.lineTo(25, 31); ctx.lineTo(20, 31); ctx.lineTo(20, 24.5); ctx.lineTo(13.5, 24.5);
+        ctx.lineTo(13.5, 19.5); ctx.lineTo(20, 19.5); ctx.closePath();
+        ctx.strokeStyle = "rgb(50,110,100)";
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
     };
     AppState.addEventListener("colors", sync);
+    window.addEventListener("kaint-settings", () => {
+        swatches.paint();
+        sync();
+    });
     sync();
     return panel;
 }

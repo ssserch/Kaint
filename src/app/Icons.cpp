@@ -127,6 +127,16 @@ QIcon theme(std::initializer_list<const char*> names)
     return {};
 }
 
+QIcon system(std::initializer_list<const char*> names)
+{
+    for (const char* n : names) {
+        const QString name = QString::fromLatin1(n);
+        if (QIcon::hasThemeIcon(name))
+            return QIcon::fromTheme(name);
+    }
+    return {};
+}
+
 QIcon theme(const QString& name)
 {
     if (QIcon icon = pdn(name); !icon.isNull())

@@ -1,6 +1,7 @@
 #include "app/Icons.h"
 
 #include "app/IconPacks.h"
+#include "app/SystemCursors.h"
 
 #include <QApplication>
 #include <QHash>
@@ -37,6 +38,8 @@ constexpr int TS = 20;
 // Colores activos para las partes que se tiñen (inválidos: los colores propios del icono).
 QColor g_primary;
 QColor g_secondary;
+// Cursores con miniatura: la flecha (o la I) del tema de cursores del sistema o la de Kaint.
+bool g_systemPointer = true;
 
 QColor mix(const QColor& a, const QColor& b, qreal t)
 {
@@ -745,22 +748,83 @@ QCursor toolCursor(const QString& name, Qt::CursorShape fallback)
     return cursor;
 }
 
+void setSystemPointer(bool on)
+{
+    g_systemPointer = on;
+}
+
+namespace {
+
+// La flecha (o la I) del tema de cursores del sistema con la miniatura al lado, colocada respecto
+// a lo que se ve del puntero como la de Kaint (abajo a la derecha de la flecha); nulo si el
+// sistema no tiene un tema que leer.
+QCursor systemMiniCursor(const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam, qreal dpr)
+{
+    const SystemCursors::Image sys = SystemCursors::load(ibeam ? SystemCursors::Shape::IBeam : SystemCursors::Shape::Arrow,
+                                                         int(std::lround(cursorSize() * dpr)));
+    if (sys.image.isNull())
+        return {};
+    // Parte visible del puntero (los temas dejan márgenes transparentes).
+    const QImage& src = sys.image;
+    QRect shape;
+    for (int y = 0; y < src.height(); ++y) {
+        const auto* line = reinterpret_cast<const QRgb*>(src.constScanLine(y));
+        for (int x = 0; x < src.width(); ++x)
+            if (qAlpha(line[x]) > 32)
+                shape |= QRect(x, y, 1, 1);
+    }
+    if (shape.isEmpty())
+        return {};
+    const QRectF visible(shape.left() / dpr, shape.top() / dpr, shape.width() / dpr, shape.height() / dpr);
+    // En la rejilla de Kaint: miniatura de 14 px junto a una flecha de 18 de alto (o una I de 14),
+    // a la derecha y algo por debajo de la mitad.
+    const qreal side = std::round(visible.height() * (ibeam ? 14.0 / 14.0 : 14.0 / 18.0));
+    const QPointF at = ibeam ? QPointF(visible.right() + 2, visible.top() + std::round(visible.height() * 10.0 / 14.0))
+                             : QPointF(visible.right() + 1, visible.top() + std::round(visible.height() * 13.0 / 18.0));
+    const QSizeF logical(std::max(src.width() / dpr, at.x() + side), std::max(src.height() / dpr, at.y() + side));
+    QImage image((logical * dpr).toSize(), QImage::Format_ARGB32_Premultiplied);
+    image.setDevicePixelRatio(dpr);
+    image.fill(Qt::transparent);
+    {
+        QPainter p(&image);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        QImage pointer = src;
+        pointer.setDevicePixelRatio(dpr);
+        p.drawImage(QPointF(0, 0), pointer);
+        paint(p, QRectF(at, QSizeF(side, side)));
+    }
+    return QCursor(QPixmap::fromImage(image), int(std::lround(sys.hotSpot.x() / dpr)), int(std::lround(sys.hotSpot.y() / dpr)));
+}
+
+} // namespace
+
 QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam)
 {
     // Rejilla de 28 px (con el cursor de 32 px de Windows): flecha de 12×19 y miniatura de 14.
     const qreal scale = std::max(1.0, cursorSize() / 32.0);
     const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
-    const QString cacheKey = QStringLiteral("%1/%2/%3/%4/%5/%6/%7")
+    const QString cacheKey = QStringLiteral("%1/%2/%3/%4/%5/%6/%7/%8")
                                  .arg(key)
                                  .arg(ibeam)
                                  .arg(scale)
                                  .arg(dpr)
                                  .arg(g_primary.rgba())
                                  .arg(g_secondary.rgba())
-                                 .arg(IconPacks::generation());
+                                 .arg(IconPacks::generation())
+                                 .arg(g_systemPointer);
     static QHash<QString, QCursor> cache;
     if (const auto it = cache.constFind(cacheKey); it != cache.cend())
         return *it;
+    if (g_systemPointer) {
+        const QCursor cursor = systemMiniCursor(paint, ibeam, dpr);
+        if (!cursor.pixmap().isNull()) {
+            if (cache.size() > 256)
+                cache.clear();
+            cache.insert(cacheKey, cursor);
+            return cursor;
+        }
+    }
     const int side = int(std::ceil(28 * scale));
     QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
     image.setDevicePixelRatio(dpr);

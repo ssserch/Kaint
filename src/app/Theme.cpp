@@ -546,6 +546,15 @@ public:
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
 
+    int styleHint(StyleHint hint, const QStyleOption* option, const QWidget* widget, QStyleHintReturn* data) const override
+    {
+        // Las listas largas (las fuentes) se abren debajo, con barra de desplazamiento, en vez de
+        // como un menú con flechas para desplazarse.
+        if (hint == SH_ComboBox_Popup && widget && widget->property("kaintScrollableList").toBool())
+            return 0;
+        return QProxyStyle::styleHint(hint, option, widget, data);
+    }
+
 private:
     static void drawClassicButton(const QStyleOption* option, QPainter* p)
     {

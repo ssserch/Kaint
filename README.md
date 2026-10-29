@@ -77,10 +77,12 @@ runs on Windows 10 and 11.
     <td valign="top">
       <h4>Cursors, rulers and status bar</h4>
       Painting tools use their icon as the cursor, sized like the system cursor and with the hot
-      spot on its tip; the selection tools, gradient, line, text and shapes keep the pointer with a
-      small icon beside it (the chosen shape, for Shapes), like Paint.NET. The move tools show a
-      curved arrow that turns as you rotate. Dark rulers (or the toolbar color) that the floating
-      windows never cover, and the tool's icon in the status bar.
+      spot on its tip; the selection tools, gradient, line, text and shapes keep the system pointer
+      (from your cursor theme) with a small icon beside it (the chosen shape, for Shapes), like
+      Paint.NET. The move tools show a curved arrow that turns as you rotate. Dark rulers (or the
+      toolbar color) that the floating windows never cover, and the tool's icon in the status bar.
+      Open and Save As use the system file dialog, the same one as Firefox (or Qt's, in
+      <b>Settings</b>).
     </td>
   </tr>
   <tr>
@@ -104,7 +106,8 @@ compact one), with the border width you choose in **Settings → User interface*
 carry Paint.NET's orange star, and the Colors window has gap-free swatches and a palette menu with
 your saved palettes, Rainbow and Small.
 
-Menus and windows fade in, layers slide into place when you reorder them, the active color slot
+Menus and windows fade in, a layer follows the mouse while you drag it in the Layers window (or a
+line marks where it will go, in **Settings**) and the others slide out of its way, the active color slot
 and the close buttons of the image tabs animate, and a modal dialog blinks when you click the
 window behind it (on X11 and Windows). Turn it all off with **Settings → User interface →
 Animations**.

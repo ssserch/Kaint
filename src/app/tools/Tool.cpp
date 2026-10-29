@@ -4,6 +4,7 @@
 #include "app/Icons.h"
 
 #include <QHash>
+#include <QSet>
 
 #include <cmath>
 
@@ -44,6 +45,11 @@ QCursor Tool::cursor() const
         {int(ToolId::Line), QStringLiteral("linecurve")},
         {int(ToolId::Shapes), QStringLiteral("shapes")},
     };
+    // Como en Paint.NET, con estas se sigue viendo el puntero y el icono va a su lado en miniatura.
+    static const QSet<int> mini{int(ToolId::RectSelect), int(ToolId::LassoSelect), int(ToolId::EllipseSelect),
+                                int(ToolId::Gradient), int(ToolId::Line)};
     const auto it = names.constFind(int(id()));
-    return it == names.cend() ? QCursor(Qt::CrossCursor) : Icons::toolCursor(*it);
+    if (it == names.cend())
+        return QCursor(Qt::CrossCursor);
+    return mini.contains(int(id())) ? Icons::miniToolCursor(*it) : Icons::toolCursor(*it);
 }

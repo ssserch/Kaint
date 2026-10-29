@@ -59,7 +59,9 @@ export class Stroke {
                 if (v > this.mask[i])
                     this.mask[i] = v;
             }
-        this.dirty = unionRect(this.dirty, rect);
+        // Un sello fuera de la imagen (clic fuera del lienzo) no cambia nada.
+        if (rect.w > 0 && rect.h > 0)
+            this.dirty = unionRect(this.dirty, rect);
         return rect;
     }
 
@@ -179,7 +181,7 @@ export class Stroke {
         const doc = this.doc, layer = this.layer;
         doc.preview = null;
         const r = this.dirty;
-        if (!r) {
+        if (!r || r.w <= 0 || r.h <= 0) {
             doc.pixelsChanged(layer, null);
             return;
         }

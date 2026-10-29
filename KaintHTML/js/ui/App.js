@@ -90,6 +90,12 @@ export class App extends EventTarget {
         });
         AppState.addEventListener("colors", () => this.updateToolIconColors());
         window.addEventListener("kaint-settings", () => this.applySettings());
+        // La miniatura del cursor de Formas sigue a la forma elegida.
+        AppState.addEventListener("tools", () => {
+            if (this.tools.current?.id === "shapes")
+                this.view.updateCursor();
+        });
+        window.addEventListener("kaint-cursor", () => this.view.updateCursor());
         window.addEventListener("kaint-iconpack", () => {
             this.view.updateCursor();
             this.refreshHint();
@@ -171,7 +177,7 @@ export class App extends EventTarget {
     setCurrent(doc) {
         if (doc === this.doc)
             return;
-        this.tools.current?.finish();
+        this.tools.finishCurrent();
         this.doc = doc;
         this.view.setDocument(doc);
         this.dispatchEvent(new Event("document"));
@@ -184,7 +190,7 @@ export class App extends EventTarget {
     async closeDocument(doc, ask = true) {
         if (!doc)
             return true;
-        this.tools.current?.finish();
+        this.tools.finishCurrent();
         if (ask && doc.isModified()) {
             const dlg = new TaskDialog(tr("Cambios no guardados"), "dialog-warning",
                                        tr("«%1» tiene cambios sin guardar.\n¿Qué quiere hacer?", doc.displayName()),
@@ -340,7 +346,7 @@ export class App extends EventTarget {
     // Antes de cualquier orden se aplica lo que la herramienta esté editando.
     command(fn) {
         return (...args) => {
-            this.tools.current?.finish();
+            this.tools.finishCurrent();
             return fn(...args);
         };
     }
@@ -726,13 +732,16 @@ export class App extends EventTarget {
         if (this.syncingHistory || !doc)
             return;
         this.syncingHistory = true;
-        const top = doc.history.steps[doc.history.index];
-        this.tools.current?.historyChanged?.();
-        if (top?.tool && top.base && this.tools.current?.id !== top.tool) {
-            this.tools.select(top.tool);
+        try {
+            const top = doc.history.steps[doc.history.index];
             this.tools.current?.historyChanged?.();
+            if (top?.tool && top.base && this.tools.current?.id !== top.tool) {
+                this.tools.select(top.tool);
+                this.tools.current?.historyChanged?.();
+            }
+        } finally {
+            this.syncingHistory = false;
         }
-        this.syncingHistory = false;
     }
 
     // --- Archivo ---------------------------------------------------------------------------
@@ -873,7 +882,7 @@ export class App extends EventTarget {
     async save(doc, saveAs = false) {
         if (!doc)
             return false;
-        this.tools.current?.finish();
+        this.tools.finishCurrent();
         let format = formatFor(doc.fileName || "imagen.png");
         let quality = doc.saveQuality ?? 95;
         if (doc.layers.length > 1 && !format.layered && !doc.fileHandle)

@@ -69,6 +69,7 @@ public:
     ToolId id() const override { return ToolId::Shapes; }
     QString name() const override { return tr("Formas"); }
     QIcon icon() const override;
+    QCursor cursor() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_O); }
     quint64 options() const override

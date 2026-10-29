@@ -486,6 +486,24 @@ ShapesTool::ShapesTool(QObject* parent)
 
 QIcon ShapesTool::icon() const { return Icons::tool(QStringLiteral("shapes"), Icons::theme({"shapes", "draw-rectangle"})); }
 
+QCursor ShapesTool::cursor() const
+{
+    // Junto al puntero, la forma elegida (también las personalizadas), en negro con borde blanco
+    // para que se vea sobre cualquier imagen.
+    const ToolSettings s = AppState::instance()->tools();
+    const QString key = s.shape == ShapeType::Custom ? QStringLiteral("shape/custom/") + s.customShape
+                                                     : QStringLiteral("shape/%1").arg(int(s.shape));
+    return Icons::miniCursor(key, [&s](QPainter& p, const QRectF& r) {
+        const QRectF box = r.adjusted(1, 2, -1, -2);
+        const QPainterPath path = s.shape == ShapeType::Custom ? toolShapePath(s, box) : shapePath(s.shape, box, 2.5);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(path);
+        p.setPen(QPen(Qt::black, 1.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(path);
+    });
+}
+
 QString ShapesTool::hint() const
 {
     return m_edit.isActive()

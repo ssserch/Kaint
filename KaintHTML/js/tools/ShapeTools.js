@@ -5,7 +5,7 @@ import { Tool } from "./Tool.js";
 import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, context, createCanvas, drawBlended, unionRect } from "../core/Raster.js";
-import { shapeFillRule, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { miniCursor, shapeFillRule, shapePath, ShapeTypes } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
 const dashPatterns = { solid: [], dash: [3, 1], dot: [1, 1], dashdot: [3, 1, 1, 1], dashdotdot: [3, 1, 1, 1, 1, 1] };
@@ -387,6 +387,11 @@ export class ShapesTool extends EditableTool {
     get icon() { return "shapes"; }
     get letter() { return "O"; }
     get options() { return ["brushSize", "shape", "shapeStyle", "antialias", "blend", "dash", "finish"]; }
+
+    // Junto al puntero, la figura elegida.
+    cursor() {
+        return miniCursor(`opt-shape:${this.settings.shape}`);
+    }
 
     hint() {
         return this.editing

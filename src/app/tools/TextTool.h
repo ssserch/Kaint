@@ -22,7 +22,7 @@ public:
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_T); }
     quint64 options() const override { return OptText | OptAntialias | OptBlend | OptSelectionQuality | OptFinish; }
-    QCursor cursor() const override { return Qt::IBeamCursor; }
+    QCursor cursor() const override;
 
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;

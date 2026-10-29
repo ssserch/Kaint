@@ -102,6 +102,11 @@ TextTool::TextTool(QObject* parent)
 
 QIcon TextTool::icon() const { return Icons::tool(QStringLiteral("text"), Icons::theme({"draw-text", "tool-text"})); }
 
+QCursor TextTool::cursor() const
+{
+    return Icons::miniToolCursor(QStringLiteral("text"), true);
+}
+
 QString TextTool::hint() const
 {
     return m_edit.isActive()

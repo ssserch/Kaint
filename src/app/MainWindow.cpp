@@ -498,6 +498,13 @@ MainWindow::MainWindow()
             m_layers->setLinkingEnabled(t->id() == ToolId::MoveSelected);
     });
     connect(AppState::instance(), &AppState::colorsChanged, this, &MainWindow::updateToolIconColors);
+    // La miniatura del cursor de Formas sigue a la forma elegida.
+    const auto shapesCursor = [this] {
+        if (m_tools->current() && m_tools->current()->id() == ToolId::Shapes)
+            m_canvas->updateCursor();
+    };
+    connect(AppState::instance(), &AppState::toolSettingsChanged, this, shapesCursor);
+    connect(AppState::instance(), &AppState::customShapesChanged, this, shapesCursor);
     for (Tool* t : m_tools->tools())
         connect(t, &Tool::hintChanged, this, [this, t](const QString& h) {
             if (m_tools->current() == t)

@@ -632,6 +632,20 @@ int main(int argc, char** argv)
     drag(canvas, {QPointF(690, 110), QPointF(720, 140)});
     CHECK(qAlpha(doc->layer(1)->image.pixel(705, 125)) == 0);
 
+    // Un clic fuera de la imagen con el degradado y luego con la goma y Ctrl (el bloqueo de la
+    // versión web): la goma no deja paso y se sigue pudiendo cambiar de herramienta.
+    {
+        tools->select(ToolId::Gradient);
+        drag(canvas, {QPointF(-30, -30)});
+        tools->select(ToolId::Eraser);
+        const int steps = doc->undoStack()->count();
+        drag(canvas, {QPointF(-40, -40)}, Qt::LeftButton, Qt::ControlModifier);
+        CHECK(doc->undoStack()->count() == steps && !tools->current()->isBusy());
+        tools->select(ToolId::Pencil);
+        CHECK(tools->current()->id() == ToolId::Pencil);
+        tools->select(ToolId::Eraser);
+    }
+
     // Copiar y pegar (portapapeles dentro del proceso)
     tools->select(ToolId::RectSelect);
     drag(canvas, {QPointF(450, 250), QPointF(650, 480)});
@@ -1245,6 +1259,27 @@ int main(int argc, char** argv)
         settle();
         CHECK(canvas->viewport()->cursor().shape() == Qt::BitmapCursor);
         CHECK(Icons::rotateCursor(0).pixmap().toImage() != Icons::rotateCursor(M_PI / 2).pixmap().toImage());
+        // Selección, degradado y línea: la flecha (punto activo en la punta) con el icono en
+        // miniatura; el texto, la I; las formas, la forma elegida.
+        for (ToolId id : {ToolId::RectSelect, ToolId::LassoSelect, ToolId::EllipseSelect, ToolId::Gradient, ToolId::Line}) {
+            tools->select(id);
+            const QCursor c = tools->current()->cursor();
+            CHECK(c.shape() == Qt::BitmapCursor && c.hotSpot() == QPoint(0, 0) && !c.pixmap().isNull());
+        }
+        CHECK(Icons::miniToolCursor(QStringLiteral("gradient")).pixmap().toImage()
+              != Icons::miniToolCursor(QStringLiteral("linecurve")).pixmap().toImage());
+        tools->select(ToolId::Text);
+        const QCursor ibeam = tools->current()->cursor();
+        CHECK(ibeam.shape() == Qt::BitmapCursor && ibeam.hotSpot().x() > 0 && ibeam.hotSpot().y() > ibeam.hotSpot().x());
+        tools->select(ToolId::Shapes);
+        const ShapeType oldShape = state->tools().shape;
+        state->updateTools([](ToolSettings& s) { s.shape = ShapeType::Rectangle; });
+        const QImage rectCursor = tools->current()->cursor().pixmap().toImage();
+        state->updateTools([](ToolSettings& s) { s.shape = ShapeType::Heart; });
+        CHECK(tools->current()->cursor().pixmap().toImage() != rectCursor);
+        CHECK(canvas->viewport()->cursor().pixmap().toImage() == tools->current()->cursor().pixmap().toImage());
+        state->updateTools([oldShape](ToolSettings& s) { s.shape = oldShape; });
+        tools->select(ToolId::Paintbrush);
         CHECK(Palette::rainbowColors().size() == Palette::kColorCount && Palette::smallColors().size() == Palette::kColorCount);
         CHECK(Palette::smallColors().value(40) == QColor(Qt::white) && Palette::rainbowColors().value(0) != Palette::rainbowColors().value(1));
         QImage star(32, 32, QImage::Format_ARGB32_Premultiplied);

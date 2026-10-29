@@ -1,8 +1,10 @@
 // Base de las herramientas (src/app/tools/Tool.h de Kaint) y el gestor que las cambia con sus
 // atajos de una letra (pulsar la misma letra pasa a la siguiente herramienta que la comparte).
 import { AppState } from "../AppState.js";
-import { iconCursor } from "../ui/Icons.js";
+import { iconCursor, miniCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
+
+const miniCursorTools = new Set(["rectangleselect", "ellipseselect", "lassoselect", "gradient", "linecurve"]);
 
 export class Tool {
     constructor(app) {
@@ -34,13 +36,10 @@ export class Tool {
         return "";
     }
 
-    // Como en Kaint, el icono actual de la herramienta con el punto activo en su punta.
+    // Como en Kaint, el icono actual de la herramienta con el punto activo en su punta; la
+    // selección, el degradado y la línea dejan ver el puntero con su icono en miniatura al lado.
     cursor() {
-        return iconCursor(this.icon);
-    }
-
-    iconCursor() {
-        return iconCursor(this.icon);
+        return miniCursorTools.has(this.id) ? miniCursor(this.icon) : iconCursor(this.icon);
     }
 
     activate() {}
@@ -104,12 +103,28 @@ export class ToolManager extends EventTarget {
         if (!tool || tool === this.current)
             return;
         if (this.current) {
-            this.current.deactivate();
+            // Un error al aplicar lo pendiente no puede dejar atrapada la herramienta (ningún
+            // botón volvería a responder): se registra y se cambia igual.
+            try {
+                this.current.deactivate();
+            } catch (err) {
+                console.error(err);
+            }
             this.previous = this.current;
         }
         this.current = tool;
         tool.activate();
         this.dispatchEvent(new Event("changed"));
+    }
+
+    // Aplica lo pendiente de la herramienta actual antes de un comando; como al cambiar de
+    // herramienta, un error se registra y el comando sigue.
+    finishCurrent() {
+        try {
+            this.current?.finish();
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     // Atajo de una letra: la primera herramienta con esa letra o, si ya es la actual, la

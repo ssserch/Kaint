@@ -838,6 +838,90 @@ export function iconCursor(name, hx = null, hy = null, fallback = "crosshair") {
     return `-webkit-image-set(url(${c.one}) 1x, url(${c.two}) 2x) ${x} ${y}, ${fallback}`;
 }
 
+// Imágenes de los iconos de paquete para dibujarlas en los cursores: hasta que cargan se usa el
+// icono dibujado y luego se avisa para rehacer el cursor.
+const packImages = new Map();
+function packImage(url) {
+    let img = packImages.get(url);
+    if (!img) {
+        img = new Image();
+        img.onload = () => {
+            for (const key of Object.keys(cursorCache))
+                if (key.startsWith("mini/"))
+                    delete cursorCache[key];
+            window.dispatchEvent(new Event("kaint-cursor"));
+        };
+        img.src = url;
+        packImages.set(url, img);
+    }
+    return img.complete && img.naturalWidth ? img : null;
+}
+
+// Puntero normal (la flecha o, con 'ibeam', la I del texto) con el icono 'name' en miniatura al
+// lado, en una rejilla de 28 px; 'scale' da la versión de alta densidad.
+function miniCursorImage(name, ibeam, scale) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 28 * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.save();
+    ctx.translate(0.5, 0.5);
+    if (ibeam) {
+        const trace = () => {
+            ctx.beginPath();
+            ctx.moveTo(1, 1); ctx.quadraticCurveTo(4, 1, 4, 3); ctx.quadraticCurveTo(4, 1, 7, 1);
+            ctx.moveTo(4, 3); ctx.lineTo(4, 13);
+            ctx.moveTo(1, 15); ctx.quadraticCurveTo(4, 15, 4, 13); ctx.quadraticCurveTo(4, 15, 7, 15);
+        };
+        ctx.lineCap = "round";
+        for (const [color, width] of [["#fff", 3], ["#000", 1]]) {
+            trace();
+            stroke(ctx, color, width, "round", "round");
+        }
+    } else {
+        ctx.beginPath();
+        for (const [x, y] of [[0, 0], [0, 16], [4, 12], [7, 18], [9, 17], [6, 11], [11, 11]])
+            ctx.lineTo(x, y);
+        ctx.closePath();
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        stroke(ctx, "#000", 1);
+    }
+    ctx.restore();
+    const [ix, iy, side] = ibeam ? [9, 11, 14] : [12, 13, 14];
+    ctx.translate(ix, iy);
+    if (name.startsWith("opt-shape:")) {
+        // La figura elegida, en negro con borde blanco para verse sobre cualquier imagen.
+        for (const [color, width] of [["#fff", 3], ["#000", 1.2]]) {
+            ctx.beginPath();
+            shapePath(ctx, name.slice(10), 1, 2, side - 2, side - 4, 2.5);
+            stroke(ctx, color, width, "round", "round");
+        }
+        return canvas.toDataURL();
+    }
+    const packed = packedTool(name), img = packed && packImage(packed);
+    if (img) {
+        ctx.drawImage(img, 0, 0, side, side);
+    } else {
+        const painter = painterFor(name);
+        if (painter) {
+            ctx.scale(side / painter.design, side / painter.design);
+            painter.paint(ctx);
+        }
+    }
+    return canvas.toDataURL();
+}
+
+// Como en Paint.NET: el puntero se sigue viendo y la herramienta va a su lado en miniatura (la
+// selección, el degradado, la línea, el texto y las figuras).
+export function miniCursor(name, ibeam = false) {
+    const key = `mini/${ibeam ? "i" : "a"}/${name}/${primary ? css(primary) : ""}/${secondary ? css(secondary) : ""}`;
+    if (!cursorCache[key])
+        cursorCache[key] = { one: miniCursorImage(name, ibeam, 1), two: miniCursorImage(name, ibeam, 2) };
+    const c = cursorCache[key], [x, y] = ibeam ? [4, 8] : [0, 0];
+    return `-webkit-image-set(url(${c.one}) 1x, url(${c.two}) 2x) ${x} ${y}, ${ibeam ? "text" : "default"}`;
+}
+
 // Flecha curva de girar (como la de paint.js): 'angle' es la dirección, en radianes, desde el
 // puntero hacia el centro del giro.
 export function rotateCursor(angle) {

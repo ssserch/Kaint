@@ -745,6 +745,76 @@ QCursor toolCursor(const QString& name, Qt::CursorShape fallback)
     return cursor;
 }
 
+QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam)
+{
+    // Rejilla de 28 px (con el cursor de 32 px de Windows): flecha de 12×19 y miniatura de 14.
+    const qreal scale = std::max(1.0, cursorSize() / 32.0);
+    const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
+    const QString cacheKey = QStringLiteral("%1/%2/%3/%4/%5/%6/%7")
+                                 .arg(key)
+                                 .arg(ibeam)
+                                 .arg(scale)
+                                 .arg(dpr)
+                                 .arg(g_primary.rgba())
+                                 .arg(g_secondary.rgba())
+                                 .arg(IconPacks::generation());
+    static QHash<QString, QCursor> cache;
+    if (const auto it = cache.constFind(cacheKey); it != cache.cend())
+        return *it;
+    const int side = int(std::ceil(28 * scale));
+    QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
+    image.setDevicePixelRatio(dpr);
+    image.fill(Qt::transparent);
+    {
+        QPainter p(&image);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.scale(scale, scale);
+        p.save();
+        p.translate(0.5, 0.5);
+        if (ibeam) {
+            QPainterPath path;
+            path.moveTo(1, 1);
+            path.quadTo(4, 1, 4, 3);
+            path.quadTo(4, 1, 7, 1);
+            path.moveTo(4, 3);
+            path.lineTo(4, 13);
+            path.moveTo(1, 15);
+            path.quadTo(4, 15, 4, 13);
+            path.quadTo(4, 15, 7, 15);
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(path);
+            p.setPen(QPen(Qt::black, 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(path);
+        } else {
+            static const QPointF arrow[] = {{0, 0}, {0, 16}, {4, 12}, {7, 18}, {9, 17}, {6, 11}, {11, 11}};
+            p.setPen(QPen(Qt::black, 1, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
+            p.setBrush(Qt::white);
+            p.drawPolygon(arrow, int(std::size(arrow)));
+        }
+        p.restore();
+        paint(p, ibeam ? QRectF(9, 11, 14, 14) : QRectF(12, 13, 14, 14));
+    }
+    const QPointF hot = ibeam ? QPointF(4, 8) : QPointF(0, 0);
+    const QCursor cursor(QPixmap::fromImage(image), int(std::lround(hot.x() * scale)), int(std::lround(hot.y() * scale)));
+    if (cache.size() > 256)
+        cache.clear();
+    cache.insert(cacheKey, cursor);
+    return cursor;
+}
+
+QCursor miniToolCursor(const QString& name, bool ibeam)
+{
+    const QIcon icon = pdn(name);
+    return miniCursor(QStringLiteral("tool/") + name, [&icon](QPainter& p, const QRectF& r) {
+        // A la resolución final (escala del cursor y de la pantalla), para que se vea nítido.
+        const qreal k = p.transform().m11() * p.device()->devicePixelRatio();
+        const QPixmap pm = icon.pixmap(QSize(int(std::lround(r.width() * k)), int(std::lround(r.height() * k))), 1.0);
+        p.drawPixmap(r, pm, QRectF(pm.rect()));
+    }, ibeam);
+}
+
 QCursor rotateCursor(qreal angle)
 {
     // La flecha de girar de paint.js: un trozo de circunferencia de 32° con una punta en cada

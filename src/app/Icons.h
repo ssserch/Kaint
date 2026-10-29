@@ -6,6 +6,7 @@
 #include <QIcon>
 #include <QPainterPath>
 
+#include <functional>
 #include <initializer_list>
 
 class QPainter;
@@ -54,6 +55,12 @@ QCursor toolCursor(const QString& name, Qt::CursorShape fallback = Qt::CrossCurs
 // Flecha curva de girar (como la de paint.js) apuntando a lo largo del giro: 'angle' es la
 // dirección, en radianes, desde el puntero hacia el centro del giro.
 QCursor rotateCursor(qreal angle);
+// Como en Paint.NET, el puntero normal (la flecha o, con 'ibeam', la I del texto) con un dibujo en
+// miniatura al lado: 'paint' lo dibuja en el rectángulo que recibe y 'key' lo identifica en la
+// caché. Lo usan la selección, el degradado, la línea, el texto y las formas.
+QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam = false);
+// El de una herramienta ("gradient", "text"...): su icono actual en miniatura.
+QCursor miniToolCursor(const QString& name, bool ibeam = false);
 // Colores con los que se tiñen el cubo de pintura, el pincel, cambiar color y el degradado
 // (inválidos: sus colores de siempre). Los iconos ya creados cambian al volver a dibujarse.
 void setActiveColors(const QColor& primary, const QColor& secondary);

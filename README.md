@@ -75,9 +75,11 @@ runs on Windows 10 and 11.
     </td>
     <td valign="top">
       <h4>Cursors, rulers and status bar</h4>
-      Every tool's cursor is its icon, sized like the system cursor and with the hot spot on its
-      tip; the move tools show a curved arrow that turns as you rotate. Dark rulers (or the toolbar
-      color) that the floating windows never cover, and the tool's icon in the status bar.
+      Painting tools use their icon as the cursor, sized like the system cursor and with the hot
+      spot on its tip; the selection tools, gradient, line, text and shapes keep the pointer with a
+      small icon beside it (the chosen shape, for Shapes), like Paint.NET. The move tools show a
+      curved arrow that turns as you rotate. Dark rulers (or the toolbar color) that the floating
+      windows never cover, and the tool's icon in the status bar.
     </td>
   </tr>
   <tr>

@@ -91,6 +91,45 @@ await tool("eraser");
 await drag([[20, 10], [21, 10]]);
 check((await pixel(20, 10))[3] < 255, "la goma borra");
 
+// El bloqueo de la goma: degradado con un clic fuera del lienzo, goma con Ctrl+clic fuera del
+// lienzo y luego cualquier herramienta (antes el trazo vacío fallaba y no dejaba cambiar).
+{
+    const toolButton = (name) => page.locator(`.tools-grid .tbutton[title^="${name}"]`);
+    await toolButton("Degradado").click();
+    await click(-30, -30);
+    await toolButton("Goma").click();
+    const steps = await page.evaluate(() => window.kaint.doc.history.steps.length);
+    await page.keyboard.down("Control");
+    await click(-40, -40);
+    await page.keyboard.up("Control");
+    await toolButton("Lápiz").click();
+    const after = await page.evaluate(() => ({ tool: window.kaint.tools.current.id, steps: window.kaint.doc.history.steps.length }));
+    check(after.tool === "pencil" && after.steps === steps, `tras Ctrl+clic con la goma fuera del lienzo se cambia de herramienta (${JSON.stringify(after)})`);
+}
+
+// Selección, degradado, línea, texto y formas: el puntero con la herramienta en miniatura al lado
+// (en Formas, la forma elegida).
+{
+    const cursors = await page.evaluate(async () => {
+        const { AppState } = await import("./js/AppState.js");
+        const k = window.kaint, out = {};
+        for (const id of ["rectangleselect", "lassoselect", "ellipseselect", "gradient", "linecurve", "text", "shapes"]) {
+            k.tools.select(id);
+            out[id] = k.view.canvas.style.cursor;
+        }
+        const old = AppState.tools.shape;
+        AppState.updateTools({ shape: "heart" });
+        out.heart = k.view.canvas.style.cursor;
+        AppState.updateTools({ shape: old });
+        k.tools.select("pencil");
+        return out;
+    });
+    const arrows = ["rectangleselect", "lassoselect", "ellipseselect", "gradient", "linecurve", "shapes"];
+    check(arrows.every((id) => cursors[id].includes("image-set") && cursors[id].endsWith(" 0 0, default"))
+          && cursors.text.endsWith(" 4 8, text") && cursors.heart !== cursors.shapes && cursors.gradient !== cursors.linecurve,
+          "las herramientas con miniatura muestran el puntero con su icono al lado");
+}
+
 // Cubo de pintura (relleno global y contiguo) y varita mágica
 await setColors({ r: 0, g: 160, b: 0, a: 255 }, { r: 255, g: 255, b: 255, a: 255 });
 await tool("paintbucket");

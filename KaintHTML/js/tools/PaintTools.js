@@ -53,10 +53,11 @@ class StrokeTool extends Tool {
         if (!this.stroke)
             return;
         // El suavizado no deja el final del trazo por detrás del puntero.
-        if (e && this.settings.smoothing)
-            this.stroke.lineTo(e.x, e.y, this.size(e));
-        this.stroke.commit(this.name, this.icon);
+        const stroke = this.stroke;
         this.stroke = null;
+        if (e && this.settings.smoothing)
+            stroke.lineTo(e.x, e.y, this.size(e));
+        stroke.commit(this.name, this.icon);
     }
 
     isBusy() {
@@ -116,8 +117,9 @@ export class PencilTool extends Tool {
     onPointerUp() {
         if (!this.stroke)
             return;
-        this.stroke.commit(this.name, this.icon);
+        const stroke = this.stroke;
         this.stroke = null;
+        stroke.commit(this.name, this.icon);
     }
 
     isBusy() {

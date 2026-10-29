@@ -29,7 +29,8 @@ Safari download the saved file and paste with Ctrl+V instead.
 ## What's in it
 
 - **The Kaint interface**: menus, the main toolbar and the tool options bar, Kaint's drawn tool
-  icons (also as cursors, with the hot spot on their tip), image tabs with thumbnails and the
+  icons (also as cursors, with the hot spot on their tip, or small beside the pointer for the
+  selection tools, gradient, line, text and shapes), image tabs with thumbnails and the
   orange star of unsaved images, the Tools, History, Layers and Colors windows (dockable to a
   corner, resizable and translucent, in a Windows 10 inspired style or compact, with the border
   width you choose), rulers and the status bar with the tool icon and the zoom controls. The view

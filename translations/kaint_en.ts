@@ -294,6 +294,11 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>S:</translation>
     </message>
     <message>
+        <source>V:</source>
+        <comment>valor (MSV)</comment>
+        <translation>V:</translation>
+    </message>
+    <message>
         <source>Opacidad (canal alfa)</source>
         <translation>Opacity - Alpha</translation>
     </message>
@@ -304,6 +309,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>« Menos</source>
         <translation>« Less</translation>
+    </message>
+    <message>
+        <source>&lt;&lt; Menos</source>
+        <translation>&lt;&lt; Less</translation>
+    </message>
+    <message>
+        <source>Más &gt;&gt;</source>
+        <translation>More &gt;&gt;</translation>
     </message>
     <message>
         <source>Color secundario</source>
@@ -4053,6 +4066,22 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The classic gray 3D look. It is also a template for the custom theme.</translation>
     </message>
     <message>
+        <source>El aspecto propio de Kaint.</source>
+        <translation>Kaint&apos;s own look.</translation>
+    </message>
+    <message>
+        <source>Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.</source>
+        <translation>Like Paint.NET 5: more compact, with borderless windows and buttons and menus closer together.</translation>
+    </message>
+    <message>
+        <source>No se aplica con el tema KDE.</source>
+        <translation>It does not apply with the KDE theme.</translation>
+    </message>
+    <message>
+        <source>Estilo de la interfaz:</source>
+        <translation>Interface style:</translation>
+    </message>
+    <message>
         <source>Administrar…</source>
         <translation>Manage…</translation>
     </message>
@@ -5700,6 +5729,85 @@ Do you want to replace them?</translation>
     <message>
         <source>px</source>
         <translation>px</translation>
+    </message>
+</context>
+<context>
+    <name>WelcomeDialog</name>
+    <message>
+        <source>Te damos la bienvenida a Kaint</source>
+        <translation>Welcome to Kaint</translation>
+    </message>
+    <message>
+        <source>Por </source>
+        <translation>By </translation>
+    </message>
+    <message>
+        <source>♥ Donar</source>
+        <translation>♥ Donate</translation>
+    </message>
+    <message>
+        <source>Apoyar el desarrollo de Kaint en Ko-fi</source>
+        <translation>Support Kaint&apos;s development on Ko-fi</translation>
+    </message>
+    <message>
+        <source>Elige cómo quieres que se vea Kaint. Todo se puede cambiar más tarde en Configuración.</source>
+        <translation>Choose how Kaint should look. You can change all of this later in Settings.</translation>
+    </message>
+    <message>
+        <source>Seguir al sistema</source>
+        <translation>Follow system</translation>
+    </message>
+    <message>
+        <source>Claro</source>
+        <translation>Light</translation>
+    </message>
+    <message>
+        <source>Oscuro</source>
+        <translation>Dark</translation>
+    </message>
+    <message>
+        <source>KDE</source>
+        <translation>KDE</translation>
+    </message>
+    <message>
+        <source>Windows 98</source>
+        <translation>Windows 98</translation>
+    </message>
+    <message>
+        <source>Personalizado</source>
+        <translation>Custom</translation>
+    </message>
+    <message>
+        <source>Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.</source>
+        <translation>Like Paint.NET 5: more compact, with borderless windows and buttons and menus closer together.</translation>
+    </message>
+    <message>
+        <source>Mostrar en Discord que usas Kaint (Rich Presence)</source>
+        <translation>Show on Discord that you are using Kaint (Rich Presence)</translation>
+    </message>
+    <message>
+        <source>Tu perfil de Discord muestra Kaint con la imagen y la herramienta; en Configuración eliges qué se ve.</source>
+        <translation>Your Discord profile shows Kaint with the image and the tool; choose what is shown in Settings.</translation>
+    </message>
+    <message>
+        <source>El idioma se aplica al reiniciar Kaint.</source>
+        <translation>The language is applied when Kaint restarts.</translation>
+    </message>
+    <message>
+        <source>Tema:</source>
+        <translation>Theme:</translation>
+    </message>
+    <message>
+        <source>Estilo de la interfaz:</source>
+        <translation>Interface style:</translation>
+    </message>
+    <message>
+        <source>Idioma:</source>
+        <translation>Language:</translation>
+    </message>
+    <message>
+        <source>Empezar</source>
+        <translation>Get Started</translation>
     </message>
 </context>
 <context>

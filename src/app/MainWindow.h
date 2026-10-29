@@ -53,6 +53,9 @@ public:
     void newDefaultDocument();
     void restoreSessionOrNew();
     void startupChecks();
+    // Primer inicio: la bienvenida con lo básico de la configuración (tema, estilo, idioma y
+    // Rich Presence); después ya no vuelve a salir.
+    void showWelcome();
     // Copias de recuperación de las imágenes sin guardar (cada pocos minutos).
     void autosave();
     // Se cerró para reiniciar Kaint (tema KDE o idioma).

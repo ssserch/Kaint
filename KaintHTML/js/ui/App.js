@@ -141,6 +141,8 @@ export class App extends EventTarget {
         // Ventanas como las de paint.js (Windows 10) o compactas, con el borde elegido.
         const root = document.documentElement;
         root.classList.toggle("win10", Settings.get("panelStyle") === 0);
+        // Aspecto de Paint.NET: más compacto, ventanas sin borde... (solo lo visual).
+        root.classList.toggle("pdn", Settings.get("uiStyle") === 1);
         root.style.setProperty("--window-border", `${Math.max(1, Math.min(12, Number(Settings.get("panelBorder")) || 1))}px`);
         this.updateToolIconColors();
         this.view.update();

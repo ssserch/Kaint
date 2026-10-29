@@ -26,6 +26,10 @@ enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Window
 enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
 enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
 enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
+// Aspecto de la interfaz: el de Kaint o una recreación de Paint.NET 5, más compacta (menús y
+// botones más juntos, ventanas sin borde ni esquinas redondeadas...). Solo cambia lo visual; no
+// se aplica con el tema KDE.
+enum class Look { Kaint = 0, PaintNet = 1 };
 
 // Colores y diseño de un tema. En el personalizado, un color no válido toma el del tema base
 // (claro u oscuro).
@@ -76,6 +80,8 @@ struct Spec {
     QString fontFamily;
     int fontSize = 0;
     QString iconTheme;
+    // Con el aspecto de Paint.NET (lo pone apply(), no se guarda en el tema).
+    bool paintNet = false;
 
     bool operator==(const Spec&) const = default;
 };
@@ -109,6 +115,11 @@ void prepare(Scheme scheme);
 void initStyle(Scheme scheme);
 
 void apply(Scheme scheme);
+// Aspecto de la interfaz (se ve al volver a aplicar el tema).
+void setLook(Look look);
+Look look();
+// Con el aspecto de Paint.NET activo (nunca con el tema KDE).
+bool paintNetLook();
 // Cambia el tema personalizado (se ve al momento si es el activo).
 void setCustom(const Spec& custom);
 Spec custom();

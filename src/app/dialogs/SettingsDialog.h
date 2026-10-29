@@ -41,6 +41,10 @@ struct AppSettings {
     // en píxeles.
     int panelStyle = 0;
     int panelBorder = 1;
+    // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (Theme::Look).
+    int uiStyle = 0;
+    // Se mostró la bienvenida del primer inicio.
+    bool welcomed = false;
     int colorScheme = 0;
     QString language = QStringLiteral("en");
     bool reopenLast = false;

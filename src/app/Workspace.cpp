@@ -25,7 +25,8 @@ int g_chromeBorder = 1;
 
 bool windows10Chrome()
 {
-    return g_chromeStyle == FloatingPanel::Style::Windows10 && Theme::current() != Theme::Scheme::Kde
+    // El aspecto de Paint.NET lleva siempre su botón de cerrar rojo y cuadrado.
+    return (g_chromeStyle == FloatingPanel::Style::Windows10 || Theme::paintNetLook()) && Theme::current() != Theme::Scheme::Kde
         && !Theme::active().classic;
 }
 
@@ -193,6 +194,9 @@ int FloatingPanel::borderWidth() const
 {
     if (Theme::current() == Theme::Scheme::Kde)
         return frameWidth();
+    // Como Paint.NET: sin borde.
+    if (Theme::paintNetLook())
+        return 0;
     return Theme::active().classic ? 2 : g_chromeBorder;
 }
 
@@ -208,8 +212,11 @@ void FloatingPanel::applyChrome()
     const auto* fit = dynamic_cast<const PanelContent*>(m_content);
     const QVariant layoutState = fit ? fit->layoutState() : QVariant();
     // paint.js: 5 px arriba, abajo y a la izquierda del título; el botón de cerrar casi en el borde.
+    // Paint.NET: una cabecera algo más baja, con el título a 8 px.
     auto* titleLayout = static_cast<QBoxLayout*>(m_titleBar->layout());
-    if (windows10())
+    if (Theme::paintNetLook())
+        titleLayout->setContentsMargins(8, 3, 3, 3);
+    else if (windows10())
         titleLayout->setContentsMargins(6, 5, 2, 5);
     else
         titleLayout->setContentsMargins(7, 1, 1, 1);
@@ -260,8 +267,9 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     const Theme::Spec s = Theme::active();
     QPainter p(this);
     // Con el estilo de Windows 10, las esquinas algo redondeadas de las ventanas de Paint.NET; el
-    // borde, del grosor elegido.
-    const qreal radius = windows10() ? 7 : s.radius;
+    // borde, del grosor elegido. Con el aspecto de Paint.NET, rectas y sin borde.
+    const bool paintNet = Theme::paintNetLook();
+    const qreal radius = paintNet ? 0 : windows10() ? 7 : s.radius;
     const qreal half = s.classic ? 0.5 : borderWidth() / 2.0;
     QPainterPath shape;
     shape.addRoundedRect(QRectF(rect()).adjusted(half, half, -half, -half), radius, radius);
@@ -295,6 +303,8 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
         bevel(r.adjusted(1, 1, -1, -1), Qt::white, face.darker(150));
         return;
     }
+    if (paintNet)
+        return;
     QColor border = s.panel;
     border = QColor::fromRgbF(border.redF() * 0.78f + s.text.redF() * 0.22f, border.greenF() * 0.78f + s.text.greenF() * 0.22f,
                               border.blueF() * 0.78f + s.text.blueF() * 0.22f);
@@ -333,8 +343,10 @@ bool FloatingPanel::event(QEvent* e)
     case QEvent::StyleChange:
     case QEvent::FontChange: {
         const int titleHeight = m_titleBar->sizeHint().height() + titleInset() - frameWidth();
-        const int side = grip() - frameWidth();
-        layout()->setContentsMargins(side, titleHeight + 2, side, side);
+        // Paint.NET: el contenido casi pegado a los bordes y justo debajo de la cabecera.
+        const bool paintNet = Theme::paintNetLook();
+        const int side = paintNet ? 2 : grip() - frameWidth();
+        layout()->setContentsMargins(side, titleHeight + (paintNet ? 0 : 2), side, side);
         break;
     }
     default:

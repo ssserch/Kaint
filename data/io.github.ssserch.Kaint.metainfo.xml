@@ -66,12 +66,12 @@
     <screenshot type="default">
       <caption>The dark theme with the tools, colors, history and layers windows</caption>
       <caption xml:lang="es">El tema oscuro con las ventanas de herramientas, colores, historial y capas</caption>
-      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.0/img/other/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.1/img/other/screenshot.png</image>
     </screenshot>
     <screenshot>
       <caption>The light theme</caption>
       <caption xml:lang="es">El tema claro</caption>
-      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.0/img/other/screenshot-light.png</image>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.1/img/other/screenshot-light.png</image>
     </screenshot>
   </screenshots>
 
@@ -109,6 +109,19 @@
   </keywords>
 
   <releases>
+    <release version="1.1.1" date="2026-10-29">
+      <description>
+        <p>A Paint.NET style for the interface, a welcome window and many fixes.</p>
+        <ul>
+          <li>New Paint.NET interface style, more compact and without borders, next to Kaint's own</li>
+          <li>A welcome window on the first start with the theme, style, language and Discord options</li>
+          <li>Open and Save As use the system file dialog</li>
+          <li>Cursors with a tool thumbnail use the system pointer</li>
+          <li>Layers follow the mouse while dragged in the Layers window</li>
+          <li>Fixed selection outlines, the background shifting while moving pixels and the font chooser</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-10-29">
       <description>
         <p>Animations, icon packs, editable shortcuts and a web version.</p>

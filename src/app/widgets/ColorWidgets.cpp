@@ -70,13 +70,22 @@ void ColorWheel::resizeEvent(QResizeEvent*)
                 row[x] = 0;
                 continue;
             }
-            qreal hue = std::atan2(-dy, dx) / (2 * M_PI);
+            qreal hue = std::atan2(m_clockwise ? dy : -dy, dx) / (2 * M_PI);
             if (hue < 0)
                 hue += 1;
             const QColor col = QColor::fromHsvF(float(hue), float(std::min(1.0, d / c)), 1.0f, float(alpha));
             row[x] = qPremultiply(col.rgba());
         }
     }
+}
+
+void ColorWheel::setClockwise(bool on)
+{
+    if (on == m_clockwise)
+        return;
+    m_clockwise = on;
+    resizeEvent(nullptr);
+    update();
 }
 
 void ColorWheel::setColor(const QColor& c)
@@ -97,7 +106,7 @@ void ColorWheel::paintEvent(QPaintEvent*)
     const qreal radius = r.width() / 2.0;
     const qreal angle = hueOf(m_color) * 2 * M_PI;
     const qreal dist = m_color.hsvSaturationF() * radius;
-    const QPointF marker = r.center() + QPointF(std::cos(angle) * dist, -std::sin(angle) * dist);
+    const QPointF marker = r.center() + QPointF(std::cos(angle) * dist, (m_clockwise ? 1 : -1) * std::sin(angle) * dist);
     p.setBrush(Qt::NoBrush);
     p.setPen(QPen(Qt::black, 1.5));
     p.drawEllipse(marker, 5, 5);
@@ -110,7 +119,7 @@ void ColorWheel::pickAt(const QPointF& pos, Qt::KeyboardModifiers mods)
     const QRectF r = wheelRect();
     const QPointF d = pos - r.center();
     const qreal radius = r.width() / 2.0;
-    qreal hue = std::atan2(-d.y(), d.x()) / (2 * M_PI);
+    qreal hue = std::atan2(m_clockwise ? d.y() : -d.y(), d.x()) / (2 * M_PI);
     if (hue < 0)
         hue += 1;
     qreal sat = std::min(1.0, std::hypot(d.x(), d.y()) / radius);

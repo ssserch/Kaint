@@ -15,6 +15,10 @@ const defaults = {
     layerDropLine: false,
     // Cursores con la herramienta en miniatura al lado: el puntero del sistema o el de Kaint.
     systemPointer: true,
+    // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (solo lo visual).
+    uiStyle: 0,
+    // Se mostró la bienvenida de la primera vez.
+    welcomed: false,
     colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro
     language: navigator.language?.toLowerCase().startsWith("es") ? "es" : "en",
     dropShadow: true,

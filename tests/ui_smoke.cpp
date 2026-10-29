@@ -22,6 +22,7 @@
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
 #include "app/dialogs/TaskDialog.h"
+#include "app/dialogs/WelcomeDialog.h"
 #include "app/panels/ColorsPanel.h"
 #include "app/panels/LayersPanel.h"
 #include "app/panels/ToolsPanel.h"
@@ -44,6 +45,7 @@
 #include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
 #include <QDir>
@@ -2785,6 +2787,68 @@ int main(int argc, char** argv)
 #endif
         qputenv("XCURSOR_PATH", oldPath);
         qputenv("XCURSOR_THEME", oldTheme);
+    }
+
+    // Estilo de la interfaz como Paint.NET: ventanas sin borde, sin ir al principio ni al final en
+    // Historial, Colores sin selector de ranura ni brillo y «Más >>» junto a la rueda; al volver,
+    // todo como antes.
+    {
+        auto* colors = w.findChild<ColorsPanel*>();
+        auto* moreButton = colors ? colors->findChild<QPushButton*>(QStringLiteral("ColorsMoreButton")) : nullptr;
+        auto* target = colors ? colors->findChild<QComboBox*>() : nullptr;
+        QToolButton* first = nullptr;
+        for (QToolButton* b : w.findChildren<QToolButton*>())
+            if (b->toolTip() == QLatin1String("Volver al principio"))
+                first = b;
+        CHECK(moreButton && target && first);
+        // En la vista compacta.
+        if (moreButton && moreButton->isChecked())
+            moreButton->click();
+        const Theme::Scheme scheme = Theme::current();
+        Theme::setLook(Theme::Look::PaintNet);
+        Theme::apply(scheme);
+        settle();
+        CHECK(Theme::paintNetLook() && Theme::active().radius == 0 && Theme::active().paintNet);
+        CHECK(qApp->styleSheet().contains(QStringLiteral("ColorsMoreButton")));
+        if (moreButton && target && first) {
+            CHECK(moreButton->text() == QStringLiteral("Más >>") && !target->isVisibleTo(colors) && first->isHidden());
+        }
+        CHECK(QApplication::style()->styleHint(QStyle::SH_UnderlineShortcut) == 0);
+        Theme::setLook(Theme::Look::Kaint);
+        Theme::apply(scheme);
+        settle();
+        CHECK(!Theme::paintNetLook() && !qApp->styleSheet().contains(QStringLiteral("ColorsMoreButton")));
+        if (moreButton && target && first)
+            CHECK(moreButton->text() == QStringLiteral("Más »") && target->isVisibleTo(colors) && !first->isHidden());
+    }
+
+    // Bienvenida del primer inicio: el logo, la versión, el autor con el botón de donar, y el
+    // tema, el estilo, el idioma y Rich Presence; el tema y el estilo se ven al momento.
+    {
+        AppSettings start;
+        start.language = QStringLiteral("es");
+        WelcomeDialog welcome(start);
+        welcome.show();
+        settle();
+        const QList<QComboBox*> combos = welcome.findChildren<QComboBox*>();
+        CHECK(combos.size() == 3 && welcome.findChild<QCheckBox*>() && welcome.findChild<WaveLabel*>());
+        bool donate = false;
+        for (QToolButton* b : welcome.findChildren<QToolButton*>())
+            donate = donate || b->text().contains(QStringLiteral("Donar"));
+        CHECK(donate);
+        AppSettings previewed;
+        bool previewSent = false;
+        QObject::connect(&welcome, &WelcomeDialog::previewRequested, &welcome, [&](const AppSettings& s) {
+            previewed = s;
+            previewSent = true;
+        });
+        for (QComboBox* c : combos)
+            if (c->findData(1) >= 0 && c->count() == 2) {
+                c->setCurrentIndex(1);
+                emit c->activated(1);
+            }
+        CHECK(previewSent && previewed.uiStyle == 1 && welcome.settings().uiStyle == 1);
+        welcome.close();
     }
 
     // Breeze (su ToolsAreaManager) pide QMainWindow::menuBar() al pulir la ventana: los menús y

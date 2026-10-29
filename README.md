@@ -102,7 +102,10 @@ runs on Windows 10 and 11.
 Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
 colors, toolbar layout and a canvas background image with placement, scale, blur and tint. The
 floating windows have a Windows 10 inspired style with slightly rounded corners (or Kaint's
-compact one), with the border width you choose in **Settings → User interface**. Unsaved images
+compact one), with the border width you choose in **Settings → User interface**. The **interface
+style** can be Kaint's own or a recreation of **Paint.NET 5**: more compact, with borderless
+windows, tighter menus and buttons and Paint.NET's Colors window. The first start shows a
+welcome window to pick the theme, style, language and Discord Rich Presence. Unsaved images
 carry Paint.NET's orange star, and the Colors window has gap-free swatches and a palette menu with
 your saved palettes, Rainbow and Small.
 

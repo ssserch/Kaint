@@ -54,7 +54,10 @@ Safari download the saved file and paste with Ctrl+V instead.
 - **Files**: opens PNG, JPEG, WebP, GIF, BMP, AVIF and ICO images and **OpenRaster (.ora)** with
   its layers; saves PNG, JPEG, WebP and OpenRaster. Drop images onto the window to open them.
 - **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
-  editable colors; **English and Spanish** (Kaint's own translations) and Kaint's **animations**.
+  editable colors, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
+  compact, borderless windows); **English and Spanish** (Kaint's own translations) and Kaint's
+  **animations**. The first visit shows a welcome window with the theme, style and language, and
+  About looks like Kaint's, with its animated logo.
 - **Settings** like Kaint's: interface, canvas (custom background, checkerboard brightness,
   rulers), tools, pen and tablet, plugins, updates, diagnostics, icon packs (.zip files with an
   `asset-pack.json`, with a preview), fonts for the Text tool and editable keyboard shortcuts.

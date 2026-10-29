@@ -15,6 +15,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QTranslator>
 
 #include <algorithm>
@@ -157,6 +158,7 @@ int main(int argc, char** argv)
     AppState::instance()->load();
     Theme::captureSystemDefaults();
     Theme::initStyle(scheme);
+    Theme::setLook(Theme::Look(AppSettings::load().uiStyle));
     Theme::apply(scheme);
 
     if (preview) {
@@ -186,6 +188,8 @@ int main(int argc, char** argv)
     else
         window.openFiles(files);
     window.startupChecks();
+    if (!AppSettings::load().welcomed)
+        QTimer::singleShot(0, &window, &MainWindow::showWelcome);
     const int code = app.exec();
     if (window.restartRequested())
         QProcess::startDetached(QCoreApplication::applicationFilePath(),

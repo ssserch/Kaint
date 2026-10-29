@@ -11,9 +11,10 @@ const ts = readFileSync(join(here, "../../translations/kaint_en.ts"), "utf8");
 const decode = (s) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, "&");
 const table = {};
-for (const m of ts.matchAll(/<message>\s*<source>([\s\S]*?)<\/source>\s*<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
-    const source = decode(m[1]);
-    const translation = decode(m[2]);
+// Un texto con comentario (el mismo texto con otro sentido) va como "comentario\u0004texto" (trc).
+for (const m of ts.matchAll(/<message>\s*<source>([\s\S]*?)<\/source>\s*(?:<comment>([\s\S]*?)<\/comment>\s*)?<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
+    const source = m[2] ? `${decode(m[2])}\u0004${decode(m[1])}` : decode(m[1]);
+    const translation = decode(m[3]);
     if (translation && !(source in table))
         table[source] = translation;
 }

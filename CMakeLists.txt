@@ -152,6 +152,7 @@ add_library(kaintui STATIC
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp
     src/app/dialogs/ThemeDialog.cpp
+    src/app/dialogs/WelcomeDialog.cpp
     src/app/tools/Handles.cpp
     src/app/tools/Tool.cpp
     src/app/tools/TransformBox.cpp

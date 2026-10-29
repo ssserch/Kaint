@@ -6,10 +6,28 @@ import { mnemonicHtml, plain } from "../i18n.js";
 
 let openMenus = [];
 
+// Como en Windows, pulsar Alt subraya las letras de acceso (kaint.css); un clic o cerrar los
+// menús lo quita.
+function altShortcuts(on) {
+    document.documentElement.classList.toggle("alt-held", on);
+}
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Alt")
+        altShortcuts(true);
+}, true);
+document.addEventListener("keyup", (e) => {
+    if (e.key === "Alt" && !openMenus.length)
+        altShortcuts(false);
+}, true);
+document.addEventListener("pointerdown", () => altShortcuts(false), true);
+window.addEventListener("blur", () => altShortcuts(false));
+
 export function closeMenus() {
     for (const m of openMenus)
         m.remove();
     openMenus = [];
+    altShortcuts(false);
     document.querySelectorAll(".menubar.active").forEach((bar) => {
         bar.classList.remove("active");
         bar.querySelectorAll(".open").forEach((t) => t.classList.remove("open"));

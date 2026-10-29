@@ -425,6 +425,8 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 check(tr("Seleccionar automáticamente la capa visible más cercana tras ocultar una capa"), "autoSelectVisibleLayer"),
                 check(tr("Iconos de herramientas con los colores activos"), "coloredToolIcons",
                       tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario.")),
+                check(tr("Subrayar las letras de acceso de los menús"), "menuMnemonics",
+                      tr("Las letras que abren cada menú y opción con Alt. Desactivado, como en Windows, solo se subrayan al pulsar Alt.")),
                 check(tr("Usar el puntero del sistema en los cursores con la herramienta en miniatura"), "systemPointer",
                       tr("La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores del escritorio con su icono al lado. Desactivado, la flecha de Kaint.")),
                 check(tr("Al arrastrar una capa, marcar con una línea dónde quedará"), "layerDropLine",

@@ -4,8 +4,9 @@
 # Cópialo dentro de la carpeta de compilación (junto al ejecutable kaint) y ejecútalo allí:
 #   ./screenpreview.sh
 # Pregunta las imágenes (la primera es la que se ve; las demás quedan abiertas en la barra de
-# arriba), el tema, si los iconos de herramientas llevan los colores activos, la resolución y el
-# formato, y guarda la captura en screenpreview-screenshots/.
+# arriba), el tema, el estilo de la interfaz (Kaint o Paint.NET), el idioma, si los iconos de
+# herramientas llevan los colores activos, las reglas, las ventanas translúcidas, la resolución y
+# el formato, y guarda la captura en screenpreview-screenshots/.
 # No toca la configuración de Kaint: cada captura usa una configuración de fábrica temporal.
 set -euo pipefail
 
@@ -31,6 +32,22 @@ QT_QPA_PLATFORM=offscreen "$KAINT" --help 2>/dev/null | grep -q -- "--screenprev
     || fail "Este kaint ($KAINT) no tiene el modo de capturas: vuelve a compilarlo."
 QT_QPA_PLATFORM=offscreen "$KAINT" --help 2>/dev/null | grep -q -- "--preview-colored-icons" \
     || fail "Este kaint ($KAINT) es anterior a la opción de los iconos de herramientas: vuelve a compilarlo."
+QT_QPA_PLATFORM=offscreen "$KAINT" --help 2>/dev/null | grep -q -- "--preview-style" \
+    || fail "Este kaint ($KAINT) es anterior al estilo de Paint.NET: vuelve a compilarlo."
+
+# Pregunta de sí o no; la respuesta vacía es la de fábrica ($2: yes o no).
+ask_yes_no() {
+    local prompt="$1" default="$2" choice
+    while true; do
+        read -r -p "$prompt" choice
+        case "${choice,,}" in
+            "") echo "$default"; return ;;
+            s|si|sí|y|yes) echo yes; return ;;
+            n|no) echo no; return ;;
+            *) warn "Escribe s o n." ;;
+        esac
+    done
+}
 
 # --- Imágenes ---------------------------------------------------------------
 # Admite rutas arrastradas a la terminal: entre comillas, con espacios escapados o file://.
@@ -78,32 +95,60 @@ echo "Tema:"
 echo "  1) Oscuro"
 echo "  2) Claro"
 echo "  3) KDE"
+echo "  4) Windows 98"
 THEME=""
 while [[ -z "$THEME" ]]; do
-    read -r -p "Elige [1-3]: " choice
+    read -r -p "Elige [1-4]: " choice
     case "${choice,,}" in
-        1|oscuro|dark) THEME=dark ;;
-        2|claro|light) THEME=light ;;
-        3|kde)         THEME=kde ;;
-        *) warn "Escribe 1, 2 o 3." ;;
+        1|oscuro|dark)   THEME=dark ;;
+        2|claro|light)   THEME=light ;;
+        3|kde)           THEME=kde ;;
+        4|windows98|98)  THEME=windows98 ;;
+        *) warn "Escribe 1, 2, 3 o 4." ;;
     esac
 done
 if [[ "$THEME" == kde && "${XDG_CURRENT_DESKTOP:-}" != *KDE* ]]; then
     warn "El tema KDE necesita Plasma (plasma-integration); fuera de KDE la captura saldrá con el estilo de Qt."
 fi
 
-# --- Iconos de herramientas -------------------------------------------------
-# El cubo, el pincel, cambiar color y el degradado pueden mostrar los colores activos.
+# --- Estilo de la interfaz --------------------------------------------------
+# El de Kaint o la recreación de Paint.NET 5 (más compacta, ventanas sin borde...).
 echo
-COLORED=""
-while [[ -z "$COLORED" ]]; do
-    read -r -p "¿Iconos de herramientas con los colores activos? [S/n] " choice
+echo "Estilo de la interfaz:"
+echo "  1) Kaint"
+echo "  2) Paint.NET"
+STYLE=""
+while [[ -z "$STYLE" ]]; do
+    read -r -p "Elige [1-2] (1): " choice
     case "${choice,,}" in
-        ""|s|si|sí|y|yes) COLORED=yes ;;
-        n|no) COLORED=no ;;
-        *) warn "Escribe s o n." ;;
+        ""|1|kaint)              STYLE=kaint ;;
+        2|paint.net|paintnet|pdn) STYLE=paintnet ;;
+        *) warn "Escribe 1 o 2." ;;
     esac
 done
+[[ "$STYLE" == paintnet && "$THEME" == kde ]] && warn "El estilo de Paint.NET no se aplica con el tema KDE."
+
+# --- Idioma -----------------------------------------------------------------
+echo
+echo "Idioma:"
+echo "  1) English"
+echo "  2) Español"
+LANGUAGE=""
+while [[ -z "$LANGUAGE" ]]; do
+    read -r -p "Elige [1-2] (1): " choice
+    case "${choice,,}" in
+        ""|1|en|english)          LANGUAGE=en ;;
+        2|es|español|espanol)     LANGUAGE=es ;;
+        *) warn "Escribe 1 o 2." ;;
+    esac
+done
+
+# --- Iconos de herramientas, reglas y ventanas -----------------------------
+# El cubo, el pincel, cambiar color y el degradado pueden mostrar los colores activos.
+echo
+COLORED="$(ask_yes_no "¿Iconos de herramientas con los colores activos? [S/n] " yes)"
+RULERS="$(ask_yes_no "¿Mostrar las reglas? [s/N] " no)"
+TRANSLUCENT="$(ask_yes_no "¿Ventanas translúcidas (como de fábrica)? [S/n] " yes)"
 
 # --- Resolución -------------------------------------------------------------
 RESOLUTIONS=(1280x720 1366x768 1600x900 1920x1080 2560x1440 3840x2160)
@@ -151,11 +196,13 @@ done
 
 # --- Captura ----------------------------------------------------------------
 mkdir -p "$OUT_DIR"
-OUTPUT="$OUT_DIR/kaint-$THEME-$SIZE-$(date +%Y%m%d-%H%M%S).$FORMAT"
+OUTPUT="$OUT_DIR/kaint-$STYLE-$THEME-$LANGUAGE-$SIZE-$(date +%Y%m%d-%H%M%S).$FORMAT"
 echo
 echo "Creando la captura…"
 if "$KAINT" --screenpreview "$OUTPUT" --color-scheme "$THEME" --preview-size "$SIZE" --preview-scale "$SCALE" \
-        --preview-colored-icons "$COLORED" -- "${IMAGES[@]}" 2> >(grep -v "propagateSizeHints" >&2); then
+        --preview-colored-icons "$COLORED" --preview-style "$STYLE" --preview-language "$LANGUAGE" \
+        --preview-rulers "$RULERS" --preview-translucent "$TRANSLUCENT" \
+        -- "${IMAGES[@]}" 2> >(grep -v "propagateSizeHints" >&2); then
     echo "${c_green}Lista:${c_reset} $OUTPUT"
 else
     fail "No se pudo crear la captura."

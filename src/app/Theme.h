@@ -120,6 +120,9 @@ void setLook(Look look);
 Look look();
 // Con el aspecto de Paint.NET activo (nunca con el tema KDE).
 bool paintNetLook();
+// Subrayar siempre las letras de acceso de los menús y botones. Si no (lo de fábrica, como en
+// Windows), solo se subrayan mientras se pulsa Alt o se usan los menús con el teclado.
+void setUnderlineShortcuts(bool always);
 // Cambia el tema personalizado (se ve al momento si es el activo).
 void setCustom(const Spec& custom);
 Spec custom();

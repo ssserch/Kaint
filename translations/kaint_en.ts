@@ -2105,6 +2105,22 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Tool icons with the active colors in the screenshot (yes or no).</translation>
     </message>
     <message>
+        <source>Estilo de la interfaz en la captura (kaint o paintnet).</source>
+        <translation>Interface style in the screenshot (kaint or paintnet).</translation>
+    </message>
+    <message>
+        <source>Idioma de la captura (en o es).</source>
+        <translation>Language of the screenshot (en or es).</translation>
+    </message>
+    <message>
+        <source>Reglas en la captura (yes o no).</source>
+        <translation>Rulers in the screenshot (yes or no).</translation>
+    </message>
+    <message>
+        <source>Ventanas translúcidas en la captura (yes o no).</source>
+        <translation>Translucent windows in the screenshot (yes or no).</translation>
+    </message>
+    <message>
         <source>px</source>
         <translation>px</translation>
     </message>
@@ -4032,6 +4048,14 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario.</source>
         <translation>The Paint Bucket, Paintbrush, Recolor and Gradient icons show the primary and secondary colors.</translation>
+    </message>
+    <message>
+        <source>Subrayar las letras de acceso de los menús</source>
+        <translation>Underline the access keys in menus</translation>
+    </message>
+    <message>
+        <source>Las letras que abren cada menú y opción con Alt. Desactivado, como en Windows, solo se subrayan al pulsar Alt.</source>
+        <translation>The letters that open each menu and item with Alt. When off, as in Windows, they are only underlined while Alt is pressed.</translation>
     </message>
     <message>
         <source>Usar el puntero del sistema en los cursores con la herramienta en miniatura</source>

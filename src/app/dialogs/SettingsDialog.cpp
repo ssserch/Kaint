@@ -81,6 +81,7 @@ AppSettings AppSettings::load()
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
+    a.menuMnemonics = get("menuMnemonics", a.menuMnemonics);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 5);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
@@ -137,6 +138,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("panelBorder"), panelBorder);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
     s.setValue(QStringLiteral("welcomed"), welcomed);
+    s.setValue(QStringLiteral("menuMnemonics"), menuMnemonics);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
     s.setValue(QStringLiteral("autosaveMinutes"), autosaveMinutes);
     s.setValue(QStringLiteral("language"), language);
@@ -307,6 +309,8 @@ QWidget* SettingsDialog::createInterfacePage()
           &AppSettings::autoSelectVisibleLayer);
     check(tr("Iconos de herramientas con los colores activos"), &AppSettings::coloredToolIcons,
           tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario."));
+    check(tr("Subrayar las letras de acceso de los menús"), &AppSettings::menuMnemonics,
+          tr("Las letras que abren cada menú y opción con Alt. Desactivado, como en Windows, solo se subrayan al pulsar Alt."));
     check(tr("Usar el puntero del sistema en los cursores con la herramienta en miniatura"), &AppSettings::systemPointer,
           tr("La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores "
              "del escritorio con su icono al lado. Desactivado, la flecha de Kaint."));

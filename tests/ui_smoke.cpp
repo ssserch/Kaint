@@ -2822,6 +2822,21 @@ int main(int argc, char** argv)
             CHECK(moreButton->text() == QStringLiteral("Más »") && target->isVisibleTo(colors) && !first->isHidden());
     }
 
+    // Letras de acceso: como en Windows, sin subrayar salvo con Alt (o siempre, en Configuración).
+    {
+        QStyle* style = QApplication::style();
+        CHECK(style->styleHint(QStyle::SH_UnderlineShortcut) == 0);
+        QKeyEvent altDown(QEvent::KeyPress, Qt::Key_Alt, Qt::AltModifier);
+        QApplication::sendEvent(&w, &altDown);
+        CHECK(style->styleHint(QStyle::SH_UnderlineShortcut) == 1);
+        QKeyEvent altUp(QEvent::KeyRelease, Qt::Key_Alt, Qt::NoModifier);
+        QApplication::sendEvent(&w, &altUp);
+        CHECK(style->styleHint(QStyle::SH_UnderlineShortcut) == 0);
+        Theme::setUnderlineShortcuts(true);
+        CHECK(style->styleHint(QStyle::SH_UnderlineShortcut) == 1);
+        Theme::setUnderlineShortcuts(false);
+    }
+
     // Bienvenida del primer inicio: el logo, la versión, el autor con el botón de donar, y el
     // tema, el estilo, el idioma y Rich Presence; el tema y el estilo se ven al momento.
     {

@@ -15,6 +15,9 @@
 #include <QFontDatabase>
 #include <QIcon>
 #include <QJsonDocument>
+#include <QKeyEvent>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPainter>
 #include <QPixmap>
 #include <QSettings>
@@ -75,6 +78,10 @@ QFont g_baseFont;
 bool g_baseFontSet = false;
 bool g_fusion = false;
 Look g_look = Look::Kaint;
+// Letras de acceso: siempre subrayadas o solo con Alt (mientras se pulsa o se navega por los
+// menús con el teclado).
+bool g_underlineAlways = false;
+bool g_altShortcuts = false;
 int g_systemDark = -1;
 QColor g_titleBar;
 QFileSystemWatcher* g_watcher = nullptr;
@@ -260,6 +267,63 @@ public:
     }
 };
 #endif
+
+// Pulsar Alt muestra el subrayado de las letras de acceso (como en Windows); un clic o cerrar los
+// menús lo vuelve a quitar.
+class AltShortcuts : public QObject {
+public:
+    using QObject::QObject;
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        switch (event->type()) {
+        case QEvent::KeyPress:
+            if (static_cast<QKeyEvent*>(event)->key() == Qt::Key_Alt)
+                set(true);
+            break;
+        case QEvent::KeyRelease:
+            // Al soltar Alt sin un menú abierto (con uno, sigue mientras se navega con el teclado).
+            if (static_cast<QKeyEvent*>(event)->key() == Qt::Key_Alt && !QApplication::activePopupWidget())
+                set(false);
+            break;
+        case QEvent::MouseButtonPress:
+            set(false);
+            break;
+        case QEvent::Hide:
+            if (qobject_cast<QMenu*>(watched))
+                QTimer::singleShot(0, this, [this] {
+                    if (!QApplication::activePopupWidget())
+                        set(false);
+                });
+            break;
+        default:
+            break;
+        }
+        return false;
+    }
+
+private:
+    void set(bool on)
+    {
+        if (on == g_altShortcuts)
+            return;
+        g_altShortcuts = on;
+        if (g_underlineAlways)
+            return;
+        for (QWidget* w : QApplication::allWidgets())
+            if (w->isVisible() && (qobject_cast<QMenuBar*>(w) || qobject_cast<QMenu*>(w) || qobject_cast<QAbstractButton*>(w)))
+                w->update();
+    }
+};
+
+void installAltShortcuts()
+{
+    static bool installed = false;
+    if (installed || !qApp)
+        return;
+    installed = true;
+    qApp->installEventFilter(new AltShortcuts(notifier()));
+}
 
 void watchSystem()
 {
@@ -553,9 +617,9 @@ public:
         // como un menú con flechas para desplazarse.
         if (hint == SH_ComboBox_Popup && widget && widget->property("kaintScrollableList").toBool())
             return 0;
-        // Como Paint.NET en Windows: las letras de acceso de los menús, sin subrayar.
-        if (hint == SH_UnderlineShortcut && paintNetLook())
-            return 0;
+        // Como en Windows: las letras de acceso, subrayadas solo con Alt (o siempre, en Configuración).
+        if (hint == SH_UnderlineShortcut)
+            return g_underlineAlways || g_altShortcuts ? 1 : 0;
         return QProxyStyle::styleHint(hint, option, widget, data);
     }
 
@@ -1170,6 +1234,7 @@ void initStyle(Scheme scheme)
 
 void apply(Scheme scheme)
 {
+    installAltShortcuts();
     g_current = scheme;
     g_titleBar = titleBarColor();
     if (g_systemIconTheme.isEmpty())
@@ -1236,6 +1301,15 @@ void apply(Scheme scheme)
             styleTitleBar(w, QColor());
 #endif
     emit notifier()->changed();
+}
+
+void setUnderlineShortcuts(bool always)
+{
+    if (always == g_underlineAlways)
+        return;
+    g_underlineAlways = always;
+    for (QWidget* w : QApplication::allWidgets())
+        w->update();
 }
 
 void setLook(Look look)

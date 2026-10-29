@@ -19,6 +19,8 @@ const defaults = {
     uiStyle: 0,
     // Se mostró la bienvenida de la primera vez.
     welcomed: false,
+    // Subrayar siempre las letras de acceso de los menús (si no, como en Windows, solo con Alt).
+    menuMnemonics: false,
     colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro
     language: navigator.language?.toLowerCase().startsWith("es") ? "es" : "en",
     dropShadow: true,

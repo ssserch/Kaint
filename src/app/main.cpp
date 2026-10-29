@@ -83,11 +83,25 @@ int main(int argc, char** argv)
         QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, previewSettings.path());
         QSettings preset(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"));
         preset.setValue(QStringLiteral("settings/discordEnabled"), false);
-        // Iconos de herramientas con los colores activos (de fábrica, sí).
-        const QString colored = rawOption(argc, argv, QStringLiteral("--preview-colored-icons")).toLower();
-        if (!colored.isEmpty())
-            preset.setValue(QStringLiteral("settings/coloredToolIcons"),
-                            colored != QLatin1String("no") && colored != QLatin1String("false") && colored != QLatin1String("0"));
+        preset.setValue(QStringLiteral("settings/welcomed"), true);
+        // Opciones de sí o no: los iconos de herramientas con los colores activos (de fábrica, sí),
+        // las reglas y las ventanas translúcidas.
+        auto yesNo = [&](const char* option, const char* key) {
+            const QString value = rawOption(argc, argv, QLatin1String(option)).toLower();
+            if (!value.isEmpty())
+                preset.setValue(QLatin1String(key),
+                                value != QLatin1String("no") && value != QLatin1String("false") && value != QLatin1String("0"));
+        };
+        yesNo("--preview-colored-icons", "settings/coloredToolIcons");
+        yesNo("--preview-rulers", "settings/rulers");
+        yesNo("--preview-translucent", "settings/translucentPanels");
+        // Estilo de la interfaz (kaint o paintnet) e idioma (en o es).
+        const QString style = rawOption(argc, argv, QStringLiteral("--preview-style")).toLower();
+        if (!style.isEmpty())
+            preset.setValue(QStringLiteral("settings/uiStyle"), style.contains(QLatin1String("paint")) || style == QLatin1String("pdn") ? 1 : 0);
+        const QString language = rawOption(argc, argv, QStringLiteral("--preview-language")).toLower();
+        if (language == QLatin1String("en") || language == QLatin1String("es"))
+            preset.setValue(QStringLiteral("settings/language"), language);
     }
 
     // Antes de crear la aplicación: salvo con el tema de KDE, el escritorio no debe imponer
@@ -153,6 +167,15 @@ int main(int argc, char** argv)
     parser.addOption(QCommandLineOption(QStringLiteral("preview-colored-icons"),
                                         QObject::tr("Iconos de herramientas con los colores activos en la captura (yes o no)."),
                                         QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-style"),
+                                        QObject::tr("Estilo de la interfaz en la captura (kaint o paintnet)."),
+                                        QStringLiteral("kaint|paintnet")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-language"), QObject::tr("Idioma de la captura (en o es)."),
+                                        QStringLiteral("en|es")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-rulers"), QObject::tr("Reglas en la captura (yes o no)."),
+                                        QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-translucent"),
+                                        QObject::tr("Ventanas translúcidas en la captura (yes o no)."), QStringLiteral("yes|no")));
     parser.process(app);
 
     AppState::instance()->load();

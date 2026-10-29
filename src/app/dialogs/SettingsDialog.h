@@ -45,6 +45,8 @@ struct AppSettings {
     int uiStyle = 0;
     // Se mostró la bienvenida del primer inicio.
     bool welcomed = false;
+    // Subrayar siempre las letras de acceso de los menús (si no, solo con Alt).
+    bool menuMnemonics = false;
     int colorScheme = 0;
     QString language = QStringLiteral("en");
     bool reopenLast = false;

@@ -97,6 +97,13 @@ u {
     text-decoration: underline;
 }
 
+/* Letras de acceso de los menús: como en Windows, sin subrayar salvo mientras se pulsa Alt o se
+   navega por los menús con el teclado (o siempre, en Configuración). */
+:root:not(.mnemonics):not(.alt-held) .menubar u,
+:root:not(.mnemonics):not(.alt-held) .popup-menu u {
+    text-decoration: none;
+}
+
 .kicon {
     display: inline-block;
     flex: none;
@@ -248,12 +255,71 @@ u {
     display: none;
 }
 
+/* Flecha de la lista de imágenes: una franja de la altura de las miniaturas con el chevrón arriba,
+   que se queda pulsada mientras la lista está abierta (como en Kaint y Paint.NET). */
 .image-list-button {
     flex: none;
-    align-self: flex-start;
-    width: 18px;
-    height: 24px;
-    margin: 8px 0 0 -4px;
+    align-self: stretch;
+    align-items: flex-start;
+    width: 16px;
+    min-width: 16px;
+    margin: 2px 0 2px -4px;
+    padding: 6px 0 0;
+}
+
+.image-list-button.down {
+    background: var(--selection);
+    border-color: var(--selection-border);
+}
+
+/* Lista de las imágenes abiertas: cada una con su miniatura y su nombre; la actual resaltada. */
+.image-list-popup {
+    position: fixed;
+    z-index: 1000;
+    min-width: 220px;
+    max-width: 480px;
+    max-height: calc(8 * 58px + 6px);
+    overflow-y: auto;
+    background: var(--base);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 1px;
+    box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3);
+    animation: kaint-fade-in 100ms ease-out;
+}
+
+.image-list-popup .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 58px;
+    padding: 0 8px 0 4px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    white-space: nowrap;
+}
+
+.image-list-popup .row.selected {
+    background: var(--selection);
+    border-color: var(--selection-border);
+}
+
+.image-list-popup .thumb {
+    width: 64px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+.image-list-popup .thumb canvas {
+    box-shadow: 0 0 0 1px var(--line);
+}
+
+.image-list-popup .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .image-tab {
@@ -1664,10 +1730,6 @@ input[type="checkbox"] {
 
 :root.pdn .menubar > .menu-title {
     padding: 3px 4px;
-}
-
-:root.pdn .menubar u {
-    text-decoration: none;
 }
 
 :root.pdn #main-toolbar {

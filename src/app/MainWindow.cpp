@@ -3088,6 +3088,7 @@ void MainWindow::applySettings()
     m_canvas->setAutoScroll(m_settings.autoScroll);
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, !m_settings.systemFileDialogs);
     Icons::setSystemPointer(m_settings.systemPointer);
+    Theme::setUnderlineShortcuts(m_settings.menuMnemonics);
     m_layers->setDropLineMode(m_settings.layerDropLine);
     ToolPreferences preferences;
     preferences.hideBoxWhileDragging = m_settings.hideMoveBox;

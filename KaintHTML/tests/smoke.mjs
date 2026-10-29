@@ -682,6 +682,46 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     check(about.logo === "kaint.html" && about.wave > 8 && about.credits >= 3, `Acerca de (${JSON.stringify(about)})`);
 }
 
+// La flecha de la tira, como en Kaint: se queda pulsada y debajo salen las imágenes con su
+// miniatura y su nombre (la actual resaltada); se elige con el ratón o con el teclado.
+{
+    const list = await page.evaluate(async () => {
+        const k = window.kaint;
+        if (k.docs.length < 2) {
+            const { Document } = await import("./js/core/Document.js");
+            k.addDocument(new Document(64, 48));
+        }
+        document.getElementById("image-list").click();
+        const popup = document.querySelector(".image-list-popup");
+        const out = { rows: popup?.querySelectorAll(".row").length, thumbs: popup?.querySelectorAll(".row canvas").length,
+                      selected: [...(popup?.querySelectorAll(".row") || [])].findIndex((r) => r.classList.contains("selected")),
+                      current: k.docs.indexOf(k.doc), down: document.getElementById("image-list").classList.contains("down") };
+        return out;
+    });
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("Enter");
+    const chosen = await page.evaluate(() => ({ current: window.kaint.docs.indexOf(window.kaint.doc), open: !!document.querySelector(".image-list-popup"),
+                                               down: document.getElementById("image-list").classList.contains("down") }));
+    check(list.rows >= 2 && list.thumbs === list.rows && list.selected === list.current && list.down
+          && chosen.current === list.current - 1 && !chosen.open && !chosen.down, `lista de imágenes (${JSON.stringify(list)}, ${JSON.stringify(chosen)})`);
+    await page.evaluate(() => window.kaint.closeDocument(window.kaint.docs[window.kaint.docs.length - 1], false));
+}
+
+// Letras de acceso de los menús: sin subrayar salvo con Alt (o siempre, en Configuración).
+{
+    const deco = () => page.evaluate(() => getComputedStyle(document.querySelector(".menubar u")).textDecorationLine);
+    const off = await deco();
+    await page.keyboard.down("Alt");
+    const alt = await deco();
+    await page.keyboard.up("Alt");
+    const released = await deco();
+    await page.evaluate(async () => (await import("./js/Settings.js")).Settings.set("menuMnemonics", true));
+    const always = await deco();
+    await page.evaluate(async () => (await import("./js/Settings.js")).Settings.set("menuMnemonics", false));
+    check(off === "none" && alt === "underline" && released === "none" && always === "underline",
+          `subrayado de las letras de acceso (${off}, ${alt}, ${released}, ${always})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

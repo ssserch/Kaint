@@ -143,6 +143,8 @@ export class App extends EventTarget {
         root.classList.toggle("win10", Settings.get("panelStyle") === 0);
         // Aspecto de Paint.NET: más compacto, ventanas sin borde... (solo lo visual).
         root.classList.toggle("pdn", Settings.get("uiStyle") === 1);
+        // Letras de acceso de los menús: siempre subrayadas o solo con Alt.
+        root.classList.toggle("mnemonics", !!Settings.get("menuMnemonics"));
         root.style.setProperty("--window-border", `${Math.max(1, Math.min(12, Number(Settings.get("panelBorder")) || 1))}px`);
         this.updateToolIconColors();
         this.view.update();
@@ -225,15 +227,72 @@ export class App extends EventTarget {
                 return;
     }
 
-    // Flecha al final de la tira: la lista de todas las imágenes abiertas.
+    // Flecha al final de la tira (como en Kaint y Paint.NET): una franja de la altura de las
+    // miniaturas que se queda pulsada mientras se ve, debajo, la lista de todas las imágenes con su
+    // miniatura y su nombre, con la actual resaltada.
     createImageList() {
         const button = document.getElementById("image-list");
         button.title = tr("Imágenes abiertas");
         button.appendChild(icon("image-list-menu", 16));
+        let popup = null;
+        const close = () => {
+            popup?.remove();
+            popup = null;
+            button.classList.remove("down");
+            document.removeEventListener("pointerdown", outside, true);
+            document.removeEventListener("keydown", keys, true);
+        };
+        const outside = (e) => {
+            if (!popup?.contains(e.target) && !button.contains(e.target))
+                close();
+        };
+        const choose = (doc) => {
+            close();
+            this.setCurrent(doc);
+        };
+        const keys = (e) => {
+            const rows = [...popup.querySelectorAll(".row")];
+            let i = rows.findIndex((r) => r.classList.contains("selected"));
+            if (e.key === "Escape") {
+                close();
+            } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                rows[i]?.classList.remove("selected");
+                i = Math.max(0, Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+                rows[i].classList.add("selected");
+                rows[i].scrollIntoView({ block: "nearest" });
+            } else if (e.key === "Enter" && i >= 0) {
+                choose(this.docs[i]);
+            } else {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+        };
         button.addEventListener("click", () => {
-            const r = button.getBoundingClientRect();
-            popupMenu(this.docs.map((doc) => ({ text: doc.displayName(), icon: doc === this.doc ? "dialog-ok-apply" : "document-new",
-                                                 run: () => this.setCurrent(doc) })), r.left, r.bottom);
+            if (popup) {
+                close();
+                return;
+            }
+            popup = el("div", { className: "image-list-popup" });
+            for (const doc of this.docs) {
+                const row = el("div", { className: "row" + (doc === this.doc ? " selected" : "") },
+                               [el("span", { className: "thumb" }, [thumbnail(doc.flattened(), 64, 48)]),
+                                el("span", { className: "name", textContent: (doc.isModified() ? "*" : "") + doc.displayName() })]);
+                row.addEventListener("click", () => choose(doc));
+                row.addEventListener("pointerenter", () => {
+                    popup.querySelectorAll(".row").forEach((r) => r.classList.toggle("selected", r === row));
+                });
+                popup.appendChild(row);
+            }
+            document.body.appendChild(popup);
+            // Debajo de la flecha, sin salirse de la ventana.
+            const r = button.getBoundingClientRect(), w = popup.offsetWidth;
+            popup.style.left = `${Math.max(0, Math.min(r.left, window.innerWidth - w - 2))}px`;
+            popup.style.top = `${r.bottom + 1}px`;
+            popup.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
+            button.classList.add("down");
+            document.addEventListener("pointerdown", outside, true);
+            document.addEventListener("keydown", keys, true);
         });
     }
 

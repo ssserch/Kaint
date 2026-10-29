@@ -49,10 +49,6 @@ Safari download the saved file and paste with Ctrl+V instead.
   drop shadow; **Ctrl+F** repeats the last one.
 - **Files**: opens PNG, JPEG, WebP, GIF, BMP, AVIF and ICO images and **OpenRaster (.ora)** with
   its layers; saves PNG, JPEG, WebP and OpenRaster. Drop images onto the window to open them.
-- **Plugins**: `.paintjs` packages (a ZIP with `plugin.json` and `plugin.js`) that add
-  adjustments, effects and file formats through the `paintDotJs.registerPlugin()` JavaScript API.
-  Install them from a file (or drop them onto the window) or from the plugin catalog in
-  **Settings → Plugins**; they are stored in the browser.
 - **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
   editable colors; **English and Spanish** (Kaint's own translations) and Kaint's **animations**.
 - **Settings** like Kaint's: interface, canvas (custom background, checkerboard brightness,
@@ -77,9 +73,12 @@ some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use the menus for those.
 
 ## License
 
-GPL-3.0, like Kaint. The interface icons in `assets/icons/` come from SSSerch's fork of
-[paint.js](https://github.com/LabyStudio/paintdotjs), used with permission;
-`assets/icons/face-smile.svg` is from KDE's Breeze icons (LGPL-3.0-or-later). The plugin API is
-compatible with paint.js plugins, and the plugin catalog is
-[paintdotjs-plugins](https://github.com/LabyStudio/paintdotjs-plugins). Kaint is not affiliated
-with dotPDN LLC; Paint.NET is a trademark of dotPDN LLC.
+Kaint is free software under the [GNU General Public License v3.0](LICENSE).
+`src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, `data/icons/` bundles KDE's
+Breeze icons (LGPL-3.0-or-later), and the interface
+
+## Disclaimer
+
+Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
+LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the
+software Kaint is inspired by.

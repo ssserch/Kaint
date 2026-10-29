@@ -28,14 +28,18 @@ Safari download the saved file and paste with Ctrl+V instead.
 
 ## What's in it
 
-- **The Kaint interface**: menus, the main toolbar and the tool options bar with Kaint's drawn
+- **The Kaint interface**: menus, the main toolbar and the tool options bar, Kaint's drawn tool
   icons, image tabs with thumbnails, the Tools, History, Layers and Colors windows (dockable to a
-  corner, resizable and translucent), and the status bar with the zoom controls.
+  corner, resizable and translucent, in paint.js's Windows 10 style or compact, with the border
+  width you choose), paint.js-style rulers and the status bar with the tool icon and the zoom
+  controls.
 - **All 19 tools**: rectangle, ellipse and lasso select, magic wand, move selected pixels and move
   selection (move, resize, rotate), zoom (with the pixel-snapped rectangle), pan, paint bucket,
   gradient, paintbrush, eraser, pencil, color picker, clone stamp, recolor, text, line/curve and
-  the 29 shapes. Selections combine like in Paint.NET (Ctrl, Alt, right click), and shapes, lines,
-  text and gradients stay editable until you press Enter.
+  the 29 shapes. Selections combine like in Paint.NET (Ctrl, Alt, right click), and the magic wand
+  follows the tolerance until you press Enter. Like in Kaint, shapes, lines, text, gradients and
+  paint bucket fills stay editable: every change is a history step, and going back to one of them
+  lets you keep editing it. A click with Move Selected Pixels selects the whole layer.
 - **Layers** with the 14 Paint.NET blend modes, opacity, visibility, drag to reorder and their
   properties dialog; full **history** you can click through.
 - **Adjustments and effects** with live preview, including Curves, Levels, Hue/Saturation,
@@ -45,10 +49,12 @@ Safari download the saved file and paste with Ctrl+V instead.
   its layers; saves PNG, JPEG, WebP and OpenRaster. Drop images onto the window to open them.
 - **Light and dark themes** (or follow the system), **English and Spanish** (Kaint's own
   translations), and Kaint's **animations**, which you can turn off in Settings.
+- **paint.js icon packs** (.zip files with an `asset-pack.json`), stored in the browser, and
+  **editable keyboard shortcuts** (Settings).
 
-Not available on the web: Paint.NET and native plugins, recovery copies, rulers, `.pdn` files,
-GIF animation editing and scanning. Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W,
-Ctrl+T): use the menus for those.
+Not available on the web: Paint.NET and native plugins, recovery copies, extra fonts and custom
+shapes, inches and centimeters, `.pdn` files, GIF animation editing and scanning. Browsers keep
+some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use the menus for those.
 
 ## Development
 

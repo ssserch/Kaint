@@ -7,9 +7,12 @@
 #include "app/Canvas.h"
 #include "app/Icons.h"
 #include "app/Recovery.h"
+#include "app/Shortcuts.h"
+#include "app/UserFonts.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
 #include "app/DiscordPresence.h"
+#include "app/IconPacks.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
@@ -32,7 +35,6 @@
 #include "core/plugins/PluginManager.h"
 
 #include <QActionGroup>
-#include <QActionEvent>
 #include <QApplication>
 #include <QBuffer>
 #include <QElapsedTimer>
@@ -390,34 +392,6 @@ private:
     QElapsedTimer m_closeClock;
 };
 
-// Botón de la barra principal: hace lo mismo que su acción, pero con el icono de la barra (el
-// dibujado al estilo de Paint.NET) aunque en los menús la acción lleve el PNG de la interfaz. Qt
-// vuelve a poner el de la acción cada vez que esta cambia, así que se repone siempre.
-class ToolBarButton : public QToolButton {
-public:
-    ToolBarButton(QAction* action, const QIcon& icon, QToolBar* bar)
-        : QToolButton(bar)
-        , m_icon(icon)
-    {
-        setAutoRaise(true);
-        setFocusPolicy(Qt::NoFocus);
-        setIconSize(bar->iconSize());
-        connect(bar, &QToolBar::iconSizeChanged, this, &QToolButton::setIconSize);
-        setDefaultAction(action);
-        setIcon(m_icon);
-    }
-
-protected:
-    void actionEvent(QActionEvent* e) override
-    {
-        QToolButton::actionEvent(e);
-        setIcon(m_icon);
-    }
-
-private:
-    QIcon m_icon;
-};
-
 // Fila superior al estilo de Paint.NET 5: menús con la barra principal debajo, la tira de
 // imágenes a lo alto de las dos filas y los botones de las ventanas a la derecha. La franja de
 // los menús lleva el color de la barra de título y la de abajo el de las barras.
@@ -491,6 +465,7 @@ MainWindow::MainWindow()
     setWindowIcon(Icons::app());
     setAcceptDrops(true);
     SliderBehavior::install();
+    UserFonts::loadAll();
     m_lastDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
 
     m_tools = new ToolManager(m_canvas, this);
@@ -503,6 +478,16 @@ MainWindow::MainWindow()
     createToolBars();
     createPanels();
     createStatusBar();
+    Shortcuts::registerActions(m_act);
+    // Otro paquete de iconos: todo se vuelve a pintar con los suyos.
+    connect(IconPacks::notifier(), &IconPacks::Notifier::changed, this, [this] {
+        for (const auto& [label, icon] : std::as_const(m_statusIcons))
+            label->setPixmap(icon.pixmap(16, 16));
+        refreshHint();
+        for (QWidget* w : QApplication::allWidgets())
+            w->update();
+        m_canvas->updateCursor();
+    });
 
     connect(m_tools, &ToolManager::toolChanged, this, [this](Tool* t) {
         showToolHint(t->hint());
@@ -645,15 +630,16 @@ void MainWindow::createActions()
                                  QKeySequence(QStringLiteral("Ctrl+Alt+V")), [this] { pasteIntoNewImage(); });
     A["copySelection"] = makeAction(tr("Copiar &selección"), {"edit-copy-selection", "edit-copy"},
                                     QKeySequence(QStringLiteral("Ctrl+Alt+Shift+C")), [this] { copySelection(); }, sel);
-    const QList<std::tuple<SelectionMode, QString, const char*, const char*>> pasteModes{
-        {SelectionMode::Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V", "selection-replace"},
-        {SelectionMode::Union, tr("&Sumar (unión)"), "", "selection-union"},
-        {SelectionMode::Exclude, tr("&Excluir"), "", "selection-exclude"},
-        {SelectionMode::Intersect, tr("&Intersecar"), "", "selection-intersect"},
-        {SelectionMode::Xor, tr("In&vertir («xor»)"), "", "selection-xor"}};
-    for (const auto& [mode, name, key, icon] : pasteModes) {
+    const QList<std::tuple<SelectionMode, QString, const char*>> pasteModes{
+        {SelectionMode::Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V"},
+        {SelectionMode::Union, tr("&Sumar (unión)"), ""},
+        {SelectionMode::Exclude, tr("&Excluir"), ""},
+        {SelectionMode::Intersect, tr("&Intersecar"), ""},
+        {SelectionMode::Xor, tr("In&vertir («xor»)"), ""}};
+    for (const auto& [mode, name, key] : pasteModes) {
         const QString id = QStringLiteral("pasteSelection%1").arg(int(mode));
-        A[id] = makeAction(name, {icon}, QKeySequence(QString::fromLatin1(key)), [this, m = mode] { pasteSelection(m); }, doc);
+        A[id] = makeAction(name, {}, QKeySequence(QString::fromLatin1(key)), [this, m = mode] { pasteSelection(m); }, doc);
+        A[id]->setIcon(Icons::selectionMode(mode));
     }
     A["eraseSel"] = makeAction(tr("&Borrar la selección"), {"edit-erase-selection", "edit-delete"}, QKeySequence(Qt::Key_Delete),
                                [this] { eraseSelection(tr("Borrar la selección")); }, sel);
@@ -1018,21 +1004,17 @@ void MainWindow::createToolBars()
     main->setObjectName(QStringLiteral("MainToolBar"));
     main->setMovable(false);
     main->setIconSize(QSize(16, 16));
-    const QList<QList<std::pair<const char*, const char*>>> groups{
-        {{"new", "document-new"}, {"open", "document-open"}, {"save", "document-save"}},
-        {{"print", "document-print"}},
-        {{"cut", "edit-cut"}, {"copy", "edit-copy"}, {"paste", "edit-paste"}},
-        {{"crop", "transform-crop"}, {"deselect", "edit-select-none"}},
-        {{"undo", "edit-undo"}, {"redo", "edit-redo"}},
-        {{"pixelGrid", "view-grid"}, {"rulers", "measure"}}};
-    for (const auto& group : groups) {
-        if (&group != &groups.first())
-            main->addSeparator();
-        for (const auto& [id, icon] : group) {
-            const QIcon drawn = Icons::pdn(QStringLiteral("toolbar-") + QLatin1String(icon));
-            main->addWidget(new ToolBarButton(A[id], drawn, main));
-        }
-    }
+    main->addActions({A["new"], A["open"], A["save"]});
+    main->addSeparator();
+    main->addAction(A["print"]);
+    main->addSeparator();
+    main->addActions({A["cut"], A["copy"], A["paste"]});
+    main->addSeparator();
+    main->addActions({A["crop"], A["deselect"]});
+    main->addSeparator();
+    main->addActions({A["undo"], A["redo"]});
+    main->addSeparator();
+    main->addActions({A["pixelGrid"], A["rulers"]});
     m_topLayout->addWidget(main, 1, 0, Qt::AlignLeft | Qt::AlignTop);
 
     m_options = new ToolOptionsBar(m_tools, this);
@@ -1195,22 +1177,27 @@ void MainWindow::createPanels()
 
 void MainWindow::createStatusBar()
 {
-    // Barra de estado de Paint.NET 5: ayuda de la herramienta, tamaño de la selección,
+    // Barra de estado de Paint.NET 5: icono y ayuda de la herramienta, tamaño de la selección,
     // posición del cursor, unidades, zum y su deslizador.
     QStatusBar* bar = statusBar();
+    m_hintIcon = new QLabel(bar);
+    m_hintIcon->setFixedSize(16, 16);
+    m_hintIcon->setContentsMargins(0, 0, 0, 0);
+    bar->addWidget(m_hintIcon);
     m_hint = new QLabel(bar);
     m_hint->setTextFormat(Qt::PlainText);
     m_hint->setMinimumWidth(100);
     m_hint->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     bar->addWidget(m_hint, 1);
 
-    auto item = [bar](std::initializer_list<const char*> icons, const QString& tip) {
+    auto item = [this, bar](std::initializer_list<const char*> icons, const QString& tip) {
         auto* w = new QWidget(bar);
         auto* l = new QHBoxLayout(w);
         l->setContentsMargins(6, 0, 6, 0);
         l->setSpacing(4);
         auto* icon = new QLabel(w);
         icon->setPixmap(Icons::theme(icons).pixmap(16, 16));
+        m_statusIcons.append({icon, Icons::theme(icons)});
         auto* text = new QLabel(w);
         text->setMinimumWidth(70);
         l->addWidget(icon);
@@ -1641,12 +1628,18 @@ void MainWindow::refreshHint()
 {
     // Con una herramienta de selección en reposo y algo seleccionado, como Paint.NET: posición,
     // rectángulo delimitador y área de la selección.
+    // Delante, como en paint.js, el icono de la herramienta o el de la selección.
     Tool* t = m_tools ? m_tools->current() : nullptr;
+    auto setIcon = [this](const QIcon& icon) {
+        m_hintIcon->setPixmap(icon.isNull() ? QPixmap() : icon.pixmap(QSize(16, 16), devicePixelRatioF()));
+    };
     if (!m_doc || !t || !t->highlightSelection() || t->isBusy() || m_doc->selection().isEmpty()
         || m_toolHint != t->hint()) {
+        setIcon(t ? t->icon() : QIcon());
         m_hint->setText(m_toolHint);
         return;
     }
+    setIcon(Icons::named(QStringLiteral("status-selection")));
     const Unit u = m_canvas->unit();
     const double dpi = m_doc->dpi();
     auto len = [&](double px) { return QStringLiteral("%1 %2").arg(formatLength(px, u, dpi), unitSuffix(u)); };
@@ -3045,6 +3038,8 @@ void MainWindow::applySettings()
         m_act["rulers"]->setChecked(m_settings.rulers);
     }
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
+    m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder);
+    m_canvas->setRulerStyle(Ruler::Style(m_settings.rulerStyle));
     m_canvas->setRulersVisible(m_settings.rulers);
     m_canvas->setOverscroll(m_settings.overscroll);
     m_canvas->setAutoScroll(m_settings.autoScroll);
@@ -3090,6 +3085,8 @@ void MainWindow::updateToolIconColors()
         tools->update();
     if (auto* bar = findChild<ToolOptionsBar*>())
         bar->update();
+    if (m_hint)
+        refreshHint();
 }
 
 PresenceInfo MainWindow::presenceInfo() const

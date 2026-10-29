@@ -18,6 +18,8 @@ public:
     // desplegables de Paint.NET 5.
     void addChoice(const QIcon& icon, const QString& text, int data, const QString& description = QString());
     void addSection(const QString& title);
+    // Quita las opciones con dato >= data y las secciones que se quedan vacías al final.
+    void removeChoicesFrom(int data);
     void setCurrent(int data);
     int current() const { return m_current; }
     void setShowText(bool on);

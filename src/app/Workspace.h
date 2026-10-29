@@ -25,6 +25,9 @@ class FloatingPanel : public QFrame {
     Q_OBJECT
 public:
     enum Corner { TopLeft, TopRight, BottomLeft, BottomRight };
+    // Aspecto del marco: como las ventanas de paint.js (Windows 10: cabecera alta, botón de cerrar
+    // cuadrado y esquinas rectas) o el compacto de Kaint.
+    enum class Style { Windows10, Compact };
 
     FloatingPanel(const QString& id, const QString& title, QWidget* content, QWidget* parent);
 
@@ -43,8 +46,13 @@ public:
     void showAnimated();
     void fitToContent();
 
-    // Grosor del borde que se puede arrastrar para cambiar el tamaño.
+    // Grosor mínimo del borde que se puede arrastrar para cambiar el tamaño.
     static constexpr int kBorder = 5;
+    // Estilo y grosor (en píxeles) del borde de todas las ventanas; se aplica con applyChrome().
+    static void setChrome(Style style, int border);
+    static Style chromeStyle();
+    static int chromeBorder();
+    void applyChrome();
 
 signals:
     void closed();
@@ -68,6 +76,13 @@ private:
     QRect constrained(const QRect& proposed, Qt::Edges edges) const;
     QSize chromeSize() const;
     int titleInset() const;
+    // Zona del área de trabajo donde puede estar la ventana (sin tapar las reglas).
+    QRect area() const;
+    // Con los temas de Paint.NET y el personalizado (no con el de KDE ni el clásico).
+    bool windows10() const;
+    // Grosor del borde dibujado y de la franja para cambiar el tamaño.
+    int borderWidth() const;
+    int grip() const;
     void updateTitleText();
     qreal restingOpacity() const;
     void fadeOpacity(qreal from, qreal to);
@@ -105,6 +120,9 @@ public:
     void saveState() const;
     void resetPanels();
     void setTranslucentPanels(bool on);
+    void setPanelChrome(FloatingPanel::Style style, int border);
+    // Zona para las ventanas: todo el área de trabajo menos las reglas, si se ven.
+    QRect panelArea() const;
 
 protected:
     void resizeEvent(QResizeEvent* e) override;

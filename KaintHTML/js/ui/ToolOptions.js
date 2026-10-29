@@ -194,6 +194,12 @@ export class ToolOptions {
                 ["intersect", "opt-selmode:intersect", tr("Modo de selección: %1", tr("Intersecar · Alt + clic derecho"))],
                 ["xor", "opt-selmode:xor", tr("Modo de selección: %1", tr("Invertir («xor») · Ctrl + clic derecho"))]]));
             break;
+        case "afterSelect":
+            this.group(label(tr("Después de seleccionar:")), choice(tr("Después de seleccionar"), "afterSelect", [
+                ["none", "rectangleselect", tr("No cambiar de herramienta")],
+                ["moveselection", "moveselection", tr("Cambiar a Mover selección")],
+                ["moveselectedpixels", "moveselectedpixels", tr("Cambiar a Mover píxeles seleccionados")]], { showText: true }));
+            break;
         case "selectionQuality":
             this.group(choice(tr("Calidad de selección"), "selectionAntialias", [
                 [false, "opt-selquality:0", tr("Calidad de selección pixelada")],

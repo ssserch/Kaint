@@ -1,30 +1,227 @@
-// Cubo de pintura y degradado (src/app/tools/FillTools.cpp).
+// Cubo de pintura y degradado (src/app/tools/FillTools.cpp): siguen editables (el origen del
+// relleno, los extremos del degradado, las opciones y los colores) hasta pulsar Intro.
 import { Tool } from "./Tool.js";
+import { drawMoveHandle, nearPoint, StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { floodMask } from "../core/FloodFill.js";
-import { blendPixels, cloneCanvas, context } from "../core/Raster.js";
+import { blendPixels, cloneCanvas, context, unionRect } from "../core/Raster.js";
 import { tr } from "../i18n.js";
 
-export class PaintBucketTool extends Tool {
+// Base de las dos: pasos editables como en Kaint (crear, "Editar…"/"Mover…" y "Finalizar…") y
+// retomar la edición al volver a uno de sus pasos.
+class EditableFill extends Tool {
+    constructor(app) {
+        super(app);
+        this.steps = new StepRecorder(this);
+    }
+
+    get recordsSteps() {
+        return true;
+    }
+
+    activate() {
+        // Otras opciones o colores: se ve al momento y se registra con el próximo paso.
+        this.onSettings = () => {
+            if (this.editing && !this.restoring) {
+                this.render();
+                this.steps.changed();
+            }
+        };
+        AppState.addEventListener("tools", this.onSettings);
+        AppState.addEventListener("colors", this.onSettings);
+    }
+
+    deactivate() {
+        AppState.removeEventListener("tools", this.onSettings);
+        AppState.removeEventListener("colors", this.onSettings);
+        this.finish();
+    }
+
+    begin() {
+        this.editing = true;
+        this.layer = this.doc.activeLayer;
+        this.start = cloneCanvas(this.layer.canvas);
+        this.preview = cloneCanvas(this.layer.canvas);
+        this.rect = null;
+        this.steps.start();
+        this.doc.setPreview({ layer: this.layer, canvas: this.preview });
+    }
+
+    commitStep() {
+        if (!this.editing || !this.rect)
+            return;
+        this.steps.commit({ layer: this.layer, preview: this.preview, rect: this.rect, base: this.start, state: this.saveState(),
+                            createText: this.name, editText: this.editName(), icon: this.icon });
+    }
+
+    isBusy() {
+        return !!this.drag;
+    }
+
+    finish() {
+        if (!this.editing)
+            return;
+        this.commitStep();
+        this.editing = false;
+        this.drag = null;
+        this.doc.preview = null;
+        if (!this.steps.finish(this.finishName(), this.icon))
+            this.doc.pixelsChanged(this.layer, null);
+        this.setHint(this.hint());
+        this.repaint();
+    }
+
+    leave() {
+        this.editing = false;
+        this.drag = null;
+        this.steps.leave();
+        if (this.doc?.preview?.canvas === this.preview)
+            this.doc.setPreview(null);
+        this.setHint(this.hint());
+    }
+
+    cancel() {
+        if (!this.editing)
+            return;
+        this.drag = null;
+        const step = this.steps.top();
+        step ? this.resumeFrom(step) : this.leave();
+    }
+
+    beforeHistoryJump() {
+        if (this.editing && !this.drag)
+            this.commitStep();
+    }
+
+    historyChanged() {
+        if (this.steps.pushing)
+            return;
+        const step = this.steps.top();
+        if (step)
+            this.resumeFrom(step);
+        else if (this.editing)
+            this.leave();
+    }
+
+    resumeFrom(step) {
+        this.restoring = true;
+        this.restoreState(step.state);
+        this.restoring = false;
+        this.editing = true;
+        this.layer = step.layer;
+        this.start = cloneCanvas(step.base);
+        this.preview = cloneCanvas(this.layer.canvas);
+        this.rect = step.rect;
+        this.steps.resume(step);
+        this.doc.setPreview({ layer: this.layer, canvas: this.preview });
+        this.render();
+        this.setHint(this.hint());
+        this.repaint();
+    }
+
+    onKeyDown(e) {
+        if (!this.editing)
+            return false;
+        // Como en Kaint, Intro y Esc terminan la edición.
+        if (e.key === "Enter" || e.key === "Escape") { this.finish(); return true; }
+        return false;
+    }
+}
+
+export class PaintBucketTool extends EditableFill {
     get id() { return "paintbucket"; }
     get name() { return tr("Cubo de pintura"); }
     get icon() { return "paintbucket"; }
     get letter() { return "F"; }
-    get options() { return ["flood", "tolerance", "sampling", "antialias", "blend"]; }
-    hint() { return tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global."); }
+    get options() { return ["flood", "tolerance", "sampling", "antialias", "blend", "finish"]; }
+    editName() { return tr("Editar cubo de pintura"); }
+    finishName() { return tr("Finalizar cubo de pintura"); }
+
+    hint() {
+        return this.editing
+            ? tr("Cambia la tolerancia o los colores, o arrastra el punto de origen. Intro: terminar.")
+            : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.");
+    }
+
     cursor() { return this.iconCursor(3, 20); }
+
+    // Tirador para mover el origen del relleno, abajo a la derecha del punto (como Kaint).
+    handlePos() {
+        const v = this.view.imageToView(this.seed.x + 0.5, this.seed.y + 0.5);
+        return { x: v.x + 16, y: v.y + 16 };
+    }
 
     onPointerDown(e) {
         const doc = this.doc;
         if (!doc || (e.button !== "left" && e.button !== "right"))
             return;
-        const x = Math.floor(e.x), y = Math.floor(e.y);
-        if (x < 0 || y < 0 || x >= doc.width || y >= doc.height)
+        if (this.editing && e.button === "left" && nearPoint(e, this.handlePos(), 11)) {
+            this.drag = { grab: { x: this.seed.x + 0.5 - e.x, y: this.seed.y + 0.5 - e.y } };
             return;
-        const s = this.settings, layer = doc.activeLayer, w = doc.width, h = doc.height;
-        const source = s.sampleImage ? doc.flattened() : layer.canvas;
-        const mask = floodMask(context(source).getImageData(0, 0, w, h), x, y, s.tolerance, s.floodGlobal || e.shift);
-        const sel = doc.selection;
+        }
+        this.finish();
+        const x = Math.floor(e.x), y = Math.floor(e.y);
+        if (x < 0 || y < 0 || x >= doc.width || y >= doc.height || (doc.selection.mask && !doc.selection.mask[y * doc.width + x]))
+            return;
+        const s = this.settings;
+        this.sample = context(s.sampleImage ? doc.flattened() : doc.activeLayer.canvas).getImageData(0, 0, doc.width, doc.height);
+        this.seed = { x, y };
+        this.useSecondary = e.button === "right";
+        this.shiftGlobal = !!e.shift;
+        this.begin();
+        this.render();
+        // El relleno entra en el historial al momento; los cambios posteriores son "Editar…".
+        this.steps.changed();
+        this.commitStep();
+        this.setHint(this.hint());
+    }
+
+    onPointerMove(e) {
+        if (!this.drag) {
+            if (this.editing)
+                this.view.canvas.style.cursor = nearPoint(e, this.handlePos(), 11) ? "move" : this.cursor();
+            return;
+        }
+        const doc = this.doc;
+        const x = Math.floor(e.x + this.drag.grab.x), y = Math.floor(e.y + this.drag.grab.y);
+        if ((x === this.seed.x && y === this.seed.y) || x < 0 || y < 0 || x >= doc.width || y >= doc.height)
+            return;
+        if (doc.selection.mask && !doc.selection.mask[y * doc.width + x])
+            return;
+        this.seed = { x, y };
+        this.drag.moved = true;
+        this.render();
+        this.steps.changed();
+    }
+
+    onPointerUp() {
+        const moved = this.drag?.moved;
+        this.drag = null;
+        if (moved)
+            this.commitStep();
+    }
+
+    saveState() {
+        const s = this.settings;
+        return { seed: { ...this.seed }, useSecondary: this.useSecondary, shiftGlobal: this.shiftGlobal, sample: this.sample,
+                 primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
+                 settings: { tolerance: s.tolerance, floodGlobal: s.floodGlobal, sampleImage: s.sampleImage, antialias: s.antialias, blend: s.blend } };
+    }
+
+    restoreState(st) {
+        this.seed = { ...st.seed };
+        this.useSecondary = st.useSecondary;
+        this.shiftGlobal = st.shiftGlobal;
+        this.sample = st.sample;
+        AppState.updateTools(st.settings);
+        AppState.setPrimary(st.primary);
+        AppState.setSecondary(st.secondary);
+    }
+
+    // El relleno sobre la capa de antes de empezar, con las opciones y colores actuales.
+    render() {
+        const doc = this.doc, s = this.settings, w = doc.width, h = doc.height, sel = doc.selection;
+        const mask = floodMask(this.sample, this.seed.x, this.seed.y, s.tolerance, s.floodGlobal !== this.shiftGlobal);
         let x0 = w, y0 = h, x1 = -1, y1 = -1;
         for (let yy = 0; yy < h; ++yy)
             for (let xx = 0; xx < w; ++xx) {
@@ -38,15 +235,24 @@ export class PaintBucketTool extends Tool {
                     y1 = yy;
                 }
             }
-        if (x1 < 0)
+        const pctx = context(this.preview);
+        const old = this.rect;
+        if (old) {
+            pctx.clearRect(old.x, old.y, old.w, old.h);
+            pctx.drawImage(this.start, old.x, old.y, old.w, old.h, old.x, old.y, old.w, old.h);
+        }
+        if (x1 < 0) {
+            if (old)
+                doc.pixelsChanged(this.layer, old);
+            this.rect = old;
             return;
+        }
         // Borde suavizado: los píxeles del borde de la zona se cubren a medias.
         const rect = { x: Math.max(0, x0 - 1), y: Math.max(0, y0 - 1) };
         rect.w = Math.min(w, x1 + 2) - rect.x;
         rect.h = Math.min(h, y1 + 2) - rect.y;
-        const before = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
-        const out = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
-        const top = new ImageData(rect.w, rect.h), c = this.colorFor(e.button);
+        const out = context(this.start).getImageData(rect.x, rect.y, rect.w, rect.h);
+        const top = new ImageData(rect.w, rect.h), c = this.useSecondary ? AppState.secondary : AppState.primary;
         for (let yy = 0; yy < rect.h; ++yy)
             for (let xx = 0; xx < rect.w; ++xx) {
                 const i = (rect.y + yy) * w + rect.x + xx;
@@ -65,35 +271,36 @@ export class PaintBucketTool extends Tool {
                 top.data[j] = c.r; top.data[j + 1] = c.g; top.data[j + 2] = c.b; top.data[j + 3] = (Math.min(255, m) * (c.a ?? 255)) / 255;
             }
         blendPixels(out, top, s.blend);
-        layer.ctx.putImageData(out, rect.x, rect.y);
-        doc.pixelsChanged(layer, rect);
-        doc.pushPixels(layer, rect, before, this.name, this.icon);
+        pctx.putImageData(out, rect.x, rect.y);
+        this.rect = old ? unionRect(old, rect) : rect;
+        doc.pixelsChanged(this.layer, this.rect);
+    }
+
+    paintOverlay(ctx, view) {
+        if (!this.editing)
+            return;
+        const v = view.imageToView(this.seed.x + 0.5, this.seed.y + 0.5);
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#000";
+        ctx.fillRect(Math.round(v.x) - 2, Math.round(v.y) - 2, 4, 4);
+        ctx.strokeRect(Math.round(v.x) - 2.5, Math.round(v.y) - 2.5, 5, 5);
+        drawMoveHandle(ctx, this.handlePos());
     }
 }
 
-export class GradientTool extends Tool {
+export class GradientTool extends EditableFill {
     get id() { return "gradient"; }
     get name() { return tr("Degradado"); }
     get icon() { return "gradient"; }
     get letter() { return "G"; }
-    get options() { return ["gradient"]; }
+    get options() { return ["gradient", "finish"]; }
+    editName() { return tr("Mover degradado"); }
+    finishName() { return tr("Finalizar degradado"); }
 
     hint() {
         return this.editing
             ? tr("Arrastra los extremos o el icono de mover; clic derecho en un extremo invierte los colores. Intro: terminar.")
             : tr("Arrastra para dibujar el degradado del color principal al secundario (clic derecho: al revés). Mayús: ángulos de 15°.");
-    }
-
-    activate() {
-        this.onSettings = () => this.editing && this.render();
-        AppState.addEventListener("tools", this.onSettings);
-        AppState.addEventListener("colors", this.onSettings);
-    }
-
-    deactivate() {
-        AppState.removeEventListener("tools", this.onSettings);
-        AppState.removeEventListener("colors", this.onSettings);
-        this.finish();
     }
 
     handleAt(e) {
@@ -107,6 +314,12 @@ export class GradientTool extends Tool {
         return -1;
     }
 
+    // Icono para mover todo el degradado, junto al centro de la línea (como Kaint).
+    moveHandle() {
+        const a = this.view.imageToView(this.a.x, this.a.y), b = this.view.imageToView(this.b.x, this.b.y);
+        return { x: (a.x + b.x) / 2 + 18, y: (a.y + b.y) / 2 + 18 };
+    }
+
     onPointerDown(e) {
         if (!this.doc || (e.button !== "left" && e.button !== "right"))
             return;
@@ -115,40 +328,72 @@ export class GradientTool extends Tool {
             if (e.button === "right") {
                 this.reversed = !this.reversed;
                 this.render();
+                this.steps.changed();
+                this.commitStep();
                 return;
             }
             this.drag = { handle };
             return;
         }
+        if (this.editing && nearPoint(e, this.moveHandle(), 11)) {
+            this.drag = { both: true, grab: { x: e.x, y: e.y } };
+            return;
+        }
         this.finish();
-        this.editing = true;
         this.reversed = e.button === "right";
         this.a = { x: e.x, y: e.y };
         this.b = { x: e.x, y: e.y };
-        this.layer = this.doc.activeLayer;
-        this.start = cloneCanvas(this.layer.canvas);
-        this.preview = cloneCanvas(this.layer.canvas);
+        this.begin();
         this.drag = { handle: 1 };
-        this.doc.setPreview({ layer: this.layer, canvas: this.preview });
         this.setHint(this.hint());
     }
 
     onPointerMove(e) {
-        if (!this.drag)
+        if (!this.drag) {
+            if (this.editing)
+                this.view.canvas.style.cursor = nearPoint(e, this.moveHandle(), 11) ? "move" : this.cursor();
             return;
-        let p = { x: e.x, y: e.y };
-        if (e.shift) {
-            const o = this.drag.handle === 1 ? this.a : this.b;
-            const ang = Math.round(Math.atan2(p.y - o.y, p.x - o.x) / (Math.PI / 12)) * (Math.PI / 12);
-            const d = Math.hypot(p.x - o.x, p.y - o.y);
-            p = { x: o.x + Math.cos(ang) * d, y: o.y + Math.sin(ang) * d };
         }
-        this.drag.handle === 0 ? (this.a = p) : (this.b = p);
+        let p = { x: e.x, y: e.y };
+        if (this.drag.both) {
+            const dx = p.x - this.drag.grab.x, dy = p.y - this.drag.grab.y;
+            this.a = { x: this.a.x + dx, y: this.a.y + dy };
+            this.b = { x: this.b.x + dx, y: this.b.y + dy };
+            this.drag.grab = p;
+        } else {
+            if (e.shift) {
+                const o = this.drag.handle === 1 ? this.a : this.b;
+                const ang = Math.round(Math.atan2(p.y - o.y, p.x - o.x) / (Math.PI / 12)) * (Math.PI / 12);
+                const d = Math.hypot(p.x - o.x, p.y - o.y);
+                p = { x: o.x + Math.cos(ang) * d, y: o.y + Math.sin(ang) * d };
+            }
+            this.drag.handle === 0 ? (this.a = p) : (this.b = p);
+        }
+        this.drag.moved = true;
         this.render();
+        this.steps.changed();
     }
 
     onPointerUp() {
+        const moved = this.drag?.moved;
         this.drag = null;
+        if (moved && (this.a.x !== this.b.x || this.a.y !== this.b.y))
+            this.commitStep();
+    }
+
+    saveState() {
+        const s = this.settings;
+        return { a: { ...this.a }, b: { ...this.b }, reversed: this.reversed, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
+                 settings: { gradient: s.gradient, gradientRepeat: s.gradientRepeat, gradientTransparency: s.gradientTransparency, blend: s.blend } };
+    }
+
+    restoreState(st) {
+        this.a = { ...st.a };
+        this.b = { ...st.b };
+        this.reversed = st.reversed;
+        AppState.updateTools(st.settings);
+        AppState.setPrimary(st.primary);
+        AppState.setSecondary(st.secondary);
     }
 
     // Valor del degradado (0..1) en un punto, según el tipo y la repetición.
@@ -218,7 +463,8 @@ export class GradientTool extends Tool {
         ctx.strokeStyle = "rgba(0,0,0,0.6)";
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-        for (const [p, c] of [[a, AppState.primary], [b, AppState.secondary]]) {
+        const first = this.reversed ? AppState.secondary : AppState.primary, second = this.reversed ? AppState.primary : AppState.secondary;
+        for (const [p, c] of [[a, first], [b, second]]) {
             ctx.beginPath();
             ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
             ctx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
@@ -226,44 +472,7 @@ export class GradientTool extends Tool {
             ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
             ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
         }
-    }
-
-    isBusy() {
-        return !!this.editing;
-    }
-
-    finish() {
-        if (!this.editing)
-            return;
-        this.editing = false;
-        this.drag = null;
-        const doc = this.doc, layer = this.layer, r = this.rect;
-        doc.preview = null;
-        if (r && (this.a.x !== this.b.x || this.a.y !== this.b.y)) {
-            const before = context(this.start).getImageData(r.x, r.y, r.w, r.h);
-            layer.ctx.putImageData(context(this.preview).getImageData(r.x, r.y, r.w, r.h), r.x, r.y);
-            doc.pixelsChanged(layer, r);
-            doc.pushPixels(layer, r, before, this.name, this.icon);
-        } else {
-            doc.pixelsChanged(layer, null);
-        }
-        this.setHint(this.hint());
-    }
-
-    cancel() {
-        if (!this.editing)
-            return;
-        this.editing = false;
-        this.drag = null;
-        this.doc.setPreview(null);
-        this.setHint(this.hint());
-    }
-
-    onKeyDown(e) {
-        if (!this.editing)
-            return false;
-        if (e.key === "Enter") { this.finish(); return true; }
-        if (e.key === "Escape") { this.cancel(); return true; }
-        return false;
+        if (!this.drag)
+            drawMoveHandle(ctx, this.moveHandle());
     }
 }

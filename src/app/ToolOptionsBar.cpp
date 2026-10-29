@@ -181,6 +181,15 @@ QComboBox* ToolOptionsEditor::numberCombo(const QList<double>& presets, double m
     return c;
 }
 
+void ToolOptionsEditor::addCustomShapes()
+{
+    const QList<CustomShapes::Shape>& custom = CustomShapes::all();
+    if (!custom.isEmpty())
+        m_shape->addSection(tr("Formas personalizadas"));
+    for (int i = 0; i < int(custom.size()); ++i)
+        m_shape->addChoice(Icons::customShape(custom[i].path), custom[i].name, kCustomShapeBase + i);
+}
+
 void ToolOptionsEditor::add(const QString& key, quint64 option, int section, const QList<QWidget*>& widgets)
 {
     QList<Item> items;
@@ -243,11 +252,12 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
         for (ShapeType t : shapes)
             m_shape->addChoice(Icons::shape(t), shapeName(t), int(t));
     }
-    const QList<CustomShapes::Shape>& custom = CustomShapes::all();
-    if (!custom.isEmpty())
-        m_shape->addSection(tr("Formas personalizadas"));
-    for (int i = 0; i < int(custom.size()); ++i)
-        m_shape->addChoice(Icons::customShape(custom[i].path), custom[i].name, kCustomShapeBase + i);
+    addCustomShapes();
+    connect(AppState::instance(), &AppState::customShapesChanged, m_shape, [this] {
+        m_shape->removeChoicesFrom(kCustomShapeBase);
+        addCustomShapes();
+        sync();
+    });
     m_shape->setShowText(true);
     m_shape->onChosen = [update](int v) {
         update([v](ToolSettings& s) {
@@ -489,9 +499,9 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     add(QStringLiteral("gradient.types"), Tool::OptGradient, Gradient, {gradientBox});
 
     m_gradientMode = new ChoiceButton(tr("Modo"), parent);
-    m_gradientMode->addChoice(Icons::theme({"edit-opacity", "transform-shear-left", "fill-color"}),
+    m_gradientMode->addChoice(Icons::theme({"gradient-transparency-mode", "edit-opacity", "fill-color"}),
                               tr("Modo de transparencia"), 1);
-    m_gradientMode->addChoice(Icons::theme({"color-management", "fill-color"}), tr("Modo de color"), 0);
+    m_gradientMode->addChoice(Icons::theme({"gradient-color-mode", "color-management", "fill-color"}), tr("Modo de color"), 0);
     m_gradientMode->onChosen = [update](int v) { update([v](ToolSettings& s) { s.gradientTransparency = v == 1; }); };
     add(QStringLiteral("gradient.mode"), Tool::OptGradient, Gradient, {m_gradientMode});
 
@@ -546,23 +556,23 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
 
     // --- Selector de color ------------------------------------------------
     m_pickerAfter = new ChoiceButton(tr("Después de pulsar"), parent);
-    m_pickerAfter->addChoice(Icons::theme({"color-picker"}), tr("No cambiar de herramienta"), int(PickerAfter::DoNotSwitch));
-    m_pickerAfter->addChoice(Icons::theme({"toolbar-edit-undo", "go-previous"}), tr("Cambiar a la herramienta anterior"),
+    m_pickerAfter->addChoice(Icons::theme({"picker-stay", "color-picker"}), tr("No cambiar de herramienta"), int(PickerAfter::DoNotSwitch));
+    m_pickerAfter->addChoice(Icons::theme({"picker-previous-tool", "go-previous"}), tr("Cambiar a la herramienta anterior"),
                              int(PickerAfter::PreviousTool));
-    m_pickerAfter->addChoice(Icons::theme({"draw-freehand"}), tr("Cambiar a la herramienta Lápiz"), int(PickerAfter::Pencil));
+    m_pickerAfter->addChoice(Icons::theme({"picker-pencil", "draw-freehand"}), tr("Cambiar a la herramienta Lápiz"), int(PickerAfter::Pencil));
     m_pickerAfter->setShowText(true);
     m_pickerAfter->onChosen = [update](int v) { update([v](ToolSettings& s) { s.pickerAfter = PickerAfter(v); }); };
     add(QStringLiteral("picker.after"), Tool::OptPicker, Picker, {label(tr("Después de pulsar:")), m_pickerAfter});
 
     // --- Muestreo -----------------------------------------------------------
     m_sampling = new ChoiceButton(tr("Toma de muestras"), parent);
-    m_sampling->addChoice(Icons::theme({"image-x-generic"}), tr("Imagen"), 1);
-    m_sampling->addChoice(Icons::breeze({"layer-visible-on", "view-list-details"}), tr("Capa"), 0);
+    m_sampling->addChoice(Icons::theme({"sample-image", "image-x-generic"}), tr("Imagen"), 1);
+    m_sampling->addChoice(Icons::theme({"sample-layer", "view-list-details"}), tr("Capa"), 0);
     m_sampling->setShowText(true);
     m_sampling->onChosen = [update](int v) { update([v](ToolSettings& s) { s.sampleImage = v == 1; }); };
     m_pickerSampling = new ChoiceButton(tr("Toma de muestras"), parent);
-    m_pickerSampling->addChoice(Icons::theme({"image-x-generic"}), tr("Imagen"), 1);
-    m_pickerSampling->addChoice(Icons::breeze({"layer-visible-on", "view-list-details"}), tr("Capa"), 0);
+    m_pickerSampling->addChoice(Icons::theme({"sample-image", "image-x-generic"}), tr("Imagen"), 1);
+    m_pickerSampling->addChoice(Icons::theme({"sample-layer", "view-list-details"}), tr("Capa"), 0);
     m_pickerSampling->setShowText(true);
     m_pickerSampling->onChosen = [update](int v) { update([v](ToolSettings& s) { s.pickerSampleImage = v == 1; }); };
     m_pickerSize = new ChoiceButton(tr("Tamaño de la muestra"), parent);
@@ -585,9 +595,9 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     add(QStringLiteral("smoothing"), Tool::OptSmoothing, Options, {m_smoothing});
 
     m_pressure = new QToolButton(parent);
-    m_pressure->setIcon(Icons::theme({"input-tablet", "draw-calligraphic"}));
-    if (m_pressure->icon().isNull())
-        m_pressure->setText(tr("Presión"));
+    // Como paint.js: el pincel sin presión o con ella (marcado).
+    m_pressure->setIcon(Icons::png(QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_false"),
+                                   QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_true")));
     m_pressure->setToolTip(tr("La presión del lápiz de la tableta controla el tamaño del pincel"));
     m_pressure->setCheckable(true);
     m_pressure->setAutoRaise(true);

@@ -511,6 +511,55 @@ input[type="checkbox"] {
     touch-action: none;
 }
 
+/* Reglas (Ver > Reglas): arriba y a la izquierda del lienzo, como en paint.js. */
+.ruler, .ruler-corner {
+    display: none;
+    position: absolute;
+    pointer-events: none;
+}
+
+.workspace.rulers .ruler, .workspace.rulers .ruler-corner {
+    display: block;
+}
+
+.ruler.h {
+    top: 0;
+    left: 20px;
+    right: 14px;
+    height: 20px;
+    width: calc(100% - 34px);
+}
+
+.ruler.v {
+    top: 20px;
+    left: 0;
+    bottom: 14px;
+    width: 20px;
+    height: calc(100% - 34px);
+}
+
+.ruler-corner {
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 20px;
+    box-sizing: border-box;
+    background: #202020;
+    border-right: 1px solid #575757;
+    border-bottom: 1px solid #575757;
+}
+
+.workspace.ruler-classic .ruler-corner {
+    background: var(--toolbar);
+    border-color: var(--line);
+}
+
+.workspace.rulers #view {
+    inset: 20px 14px 14px 20px;
+    width: calc(100% - 34px);
+    height: calc(100% - 34px);
+}
+
 .scrollbar {
     position: absolute;
     background: color-mix(in srgb, var(--window) 60%, var(--base));
@@ -564,7 +613,7 @@ input[type="checkbox"] {
     display: flex;
     flex-direction: column;
     background: var(--panel);
-    border: 1px solid var(--panel-border);
+    border: var(--window-border, 1px) solid var(--panel-border);
     border-radius: var(--radius);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
     min-width: 60px;
@@ -661,6 +710,12 @@ input[type="checkbox"] {
 .tools-grid .tbutton {
     width: 30px;
     height: 30px;
+}
+
+/* Como en Paint.NET, el último botón (Formas) ocupa lo que quede de su fila, con el icono centrado. */
+.tools-grid .tbutton:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    width: auto;
 }
 
 /* Listas (historial, capas) */
@@ -829,6 +884,14 @@ input[type="checkbox"] {
     min-height: 26px;
 }
 
+.status-bar .hint-icon {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    margin: 0 4px 0 2px;
+    flex: none;
+}
+
 .status-bar .hint {
     flex: 1;
     overflow: hidden;
@@ -852,6 +915,70 @@ input[type="checkbox"] {
     width: 130px;
 }
 
+/* Ventanas al estilo de Windows 10, como las de paint.js: esquinas rectas, cabecera más alta,
+   cerrar con una «x» en un cuadrado rojo y sombra suave alrededor. */
+:root.win10 .floating-panel {
+    border-radius: 0;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+:root.win10 .floating-panel > .title {
+    padding: 5px 1px 5px 6px;
+    border-radius: 0;
+}
+
+:root.win10 .floating-panel > .title .close {
+    width: 19px;
+    height: 19px;
+    border-radius: 0;
+}
+
+:root.win10 .floating-panel > .title .close::before {
+    content: "x";
+    position: static;
+    display: block;
+    height: auto;
+    background: none;
+    transform: none;
+    color: #fff;
+    font: bold 10px/18px Arial, sans-serif;
+    text-align: center;
+}
+
+:root.win10 .floating-panel > .title .close::after {
+    display: none;
+}
+
+:root.win10 .dialog {
+    border-radius: 0;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+:root.win10 .dialog > .title {
+    background: var(--window);
+    color: var(--text);
+    padding: 0 0 0 10px;
+    min-height: 31px;
+}
+
+:root.win10 .dialog > .title .close {
+    width: 46px;
+    height: 31px;
+    border-radius: 0;
+}
+
+:root.win10 .dialog > .title .close:hover {
+    background: var(--panel-close);
+    color: #fff;
+}
+
+:root.win10 .dialog > .title .close::before, :root.win10 .dialog > .title .close::after {
+    left: 17px;
+    right: 17px;
+    top: 15px;
+    height: 1px;
+}
+
 /* --- Diálogos ----------------------------------------------------------------------------- */
 
 .backdrop {
@@ -871,7 +998,7 @@ input[type="checkbox"] {
     max-height: calc(100vh - 32px);
     background: var(--window);
     color: var(--text);
-    border: 1px solid var(--border);
+    border: var(--window-border, 1px) solid var(--border);
     border-radius: var(--radius);
     box-shadow: 0 12px 38px rgba(0, 0, 0, 0.45);
 }
@@ -1085,6 +1212,51 @@ input[type="checkbox"] {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.settings .page p {
+    margin: 0;
+}
+
+.settings .pack-list, .settings .shortcut-list {
+    flex: 1;
+    min-height: 140px;
+}
+
+.settings .list .row.selected {
+    background: var(--selection);
+}
+
+.settings .row-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings .row-buttons > p {
+    flex: 1;
+}
+
+.settings .shortcut-row {
+    gap: 6px;
+    padding: 2px 4px;
+}
+
+.settings .shortcut-row .name {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.settings .shortcut-field {
+    width: 150px;
+    cursor: pointer;
+}
+
+.settings .shortcut-row .tbutton {
+    width: 22px;
+    height: 22px;
 }
 
 /* Acerca de */

@@ -25,15 +25,17 @@ QIcon tool(const QString& name, const QIcon& fallback);
 // sistema (Breeze en KDE).
 QIcon theme(std::initializer_list<const char*> names);
 QIcon theme(const QString& name);
-// Primer icono disponible solo en el tema del sistema (Breeze), sin los PNG de la interfaz.
-QIcon breeze(std::initializer_list<const char*> names);
 
-// Icono de estilo Paint.NET: el PNG de la interfaz (named) o, si no hay, uno dibujado por código
-// (las herramientas que llevan los colores activos y la mano); si no, nulo.
+// Icono de estilo Paint.NET: el de herramienta dibujado por código (el del paquete de iconos
+// activo si trae ese archivo) o, si no hay, el PNG de la interfaz (named); si no, nulo.
 QIcon pdn(const QString& name);
-// El PNG de la interfaz (data/ui-icons) que corresponde a un nombre de Kaint ("document-save",
-// "layer-new"...), en gris si está desactivado, o nulo.
+// Icono de la interfaz en PNG (data/ui-icons/<archivo>.png), en gris si está desactivado; onFile
+// es el del estado marcado de los botones que se activan y desactivan.
+QIcon png(const QString& file, const QString& onFile = {});
+// El PNG que corresponde a un nombre de Kaint ("document-save", "layer-new"...), o nulo.
 QIcon named(const QString& name);
+// Archivo de paint.js (sin ".png") de un nombre de Kaint, o vacío.
+QString pngFile(const QString& name);
 // Nombres de la tabla de PNG cuyo archivo no está entre los recursos (para las pruebas).
 QStringList missingNamedIcons();
 // Nombre del icono de un ajuste o efecto ("effect-" + su identificador) si hay PNG; si no, fallback.

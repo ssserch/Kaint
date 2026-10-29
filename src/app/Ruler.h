@@ -15,9 +15,17 @@ QString formatLength(double pixels, Unit unit, double dpi);
 class Ruler : public QWidget {
     Q_OBJECT
 public:
+    // Oscura con números claros, como la de paint.js, o del color de la barra de herramientas.
+    enum class Style { PaintJs, ToolBar };
+
     Ruler(Qt::Orientation orientation, Canvas* canvas, QWidget* parent);
     static constexpr int kThickness = 20;
     QSize sizeHint() const override;
+
+    static void setStyle(Style style);
+    static Style style();
+    // Fondo de las reglas (también el de la esquina entre las dos).
+    static QColor background();
 
 protected:
     void paintEvent(QPaintEvent* e) override;

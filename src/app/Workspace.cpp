@@ -20,6 +20,15 @@
 
 namespace {
 
+FloatingPanel::Style g_chromeStyle = FloatingPanel::Style::Windows10;
+int g_chromeBorder = 1;
+
+bool windows10Chrome()
+{
+    return g_chromeStyle == FloatingPanel::Style::Windows10 && Theme::current() != Theme::Scheme::Kde
+        && !Theme::active().classic;
+}
+
 // Botón de cerrar de los paneles: el cuadrado rojo de Paint.NET o, con el tema de KDE, el icono
 // del sistema.
 class PanelCloseButton : public QAbstractButton {
@@ -34,7 +43,8 @@ public:
 
     QSize sizeHint() const override
     {
-        const int side = fontMetrics().height() + 2;
+        // Con el estilo de Windows 10, el cuadrado de 19 px de paint.js.
+        const int side = windows10Chrome() ? std::max(19, fontMetrics().height() + 4) : fontMetrics().height() + 2;
         return {side, side};
     }
 
@@ -76,6 +86,19 @@ protected:
             return;
         }
         const QColor bg = isDown() ? s.panelClose.darker(115) : underMouse() ? s.panelClose.lighter(118) : s.panelClose;
+        if (windows10Chrome()) {
+            // Como paint.js: cuadrado rojo sin redondear con una «x» blanca en negrita.
+            p.setRenderHint(QPainter::Antialiasing, false);
+            p.fillRect(rect(), bg);
+            p.setRenderHint(QPainter::Antialiasing);
+            QFont f = font();
+            f.setBold(true);
+            f.setPixelSize(std::max(10, height() / 2));
+            p.setFont(f);
+            p.setPen(Qt::white);
+            p.drawText(QRectF(rect()).adjusted(0, -1, 0, -1), Qt::AlignCenter, QStringLiteral("x"));
+            return;
+        }
         const QRectF r = QRectF(rect()).adjusted(1, 1, -1, -1);
         p.setPen(Qt::NoPen);
         p.setBrush(bg);
@@ -137,15 +160,71 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     updateColors();
     connect(Theme::notifier(), &Theme::Notifier::changed, this, [this] {
         updateColors();
-        QEvent relayout(QEvent::StyleChange);
-        event(&relayout);
-        const int inset = titleInset();
-        m_titleBar->setGeometry(inset, inset, width() - 2 * inset, m_titleBar->sizeHint().height());
+        applyChrome();
         if (m_opacity && !m_fade)
             m_opacity->setOpacity(restingOpacity());
-        update();
     });
+    applyChrome();
     updateGeometry();
+}
+
+void FloatingPanel::setChrome(Style style, int border)
+{
+    g_chromeStyle = style;
+    g_chromeBorder = std::clamp(border, 1, 12);
+}
+
+FloatingPanel::Style FloatingPanel::chromeStyle()
+{
+    return g_chromeStyle;
+}
+
+int FloatingPanel::chromeBorder()
+{
+    return g_chromeBorder;
+}
+
+bool FloatingPanel::windows10() const
+{
+    return windows10Chrome();
+}
+
+int FloatingPanel::borderWidth() const
+{
+    if (Theme::current() == Theme::Scheme::Kde)
+        return frameWidth();
+    return Theme::active().classic ? 2 : g_chromeBorder;
+}
+
+int FloatingPanel::grip() const
+{
+    return std::max(kBorder, borderWidth());
+}
+
+void FloatingPanel::applyChrome()
+{
+    // Las ventanas que encajan su contenido (Herramientas) conservan sus columnas: crecen o
+    // encogen con la cabecera y el borde.
+    const auto* fit = dynamic_cast<const PanelContent*>(m_content);
+    const QVariant layoutState = fit ? fit->layoutState() : QVariant();
+    // paint.js: 5 px arriba, abajo y a la izquierda del título; el botón de cerrar casi en el borde.
+    auto* titleLayout = static_cast<QBoxLayout*>(m_titleBar->layout());
+    if (windows10())
+        titleLayout->setContentsMargins(6, 5, 2, 5);
+    else
+        titleLayout->setContentsMargins(7, 1, 1, 1);
+    m_close->updateGeometry();
+    titleLayout->invalidate();
+    QEvent relayout(QEvent::StyleChange);
+    event(&relayout);
+    const int inset = titleInset();
+    m_titleBar->setGeometry(inset, inset, width() - 2 * inset, m_titleBar->sizeHint().height());
+    if (fit) {
+        const QSize content = fit->sizeForLayout(layoutState);
+        if (content.isValid())
+            resize(content + chromeSize());
+    }
+    update();
 }
 
 void FloatingPanel::updateColors()
@@ -180,9 +259,12 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     }
     const Theme::Spec s = Theme::active();
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing, s.radius > 0);
+    // Con el estilo de Windows 10, esquinas rectas; el borde, del grosor elegido.
+    const qreal radius = windows10() ? 0 : s.radius;
+    const qreal half = s.classic ? 0.5 : borderWidth() / 2.0;
     QPainterPath shape;
-    shape.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), s.radius, s.radius);
+    shape.addRoundedRect(QRectF(rect()).adjusted(half, half, -half, -half), radius, radius);
+    p.setRenderHint(QPainter::Antialiasing, radius > 0);
     p.fillPath(shape, s.panel);
     // Cabecera de un color o en degradado (Windows 98: azul marino a azul).
     const QRect title(0, 0, width(), m_titleBar->geometry().bottom() + 1);
@@ -215,15 +297,18 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     QColor border = s.panel;
     border = QColor::fromRgbF(border.redF() * 0.78f + s.text.redF() * 0.22f, border.greenF() * 0.78f + s.text.greenF() * 0.22f,
                               border.blueF() * 0.78f + s.text.blueF() * 0.22f);
-    p.setPen(QPen(border, 1));
+    p.setPen(QPen(border, borderWidth(), Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
     p.setBrush(Qt::NoBrush);
     p.drawPath(shape);
 }
 
 int FloatingPanel::titleInset() const
 {
-    // Con el estilo clásico, la cabecera queda dentro del marco en relieve (como en 98.css).
-    return Theme::current() != Theme::Scheme::Kde && Theme::active().classic ? 3 : frameWidth();
+    // Con el estilo clásico, la cabecera queda dentro del marco en relieve (como en 98.css); con
+    // los demás, dentro del borde.
+    if (Theme::current() == Theme::Scheme::Kde)
+        return frameWidth();
+    return Theme::active().classic ? 3 : std::max(frameWidth(), borderWidth());
 }
 
 QSize FloatingPanel::chromeSize() const
@@ -247,8 +332,8 @@ bool FloatingPanel::event(QEvent* e)
     case QEvent::StyleChange:
     case QEvent::FontChange: {
         const int titleHeight = m_titleBar->sizeHint().height() + titleInset() - frameWidth();
-        layout()->setContentsMargins(kBorder - frameWidth(), titleHeight + 2, kBorder - frameWidth(),
-                                     kBorder - frameWidth());
+        const int side = grip() - frameWidth();
+        layout()->setContentsMargins(side, titleHeight + 2, side, side);
         break;
     }
     default:
@@ -264,41 +349,48 @@ void FloatingPanel::setAnchor(Corner corner, QPoint offset)
     reposition();
 }
 
+QRect FloatingPanel::area() const
+{
+    // Como en paint.js, con las reglas visibles las ventanas se colocan junto a ellas, sin taparlas.
+    if (const auto* workspace = qobject_cast<const Workspace*>(parentWidget()))
+        return workspace->panelArea();
+    return parentWidget() ? parentWidget()->rect() : QRect();
+}
+
 void FloatingPanel::reposition()
 {
-    QWidget* p = parentWidget();
-    if (!p)
+    if (!parentWidget())
         return;
-    const QSize area = p->size();
+    const QRect a = area();
     QPoint pos;
     switch (m_corner) {
     case TopLeft: pos = m_offset; break;
-    case TopRight: pos = QPoint(area.width() - width() - m_offset.x(), m_offset.y()); break;
-    case BottomLeft: pos = QPoint(m_offset.x(), area.height() - height() - m_offset.y()); break;
-    case BottomRight: pos = QPoint(area.width() - width() - m_offset.x(), area.height() - height() - m_offset.y()); break;
+    case TopRight: pos = QPoint(a.width() - width() - m_offset.x(), m_offset.y()); break;
+    case BottomLeft: pos = QPoint(m_offset.x(), a.height() - height() - m_offset.y()); break;
+    case BottomRight: pos = QPoint(a.width() - width() - m_offset.x(), a.height() - height() - m_offset.y()); break;
     }
-    pos.setX(std::clamp(pos.x(), 0, std::max(0, area.width() - width())));
-    pos.setY(std::clamp(pos.y(), 0, std::max(0, area.height() - height())));
-    move(pos);
+    pos.setX(std::clamp(pos.x(), 0, std::max(0, a.width() - width())));
+    pos.setY(std::clamp(pos.y(), 0, std::max(0, a.height() - height())));
+    move(pos + a.topLeft());
 }
 
 void FloatingPanel::updateAnchorFromGeometry()
 {
-    QWidget* p = parentWidget();
-    if (!p)
+    if (!parentWidget())
         return;
-    const QRect g = geometry();
-    const bool right = g.center().x() > p->width() / 2;
-    const bool bottom = g.center().y() > p->height() / 2;
+    const QRect a = area();
+    const QRect g = geometry().translated(-a.topLeft());
+    const bool right = g.center().x() > a.width() / 2;
+    const bool bottom = g.center().y() > a.height() / 2;
     m_corner = bottom ? (right ? BottomRight : BottomLeft) : (right ? TopRight : TopLeft);
-    m_offset = QPoint(right ? p->width() - g.right() - 1 : g.left(), bottom ? p->height() - g.bottom() - 1 : g.top());
+    m_offset = QPoint(right ? a.width() - g.right() - 1 : g.left(), bottom ? a.height() - g.bottom() - 1 : g.top());
 }
 
 Qt::Edges FloatingPanel::edgesAt(const QPoint& pos) const
 {
     if (!m_resizable)
         return {};
-    const int b = kBorder;
+    const int b = grip();
     const int corner = 3 * b;
     Qt::Edges e;
     if (pos.x() < b)
@@ -347,7 +439,7 @@ void FloatingPanel::updateEdgeCursor(Qt::Edges edges)
 QRect FloatingPanel::constrained(const QRect& proposed, Qt::Edges edges) const
 {
     QRect g = proposed;
-    const QRect area = parentWidget() ? parentWidget()->rect() : QRect(QPoint(0, 0), QSize(100000, 100000));
+    const QRect area = parentWidget() ? this->area() : QRect(QPoint(0, 0), QSize(100000, 100000));
     if (edges & Qt::LeftEdge)
         g.setLeft(std::max(g.left(), area.left()));
     if (edges & Qt::RightEdge)
@@ -476,9 +568,9 @@ bool FloatingPanel::eventFilter(QObject* obj, QEvent* e)
         }
         if (m_dragging) {
             QPoint p = me->globalPosition().toPoint() - m_dragOffset;
-            const QSize area = parentWidget()->size();
-            p.setX(std::clamp(p.x(), 0, std::max(0, area.width() - width())));
-            p.setY(std::clamp(p.y(), 0, std::max(0, area.height() - height())));
+            const QRect a = area();
+            p.setX(std::clamp(p.x(), a.left(), std::max(a.left(), a.right() + 1 - width())));
+            p.setY(std::clamp(p.y(), a.top(), std::max(a.top(), a.bottom() + 1 - height())));
             move(p);
             return true;
         }
@@ -635,6 +727,18 @@ Workspace::Workspace(Canvas* canvas, QWidget* parent)
     , m_canvas(canvas)
 {
     m_canvas->setParent(this);
+    connect(m_canvas, &Canvas::rulersVisibilityChanged, this, [this] {
+        for (FloatingPanel* p : std::as_const(m_panels))
+            p->reposition();
+    });
+}
+
+QRect Workspace::panelArea() const
+{
+    QRect r = rect();
+    if (m_canvas->rulersVisible())
+        r.adjust(Ruler::kThickness, Ruler::kThickness, 0, 0);
+    return r;
 }
 
 FloatingPanel* Workspace::addPanel(const QString& id, const QString& title, QWidget* content,
@@ -664,6 +768,15 @@ void Workspace::setTranslucentPanels(bool on)
 {
     for (FloatingPanel* p : m_panels)
         p->setTranslucent(on);
+}
+
+void Workspace::setPanelChrome(FloatingPanel::Style style, int border)
+{
+    FloatingPanel::setChrome(style, border);
+    for (FloatingPanel* p : std::as_const(m_panels)) {
+        p->applyChrome();
+        p->reposition();
+    }
 }
 
 void Workspace::resizeEvent(QResizeEvent* e)

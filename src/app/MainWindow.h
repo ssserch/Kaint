@@ -218,6 +218,9 @@ private:
     QHash<const QUndoStack*, int> m_historyIndex;
     class QGridLayout* m_topLayout = nullptr;
 
+    QLabel* m_hintIcon = nullptr;
+    // Iconos de la barra de estado (se vuelven a pintar al cambiar de paquete de iconos).
+    QList<std::pair<QLabel*, QIcon>> m_statusIcons;
     QLabel* m_hint = nullptr;
     QLabel* m_posLabel = nullptr;
     QLabel* m_selLabel = nullptr;

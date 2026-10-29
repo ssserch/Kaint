@@ -2,6 +2,8 @@
 // con las combinaciones de Paint.NET: Ctrl + izq.: unión · Alt + izq.: restar · Ctrl + der.: XOR ·
 // Alt + der.: intersección · sin teclas: el modo de la barra.
 import { Tool, selectHint } from "./Tool.js";
+import { drawMoveHandle, nearPoint } from "./EditableSteps.js";
+import { AppState } from "../AppState.js";
 import { Selection } from "../core/Selection.js";
 import { floodMask } from "../core/FloodFill.js";
 import { context } from "../core/Raster.js";
@@ -9,7 +11,7 @@ import { tr } from "../i18n.js";
 
 class SelectTool extends Tool {
     get options() {
-        return ["selectionMode", "selectionQuality"];
+        return ["selectionMode", "afterSelect", "selectionQuality"];
     }
 
     get highlightSelection() {
@@ -28,6 +30,7 @@ class SelectTool extends Tool {
     begin(e) {
         this.before = this.doc.selection;
         this.mode = this.modeFor(e);
+        this.plain = !e.ctrl && !e.alt;
         this.active = true;
         this.dragged = false;
         this.startTime = performance.now();
@@ -52,6 +55,19 @@ class SelectTool extends Tool {
         }
         this.doc.pushSelection(this.before, name, icon);
         this.app.updateStatus();
+        if (this.mode === "replace" && this.plain)
+            this.selectionFinished();
+    }
+
+    // Como Kaint (Después de seleccionar): tras una selección nueva, cambia a una herramienta Mover.
+    selectionFinished() {
+        const after = this.settings.afterSelect;
+        if (!after || after === "none" || this.doc.selection.isEmpty())
+            return;
+        setTimeout(() => {
+            if (this.app.tools.current === this)
+                this.app.tools.select(after);
+        }, 0);
     }
 
     showStatus(r) {
@@ -124,7 +140,7 @@ export class RectSelectTool extends ShapeSelectTool {
     get icon() { return "rectangleselect"; }
     get letter() { return "S"; }
     get ellipse() { return false; }
-    get options() { return ["selectionMode", "rectMode"]; }
+    get options() { return ["selectionMode", "rectMode", "afterSelect"]; }
     hint() { return tr("Arrastra para seleccionar un rectángulo. Mayús: cuadrado. ") + selectHint(); }
 }
 
@@ -179,21 +195,122 @@ export class MagicWandTool extends SelectTool {
     get name() { return tr("Varita mágica"); }
     get icon() { return "magicwand"; }
     get letter() { return "S"; }
-    get options() { return ["selectionMode", "flood", "tolerance", "sampling"]; }
-    hint() { return tr("Haz clic para seleccionar una zona de color parecido. Mayús: modo global. ") + selectHint(); }
+    get options() { return ["selectionMode", "flood", "tolerance", "sampling", "afterSelect"]; }
     cursor() { return this.iconCursor(4, 20); }
 
-    onPointerDown(e) {
-        if (!this.doc || (e.button !== "left" && e.button !== "right"))
-            return;
-        this.begin(e);
+    hint() {
+        return this.session
+            ? tr("Ajusta la tolerancia o arrastra el punto de origen. Intro: terminar.")
+            : tr("Haz clic para seleccionar una zona de color parecido. Mayús: modo global. ") + selectHint();
+    }
+
+    activate() {
+        // Como en Kaint, la selección sigue a la tolerancia y al modo mientras dura la sesión.
+        this.onSettings = () => this.session && this.recompute();
+        AppState.addEventListener("tools", this.onSettings);
+    }
+
+    deactivate() {
+        AppState.removeEventListener("tools", this.onSettings);
+        this.finish();
+    }
+
+    seedHandle() {
+        const v = this.view.imageToView(this.seed.x + 0.5, this.seed.y + 0.5);
+        return { x: v.x + 16, y: v.y + 16 };
+    }
+
+    recompute() {
         const doc = this.doc, s = this.settings;
-        const source = s.sampleImage ? doc.flattened() : doc.activeLayer.canvas;
-        const image = context(source).getImageData(0, 0, doc.width, doc.height);
-        const mask = floodMask(image, Math.floor(e.x), Math.floor(e.y), s.tolerance, s.floodGlobal || e.shift);
-        this.dragged = true;
-        this.startTime = 0;
+        const mask = floodMask(this.sample, this.seed.x, this.seed.y, s.tolerance, s.floodGlobal !== this.shiftGlobal);
         this.preview(Selection.fromMask(doc.width, doc.height, mask));
-        this.done(this.name, this.icon);
+        this.repaint();
+    }
+
+    onPointerDown(e) {
+        const doc = this.doc;
+        if (!doc || (e.button !== "left" && e.button !== "right"))
+            return;
+        if (this.session && e.button === "left" && nearPoint(e, this.seedHandle(), 11)) {
+            this.draggingSeed = { x: this.seed.x + 0.5 - e.x, y: this.seed.y + 0.5 - e.y };
+            return;
+        }
+        this.finish();
+        const x = Math.floor(e.x), y = Math.floor(e.y);
+        if (x < 0 || y < 0 || x >= doc.width || y >= doc.height)
+            return;
+        const s = this.settings;
+        this.sample = context(s.sampleImage ? doc.flattened() : doc.activeLayer.canvas).getImageData(0, 0, doc.width, doc.height);
+        this.begin(e);
+        this.session = true;
+        this.shiftGlobal = !!e.shift;
+        this.seed = { x, y };
+        this.dragged = true;
+        this.recompute();
+        this.setHint(this.hint());
+    }
+
+    onPointerMove(e) {
+        if (!this.draggingSeed) {
+            if (this.session)
+                this.view.canvas.style.cursor = nearPoint(e, this.seedHandle(), 11) ? "move" : this.cursor();
+            return;
+        }
+        const doc = this.doc;
+        const x = Math.floor(e.x + this.draggingSeed.x), y = Math.floor(e.y + this.draggingSeed.y);
+        if ((x !== this.seed.x || y !== this.seed.y) && x >= 0 && y >= 0 && x < doc.width && y < doc.height) {
+            this.seed = { x, y };
+            this.recompute();
+        }
+    }
+
+    onPointerUp() {
+        if (this.draggingSeed) {
+            this.draggingSeed = null;
+            return;
+        }
+        if (this.session && this.mode === "replace" && this.plain)
+            this.selectionFinished();
+    }
+
+    onKeyDown(e) {
+        if (this.session && (e.key === "Enter" || e.key === "Escape")) {
+            this.finish();
+            return true;
+        }
+        return false;
+    }
+
+    // Solo mientras se arrastra el origen (deshacer durante la sesión aplica lo seleccionado).
+    isBusy() {
+        return !!this.draggingSeed;
+    }
+
+    finish() {
+        if (!this.session)
+            return;
+        this.session = false;
+        this.draggingSeed = null;
+        this.sample = null;
+        this.active = false;
+        this.doc.pushSelection(this.before, this.name, this.icon);
+        this.app.updateStatus();
+        this.setHint(this.hint());
+        this.repaint();
+    }
+
+    cancel() {
+        this.draggingSeed = null;
+    }
+
+    paintOverlay(ctx, view) {
+        if (!this.session)
+            return;
+        const v = view.imageToView(this.seed.x + 0.5, this.seed.y + 0.5);
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#000";
+        ctx.fillRect(Math.round(v.x) - 2, Math.round(v.y) - 2, 4, 4);
+        ctx.strokeRect(Math.round(v.x) - 2.5, Math.round(v.y) - 2.5, 5, 5);
+        drawMoveHandle(ctx, this.seedHandle());
     }
 }

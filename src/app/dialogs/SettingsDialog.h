@@ -28,12 +28,18 @@ struct AppSettings {
     bool autoScroll = true;
     bool autoSelectVisibleLayer = false;
     bool coloredToolIcons = true;
+    // Ventanas flotantes: 0, como las de paint.js (Windows 10); 1, compactas. Grosor del borde
+    // en píxeles.
+    int panelStyle = 0;
+    int panelBorder = 1;
     int colorScheme = 0;
     QString language = QStringLiteral("en");
     bool reopenLast = false;
     int autosaveMinutes = 5;
     int unit = 0;
     bool rulers = false;
+    // 0: oscura, como la de paint.js; 1: del color de la barra de herramientas.
+    int rulerStyle = 0;
     bool dropShadow = true;
     // Color propio del fondo alrededor de la imagen, uno para los temas claros y otro para los
     // oscuros (no válido: el del tema).
@@ -70,7 +76,21 @@ struct AppSettings {
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
-    enum class Page { Interface, Canvas, Tools, Tablet, Performance, Plugins, Discord, Updates, Diagnostics };
+    enum class Page {
+        Interface,
+        Canvas,
+        Tools,
+        Tablet,
+        Performance,
+        Plugins,
+        Discord,
+        Updates,
+        Diagnostics,
+        IconPacks,
+        Fonts,
+        Shapes,
+        Keyboard
+    };
 
     SettingsDialog(const AppSettings& current, ToolManager* tools, QWidget* parent = nullptr);
     AppSettings settings() const { return m_settings; }
@@ -98,6 +118,14 @@ private:
     QWidget* createDiscordPage();
     QWidget* createUpdatesPage();
     QWidget* createDiagnosticsPage();
+    QWidget* createIconPacksPage();
+    QWidget* createFontsPage();
+    QWidget* createShapesPage();
+    QWidget* createKeyboardPage();
+    void refreshIconPacks();
+    void refreshFonts();
+    void refreshShapes();
+    void refreshShortcuts();
     void refreshPlugins();
     void showPluginDetails();
     void addPlugins();
@@ -114,5 +142,13 @@ private:
     QLabel* m_updateStatus = nullptr;
     QLabel* m_discordStatus = nullptr;
     ToolOptionsPanel* m_toolDefaults = nullptr;
+    QComboBox* m_iconPackChoice = nullptr;
+    QListWidget* m_iconPacks = nullptr;
+    QLabel* m_iconPackDetails = nullptr;
+    QListWidget* m_fonts = nullptr;
+    QListWidget* m_shapes = nullptr;
+    class QLineEdit* m_shortcutSearch = nullptr;
+    QTreeWidget* m_shortcuts = nullptr;
+    QLabel* m_shortcutStatus = nullptr;
     bool m_restartRequested = false;
 };

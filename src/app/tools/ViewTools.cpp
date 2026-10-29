@@ -32,7 +32,8 @@ QString ZoomTool::hint() const
 
 QCursor ZoomTool::cursor() const
 {
-    return iconCursor(icon(), QPoint(9, 9), Qt::CrossCursor);
+    // El cursor es la lupa de paint.js (la del botón es la dibujada de Kaint).
+    return iconCursor(Icons::named(QStringLiteral("zoom")), QPoint(9, 9), Qt::CrossCursor);
 }
 
 void ZoomTool::mousePress(const ToolEvent& e)
@@ -155,7 +156,8 @@ QString ColorPickerTool::hint() const
 
 QCursor ColorPickerTool::cursor() const
 {
-    return iconCursor(icon(), QPoint(2, 21), Qt::CrossCursor);
+    // El cuentagotas de paint.js, como el de la lupa.
+    return iconCursor(Icons::named(QStringLiteral("colorpicker")), QPoint(2, 21), Qt::CrossCursor);
 }
 
 void ColorPickerTool::pick(const ToolEvent& e, Qt::MouseButton button)

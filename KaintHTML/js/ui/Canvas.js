@@ -7,6 +7,8 @@ import { handCursor } from "./Icons.js";
 import { Settings } from "../Settings.js";
 
 const kMargin = 24;
+// Grosor de las reglas (Ver > Reglas).
+export const kRuler = 20;
 
 export const ZoomPresets = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.12, 0.16, 0.2, 0.25, 1 / 3, 0.5, 2 / 3, 1, 1.5, 2, 3,
                             4, 5, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64];
@@ -32,6 +34,10 @@ export class CanvasView extends EventTarget {
         this.listeners = [];
         this.hScroll = workspace.querySelector(".scrollbar.h");
         this.vScroll = workspace.querySelector(".scrollbar.v");
+        this.hRuler = workspace.querySelector("canvas.ruler.h");
+        this.vRuler = workspace.querySelector("canvas.ruler.v");
+        this.rulersVisible = !!Settings.get("rulers");
+        workspace.classList.toggle("rulers", this.rulersVisible);
         new ResizeObserver(() => this.resized()).observe(workspace);
         this.installEvents();
         this.installScrollbars();
@@ -193,8 +199,9 @@ export class CanvasView extends EventTarget {
     zoomToRect(r) {
         if (!this.doc || r.w <= 0 || r.h <= 0)
             return;
+        // Justo ese rectángulo, sin margen: llena la vista a lo ancho o a lo alto y queda centrado.
         const v = this.viewSize();
-        this.setZoom(Math.min((v.w - 2 * kMargin) / r.w, (v.h - 2 * kMargin) / r.h) * this.dpr);
+        this.setZoom(Math.min(v.w / r.w, v.h / r.h) * this.dpr);
         this.centerOn(r.x + r.w / 2, r.y + r.h / 2);
     }
 
@@ -314,6 +321,7 @@ export class CanvasView extends EventTarget {
         const doc = this.doc;
         if (!doc) {
             this.updateScrollbars();
+            this.renderRulers();
             return;
         }
         this.updateComposite();
@@ -345,6 +353,7 @@ export class CanvasView extends EventTarget {
         if (this.pixelGrid && this.zoom >= 2)
             this.drawPixelGrid(ctx, v);
         this.drawSelection(ctx);
+        this.renderRulers();
         if (this.tool) {
             ctx.save();
             this.tool.paintOverlay?.(ctx, this);
@@ -366,6 +375,113 @@ export class CanvasView extends EventTarget {
             }
         }
         this.updateScrollbars();
+    }
+
+    // --- Reglas ------------------------------------------------------------------------------
+
+    setRulersVisible(on) {
+        this.rulersVisible = on;
+        Settings.set("rulers", on);
+        this.workspace.classList.toggle("rulers", on);
+        this.resized();
+        this.dispatchEvent(new Event("rulers"));
+    }
+
+    // Como las de paint.js (Configuración > Lienzo): oscuras, con una marca corta y el número cada
+    // 1, 2, 5, 10, 20, 40... píxeles (al menos 35 px entre marcas), o del color de la barra de
+    // herramientas con marcas intermedias. Resaltan la selección y la posición del cursor.
+    renderRulers() {
+        if (!this.rulersVisible)
+            return;
+        const paintJs = Settings.get("rulerStyle") !== 1;
+        this.workspace.classList.toggle("ruler-classic", !paintJs);
+        const styles = getComputedStyle(document.documentElement);
+        const theme = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+        const colors = paintJs ? { bg: "#202020", tick: "#a8a8a8", text: "#e5e5e5", edge: "#575757" }
+                               : { bg: theme("--toolbar", "#fff"), tick: theme("--text", "#000"), text: theme("--text", "#000"), edge: theme("--line", "#999") };
+        const accent = theme("--accent", "#3399ff");
+        for (const vertical of [false, true]) {
+            const canvas = vertical ? this.vRuler : this.hRuler;
+            if (!canvas)
+                continue;
+            const dpr = this.dpr, w = canvas.clientWidth, h = canvas.clientHeight;
+            if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+                canvas.width = Math.round(w * dpr);
+                canvas.height = Math.round(h * dpr);
+            }
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.fillStyle = colors.bg;
+            ctx.fillRect(0, 0, w, h);
+            const doc = this.doc;
+            if (doc) {
+                const t = kRuler, length = vertical ? h : w, origin = vertical ? this.origin.y : this.origin.x, s = this.scale;
+                const b = doc.selection.bounds();
+                if (b) {
+                    ctx.globalAlpha = paintJs ? 0.45 : 0.35;
+                    ctx.fillStyle = accent;
+                    const a = origin + (vertical ? b.y : b.x) * s, size = (vertical ? b.h : b.w) * s;
+                    vertical ? ctx.fillRect(0, a, t, size) : ctx.fillRect(a, 0, size, t);
+                    ctx.globalAlpha = 1;
+                }
+                let step = 1;
+                if (paintJs) {
+                    while (step * s < 35 && step < 1e7)
+                        step *= step === 2 ? 2.5 : 2;
+                } else {
+                    outer: for (let mag = 1; mag < 1e7; mag *= 10)
+                        for (const k of [1, 2, 5])
+                            if (k * mag * s >= 60) {
+                                step = k * mag;
+                                break outer;
+                            }
+                }
+                const minor = paintJs ? step : step / 5;
+                const first = Math.ceil(-origin / s / minor) * minor - minor, last = (length - origin) / s;
+                ctx.font = `10px ${theme("--font", "sans-serif")}`;
+                ctx.lineWidth = 1;
+                for (let value = first; value <= last; value += minor) {
+                    const pos = Math.round(origin + value * s) + 0.5;
+                    const major = Math.abs(value / step - Math.round(value / step)) < 1e-6;
+                    const tick = paintJs ? 6 : major ? t : t / 3;
+                    ctx.strokeStyle = colors.tick;
+                    ctx.beginPath();
+                    if (vertical) {
+                        ctx.moveTo(t - tick, pos);
+                        ctx.lineTo(t, pos);
+                    } else {
+                        ctx.moveTo(pos, t - tick);
+                        ctx.lineTo(pos, t);
+                    }
+                    ctx.stroke();
+                    if (!major)
+                        continue;
+                    ctx.fillStyle = colors.text;
+                    const label = String(Math.round(value));
+                    if (vertical) {
+                        // Como paint.js, de abajo arriba sobre la marca.
+                        ctx.save();
+                        ctx.translate(t - 9, pos + 2);
+                        ctx.rotate(-Math.PI / 2);
+                        ctx.fillText(label, 0, 0);
+                        ctx.restore();
+                    } else {
+                        ctx.fillText(label, pos + 2, 12);
+                    }
+                }
+                if (this.mouse) {
+                    const c = Math.round(vertical ? this.mouse.vy : this.mouse.vx) + 0.5;
+                    ctx.strokeStyle = accent;
+                    ctx.beginPath();
+                    vertical ? (ctx.moveTo(0, c), ctx.lineTo(t, c)) : (ctx.moveTo(c, 0), ctx.lineTo(c, t));
+                    ctx.stroke();
+                }
+            }
+            ctx.strokeStyle = colors.edge;
+            ctx.beginPath();
+            vertical ? (ctx.moveTo(w - 0.5, 0), ctx.lineTo(w - 0.5, h)) : (ctx.moveTo(0, h - 0.5), ctx.lineTo(w, h - 0.5));
+            ctx.stroke();
+        }
     }
 
     drawPixelGrid(ctx, v) {

@@ -3,6 +3,7 @@
 // por los bordes y se vuelven translúcidas sin el puntero encima.
 import { AppState } from "../AppState.js";
 import { hsvToRgb, hex, parseHex, rgbToHsv, thumbnail } from "../core/Raster.js";
+import { kRuler } from "./Canvas.js";
 import { el } from "./Dialogs.js";
 import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
@@ -52,21 +53,28 @@ export class FloatingPanel {
         });
     }
 
+    // Zona para las ventanas: el área de trabajo sin las barras de desplazamiento ni, como en
+    // paint.js, las reglas.
+    area() {
+        const r = this.workspace.classList.contains("rulers") ? kRuler : 0;
+        return { x: r, y: r, w: this.workspace.clientWidth - 14 - r, h: this.workspace.clientHeight - 14 - r };
+    }
+
     reposition() {
-        const W = this.workspace.clientWidth - 14, H = this.workspace.clientHeight - 14;
+        const a = this.area(), W = a.w, H = a.h;
         const w = this.element.offsetWidth, h = this.element.offsetHeight;
         let x = this.corner.includes("l") ? this.offset.x : W - w - this.offset.x;
         let y = this.corner.includes("t") ? this.offset.y : H - h - this.offset.y;
         x = Math.max(0, Math.min(W - w, x));
         y = Math.max(0, Math.min(H - h, y));
-        this.element.style.left = `${x}px`;
-        this.element.style.top = `${y}px`;
+        this.element.style.left = `${x + a.x}px`;
+        this.element.style.top = `${y + a.y}px`;
     }
 
     // Esquina más cercana y distancia a ella (así se quedan en su sitio al cambiar el tamaño).
     anchorFromGeometry() {
-        const W = this.workspace.clientWidth - 14, H = this.workspace.clientHeight - 14;
-        const x = this.element.offsetLeft, y = this.element.offsetTop, w = this.element.offsetWidth, h = this.element.offsetHeight;
+        const a = this.area(), W = a.w, H = a.h;
+        const x = this.element.offsetLeft - a.x, y = this.element.offsetTop - a.y, w = this.element.offsetWidth, h = this.element.offsetHeight;
         const left = x + w / 2 < W / 2, top = y + h / 2 < H / 2;
         this.corner = (top ? "t" : "b") + (left ? "l" : "r");
         this.offset = { x: left ? x : W - x - w, y: top ? y : H - y - h };
@@ -86,9 +94,9 @@ export class FloatingPanel {
         head.addEventListener("pointermove", (e) => {
             if (!start)
                 return;
-            const W = this.workspace.clientWidth - 14, H = this.workspace.clientHeight - 14;
-            this.element.style.left = `${Math.max(0, Math.min(W - this.element.offsetWidth, start.left + e.clientX - start.x))}px`;
-            this.element.style.top = `${Math.max(0, Math.min(H - this.element.offsetHeight, start.top + e.clientY - start.y))}px`;
+            const a = this.area();
+            this.element.style.left = `${Math.max(a.x, Math.min(a.x + a.w - this.element.offsetWidth, start.left + e.clientX - start.x))}px`;
+            this.element.style.top = `${Math.max(a.y, Math.min(a.y + a.h - this.element.offsetHeight, start.top + e.clientY - start.y))}px`;
         });
         head.addEventListener("pointerup", () => {
             if (!start)

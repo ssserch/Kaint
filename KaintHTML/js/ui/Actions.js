@@ -12,6 +12,8 @@ export class Action {
         this.text = text;
         this.icon = iconName;
         this.shortcuts = shortcut ? (Array.isArray(shortcut) ? shortcut : [shortcut]) : [];
+        // Los de fábrica (Configuración > Atajos de teclado los puede cambiar).
+        this.defaultShortcuts = [...this.shortcuts];
         this.run = run;
         this.enabledFn = enabled;
         this.checked = checked;
@@ -24,6 +26,14 @@ export class Action {
     trigger() {
         if (this.isEnabled())
             this.run();
+    }
+
+    get shortcut() {
+        return this.shortcuts[0] || "";
+    }
+
+    get defaultShortcut() {
+        return this.defaultShortcuts[0] || "";
     }
 
     shortcutText() {
@@ -63,8 +73,7 @@ export function keyCombo(e) {
     return parts.join("+");
 }
 
-// Botón de barra para una acción; 'iconName' cambia el icono (la barra principal lleva los
-// dibujados aunque los menús lleven los PNG).
+// Botón de barra para una acción; 'iconName' cambia el icono.
 export function toolButton(action, iconName = action.icon, size = 16) {
     const b = document.createElement("button");
     b.className = "tbutton";
@@ -72,6 +81,7 @@ export function toolButton(action, iconName = action.icon, size = 16) {
     b.appendChild(icon(iconName, size));
     b.addEventListener("click", () => action.trigger());
     const update = () => {
+        b.title = action.tooltip();
         b.disabled = !action.isEnabled();
         b.classList.toggle("checked", !!action.checked?.());
     };

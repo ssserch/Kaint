@@ -149,6 +149,8 @@ signals:
     void paletteChanged();
     void toolSettingsChanged();
     void recentFilesChanged();
+    // Se añadieron o quitaron formas personalizadas (Configuración > Formas).
+    void customShapesChanged();
 
 private:
     AppState();

@@ -68,6 +68,19 @@ runs on Windows 10 and 11.
   </tr>
   <tr>
     <td valign="top">
+      <h4>Icon packs, fonts and shortcuts</h4>
+      Install <a href="https://github.com/LabyStudio/paintdotjs">paint.js</a> icon packs (.zip),
+      add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
+      and change any keyboard shortcut in <b>Settings</b>.
+    </td>
+    <td valign="top">
+      <h4>Rulers and status bar</h4>
+      Dark rulers like paint.js's (or the toolbar color), with the floating windows kept clear of
+      them, and the current tool's icon next to its help in the status bar.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
       <h4>Recovery copies</h4>
       Unsaved images are kept safe in case Kaint closes unexpectedly.
     </td>
@@ -81,7 +94,9 @@ runs on Windows 10 and 11.
 ## Themes
 
 Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
-colors, toolbar layout and a canvas background image with placement, scale, blur and tint.
+colors, toolbar layout and a canvas background image with placement, scale, blur and tint. The
+floating windows look like paint.js's Windows 10 windows (or Kaint's compact ones), with the border
+width you choose in **Settings → User interface**.
 
 Menus and windows fade in, layers slide into place when you reorder them, the active color slot
 and the close buttons of the image tabs animate, and a modal dialog blinks when you click the
@@ -184,8 +199,8 @@ from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to d
 `build.bat --setup` makes `Kaint-<version>-windows-x64-setup.exe`, a regular installer for
 sharing: it installs Kaint for the current user (no administrator rights), adds it to the Start
 menu (and optionally the desktop) and registers it in *Installed apps*, so it can be removed like
-any other application. Its uninstaller can also delete your settings, palettes, plugins and
-recovery copies. If NSIS is missing, it offers to download it (about 2 MB).
+any other application. Its uninstaller can also delete your settings, palettes, plugins, icon packs,
+fonts and recovery copies. If NSIS is missing, it offers to download it (about 2 MB).
 
 `build.bat --zip` makes a portable `Kaint-<version>-windows-x64.zip`: unzip it anywhere and run
 `Kaint\bin\kaint.exe`.

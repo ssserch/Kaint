@@ -1,14 +1,22 @@
 // Iconos de Kaint: los PNG de la interfaz (assets/icons, la misma tabla que src/app/PngIcons.cpp)
-// y los dibujados por código (src/app/PdnIcons.cpp e Icons.cpp): la barra de herramientas, las
-// herramientas que llevan los colores activos y la mano. Los dibujados se vuelven a pintar al
-// cambiar de tema o de colores.
+// y los dibujados por código (src/app/PdnIcons.cpp e Icons.cpp): las herramientas (las que llevan
+// los colores activos, la mano y las demás con sus dibujos de siempre) y las formas. Los dibujados
+// se vuelven a pintar al cambiar de tema o de colores.
+import { IconPacks } from "../IconPacks.js";
 
-const files = {
+// PNG de paint.js de las herramientas: solo para los cursores (los botones llevan los dibujados de
+// Kaint) y para que un paquete de iconos sustituya también los botones.
+const toolFiles = {
     rectangleselect: "rectangle_select_tool_icon", ellipseselect: "ellipse_select_tool_icon",
     lassoselect: "lasso_select_tool_icon", magicwand: "magic_wand_tool_icon", moveselectedpixels: "move_tool_icon",
     moveselection: "move_selection_tool_icon", zoom: "zoom_tool_icon", eraser: "eraser_tool_icon",
     pencil: "pencil_tool_icon", colorpicker: "color_picker_tool_icon", clonestamp: "clone_stamp_tool_icon",
-    text: "text_tool_icon", linecurve: "line_tool_icon", shapes: "shapes_tool_icon_16",
+    text: "text_tool_icon", linecurve: "line_tool_icon", shapes: "shapes_tool_icon",
+    paintbrush: "paint_brush_tool_icon", paintbucket: "paint_bucket_icon", recolor: "recoloring_tool_icon",
+    gradient: "gradient_tool_icon", pan: "pan_tool_icon",
+};
+
+const files = {
     "document-new": "menu_file_new_icon", "document-open": "menu_file_open_icon", "document-save": "menu_file_save_icon",
     "document-save-as": "menu_file_save_as_icon", "document-save-all": "menu_file_save_all_icon",
     "document-print": "menu_file_print_icon", "document-close": "menu_file_close_icon", "application-exit": "menu_file_exit_icon",
@@ -74,6 +82,42 @@ const files = {
     "effect-zoomblur": "zoom_blur_effect",
 };
 
+// Opciones de la barra de herramientas con PNG de paint.js (como Icons.cpp); las formas se
+// dibujan.
+const optionFiles = {
+    "opt-gradient:linear": "enum_gradient_type_linear_clamped", "opt-gradient:reflected": "enum_gradient_type_linear_reflected",
+    "opt-gradient:diamond": "enum_gradient_type_linear_diamond", "opt-gradient:radial": "enum_gradient_type_radial",
+    "opt-gradient:conical": "enum_gradient_type_conical",
+    "opt-style:outline": "enum_shape_draw_type_outline_dark", "opt-style:fill": "enum_shape_draw_type_interior",
+    "opt-style:both": "enum_shape_draw_type_both_dark",
+    "opt-curve:straight": "enum_curve_type_straight", "opt-curve:spline": "enum_curve_type_spline",
+    "opt-curve:bezier": "enum_curve_type_bezier",
+    "opt-aa:1": "anti_aliasing_true", "opt-aa:0": "anti_aliasing_false",
+    "opt-selquality:0": "enum_selection_rendering_quality_aliased",
+    "opt-selquality:1": "enum_selection_rendering_quality_high_quality_antialiased",
+    "opt-selmode:replace": "enum_selection_combine_mode_replace", "opt-selmode:union": "enum_selection_combine_mode_union",
+    "opt-selmode:exclude": "enum_selection_combine_mode_exclude", "opt-selmode:intersect": "enum_selection_combine_mode_intersect",
+    "opt-selmode:xor": "enum_selection_combine_mode_xor",
+    "opt-dash:solid": "enum_dash_style_solid", "opt-dash:dash": "enum_dash_style_dash", "opt-dash:dot": "enum_dash_style_dot",
+    "opt-dash:dashdot": "enum_dash_style_dash_dot", "opt-dash:dashdotdot": "enum_dash_style_dash_dot_dot",
+    "opt-flood:0": "enum_flood_mode_local", "opt-flood:1": "enum_flood_mode_global",
+    "opt-rectmode:normal": "enum_selection_draw_mode_normal", "opt-rectmode:ratio": "enum_selection_draw_mode_fixed_ratio",
+    "opt-rectmode:size": "enum_selection_draw_mode_fixed_size",
+    "opt-stepper:plus": "plus_button_icon", "opt-stepper:minus": "minus_button_icon", "opt-blend": "alpha_blending_true",
+    "opt-align:left": "enum_text_alignment_left", "opt-align:center": "enum_text_alignment_center",
+    "opt-align:right": "enum_text_alignment_right",
+    "opt-sample:1": "enum_pixel_sample_mode_point_sample",
+    "opt-recolor:once": "enum_recolor_tool_sampling_mode_once",
+    "opt-recolor:secondary": "enum_recolor_tool_sampling_mode_secondary_color",
+};
+for (const cap of ["flat", "round", "arrow", "filled"])
+    for (const end of ["start", "end"])
+        optionFiles[`opt-cap:${cap}:${end}`] = `enum_line_curve_cap_${{ round: "rounded", filled: "arrow_filled" }[cap] || cap}_${end}`;
+for (const n of [3, 5, 11, 31, 51])
+    optionFiles[`opt-sample:${n}`] = `enum_pixel_sample_mode_average${n}x${n}`;
+for (const [k, v] of Object.entries(optionFiles))
+    files[k] = v;
+
 // --- Colores ------------------------------------------------------------------------------
 
 let primary = null, secondary = null;
@@ -89,7 +133,6 @@ function cssVar(name) {
 }
 const fg = () => cssVar("--text");
 const accent = () => cssVar("--accent");
-const isDark = () => document.documentElement.classList.contains("dark");
 
 const rgb = (r, g, b, a = 1) => `rgba(${r},${g},${b},${a})`;
 const css = (c) => rgb(c.r, c.g, c.b);
@@ -284,340 +327,238 @@ function drawPanGrab(ctx) {
 // --- Barra principal (rejilla de 16 px) -----------------------------------------------------
 
 // Arco con punta de flecha al final (ángulos en grados, positivos en sentido antihorario).
-function arrowArc(ctx, cx, cy, r, startDeg, spanDeg, width, fill, line) {
-    const a0 = (-startDeg * Math.PI) / 180, a1 = (-(startDeg + spanDeg) * Math.PI) / 180;
-    const end = ((startDeg + spanDeg) * Math.PI) / 180, dir = spanDeg >= 0 ? 1 : -1;
-    const tip = [cx + Math.cos(end) * r, cy - Math.sin(end) * r];
-    const tan = [-Math.sin(end) * dir, -Math.cos(end) * dir], rad = [Math.cos(end), -Math.sin(end)];
-    const head = [[tip[0] + tan[0] * width * 1.35, tip[1] + tan[1] * width * 1.35],
-                  [tip[0] + rad[0] * width * 1.2, tip[1] + rad[1] * width * 1.2],
-                  [tip[0] - rad[0] * width * 1.2, tip[1] - rad[1] * width * 1.2]];
-    for (const [color, extra] of [[line, 1.8], [fill, 0]]) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, a0, a1, spanDeg > 0);
-        stroke(ctx, color, width + extra, "butt", "round");
-        poly(ctx, head);
-        ctx.fillStyle = color;
+// --- Herramientas con sus dibujos de siempre (PdnIcons.cpp, rejilla de 20 px) -------------
+
+function ants(ctx) {
+    ctx.strokeStyle = rgb(65, 75, 88);
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2.5 * 1.2, 1.8 * 1.2]);
+}
+
+function ellipseAt(ctx, x, y, w, h) {
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+}
+
+function fillStroke(ctx, fill, line, width) {
+    if (fill) {
+        ctx.fillStyle = fill;
         ctx.fill();
-        if (extra) {
-            ctx.lineWidth = extra;
-            ctx.lineJoin = "round";
-            ctx.strokeStyle = color;
-            ctx.stroke();
-        }
+    }
+    if (line) {
+        ctx.strokeStyle = line;
+        ctx.lineWidth = width;
+        ctx.stroke();
     }
 }
 
-function page(ctx, pts, fill, line = rgb(100, 100, 100)) {
-    poly(ctx, pts);
-    ctx.fillStyle = fill;
-    ctx.fill();
-    stroke(ctx, line, 1);
+function drawRectSelect(ctx) {
+    ctx.fillStyle = rgb(178, 215, 245);
+    ctx.fillRect(3, 3, 14, 14);
+    ants(ctx);
+    ctx.strokeRect(3, 3, 14, 14);
+    ctx.setLineDash([]);
 }
 
-const toolbar = {
-    "document-new"(ctx) {
-        page(ctx, [[2.5, 0.5], [8.5, 0.5], [11.5, 3.5], [11.5, 9], [9, 14.5], [2.5, 14.5]], "#fff");
-        page(ctx, [[8.5, 0.5], [8.5, 3.5], [11.5, 3.5]], rgb(210, 214, 222));
+function drawEllipseSelect(ctx) {
+    ellipseAt(ctx, 3, 3, 14, 14);
+    ctx.fillStyle = rgb(137, 190, 233);
+    ctx.fill();
+    ants(ctx);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawLasso(ctx) {
+    ellipseAt(ctx, 3.2, 2, 12.4, 9.8);
+    ctx.fillStyle = rgb(178, 215, 245);
+    ctx.fill();
+    stroke(ctx, rgb(50, 106, 176), 1.7, "round");
+    ctx.beginPath();
+    ctx.moveTo(9, 11.8);
+    ctx.bezierCurveTo(9.4, 15, 13.8, 15.4, 12.2, 18.6);
+    stroke(ctx, rgb(50, 106, 176), 1.7, "round");
+}
+
+function drawMagicWand(ctx) {
+    const line = (x0, y0, x1, y1, color, width) => {
         ctx.beginPath();
-        ctx.moveTo(12, 8.5); ctx.lineTo(12, 15.5); ctx.moveTo(8.5, 12); ctx.lineTo(15.5, 12);
-        stroke(ctx, rgb(46, 160, 90), 2);
-    },
-    "document-open"(ctx) {
-        page(ctx, [[0.5, 5.5], [0.5, 3.5], [5, 3.5], [6.5, 5], [13.5, 5], [13.5, 14.5], [0.5, 14.5]], rgb(214, 170, 96), rgb(150, 110, 50));
-        page(ctx, [[0.5, 14.5], [2.5, 7.5], [15.5, 7.5], [13.5, 14.5]], rgb(240, 196, 120), rgb(150, 110, 50));
-        arrowArc(ctx, 13.6, 6.6, 4.6, 180, -80, 1.6, rgb(46, 170, 120), rgb(20, 100, 70));
-    },
-    "document-save"(ctx) {
-        page(ctx, [[0.5, 0.5], [12.5, 0.5], [15.5, 3.5], [15.5, 15.5], [0.5, 15.5]], rgb(150, 80, 190), rgb(80, 40, 110));
-        ctx.fillStyle = rgb(236, 230, 244);
-        ctx.fillRect(3.5, 8.5, 9, 7);
-        ctx.strokeStyle = rgb(80, 40, 110);
-        ctx.lineWidth = 1;
-        ctx.strokeRect(3.5, 8.5, 9, 7);
-        ctx.beginPath();
-        ctx.moveTo(5, 11); ctx.lineTo(11, 11); ctx.moveTo(5, 13); ctx.lineTo(11, 13);
-        stroke(ctx, rgb(150, 130, 170), 0.8);
-        ctx.fillStyle = rgb(200, 170, 225);
-        ctx.fillRect(4, 1, 7, 4);
-    },
-    "document-print"(ctx) {
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = rgb(80, 80, 90);
-        ctx.fillStyle = rgb(235, 238, 242);
-        ctx.fillRect(4, 2, 8, 4); ctx.strokeRect(4, 2, 8, 4);
-        roundRect(ctx, 2, 6, 12, 5, 1);
-        ctx.fillStyle = rgb(120, 130, 145); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(4, 10, 8, 4); ctx.strokeRect(4, 10, 8, 4);
-    },
-    "edit-cut"(ctx) {
-        ctx.fillStyle = rgb(112, 112, 112);
-        poly(ctx, [[1.9, 0.2], [3.6, 0.2], [9.2, 8.4], [7.4, 9.6]]); ctx.fill();
-        poly(ctx, [[14.1, 0.2], [12.4, 0.2], [6.8, 8.4], [8.6, 9.6]]); ctx.fill();
-        const handle = rgb(60, 118, 178);
-        for (const x of [3.5, 12.5]) {
-            ctx.beginPath();
-            ctx.ellipse(x, 12.8, 2.4, 2.2, 0, 0, Math.PI * 2);
-            stroke(ctx, handle, 1.4, "round", "round");
-        }
-        ctx.beginPath();
-        ctx.moveTo(7.4, 9.6); ctx.lineTo(5.7, 12.6); ctx.moveTo(8.6, 9.6); ctx.lineTo(10.3, 12.6);
-        stroke(ctx, handle, 1.7, "round", "round");
-        roundRect(ctx, 6.3, 9, 3.4, 2.4, 0.8);
-        ctx.fillStyle = handle;
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        stroke(ctx, color, width, "round");
+    };
+    line(3, 17, 11, 9, rgb(74, 85, 101), 3);
+    line(11, 9, 13, 7, rgb(196, 208, 222), 3);
+    const sparkle = (cx, cy, r, color, w) => {
+        line(cx, cy - r, cx, cy + r, color, w);
+        line(cx - r, cy, cx + r, cy, color, w);
+    };
+    sparkle(15.5, 4, 3.2, rgb(255, 196, 36), 1.6);
+    sparkle(9.5, 3, 1.9, rgb(255, 226, 120), 1.2);
+    sparkle(18, 9.5, 1.7, rgb(255, 226, 120), 1.2);
+}
+
+const moveArrow = [[2, 1], [2, 12.5], [5, 9.8], [7, 14.2], [8.9, 13.3], [7, 9.2], [11, 8.8]];
+
+// La cruz con cuatro puntas de las dos herramientas Mover.
+function moveCross(ctx) {
+    const cx = 14.5, cy = 14.5, r = 5, h = 2, c = rgb(64, 84, 110);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+    ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+    stroke(ctx, c, 1.3, "round");
+    ctx.fillStyle = c;
+    for (const tri of [[[cx, cy - r - 0.8], [cx - h, cy - r + 1.6], [cx + h, cy - r + 1.6]],
+                       [[cx, cy + r + 0.8], [cx - h, cy + r - 1.6], [cx + h, cy + r - 1.6]],
+                       [[cx - r - 0.8, cy], [cx - r + 1.6, cy - h], [cx - r + 1.6, cy + h]],
+                       [[cx + r + 0.8, cy], [cx + r - 1.6, cy - h], [cx + r - 1.6, cy + h]]]) {
+        poly(ctx, tri);
         ctx.fill();
-    },
-    "edit-copy"(ctx) {
-        for (const [x, y, fill] of [[1.5, 0.5, rgb(226, 229, 235)], [5.5, 4.5, "#fff"]]) {
-            page(ctx, [[x, y], [x + 6, y], [x + 9, y + 3], [x + 9, y + 11], [x, y + 11]], fill);
-            page(ctx, [[x + 6, y], [x + 6, y + 3], [x + 9, y + 3]], rgb(200, 204, 212));
-        }
-    },
-    "edit-paste"(ctx) {
-        roundRect(ctx, 0.5, 1.5, 11, 13.5, 1);
-        ctx.fillStyle = rgb(224, 178, 104); ctx.fill(); stroke(ctx, rgb(150, 110, 50), 1);
-        roundRect(ctx, 3.5, 0.5, 5, 3, 1);
-        ctx.fillStyle = rgb(170, 130, 70); ctx.fill(); stroke(ctx, rgb(150, 110, 50), 1);
-        page(ctx, [[6.5, 5.5], [12, 5.5], [15.5, 9], [15.5, 15.5], [6.5, 15.5]], "#fff");
-        page(ctx, [[12, 5.5], [12, 9], [15.5, 9]], rgb(200, 204, 212));
-    },
-    "transform-crop"(ctx) {
-        ctx.fillStyle = rgb(150, 156, 166);
-        ctx.fillRect(5, 5, 6, 6);
+    }
+}
+
+function drawMove(ctx) {
+    poly(ctx, moveArrow);
+    fillStroke(ctx, rgb(96, 146, 205), rgb(32, 56, 92), 1);
+    moveCross(ctx);
+}
+
+function drawMoveSelection(ctx) {
+    poly(ctx, moveArrow);
+    stroke(ctx, rgb(104, 154, 212), 1.3, "butt", "round");
+    moveCross(ctx);
+}
+
+function drawZoom(ctx) {
+    ctx.beginPath();
+    ctx.moveTo(12.6, 12.6);
+    ctx.lineTo(17.6, 17.6);
+    stroke(ctx, rgb(40, 80, 140), 3, "round");
+    ellipseAt(ctx, 2.2, 2.2, 11.6, 11.6);
+    stroke(ctx, rgb(40, 80, 140), 1.8);
+    ctx.fillStyle = rgb(50, 60, 76);
+    for (let i = 0; i < 4; ++i)
+        ctx.fillRect(5 + (i % 2) * 3.3, 5 + Math.floor(i / 2) * 3.3, 2.7, 2.7);
+}
+
+function drawEraser(ctx) {
+    ctx.save();
+    ctx.translate(10, 10);
+    ctx.rotate((-35 * Math.PI) / 180);
+    roundRect(ctx, -8.4, -3.6, 16.8, 7.2, 1.4);
+    ctx.fillStyle = rgb(176, 80, 196);
+    ctx.fill();
+    roundRect(ctx, -1.2, -3.6, 9.6, 7.2, 1.4);
+    ctx.fillStyle = rgb(246, 236, 248);
+    ctx.fill();
+    roundRect(ctx, -8.4, -3.6, 16.8, 7.2, 1.4);
+    stroke(ctx, rgb(90, 40, 104), 0.9);
+    ctx.beginPath();
+    ctx.moveTo(-1.2, -3.6);
+    ctx.lineTo(-1.2, 3.6);
+    stroke(ctx, rgb(90, 40, 104), 0.9);
+    ctx.restore();
+}
+
+function drawPencil(ctx) {
+    ctx.save();
+    ctx.translate(2, 18);
+    ctx.rotate(-Math.PI / 4);
+    poly(ctx, [[0, 0], [4.6, -1.8], [4.6, 1.8]]);
+    fillStroke(ctx, rgb(236, 210, 160), rgb(90, 70, 40), 0.7);
+    poly(ctx, [[0, 0], [1.8, -0.7], [1.8, 0.7]]);
+    ctx.fillStyle = rgb(50, 50, 56);
+    ctx.fill();
+    const edge = rgb(120, 84, 40);
+    ctx.beginPath();
+    ctx.rect(4.6, -1.8, 13.4, 3.6);
+    fillStroke(ctx, linear(ctx, 0, -1.8, 0, 1.8, [[0, rgb(240, 206, 140)], [1, rgb(200, 150, 80)]]), edge, 0.7);
+    ctx.beginPath();
+    ctx.rect(18, -1.8, 1.6, 3.6);
+    fillStroke(ctx, rgb(170, 176, 186), edge, 0.7);
+    roundRect(ctx, 19.6, -1.8, 2.6, 3.6, 1.2);
+    fillStroke(ctx, rgb(236, 120, 130), edge, 0.7);
+    ctx.restore();
+}
+
+function drawColorPicker(ctx) {
+    ctx.save();
+    ctx.translate(2.2, 17.8);
+    ctx.rotate(-Math.PI / 4);
+    poly(ctx, [[0, 0], [4.4, -1.1], [4.4, 1.1]]);
+    fillStroke(ctx, rgb(70, 140, 230), rgb(40, 70, 120), 0.7);
+    ctx.beginPath();
+    ctx.rect(4.4, -1.6, 7.4, 3.2);
+    fillStroke(ctx, rgb(236, 243, 251), rgb(80, 96, 118), 0.8);
+    ctx.fillStyle = rgb(70, 140, 230);
+    ctx.fillRect(4.8, -1.2, 3, 2.4);
+    ctx.beginPath();
+    ctx.rect(11.8, -2.4, 2.2, 4.8);
+    fillStroke(ctx, rgb(150, 160, 172), rgb(60, 68, 80), 0.8);
+    roundRect(ctx, 14, -3.2, 7.6, 6.4, 3.2);
+    fillStroke(ctx, linear(ctx, 0, -3.2, 0, 3.2, [[0, rgb(96, 150, 225)], [1, rgb(24, 64, 140)]]), rgb(18, 44, 96), 0.8);
+    ctx.restore();
+}
+
+function drawCloneStamp(ctx) {
+    ellipseAt(ctx, 7, 1, 6, 5.2);
+    fillStroke(ctx, rgb(82, 90, 104), rgb(38, 42, 50), 0.9);
+    ctx.beginPath();
+    ctx.rect(8.6, 4.8, 2.8, 5.4);
+    fillStroke(ctx, rgb(112, 120, 134), rgb(38, 42, 50), 0.9);
+    poly(ctx, [[5, 10.2], [15, 10.2], [16.6, 14.2], [3.4, 14.2]]);
+    fillStroke(ctx, linear(ctx, 4, 10, 16, 15, [[0, rgb(248, 182, 88)], [1, rgb(210, 130, 36)]]), rgb(140, 84, 20), 0.9);
+    ctx.beginPath();
+    ctx.rect(3.2, 14.6, 13.6, 2.6);
+    fillStroke(ctx, rgb(184, 110, 28), rgb(140, 84, 20), 0.9);
+}
+
+function drawTextTool(ctx) {
+    // "T" con remates, gris, como en Paint.NET.
+    ctx.beginPath();
+    ctx.moveTo(2.5, 2); ctx.lineTo(17.5, 2); ctx.lineTo(17.5, 6.2); ctx.lineTo(16.2, 6.2);
+    ctx.quadraticCurveTo(15.8, 3.8, 13.2, 3.6); ctx.lineTo(11.4, 3.6); ctx.lineTo(11.4, 16.2);
+    ctx.quadraticCurveTo(11.6, 17.2, 13.6, 17.2); ctx.lineTo(13.6, 18.2); ctx.lineTo(6.4, 18.2); ctx.lineTo(6.4, 17.2);
+    ctx.quadraticCurveTo(8.4, 17.2, 8.6, 16.2); ctx.lineTo(8.6, 3.6); ctx.lineTo(6.8, 3.6);
+    ctx.quadraticCurveTo(4.2, 3.8, 3.8, 6.2); ctx.lineTo(2.5, 6.2); ctx.closePath();
+    fillStroke(ctx, rgb(128, 136, 150), rgb(70, 76, 86), 0.6);
+}
+
+function drawLineTool(ctx) {
+    ctx.beginPath();
+    ctx.moveTo(3.4, 16.4);
+    ctx.bezierCurveTo(7, 6, 13, 18, 16.8, 4);
+    stroke(ctx, rgb(158, 172, 192), 1.9, "round");
+    for (const [x, y] of [[3.4, 16.4], [16.8, 4]]) {
         ctx.beginPath();
-        ctx.moveTo(4, 1); ctx.lineTo(4, 12); ctx.lineTo(15, 12); ctx.moveTo(12, 15); ctx.lineTo(12, 4); ctx.lineTo(1, 4);
-        stroke(ctx, rgb(60, 60, 70), 1.4);
-    },
-    "edit-select-none"(ctx) {
-        ctx.setLineDash([2, 2]);
-        ctx.strokeStyle = rgb(110, 110, 120);
-        ctx.lineWidth = 1;
-        ctx.strokeRect(2.5, 2.5, 11, 11);
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(5, 5); ctx.lineTo(11, 11); ctx.moveTo(11, 5); ctx.lineTo(5, 11);
-        stroke(ctx, rgb(200, 60, 60), 1.6);
-    },
-    "edit-undo": (ctx) => arrowArc(ctx, 8.8, 9.2, 4.6, -40, 215, 2.6, rgb(52, 128, 232), rgb(18, 60, 140)),
-    "edit-redo": (ctx) => arrowArc(ctx, 7.2, 9.2, 4.6, 220, -215, 2.6, rgb(52, 128, 232), rgb(18, 60, 140)),
-    "view-grid"(ctx) {
-        ctx.beginPath();
-        for (let i = 1; i <= 13; i += 4) {
-            ctx.moveTo(i + 0.5, 1); ctx.lineTo(i + 0.5, 14); ctx.moveTo(1, i + 0.5); ctx.lineTo(14, i + 0.5);
-        }
-        stroke(ctx, rgb(110, 120, 135), 1);
-    },
-    measure(ctx) {
-        page(ctx, [[0.5, 0.5], [15.5, 0.5], [15.5, 5.5], [5.5, 5.5], [5.5, 15.5], [0.5, 15.5]], rgb(236, 196, 120), rgb(120, 90, 40));
-        ctx.beginPath();
-        for (let i = 7; i < 15; i += 3) {
-            ctx.moveTo(i, 0.5); ctx.lineTo(i, 3); ctx.moveTo(0.5, i); ctx.lineTo(3, i);
-        }
-        stroke(ctx, rgb(120, 90, 40), 0.9);
-    },
-};
-// En el tema oscuro, Kaint aclara los trazos oscuros de estos iconos (excepto deshacer/rehacer).
-const lightenedInDark = new Set(Object.keys(toolbar).filter((k) => k !== "edit-undo" && k !== "edit-redo"));
+        ctx.arc(x, y, 2.3, 0, Math.PI * 2);
+        fillStroke(ctx, rgb(100, 154, 216), rgb(28, 60, 100), 0.9);
+    }
+}
+
+function drawShapesTool(ctx) {
+    ctx.beginPath();
+    ctx.rect(1.6, 2.8, 9.4, 9.4);
+    fillStroke(ctx, rgb(80, 138, 210), rgb(28, 60, 104), 0.9);
+    poly(ctx, [[14.6, 6.2], [19, 16.8], [10.2, 16.8]]);
+    fillStroke(ctx, rgb(106, 184, 110), rgb(34, 92, 52), 0.9);
+    ellipseAt(ctx, 5.8, 8.2, 8.8, 8.8);
+    fillStroke(ctx, rgb(170, 98, 210), rgb(84, 40, 110), 0.9);
+}
 
 // --- Opciones de herramienta (Icons.cpp: rejilla de 32 px con un margen de 3) -------------
 
 const options = {
-    gradient(ctx, type) {
-        const a = fg();
-        const r = [3, 3, 26, 26];
-        const clear = "rgba(0,0,0,0)";
-        let fill = null;
-        if (type === "linear" || type === "reflected") {
-            fill = ctx.createLinearGradient(r[0], 0, r[0] + r[2], 0);
-            if (type === "linear") { fill.addColorStop(0, a); fill.addColorStop(1, clear); }
-            else { fill.addColorStop(0, clear); fill.addColorStop(0.5, a); fill.addColorStop(1, clear); }
-        } else if (type === "radial" || type === "diamond") {
-            fill = ctx.createRadialGradient(16, 16, 0, 16, 16, 13);
-            fill.addColorStop(0, a); fill.addColorStop(1, clear);
-        } else if (type === "conical") {
-            fill = ctx.createConicGradient(-Math.PI / 2, 16, 16);
-            fill.addColorStop(0, a); fill.addColorStop(1, clear);
-        }
-        if (type === "diamond") {
-            poly(ctx, [[16, 3], [29, 16], [16, 29], [3, 16]]);
-            ctx.fillStyle = fill; ctx.fill();
-        } else if (type === "spiral" || type === "spiralccw") {
-            ctx.beginPath();
-            for (let i = 0; i <= 60; ++i) {
-                const t = i / 60, ang = (type === "spiral" ? 1 : -1) * t * 4 * Math.PI;
-                const x = 16 + Math.cos(ang) * t * 13, y = 16 + Math.sin(ang) * t * 13;
-                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-            }
-            stroke(ctx, a, 2);
-        } else {
-            ctx.fillStyle = fill;
-            ctx.fillRect(...r);
-        }
-        ctx.strokeStyle = a; ctx.lineWidth = 1; ctx.strokeRect(...r);
-    },
     shape(ctx, type) {
         ctx.beginPath();
         shapePath(ctx, type, 4, 5, 24, 22, 4);
         stroke(ctx, fg(), 1.6);
-    },
-    style(ctx, style) {
-        const box = [5, 8, 22, 16];
-        if (style !== "outline") { ctx.fillStyle = style === "fill" ? fg() : accent(); ctx.fillRect(...box); }
-        if (style !== "fill") { ctx.strokeStyle = fg(); ctx.lineWidth = 2.5; ctx.strokeRect(...box); }
-    },
-    curve(ctx, type) {
-        const a = [3, 25], b = [12, 5], c = [20, 27], d = [29, 7];
-        ctx.beginPath();
-        ctx.moveTo(...a);
-        if (type === "straight") ctx.lineTo(...d);
-        else ctx.bezierCurveTo(...b, ...c, ...d);
-        stroke(ctx, fg(), 2);
-        if (type === "bezier") {
-            ctx.setLineDash([1, 2]);
-            ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.moveTo(...c); ctx.lineTo(...d);
-            stroke(ctx, accent(), 1);
-            ctx.setLineDash([]);
-        }
-    },
-    cap(ctx, cap, end) {
-        const y = 16, start = end !== "end", tip = start ? 5 : 27, dir = start ? 1 : -1;
-        ctx.beginPath();
-        ctx.moveTo(tip + dir * (cap === "flat" || cap === "round" ? 0 : 6), y);
-        ctx.lineTo(start ? 29 : 3, y);
-        stroke(ctx, fg(), 4, cap === "round" ? "round" : "butt");
-        if (cap === "arrow" || cap === "filled") {
-            const head = [[tip, y], [tip + dir * 10, y - 7], [tip + dir * 10, y + 7]];
-            if (cap === "filled") { poly(ctx, head); ctx.fillStyle = fg(); ctx.fill(); }
-            else { poly(ctx, [head[1], head[0], head[2]], false); stroke(ctx, fg(), 2.5); }
-        }
-    },
-    aa(ctx, on) {
-        ctx.save();
-        if (on === "1") {
-            ctx.beginPath();
-            ctx.moveTo(5, 6);
-            ctx.bezierCurveTo(16, 5, 14, 27, 27, 26);
-            stroke(ctx, fg(), 2.5, "round", "round");
-        } else {
-            ctx.beginPath();
-            for (let i = 0; i <= 6; ++i) {
-                const x = 5 + (22 * i) / 6, yy = 6 + (20 * i) / 6;
-                i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy);
-                ctx.lineTo(x + 22 / 6, yy);
-            }
-            stroke(ctx, fg(), 2.5, "round", "round");
-        }
-        ctx.fillStyle = accent();
-        for (const [x, y] of [[5, 6], [27, 26]]) { ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill(); }
-        ctx.restore();
-    },
-    selquality(ctx, on) {
-        const ac = accent();
-        ctx.beginPath();
-        ctx.ellipse(16, 16, 11, 11, 0, 0, Math.PI * 2);
-        ctx.globalAlpha = 0.5; ctx.fillStyle = ac; ctx.fill(); ctx.globalAlpha = 1;
-        ctx.setLineDash([2, 2]);
-        stroke(ctx, fg(), 1);
-        ctx.setLineDash([]);
-        if (on !== "1") {
-            ctx.fillStyle = fg();
-            for (const [x, y] of [[8, 6], [24, 6], [8, 24], [24, 24]]) ctx.fillRect(x, y, 2, 2);
-        }
-    },
-    selmode(ctx, mode) {
-        const a = [3, 3, 16, 16], b = [13, 13, 16, 16];
-        ctx.save();
-        ctx.fillStyle = accent();
-        const rect = (r) => { ctx.beginPath(); ctx.rect(...r); };
-        if (mode === "replace") { rect(b); ctx.fill(); }
-        else if (mode === "union") { rect(a); ctx.fill(); rect(b); ctx.fill(); }
-        else if (mode === "exclude") { ctx.beginPath(); ctx.rect(...a); ctx.rect(13, 13, 6, 6); ctx.fill("evenodd"); }
-        else if (mode === "intersect") ctx.fillRect(13, 13, 6, 6);
-        else if (mode === "xor") { ctx.beginPath(); ctx.rect(...a); ctx.rect(...b); ctx.rect(13, 13, 6, 6); ctx.fill("evenodd");
-                                   ctx.fillStyle = accent(); }
-        ctx.setLineDash([2, 2]);
-        ctx.strokeStyle = fg(); ctx.lineWidth = 1;
-        ctx.strokeRect(a[0] + 0.5, a[1] + 0.5, a[2], a[3]);
-        ctx.strokeRect(b[0] + 0.5, b[1] + 0.5, b[2], b[3]);
-        ctx.restore();
-    },
-    dash(ctx, style) {
-        const pattern = { solid: [], dash: [7, 4], dot: [2.5, 3], dashdot: [7, 3, 2.5, 3], dashdotdot: [7, 3, 2.5, 3, 2.5, 3] }[style] || [];
-        ctx.setLineDash(pattern);
-        ctx.beginPath(); ctx.moveTo(3, 16); ctx.lineTo(29, 16);
-        stroke(ctx, fg(), 2.5);
-        ctx.setLineDash([]);
-    },
-    flood(ctx, global) {
-        const c = 26 / 4;
-        for (let j = 0; j < 4; ++j)
-            for (let i = 0; i < 4; ++i) {
-                const same = (i + j) % 3 === 0 || (i < 2 && j < 2);
-                const filled = global === "1" ? same : (i < 2 && j < 2) || (i === 2 && j === 0);
-                ctx.fillStyle = filled ? accent() : same ? fg() : "rgba(128,128,128,0.3)";
-                ctx.fillRect(3 + i * c, 3 + j * c, c - 1, c - 1);
-            }
-    },
-    rectmode(ctx, mode) {
-        ctx.save();
-        ctx.setLineDash([3, 3]);
-        ctx.fillStyle = accent(); ctx.globalAlpha = 0.35;
-        ctx.fillRect(4, 7, 21, 18);
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = fg(); ctx.lineWidth = 1.5; ctx.strokeRect(4, 7, 21, 18);
-        ctx.restore();
-        if (mode === "normal") return;
-        ctx.fillStyle = accent();
-        if (mode === "ratio") { ctx.fillRect(18, 23, 6, 6); ctx.fillRect(23, 18, 6, 6); }
-        else { ctx.fillRect(18, 22, 11, 7); ctx.beginPath(); ctx.arc(23.5, 21, 3.5, Math.PI, 0); stroke(ctx, accent(), 1.6); }
     },
     sample(ctx, n) {
         ctx.strokeStyle = fg(); ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, 23, 23);
         const side = Math.min(19, 2.5 + Math.log2(Math.max(1, Number(n))) * 1.6);
         ctx.fillStyle = accent();
         ctx.fillRect(16 - side / 2, 16 - side / 2, side, side);
-    },
-    stepper(ctx, sign) {
-        ctx.strokeStyle = fg(); ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, 23, 23);
-        ctx.beginPath(); ctx.moveTo(10, 16); ctx.lineTo(22, 16);
-        if (sign === "plus") { ctx.moveTo(16, 10); ctx.lineTo(16, 22); }
-        stroke(ctx, fg(), 1.5);
-    },
-    blend(ctx) {
-        // Matraz, como el de Paint.NET.
-        const top = 3, bottom = 29, neck = top + 26 * 0.38;
-        poly(ctx, [[13, top], [13, neck], [4, bottom], [28, bottom], [19, neck], [19, top]]);
-        ctx.save();
-        ctx.clip();
-        ctx.fillStyle = accent();
-        ctx.fillRect(0, top + 26 * 0.62, 32, 32);
-        ctx.restore();
-        poly(ctx, [[13, top], [13, neck], [4, bottom], [28, bottom], [19, neck], [19, top]]);
-        stroke(ctx, fg(), 1.6, "round", "round");
-    },
-    recolor(ctx, mode) {
-        if (mode === "once") {
-            ctx.beginPath(); ctx.arc(16, 16, 8.3, 0, Math.PI * 2); stroke(ctx, fg(), 2);
-            ctx.beginPath();
-            ctx.moveTo(16, 3); ctx.lineTo(16, 9); ctx.moveTo(16, 29); ctx.lineTo(16, 23);
-            ctx.moveTo(3, 16); ctx.lineTo(9, 16); ctx.moveTo(29, 16); ctx.lineTo(23, 16);
-            stroke(ctx, fg(), 2);
-            ctx.fillStyle = accent(); ctx.beginPath(); ctx.arc(16, 16, 2.5, 0, Math.PI * 2); ctx.fill();
-        } else {
-            ctx.lineWidth = 1.2; ctx.strokeStyle = fg();
-            ctx.fillStyle = "#000"; ctx.fillRect(3, 3, 16, 16); ctx.strokeRect(3, 3, 16, 16);
-            ctx.fillStyle = "#fff"; ctx.fillRect(13, 13, 16, 16); ctx.strokeRect(13, 13, 16, 16);
-        }
-    },
-    align(ctx, align) {
-        ctx.beginPath();
-        for (let i = 0; i < 5; ++i) {
-            const w = i % 2 ? 14 : 22, y = 6.5 + i * 5;
-            const x = align === "left" ? 5 : align === "right" ? 27 - w : 16 - w / 2;
-            ctx.moveTo(x, y); ctx.lineTo(x + w, y);
-        }
-        stroke(ctx, fg(), 2);
     },
 };
 
@@ -723,7 +664,14 @@ export const shapeFillRule = (type) => (type === "gear" ? "evenodd" : "nonzero")
 
 // --- Creación ------------------------------------------------------------------------------
 
+// Las que llevan los colores activos y la mano: su cursor es el dibujo.
+const drawnColored = new Set(["paintbrush", "paintbucket", "recolor", "gradient", "pan"]);
+
 const drawn = {
+    rectangleselect: [20, drawRectSelect], ellipseselect: [20, drawEllipseSelect], lassoselect: [20, drawLasso],
+    magicwand: [20, drawMagicWand], moveselectedpixels: [20, drawMove], moveselection: [20, drawMoveSelection],
+    zoom: [20, drawZoom], eraser: [20, drawEraser], pencil: [20, drawPencil], colorpicker: [20, drawColorPicker],
+    clonestamp: [20, drawCloneStamp], text: [20, drawTextTool], linecurve: [20, drawLineTool], shapes: [20, drawShapesTool],
     paintbrush: [20, drawBrush], paintbucket: [20, drawFill], recolor: [20, drawRecolor], gradient: [20, drawGradientTool],
     pan: [20, drawPan], "pan-grab": [20, drawPanGrab],
 };
@@ -731,44 +679,12 @@ const drawn = {
 function painterFor(name) {
     if (drawn[name])
         return { design: drawn[name][0], paint: drawn[name][1] };
-    if (name.startsWith("toolbar-")) {
-        const key = name.slice(8);
-        if (toolbar[key])
-            return { design: 16, paint: toolbar[key], lighten: lightenedInDark.has(key) };
-    }
     if (name.startsWith("opt-")) {
         const [kind, ...args] = name.slice(4).split(":");
         if (options[kind])
             return { design: 32, paint: (ctx) => options[kind](ctx, ...args) };
     }
     return null;
-}
-
-// Aclara los trazos oscuros conservando el tono (como "lightened" de PdnIcons.cpp).
-function lightenDark(ctx, w, h) {
-    const img = ctx.getImageData(0, 0, w, h), d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-        if (!d[i + 3])
-            continue;
-        const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
-        const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
-        if (l * 255 >= 150)
-            continue;
-        let h = 0, s = 0;
-        if (max !== min) {
-            const dd = max - min;
-            s = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
-            h = max === r ? (g - b) / dd + (g < b ? 6 : 0) : max === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
-            h *= 60;
-        }
-        const nl = (235 - l * 255) / 255;
-        const f = (n) => {
-            const k = (n + h / 30) % 12, a = s * Math.min(nl, 1 - nl);
-            return Math.round((nl - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255);
-        };
-        d[i] = f(0); d[i + 1] = f(8); d[i + 2] = f(4);
-    }
-    ctx.putImageData(img, 0, 0);
 }
 
 function paintCanvas(canvas) {
@@ -784,19 +700,24 @@ function paintCanvas(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.scale(canvas.width / painter.design, canvas.height / painter.design);
     painter.paint(ctx);
-    if (painter.lighten && isDark())
-        lightenDark(ctx, canvas.width, canvas.height);
 }
 
 export function hasIcon(name) {
     return !!(files[name] || painterFor(name));
 }
 
+// El PNG de un paquete de iconos que sustituye al dibujo de una herramienta, si lo trae.
+function packedTool(name) {
+    return toolFiles[name] ? IconPacks.file("icons", toolFiles[name]) : null;
+}
+
 // Un icono de 'size' px: <img> para los PNG y <canvas> para los dibujados.
 export function icon(name, size = 16) {
-    if (files[name]) {
+    if (files[name] || packedTool(name)) {
         const img = document.createElement("img");
         img.className = "kicon";
+        img.dataset.icon = name;
+        img.dataset.size = size;
         img.src = iconUrl(name);
         img.width = img.height = size;
         img.alt = "";
@@ -819,21 +740,42 @@ export function icon(name, size = 16) {
 }
 
 export function iconUrl(name, size = 24) {
+    const packed = files[name] ? IconPacks.file("icons", files[name]) : packedTool(name);
+    if (packed)
+        return packed;
     if (files[name])
         return `assets/icons/${files[name]}${files[name].endsWith(".svg") ? "" : ".png"}`;
     const canvas = icon(name, size);
     return canvas.toDataURL ? canvas.toDataURL() : "";
 }
 
+// Vuelve a pintar los iconos (otros colores, otro tema u otro paquete de iconos): los dibujados
+// se repintan y, si un paquete cambia un dibujo por su PNG (o al revés), se sustituye el elemento.
 export function refreshIcons(root = document) {
-    for (const canvas of root.querySelectorAll("canvas.kicon[data-icon]"))
-        paintCanvas(canvas);
+    for (const element of root.querySelectorAll(".kicon[data-icon]")) {
+        const name = element.dataset.icon, wantsImage = !!(files[name] || packedTool(name));
+        if (wantsImage && element.tagName === "IMG")
+            element.src = iconUrl(name);
+        else if (!wantsImage && element.tagName === "CANVAS")
+            paintCanvas(element);
+        else
+            element.replaceWith(icon(name, Number(element.dataset.size) || 16));
+    }
 }
+
+window.addEventListener("kaint-iconpack", () => {
+    for (const key of Object.keys(cursorCache))
+        delete cursorCache[key];
+    refreshIcons();
+});
 
 // Cursor de la mano (abierta o agarrando), dibujado como el icono de la herramienta.
 const cursorCache = {};
 export function handCursor(grabbing) {
     const key = grabbing ? "pan-grab" : "pan";
+    const packed = IconPacks.file("cursors", grabbing ? "hand_closed_cursor" : "hand_open_cursor");
+    if (packed)
+        return `url(${packed}) 12 12, ${grabbing ? "grabbing" : "grab"}`;
     if (!cursorCache[key]) {
         const canvas = document.createElement("canvas");
         canvas.width = canvas.height = 24;
@@ -845,7 +787,10 @@ export function handCursor(grabbing) {
     return cursorCache[key];
 }
 
-// Cursor con el icono de una herramienta y su punto activo.
+// Cursor con el icono de una herramienta y su punto activo: como en Kaint, el PNG de paint.js de
+// las herramientas que no llevan los colores activos (el botón lleva el dibujado).
+const pngCursors = new Set(Object.keys(toolFiles).filter((k) => !drawnColored.has(k)));
 export function iconCursor(name, hx, hy, fallback = "crosshair") {
-    return `url(${iconUrl(name, 24)}) ${hx} ${hy}, ${fallback}`;
+    const url = pngCursors.has(name) ? packedTool(name) || `assets/icons/${toolFiles[name]}.png` : iconUrl(name, 24);
+    return `url(${url}) ${hx} ${hy}, ${fallback}`;
 }

@@ -41,7 +41,7 @@ Canvas::Canvas(QWidget* parent)
     // La esquina entre las reglas, del mismo color que ellas.
     auto paintCorner = [this] {
         QPalette pal = m_rulerCorner->palette();
-        pal.setColor(QPalette::Window, Theme::active().toolBar);
+        pal.setColor(QPalette::Window, Ruler::background());
         m_rulerCorner->setPalette(pal);
     };
     paintCorner();
@@ -417,9 +417,10 @@ void Canvas::zoomToRect(const QRectF& r)
 {
     if (!m_doc || r.isEmpty())
         return;
+    // Justo ese rectángulo, sin margen: llena la vista a lo ancho o a lo alto y queda centrado.
     const qreal dpr = viewport()->devicePixelRatioF();
-    const qreal zx = (viewport()->width() - 2.0 * kMargin) / r.width();
-    const qreal zy = (viewport()->height() - 2.0 * kMargin) / r.height();
+    const qreal zx = viewport()->width() / r.width();
+    const qreal zy = viewport()->height() / r.height();
     setZoom(std::min(zx, zy) * dpr);
     centerOn(r.center());
 }
@@ -482,6 +483,16 @@ void Canvas::setRulersVisible(bool on)
     m_rulerCorner->setVisible(on);
     setViewportMargins(on ? Ruler::kThickness : 0, on ? Ruler::kThickness : 0, 0, 0);
     layoutRulers();
+    emit rulersVisibilityChanged(on);
+}
+
+void Canvas::setRulerStyle(Ruler::Style style)
+{
+    Ruler::setStyle(style);
+    QPalette pal = m_rulerCorner->palette();
+    pal.setColor(QPalette::Window, Ruler::background());
+    m_rulerCorner->setPalette(pal);
+    updateRulers();
 }
 
 void Canvas::setUnit(Unit unit)

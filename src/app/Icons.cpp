@@ -5,15 +5,12 @@
 #include "core/Raster.h"
 
 #include <QApplication>
-#include <QConicalGradient>
 #include <QFile>
 #include <QIconEngine>
-#include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPalette>
 #include <QPixmap>
-#include <QRadialGradient>
 #include <QStandardPaths>
 #include <QStyle>
 #include <QStyleOption>
@@ -130,16 +127,6 @@ QIcon theme(std::initializer_list<const char*> names)
     return {};
 }
 
-QIcon breeze(std::initializer_list<const char*> names)
-{
-    for (const char* n : names) {
-        const QString name = QString::fromLatin1(n);
-        if (QIcon::hasThemeIcon(name))
-            return QIcon::fromTheme(name);
-    }
-    return {};
-}
-
 QIcon theme(const QString& name)
 {
     if (QIcon icon = pdn(name); !icon.isNull())
@@ -149,89 +136,26 @@ QIcon theme(const QString& name)
 
 QIcon gradient(GradientType type)
 {
-    return drawn([type](QPainter& p, QRectF r) {
-        const QColor a = fg();
-        const QColor b = QColor(a.red(), a.green(), a.blue(), 0);
-        QBrush brush;
-        switch (type) {
-        case GradientType::Linear: {
-            QLinearGradient g(r.topLeft(), r.topRight());
-            g.setColorAt(0, a);
-            g.setColorAt(1, b);
-            brush = g;
-            break;
-        }
-        case GradientType::Reflected: {
-            QLinearGradient g(r.topLeft(), r.topRight());
-            g.setColorAt(0, b);
-            g.setColorAt(0.5, a);
-            g.setColorAt(1, b);
-            brush = g;
-            break;
-        }
-        case GradientType::Diamond: {
-            QPainterPath d;
-            d.addPolygon(QPolygonF({QPointF(r.center().x(), r.top()), QPointF(r.right(), r.center().y()),
-                                    QPointF(r.center().x(), r.bottom()), QPointF(r.left(), r.center().y())}));
-            QRadialGradient g(r.center(), r.width() / 2);
-            g.setColorAt(0, a);
-            g.setColorAt(1, b);
-            p.fillPath(d, g);
-            p.setPen(QPen(fg(), 1));
-            p.drawRect(r);
-            return;
-        }
-        case GradientType::Radial: {
-            QRadialGradient g(r.center(), r.width() / 2);
-            g.setColorAt(0, a);
-            g.setColorAt(1, b);
-            brush = g;
-            break;
-        }
-        case GradientType::Conical: {
-            QConicalGradient g(r.center(), 90);
-            g.setColorAt(0, a);
-            g.setColorAt(1, b);
-            brush = g;
-            break;
-        }
-        case GradientType::SpiralClockwise:
-        case GradientType::SpiralCounterClockwise: {
-            QPainterPath spiral;
-            const bool cw = type == GradientType::SpiralClockwise;
-            for (int i = 0; i <= 60; ++i) {
-                const double t = i / 60.0;
-                const double ang = (cw ? 1 : -1) * t * 4 * M_PI;
-                const QPointF pt = r.center() + QPointF(std::cos(ang), std::sin(ang)) * (t * r.width() / 2);
-                i == 0 ? spiral.moveTo(pt) : spiral.lineTo(pt);
-            }
-            p.setPen(QPen(fg(), 2));
-            p.drawPath(spiral);
-            p.setPen(QPen(fg(), 1));
-            p.drawRect(r);
-            return;
-        }
-        }
-        p.fillRect(r, brush);
-        p.setPen(QPen(fg(), 1));
-        p.drawRect(r);
-    });
+    switch (type) {
+    case GradientType::Linear: return png(QStringLiteral("enum_gradient_type_linear_clamped"));
+    case GradientType::Reflected: return png(QStringLiteral("enum_gradient_type_linear_reflected"));
+    case GradientType::Diamond: return png(QStringLiteral("enum_gradient_type_linear_diamond"));
+    case GradientType::Radial: return png(QStringLiteral("enum_gradient_type_radial"));
+    case GradientType::Conical: return png(QStringLiteral("enum_gradient_type_conical"));
+    case GradientType::SpiralClockwise: return png(QStringLiteral("enum_gradient_type_spiral"));
+    case GradientType::SpiralCounterClockwise: return png(QStringLiteral("enum_gradient_type_spiral_counter_clockwise"));
+    }
+    return {};
 }
 
 QIcon gradientRepeat(GradientRepeat repeat)
 {
-    return drawn([repeat](QPainter& p, QRectF r) {
-        const QColor a = fg();
-        const QColor b = QColor(a.red(), a.green(), a.blue(), 20);
-        QLinearGradient g(QPointF(r.left() + r.width() * 0.3, 0), QPointF(r.left() + r.width() * 0.6, 0));
-        g.setColorAt(0, a);
-        g.setColorAt(1, b);
-        g.setSpread(repeat == GradientRepeat::None ? QGradient::PadSpread
-                    : repeat == GradientRepeat::Wrapped ? QGradient::RepeatSpread : QGradient::ReflectSpread);
-        p.fillRect(r, g);
-        p.setPen(QPen(fg(), 1));
-        p.drawRect(r);
-    });
+    switch (repeat) {
+    case GradientRepeat::None: return png(QStringLiteral("enum_gradient_repeat_type_no_repeat"));
+    case GradientRepeat::Wrapped: return png(QStringLiteral("enum_gradient_repeat_type_repeat_wrapped"));
+    case GradientRepeat::Reflected: return png(QStringLiteral("enum_gradient_repeat_type_repeat_reflected"));
+    }
+    return {};
 }
 
 QIcon fillPattern(int pattern)
@@ -267,106 +191,44 @@ QIcon customShape(const QPainterPath& path)
 
 QIcon shapeStyle(ShapeStyle style)
 {
-    return drawn([style](QPainter& p, QRectF r) {
-        const QRectF box = r.adjusted(2, 5, -2, -5);
-        if (style != ShapeStyle::Outline)
-            p.fillRect(box, style == ShapeStyle::Fill ? fg() : accent());
-        if (style != ShapeStyle::Fill) {
-            p.setPen(QPen(fg(), 2.5));
-            p.drawRect(box);
-        }
-    });
+    switch (style) {
+    case ShapeStyle::Outline: return png(QStringLiteral("enum_shape_draw_type_outline_dark"));
+    case ShapeStyle::Fill: return png(QStringLiteral("enum_shape_draw_type_interior"));
+    case ShapeStyle::OutlineFill: return png(QStringLiteral("enum_shape_draw_type_both_dark"));
+    }
+    return {};
 }
 
 QIcon curveType(CurveType type)
 {
-    return drawn([type](QPainter& p, QRectF r) {
-        const QPointF a(r.left(), r.bottom() - 4), b(r.left() + r.width() * 0.35, r.top() + 2);
-        const QPointF c(r.left() + r.width() * 0.65, r.bottom() - 2), d(r.right(), r.top() + 4);
-        QPainterPath path(a);
-        if (type == CurveType::Straight) {
-            path.lineTo(d);
-        } else if (type == CurveType::Spline) {
-            path.cubicTo(b, c, d);
-        } else {
-            path.cubicTo(b, c, d);
-            p.setPen(QPen(accent(), 1, Qt::DotLine));
-            p.drawLine(a, b);
-            p.drawLine(c, d);
-        }
-        p.setPen(QPen(fg(), 2));
-        p.drawPath(path);
-    });
+    switch (type) {
+    case CurveType::Straight: return png(QStringLiteral("enum_curve_type_straight"));
+    case CurveType::Spline: return png(QStringLiteral("enum_curve_type_spline"));
+    case CurveType::Bezier: return png(QStringLiteral("enum_curve_type_bezier"));
+    }
+    return {};
 }
 
 QIcon lineCap(LineCap cap, bool start)
 {
-    return drawn([cap, start](QPainter& p, QRectF r) {
-        const qreal y = r.center().y();
-        const QPointF tip = start ? QPointF(r.left() + 2, y) : QPointF(r.right() - 2, y);
-        const qreal dir = start ? 1 : -1;
-        p.setPen(QPen(fg(), 4, Qt::SolidLine, cap == LineCap::Round ? Qt::RoundCap : Qt::FlatCap));
-        p.drawLine(tip + QPointF(dir * (cap == LineCap::Flat || cap == LineCap::Round ? 0 : 6), 0),
-                   QPointF(start ? r.right() : r.left(), y));
-        if (cap == LineCap::Arrow || cap == LineCap::ArrowFilled) {
-            QPolygonF head{tip, tip + QPointF(dir * 10, -7), tip + QPointF(dir * 10, 7)};
-            if (cap == LineCap::ArrowFilled) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(fg());
-                p.drawPolygon(head);
-            } else {
-                p.setPen(QPen(fg(), 2.5));
-                p.drawPolyline(QPolygonF{head[1], tip, head[2]});
-            }
-        }
-    });
+    const char* name = "flat";
+    switch (cap) {
+    case LineCap::Flat: name = "flat"; break;
+    case LineCap::Round: name = "rounded"; break;
+    case LineCap::Arrow: name = "arrow"; break;
+    case LineCap::ArrowFilled: name = "arrow_filled"; break;
+    }
+    return png(QStringLiteral("enum_line_curve_cap_%1_%2").arg(QLatin1String(name), start ? QStringLiteral("start") : QStringLiteral("end")));
 }
 
 QIcon antialias(bool on)
 {
-    // Como Paint.NET: una curva con sus puntos de control; escalonada sin suavizado.
-    return drawn([on](QPainter& p, QRectF r) {
-        p.setRenderHint(QPainter::Antialiasing, on);
-        p.setPen(QPen(fg(), 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        if (on) {
-            QPainterPath path(QPointF(r.left() + 2, r.top() + 3));
-            path.cubicTo(QPointF(r.center().x(), r.top() + 2), QPointF(r.center().x() - 2, r.bottom() - 2),
-                         QPointF(r.right() - 2, r.bottom() - 3));
-            p.drawPath(path);
-        } else {
-            QPolygonF steps;
-            const int n = 6;
-            for (int i = 0; i <= n; ++i) {
-                const qreal x = r.left() + 2 + (r.width() - 4) * i / n;
-                const qreal y = r.top() + 3 + (r.height() - 6) * i / n;
-                steps << QPointF(x, y) << QPointF(x + (r.width() - 4) / n, y);
-            }
-            p.drawPolyline(steps);
-        }
-        p.setPen(Qt::NoPen);
-        p.setBrush(accent());
-        for (const QPointF c : {QPointF(r.left() + 2, r.top() + 3), QPointF(r.right() - 2, r.bottom() - 3)})
-            p.drawEllipse(c, 2.6, 2.6);
-    });
+    return png(on ? QStringLiteral("anti_aliasing_true") : QStringLiteral("anti_aliasing_false"));
 }
 
 QIcon smoothing(bool on)
 {
-    return drawn([on](QPainter& p, QRectF r) {
-        p.setPen(QPen(fg(), 2.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        if (on) {
-            QPainterPath path(QPointF(r.left() + 1, r.center().y() + 4));
-            path.cubicTo(QPointF(r.left() + 8, r.top()), QPointF(r.right() - 10, r.bottom()), QPointF(r.right() - 1, r.top() + 5));
-            p.drawPath(path);
-        } else {
-            p.drawPolyline(QPolygonF{QPointF(r.left() + 1, r.center().y() + 4), QPointF(r.left() + 7, r.top() + 4),
-                                     QPointF(r.center().x() - 1, r.center().y() + 2), QPointF(r.center().x() + 4, r.bottom() - 4),
-                                     QPointF(r.right() - 5, r.center().y()), QPointF(r.right() - 1, r.top() + 5)});
-        }
-        p.setPen(Qt::NoPen);
-        p.setBrush(accent());
-        p.drawEllipse(QPointF(r.right() - 4, r.bottom() - 4), 3.5, 3.5);
-    });
+    return png(on ? QStringLiteral("enum_input_path_smoothing_enabled") : QStringLiteral("enum_input_path_smoothing_disabled"));
 }
 
 QIcon eye(bool open)
@@ -399,99 +261,38 @@ QIcon eye(bool open)
 
 QIcon gamma(bool corrected)
 {
-    // Una curva de gamma (corregida) o una recta (se ignora la gamma).
-    return drawn([corrected](QPainter& p, QRectF r) {
-        p.setPen(QPen(fg(), 1.2));
-        p.drawLine(r.bottomLeft(), r.topLeft());
-        p.drawLine(r.bottomLeft(), r.bottomRight());
-        p.setPen(QPen(accent(), 2.4, Qt::SolidLine, Qt::RoundCap));
-        if (corrected) {
-            QPainterPath path(r.bottomLeft());
-            path.quadTo(QPointF(r.left() + r.width() * 0.15, r.top() + r.height() * 0.15), r.topRight());
-            p.drawPath(path);
-        } else {
-            p.drawLine(r.bottomLeft(), r.topRight());
-        }
-    });
+    // Como en paint.js: corregido es la mezcla lineal; sin corregir, la comprimida (sRGB).
+    return png(corrected ? QStringLiteral("enum_tool_gamma_mode_linear") : QStringLiteral("enum_tool_gamma_mode_companded"));
 }
 
 QIcon fontMetric(FontMetric metric)
 {
-    // "ƒ" con un subíndice: los puntos dependen de los PPP de la imagen; fijo, 96.
-    return drawn([metric](QPainter& p, QRectF r) {
-        QFont f = p.font();
-        f.setItalic(true);
-        f.setBold(true);
-        f.setPixelSize(int(r.height() * 0.9));
-        p.setFont(f);
-        p.setPen(fg());
-        p.drawText(QRectF(r.left(), r.top() - 2, r.width() * 0.6, r.height()), Qt::AlignCenter, QStringLiteral("ƒ"));
-        const QRectF box(r.center().x() + 1, r.center().y() + 1, r.width() / 2 - 1, r.height() / 2 - 1);
-        if (metric == FontMetric::Fixed96) {
-            p.fillRect(box, accent());
-        } else {
-            p.setPen(QPen(accent(), 2));
-            p.drawRect(box.adjusted(1, 1, -1, -1));
-        }
-    });
+    return png(metric == FontMetric::Points ? QStringLiteral("enum_font_size_metric_points")
+                                            : QStringLiteral("enum_font_size_metric_fixed96_dpi"));
 }
 
 QIcon recolorSampling(RecolorSampling sampling)
 {
-    return drawn([sampling](QPainter& p, QRectF r) {
-        if (sampling == RecolorSampling::Once) {
-            p.setPen(QPen(fg(), 2));
-            p.drawEllipse(r.center(), r.width() * 0.32, r.height() * 0.32);
-            p.drawLine(QPointF(r.center().x(), r.top()), QPointF(r.center().x(), r.top() + 6));
-            p.drawLine(QPointF(r.center().x(), r.bottom()), QPointF(r.center().x(), r.bottom() - 6));
-            p.drawLine(QPointF(r.left(), r.center().y()), QPointF(r.left() + 6, r.center().y()));
-            p.drawLine(QPointF(r.right(), r.center().y()), QPointF(r.right() - 6, r.center().y()));
-            p.setPen(Qt::NoPen);
-            p.setBrush(accent());
-            p.drawEllipse(r.center(), 2.5, 2.5);
-        } else {
-            const QRectF back(r.left(), r.top(), r.width() * 0.62, r.height() * 0.62);
-            const QRectF front(r.right() - r.width() * 0.62, r.bottom() - r.height() * 0.62, r.width() * 0.62,
-                               r.height() * 0.62);
-            p.setPen(QPen(fg(), 1.2));
-            p.setBrush(Qt::black);
-            p.drawRect(back);
-            p.setBrush(Qt::white);
-            p.drawRect(front);
-        }
-    });
+    return png(sampling == RecolorSampling::Once ? QStringLiteral("enum_recolor_tool_sampling_mode_once")
+                                                 : QStringLiteral("enum_recolor_tool_sampling_mode_secondary_color"));
 }
 
 QIcon rectSelectMode(RectSelectMode mode)
 {
-    return drawn([mode](QPainter& p, QRectF r) {
-        const QRectF box = r.adjusted(1, 4, -6, -4);
-        p.setPen(QPen(fg(), 1.5, Qt::DashLine));
-        p.setBrush(QColor(accent().red(), accent().green(), accent().blue(), 90));
-        p.drawRect(box);
-        if (mode == RectSelectMode::Normal)
-            return;
-        p.setPen(Qt::NoPen);
-        p.setBrush(accent());
-        const QRectF corner(r.right() - 11, r.bottom() - 11, 11, 11);
-        if (mode == RectSelectMode::FixedRatio) {
-            p.drawRect(corner.adjusted(0, 5, -5, 0));
-            p.drawRect(corner.adjusted(5, 0, 0, -5));
-        } else {
-            p.drawRect(corner.adjusted(0, 4, 0, 0));
-            p.setPen(QPen(accent(), 1.6));
-            p.setBrush(Qt::NoBrush);
-            p.drawArc(QRectF(corner.left() + 2, corner.top(), corner.width() - 4, 8), 0, 180 * 16);
-        }
-    });
+    switch (mode) {
+    case RectSelectMode::Normal: return png(QStringLiteral("enum_selection_draw_mode_normal"));
+    case RectSelectMode::FixedRatio: return png(QStringLiteral("enum_selection_draw_mode_fixed_ratio"));
+    case RectSelectMode::FixedSize: return png(QStringLiteral("enum_selection_draw_mode_fixed_size"));
+    }
+    return {};
 }
 
 QIcon afterSelect(AfterSelect after)
 {
     if (after == AfterSelect::MoveSelection)
-        return theme({"transform-move", "edit-select"});
+        return tool(QStringLiteral("moveselection"), theme({"edit-select"}));
     if (after == AfterSelect::MovePixels)
-        return theme({"transform-move", "object-move"});
+        return tool(QStringLiteral("moveselectedpixels"), theme({"transform-move"}));
     return drawn([](QPainter& p, QRectF r) {
         p.setPen(QPen(fg(), 1.5, Qt::DashLine));
         p.drawRect(r.adjusted(2, 4, -2, -4));
@@ -500,7 +301,12 @@ QIcon afterSelect(AfterSelect after)
 
 QIcon sampleSize(int pixels)
 {
-    // Marco con el cuadrado muestreado en el centro, mayor cuantos más píxeles.
+    // Los tamaños de Paint.NET tienen su icono; otro tamaño, el marco con el cuadrado muestreado
+    // en el centro, mayor cuantos más píxeles.
+    if (pixels == 1)
+        return png(QStringLiteral("enum_pixel_sample_mode_point_sample"));
+    if (pixels == 3 || pixels == 5 || pixels == 11 || pixels == 31 || pixels == 51)
+        return png(QStringLiteral("enum_pixel_sample_mode_average%1x%1").arg(pixels));
     return drawn([pixels](QPainter& p, QRectF r) {
         const QRectF frame = r.adjusted(1.5, 1.5, -1.5, -1.5);
         p.setPen(QPen(fg(), 1));
@@ -515,114 +321,53 @@ QIcon sampleSize(int pixels)
 
 QIcon stepper(bool plus)
 {
-    return drawn([plus](QPainter& p, QRectF r) {
-        const QRectF box = r.adjusted(1.5, 1.5, -1.5, -1.5);
-        p.setPen(QPen(fg(), 1));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(box);
-        const QPointF c = box.center();
-        const double arm = box.width() * 0.28;
-        p.setPen(QPen(fg(), 1.5));
-        p.drawLine(QPointF(c.x() - arm, c.y()), QPointF(c.x() + arm, c.y()));
-        if (plus)
-            p.drawLine(QPointF(c.x(), c.y() - arm), QPointF(c.x(), c.y() + arm));
-    });
+    return png(plus ? QStringLiteral("plus_button_icon") : QStringLiteral("minus_button_icon"));
 }
 
 QIcon blendMode()
 {
     // Matraz, como el de Paint.NET.
-    return drawn([](QPainter& p, QRectF r) {
-        QPainterPath flask;
-        const qreal cx = r.center().x();
-        flask.moveTo(cx - 3, r.top());
-        flask.lineTo(cx - 3, r.top() + r.height() * 0.38);
-        flask.lineTo(r.left() + 1, r.bottom());
-        flask.lineTo(r.right() - 1, r.bottom());
-        flask.lineTo(cx + 3, r.top() + r.height() * 0.38);
-        flask.lineTo(cx + 3, r.top());
-        flask.closeSubpath();
-        QPainterPath liquid;
-        liquid.addRect(QRectF(r.left(), r.top() + r.height() * 0.62, r.width(), r.height()));
-        p.fillPath(flask.intersected(liquid), accent());
-        p.setPen(QPen(fg(), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        p.drawPath(flask);
-    });
+    return png(QStringLiteral("alpha_blending_true"));
 }
 
 QIcon selectionQuality(bool antialias)
 {
-    return drawn([antialias](QPainter& p, QRectF r) {
-        p.setRenderHint(QPainter::Antialiasing, antialias);
-        QPainterPath path;
-        path.addEllipse(r.adjusted(2, 2, -2, -2));
-        p.fillPath(path, QColor(accent().red(), accent().green(), accent().blue(), 120));
-        p.setPen(QPen(fg(), 1, Qt::DashLine));
-        p.drawPath(path);
-    });
+    return png(antialias ? QStringLiteral("enum_selection_rendering_quality_high_quality_antialiased")
+                         : QStringLiteral("enum_selection_rendering_quality_aliased"));
 }
 
 QIcon selectionMode(SelectionMode mode)
 {
-    return drawn([mode](QPainter& p, QRectF r) {
-        const QRectF a(r.left(), r.top(), r.width() * 0.62, r.height() * 0.62);
-        const QRectF b(r.right() - r.width() * 0.62, r.bottom() - r.height() * 0.62, r.width() * 0.62, r.height() * 0.62);
-        QPainterPath pa, pb;
-        pa.addRect(a);
-        pb.addRect(b);
-        QPainterPath fill;
-        switch (mode) {
-        case SelectionMode::Replace: fill = pb; break;
-        case SelectionMode::Union: fill = pa.united(pb); break;
-        case SelectionMode::Exclude: fill = pa.subtracted(pb); break;
-        case SelectionMode::Intersect: fill = pa.intersected(pb); break;
-        case SelectionMode::Xor: fill = pa.subtracted(pb).united(pb.subtracted(pa)); break;
-        }
-        p.fillPath(fill, accent());
-        p.setPen(QPen(fg(), 1, Qt::DashLine));
-        p.drawRect(a);
-        p.drawRect(b);
-    });
+    switch (mode) {
+    case SelectionMode::Replace: return png(QStringLiteral("enum_selection_combine_mode_replace"));
+    case SelectionMode::Union: return png(QStringLiteral("enum_selection_combine_mode_union"));
+    case SelectionMode::Exclude: return png(QStringLiteral("enum_selection_combine_mode_exclude"));
+    case SelectionMode::Intersect: return png(QStringLiteral("enum_selection_combine_mode_intersect"));
+    case SelectionMode::Xor: return png(QStringLiteral("enum_selection_combine_mode_xor"));
+    }
+    return {};
 }
 
 QIcon dash(Qt::PenStyle style)
 {
-    return drawn([style](QPainter& p, QRectF r) {
-        p.setPen(QPen(fg(), 2.5, style, Qt::FlatCap));
-        p.drawLine(QPointF(r.left(), r.center().y()), QPointF(r.right(), r.center().y()));
-    });
+    switch (style) {
+    case Qt::DashLine: return png(QStringLiteral("enum_dash_style_dash"));
+    case Qt::DotLine: return png(QStringLiteral("enum_dash_style_dot"));
+    case Qt::DashDotLine: return png(QStringLiteral("enum_dash_style_dash_dot"));
+    case Qt::DashDotDotLine: return png(QStringLiteral("enum_dash_style_dash_dot_dot"));
+    default: return png(QStringLiteral("enum_dash_style_solid"));
+    }
 }
 
 QIcon floodMode(bool global)
 {
-    return drawn([global](QPainter& p, QRectF r) {
-        p.setRenderHint(QPainter::Antialiasing, false);
-        const qreal c = r.width() / 4;
-        for (int j = 0; j < 4; ++j)
-            for (int i = 0; i < 4; ++i) {
-                const bool same = (i + j) % 3 == 0 || (i < 2 && j < 2);
-                const bool filled = global ? same : (i < 2 && j < 2) || (i == 2 && j == 0);
-                p.fillRect(QRectF(r.left() + i * c, r.top() + j * c, c - 1, c - 1),
-                           filled ? accent() : (same ? fg() : QColor(128, 128, 128, 80)));
-            }
-    });
+    return png(global ? QStringLiteral("enum_flood_mode_global") : QStringLiteral("enum_flood_mode_local"));
 }
 
 QIcon toleranceAlpha(bool straight)
 {
-    return drawn([straight](QPainter& p, QRectF r) {
-        p.fillRect(r, QBrush(Raster::checkerboard(4)));
-        QLinearGradient g(r.topLeft(), r.topRight());
-        g.setColorAt(0, QColor(220, 40, 40, 255));
-        g.setColorAt(1, QColor(220, 40, 40, 0));
-        p.fillRect(r.adjusted(0, 0, 0, -r.height() / 2), g);
-        QLinearGradient g2(r.topLeft(), r.topRight());
-        g2.setColorAt(0, QColor(40, 80, 220, 255));
-        g2.setColorAt(1, straight ? QColor(40, 80, 220, 0) : QColor(220, 40, 40, 0));
-        p.fillRect(r.adjusted(0, r.height() / 2, 0, 0), g2);
-        p.setPen(QPen(fg(), 1));
-        p.drawRect(r);
-    });
+    return png(straight ? QStringLiteral("enum_tolerance_alpha_mode_straight")
+                        : QStringLiteral("enum_tolerance_alpha_mode_premultiplied"));
 }
 
 QIcon fillAccumulate(bool on)
@@ -655,9 +400,9 @@ QIcon fillAccumulate(bool on)
 QIcon textAlign(TextAlign align)
 {
     switch (align) {
-    case TextAlign::Left: return theme({"format-justify-left"});
-    case TextAlign::Center: return theme({"format-justify-center"});
-    case TextAlign::Right: return theme({"format-justify-right"});
+    case TextAlign::Left: return png(QStringLiteral("enum_text_alignment_left"));
+    case TextAlign::Center: return png(QStringLiteral("enum_text_alignment_center"));
+    case TextAlign::Right: return png(QStringLiteral("enum_text_alignment_right"));
     }
     return {};
 }

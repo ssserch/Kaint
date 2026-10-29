@@ -6,9 +6,12 @@
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/DiscordPresence.h"
+#include "app/IconPacks.h"
 #include "app/Icons.h"
 #include "app/MainWindow.h"
 #include "app/Recovery.h"
+#include "app/Ruler.h"
+#include "app/Shortcuts.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/Workspace.h"
@@ -33,6 +36,7 @@
 #include "core/Document.h"
 #include "core/Ora.h"
 #include "core/effects/Effect.h"
+#include "core/Zip.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QAbstractButton>
@@ -72,6 +76,8 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QToolBar>
+#include <QBuffer>
+#include <QLayout>
 #include <QToolButton>
 #include <QtEndian>
 #include <QUndoStack>
@@ -1140,21 +1146,163 @@ int main(int argc, char** argv)
         CHECK(builtIn > 40 && withIcon >= builtIn - 1);
         CHECK(!Icons::pdn(QStringLiteral("pan-grab")).isNull());
         CHECK(!Icons::handCursor(true).pixmap().isNull() && !Icons::handCursor(false).pixmap().isNull());
-        // La barra principal lleva los iconos dibujados de siempre, aunque los menús lleven los PNG.
+        const QIcon pressure = Icons::png(QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_false"),
+                                          QStringLiteral("tool_config_strip_brush_enable_pressure_sensitivity_true"));
+        CHECK(pressure.pixmap(QSize(16, 16), QIcon::Normal, QIcon::Off).toImage()
+              != pressure.pixmap(QSize(16, 16), QIcon::Normal, QIcon::On).toImage());
+        // La ventana Herramientas lleva los iconos dibujados de Kaint; los cursores de la lupa y el
+        // cuentagotas siguen siendo los PNG de paint.js.
+        for (const QString& name : {QStringLiteral("rectangleselect"), QStringLiteral("zoom"), QStringLiteral("text"),
+                                    QStringLiteral("shapes"), QStringLiteral("colorpicker")}) {
+            const QImage drawn = Icons::tool(name, QIcon()).pixmap(QSize(24, 24)).toImage();
+            CHECK(!drawn.isNull() && drawn != Icons::named(name).pixmap(QSize(24, 24)).toImage());
+        }
+        if (auto* toolsPanel = w.findChild<ToolsPanel*>()) {
+            const QList<QToolButton*> buttons = toolsPanel->findChildren<QToolButton*>();
+            CHECK(!buttons.isEmpty()
+                  && buttons.first()->icon().pixmap(QSize(22, 22)).toImage()
+                         == Icons::tool(QStringLiteral("rectangleselect"), QIcon()).pixmap(QSize(22, 22)).toImage());
+        }
+        // La barra principal lleva los mismos PNG que los menús.
         if (auto* mainBar = w.findChild<QToolBar*>(QStringLiteral("MainToolBar"))) {
             QAction* save = findAction(&w, QStringLiteral("Guardar"));
-            QToolButton* saveButton = nullptr;
-            for (QToolButton* b : mainBar->findChildren<QToolButton*>())
-                if (b->defaultAction() == save)
-                    saveButton = b;
-            CHECK(save && saveButton);
-            if (save && saveButton) {
-                const QImage menuIcon = save->icon().pixmap(QSize(16, 16)).toImage();
-                CHECK(saveButton->icon().pixmap(QSize(16, 16)).toImage() != menuIcon);
-                save->setEnabled(!save->isEnabled());
-                save->setEnabled(!save->isEnabled());
-                CHECK(saveButton->icon().pixmap(QSize(16, 16)).toImage() != menuIcon);
+            CHECK(save && mainBar->actions().contains(save));
+        }
+    }
+
+    // Paquetes de iconos de paint.js: un ZIP con asset-pack.json (dentro de una carpeta) cambia
+    // el icono de un menú y el de una herramienta dibujada; los que no trae siguen siendo los de
+    // Kaint. Se descartan las rutas que salen de la carpeta del paquete.
+    {
+        auto solid = [](const QColor& c) {
+            QImage img(32, 32, QImage::Format_ARGB32);
+            img.fill(c);
+            QByteArray bytes;
+            QBuffer buffer(&bytes);
+            buffer.open(QIODevice::WriteOnly);
+            img.save(&buffer, "PNG");
+            return bytes;
+        };
+        ZipWriter zip;
+        zip.add(QStringLiteral("mi-paquete/asset-pack.json"),
+                QByteArrayLiteral("{\"formatVersion\": 1, \"id\": \"test.pack\", \"name\": \"Paquete de prueba\", "
+                                  "\"author\": \"Prueba\", \"version\": \"1.0.0\"}"));
+        zip.add(QStringLiteral("mi-paquete/icons/menu_file_open_icon.png"), solid(QColor(255, 0, 0)));
+        zip.add(QStringLiteral("mi-paquete/icons/text_tool_icon.png"), solid(QColor(0, 0, 255)));
+        zip.add(QStringLiteral("mi-paquete/icons/../../fuera.png"), solid(Qt::green));
+        QTemporaryDir packDir;
+        const QString packFile = packDir.filePath(QStringLiteral("pack.zip"));
+        {
+            QFile f(packFile);
+            CHECK(f.open(QIODevice::WriteOnly) && f.write(zip.finish()) > 0);
+        }
+        const QImage openBefore = Icons::named(QStringLiteral("document-open")).pixmap(QSize(16, 16)).toImage();
+        const QImage saveBefore = Icons::named(QStringLiteral("document-save")).pixmap(QSize(16, 16)).toImage();
+        const QIcon textIcon = Icons::tool(QStringLiteral("text"), QIcon());
+        const QImage textBefore = textIcon.pixmap(QSize(16, 16)).toImage();
+        QString error;
+        const QString id = IconPacks::install(packFile, &error);
+        CHECK(id == QStringLiteral("test.pack"));
+        CHECK(!QFile::exists(IconPacks::root() + QStringLiteral("/fuera.png")));
+        bool listed = false;
+        for (const IconPacks::Pack& p : IconPacks::installed())
+            listed = listed || (p.id == id && p.name == QStringLiteral("Paquete de prueba") && p.images == 2);
+        CHECK(listed);
+        IconPacks::activate(id);
+        settle();
+        CHECK(IconPacks::activeId() == id);
+        const QImage openAfter = Icons::named(QStringLiteral("document-open")).pixmap(QSize(16, 16)).toImage();
+        CHECK(openAfter != openBefore && openAfter.pixelColor(8, 8) == QColor(255, 0, 0));
+        CHECK(Icons::named(QStringLiteral("document-save")).pixmap(QSize(16, 16)).toImage() == saveBefore);
+        // El icono ya creado (el de la ventana Herramientas) cambia al volver a dibujarse.
+        CHECK(textIcon.pixmap(QSize(16, 16)).toImage().pixelColor(8, 8) == QColor(0, 0, 255));
+        IconPacks::activate(IconPacks::defaultId());
+        CHECK(Icons::named(QStringLiteral("document-open")).pixmap(QSize(16, 16)).toImage() == openBefore);
+        CHECK(textIcon.pixmap(QSize(16, 16)).toImage() == textBefore);
+        CHECK(IconPacks::remove(id));
+        CHECK(IconPacks::installed().size() == 1);
+        // Un ZIP sin asset-pack.json no es un paquete.
+        ZipWriter bad;
+        bad.add(QStringLiteral("icons/menu_file_open_icon.png"), solid(Qt::red));
+        {
+            QFile f(packFile);
+            CHECK(f.open(QIODevice::WriteOnly) && f.write(bad.finish()) > 0);
+        }
+        CHECK(IconPacks::install(packFile, &error).isEmpty() && !error.isEmpty());
+    }
+
+    // Atajos de teclado editables: cambiar uno lo quita de la acción que lo usaba; restablecer
+    // vuelve a los de fábrica, también al abrir Kaint otra vez (QSettings).
+    {
+        QAction* save = findAction(&w, QStringLiteral("Guardar"));
+        QAction* open = findAction(&w, QStringLiteral("Abrir..."));
+        CHECK(save && open);
+        if (save && open) {
+            QString saveId, openId;
+            for (const Shortcuts::Entry& e : Shortcuts::entries()) {
+                if (e.action == save)
+                    saveId = e.id;
+                if (e.action == open)
+                    openId = e.id;
             }
+            CHECK(!saveId.isEmpty() && !openId.isEmpty());
+            const QKeySequence openKey = open->shortcut();
+            CHECK(Shortcuts::assign(saveId, openKey) == open);
+            CHECK(save->shortcut() == openKey && open->shortcut().isEmpty());
+            CHECK(QSettings().contains(QStringLiteral("shortcuts/") + saveId));
+            CHECK(!Shortcuts::isDefault(saveId) && !Shortcuts::isDefault(openId));
+            Shortcuts::resetAll();
+            CHECK(open->shortcut() == openKey && save->shortcut() == QKeySequence(QKeySequence::Save));
+            CHECK(!QSettings().contains(QStringLiteral("shortcuts/") + saveId));
+        }
+    }
+
+    // Reglas como las de paint.js: oscuras, y las ventanas flotantes no las tapan.
+    {
+        QAction* rulers = findAction(&w, QStringLiteral("Reglas"));
+        CHECK(rulers);
+        auto* workspace = w.findChild<Workspace*>();
+        if (rulers && workspace) {
+            rulers->setChecked(true);
+            settle();
+            for (FloatingPanel* p : workspace->panels())
+                CHECK(!p->isVisible() || (p->x() >= Ruler::kThickness && p->y() >= Ruler::kThickness));
+            const auto rulerWidgets = canvas->findChildren<Ruler*>();
+            CHECK(!rulerWidgets.isEmpty());
+            if (!rulerWidgets.isEmpty())
+                CHECK(rulerWidgets.first()->grab().toImage().pixelColor(2, 2).lightness() < 60);
+            FloatingPanel* toolsWindow = nullptr;
+            for (FloatingPanel* p : workspace->panels())
+                if (p->id() == QStringLiteral("tools"))
+                    toolsWindow = p;
+            const QPoint withRulers = toolsWindow ? toolsWindow->pos() : QPoint();
+            rulers->setChecked(false);
+            settle();
+            CHECK(toolsWindow && toolsWindow->pos() == withRulers - QPoint(Ruler::kThickness, Ruler::kThickness));
+        }
+    }
+
+    // Ventanas al estilo de Windows 10 (como paint.js) y con el borde que se elija: el contenido
+    // se aparta del borde.
+    {
+        auto* workspace = w.findChild<Workspace*>();
+        FloatingPanel* history = nullptr;
+        for (FloatingPanel* p : workspace ? workspace->panels() : QList<FloatingPanel*>())
+            if (p->id() == QStringLiteral("history"))
+                history = p;
+        CHECK(history);
+        if (workspace && history) {
+            CHECK(FloatingPanel::chromeStyle() == FloatingPanel::Style::Windows10);
+            const int compactTop = [&] {
+                workspace->setPanelChrome(FloatingPanel::Style::Compact, 1);
+                return history->layout()->contentsMargins().top();
+            }();
+            workspace->setPanelChrome(FloatingPanel::Style::Windows10, 1);
+            CHECK(history->layout()->contentsMargins().top() > compactTop);
+            workspace->setPanelChrome(FloatingPanel::Style::Windows10, 9);
+            CHECK(history->layout()->contentsMargins().left() + history->frameWidth() >= 9);
+            workspace->setPanelChrome(FloatingPanel::Style::Windows10, 1);
+            CHECK(history->layout()->contentsMargins().left() + history->frameWidth() == FloatingPanel::kBorder);
         }
     }
 
@@ -1181,6 +1329,14 @@ int main(int argc, char** argv)
         settle();
         const QPointF center = canvas->viewToImage(QPointF(canvas->viewport()->width() / 2.0, canvas->viewport()->height() / 2.0));
         CHECK(canvas->zoom() > 4.0 && QLineF(center, QPointF(50, 38)).length() < 1.0);
+        // Justo el rectángulo, sin margen: ocupa toda la vista a lo ancho o a lo alto.
+        const QPointF topLeft = canvas->imageToView(QPointF(40, 30));
+        const QPointF bottomRight = canvas->imageToView(QPointF(60, 46));
+        const QSize viewSize = canvas->viewport()->size();
+        CHECK(std::abs((bottomRight.x() - topLeft.x()) - viewSize.width()) < 1.5
+              || std::abs((bottomRight.y() - topLeft.y()) - viewSize.height()) < 1.5);
+        CHECK(topLeft.x() > -1.5 && topLeft.y() > -1.5 && bottomRight.x() < viewSize.width() + 1.5
+              && bottomRight.y() < viewSize.height() + 1.5);
         CHECK(zoomTool && zoomTool->dragRect().isEmpty());
         canvas->zoomToWindow();
         tools->select(ToolId::RectSelect);
@@ -1410,6 +1566,9 @@ int main(int argc, char** argv)
     // claro o al oscuro según su brillo, y el tema claro ya no se queda con un fondo oscuro.
     {
         QSettings s;
+        // Como en una configuración de antes de separarlos (otros bloques ya guardaron los nuevos).
+        s.remove(QStringLiteral("settings/canvasBorderDark"));
+        s.remove(QStringLiteral("settings/canvasBorderLight"));
         s.setValue(QStringLiteral("settings/canvasBorder"), QColor(0x2c, 0x2c, 0x2c));
         AppSettings migrated = AppSettings::load();
         CHECK(migrated.canvasBorderDark == QColor(0x2c, 0x2c, 0x2c) && !migrated.canvasBorderLight.isValid());

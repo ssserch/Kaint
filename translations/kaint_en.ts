@@ -575,6 +575,57 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>IconPacks</name>
+    <message>
+        <source>Kaint (predeterminado)</source>
+        <translation>Kaint (default)</translation>
+    </message>
+    <message>
+        <source>Los iconos de Kaint: los de la interfaz de paint.js y los de las herramientas dibujados.</source>
+        <translation>Kaint&apos;s icons: the paint.js interface icons and the drawn tool icons.</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir el archivo.</source>
+        <translation>The file could not be opened.</translation>
+    </message>
+    <message>
+        <source>El archivo es demasiado grande.</source>
+        <translation>The file is too large.</translation>
+    </message>
+    <message>
+        <source>No es un archivo ZIP válido.</source>
+        <translation>This is not a valid ZIP file.</translation>
+    </message>
+    <message>
+        <source>Falta asset-pack.json: no es un paquete de iconos.</source>
+        <translation>asset-pack.json is missing: this is not an icon pack.</translation>
+    </message>
+    <message>
+        <source>El paquete usa una versión del formato que Kaint no conoce.</source>
+        <translation>The pack uses a format version Kaint doesn&apos;t know.</translation>
+    </message>
+    <message>
+        <source>El identificador del paquete no es válido.</source>
+        <translation>The pack ID is not valid.</translation>
+    </message>
+    <message>
+        <source>Ese es el identificador del paquete predeterminado.</source>
+        <translation>That is the ID of the default pack.</translation>
+    </message>
+    <message>
+        <source>No se pudo crear la carpeta del paquete.</source>
+        <translation>The pack folder could not be created.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el paquete.</source>
+        <translation>The pack could not be saved.</translation>
+    </message>
+    <message>
+        <source>El paquete no trae ninguna imagen que Kaint pueda usar.</source>
+        <translation>The pack has no images Kaint can use.</translation>
+    </message>
+</context>
+<context>
     <name>LassoSelectTool</name>
     <message>
         <source>Arrastra para dibujar el contorno de la selección. </source>
@@ -3934,6 +3985,22 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Cancel</translation>
     </message>
     <message>
+        <source>Paquetes de iconos</source>
+        <translation>Icon Packs</translation>
+    </message>
+    <message>
+        <source>Fuentes</source>
+        <translation>Fonts</translation>
+    </message>
+    <message>
+        <source>Formas</source>
+        <translation>Shapes</translation>
+    </message>
+    <message>
+        <source>Atajos de teclado</source>
+        <translation>Keyboard Shortcuts</translation>
+    </message>
+    <message>
         <source>Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.</source>
         <translation>Menus and windows that fade in, layers that slide when you reorder them and other transitions.</translation>
     </message>
@@ -3952,6 +4019,54 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>El clásico gris con relieve. También es una plantilla del personalizado.</source>
         <translation>The classic gray 3D look. It is also a template for the custom theme.</translation>
+    </message>
+    <message>
+        <source>Administrar…</source>
+        <translation>Manage…</translation>
+    </message>
+    <message>
+        <source>Añadir o quitar paquetes de iconos.</source>
+        <translation>Add or remove icon packs.</translation>
+    </message>
+    <message>
+        <source>Paquete de iconos:</source>
+        <translation>Icon pack:</translation>
+    </message>
+    <message>
+        <source>Ventanas</source>
+        <translation>Windows</translation>
+    </message>
+    <message>
+        <source>Windows 10 (como paint.js)</source>
+        <translation>Windows 10 (like paint.js)</translation>
+    </message>
+    <message>
+        <source>Cabecera más alta, botón de cerrar cuadrado y esquinas rectas.</source>
+        <translation>Taller title bar, square close button and square corners.</translation>
+    </message>
+    <message>
+        <source>Compacto</source>
+        <translation>Compact</translation>
+    </message>
+    <message>
+        <source>La cabecera fina de siempre de Kaint.</source>
+        <translation>Kaint&apos;s usual thin title bar.</translation>
+    </message>
+    <message>
+        <source>Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.</source>
+        <translation>Border width of the Tools, History, Layers and Colors windows.</translation>
+    </message>
+    <message>
+        <source>Estilo de las ventanas:</source>
+        <translation>Window style:</translation>
+    </message>
+    <message>
+        <source>Grosor del borde de las ventanas:</source>
+        <translation>Window border width:</translation>
+    </message>
+    <message>
+        <source>px</source>
+        <translation>px</translation>
     </message>
     <message>
         <source>Seguir con el tema actual.</source>
@@ -4016,6 +4131,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Restablecer</source>
         <translation>Reset</translation>
+    </message>
+    <message>
+        <source>Oscura (como paint.js)</source>
+        <translation>Dark (like paint.js)</translation>
+    </message>
+    <message>
+        <source>Del color de la barra de herramientas</source>
+        <translation>Same color as the toolbar</translation>
+    </message>
+    <message>
+        <source>Reglas:</source>
+        <translation>Rulers:</translation>
     </message>
     <message>
         <source>Puede elegir la herramienta que está activa cuando inicie Kaint, y qué configuración predeterminada se debe aplicar a los elementos de la barra de herramientas.</source>
@@ -4309,6 +4436,157 @@ Do you want to replace them?</translation>
     <message>
         <source>Buscar también versiones preliminares (beta) de Kaint</source>
         <translation>Also look for pre-release (beta) versions of Kaint</translation>
+    </message>
+    <message>
+        <source>Los paquetes de iconos de paint.js (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.</source>
+        <translation>paint.js icon packs (.zip files with an asset-pack.json) change Kaint&apos;s icons, the tool icons too. Icons a pack doesn&apos;t include stay as Kaint&apos;s. Packs are stored on this computer.</translation>
+    </message>
+    <message>
+        <source>Usar</source>
+        <translation>Use</translation>
+    </message>
+    <message>
+        <source>Usar el paquete elegido</source>
+        <translation>Use the selected pack</translation>
+    </message>
+    <message>
+        <source>Instalar un paquete de iconos (.zip)</source>
+        <translation>Install an icon pack (.zip)</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
+    </message>
+    <message>
+        <source>Desinstalar el paquete elegido</source>
+        <translation>Uninstall the selected pack</translation>
+    </message>
+    <message>
+        <source>Abre la carpeta de los paquetes de iconos</source>
+        <translation>Open the icon packs folder</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n imagen(es)</source>
+        <translation>
+            <numerusform>%n image</numerusform>
+            <numerusform>%n images</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Añadir un paquete de iconos</source>
+        <translation>Add an icon pack</translation>
+    </message>
+    <message>
+        <source>Paquetes de iconos (*.zip)</source>
+        <translation>Icon packs (*.zip)</translation>
+    </message>
+    <message>
+        <source>Quitar el paquete de iconos</source>
+        <translation>Remove icon pack</translation>
+    </message>
+    <message>
+        <source>¿Quieres quitar este paquete de iconos?</source>
+        <translation>Do you want to remove this icon pack?</translation>
+    </message>
+    <message>
+        <source>en uso</source>
+        <translation>in use</translation>
+    </message>
+    <message>
+        <source>Añade fuentes para la herramienta Texto (.ttf, .otf, .ttc, .woff). Se copian a la carpeta de Kaint y solo las usa Kaint: no se instalan en el sistema.</source>
+        <translation>Add fonts for the Text tool (.ttf, .otf, .ttc, .woff). They are copied to Kaint&apos;s folder and only Kaint uses them: they aren&apos;t installed on the system.</translation>
+    </message>
+    <message>
+        <source>Añadir fuentes…</source>
+        <translation>Add fonts…</translation>
+    </message>
+    <message>
+        <source>Quitar todas</source>
+        <translation>Remove all</translation>
+    </message>
+    <message>
+        <source>Añadir fuentes</source>
+        <translation>Add fonts</translation>
+    </message>
+    <message>
+        <source>Fuentes (*.ttf *.otf *.ttc *.otc *.woff *.woff2)</source>
+        <translation>Fonts (*.ttf *.otf *.ttc *.otc *.woff *.woff2)</translation>
+    </message>
+    <message>
+        <source>No se pudieron añadir:
+
+%1</source>
+        <translation>These could not be added:
+
+%1</translation>
+    </message>
+    <message>
+        <source>¿Quieres quitar todas las fuentes añadidas?</source>
+        <translation>Do you want to remove all the added fonts?</translation>
+    </message>
+    <message>
+        <source>Todavía no has añadido ninguna fuente.</source>
+        <translation>You haven&apos;t added any fonts yet.</translation>
+    </message>
+    <message>
+        <source>Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se copian a la carpeta de formas de Kaint.</source>
+        <translation>Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom Shapes” group. They are copied to Kaint&apos;s shapes folder.</translation>
+    </message>
+    <message>
+        <source>Añadir formas…</source>
+        <translation>Add shapes…</translation>
+    </message>
+    <message>
+        <source>Solo se pueden quitar las formas de tu carpeta de formas.</source>
+        <translation>Only the shapes in your shapes folder can be removed.</translation>
+    </message>
+    <message>
+        <source>Añadir formas</source>
+        <translation>Add shapes</translation>
+    </message>
+    <message>
+        <source>Formas de Paint.NET (*.xaml)</source>
+        <translation>Paint.NET shapes (*.xaml)</translation>
+    </message>
+    <message>
+        <source>Todavía no hay formas personalizadas.</source>
+        <translation>There are no custom shapes yet.</translation>
+    </message>
+    <message>
+        <source>Haz clic en un atajo y pulsa la combinación de teclas. Con la «x» se queda sin atajo; si otra acción lo usaba, se le quita.</source>
+        <translation>Click a shortcut and press the key combination. The “x” leaves it without a shortcut; if another action used it, it is removed from that action.</translation>
+    </message>
+    <message>
+        <source>Buscar acciones</source>
+        <translation>Search actions</translation>
+    </message>
+    <message>
+        <source>Acción</source>
+        <translation>Action</translation>
+    </message>
+    <message>
+        <source>Atajo</source>
+        <translation>Shortcut</translation>
+    </message>
+    <message>
+        <source>Restablecer todos</source>
+        <translation>Reset all</translation>
+    </message>
+    <message>
+        <source>Volver a los atajos de fábrica de todas las acciones</source>
+        <translation>Go back to the default shortcuts of every action</translation>
+    </message>
+    <message>
+        <source>Se restablecieron todos los atajos.</source>
+        <translation>All shortcuts were reset.</translation>
+    </message>
+    <message>
+        <source>Sin atajo</source>
+        <translation>No shortcut</translation>
+    </message>
+    <message>
+        <source>Se quitó el atajo de «%1».</source>
+        <translation>The shortcut was removed from “%1”.</translation>
     </message>
     <message>
         <source>Versión instalada: %1</source>
@@ -5334,10 +5612,6 @@ Do you want to replace them?</translation>
     <message>
         <source>El trazo del pincel se suavizará utilizando una curva segmentaria Catmull-Rom centrípeta.</source>
         <translation>The brush stroke will be smoothed using a centripetal Catmull-Rom spline.</translation>
-    </message>
-    <message>
-        <source>Presión</source>
-        <translation>Pressure</translation>
     </message>
     <message>
         <source>La presión del lápiz de la tableta controla el tamaño del pincel</source>

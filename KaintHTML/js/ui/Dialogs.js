@@ -1,8 +1,10 @@
 // Diálogos de Kaint: la base modal (con el parpadeo de atención de paint.js al pulsar fuera),
 // las tareas con opciones (TaskDialog) y los de Imagen y Capas, Configuración y Acerca de.
 import { icon } from "./Icons.js";
+import { shortcutLabel } from "./Actions.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
 import { Settings } from "../Settings.js";
+import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { plain, tr } from "../i18n.js";
 
 let openDialogs = 0;
@@ -346,7 +348,7 @@ export async function saveOptionsDialog(formats, chosen, quality) {
 
 // --- Configuración -----------------------------------------------------------------------
 
-export async function settingsDialog() {
+export async function settingsDialog(app = null, startPage = 0) {
     const dlg = new Dialog(tr("Configuración"), { iconName: "configure" });
     const sections = el("div", { className: "sections" });
     const page = el("div", { className: "page" });
@@ -356,8 +358,17 @@ export async function settingsDialog() {
         c.input.addEventListener("change", () => Settings.set(key, c.input.checked));
         return c;
     };
+    const heading = (text) => el("h4", { textContent: text, style: { margin: "8px 0 0", fontWeight: "normal" } });
+    const note = (text) => el("small", { textContent: text, style: { opacity: 0.75 } });
+    let show = null;
+    // Paquete de iconos: el desplegable de la interfaz y la página que los administra.
+    const packChoice = (packs) => {
+        const s = select(packs.map((p) => [p.id, p.name]), IconPacks.activeId());
+        s.addEventListener("change", () => IconPacks.activate(s.value));
+        return s;
+    };
     const pages = [
-        ["settings-interface", tr("Interfaz de usuario"), () => {
+        ["settings-interface", tr("Interfaz de usuario"), async () => {
             const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")]], Settings.get("colorScheme"));
             scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
             const language = select([["en", "English"], ["es", "Español"]], Settings.get("language"));
@@ -367,6 +378,14 @@ export async function settingsDialog() {
                 Settings.set("language", language.value);
                 reload.style.visibility = "visible";
             });
+            const manage = el("button", { className: "pushbutton", textContent: plain(tr("Administrar…")), title: tr("Añadir o quitar paquetes de iconos.") });
+            manage.addEventListener("click", () => show(4));
+            const panelStyle = select([[0, tr("Windows 10 (como paint.js)")], [1, tr("Compacto")]], Settings.get("panelStyle"));
+            panelStyle.addEventListener("change", () => Settings.set("panelStyle", Number(panelStyle.value)));
+            const border = numberInput(Settings.get("panelBorder"), 1, 12);
+            border.style.width = "60px";
+            border.title = tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.");
+            border.addEventListener("input", () => Settings.set("panelBorder", border.read()));
             return [
                 check(tr("Animaciones"), "animations",
                       tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.")),
@@ -376,20 +395,35 @@ export async function settingsDialog() {
                       tr("El cubo de pintura, el pincel, cambiar color y el degradado muestran el color principal y el secundario.")),
                 el("label", {}, [tr("Tema:"), scheme]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
-                el("small", { textContent: tr("Los cambios de idioma se aplican al recargar la página."), style: { opacity: 0.75 } }),
-                el("h4", { textContent: tr("Al cerrar"), style: { margin: "8px 0 0", fontWeight: "normal" } }),
+                note(tr("Los cambios de idioma se aplican al recargar la página.")),
+                el("label", {}, [tr("Paquete de iconos:"), packChoice(await IconPacks.list()), manage]),
+                heading(tr("Ventanas")),
+                el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
+                el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
+                heading(tr("Al cerrar")),
                 check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), "askOnceOnClose"),
             ];
         }],
         ["settings-canvas", tr("Lienzo"), () => {
             const brightness = slider(Settings.get("checkerBrightness"), 0, 255, 1, (v) => Settings.set("checkerBrightness", v));
+            const ruler = select([[0, tr("Oscura (como paint.js)")], [1, tr("Del color de la barra de herramientas")]], Settings.get("rulerStyle"));
+            ruler.addEventListener("change", () => Settings.set("rulerStyle", Number(ruler.value)));
             return [check(tr("Proyectar una sombra bajo el lienzo"), "dropShadow"),
-                    el("label", {}, [tr("Brillo de tablero de ajedrez de transparencia")]), brightness];
+                    el("label", {}, [tr("Brillo de tablero de ajedrez de transparencia")]), brightness,
+                    el("label", {}, [tr("Reglas:"), ruler])];
         }],
+        ["settings-tools", tr("Herramientas"), () => [
+            heading(tr("Mover y pegar")),
+            check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
+                  tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+        ]],
+        ["configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
+        ["document-open", tr("Paquetes de iconos"), () => iconPacksPage(() => show(4))],
     ];
-    const show = (i) => {
+    show = async (i) => {
         [...sections.children].forEach((row, k) => row.classList.toggle("selected", k === i));
-        page.replaceChildren(...pages[i][2]());
+        const content = await pages[i][2]();
+        page.replaceChildren(...content);
     };
     pages.forEach(([iconName, name], i) => {
         const row = el("div", { className: "row" }, [icon(iconName, 24), name]);
@@ -397,9 +431,141 @@ export async function settingsDialog() {
         sections.appendChild(row);
     });
     dlg.body.appendChild(el("div", { className: "settings" }, [sections, page]));
-    show(0);
+    show(startPage);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
+}
+
+// Paquetes de iconos de paint.js (.zip con asset-pack.json): instalar, usar y quitar.
+async function iconPacksPage(refresh) {
+    const packs = await IconPacks.list();
+    const active = IconPacks.activeId();
+    const list = el("div", { className: "list pack-list" });
+    let selected = active;
+    const details = el("p", { className: "pack-details" });
+    const use = el("button", { className: "pushbutton", textContent: tr("Usar"), title: tr("Usar el paquete elegido") });
+    const add = el("button", { className: "pushbutton", textContent: plain(tr("Añadir…")), title: tr("Instalar un paquete de iconos (.zip)") });
+    const remove = el("button", { className: "pushbutton", textContent: tr("Quitar"), title: tr("Desinstalar el paquete elegido") });
+    const file = el("input", { type: "file", accept: ".zip,application/zip", hidden: true });
+    const status = el("p", { className: "pack-status", style: { minHeight: "1.2em" } });
+    const sync = () => {
+        for (const row of list.children)
+            row.classList.toggle("selected", row.dataset.id === selected);
+        const p = packs.find((x) => x.id === selected);
+        details.textContent = p ? [p.description, p.id !== DEFAULT_PACK ? tr("Imágenes: %1", p.images) : ""].filter(Boolean).join(" · ") : "";
+        use.disabled = selected === active;
+        remove.disabled = selected === DEFAULT_PACK;
+    };
+    for (const p of packs) {
+        const extra = [p.author, p.version].filter(Boolean).join(", ");
+        const text = `${p.name}${extra ? ` (${extra})` : ""}${p.id === active ? ` · ${tr("en uso")}` : ""}`;
+        const row = el("div", { className: "row", dataset: { id: p.id }, title: p.description }, [el("span", { textContent: text })]);
+        if (p.id === active)
+            row.style.fontWeight = "bold";
+        row.addEventListener("click", () => {
+            selected = p.id;
+            sync();
+        });
+        row.addEventListener("dblclick", () => use.click());
+        list.appendChild(row);
+    }
+    use.addEventListener("click", async () => {
+        await IconPacks.activate(selected);
+        refresh();
+    });
+    remove.addEventListener("click", async () => {
+        if (selected === DEFAULT_PACK || !confirm(tr("¿Quieres quitar este paquete de iconos?")))
+            return;
+        await IconPacks.remove(selected);
+        refresh();
+    });
+    add.addEventListener("click", () => file.click());
+    file.addEventListener("change", async () => {
+        const f = file.files?.[0];
+        if (!f)
+            return;
+        try {
+            const { id, images } = await IconPacks.install(f);
+            // Como en paint.js, el paquete instalado pasa a usarse.
+            await IconPacks.activate(id);
+            await refresh();
+            if (!images)
+                alert(tr("El paquete no trae ninguna imagen que Kaint pueda usar."));
+        } catch (error) {
+            status.textContent = error.message;
+        }
+    });
+    sync();
+    return [
+        el("p", { textContent: tr("Los paquetes de iconos de paint.js (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.") }),
+        list, details, el("div", { className: "row-buttons" }, [use, add, remove, file]), status,
+    ];
+}
+
+// Atajos de teclado editables: pulsa en un atajo y escribe la combinación nueva.
+function shortcutsPage(app) {
+    const actions = app ? [...app.actions.values()].filter((a) => a.text && a.id) : [];
+    const collator = new Intl.Collator();
+    const nameOf = (a) => plain(a.text).replace(/(\.\.\.|…)$/, "").trim();
+    actions.sort((a, b) => collator.compare(nameOf(a), nameOf(b)));
+    const search = el("input", { type: "search", placeholder: tr("Buscar acciones") });
+    const table = el("div", { className: "list shortcut-list" });
+    const status = el("p", { style: { minHeight: "1.2em" } });
+    const rows = [];
+    const describe = (keys) => (keys ? shortcutLabel(keys) : tr("Sin atajo"));
+    for (const action of actions) {
+        const field = el("input", { type: "text", readOnly: true, className: "shortcut-field", value: describe(action.shortcut) });
+        const reset = el("button", { className: "tbutton", title: tr("Restablecer") }, [icon("edit-reset", 16)]);
+        const clear = el("button", { className: "tbutton", title: tr("Quitar el atajo"), textContent: "×" });
+        const row = el("div", { className: "row shortcut-row" }, [icon(action.icon || "configure", 16), el("span", { className: "name", textContent: nameOf(action) }), field, clear, reset]);
+        const sync = () => {
+            field.value = describe(action.shortcut);
+            reset.disabled = action.shortcuts.length === action.defaultShortcuts.length
+                && action.shortcuts.every((k, i) => k === action.defaultShortcuts[i]);
+        };
+        const assign = (keys) => {
+            const taken = app.setShortcut(action.id, keys);
+            for (const r of rows)
+                r.sync();
+            status.textContent = taken ? tr("Se quitó el atajo de «%1».", nameOf(taken)) : "";
+        };
+        field.addEventListener("focus", () => (field.value = tr("Pulsa un atajo…")));
+        field.addEventListener("blur", sync);
+        field.addEventListener("keydown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (["Control", "Shift", "Alt", "Meta"].includes(e.key))
+                return;
+            if (e.key === "Escape") {
+                field.blur();
+                return;
+            }
+            assign(app.comboFromEvent(e));
+            field.blur();
+        });
+        clear.addEventListener("click", () => assign(""));
+        reset.addEventListener("click", () => assign(action.defaultShortcut));
+        row.sync = sync;
+        sync();
+        rows.push(row);
+        table.appendChild(row);
+    }
+    search.addEventListener("input", () => {
+        const q = search.value.trim().toLowerCase();
+        for (const row of rows)
+            row.hidden = !!q && !row.textContent.toLowerCase().includes(q) && !row.querySelector("input").value.toLowerCase().includes(q);
+    });
+    const resetAll = el("button", { className: "pushbutton", textContent: tr("Restablecer todos"), title: tr("Volver a los atajos de fábrica de todas las acciones") });
+    resetAll.addEventListener("click", () => {
+        app.resetShortcuts();
+        for (const row of rows)
+            row.sync();
+        status.textContent = tr("Se restablecieron todos los atajos.");
+    });
+    return [
+        el("p", { textContent: tr("Haz clic en un atajo y pulsa la combinación de teclas. Con la «x» se queda sin atajo; si otra acción lo usaba, se le quita.") }),
+        search, table, el("div", { className: "row-buttons" }, [status, resetAll]),
+    ];
 }
 
 export async function aboutDialog(version) {

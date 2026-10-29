@@ -1,6 +1,6 @@
 #include "app/Icons.h"
 
-#include "app/Theme.h"
+#include "app/IconPacks.h"
 
 #include <QApplication>
 #include <QHash>
@@ -11,16 +11,15 @@
 #include <QPainterPathStroker>
 #include <QStyle>
 #include <QStyleOption>
-#include <QtMath>
 
 #include <algorithm>
 #include <cmath>
 
-// Iconos dibujados por código imitando los de Paint.NET: los de las herramientas que llevan los
-// colores activos (pincel, cubo de pintura, cambiar color y degradado), la mano, abierta y
-// agarrando, y los de la barra principal. Cada uno se dibuja en una rejilla de 20 px
-// (herramientas) o 16 px (barra) y se escala a cualquier tamaño. Los demás iconos son los PNG de
-// la interfaz (PngIcons.cpp).
+// Iconos de las herramientas dibujados por código imitando los de Paint.NET (el pincel, el cubo
+// de pintura, cambiar color y el degradado llevan los colores activos) y la mano, abierta y
+// agarrando. Cada uno se dibuja en una rejilla de 20 px y se escala a cualquier tamaño. Los
+// demás iconos son los PNG de la interfaz (PngIcons.cpp). Un paquete de iconos que traiga el
+// archivo de paint.js de una herramienta la sustituye.
 namespace Icons {
 
 namespace {
@@ -252,286 +251,327 @@ void drawPanGrab(QPainter& p)
     p.drawLine(QPointF(14.5, 8.5), QPointF(14.5, 10.5));
 }
 
-// Iconos de la barra principal (Nuevo, Abrir, Guardar...), dibujados como los de Paint.NET; los
-// menús llevan los PNG.
+// Herramientas sin los colores activos, con los dibujos de siempre de Kaint.
 
-// Arco con punta de flecha al final (span positivo: sentido antihorario), con relleno y borde.
-void arrowArc(QPainter& p, QPointF c, qreal r, qreal startDeg, qreal spanDeg, qreal width, const QColor& fill,
-              const QColor& line)
+void marchingAnts(QPainter& p)
 {
-    const QRectF box(c.x() - r, c.y() - r, 2 * r, 2 * r);
-    QPainterPath arc;
-    arc.arcMoveTo(box, startDeg);
-    arc.arcTo(box, startDeg, spanDeg);
-    QPainterPathStroker stroker;
-    stroker.setWidth(width);
-    stroker.setCapStyle(Qt::FlatCap);
-    QPainterPath shape = stroker.createStroke(arc);
-    const qreal end = qDegreesToRadians(startDeg + spanDeg);
-    const qreal dir = spanDeg >= 0 ? 1 : -1;
-    const QPointF tip = c + QPointF(std::cos(end), -std::sin(end)) * r;
-    const QPointF tangent(-std::sin(end) * dir, -std::cos(end) * dir);
-    const QPointF radial(std::cos(end), -std::sin(end));
-    QPainterPath head;
-    head.addPolygon(QPolygonF{tip + tangent * width * 1.35, tip + radial * width * 1.2, tip - radial * width * 1.2});
-    head.closeSubpath();
-    p.setPen(QPen(line, 0.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(fill);
-    p.drawPath(shape.united(head).simplified());
-}
-
-void drawNewDoc(QPainter& p)
-{
-    // Hoja con la esquina doblada y un "+" verde, como en Paint.NET.
-    aa(p);
-    p.setPen(QPen(QColor(100, 100, 100), 1));
-    p.setBrush(Qt::white);
-    QPainterPath page;
-    page.moveTo(2.5, 0.5); page.lineTo(8.5, 0.5); page.lineTo(11.5, 3.5); page.lineTo(11.5, 9); page.lineTo(9, 14.5);
-    page.lineTo(2.5, 14.5); page.closeSubpath();
-    p.drawPath(page);
-    p.setBrush(QColor(210, 214, 222));
-    QPainterPath fold;
-    fold.moveTo(8.5, 0.5); fold.lineTo(8.5, 3.5); fold.lineTo(11.5, 3.5); fold.closeSubpath();
-    p.drawPath(fold);
-    QPen plus(QColor(46, 160, 90), 2.0);
-    plus.setCapStyle(Qt::FlatCap);
-    p.setPen(plus);
-    p.drawLine(QPointF(12, 8.5), QPointF(12, 15.5));
-    p.drawLine(QPointF(8.5, 12), QPointF(15.5, 12));
-}
-
-void drawOpenDoc(QPainter& p)
-{
-    // Carpeta beige con una flecha verde que sale, como en Paint.NET.
-    aa(p);
-    p.setPen(QPen(QColor(150, 110, 50), 1));
-    p.setBrush(QColor(214, 170, 96));
-    QPainterPath back;
-    back.moveTo(0.5, 5.5); back.lineTo(0.5, 3.5); back.lineTo(5, 3.5); back.lineTo(6.5, 5); back.lineTo(13.5, 5);
-    back.lineTo(13.5, 14.5); back.lineTo(0.5, 14.5); back.closeSubpath();
-    p.drawPath(back);
-    p.setBrush(QColor(240, 196, 120));
-    QPainterPath front;
-    front.moveTo(0.5, 14.5); front.lineTo(2.5, 7.5); front.lineTo(15.5, 7.5); front.lineTo(13.5, 14.5); front.closeSubpath();
-    p.drawPath(front);
-    arrowArc(p, QPointF(13.6, 6.6), 4.6, 180, -80, 1.6, QColor(46, 170, 120), QColor(20, 100, 70));
-}
-
-void drawSaveDoc(QPainter& p)
-{
-    // Disquete morado, como en Paint.NET.
-    aa(p);
-    p.setPen(QPen(QColor(80, 40, 110), 1));
-    p.setBrush(QColor(150, 80, 190));
-    QPainterPath body;
-    body.moveTo(0.5, 0.5); body.lineTo(12.5, 0.5); body.lineTo(15.5, 3.5); body.lineTo(15.5, 15.5); body.lineTo(0.5, 15.5);
-    body.closeSubpath();
-    p.drawPath(body);
-    p.setBrush(QColor(236, 230, 244));
-    p.drawRect(QRectF(3.5, 8.5, 9, 7));
-    p.setPen(QPen(QColor(150, 130, 170), 0.8));
-    p.drawLine(QPointF(5, 11), QPointF(11, 11));
-    p.drawLine(QPointF(5, 13), QPointF(11, 13));
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(200, 170, 225));
-    p.drawRect(QRectF(4, 1, 7, 4));
-}
-
-void drawUndo(QPainter& p)
-{
-    aa(p);
-    arrowArc(p, QPointF(8.8, 9.2), 4.6, -40, 215, 2.6, QColor(52, 128, 232), QColor(18, 60, 140));
-}
-
-void drawRedo(QPainter& p)
-{
-    aa(p);
-    arrowArc(p, QPointF(7.2, 9.2), 4.6, 220, -215, 2.6, QColor(52, 128, 232), QColor(18, 60, 140));
-}
-
-void drawCut(QPainter& p)
-{
-    // Tijeras abiertas hacia arriba, como en Paint.NET: hojas grises en V que se cruzan en el
-    // eje y mangos azules con dos anillas abajo.
-    aa(p);
-    const QColor blade(112, 112, 112), handle(60, 118, 178);
-    p.setBrush(blade);
-    p.setPen(Qt::NoPen);
-    QPainterPath left;
-    left.moveTo(1.9, 0.2); left.lineTo(3.6, 0.2); left.lineTo(9.2, 8.4); left.lineTo(7.4, 9.6); left.closeSubpath();
-    p.drawPath(left);
-    QPainterPath right;
-    right.moveTo(14.1, 0.2); right.lineTo(12.4, 0.2); right.lineTo(6.8, 8.4); right.lineTo(8.6, 9.6); right.closeSubpath();
-    p.drawPath(right);
-
+    QPen pen(QColor(65, 75, 88), 1.2, Qt::DashLine);
+    QVector<qreal> d; d << 2.5 << 1.8;
+    pen.setDashPattern(d);
+    p.setPen(pen);
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(handle, 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.drawEllipse(QPointF(3.5, 12.8), 2.4, 2.2);
-    p.drawEllipse(QPointF(12.5, 12.8), 2.4, 2.2);
-    p.setPen(QPen(handle, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.drawLine(QPointF(7.4, 9.6), QPointF(5.7, 12.6));
-    p.drawLine(QPointF(8.6, 9.6), QPointF(10.3, 12.6));
-    p.setPen(Qt::NoPen);
-    p.setBrush(handle);
-    p.drawRoundedRect(QRectF(6.3, 9.0, 3.4, 2.4), 0.8, 0.8);
 }
 
-void drawCopy(QPainter& p)
+void drawRectSelect(QPainter& p)
 {
-    // Dos hojas con la esquina doblada, como en Paint.NET.
+    // Rectángulo azul claro con el borde de hormigas, como en Paint.NET.
     aa(p);
-    auto sheet = [&p](qreal x, qreal y, const QColor& fill) {
-        QPainterPath page;
-        page.moveTo(x, y); page.lineTo(x + 6, y); page.lineTo(x + 9, y + 3); page.lineTo(x + 9, y + 11); page.lineTo(x, y + 11);
-        page.closeSubpath();
-        p.setPen(QPen(QColor(100, 100, 100), 1));
-        p.setBrush(fill);
-        p.drawPath(page);
-        QPainterPath fold;
-        fold.moveTo(x + 6, y); fold.lineTo(x + 6, y + 3); fold.lineTo(x + 9, y + 3); fold.closeSubpath();
-        p.setBrush(QColor(200, 204, 212));
-        p.drawPath(fold);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(178, 215, 245));
+    p.drawRect(QRectF(3, 3, 14, 14));
+    marchingAnts(p);
+    p.drawRect(QRectF(3, 3, 14, 14));
+}
+
+void drawEllipseSelect(QPainter& p)
+{
+    aa(p);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(137, 190, 233));
+    p.drawEllipse(3, 3, 14, 14);
+    marchingAnts(p);
+    p.drawEllipse(3, 3, 14, 14);
+}
+
+void drawLasso(QPainter& p)
+{
+    aa(p);
+    QPen rope(QColor(50, 106, 176), 1.7);
+    rope.setCapStyle(Qt::RoundCap);
+    p.setPen(rope);
+    p.setBrush(QColor(178, 215, 245));
+    p.drawEllipse(QRectF(3.2, 2.0, 12.4, 9.8));
+    p.setBrush(Qt::NoBrush);
+    QPainterPath tail;
+    tail.moveTo(9.0, 11.8);
+    tail.cubicTo(9.4, 15.0, 13.8, 15.4, 12.2, 18.6);
+    p.drawPath(tail);
+}
+
+void drawMagicWand(QPainter& p)
+{
+    aa(p);
+    QPen shaft(QColor(74, 85, 101), 3.0);
+    shaft.setCapStyle(Qt::RoundCap);
+    p.setPen(shaft);
+    p.drawLine(3, 17, 11, 9);
+    QPen tip(QColor(196, 208, 222), 3.0);
+    tip.setCapStyle(Qt::RoundCap);
+    p.setPen(tip);
+    p.drawLine(11, 9, 13, 7);
+    auto sparkle = [&](qreal cx, qreal cy, qreal r, const QColor &c, qreal w) {
+        QPen sp(c, w); sp.setCapStyle(Qt::RoundCap);
+        p.setPen(sp);
+        p.drawLine(QPointF(cx, cy - r), QPointF(cx, cy + r));
+        p.drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy));
     };
-    sheet(1.5, 0.5, QColor(226, 229, 235));
-    sheet(5.5, 4.5, Qt::white);
+    sparkle(15.5, 4.0, 3.2, QColor(255, 196, 36), 1.6);
+    sparkle(9.5, 3.0, 1.9, QColor(255, 226, 120), 1.2);
+    sparkle(18.0, 9.5, 1.7, QColor(255, 226, 120), 1.2);
 }
 
-void drawPaste(QPainter& p)
-{
-    // Portapapeles beige con una hoja delante, como en Paint.NET.
-    aa(p);
-    p.setPen(QPen(QColor(150, 110, 50), 1));
-    p.setBrush(QColor(224, 178, 104));
-    p.drawRoundedRect(QRectF(0.5, 1.5, 11, 13.5), 1, 1);
-    p.setBrush(QColor(170, 130, 70));
-    p.drawRoundedRect(QRectF(3.5, 0.5, 5, 3), 1, 1);
-    QPainterPath page;
-    page.moveTo(6.5, 5.5); page.lineTo(12, 5.5); page.lineTo(15.5, 9); page.lineTo(15.5, 15.5); page.lineTo(6.5, 15.5);
-    page.closeSubpath();
-    p.setPen(QPen(QColor(100, 100, 100), 1));
-    p.setBrush(Qt::white);
-    p.drawPath(page);
-    QPainterPath fold;
-    fold.moveTo(12, 5.5); fold.lineTo(12, 9); fold.lineTo(15.5, 9); fold.closeSubpath();
-    p.setBrush(QColor(200, 204, 212));
-    p.drawPath(fold);
-}
-
-void printAction(QPainter& p)
+void drawMove(QPainter& p)
 {
     aa(p);
-    p.setPen(QPen(QColor(80, 80, 90), 1));
-    p.setBrush(QColor(235, 238, 242));
-    p.drawRect(4, 2, 8, 4);
-    p.setBrush(QColor(120, 130, 145));
-    p.drawRoundedRect(2, 6, 12, 5, 1, 1);
-    p.setBrush(Qt::white);
-    p.drawRect(4, 10, 8, 4);
-}
-
-void cropAction(QPainter& p)
-{
-    // Marcas de recorte con la imagen dentro, como en Paint.NET.
-    aa(p);
+    QPainterPath a;
+    a.moveTo(2, 1); a.lineTo(2, 12.5); a.lineTo(5.0, 9.8);
+    a.lineTo(7.0, 14.2); a.lineTo(8.9, 13.3); a.lineTo(7.0, 9.2);
+    a.lineTo(11.0, 8.8); a.closeSubpath();
+    p.setPen(QPen(QColor(32, 56, 92), 1.0));
+    p.setBrush(QColor(96, 146, 205));
+    p.drawPath(a);
+    const qreal cx = 14.5, cy = 14.5, r = 5.0;
+    QPen cp(QColor(64, 84, 110), 1.3); cp.setCapStyle(Qt::RoundCap);
+    p.setPen(cp);
+    p.drawLine(QPointF(cx, cy - r), QPointF(cx, cy + r));
+    p.drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy));
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(150, 156, 166));
-    p.drawRect(QRectF(5, 5, 6, 6));
-    p.setPen(QPen(QColor(60, 60, 70), 1.4));
-    p.drawLine(QPointF(4, 1), QPointF(4, 12));
-    p.drawLine(QPointF(1, 12), QPointF(12, 12));
-    p.drawLine(QPointF(12, 4), QPointF(12, 15));
-    p.drawLine(QPointF(4, 4), QPointF(15, 4));
+    p.setBrush(QColor(64, 84, 110));
+    const qreal h = 2.0;
+    QPointF up[] = {QPointF(cx, cy - r - 0.8), QPointF(cx - h, cy - r + 1.6), QPointF(cx + h, cy - r + 1.6)};
+    QPointF dn[] = {QPointF(cx, cy + r + 0.8), QPointF(cx - h, cy + r - 1.6), QPointF(cx + h, cy + r - 1.6)};
+    QPointF lf[] = {QPointF(cx - r - 0.8, cy), QPointF(cx - r + 1.6, cy - h), QPointF(cx - r + 1.6, cy + h)};
+    QPointF rt[] = {QPointF(cx + r + 0.8, cy), QPointF(cx + r - 1.6, cy - h), QPointF(cx + r - 1.6, cy + h)};
+    p.drawPolygon(up, 3); p.drawPolygon(dn, 3); p.drawPolygon(lf, 3); p.drawPolygon(rt, 3);
 }
 
-void deselectAction(QPainter& p)
+void drawMoveSelection(QPainter& p)
 {
     aa(p);
-    p.setPen(QPen(QColor(110, 110, 120), 1, Qt::DashLine));
+    QPainterPath a;
+    a.moveTo(2, 1); a.lineTo(2, 12.5); a.lineTo(5.0, 9.8);
+    a.lineTo(7.0, 14.2); a.lineTo(8.9, 13.3); a.lineTo(7.0, 9.2);
+    a.lineTo(11.0, 8.8); a.closeSubpath();
+    QPen ap(QColor(104, 154, 212), 1.3);
+    ap.setJoinStyle(Qt::RoundJoin);
+    p.setPen(ap);
     p.setBrush(Qt::NoBrush);
-    p.drawRect(2, 2, 11, 11);
-    p.setPen(QPen(QColor(200, 60, 60), 1.6));
-    p.drawLine(5, 5, 11, 11);
-    p.drawLine(11, 5, 5, 11);
+    p.drawPath(a);
+    const qreal cx = 14.5, cy = 14.5, r = 5.0;
+    QPen cp(QColor(64, 84, 110), 1.3); cp.setCapStyle(Qt::RoundCap);
+    p.setPen(cp);
+    p.drawLine(QPointF(cx, cy - r), QPointF(cx, cy + r));
+    p.drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(64, 84, 110));
+    const qreal h = 2.0;
+    QPointF up[] = {QPointF(cx, cy - r - 0.8), QPointF(cx - h, cy - r + 1.6), QPointF(cx + h, cy - r + 1.6)};
+    QPointF dn[] = {QPointF(cx, cy + r + 0.8), QPointF(cx - h, cy + r - 1.6), QPointF(cx + h, cy + r - 1.6)};
+    QPointF lf[] = {QPointF(cx - r - 0.8, cy), QPointF(cx - r + 1.6, cy - h), QPointF(cx - r + 1.6, cy + h)};
+    QPointF rt[] = {QPointF(cx + r + 0.8, cy), QPointF(cx + r - 1.6, cy - h), QPointF(cx + r - 1.6, cy + h)};
+    p.drawPolygon(up, 3); p.drawPolygon(dn, 3); p.drawPolygon(lf, 3); p.drawPolygon(rt, 3);
 }
 
-void pixelGridAction(QPainter& p)
+void drawZoom(QPainter& p)
 {
-    p.setPen(QPen(QColor(110, 120, 135), 1));
-    for (int i = 1; i <= 13; i += 4) {
-        p.drawLine(i, 1, i, 14);
-        p.drawLine(1, i, 14, i);
-    }
-}
-
-void rulersAction(QPainter& p)
-{
-    // Regla en forma de L, como en Paint.NET.
+    // Lupa con mango azul oscuro y la cuadrícula dentro (el cristal, transparente), como en
+    // Paint.NET.
     aa(p);
-    p.setPen(QPen(QColor(120, 90, 40), 1));
-    p.setBrush(QColor(236, 196, 120));
-    QPainterPath l;
-    l.moveTo(0.5, 0.5); l.lineTo(15.5, 0.5); l.lineTo(15.5, 5.5); l.lineTo(5.5, 5.5); l.lineTo(5.5, 15.5); l.lineTo(0.5, 15.5);
-    l.closeSubpath();
-    p.drawPath(l);
-    p.setPen(QPen(QColor(120, 90, 40), 0.9));
-    for (int i = 7; i < 15; i += 3) {
-        p.drawLine(QPointF(i, 0.5), QPointF(i, 3));
-        p.drawLine(QPointF(0.5, i), QPointF(3, i));
-    }
+    QPen hp(QColor(40, 80, 140), 3.0);
+    hp.setCapStyle(Qt::RoundCap);
+    p.setPen(hp);
+    p.drawLine(QPointF(12.6, 12.6), QPointF(17.6, 17.6));
+    p.setPen(QPen(QColor(40, 80, 140), 1.8));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QRectF(2.2, 2.2, 11.6, 11.6));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(50, 60, 76));
+    for (int i = 0; i < 4; ++i)
+        p.drawRect(QRectF(5.0 + (i % 2) * 3.3, 5.0 + (i / 2) * 3.3, 2.7, 2.7));
 }
 
-// En el tema oscuro, los iconos de línea oscuros se aclaran conservando el tono, como en el
-// original (los de herramientas, en color, se quedan como están).
-QImage lightened(QImage image)
+void drawEraser(QPainter& p)
 {
-    image = image.convertToFormat(QImage::Format_ARGB32);
-    for (int y = 0; y < image.height(); ++y) {
-        QRgb* line = reinterpret_cast<QRgb*>(image.scanLine(y));
-        for (int x = 0; x < image.width(); ++x) {
-            const int a = qAlpha(line[x]);
-            if (a == 0)
-                continue;
-            int h, s, l, al;
-            QColor c = QColor::fromRgb(line[x]);
-            c.getHsl(&h, &s, &l, &al);
-            if (l < 150) {
-                c.setHsl(h < 0 ? 0 : h, s, std::clamp(235 - l, 0, 255), a);
-                line[x] = c.rgba();
-            }
-        }
-    }
-    return image;
+    // Goma en diagonal, mitad morada y mitad blanca, como en Paint.NET.
+    aa(p);
+    p.save();
+    p.translate(10, 10);
+    p.rotate(-35);
+    const QRectF body(-8.4, -3.6, 16.8, 7.2);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(176, 80, 196));
+    p.drawRoundedRect(body, 1.4, 1.4);
+    p.setBrush(QColor(246, 236, 248));
+    p.drawRoundedRect(QRectF(-1.2, -3.6, 9.6, 7.2), 1.4, 1.4);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(90, 40, 104), 0.9));
+    p.drawRoundedRect(body, 1.4, 1.4);
+    p.drawLine(QPointF(-1.2, -3.6), QPointF(-1.2, 3.6));
+    p.restore();
 }
 
+void drawPencil(QPainter& p)
+{
+    // Lápiz de madera con goma rosa y punta oscura, como en Paint.NET.
+    aa(p);
+    p.save();
+    p.translate(2.0, 18.0);
+    p.rotate(-45);
+    QPainterPath tip;
+    tip.moveTo(0, 0); tip.lineTo(4.6, -1.8); tip.lineTo(4.6, 1.8); tip.closeSubpath();
+    p.setPen(QPen(QColor(90, 70, 40), 0.7));
+    p.setBrush(QColor(236, 210, 160));
+    p.drawPath(tip);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(50, 50, 56));
+    QPainterPath lead;
+    lead.moveTo(0, 0); lead.lineTo(1.8, -0.7); lead.lineTo(1.8, 0.7); lead.closeSubpath();
+    p.drawPath(lead);
+    QLinearGradient wood(0, -1.8, 0, 1.8);
+    wood.setColorAt(0, QColor(240, 206, 140));
+    wood.setColorAt(1, QColor(200, 150, 80));
+    p.setPen(QPen(QColor(120, 84, 40), 0.7));
+    p.setBrush(wood);
+    p.drawRect(QRectF(4.6, -1.8, 13.4, 3.6));
+    p.setBrush(QColor(170, 176, 186));
+    p.drawRect(QRectF(18.0, -1.8, 1.6, 3.6));
+    p.setBrush(QColor(236, 120, 130));
+    p.drawRoundedRect(QRectF(19.6, -1.8, 2.6, 3.6), 1.2, 1.2);
+    p.restore();
+}
+
+void drawColorPicker(QPainter& p)
+{
+    // Cuentagotas en diagonal: punta de cristal con color, tubo, anillo y bulbo azul.
+    aa(p);
+    p.save();
+    p.translate(2.2, 17.8);
+    p.rotate(-45);
+    QPainterPath tip;
+    tip.moveTo(0, 0);
+    tip.lineTo(4.4, -1.1);
+    tip.lineTo(4.4, 1.1);
+    tip.closeSubpath();
+    p.setPen(QPen(QColor(40, 70, 120), 0.7));
+    p.setBrush(QColor(70, 140, 230));
+    p.drawPath(tip);
+    p.setPen(QPen(QColor(80, 96, 118), 0.8));
+    p.setBrush(QColor(236, 243, 251));
+    p.drawRect(QRectF(4.4, -1.6, 7.4, 3.2));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(70, 140, 230));
+    p.drawRect(QRectF(4.8, -1.2, 3.0, 2.4));
+    p.setPen(QPen(QColor(60, 68, 80), 0.8));
+    p.setBrush(QColor(150, 160, 172));
+    p.drawRect(QRectF(11.8, -2.4, 2.2, 4.8));
+    QLinearGradient bulb(0, -3.2, 0, 3.2);
+    bulb.setColorAt(0, QColor(96, 150, 225));
+    bulb.setColorAt(1, QColor(24, 64, 140));
+    p.setPen(QPen(QColor(18, 44, 96), 0.8));
+    p.setBrush(bulb);
+    p.drawRoundedRect(QRectF(14.0, -3.2, 7.6, 6.4), 3.2, 3.2);
+    p.restore();
+}
+
+void drawCloneStamp(QPainter& p)
+{
+    aa(p);
+    p.setPen(QPen(QColor(38, 42, 50), 0.9));
+    p.setBrush(QColor(82, 90, 104));
+    p.drawEllipse(QRectF(7.0, 1.0, 6.0, 5.2));
+    p.setBrush(QColor(112, 120, 134));
+    p.drawRect(QRectF(8.6, 4.8, 2.8, 5.4));
+    p.setPen(QPen(QColor(140, 84, 20), 0.9));
+    QLinearGradient bg(4, 10, 16, 15);
+    bg.setColorAt(0.0, QColor(248, 182, 88));
+    bg.setColorAt(1.0, QColor(210, 130, 36));
+    p.setBrush(bg);
+    QPainterPath base;
+    base.moveTo(5.0, 10.2); base.lineTo(15.0, 10.2);
+    base.lineTo(16.6, 14.2); base.lineTo(3.4, 14.2);
+    base.closeSubpath();
+    p.drawPath(base);
+    p.setBrush(QColor(184, 110, 28));
+    p.drawRect(QRectF(3.2, 14.6, 13.6, 2.6));
+}
+
+void drawText(QPainter& p)
+{
+    // "T" con remates, gris, como en Paint.NET.
+    aa(p);
+    QPainterPath t;
+    t.moveTo(2.5, 2); t.lineTo(17.5, 2); t.lineTo(17.5, 6.2); t.lineTo(16.2, 6.2); t.quadTo(15.8, 3.8, 13.2, 3.6);
+    t.lineTo(11.4, 3.6); t.lineTo(11.4, 16.2); t.quadTo(11.6, 17.2, 13.6, 17.2); t.lineTo(13.6, 18.2); t.lineTo(6.4, 18.2);
+    t.lineTo(6.4, 17.2); t.quadTo(8.4, 17.2, 8.6, 16.2); t.lineTo(8.6, 3.6); t.lineTo(6.8, 3.6); t.quadTo(4.2, 3.8, 3.8, 6.2);
+    t.lineTo(2.5, 6.2); t.closeSubpath();
+    p.setPen(QPen(QColor(70, 76, 86), 0.6));
+    p.setBrush(QColor(128, 136, 150));
+    p.drawPath(t);
+}
+
+void drawLine(QPainter& p)
+{
+    aa(p);
+    QPen cp(QColor(158, 172, 192), 1.9);
+    cp.setCapStyle(Qt::RoundCap);
+    p.setPen(cp);
+    p.setBrush(Qt::NoBrush);
+    QPainterPath c;
+    c.moveTo(3.4, 16.4);
+    c.cubicTo(7.0, 6.0, 13.0, 18.0, 16.8, 4.0);
+    p.drawPath(c);
+    p.setPen(QPen(QColor(28, 60, 100), 0.9));
+    p.setBrush(QColor(100, 154, 216));
+    p.drawEllipse(QPointF(3.4, 16.4), 2.3, 2.3);
+    p.drawEllipse(QPointF(16.8, 4.0), 2.3, 2.3);
+}
+
+void drawShape(QPainter& p)
+{
+    aa(p);
+    p.setPen(QPen(QColor(28, 60, 104), 0.9));
+    p.setBrush(QColor(80, 138, 210));
+    p.drawRect(QRectF(1.6, 2.8, 9.4, 9.4));
+    p.setPen(QPen(QColor(34, 92, 52), 0.9));
+    p.setBrush(QColor(106, 184, 110));
+    QPointF tri[] = { QPointF(14.6, 6.2), QPointF(19.0, 16.8), QPointF(10.2, 16.8) };
+    p.drawPolygon(tri, 3);
+    p.setPen(QPen(QColor(84, 40, 110), 0.9));
+    p.setBrush(QColor(170, 98, 210));
+    p.drawEllipse(QRectF(5.8, 8.2, 8.8, 8.8));
+}
+
+// Nombre de Kaint → dibujo, rejilla en la que se dibuja y archivo de paint.js con el que lo puede
+// sustituir un paquete de iconos.
 struct Entry {
     int design;
     void (*paint)(QPainter&);
-    bool themed = false;
+    const char* packFile;
 };
 
 const QHash<QString, Entry>& table()
 {
     static const QHash<QString, Entry> icons{
-        {QStringLiteral("pan"), {TS, drawPan}},
-        {QStringLiteral("pan-grab"), {TS, drawPanGrab}},
-        {QStringLiteral("paintbucket"), {TS, drawFill}},
-        {QStringLiteral("gradient"), {TS, drawGradient}},
-        {QStringLiteral("paintbrush"), {TS, drawBrush}},
-        {QStringLiteral("recolor"), {TS, drawRecolor}},
-        {QStringLiteral("toolbar-document-new"), {16, drawNewDoc, true}},
-        {QStringLiteral("toolbar-document-open"), {16, drawOpenDoc, true}},
-        {QStringLiteral("toolbar-document-save"), {16, drawSaveDoc, true}},
-        {QStringLiteral("toolbar-document-print"), {16, printAction, true}},
-        {QStringLiteral("toolbar-edit-cut"), {16, drawCut, true}},
-        {QStringLiteral("toolbar-edit-copy"), {16, drawCopy, true}},
-        {QStringLiteral("toolbar-edit-paste"), {16, drawPaste, true}},
-        {QStringLiteral("toolbar-transform-crop"), {16, cropAction, true}},
-        {QStringLiteral("toolbar-edit-select-none"), {16, deselectAction, true}},
-        {QStringLiteral("toolbar-edit-undo"), {16, drawUndo, false}},
-        {QStringLiteral("toolbar-edit-redo"), {16, drawRedo, false}},
-        {QStringLiteral("toolbar-view-grid"), {16, pixelGridAction, true}},
-        {QStringLiteral("toolbar-measure"), {16, rulersAction, true}},
+        {QStringLiteral("rectangleselect"), {TS, drawRectSelect, "rectangle_select_tool_icon"}},
+        {QStringLiteral("ellipseselect"), {TS, drawEllipseSelect, "ellipse_select_tool_icon"}},
+        {QStringLiteral("lassoselect"), {TS, drawLasso, "lasso_select_tool_icon"}},
+        {QStringLiteral("magicwand"), {TS, drawMagicWand, "magic_wand_tool_icon"}},
+        {QStringLiteral("moveselectedpixels"), {TS, drawMove, "move_tool_icon"}},
+        {QStringLiteral("moveselection"), {TS, drawMoveSelection, "move_selection_tool_icon"}},
+        {QStringLiteral("zoom"), {TS, drawZoom, "zoom_tool_icon"}},
+        {QStringLiteral("pan"), {TS, drawPan, "pan_tool_icon"}},
+        {QStringLiteral("pan-grab"), {TS, drawPanGrab, ""}},
+        {QStringLiteral("paintbucket"), {TS, drawFill, "paint_bucket_icon"}},
+        {QStringLiteral("gradient"), {TS, drawGradient, "gradient_tool_icon"}},
+        {QStringLiteral("paintbrush"), {TS, drawBrush, "paint_brush_tool_icon"}},
+        {QStringLiteral("eraser"), {TS, drawEraser, "eraser_tool_icon"}},
+        {QStringLiteral("pencil"), {TS, drawPencil, "pencil_tool_icon"}},
+        {QStringLiteral("colorpicker"), {TS, drawColorPicker, "color_picker_tool_icon"}},
+        {QStringLiteral("clonestamp"), {TS, drawCloneStamp, "clone_stamp_tool_icon"}},
+        {QStringLiteral("recolor"), {TS, drawRecolor, "recoloring_tool_icon"}},
+        {QStringLiteral("text"), {TS, drawText, "text_tool_icon"}},
+        {QStringLiteral("linecurve"), {TS, drawLine, "line_tool_icon"}},
+        {QStringLiteral("shapes"), {TS, drawShape, "shapes_tool_icon"}},
     };
     return icons;
 }
@@ -564,13 +604,20 @@ public:
         image.fill(Qt::transparent);
         {
             QPainter p(&image);
-            const qreal side = std::min(image.width(), image.height());
-            p.translate((image.width() - side) / 2, (image.height() - side) / 2);
-            p.scale(side / m_entry.design, side / m_entry.design);
-            m_entry.paint(p);
+            const QString packed = IconPacks::file(QStringLiteral("icons"), QLatin1String(m_entry.packFile));
+            const QImage source = packed.isEmpty() ? QImage() : QImage(packed);
+            if (!source.isNull()) {
+                // La del paquete de iconos, centrada y sin deformar.
+                p.setRenderHint(QPainter::SmoothPixmapTransform);
+                const QImage scaled = source.scaled(image.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                p.drawImage(QPoint((image.width() - scaled.width()) / 2, (image.height() - scaled.height()) / 2), scaled);
+            } else {
+                const qreal side = std::min(image.width(), image.height());
+                p.translate((image.width() - side) / 2, (image.height() - side) / 2);
+                p.scale(side / m_entry.design, side / m_entry.design);
+                m_entry.paint(p);
+            }
         }
-        if (m_entry.themed && Theme::isDark())
-            image = lightened(image);
         QPixmap pm = QPixmap::fromImage(image);
         pm.setDevicePixelRatio(dpr);
         if (mode == QIcon::Disabled) {
@@ -601,14 +648,21 @@ void setActiveColors(const QColor& primary, const QColor& secondary)
 
 QIcon pdn(const QString& name)
 {
-    if (QIcon icon = named(name); !icon.isNull())
-        return icon;
     const auto it = table().constFind(name);
-    return it == table().constEnd() ? QIcon() : QIcon(new PdnIconEngine(*it));
+    if (it != table().constEnd())
+        return QIcon(new PdnIconEngine(*it));
+    return named(name);
 }
 
 QCursor handCursor(bool grabbing)
 {
+    // La del paquete de iconos (los cursores de la mano de paint.js) o la dibujada.
+    const QString packed = IconPacks::file(QStringLiteral("cursors"), grabbing ? QStringLiteral("hand_closed_cursor")
+                                                                                : QStringLiteral("hand_open_cursor"));
+    if (const QImage image(packed); !packed.isEmpty() && !image.isNull()) {
+        const QPixmap pm = QPixmap::fromImage(image.scaled(QSize(24, 24), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        return QCursor(pm, pm.width() / 2, pm.height() / 2);
+    }
     const QPixmap pm = pdn(grabbing ? QStringLiteral("pan-grab") : QStringLiteral("pan")).pixmap(QSize(24, 24));
     return QCursor(pm, 12, 12);
 }

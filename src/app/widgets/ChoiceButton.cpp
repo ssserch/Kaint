@@ -130,6 +130,21 @@ void ChoiceButton::addSection(const QString& title)
     m_menu->addSection(title);
 }
 
+void ChoiceButton::removeChoicesFrom(int data)
+{
+    for (QAction* a : m_menu->actions())
+        if (a->isCheckable() && a->data().toInt() >= data) {
+            m_group->removeAction(a);
+            m_menu->removeAction(a);
+            a->deleteLater();
+        }
+    while (!m_menu->actions().isEmpty() && m_menu->actions().constLast()->isSeparator()) {
+        QAction* section = m_menu->actions().constLast();
+        m_menu->removeAction(section);
+        section->deleteLater();
+    }
+}
+
 void ChoiceButton::setCurrent(int data)
 {
     m_current = data;

@@ -10,6 +10,17 @@ const defaults = {
     dropShadow: true,
     checkerBrightness: 191,
     askOnceOnClose: true,
+    // Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes.
+    replacePixels: true,
+    // Ventanas flotantes y diálogos: 0, como los de paint.js (Windows 10); 1, compactos. Grosor
+    // del borde en píxeles.
+    panelStyle: 0,
+    panelBorder: 1,
+    // Ver > Reglas y su estilo: 0, oscura como la de paint.js; 1, del color de la barra.
+    rulers: false,
+    rulerStyle: 0,
+    // Atajos cambiados en Configuración > Atajos de teclado (id de la acción → combinación).
+    shortcuts: {},
 };
 
 function load() {

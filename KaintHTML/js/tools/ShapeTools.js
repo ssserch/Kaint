@@ -1,6 +1,8 @@
 // Línea/curva y formas (src/app/tools/ShapeTools.cpp): se dibujan arrastrando y siguen editables
-// con sus tiradores hasta pulsar Intro, cambiar de herramienta o empezar otra.
+// con sus tiradores hasta pulsar Intro, cambiar de herramienta o empezar otra. Como en Kaint, cada
+// cambio es un paso del historial y al volver a uno se sigue editando desde él.
 import { Tool } from "./Tool.js";
+import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, context, createCanvas, drawBlended, unionRect } from "../core/Raster.js";
 import { shapeFillRule, shapePath, ShapeTypes } from "../ui/Icons.js";
@@ -12,8 +14,23 @@ const rgba = (c) => `rgba(${c.r},${c.g},${c.b},${(c.a ?? 255) / 255})`;
 
 // Base de las herramientas editables que dibujan con el lienzo del navegador.
 class EditableTool extends Tool {
+    constructor(app) {
+        super(app);
+        this.steps = new StepRecorder(this);
+    }
+
+    get recordsSteps() {
+        return true;
+    }
+
     activate() {
-        this.onSettings = () => this.editing && this.render();
+        // Otras opciones o colores: se ve al momento y se registra con el próximo paso.
+        this.onSettings = () => {
+            if (this.editing && !this.restoring) {
+                this.render();
+                this.steps.changed();
+            }
+        };
         AppState.addEventListener("tools", this.onSettings);
         AppState.addEventListener("colors", this.onSettings);
     }
@@ -31,6 +48,7 @@ class EditableTool extends Tool {
         this.preview = cloneCanvas(this.layer.canvas);
         this.temp = createCanvas(this.doc.width, this.doc.height);
         this.bounds = null;
+        this.steps.start();
         this.doc.setPreview({ layer: this.layer, canvas: this.preview });
         this.setHint(this.hint());
     }
@@ -75,47 +93,101 @@ class EditableTool extends Tool {
         return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
     }
 
+    // Solo mientras se arrastra (el resto del tiempo, deshacer recorre sus pasos).
     isBusy() {
-        return !!this.editing;
+        return !!this.drag;
+    }
+
+    // Paso con lo que se ve ahora ("Línea/Curva" la primera vez, "Editar…" después).
+    commitStep() {
+        if (!this.editing || !this.hasContent())
+            return;
+        this.steps.commit({ layer: this.layer, preview: this.preview, rect: this.bounds, base: this.start, state: this.saveState(),
+                            createText: this.historyName(), editText: this.editName(), icon: this.icon });
     }
 
     finish() {
         if (!this.editing)
             return;
+        this.commitStep();
         this.editing = false;
         this.drag = null;
-        const doc = this.doc, layer = this.layer, r = this.bounds;
+        const doc = this.doc, layer = this.layer;
         doc.preview = null;
-        if (r && this.hasContent()) {
-            const before = context(this.start).getImageData(r.x, r.y, r.w, r.h);
-            layer.ctx.putImageData(context(this.preview).getImageData(r.x, r.y, r.w, r.h), r.x, r.y);
-            doc.pixelsChanged(layer, r);
-            doc.pushPixels(layer, r, before, this.historyName(), this.icon);
-        } else {
+        if (!this.steps.finish(this.finishName(), this.icon))
             doc.pixelsChanged(layer, null);
-        }
         this.setHint(this.hint());
     }
 
+    // Deja de editar sin añadir pasos (lo que ya está en el historial se queda).
+    leave() {
+        this.editing = false;
+        this.drag = null;
+        this.steps.leave();
+        if (this.doc?.preview?.canvas === this.preview)
+            this.doc.setPreview(null);
+        this.setHint(this.hint());
+    }
+
+    // Deshacer en mitad de un arrastre: vuelve al último paso (o descarta si no hay ninguno).
     cancel() {
         if (!this.editing)
             return;
-        this.editing = false;
         this.drag = null;
-        this.doc.setPreview(null);
+        const step = this.steps.top();
+        if (step)
+            this.resumeFrom(step);
+        else
+            this.leave();
+    }
+
+    // Lo pendiente se registra antes de moverse por el historial.
+    beforeHistoryJump() {
+        if (this.editing && !this.drag)
+            this.commitStep();
+    }
+
+    // Al cambiar el historial: si lo último es un paso suyo, se retoma; si no, se deja de editar.
+    historyChanged() {
+        if (this.steps.pushing)
+            return;
+        const step = this.steps.top();
+        if (step)
+            this.resumeFrom(step);
+        else if (this.editing)
+            this.leave();
+    }
+
+    resumeFrom(step) {
+        this.restoring = true;
+        this.restoreState(step.state);
+        this.restoring = false;
+        this.editing = true;
+        this.layer = step.layer;
+        this.start = cloneCanvas(step.base);
+        this.preview = cloneCanvas(this.layer.canvas);
+        this.temp = createCanvas(this.doc.width, this.doc.height);
+        this.bounds = step.rect;
+        this.steps.resume(step);
+        this.doc.setPreview({ layer: this.layer, canvas: this.preview });
+        this.render();
         this.setHint(this.hint());
+        this.repaint();
     }
 
     onKeyDown(e) {
         if (!this.editing)
             return false;
-        if (e.key === "Enter") { this.finish(); return true; }
-        if (e.key === "Escape") { this.cancel(); return true; }
+        // Como en Kaint, Intro y Esc terminan la edición.
+        if (e.key === "Enter" || e.key === "Escape") { this.finish(); return true; }
         return false;
     }
 
     onPointerUp() {
+        const dragged = this.drag && this.drag.moved;
         this.drag = null;
+        if (dragged)
+            this.commitStep();
     }
 
     drawHandle(ctx, view, p, round = false) {
@@ -163,6 +235,29 @@ export class LineTool extends EditableTool {
         return this.name;
     }
 
+    editName() {
+        return tr("Editar línea/curva");
+    }
+
+    finishName() {
+        return tr("Finalizar línea/curva");
+    }
+
+    saveState() {
+        const s = this.settings;
+        return { pts: this.pts.map((p) => ({ ...p })), useSecondary: this.useSecondary, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
+                 settings: { brushSize: s.brushSize, antialias: s.antialias, blend: s.blend, dash: s.dash, startCap: s.startCap,
+                             endCap: s.endCap, curveType: s.curveType } };
+    }
+
+    restoreState(st) {
+        this.pts = st.pts.map((p) => ({ ...p }));
+        this.useSecondary = st.useSecondary;
+        AppState.updateTools(st.settings);
+        AppState.setPrimary(st.primary);
+        AppState.setSecondary(st.secondary);
+    }
+
     hasContent() {
         return Math.hypot(this.pts[3].x - this.pts[0].x, this.pts[3].y - this.pts[0].y) > 0.5;
     }
@@ -183,7 +278,7 @@ export class LineTool extends EditableTool {
             }
             this.finish();
         }
-        this.color = this.colorFor(e.button);
+        this.useSecondary = e.button === "right";
         const p = { x: e.x, y: e.y };
         this.pts = [p, { ...p }, { ...p }, { ...p }];
         this.drag = { creating: true, origin: p };
@@ -207,6 +302,8 @@ export class LineTool extends EditableTool {
         } else {
             this.pts[this.drag.index] = p;
         }
+        this.drag.moved = true;
+        this.steps.changed();
         this.render();
     }
 
@@ -236,6 +333,10 @@ export class LineTool extends EditableTool {
         if (Math.hypot(b.x - a.x, b.y - a.y) < 0.01) b = start ? p3 : p0;
         const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
         return { x: (a.x - b.x) / len, y: (a.y - b.y) / len };
+    }
+
+    get color() {
+        return this.useSecondary ? AppState.secondary : AppState.primary;
     }
 
     render() {
@@ -296,6 +397,29 @@ export class ShapesTool extends EditableTool {
     historyName() {
         const shape = ShapeTypes.find(([id]) => id === this.settings.shape);
         return shape ? tr(shape[1]) : this.name;
+    }
+
+    editName() {
+        return tr("Editar forma");
+    }
+
+    finishName() {
+        return tr("Finalizar forma");
+    }
+
+    saveState() {
+        const s = this.settings;
+        return { r: { ...this.r }, reversed: this.reversed, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
+                 settings: { brushSize: s.brushSize, shape: s.shape, shapeStyle: s.shapeStyle, antialias: s.antialias, blend: s.blend,
+                             dash: s.dash, cornerRadius: s.cornerRadius } };
+    }
+
+    restoreState(st) {
+        this.r = { ...st.r };
+        this.reversed = st.reversed;
+        AppState.updateTools(st.settings);
+        AppState.setPrimary(st.primary);
+        AppState.setSecondary(st.secondary);
     }
 
     hasContent() {
@@ -360,6 +484,8 @@ export class ShapesTool extends EditableTool {
             if ([4, 5, 6].includes(h)) y1 = e.y;
             this.r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
         }
+        this.drag.moved = true;
+        this.steps.changed();
         this.render();
     }
 

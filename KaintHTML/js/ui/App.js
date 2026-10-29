@@ -49,6 +49,7 @@ export class App extends EventTarget {
         this.actions = new Map();
         this.applyTheme();
         this.createActions();
+        this.applyShortcuts();
         this.menuBar = new MenuBar(document.getElementById("menubar"));
         this.createMenus();
         this.createToolBar();
@@ -75,6 +76,10 @@ export class App extends EventTarget {
         this.view.addEventListener("cursor", (e) => this.updateCursorPos(e.detail));
         AppState.addEventListener("colors", () => this.updateToolIconColors());
         window.addEventListener("kaint-settings", () => this.applySettings());
+        window.addEventListener("kaint-iconpack", () => {
+            this.view.updateCursor();
+            this.refreshHint();
+        });
         window.addEventListener("beforeunload", (e) => {
             if (this.docs.some((d) => d.isModified())) {
                 e.preventDefault();
@@ -108,6 +113,10 @@ export class App extends EventTarget {
         this.applyTheme();
         applyAnimations();
         document.getElementById("workspace").classList.toggle("translucent", !!Settings.get("translucentPanels"));
+        // Ventanas como las de paint.js (Windows 10) o compactas, con el borde elegido.
+        const root = document.documentElement;
+        root.classList.toggle("win10", Settings.get("panelStyle") === 0);
+        root.style.setProperty("--window-border", `${Math.max(1, Math.min(12, Number(Settings.get("panelBorder")) || 1))}px`);
         this.updateToolIconColors();
         this.view.update();
         updateActions();
@@ -127,6 +136,8 @@ export class App extends EventTarget {
                 this.dispatchEvent(new CustomEvent(type, { detail: e.detail }));
             if (type === "pixels" || type === "modified")
                 this.updateTab(doc);
+            if (type === "history" && doc === this.doc)
+                this.syncToolWithHistory();
             if (type === "history" || type === "selection" || type === "active" || type === "layers" || type === "size")
                 updateActions();
             if (type === "selection" || type === "size")
@@ -234,6 +245,55 @@ export class App extends EventTarget {
 
     // --- Acciones --------------------------------------------------------------------------
 
+    // Atajos que eligió el usuario (Configuración > Atajos de teclado), sobre los de fábrica.
+    applyShortcuts() {
+        const saved = Settings.get("shortcuts") || {};
+        for (const [id, keys] of Object.entries(saved)) {
+            const a = this.actions.get(id);
+            if (a)
+                a.shortcuts = keys ? [keys] : [];
+        }
+    }
+
+    // Cambia el atajo de una acción (vacío: ninguno); si otra lo usaba, se le quita y la devuelve.
+    setShortcut(id, keys) {
+        const action = this.actions.get(id);
+        if (!action)
+            return null;
+        let taken = null;
+        const saved = { ...(Settings.get("shortcuts") || {}) };
+        const remember = (a) => {
+            const same = a.shortcuts.length === a.defaultShortcuts.length && a.shortcuts.every((k, i) => k === a.defaultShortcuts[i]);
+            if (same)
+                delete saved[a.id];
+            else
+                saved[a.id] = a.shortcut;
+        };
+        if (keys)
+            for (const other of this.actions.values())
+                if (other !== action && other.shortcuts.includes(keys)) {
+                    other.shortcuts = other.shortcuts.filter((k) => k !== keys);
+                    remember(other);
+                    taken = other;
+                }
+        action.shortcuts = keys ? (keys === action.defaultShortcut ? [...action.defaultShortcuts] : [keys]) : [];
+        remember(action);
+        Settings.set("shortcuts", saved);
+        updateActions();
+        return taken;
+    }
+
+    resetShortcuts() {
+        for (const a of this.actions.values())
+            a.shortcuts = [...a.defaultShortcuts];
+        Settings.set("shortcuts", {});
+        updateActions();
+    }
+
+    comboFromEvent(e) {
+        return keyCombo(e);
+    }
+
     action(id, text, iconName, shortcut, run, enabled = null, checked = null) {
         const a = new Action({ id, text, icon: iconName, shortcut, run, enabled, checked });
         this.actions.set(id, a);
@@ -291,6 +351,10 @@ export class App extends EventTarget {
             this.view.update();
             updateActions();
         }, has, () => this.view.pixelGrid);
+        A("rulers", tr("&Reglas"), "measure", "Ctrl+Alt+R", () => {
+            this.view.setRulersVisible(!this.view.rulersVisible);
+            updateActions();
+        }, null, () => this.view.rulersVisible);
         A("fullscreen", tr("&Pantalla completa"), null, "F11", () => {
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
         }, null, () => !!document.fullscreenElement);
@@ -333,7 +397,7 @@ export class App extends EventTarget {
         A("resetPanels", tr("&Restablecer la posición de las ventanas"), null, null, () => Object.values(this.panels).forEach((p) => p.reset()));
         A("translucent", tr("Ventanas &translúcidas"), null, null, () => Settings.set("translucentPanels", !Settings.get("translucentPanels")),
           null, () => Settings.get("translucentPanels"));
-        A("settings", tr("&Configuración..."), "configure", "Alt+X", () => settingsDialog());
+        A("settings", tr("&Configuración..."), "configure", "Alt+X", () => settingsDialog(this));
         A("docs", tr("&Documentación"), "help-docs", "F1", openUrl("https://www.getpaint.net/doc/latest/index.html"));
         A("website", tr("Sitio web de &Kaint"), "help-website", null, openUrl(REPOSITORY));
         A("donate", tr("&Donar"), "face-smile", null, openUrl("https://ko-fi.com/opposition"));
@@ -355,7 +419,7 @@ export class App extends EventTarget {
             { title: tr("&Archivo"), entries: () => [a("new"), a("open"), "-", a("save"), a("saveAs"), "-", a("print"), "-", a("close"), a("closeAll")] },
             { title: tr("&Edición"), entries: () => [a("undo"), a("redo"), "-", a("cut"), a("copy"), a("copyMerged"), a("paste"), a("pasteLayer"),
                                                       a("pasteImage"), "-", a("eraseSel"), a("fillSel"), a("invertSel"), a("selectAll"), a("deselect")] },
-            { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), "-", a("fullscreen")] },
+            { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), a("rulers"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
                                                      a("rot180"), "-", a("flatten")] },
             { title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
@@ -381,14 +445,14 @@ export class App extends EventTarget {
     }
 
     createToolBar() {
-        // La barra principal lleva los iconos dibujados de Kaint (los menús, los PNG).
+        // La barra principal lleva los mismos iconos que los menús.
         const bar = document.getElementById("main-toolbar");
-        const groups = [["new", "open", "save"], ["print"], ["cut", "copy", "paste"], ["crop", "deselect"], ["undo", "redo"], ["pixelGrid"]];
+        const groups = [["new", "open", "save"], ["print"], ["cut", "copy", "paste"], ["crop", "deselect"], ["undo", "redo"], ["pixelGrid", "rulers"]];
         groups.forEach((group, i) => {
             if (i)
                 bar.appendChild(el("span", { className: "sep" }));
             for (const id of group)
-                bar.appendChild(toolButton(this.actions.get(id), `toolbar-${this.actions.get(id).icon}`, 16));
+                bar.appendChild(toolButton(this.actions.get(id), this.actions.get(id).icon, 16));
         });
     }
 
@@ -413,6 +477,7 @@ export class App extends EventTarget {
             colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", size: { w: 230, h: 330 }, onClose: closed }),
         };
         new ResizeObserver(() => Object.values(this.panels).forEach((p) => p.reposition())).observe(ws);
+        this.view.addEventListener("rulers", () => Object.values(this.panels).forEach((p) => p.reposition()));
     }
 
     createCornerButtons() {
@@ -435,6 +500,8 @@ export class App extends EventTarget {
 
     createStatusBar() {
         const bar = document.getElementById("status-bar");
+        // Delante de la ayuda, como en paint.js, el icono de la herramienta (o el de la selección).
+        this.hintIcon = el("span", { className: "hint-icon" });
         this.hintLabel = el("span", { className: "hint" });
         this.selLabel = el("span");
         this.posLabel = el("span");
@@ -453,19 +520,40 @@ export class App extends EventTarget {
             const t = Number(this.zoomSlider.value) / 1000;
             this.view.setZoom(Math.exp(Math.log(0.01) + t * (Math.log(64) - Math.log(0.01))));
         });
-        bar.append(this.hintLabel, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
+        bar.append(this.hintIcon, this.hintLabel, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
                    item("status-cursor", this.posLabel, tr("Posición del cursor")), el("span", { textContent: "px", style: { padding: "0 6px" } }),
                    this.zoomBox, presets, this.actionButton("zoomFit"), this.actionButton("zoomOut"), this.zoomSlider, this.actionButton("zoomIn"));
     }
 
     showHint(text) {
-        if (this.hintLabel)
-            this.hintLabel.textContent = text;
+        this.toolHint = text;
+        this.refreshHint();
+    }
+
+    // Con una herramienta de selección en reposo y algo seleccionado, como Paint.NET: posición,
+    // rectángulo delimitador y área de la selección.
+    refreshHint() {
+        if (!this.hintLabel)
+            return;
+        const tool = this.tools.current, doc = this.doc;
+        let iconName = tool?.icon, text = this.toolHint || "";
+        if (doc && tool?.highlightSelection && !tool.isBusy() && !doc.selection.isEmpty() && text === tool.hint()) {
+            const b = doc.selection.bounds(), px = (n) => `${n} ${tr("px")}`;
+            text = tr("Esquina superior izquierda de la selección: %1, %2. Tamaño del rectángulo delimitador: %3 × %4. Área: %5 %6",
+                      px(b.x), px(b.y), px(b.w), px(b.h), doc.selection.area().toLocaleString(), tr("píxeles cuadrados"));
+            iconName = "status-selection";
+        }
+        if (this.hintIcon.dataset.name !== iconName) {
+            this.hintIcon.dataset.name = iconName || "";
+            this.hintIcon.replaceChildren(...(iconName ? [icon(iconName, 16)] : []));
+        }
+        this.hintLabel.textContent = text;
     }
 
     updateStatus() {
         if (!this.selLabel)
             return;
+        this.refreshHint();
         const doc = this.doc;
         if (!doc) {
             this.selLabel.textContent = "";
@@ -560,19 +648,46 @@ export class App extends EventTarget {
             updateActions();
             return;
         }
+        this.prepareHistoryJump();
         this.doc?.undo();
     }
 
     redo() {
-        this.tools.current?.finish();
+        this.prepareHistoryJump();
         this.doc?.redo();
     }
 
     jumpHistory(index) {
         if (!this.doc)
             return;
-        this.tools.current?.finish();
+        this.prepareHistoryJump();
         this.doc.goTo(Math.min(index, this.doc.history.steps.length - 1));
+    }
+
+    // Antes de moverse por el historial: las herramientas con pasos editables registran lo
+    // pendiente (el historial decide después si se retoma); las demás aplican lo que tengan.
+    prepareHistoryJump() {
+        const tool = this.tools.current;
+        if (tool?.recordsSteps)
+            tool.beforeHistoryJump();
+        else
+            tool?.finish();
+    }
+
+    // Como en Kaint: al llegar a un paso que su herramienta puede retomar (formas, degradado...),
+    // se activa esa herramienta para seguir editándolo.
+    syncToolWithHistory() {
+        const doc = this.doc;
+        if (this.syncingHistory || !doc)
+            return;
+        this.syncingHistory = true;
+        const top = doc.history.steps[doc.history.index];
+        this.tools.current?.historyChanged?.();
+        if (top?.tool && top.base && this.tools.current?.id !== top.tool) {
+            this.tools.select(top.tool);
+            this.tools.current?.historyChanged?.();
+        }
+        this.syncingHistory = false;
     }
 
     // --- Archivo ---------------------------------------------------------------------------

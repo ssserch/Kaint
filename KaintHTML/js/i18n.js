@@ -33,6 +33,9 @@ const extra = {
     "Salida: blanco": "Output: white",
     "Reiniciar": "Reseed",
     "Semilla aleatoria:": "Random seed:",
+    "Imágenes: %1": "Images: %1",
+    "Pulsa un atajo…": "Press a shortcut…",
+    "Quitar el atajo": "Remove the shortcut",
 };
 
 let language = "en";

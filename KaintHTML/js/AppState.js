@@ -14,6 +14,8 @@ export const defaultTools = () => ({
     sampleImage: false,
     pickerSampleImage: false,
     selectionMode: "replace",
+    // Después de seleccionar: "none", "moveselection" o "moveselectedpixels" (como Kaint).
+    afterSelect: "none",
     rectMode: "normal",
     fixedWidth: 4,
     fixedHeight: 3,

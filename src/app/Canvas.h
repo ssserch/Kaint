@@ -62,6 +62,7 @@ public:
 
     // Reglas y unidades de medida
     void setRulersVisible(bool on);
+    void setRulerStyle(Ruler::Style style);
     bool rulersVisible() const { return m_rulersVisible; }
     void setUnit(Unit unit);
     Unit unit() const { return m_unit; }
@@ -76,6 +77,7 @@ public:
 
 signals:
     void zoomChanged(qreal zoom);
+    void rulersVisibilityChanged(bool visible);
     void cursorMoved(QPoint imagePos, bool inside);
     void deselectRequested();
     void tabletEraserChanged(bool eraser);

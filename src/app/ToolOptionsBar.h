@@ -91,6 +91,8 @@ public:
 
 private:
     void sync();
+    // Las formas personalizadas al final del selector de formas.
+    void addCustomShapes();
     QWidget* label(const QString& text);
     QToolButton* textToggle(const QString& text, const QString& tip, const std::function<void(QFont&)>& style);
     QWidget* steppers(QWidget* inner, const std::function<void(int)>& step);

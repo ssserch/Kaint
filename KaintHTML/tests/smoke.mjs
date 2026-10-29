@@ -252,6 +252,124 @@ await page.evaluate(() => window.kaint.moveLayerTo(1, 0));
 check(await page.evaluate(() => document.documentElement.classList.contains("no-animations")
                           && document.querySelector(".layer-list .row").getAnimations().length === 0), "sin animaciones no se deslizan");
 
+// Como Kaint de escritorio: iconos de herramientas dibujados (Formas ocupa su fila), barras con
+// los PNG de los menús e icono de la herramienta en la barra de estado.
+await page.evaluate(() => window.kaint.addDocument(new window.kaint.doc.constructor(400, 300)));
+await tool("paintbrush");
+const icons = await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll(".tools-grid .tbutton")];
+    const last = buttons[buttons.length - 1].getBoundingClientRect(), first = buttons[0].getBoundingClientRect();
+    return { drawn: buttons.every((b) => b.querySelector(".kicon").tagName === "CANVAS"), lastWide: last.width > first.width * 1.5,
+             toolbar: [...document.querySelectorAll("#main-toolbar .kicon")].every((i) => i.tagName === "IMG"),
+             status: document.querySelector(".status-bar .hint-icon .kicon")?.dataset.icon };
+});
+check(icons.drawn && icons.lastWide && icons.toolbar && icons.status === "paintbrush", `iconos de herramientas y barras (${JSON.stringify(icons)})`);
+
+// Mover píxeles seleccionados: sin selección, un clic selecciona todo; cada arrastre es un paso
+await setColors({ r: 0, g: 0, b: 0, a: 255 }, { r: 255, g: 255, b: 255, a: 255 });
+await tool("pencil");
+await drag([[50, 50], [60, 50]]);
+await tool("moveselectedpixels");
+await click(200, 150);
+check(await lastStep() === "Seleccionar todo", "un clic con Mover píxeles seleccionados sin selección selecciona todo");
+await drag([[55, 50], [55, 80]]);
+// Se mueve toda la capa (con su fondo blanco): arriba queda el hueco transparente.
+check(await lastStep() === "Mover píxeles seleccionados" && JSON.stringify(await pixel(55, 80)) === "[0,0,0,255]" && (await pixel(55, 10))[3] === 0,
+      "mover píxeles deja un paso al soltar");
+await page.keyboard.press("Control+z");
+check(JSON.stringify(await pixel(55, 50)) === "[0,0,0,255]" && (await pixel(55, 10))[3] === 255, "deshacer el movimiento");
+await page.keyboard.press("Control+d");
+
+// Formas, cubo, degradado y texto: un paso al crear, "Editar…" al cambiar y "Finalizar…" con
+// Intro; al volver a un paso se sigue editando.
+await tool("shapes");
+await drag([[100, 100], [160, 160]]);
+check(await lastStep() === "Rectángulo", "la forma entra en el historial al soltar");
+await drag([[130, 130], [150, 150]]);
+check(await lastStep() === "Editar forma", "mover la forma es «Editar forma»");
+await page.keyboard.press("Control+z");
+check(await lastStep() === "Rectángulo" && await page.evaluate(() => window.kaint.tools.current.editing), "deshacer vuelve a la forma y sigue editable");
+await page.keyboard.press("Enter");
+check(await lastStep() === "Finalizar forma", "Intro termina la forma");
+await tool("paintbucket");
+await click(300, 250);
+check(await lastStep() === "Cubo de pintura", "el cubo entra en el historial al momento");
+await setColors({ r: 200, g: 0, b: 0, a: 255 }, { r: 255, g: 255, b: 255, a: 255 });
+await page.keyboard.press("Enter");
+check(JSON.stringify(await pixel(300, 250)) === "[200,0,0,255]" && await lastStep() === "Finalizar cubo de pintura",
+      "el relleno sigue a los colores hasta terminar");
+await tool("text");
+await click(20, 200);
+await page.keyboard.type("Kaint");
+check(await lastStep() === "Texto", "lo escrito aparece en el historial al momento");
+await page.keyboard.press("Escape");
+check(await lastStep() === "Finalizar texto", "Esc termina el texto");
+
+// Varita mágica: la selección sigue a la tolerancia hasta pulsar Intro
+await tool("magicwand");
+await click(380, 20);
+const wand1 = await page.evaluate(() => window.kaint.doc.selection.area());
+await page.evaluate(async () => (await import("./js/AppState.js")).AppState.updateTools({ tolerance: 100 }));
+const wand2 = await page.evaluate(() => window.kaint.doc.selection.area());
+await page.keyboard.press("Enter");
+check(wand2 > wand1 && await lastStep() === "Varita mágica", `la varita sigue a la tolerancia (${wand1} → ${wand2})`);
+await page.evaluate(async () => (await import("./js/AppState.js")).AppState.updateTools({ tolerance: 50 }));
+await page.keyboard.press("Control+d");
+
+// Zum a un rectángulo: justo ese rectángulo, sin margen
+await tool("zoom");
+await drag([[100, 100], [200, 150]]);
+const fit = await page.evaluate(() => {
+    const v = window.kaint.view, s = v.viewSize(), a = v.imageToView(100, 100), b = v.imageToView(200, 150);
+    return Math.abs(b.x - a.x - s.w) < 2 || Math.abs(b.y - a.y - s.h) < 2;
+});
+check(fit, "el zum llena la vista con el rectángulo");
+await page.evaluate(() => window.kaint.view.zoomToWindow());
+
+// Reglas: oscuras como las de paint.js y las ventanas no las tapan
+await page.evaluate(() => window.kaint.actions.get("rulers").trigger());
+await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
+const rulers = await page.evaluate(() => {
+    const ruler = document.querySelector("canvas.ruler.h"), d = ruler.getContext("2d").getImageData(1, 1, 1, 1).data;
+    return { dark: d[0] < 60, panels: [...document.querySelectorAll(".floating-panel")].every((p) => p.offsetLeft >= 20 && p.offsetTop >= 20) };
+});
+check(rulers.dark && rulers.panels, `reglas (${JSON.stringify(rulers)})`);
+await page.evaluate(() => window.kaint.actions.get("rulers").trigger());
+
+// Atajos de teclado editables
+const keys = await page.evaluate(() => {
+    const app = window.kaint, taken = app.setShortcut("save", "Ctrl+O");
+    const r = taken?.id === "open" && app.actions.get("open").shortcuts.length === 0;
+    app.resetShortcuts();
+    return r && app.actions.get("open").shortcuts[0] === "Ctrl+O";
+});
+check(keys, "cambiar un atajo se lo quita a la acción que lo usaba");
+
+// Paquete de iconos de paint.js: cambia el icono de Abrir y el de la herramienta Texto
+const pack = await page.evaluate(async () => {
+    const { zip } = await import("./js/core/Zip.js");
+    const { IconPacks } = await import("./js/IconPacks.js");
+    const png = async (color) => {
+        const c = new OffscreenCanvas(16, 16), x = c.getContext("2d");
+        x.fillStyle = color;
+        x.fillRect(0, 0, 16, 16);
+        return new Uint8Array(await (await c.convertToBlob({ type: "image/png" })).arrayBuffer());
+    };
+    const enc = new TextEncoder();
+    const file = new File([zip([
+        { name: "p/asset-pack.json", data: enc.encode(JSON.stringify({ formatVersion: 1, id: "smoke.pack", name: "Prueba" })) },
+        { name: "p/icons/menu_file_open_icon.png", data: await png("#f00") },
+        { name: "p/icons/text_tool_icon.png", data: await png("#00f") },
+    ])], "p.zip");
+    const { id } = await IconPacks.install(file);
+    await IconPacks.activate(id);
+    const text = document.querySelectorAll(".tools-grid .tbutton")[16].querySelector(".kicon");
+    const ok = text.tagName === "IMG" && document.querySelector('#main-toolbar img[data-icon="document-open"]').src.startsWith("blob:");
+    await IconPacks.remove(id);
+    return ok && document.querySelectorAll(".tools-grid .tbutton")[16].querySelector(".kicon").tagName === "CANVAS";
+});
+check(pack, "un paquete de iconos cambia los iconos y al quitarlo vuelven los de Kaint");
+
 await shot("final.png");
 for (const e of errors) {
     failures++;

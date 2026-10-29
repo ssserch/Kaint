@@ -1,10 +1,13 @@
 // Mover píxeles seleccionados y Mover selección (src/app/tools/MoveTools.cpp y TransformBox):
 // arrastrar mueve, los tiradores cambian el tamaño (Mayús: proporción) y el botón derecho o
-// arrastrar fuera del borde gira. Se aplica con Intro, al cambiar de herramienta o con otra orden.
+// arrastrar fuera del borde gira. Como en Kaint, cada arrastre es un paso del historial y los
+// píxeles siguen "flotando" mientras ese paso sea el último (moverlos otra vez no los degrada).
+// Sin selección, un clic con Mover píxeles seleccionados selecciona todo el lienzo.
 import { Tool } from "./Tool.js";
 import { Selection } from "../core/Selection.js";
 import { cloneCanvas, context, createCanvas } from "../core/Raster.js";
 import { iconCursor } from "../ui/Icons.js";
+import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
 
 // Caja de transformación: rectángulo base, desplazamiento, escala y giro alrededor del centro.
@@ -29,6 +32,18 @@ class TransformBox {
 
     isIdentity() {
         return !this.tx && !this.ty && this.sx === 1 && this.sy === 1 && !this.angle;
+    }
+
+    save() {
+        return { tx: this.tx, ty: this.ty, sx: this.sx, sy: this.sy, angle: this.angle };
+    }
+
+    restore(state) {
+        Object.assign(this, state);
+    }
+
+    same(state) {
+        return this.tx === state.tx && this.ty === state.ty && this.sx === state.sx && this.sy === state.sy && this.angle === state.angle;
     }
 
     // Tiradores: esquinas y centros de los lados (en la imagen).
@@ -94,10 +109,33 @@ class MoveToolBase extends Tool {
         return iconCursor(this.icon, 2, 2, "move");
     }
 
-    handleAt(e) {
-        if (!this.box)
+    // La sesión (píxeles o selección levantados) sigue viva mientras su paso sea el último del
+    // historial de la imagen activa.
+    session() {
+        const s = this.current;
+        if (!s || s.doc !== this.doc)
+            return null;
+        if (this.drag?.session === s)
+            return s;
+        const h = s.doc.history;
+        if (!s.step || h.steps[h.index] !== s.step || (s.layer && s.layer !== s.doc.activeLayer))
+            return null;
+        return s;
+    }
+
+    // Caja que se ve y se agarra: la de la sesión o la de la selección.
+    restBox() {
+        const s = this.session();
+        if (s)
+            return s.box;
+        const b = this.doc?.selection.bounds();
+        return b ? new TransformBox(b) : null;
+    }
+
+    handleAt(e, box) {
+        if (!box)
             return -1;
-        for (const [i, p] of this.box.handles().entries()) {
+        for (const [i, p] of box.handles().entries()) {
             const v = this.view.imageToView(p.x, p.y);
             if (Math.hypot(v.x - e.vx, v.y - e.vy) <= 7)
                 return i;
@@ -105,66 +143,129 @@ class MoveToolBase extends Tool {
         return -1;
     }
 
-    onPointerDown(e) {
-        if (!this.doc || (e.button !== "left" && e.button !== "right"))
-            return;
-        if (!this.box && !this.start())
-            return;
-        const p = { x: e.x, y: e.y }, c = this.box.center();
-        const handle = e.button === "left" ? this.handleAt(e) : -1;
+    // Qué hace el botón en ese punto: tirador, mover (dentro) o girar (fuera o botón derecho).
+    hit(e, box) {
+        const handle = e.button !== "right" ? this.handleAt(e, box) : -1;
         if (handle >= 0)
-            this.drag = { kind: "resize", handle };
-        else if (e.button === "right" || !this.box.inside(p))
-            this.drag = { kind: "rotate", from: Math.atan2(p.y - c.y, p.x - c.x), angle: this.box.angle };
-        else
-            this.drag = { kind: "move", from: p, tx: this.box.tx, ty: this.box.ty };
+            return { kind: "resize", handle };
+        if (e.button === "right" || (box && !box.inside({ x: e.x, y: e.y })))
+            return { kind: "rotate" };
+        return { kind: "move" };
+    }
+
+    onPointerDown(e) {
+        const doc = this.doc;
+        if (!doc || (e.button !== "left" && e.button !== "right"))
+            return;
+        let hit = this.hit(e, this.restBox());
+        const session = this.begin(e);
+        if (!session)
+            return;
+        if (this.selectedAll)
+            hit = { kind: "move" };
+        const box = session.box, p = { x: e.x, y: e.y }, c = box.center();
+        this.drag = { ...hit, session, start: box.save(), from: p, fromAngle: Math.atan2(p.y - c.y, p.x - c.x) };
     }
 
     onPointerMove(e) {
-        if (!this.drag)
+        if (!this.drag) {
+            this.hoverCursor(e);
             return;
-        const p = { x: e.x, y: e.y }, d = this.drag, box = this.box;
+        }
+        const p = { x: e.x, y: e.y }, d = this.drag, box = d.session.box;
         if (d.kind === "move") {
-            box.tx = Math.round(d.tx + p.x - d.from.x);
-            box.ty = Math.round(d.ty + p.y - d.from.y);
+            box.tx = Math.round(d.start.tx + p.x - d.from.x);
+            box.ty = Math.round(d.start.ty + p.y - d.from.y);
         } else if (d.kind === "resize") {
             box.resize(d.handle, p, e.shift);
         } else {
             const c = box.center();
-            let a = d.angle + Math.atan2(p.y - c.y, p.x - c.x) - d.from;
+            let a = d.start.angle + Math.atan2(p.y - c.y, p.x - c.x) - d.fromAngle;
             if (e.shift)
                 a = Math.round(a / (Math.PI / 12)) * (Math.PI / 12);
             box.angle = a;
+            this.setHint(tr("Ángulo: %1°", ((-a * 180) / Math.PI).toFixed(2)));
         }
-        this.update();
+        this.render(d.session);
     }
 
     onPointerUp() {
+        const d = this.drag;
+        if (!d)
+            return;
         this.drag = null;
+        this.selectedAll = false;
+        this.setHint(this.hint());
+        if (d.session.box.same(d.start)) {
+            this.unmoved(d.session);
+            return;
+        }
+        this.commit(d.session, this.name, this.icon);
+    }
+
+    hoverCursor(e) {
+        const box = this.restBox();
+        const canvas = this.view.canvas;
+        if (!box || this.doc.selection.isEmpty()) {
+            canvas.style.cursor = this.cursor();
+            return;
+        }
+        const hit = this.hit(e, box);
+        canvas.style.cursor = hit.kind === "resize" ? "pointer" : hit.kind === "rotate" ? iconCursor("object-rotate-right", 12, 12, "alias") : this.cursor();
     }
 
     isBusy() {
-        return !!this.box;
+        return !!this.drag;
+    }
+
+    // Se deja de arrastrar sin aplicar nada (Esc, deshacer durante el arrastre).
+    cancel() {
+        const d = this.drag;
+        if (!d)
+            return;
+        this.drag = null;
+        this.selectedAll = false;
+        d.session.box.restore(d.start);
+        this.unmoved(d.session);
+        this.view.update();
+    }
+
+    finish() {
+        this.cancel();
+        this.current = null;
+    }
+
+    deactivate() {
+        this.finish();
+        this.view.update();
     }
 
     onKeyDown(e) {
-        if (!this.box)
-            return false;
-        if (e.key === "Enter") { this.finish(); return true; }
+        // Flechas: mover un píxel, como un arrastre corto.
         const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-        if (step) {
-            this.box.tx += step[0];
-            this.box.ty += step[1];
-            this.update();
-            return true;
-        }
-        return false;
+        if (!step || this.drag || !this.doc || this.doc.selection.isEmpty())
+            return false;
+        const session = this.begin({ button: "left", ctrl: false });
+        if (!session)
+            return false;
+        session.box.tx += step[0];
+        session.box.ty += step[1];
+        this.render(session);
+        this.commit(session, this.name, this.icon);
+        return true;
     }
 
     paintOverlay(ctx, view) {
-        if (!this.box || this.drag)
+        const s = this.session();
+        const box = this.drag ? this.drag.session.box : this.restBox();
+        if (!box || (!s && this.doc.selection.isEmpty()))
             return;
-        const pts = this.box.handles().map((p) => view.imageToView(p.x, p.y));
+        // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint).
+        if (s && this.drag)
+            view.strokeSegments(ctx, s.selBase.outline(), box.matrix());
+        if (this.drag)
+            return;
+        const pts = box.handles().map((p) => view.imageToView(p.x, p.y));
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = "rgba(0,0,0,0.55)";
         ctx.lineWidth = 1;
@@ -182,7 +283,7 @@ class MoveToolBase extends Tool {
     }
 
     hidesSelectionOutline() {
-        return !!this.box;
+        return !!this.drag;
     }
 }
 
@@ -192,107 +293,113 @@ export class MoveSelectedTool extends MoveToolBase {
     get icon() { return "moveselectedpixels"; }
     get letter() { return "M"; }
 
-    // Levanta los píxeles seleccionados (o toda la capa) y deja el hueco.
-    start() {
-        const doc = this.doc, sel = doc.selection;
-        this.layer = doc.activeLayer;
-        this.before = cloneCanvas(this.layer.canvas);
-        this.beforeSelection = sel;
-        const b = sel.bounds() || { x: 0, y: 0, w: doc.width, h: doc.height };
-        this.floating = createCanvas(b.w, b.h);
-        const f = context(this.floating);
-        f.drawImage(this.layer.canvas, -b.x, -b.y);
+    // Sesión para arrastrar: la que sigue viva o, si no, los píxeles de la selección levantados.
+    // Sin selección, como en Paint.NET, el clic selecciona todo el lienzo (ya se ve al pulsar).
+    begin(e) {
+        const doc = this.doc;
+        if (!doc.activeLayer)
+            return null;
+        let session = e.ctrl ? null : this.session();
+        if (!session && doc.selection.isEmpty()) {
+            const before = doc.selection;
+            doc.setSelection(Selection.rect(doc.width, doc.height, 0, 0, doc.width, doc.height));
+            doc.pushSelection(before, tr("Seleccionar todo"), "edit-select-all");
+            this.selectedAll = true;
+        }
+        if (!session) {
+            session = this.lift(!!e.ctrl);
+            this.current = session;
+        }
+        return session;
+    }
+
+    // Levanta los píxeles seleccionados y deja el hueco (con Ctrl, una copia donde estaban).
+    lift(keepCopy) {
+        const doc = this.doc, sel = doc.selection, layer = doc.activeLayer;
+        const b = sel.bounds();
+        const floating = createCanvas(b.w, b.h);
+        const f = context(floating);
+        f.drawImage(layer.canvas, -b.x, -b.y);
         f.globalCompositeOperation = "destination-in";
         f.drawImage(sel.maskCanvas(), -b.x, -b.y);
-        this.hole = cloneCanvas(this.layer.canvas);
-        const h = context(this.hole);
-        h.globalCompositeOperation = "destination-out";
-        h.drawImage(sel.maskCanvas(), 0, 0);
-        this.preview = createCanvas(doc.width, doc.height);
-        this.box = new TransformBox(b);
-        this.update();
-        return true;
-    }
-
-    // Píxeles pegados: flotan sobre la capa (sin hueco debajo) hasta aplicarlos.
-    startFloating(image, x, y, name) {
-        const doc = this.doc;
-        this.finish();
-        this.layer = doc.activeLayer;
-        this.before = cloneCanvas(this.layer.canvas);
-        this.hole = cloneCanvas(this.layer.canvas);
-        this.floating = createCanvas(image.width, image.height);
-        context(this.floating).drawImage(image, 0, 0);
-        const rect = { x, y, w: image.width, h: image.height };
-        this.selectionBeforePaste = doc.selection;
-        this.beforeSelection = Selection.rect(doc.width, doc.height, x, y, image.width, image.height);
-        this.preview = createCanvas(doc.width, doc.height);
-        this.box = new TransformBox(rect);
-        this.forceCommit = true;
-        this.commitName = name;
-        this.update();
-    }
-
-    update() {
-        const doc = this.doc, p = context(this.preview), m = this.box.matrix();
-        p.setTransform(1, 0, 0, 1, 0, 0);
-        p.clearRect(0, 0, doc.width, doc.height);
-        p.drawImage(this.hole, 0, 0);
-        p.setTransform(m.multiply(new DOMMatrix().translate(this.box.base.x, this.box.base.y)));
-        p.imageSmoothingEnabled = this.box.sx !== 1 || this.box.sy !== 1 || !!this.box.angle;
-        p.imageSmoothingQuality = "high";
-        p.drawImage(this.floating, 0, 0);
-        p.setTransform(1, 0, 0, 1, 0, 0);
-        doc.setPreview({ layer: this.layer, canvas: this.preview });
-    }
-
-    finish() {
-        if (!this.box)
-            return;
-        const doc = this.doc, layer = this.layer, box = this.box;
-        this.box = null;
-        this.drag = null;
-        doc.preview = null;
-        const name = this.commitName || this.name, forced = this.forceCommit;
-        this.forceCommit = false;
-        this.commitName = null;
-        if (box.isIdentity() && !forced) {
-            doc.setSelection(this.beforeSelection);
-            doc.pixelsChanged(layer, null);
-            return;
+        const base = cloneCanvas(layer.canvas);
+        if (!keepCopy) {
+            const h = context(base);
+            h.globalCompositeOperation = "destination-out";
+            h.drawImage(sel.maskCanvas(), 0, 0);
         }
+        return { doc, layer, base, floating, selBase: sel, box: new TransformBox(b), preview: createCanvas(doc.width, doc.height), step: null };
+    }
+
+    // La capa con los píxeles en su sitio nuevo. Como en Paint.NET (Configuración), los movidos
+    // reemplazan a los de debajo, también a los transparentes.
+    render(s) {
+        const doc = s.doc, p = context(s.preview), m = s.box.matrix();
+        p.setTransform(1, 0, 0, 1, 0, 0);
+        p.globalCompositeOperation = "source-over";
+        p.clearRect(0, 0, doc.width, doc.height);
+        p.drawImage(s.base, 0, 0);
+        const smooth = s.box.sx !== 1 || s.box.sy !== 1 || !!s.box.angle;
+        if (Settings.get("replacePixels")) {
+            p.setTransform(m);
+            p.globalCompositeOperation = "destination-out";
+            p.imageSmoothingEnabled = smooth;
+            p.drawImage(s.selBase.maskCanvas(), 0, 0);
+            p.globalCompositeOperation = "source-over";
+        }
+        p.setTransform(m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y)));
+        p.imageSmoothingEnabled = smooth;
+        p.imageSmoothingQuality = "high";
+        p.drawImage(s.floating, 0, 0);
+        p.setTransform(1, 0, 0, 1, 0, 0);
+        doc.setPreview({ layer: s.layer, canvas: s.preview });
+    }
+
+    unmoved(s) {
+        // Se soltó sin mover: la capa no cambia (la selección de todo, si se hizo, se queda).
+        if (s.doc.preview?.canvas === s.preview)
+            s.doc.setPreview(null);
+        if (!s.step)
+            this.current = null;
+    }
+
+    // Un paso del historial con la capa y la selección de antes y de después.
+    commit(s, name, icon, selectionBefore = s.doc.selection) {
+        const doc = s.doc, layer = s.layer;
+        const before = layer.ctx.getImageData(0, 0, doc.width, doc.height);
+        doc.preview = null;
         layer.ctx.clearRect(0, 0, doc.width, doc.height);
-        layer.ctx.drawImage(this.preview, 0, 0);
-        const before = context(this.before).getImageData(0, 0, doc.width, doc.height);
+        layer.ctx.drawImage(s.preview, 0, 0);
         const after = layer.ctx.getImageData(0, 0, doc.width, doc.height);
-        const selBefore = this.beforeSelection;
-        const selAfter = selBefore.isEmpty() ? selBefore : selBefore.transformed(box.matrix());
-        doc.selection = selAfter;
+        const selAfter = s.selBase.transformed(s.box.matrix(), this.settings.selectionAntialias);
         const apply = (data, sel) => {
             layer.ctx.putImageData(data, 0, 0);
             doc.setSelection(sel);
             doc.pixelsChanged(layer, null);
         };
-        // Al pegar, deshacer quita también la selección que se creó.
-        const selUndo = forced ? this.selectionBeforePaste : selBefore;
-        doc.push({ name, icon: forced ? "edit-paste" : this.icon, undo: () => apply(before, selUndo), redo: () => apply(after, selAfter) });
+        s.step = { name, icon, undo: () => apply(before, selectionBefore), redo: () => apply(after, selAfter) };
+        doc.selection = selAfter;
+        doc.push(s.step);
         doc.pixelsChanged(layer, null);
         doc.emit("selection");
+        this.current = s;
     }
 
-    cancel() {
-        if (!this.box)
-            return;
-        this.box = null;
-        this.drag = null;
-        this.doc.setPreview(null);
-        this.doc.emit("selection");
-    }
-
-    paintOverlay(ctx, view) {
-        if (this.box && !this.beforeSelection.isEmpty())
-            view.strokeSegments(ctx, this.beforeSelection.outline(), this.box.matrix());
-        super.paintOverlay(ctx, view);
+    // Píxeles pegados: se colocan como un paso "Pegar" y quedan flotando (sin hueco debajo) para
+    // moverlos después.
+    startFloating(image, x, y, name) {
+        const doc = this.doc;
+        this.finish();
+        const floating = createCanvas(image.width, image.height);
+        context(floating).drawImage(image, 0, 0);
+        const rect = { x, y, w: image.width, h: image.height };
+        const s = {
+            doc, layer: doc.activeLayer, base: cloneCanvas(doc.activeLayer.canvas), floating,
+            selBase: Selection.rect(doc.width, doc.height, x, y, image.width, image.height), box: new TransformBox(rect),
+            preview: createCanvas(doc.width, doc.height), step: null,
+        };
+        this.render(s);
+        this.commit(s, name, "edit-paste");
     }
 }
 
@@ -302,42 +409,40 @@ export class MoveSelectionTool extends MoveToolBase {
     get icon() { return "moveselection"; }
     get letter() { return "M"; }
 
-    start() {
-        const sel = this.doc.selection;
-        if (sel.isEmpty())
-            return false;
-        this.beforeSelection = sel;
-        this.box = new TransformBox(sel.bounds());
-        return true;
-    }
-
-    update() {
-        this.view.update();
-    }
-
-    finish() {
-        if (!this.box)
-            return;
-        const box = this.box;
-        this.box = null;
-        this.drag = null;
-        if (box.isIdentity())
-            return;
+    begin(e) {
         const doc = this.doc;
-        doc.setSelection(this.beforeSelection.transformed(box.matrix(), this.settings.selectionAntialias));
-        doc.pushSelection(this.beforeSelection, this.name, this.icon);
+        let session = e.ctrl ? null : this.session();
+        if (!session) {
+            if (doc.selection.isEmpty())
+                return null;
+            session = { doc, selBase: doc.selection, box: new TransformBox(doc.selection.bounds()), step: null };
+            this.current = session;
+        }
+        return session;
     }
 
-    cancel() {
-        this.box = null;
-        this.drag = null;
+    render() {
         this.view.update();
+    }
+
+    unmoved(s) {
+        if (!s.step)
+            this.current = null;
+        this.view.update();
+    }
+
+    commit(s, name, icon) {
+        const doc = s.doc, before = doc.selection;
+        const after = s.selBase.transformed(s.box.matrix(), this.settings.selectionAntialias);
+        s.step = { name, icon, undo: () => doc.setSelection(before), redo: () => doc.setSelection(after) };
+        doc.setSelection(after);
+        doc.push(s.step);
+        this.current = s;
     }
 
     paintOverlay(ctx, view) {
-        if (this.box)
-            view.strokeSegments(ctx, this.beforeSelection.outline(), this.box.matrix());
+        if (this.drag)
+            view.strokeSegments(ctx, this.drag.session.selBase.outline(), this.drag.session.box.matrix());
         super.paintOverlay(ctx, view);
     }
 }
-

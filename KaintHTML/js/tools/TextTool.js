@@ -1,7 +1,9 @@
 // Texto (src/app/tools/TextTool.cpp): se escribe en un campo oculto (así funcionan las flechas,
 // Inicio, Fin, borrar y los métodos de entrada) y se dibuja en la vista previa de la capa hasta
-// aplicarlo con Esc, Terminar o un clic fuera.
+// aplicarlo con Esc, Terminar o un clic fuera. Como en Kaint, lo escrito aparece en el historial al
+// momento ("Texto", o "Editar texto" al retomarlo) y al terminar se añade "Finalizar texto".
 import { Tool } from "./Tool.js";
+import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, context, drawBlended, createCanvas, unionRect } from "../core/Raster.js";
 import { Settings } from "../Settings.js";
@@ -10,8 +12,9 @@ import { tr } from "../i18n.js";
 export class TextTool extends Tool {
     constructor(app) {
         super(app);
+        this.steps = new StepRecorder(this);
         this.input = document.getElementById("text-input");
-        this.input.addEventListener("input", () => this.editing && this.render());
+        this.input.addEventListener("input", () => this.editing && this.changed());
         this.input.addEventListener("keydown", (e) => {
             if (!this.editing)
                 return;
@@ -52,8 +55,12 @@ export class TextTool extends Tool {
         return !!this.editing;
     }
 
+    get recordsSteps() {
+        return true;
+    }
+
     activate() {
-        this.onSettings = () => this.editing && this.render();
+        this.onSettings = () => this.editing && !this.restoring && this.changed();
         AppState.addEventListener("tools", this.onSettings);
         AppState.addEventListener("colors", this.onSettings);
     }
@@ -93,12 +100,14 @@ export class TextTool extends Tool {
             this.finish();
         }
         this.editing = true;
+        this.resumed = false;
         this.pos = { x: e.x, y: e.y };
         this.layer = this.doc.activeLayer;
         this.start = cloneCanvas(this.layer.canvas);
         this.preview = cloneCanvas(this.layer.canvas);
         this.temp = createCanvas(this.doc.width, this.doc.height);
         this.bounds = null;
+        this.steps.start();
         this.input.value = "";
         this.doc.setPreview({ layer: this.layer, canvas: this.preview });
         this.focusInput(e);
@@ -116,11 +125,86 @@ export class TextTool extends Tool {
         if (!this.drag)
             return;
         this.pos = { x: this.drag.start.x + e.x - this.drag.from.x, y: this.drag.start.y + e.y - this.drag.from.y };
+        this.drag.moved = true;
         this.render();
     }
 
     onPointerUp() {
+        const moved = this.drag?.moved;
         this.drag = null;
+        if (moved)
+            this.changed();
+    }
+
+    // Lo escrito (o movido, o con otras opciones) se ve y queda en el historial al momento.
+    changed() {
+        this.render();
+        if (!this.input.value && !this.resumed)
+            return;
+        this.steps.changed();
+        this.commitLive();
+    }
+
+    commitLive() {
+        const name = this.resumed ? tr("Editar texto") : this.name;
+        this.steps.commit({ layer: this.layer, preview: this.preview, rect: this.bounds, base: this.start, state: this.saveState(),
+                            createText: name, editText: name, icon: this.icon, live: true });
+    }
+
+    saveState() {
+        const s = this.settings;
+        return { pos: { ...this.pos }, text: this.input.value, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
+                 settings: { fontFamily: s.fontFamily, fontSize: s.fontSize, bold: s.bold, italic: s.italic, underline: s.underline,
+                             textAlign: s.textAlign, antialias: s.antialias, blend: s.blend } };
+    }
+
+    historyChanged() {
+        if (this.steps.pushing)
+            return;
+        const step = this.steps.top();
+        if (step) {
+            this.resumeFrom(step);
+        } else if (this.editing) {
+            this.editing = false;
+            this.drag = null;
+            this.steps.leave();
+            this.input.value = "";
+            this.input.blur();
+            if (this.doc?.preview?.canvas === this.preview)
+                this.doc.setPreview(null);
+            this.setHint(this.hint());
+        }
+    }
+
+    // Se vuelve a un paso del texto: su posición, lo escrito, sus opciones y colores.
+    resumeFrom(step) {
+        const st = step.state;
+        this.restoring = true;
+        AppState.updateTools(st.settings);
+        AppState.setPrimary(st.primary);
+        AppState.setSecondary(st.secondary);
+        this.restoring = false;
+        this.editing = true;
+        this.resumed = true;
+        this.pos = { ...st.pos };
+        this.layer = step.layer;
+        this.start = cloneCanvas(step.base);
+        this.preview = cloneCanvas(this.layer.canvas);
+        this.temp = createCanvas(this.doc.width, this.doc.height);
+        this.bounds = step.rect;
+        this.steps.resume(step);
+        // Los cambios siguientes van en un paso nuevo ("Editar texto").
+        this.steps.last = null;
+        this.input.value = st.text;
+        this.doc.setPreview({ layer: this.layer, canvas: this.preview });
+        this.render();
+        this.input.focus({ preventScroll: true });
+        this.setHint(this.hint());
+    }
+
+    beforeHistoryJump() {
+        if (this.editing && this.steps.dirty)
+            this.commitLive();
     }
 
     render() {
@@ -204,7 +288,7 @@ export class TextTool extends Tool {
     }
 
     isBusy() {
-        return !!this.editing;
+        return !!this.drag;
     }
 
     finish() {
@@ -213,14 +297,18 @@ export class TextTool extends Tool {
         this.editing = false;
         this.drag = null;
         this.input.blur();
-        const doc = this.doc, layer = this.layer, r = this.bounds;
-        doc.preview = null;
-        if (r && this.input.value.trim()) {
-            const before = context(this.start).getImageData(r.x, r.y, r.w, r.h);
-            layer.ctx.putImageData(context(this.preview).getImageData(r.x, r.y, r.w, r.h), r.x, r.y);
-            doc.pixelsChanged(layer, r);
-            doc.pushPixels(layer, r, before, this.name, this.icon);
+        const doc = this.doc, layer = this.layer;
+        if (!this.input.value.trim() && !this.resumed) {
+            // Nada escrito: no queda nada.
+            doc.preview = null;
+            doc.pixelsChanged(layer, null);
+            this.steps.leave();
         } else {
+            this.render();
+            if (this.steps.dirty)
+                this.commitLive();
+            doc.preview = null;
+            this.steps.finish(tr("Finalizar texto"), this.icon);
             doc.pixelsChanged(layer, null);
         }
         this.input.value = "";
@@ -228,12 +316,20 @@ export class TextTool extends Tool {
         this.app.view.canvas.focus({ preventScroll: true });
     }
 
+    // Deshacer en mitad de un arrastre: vuelve al último paso o, si no hay, se descarta.
     cancel() {
         if (!this.editing)
             return;
+        this.drag = null;
+        const step = this.steps.top();
+        if (step) {
+            this.resumeFrom(step);
+            return;
+        }
         this.editing = false;
         this.input.value = "";
         this.input.blur();
+        this.steps.leave();
         this.doc.setPreview(null);
         this.setHint(this.hint());
     }

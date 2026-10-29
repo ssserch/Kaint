@@ -2,15 +2,19 @@
 
 #include "app/AppState.h"
 #include "app/DiscordPresence.h"
+#include "app/IconPacks.h"
 #include "app/Icons.h"
+#include "app/Shortcuts.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
+#include "app/UserFonts.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/ThemeDialog.h"
 #include "app/tools/ToolManager.h"
 #include "app/widgets/EffectControls.h"
 #include "app/widgets/UnitField.h"
+#include "core/CustomShapes.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
@@ -31,6 +35,7 @@
 #include <QImageReader>
 #include <QImageWriter>
 #include <QInputDevice>
+#include <QKeySequenceEdit>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -68,6 +73,8 @@ AppSettings AppSettings::load()
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
     a.coloredToolIcons = get("coloredToolIcons", a.coloredToolIcons);
+    a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
+    a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
     a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 5);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
@@ -78,6 +85,7 @@ AppSettings AppSettings::load()
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);
     a.rulers = get("rulers", a.rulers);
+    a.rulerStyle = std::clamp(get("rulerStyle", a.rulerStyle), 0, 1);
     a.dropShadow = get("dropShadow", a.dropShadow);
     a.canvasBorderLight = s.value(QStringLiteral("canvasBorderLight"), QColor()).value<QColor>();
     a.canvasBorderDark = s.value(QStringLiteral("canvasBorderDark"), QColor()).value<QColor>();
@@ -116,12 +124,15 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("autoScroll"), autoScroll);
     s.setValue(QStringLiteral("autoSelectVisibleLayer"), autoSelectVisibleLayer);
     s.setValue(QStringLiteral("coloredToolIcons"), coloredToolIcons);
+    s.setValue(QStringLiteral("panelStyle"), panelStyle);
+    s.setValue(QStringLiteral("panelBorder"), panelBorder);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
     s.setValue(QStringLiteral("autosaveMinutes"), autosaveMinutes);
     s.setValue(QStringLiteral("language"), language);
     s.setValue(QStringLiteral("reopenLast"), reopenLast);
     s.setValue(QStringLiteral("unit"), unit);
     s.setValue(QStringLiteral("rulers"), rulers);
+    s.setValue(QStringLiteral("rulerStyle"), rulerStyle);
     s.setValue(QStringLiteral("dropShadow"), dropShadow);
     s.setValue(QStringLiteral("canvasBorderLight"), canvasBorderLight);
     s.setValue(QStringLiteral("canvasBorderDark"), canvasBorderDark);
@@ -217,6 +228,12 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
     addPage(tr("Discord"), {"discord", "im-user-online", "user-online", "network-connect"}, createDiscordPage());
     addPage(tr("Actualizaciones"), {"settings-updates", "update-none", "system-software-update"}, createUpdatesPage());
     addPage(tr("Diagnósticos"), {"settings-diagnostics", "tools-report-bug", "dialog-information"}, createDiagnosticsPage());
+    // Como el grupo propio de paint.js: paquetes de iconos, fuentes, formas y atajos de teclado.
+    addPage(tr("Paquetes de iconos"), {"settings-icon-packs", "preferences-desktop-icons", "folder-open"}, createIconPacksPage());
+    addPage(tr("Fuentes"), {"settings-fonts", "preferences-desktop-font", "draw-text"}, createFontsPage());
+    addPage(tr("Formas"), {"settings-shapes", "draw-rectangle", "shapes"}, createShapesPage());
+    addPage(tr("Atajos de teclado"), {"settings-keyboard", "preferences-desktop-keyboard-shortcut", "input-keyboard"},
+            createKeyboardPage());
 
     connect(m_sections, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
     m_sections->setCurrentRow(0);
@@ -314,6 +331,48 @@ QWidget* SettingsDialog::createInterfacePage()
     languageRow->addWidget(language);
     languageRow->addStretch();
     page.layout->addLayout(languageRow);
+
+    // Paquete de iconos (como en paint.js; se administran en su página).
+    auto* packRow = new QHBoxLayout;
+    m_iconPackChoice = new QComboBox(page.widget);
+    auto* managePacks = new QPushButton(tr("Administrar…"), page.widget);
+    managePacks->setToolTip(tr("Añadir o quitar paquetes de iconos."));
+    packRow->addWidget(new QLabel(tr("Paquete de iconos:"), page.widget));
+    packRow->addWidget(m_iconPackChoice);
+    packRow->addWidget(managePacks);
+    packRow->addStretch();
+    page.layout->addLayout(packRow);
+    connect(m_iconPackChoice, &QComboBox::activated, this, [this](int i) {
+        IconPacks::activate(m_iconPackChoice->itemData(i).toString());
+        refreshIconPacks();
+    });
+    connect(managePacks, &QPushButton::clicked, this, [this] { showPage(Page::IconPacks); });
+
+    // Ventanas flotantes: el estilo de las de paint.js (Windows 10) o el compacto, y su borde.
+    page.layout->addWidget(sectionHeader(tr("Ventanas"), page.widget));
+    auto* panelForm = new QFormLayout;
+    panelForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+    auto* panelStyle = new QComboBox(page.widget);
+    panelStyle->addItem(tr("Windows 10 (como paint.js)"), 0);
+    panelStyle->setItemData(0, tr("Cabecera más alta, botón de cerrar cuadrado y esquinas rectas."), Qt::ToolTipRole);
+    panelStyle->addItem(tr("Compacto"), 1);
+    panelStyle->setItemData(1, tr("La cabecera fina de siempre de Kaint."), Qt::ToolTipRole);
+    panelStyle->setCurrentIndex(std::max(0, panelStyle->findData(m_settings.panelStyle)));
+    auto* panelBorder = new QSpinBox(page.widget);
+    panelBorder->setRange(1, 12);
+    panelBorder->setValue(m_settings.panelBorder);
+    panelBorder->setToolTip(tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores."));
+    panelForm->addRow(tr("Estilo de las ventanas:"), panelStyle);
+    panelForm->addRow(tr("Grosor del borde de las ventanas:"), withUnit(panelBorder, tr("px"), {}, page.widget));
+    page.layout->addLayout(panelForm);
+    connect(panelStyle, &QComboBox::activated, this, [this, panelStyle](int i) {
+        m_settings.panelStyle = panelStyle->itemData(i).toInt();
+        changed();
+    });
+    connect(panelBorder, &QSpinBox::valueChanged, this, [this](int v) {
+        m_settings.panelBorder = v;
+        changed();
+    });
 
     // Entrar en el tema KDE o salir de él, y cambiar el idioma, reinicia Kaint: se pregunta antes
     // y, si no se acepta, se queda como estaba.
@@ -460,6 +519,21 @@ QWidget* SettingsDialog::createCanvasPage()
     connect(slider, &QSlider::valueChanged, this, [set](int v) { set(v / 100.0); });
     connect(spin, &QDoubleSpinBox::valueChanged, this, set);
     connect(reset, &QToolButton::clicked, this, [set] { set(191 / 255.0); });
+
+    // Regla (Ver > Reglas): oscura como la de paint.js o del color de la barra de herramientas.
+    auto* rulerRow = new QHBoxLayout;
+    auto* ruler = new QComboBox(page.widget);
+    ruler->addItem(tr("Oscura (como paint.js)"), 0);
+    ruler->addItem(tr("Del color de la barra de herramientas"), 1);
+    ruler->setCurrentIndex(std::max(0, ruler->findData(m_settings.rulerStyle)));
+    rulerRow->addWidget(new QLabel(tr("Reglas:"), page.widget));
+    rulerRow->addWidget(ruler);
+    rulerRow->addStretch();
+    page.layout->addLayout(rulerRow);
+    connect(ruler, &QComboBox::activated, this, [this, ruler](int i) {
+        m_settings.rulerStyle = ruler->itemData(i).toInt();
+        changed();
+    });
     page.layout->addStretch();
     return page.widget;
 }
@@ -997,4 +1071,411 @@ QWidget* SettingsDialog::createDiagnosticsPage()
     row->addStretch();
     page.layout->addLayout(row);
     return page.widget;
+}
+
+// ---------------------------------------------------------------------------
+// Paquetes de iconos, fuentes, formas y atajos de teclado (las páginas propias de paint.js)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+QPushButton* actionButton(const QIcon& icon, const QString& text, const QString& tip, QWidget* parent)
+{
+    auto* b = new QPushButton(icon, text, parent);
+    b->setToolTip(tip);
+    return b;
+}
+
+void openFolder(const QString& dir)
+{
+    QDir().mkpath(dir);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+}
+
+} // namespace
+
+QWidget* SettingsDialog::createIconPacksPage()
+{
+    PageBox page = makePage(this);
+    page.layout->addWidget(wrapped(tr("Los paquetes de iconos de paint.js (archivos .zip con asset-pack.json) cambian los "
+                                      "iconos de Kaint, también los de las herramientas. Los iconos que no traiga un "
+                                      "paquete siguen siendo los de Kaint. Se guardan en este equipo."),
+                                   page.widget));
+    m_iconPacks = new QListWidget(page.widget);
+    m_iconPacks->setIconSize(QSize(24, 24));
+    m_iconPacks->setMinimumHeight(180);
+    page.layout->addWidget(m_iconPacks, 1);
+    m_iconPackDetails = wrapped(QString(), page.widget);
+    page.layout->addWidget(m_iconPackDetails);
+
+    auto* row = new QHBoxLayout;
+    auto* use = actionButton(Icons::theme({"dialog-ok-apply", "dialog-ok"}), tr("Usar"), tr("Usar el paquete elegido"), page.widget);
+    auto* add = actionButton(Icons::theme({"list-add", "document-import"}), tr("Añadir…"), tr("Instalar un paquete de iconos (.zip)"),
+                             page.widget);
+    auto* remove = actionButton(Icons::theme({"list-remove", "edit-delete"}), tr("Quitar"), tr("Desinstalar el paquete elegido"),
+                                page.widget);
+    auto* folder = actionButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), tr("Abre la carpeta de los paquetes de iconos"),
+                                page.widget);
+    for (QPushButton* b : {use, add, remove, folder})
+        row->addWidget(b);
+    row->addStretch();
+    page.layout->addLayout(row);
+
+    auto selected = [this] {
+        const QListWidgetItem* item = m_iconPacks->currentItem();
+        return item ? item->data(Qt::UserRole).toString() : QString();
+    };
+    auto updateButtons = [this, use, remove, selected] {
+        const QString id = selected();
+        use->setEnabled(!id.isEmpty() && id != IconPacks::activeId());
+        remove->setEnabled(!id.isEmpty() && id != IconPacks::defaultId());
+        for (const IconPacks::Pack& p : IconPacks::installed()) {
+            if (p.id != id)
+                continue;
+            QStringList lines;
+            if (!p.description.isEmpty())
+                lines << p.description;
+            if (!p.folder.isEmpty())
+                lines << tr("%n imagen(es)", nullptr, p.images);
+            m_iconPackDetails->setText(lines.join(QLatin1Char('\n')));
+        }
+    };
+    connect(m_iconPacks, &QListWidget::currentRowChanged, this, updateButtons);
+    connect(m_iconPacks, &QListWidget::itemDoubleClicked, use, &QPushButton::click);
+    connect(use, &QPushButton::clicked, this, [this, selected, updateButtons] {
+        IconPacks::activate(selected());
+        refreshIconPacks();
+        updateButtons();
+    });
+    connect(add, &QPushButton::clicked, this, [this, updateButtons] {
+        const QString file = QFileDialog::getOpenFileName(this, tr("Añadir un paquete de iconos"), QDir::homePath(),
+                                                          tr("Paquetes de iconos (*.zip)"));
+        if (file.isEmpty())
+            return;
+        QString error;
+        const QString id = IconPacks::install(file, &error);
+        if (id.isEmpty()) {
+            QMessageBox::warning(this, tr("Añadir un paquete de iconos"), error);
+            return;
+        }
+        if (!error.isEmpty())
+            QMessageBox::information(this, tr("Añadir un paquete de iconos"), error);
+        // Como en paint.js, el paquete instalado pasa a usarse.
+        IconPacks::activate(id);
+        refreshIconPacks();
+        updateButtons();
+    });
+    connect(remove, &QPushButton::clicked, this, [this, selected, updateButtons] {
+        const QString id = selected();
+        if (id.isEmpty() || id == IconPacks::defaultId())
+            return;
+        if (QMessageBox::question(this, tr("Quitar el paquete de iconos"), tr("¿Quieres quitar este paquete de iconos?"))
+            != QMessageBox::Yes)
+            return;
+        IconPacks::remove(id);
+        refreshIconPacks();
+        updateButtons();
+    });
+    connect(folder, &QPushButton::clicked, this, [] { openFolder(IconPacks::root()); });
+    refreshIconPacks();
+    updateButtons();
+    return page.widget;
+}
+
+void SettingsDialog::refreshIconPacks()
+{
+    const QString active = IconPacks::activeId();
+    const QList<IconPacks::Pack> packs = IconPacks::installed();
+    if (m_iconPackChoice) {
+        const QSignalBlocker block(m_iconPackChoice);
+        m_iconPackChoice->clear();
+        for (const IconPacks::Pack& p : packs)
+            m_iconPackChoice->addItem(p.name, p.id);
+        m_iconPackChoice->setCurrentIndex(std::max(0, m_iconPackChoice->findData(active)));
+    }
+    if (!m_iconPacks)
+        return;
+    const QString current = m_iconPacks->currentItem() ? m_iconPacks->currentItem()->data(Qt::UserRole).toString() : active;
+    const QSignalBlocker block(m_iconPacks);
+    m_iconPacks->clear();
+    for (const IconPacks::Pack& p : packs) {
+        QString text = p.name;
+        QStringList extra;
+        if (!p.author.isEmpty())
+            extra << p.author;
+        if (!p.version.isEmpty())
+            extra << p.version;
+        if (!extra.isEmpty())
+            text += QStringLiteral(" (%1)").arg(extra.join(QStringLiteral(", ")));
+        if (p.id == active)
+            text += QStringLiteral(" · ") + tr("en uso");
+        auto* item = new QListWidgetItem(text, m_iconPacks);
+        item->setData(Qt::UserRole, p.id);
+        item->setToolTip(p.description);
+        // Vista previa: el icono de Abrir del paquete (o el de Kaint).
+        const QString preview = QDir(p.folder).filePath(QStringLiteral("icons/menu_file_open_icon.png"));
+        item->setIcon(!p.folder.isEmpty() && QFile::exists(preview) ? QIcon(preview) : Icons::named(QStringLiteral("document-open")));
+        QFont f = item->font();
+        f.setBold(p.id == active);
+        item->setFont(f);
+        if (p.id == current)
+            m_iconPacks->setCurrentItem(item);
+    }
+}
+
+QWidget* SettingsDialog::createFontsPage()
+{
+    PageBox page = makePage(this);
+    page.layout->addWidget(wrapped(tr("Añade fuentes para la herramienta Texto (.ttf, .otf, .ttc, .woff). Se copian a la "
+                                      "carpeta de Kaint y solo las usa Kaint: no se instalan en el sistema."),
+                                   page.widget));
+    m_fonts = new QListWidget(page.widget);
+    m_fonts->setMinimumHeight(180);
+    m_fonts->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    page.layout->addWidget(m_fonts, 1);
+    auto* row = new QHBoxLayout;
+    auto* add = actionButton(Icons::theme({"list-add", "document-import"}), tr("Añadir fuentes…"), {}, page.widget);
+    auto* remove = actionButton(Icons::theme({"list-remove", "edit-delete"}), tr("Quitar"), {}, page.widget);
+    auto* clear = actionButton(Icons::theme({"edit-clear-all", "edit-clear"}), tr("Quitar todas"), {}, page.widget);
+    auto* folder = actionButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), {}, page.widget);
+    for (QPushButton* b : {add, remove, clear, folder})
+        row->addWidget(b);
+    row->addStretch();
+    page.layout->addLayout(row);
+    connect(add, &QPushButton::clicked, this, [this] {
+        const QStringList files = QFileDialog::getOpenFileNames(this, tr("Añadir fuentes"), QDir::homePath(),
+                                                                tr("Fuentes (*.ttf *.otf *.ttc *.otc *.woff *.woff2)"));
+        if (files.isEmpty())
+            return;
+        QStringList errors;
+        UserFonts::add(files, &errors);
+        if (!errors.isEmpty())
+            QMessageBox::warning(this, tr("Añadir fuentes"),
+                                 tr("No se pudieron añadir:\n\n%1").arg(errors.join(QLatin1Char('\n'))));
+        refreshFonts();
+    });
+    connect(remove, &QPushButton::clicked, this, [this] {
+        for (const QListWidgetItem* item : m_fonts->selectedItems())
+            UserFonts::remove(item->data(Qt::UserRole).toString());
+        refreshFonts();
+    });
+    connect(clear, &QPushButton::clicked, this, [this] {
+        if (m_fonts->count() == 0
+            || QMessageBox::question(this, tr("Quitar todas"), tr("¿Quieres quitar todas las fuentes añadidas?")) != QMessageBox::Yes)
+            return;
+        UserFonts::removeAll();
+        refreshFonts();
+    });
+    connect(folder, &QPushButton::clicked, this, [] { openFolder(UserFonts::folder()); });
+    refreshFonts();
+    return page.widget;
+}
+
+void SettingsDialog::refreshFonts()
+{
+    m_fonts->clear();
+    for (const UserFonts::Font& f : UserFonts::installed()) {
+        const QString name = QFileInfo(f.file).fileName();
+        auto* item = new QListWidgetItem(f.families.isEmpty() ? name : QStringLiteral("%1 (%2)").arg(f.families.join(QStringLiteral(", ")), name),
+                                         m_fonts);
+        item->setData(Qt::UserRole, f.file);
+        if (!f.families.isEmpty()) {
+            QFont font = item->font();
+            font.setFamilies({f.families.first()});
+            item->setFont(font);
+        }
+    }
+    if (m_fonts->count() == 0) {
+        auto* empty = new QListWidgetItem(tr("Todavía no has añadido ninguna fuente."), m_fonts);
+        empty->setFlags(Qt::NoItemFlags);
+    }
+}
+
+QWidget* SettingsDialog::createShapesPage()
+{
+    PageBox page = makePage(this);
+    page.layout->addWidget(wrapped(tr("Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas "
+                                      "personalizadas». Se copian a la carpeta de formas de Kaint."),
+                                   page.widget));
+    m_shapes = new QListWidget(page.widget);
+    m_shapes->setIconSize(QSize(24, 24));
+    m_shapes->setMinimumHeight(180);
+    m_shapes->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    page.layout->addWidget(m_shapes, 1);
+    auto* row = new QHBoxLayout;
+    auto* add = actionButton(Icons::theme({"list-add", "document-import"}), tr("Añadir formas…"), {}, page.widget);
+    auto* remove = actionButton(Icons::theme({"list-remove", "edit-delete"}), tr("Quitar"),
+                                tr("Solo se pueden quitar las formas de tu carpeta de formas."), page.widget);
+    auto* folder = actionButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), {}, page.widget);
+    for (QPushButton* b : {add, remove, folder})
+        row->addWidget(b);
+    row->addStretch();
+    page.layout->addLayout(row);
+    const QString userDir = CustomShapes::searchPaths().value(0);
+    auto changedShapes = [this] {
+        CustomShapes::reload();
+        emit AppState::instance()->customShapesChanged();
+        refreshShapes();
+    };
+    connect(add, &QPushButton::clicked, this, [this, userDir, changedShapes] {
+        const QStringList files = QFileDialog::getOpenFileNames(this, tr("Añadir formas"), QDir::homePath(),
+                                                                tr("Formas de Paint.NET (*.xaml)"));
+        if (files.isEmpty())
+            return;
+        QDir().mkpath(userDir);
+        QStringList errors;
+        for (const QString& file : files) {
+            CustomShapes::Shape shape;
+            QString error;
+            const QString target = QDir(userDir).filePath(QFileInfo(file).fileName());
+            if (!CustomShapes::load(file, &shape, &error)) {
+                errors << QStringLiteral("%1: %2").arg(QFileInfo(file).fileName(), error);
+                continue;
+            }
+            if (QFileInfo(target) != QFileInfo(file)) {
+                QFile::remove(target);
+                if (!QFile::copy(file, target))
+                    errors << QFileInfo(file).fileName();
+            }
+        }
+        if (!errors.isEmpty())
+            QMessageBox::warning(this, tr("Añadir formas"), tr("No se pudieron añadir:\n\n%1").arg(errors.join(QLatin1Char('\n'))));
+        changedShapes();
+    });
+    connect(remove, &QPushButton::clicked, this, [this, userDir, changedShapes] {
+        bool any = false;
+        for (const QListWidgetItem* item : m_shapes->selectedItems()) {
+            const QString file = item->data(Qt::UserRole).toString();
+            if (QFileInfo(file).absolutePath() == QFileInfo(userDir).absoluteFilePath())
+                any = QFile::remove(file) || any;
+        }
+        if (any)
+            changedShapes();
+    });
+    connect(folder, &QPushButton::clicked, this, [userDir] { openFolder(userDir); });
+    refreshShapes();
+    return page.widget;
+}
+
+void SettingsDialog::refreshShapes()
+{
+    m_shapes->clear();
+    for (const CustomShapes::Shape& shape : CustomShapes::all()) {
+        auto* item = new QListWidgetItem(Icons::customShape(shape.path), shape.name, m_shapes);
+        item->setData(Qt::UserRole, shape.file);
+        item->setToolTip(QDir::toNativeSeparators(shape.file));
+    }
+    if (m_shapes->count() == 0) {
+        auto* empty = new QListWidgetItem(tr("Todavía no hay formas personalizadas."), m_shapes);
+        empty->setFlags(Qt::NoItemFlags);
+    }
+}
+
+QWidget* SettingsDialog::createKeyboardPage()
+{
+    PageBox page = makePage(this);
+    page.layout->addWidget(wrapped(tr("Haz clic en un atajo y pulsa la combinación de teclas. Con la «x» se queda sin atajo; "
+                                      "si otra acción lo usaba, se le quita."),
+                                   page.widget));
+    m_shortcutSearch = new QLineEdit(page.widget);
+    m_shortcutSearch->setPlaceholderText(tr("Buscar acciones"));
+    m_shortcutSearch->setClearButtonEnabled(true);
+    page.layout->addWidget(m_shortcutSearch);
+    m_shortcuts = new QTreeWidget(page.widget);
+    m_shortcuts->setColumnCount(3);
+    m_shortcuts->setHeaderLabels({tr("Acción"), tr("Atajo"), QString()});
+    m_shortcuts->setRootIsDecorated(false);
+    m_shortcuts->setUniformRowHeights(true);
+    m_shortcuts->setMinimumHeight(260);
+    m_shortcuts->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_shortcuts->header()->setSectionResizeMode(1, QHeaderView::Fixed);
+    m_shortcuts->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_shortcuts->header()->resizeSection(1, 200);
+    m_shortcuts->header()->setStretchLastSection(false);
+    page.layout->addWidget(m_shortcuts, 1);
+    auto* row = new QHBoxLayout;
+    m_shortcutStatus = new QLabel(page.widget);
+    auto* resetAll = actionButton(Icons::theme({"edit-reset", "edit-undo"}), tr("Restablecer todos"),
+                                  tr("Volver a los atajos de fábrica de todas las acciones"), page.widget);
+    row->addWidget(m_shortcutStatus, 1);
+    row->addWidget(resetAll);
+    page.layout->addLayout(row);
+    connect(m_shortcutSearch, &QLineEdit::textChanged, this, [this](const QString& text) {
+        const QString needle = text.trimmed();
+        for (int i = 0; i < m_shortcuts->topLevelItemCount(); ++i) {
+            QTreeWidgetItem* item = m_shortcuts->topLevelItem(i);
+            const auto* edit = qobject_cast<QKeySequenceEdit*>(m_shortcuts->itemWidget(item, 1));
+            const QString keys = edit ? edit->keySequence().toString(QKeySequence::NativeText) : QString();
+            item->setHidden(!needle.isEmpty() && !item->text(0).contains(needle, Qt::CaseInsensitive)
+                            && !keys.contains(needle, Qt::CaseInsensitive));
+        }
+    });
+    connect(resetAll, &QPushButton::clicked, this, [this] {
+        Shortcuts::resetAll();
+        refreshShortcuts();
+        m_shortcutStatus->setText(tr("Se restablecieron todos los atajos."));
+    });
+    refreshShortcuts();
+    return page.widget;
+}
+
+void SettingsDialog::refreshShortcuts()
+{
+    m_shortcuts->clear();
+    for (const Shortcuts::Entry& e : Shortcuts::entries()) {
+        auto* item = new QTreeWidgetItem(m_shortcuts, {Shortcuts::displayName(e.action)});
+        item->setIcon(0, e.action->icon());
+        item->setData(0, Qt::UserRole, e.id);
+        auto* edit = new QKeySequenceEdit(e.action->shortcut(), m_shortcuts);
+        edit->setMaximumSequenceLength(1);
+        edit->setClearButtonEnabled(true);
+        if (auto* line = edit->findChild<QLineEdit*>())
+            line->setPlaceholderText(tr("Sin atajo"));
+        auto* reset = new QToolButton(m_shortcuts);
+        reset->setIcon(Icons::theme({"edit-reset", "edit-undo"}));
+        reset->setToolTip(tr("Restablecer"));
+        reset->setAutoRaise(true);
+        reset->setEnabled(!Shortcuts::isDefault(e.id));
+        m_shortcuts->setItemWidget(item, 1, edit);
+        m_shortcuts->setItemWidget(item, 2, reset);
+        const QString id = e.id;
+        auto apply = [this, id, edit, reset] {
+            QAction* taken = Shortcuts::assign(id, edit->keySequence());
+            reset->setEnabled(!Shortcuts::isDefault(id));
+            if (!taken) {
+                m_shortcutStatus->clear();
+                return;
+            }
+            // La otra acción se queda sin ese atajo: se actualiza su fila.
+            m_shortcutStatus->setText(tr("Se quitó el atajo de «%1».").arg(Shortcuts::displayName(taken)));
+            for (int i = 0; i < m_shortcuts->topLevelItemCount(); ++i) {
+                QTreeWidgetItem* other = m_shortcuts->topLevelItem(i);
+                if (other->text(0) != Shortcuts::displayName(taken))
+                    continue;
+                if (auto* otherEdit = qobject_cast<QKeySequenceEdit*>(m_shortcuts->itemWidget(other, 1))) {
+                    const QSignalBlocker block(otherEdit);
+                    otherEdit->setKeySequence(taken->shortcut());
+                }
+                if (auto* otherReset = qobject_cast<QToolButton*>(m_shortcuts->itemWidget(other, 2)))
+                    otherReset->setEnabled(!Shortcuts::isDefault(other->data(0, Qt::UserRole).toString()));
+            }
+        };
+        connect(edit, &QKeySequenceEdit::editingFinished, this, apply);
+        connect(edit, &QKeySequenceEdit::keySequenceChanged, this, [apply](const QKeySequence& seq) {
+            // Al borrarlo con la «x» no hay editingFinished.
+            if (seq.isEmpty())
+                apply();
+        });
+        connect(reset, &QToolButton::clicked, this, [this, id, edit, reset] {
+            Shortcuts::reset(id);
+            const QSignalBlocker block(edit);
+            for (const Shortcuts::Entry& entry : Shortcuts::entries())
+                if (entry.id == id)
+                    edit->setKeySequence(entry.action->shortcut());
+            reset->setEnabled(false);
+            m_shortcutStatus->clear();
+        });
+    }
+    if (m_shortcutSearch)
+        emit m_shortcutSearch->textChanged(m_shortcutSearch->text());
 }

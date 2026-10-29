@@ -89,6 +89,7 @@ add_library(kaintcore STATIC
     src/core/Resample.cpp
     src/core/Selection.cpp
     src/core/Stroke.cpp
+    src/core/Zip.cpp
     src/core/effects/Effect.cpp
     src/core/effects/Adjustments.cpp
     src/core/effects/Blurs.cpp
@@ -116,6 +117,9 @@ add_library(kaintui STATIC
     src/app/AppState.cpp
     src/app/Canvas.cpp
     src/app/DiscordPresence.cpp
+    src/app/IconPacks.cpp
+    src/app/Shortcuts.cpp
+    src/app/UserFonts.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp
@@ -411,7 +415,7 @@ if(WIN32)
     qt_generate_deploy_app_script(TARGET kaint OUTPUT_SCRIPT KAINT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT "${KAINT_DEPLOY_SCRIPT}")
 endif()
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE) 
     configure_file(data/${KAINT_APP_ID}.desktop.in ${KAINT_APP_ID}.desktop @ONLY)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${KAINT_APP_ID}.desktop
             DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

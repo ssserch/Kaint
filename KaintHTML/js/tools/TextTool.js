@@ -73,7 +73,8 @@ export class TextTool extends Tool {
     }
 
     font() {
-        const s = this.settings, px = (s.fontSize * 4) / 3;
+        // Puntos: según los PPP de la imagen; fijo: a 96 PPP (FontMetric de Kaint).
+        const s = this.settings, px = (s.fontSize * (s.fontMetric === "fixed96" ? 96 : this.doc?.dpi || 96)) / 72;
         return { css: `${s.italic ? "italic " : ""}${s.bold ? "bold " : ""}${px}px ${s.fontFamily}`, px, line: px * 1.25 };
     }
 
@@ -156,7 +157,8 @@ export class TextTool extends Tool {
         const s = this.settings;
         return { pos: { ...this.pos }, text: this.input.value, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { fontFamily: s.fontFamily, fontSize: s.fontSize, bold: s.bold, italic: s.italic, underline: s.underline,
-                             textAlign: s.textAlign, antialias: s.antialias, blend: s.blend } };
+                             textAlign: s.textAlign, antialias: s.antialias, blend: s.blend, strikeout: !!s.strikeout,
+                             fontMetric: s.fontMetric, textRendering: s.textRendering } };
     }
 
     historyChanged() {
@@ -219,6 +221,8 @@ export class TextTool extends Tool {
             ctx.clearRect(0, 0, doc.width, doc.height);
             ctx.font = f.css;
             ctx.textBaseline = "top";
+            // Suave o nítido (lo más parecido del navegador al ajuste a la cuadrícula de Kaint).
+            ctx.textRendering = { sharpModern: "optimizeLegibility", sharpClassic: "optimizeSpeed" }[s.textRendering] || "geometricPrecision";
             ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${alpha / 255})`;
             l.lines.forEach((line, i) => {
                 const x = s.textAlign === "center" ? this.pos.x + (l.w - l.widths[i]) / 2 : s.textAlign === "right" ? this.pos.x + l.w - l.widths[i] : this.pos.x;
@@ -226,6 +230,8 @@ export class TextTool extends Tool {
                 ctx.fillText(line, x, y);
                 if (s.underline && line)
                     ctx.fillRect(x, y + f.px * 1.05, l.widths[i], Math.max(1, f.px / 14));
+                if (s.strikeout && line)
+                    ctx.fillRect(x, y + f.px * 0.55, l.widths[i], Math.max(1, f.px / 14));
             });
         }
         const box = this.clampBox({ x: this.pos.x - 4, y: this.pos.y - 4, w: l.w + f.px + 8, h: l.h + 8 });

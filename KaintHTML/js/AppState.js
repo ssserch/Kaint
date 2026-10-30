@@ -38,6 +38,11 @@ export const defaultTools = () => ({
     bold: false,
     italic: false,
     underline: false,
+    strikeout: false,
+    // Unidad del tamaño de letra ("points": según los PPP de la imagen; "fixed96") y modo de
+    // representación ("smooth", "sharpModern", "sharpClassic").
+    fontMetric: "points",
+    textRendering: "smooth",
     textAlign: "left",
     pickerSize: 1,
     pickerAfter: "stay",

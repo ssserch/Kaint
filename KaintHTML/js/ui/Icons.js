@@ -97,6 +97,7 @@ const optionFiles = {
     "opt-gradient:spiralccw": "enum_gradient_type_spiral_counter_clockwise",
     "opt-tolalpha:0": "enum_tolerance_alpha_mode_premultiplied", "opt-tolalpha:1": "enum_tolerance_alpha_mode_straight",
     "opt-gamma:1": "enum_tool_gamma_mode_linear", "opt-gamma:0": "enum_tool_gamma_mode_companded",
+    "opt-fontmetric:points": "enum_font_size_metric_points", "opt-fontmetric:fixed96": "enum_font_size_metric_fixed96_dpi",
     "opt-style:outline": "enum_shape_draw_type_outline_dark", "opt-style:fill": "enum_shape_draw_type_interior",
     "opt-style:both": "enum_shape_draw_type_both_dark",
     "opt-curve:straight": "enum_curve_type_straight", "opt-curve:spline": "enum_curve_type_spline",

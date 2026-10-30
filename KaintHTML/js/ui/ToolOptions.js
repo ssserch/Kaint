@@ -353,13 +353,21 @@ export class ToolOptions {
                               [...fonts, ...UserFonts.families().map((f) => `"${f}"`)].map((f) => el("option", { value: f, textContent: f.split(",")[0].replace(/"/g, "") })));
             family.addEventListener("change", () => set({ fontFamily: family.value }));
             family.refresh = () => { family.value = tools().fontFamily; };
-            const style = [["bold", "B", tr("Negrita")], ["italic", "I", tr("Cursiva")], ["underline", "U", tr("Subrayado")]].map(([key, t, tip]) => {
-                const b = button([el(key === "bold" ? "b" : key === "italic" ? "i" : "u", { textContent: t })], tip, () => set({ [key]: !tools()[key] }));
-                b.refresh = () => b.classList.toggle("checked", tools()[key]);
+            // N, K, S y abc con su estilo, como los botones de Paint.NET en español (textToggle de Kaint).
+            const style = [["bold", tr("N"), tr("Negrita"), { fontWeight: "bold" }], ["italic", tr("K"), tr("Cursiva"), { fontStyle: "italic" }],
+                           ["underline", tr("S"), tr("Subrayado"), { textDecoration: "underline" }],
+                           ["strikeout", tr("abc"), tr("Tachado"), { textDecoration: "line-through" }]].map(([key, t, tip, css]) => {
+                const b = button([el("span", { textContent: t, style: css })], tip, () => set({ [key]: !tools()[key] }));
+                b.refresh = () => b.classList.toggle("checked", !!tools()[key]);
                 return b;
             });
-            this.group(label(tr("Tipo de letra:")), family, editableCombo("fontSize", fontSizes, 56));
-            this.group(...style);
+            const metric = choice(tr("Unidad del tamaño de letra"), "fontMetric", [["points", "opt-fontmetric:points", tr("Puntos (PPP de imagen)")],
+                                                                                    ["fixed96", "opt-fontmetric:fixed96", tr("Fijo (96 PPP)")]]);
+            const rendering = choice(tr("Modo de representación del texto"), "textRendering", [["smooth", null, tr("Suave")],
+                ["sharpModern", null, tr("Nítido (moderno)")], ["sharpClassic", null, tr("Nítido (clásico)")]], { showText: true });
+            this.group(label(tr("Tipo de letra:")), family, stepper(false, (d) => stepPreset("fontSize", fontSizes, d), tr("Reducir")),
+                       editableCombo("fontSize", fontSizes, 56), stepper(true, (d) => stepPreset("fontSize", fontSizes, d), tr("Aumentar")), metric);
+            this.group(...style, rendering);
             this.group(toggles("textAlign", [["left", "opt-align:left", tr("Alinear a la izquierda")],
                                              ["center", "opt-align:center", tr("Centrar")], ["right", "opt-align:right", tr("Alinear a la derecha")]]));
             break;

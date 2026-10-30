@@ -2,21 +2,37 @@
 // OpenRaster (.ora) con sus capas, como src/core/Ora.cpp de Kaint.
 import { Document, Layer } from "./Document.js";
 import { OraNames } from "./Raster.js";
-import { crc32, unzip, zip } from "./Zip.js";
+import { unzip, zip } from "./Zip.js";
+import * as Codecs from "./Codecs.js";
+import { defaultSaveOptions, encodeAnimation, encodeImage, prepare } from "./Encode.js";
 import { tr } from "../i18n.js";
 
+// Tipos de "Guardar como", en el orden de Kaint (ImageIO.cpp).
 export const SaveFormats = [
+    { ext: "ora", mime: "image/openraster", name: "OpenRaster con capas", layered: true },
     { ext: "png", mime: "image/png", name: "PNG" },
-    { ext: "jpg", mime: "image/jpeg", name: "JPEG", quality: true },
+    { ext: "jpg", mime: "image/jpeg", name: "JPEG", quality: true, aliases: ["jpeg", "jpe", "jfif"] },
     { ext: "webp", mime: "image/webp", name: "WebP", quality: true },
-    { ext: "ora", mime: "image/openraster", name: "OpenRaster", layered: true },
+    { ext: "dds", mime: "image/vnd-ms.dds", name: "Superficie de DirectDraw (DDS)" },
+    { ext: "tiff", mime: "image/tiff", name: "TIFF", aliases: ["tif"] },
+    { ext: "gif", mime: "image/gif", name: "GIF", animation: true },
+    { ext: "bmp", mime: "image/bmp", name: "BMP" },
+    { ext: "tga", mime: "image/x-tga", name: "TGA" },
+    { ext: "ico", mime: "image/x-icon", name: "Icono de Windows" },
 ];
 
-export const OpenAccept = "image/*,.ora";
+// Lo que se puede abrir (además de lo que entienda el navegador).
+export const OpenAccept = "image/*,.ora,.pdn,.tga,.tif,.tiff,.dds,.ico,.cur";
+export const OpenExtensions = [".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".gif", ".bmp", ".avif", ".ico", ".ora", ".pdn", ".tga",
+                               ".tif", ".tiff", ".dds"];
+
+export function extensionOf(name) {
+    return (name.split(".").pop() || "").toLowerCase();
+}
 
 export function formatFor(name) {
-    const ext = (name.split(".").pop() || "").toLowerCase();
-    return SaveFormats.find((f) => f.ext === ext || (ext === "jpeg" && f.ext === "jpg")) || SaveFormats[0];
+    const ext = extensionOf(name);
+    return SaveFormats.find((f) => f.ext === ext || f.aliases?.includes(ext)) || null;
 }
 
 export function baseName(name) {
@@ -37,13 +53,54 @@ async function decodeImage(blob) {
     }
 }
 
+// Documento de una o varias imágenes RGBA ({ name, data, ... } de abajo arriba).
+function documentFrom(width, height, name, layers) {
+    const doc = new Document(width, height, { name, background: null, historyName: tr("Abrir imagen"), historyIcon: "document-open" });
+    doc.layers = layers.map((l) => {
+        const layer = new Layer(width, height, l.name);
+        layer.ctx.putImageData(new ImageData(new Uint8ClampedArray(l.data), width, height), 0, 0);
+        layer.visible = l.visible ?? true;
+        layer.opacity = l.opacity ?? 255;
+        layer.blend = l.blend || "normal";
+        return layer;
+    });
+    return doc;
+}
+
+// Abre una imagen como Kaint (ImageIO::load): OpenRaster y Paint.NET con sus capas, el GIF
+// animado con un fotograma por capa (la duración en el nombre), TGA, TIFF y DDS, y lo demás con
+// el navegador.
 export async function openFile(file) {
-    if (/\.ora$/i.test(file.name))
-        return openOra(file);
-    const image = await decodeImage(file);
-    const doc = Document.fromImage(image, baseName(file.name));
+    const ext = extensionOf(file.name), name = baseName(file.name);
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const magic = String.fromCharCode(...head.subarray(0, 4));
+    let doc;
+    if (ext === "ora") {
+        doc = await openOra(file);
+    } else if (ext === "pdn" || magic === "PDN3") {
+        const pdn = await Codecs.decodePdn(new Uint8Array(await file.arrayBuffer()));
+        doc = documentFrom(pdn.width, pdn.height, name, pdn.layers.map((l, i) => ({ ...l, name: l.name || tr("Capa %1", i + 1) })));
+        doc.active = doc.layers.length - 1;
+    } else if (magic.startsWith("GIF")) {
+        const anim = Codecs.decodeGif(new Uint8Array(await file.arrayBuffer()));
+        const { width, height } = anim.frames[0];
+        doc = anim.frames.length === 1
+            ? documentFrom(width, height, name, [{ name: tr("Fondo"), data: anim.frames[0].data }])
+            : documentFrom(width, height, name, anim.frames.map((f, i) => ({ name: Codecs.nameWithDelay(tr("Fotograma %1", i + 1), f.delay), data: f.data })));
+        doc.active = 0;
+        doc.gifLoops = anim.loops;
+    } else if (ext === "tga" || magic === "DDS " || magic === "II*\0" || magic === "MM\0*") {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const image = magic === "DDS " ? Codecs.decodeDds(bytes) : ext === "tga" ? Codecs.decodeTga(bytes) : await Codecs.decodeTiff(bytes);
+        doc = documentFrom(image.width, image.height, name, [{ name: tr("Fondo"), data: image.data }]);
+        if (image.dpi)
+            doc.dpi = image.dpi;
+    } else {
+        const image = await decodeImage(file);
+        doc = Document.fromImage(image, name);
+        doc.dpi = readResolution(new Uint8Array(await file.slice(0, 65536).arrayBuffer())) || 96;
+    }
     doc.fileName = file.name;
-    doc.dpi = readResolution(new Uint8Array(await file.slice(0, 65536).arrayBuffer())) || 96;
     return doc;
 }
 
@@ -65,32 +122,6 @@ function readResolution(b) {
         return units === 1 ? x : units === 2 ? Math.round(x * 2.54 * 100) / 100 : 0;
     }
     return 0;
-}
-
-async function withResolution(blob, mime, dpi) {
-    if (!dpi)
-        return blob;
-    const b = new Uint8Array(await blob.arrayBuffer());
-    if (mime === "image/png" && b[12] === 0x49 && b[13] === 0x48) {
-        // pHYs justo después de IHDR (en píxeles por metro).
-        const ppm = Math.round(dpi / 0.0254), chunk = new Uint8Array(21), view = new DataView(chunk.buffer);
-        view.setUint32(0, 9);
-        chunk.set([0x70, 0x48, 0x59, 0x73], 4);
-        view.setUint32(8, ppm);
-        view.setUint32(12, ppm);
-        chunk[16] = 1;
-        view.setUint32(17, crc32(chunk.subarray(4, 17)));
-        const at = 8 + 25;
-        return new Blob([b.subarray(0, at), chunk, b.subarray(at)], { type: mime });
-    }
-    if (mime === "image/jpeg" && b[2] === 0xff && b[3] === 0xe0 && String.fromCharCode(...b.slice(6, 11)) === "JFIF\0") {
-        const d = Math.min(65535, Math.round(dpi));
-        b[13] = 1;
-        b[14] = d >> 8; b[15] = d & 255;
-        b[16] = d >> 8; b[17] = d & 255;
-        return new Blob([b], { type: mime });
-    }
-    return blob;
 }
 
 async function openOra(file) {
@@ -127,21 +158,47 @@ function canvasBlob(canvas, mime = "image/png", quality) {
     return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(mime))), mime, quality));
 }
 
-// El archivo de un documento en el formato elegido (quality de 0 a 100).
-export async function encode(doc, format, quality = 95) {
+// Píxeles RGBA de la imagen acoplada.
+export function flattenedImage(doc) {
+    const data = doc.flattened().getContext("2d").getImageData(0, 0, doc.width, doc.height).data;
+    return { width: doc.width, height: doc.height, data };
+}
+
+// Fotogramas de un GIF animado: las capas visibles (y las ocultas, marcadas, si se piden), la de
+// abajo primero, cada una con su opacidad (ImageIO::animationFrames de Kaint).
+export function animationFrames(doc, defaultDelay, withHidden = false) {
+    const frames = [];
+    for (const layer of doc.layers) {
+        if (!layer.visible && !withHidden)
+            continue;
+        const data = layer.ctx.getImageData(0, 0, doc.width, doc.height).data;
+        if (layer.opacity < 255)
+            for (let i = 3; i < data.length; i += 4)
+                data[i] = Math.trunc((data[i] * layer.opacity) / 255);
+        frames.push({ width: doc.width, height: doc.height, data, delay: Codecs.delayFromName(layer.name, defaultDelay), hidden: !layer.visible });
+    }
+    if (!frames.length)
+        frames.push({ ...flattenedImage(doc), delay: defaultDelay });
+    return frames;
+}
+
+// El archivo de un documento en el formato elegido con sus opciones (ImageIO::save de Kaint).
+// 'frames': los fotogramas del GIF tal como quedaron en la configuración avanzada.
+export async function encode(doc, format, options = defaultSaveOptions(), frames = null) {
+    if (typeof options === "number")
+        options = { ...defaultSaveOptions(), quality: options };
     if (format.layered)
         return encodeOra(doc);
     if (format.plugin)
         return encodePlugin(doc, format);
-    const flat = doc.flattened();
-    if (format.mime === "image/jpeg") {
-        // Sin transparencia: sobre blanco, como al guardar JPEG en Kaint.
-        const ctx = flat.getContext("2d");
-        ctx.globalCompositeOperation = "destination-over";
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, flat.width, flat.height);
-    }
-    return withResolution(await canvasBlob(flat, format.mime, format.quality ? quality / 100 : undefined), format.mime, doc.dpi);
+    let bytes;
+    if (frames?.length)
+        bytes = encodeAnimation(frames, options);
+    else if (format.animation && options.animation && doc.layers.length > 1)
+        bytes = encodeAnimation(animationFrames(doc, options.frameDelay, options.gifHiddenLayers), options);
+    else
+        bytes = await encodeImage(prepare(flattenedImage(doc), format.ext, options), format.ext, options, { dpi: doc.dpi, icc: doc.iccProfile || null });
+    return new Blob([bytes], { type: format.mime });
 }
 
 // Formato de un complemento: recibe las capas (o la imagen combinada) en RGBA y devuelve los bytes.

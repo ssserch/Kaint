@@ -2,7 +2,8 @@
 // las tareas con opciones (TaskDialog) y los de Imagen y Capas, Configuración y Acerca de.
 import { icon } from "./Icons.js";
 import { shortcutLabel } from "./Actions.js";
-import { BlendModes, BlendNames } from "../core/Raster.js";
+import { BlendModes, BlendNames, checkerPattern, thumbnail } from "../core/Raster.js";
+import { delayFromName, MIN_DELAY, nameWithDelay } from "../core/Codecs.js";
 import { remember, Settings } from "../Settings.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
@@ -486,24 +487,116 @@ export async function layerPropertiesDialog(props, onPreview) {
     return r ? current() : null;
 }
 
-export async function saveOptionsDialog(formats, chosen, quality) {
-    const dlg = new Dialog(tr("Guardar"), { iconName: "document-save" });
-    const format = select(formats.map((f) => [f.ext, `${f.name} (.${f.ext})`]), chosen.ext);
-    const q = slider(quality, 1, 100, 1);
-    const qualityRow = [el("label", { textContent: tr("Calidad:") }), q];
-    const sync = () => {
-        const f = formats.find((x) => x.ext === format.value);
-        qualityRow.forEach((e) => (e.style.visibility = f.quality ? "visible" : "hidden"));
+// Imagen > Animación (AnimationDialog de Kaint): la duración de cada fotograma de un GIF (cada
+// capa visible, la de abajo primero) con una vista previa que se reproduce. Devuelve null o un
+// Map índice de capa → nombre nuevo (la duración va en el nombre: "Fotograma 1 (100ms)").
+export async function animationDialog(layers, defaultDelay) {
+    const dlg = new Dialog(tr("Animación"), { iconName: "media-playback-start" });
+    const frames = [];
+    const list = el("div", { className: "anim-list" }, [el("div", { className: "anim-head" }, [
+        el("span", { textContent: tr("Fotograma") }), el("span", { textContent: tr("Capa") }), el("span", { textContent: tr("Duración (ms)") }),
+    ])]);
+    const preview = el("canvas", { className: "anim-preview", width: 216, height: 161 });
+    let current = 0, timer = 0;
+    const showFrame = (i) => {
+        if (i < 0 || i >= frames.length)
+            return;
+        current = i;
+        frames.forEach((f, k) => f.row.classList.toggle("current", k === i));
+        const layer = frames[i].layer, p = preview.getContext("2d");
+        p.clearRect(0, 0, preview.width, preview.height);
+        const s = Math.min(preview.width / layer.canvas.width, preview.height / layer.canvas.height);
+        const w = layer.canvas.width * s, h = layer.canvas.height * s, x = (preview.width - w) / 2, y = (preview.height - h) / 2;
+        p.fillStyle = checkerPattern(p);
+        p.fillRect(x, y, w, h);
+        p.imageSmoothingQuality = "high";
+        p.drawImage(layer.canvas, x, y, w, h);
     };
-    format.addEventListener("change", sync);
-    dlg.body.appendChild(el("div", { className: "form", style: { minWidth: "320px" } }, [
-        el("label", { textContent: tr("Formato:") }), format, ...qualityRow,
+    layers.forEach((layer, index) => {
+        if (!layer.visible)
+            return;
+        const delay = numberInput(delayFromName(layer.name, defaultDelay), MIN_DELAY, 60000, 10);
+        const thumb = thumbnail(layer.canvas, 48, 36);
+        const row = el("div", { className: "anim-row" }, [
+            el("span", { textContent: String(frames.length + 1) }),
+            el("span", { className: "anim-layer" }, [thumb, el("span", { textContent: nameWithDelay(layer.name, 0).replace(/ \(0ms\)$/, "") })]),
+            delay,
+        ]);
+        const frame = frames.length;
+        row.addEventListener("pointerdown", () => !timer && showFrame(frame));
+        frames.push({ index, layer, delay, row });
+        list.appendChild(row);
+    });
+    const play = el("button", { className: "pushbutton anim-play", type: "button" });
+    const setPlay = (on) => {
+        clearTimeout(timer);
+        timer = 0;
+        play.replaceChildren(icon(on ? "media-playback-pause" : "media-playback-start", 16), on ? tr("Pausa") : tr("Reproducir"));
+        if (on)
+            step();
+    };
+    const step = () => {
+        if (!frames.length)
+            return;
+        showFrame(current);
+        const delay = frames[current].delay.read();
+        current = (current + 1) % frames.length;
+        timer = setTimeout(step, delay);
+    };
+    play.addEventListener("click", () => setPlay(!timer));
+    // Misma duración para todos.
+    const all = numberInput(defaultDelay, MIN_DELAY, 60000, 10);
+    const apply = el("button", { className: "pushbutton", type: "button", textContent: tr("Aplicar a todos") });
+    apply.addEventListener("click", () => frames.forEach((f) => (f.delay.value = all.read())));
+    dlg.body.appendChild(el("div", { className: "anim-dialog" }, [
+        el("div", { className: "note", textContent: tr("Al guardar como GIF, cada capa visible es un fotograma (la de abajo es el primero). La duración se guarda en el nombre de la capa.") }),
+        el("div", { className: "anim-top" }, [list, el("div", { className: "anim-side" }, [preview, play])]),
+        el("div", { className: "row" }, [el("span", { textContent: tr("Duración de todos los fotogramas:") }), all, el("span", { textContent: tr("ms") }), apply]),
     ]));
-    sync();
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    setPlay(false);
+    showFrame(0);
+    const r = await dlg.exec();
+    clearTimeout(timer);
+    if (!r)
+        return null;
+    const renamed = new Map();
+    for (const f of frames) {
+        const name = f.layer.name, updated = nameWithDelay(name, f.delay.read());
+        if (updated !== name && delayFromName(name, -1) !== f.delay.read())
+            renamed.set(f.index, updated);
+    }
+    return renamed;
+}
+
+// "Guardar como" sin el diálogo de archivos del navegador: el nombre y el tipo (el archivo se
+// descarga). Devuelve el nombre con su extensión o null.
+export async function saveAsDialog(formats, suggested) {
+    const dlg = new Dialog(tr("Guardar como"), { iconName: "document-save-as" });
+    const ext = (n) => (n.split(".").pop() || "").toLowerCase();
+    const base = (n) => n.replace(/\.[^.]+$/, "");
+    const find = (n) => formats.find((f) => f.ext === ext(n) || f.aliases?.includes(ext(n))) || formats.find((f) => f.ext === "png");
+    const name = el("input", { type: "text", value: suggested, style: { width: "260px" } });
+    const type = select(formats.map((f) => [f.ext, `${tr(f.name)} (*.${f.ext})`]), find(suggested).ext);
+    // Al cambiar el tipo cambia la extensión, como en el diálogo de Kaint.
+    type.addEventListener("change", () => (name.value = `${base(name.value)}.${type.value}`));
+    name.addEventListener("input", () => {
+        const f = formats.find((x) => x.ext === ext(name.value) || x.aliases?.includes(ext(name.value)));
+        if (f)
+            type.value = f.ext;
+    });
+    dlg.body.appendChild(el("div", { className: "form", style: { minWidth: "360px" } }, [
+        el("label", { textContent: tr("Nombre:") }), name, el("label", { textContent: tr("Tipo:") }), type,
+    ]));
     dlg.addButton(tr("Guardar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
-    const r = await dlg.exec();
-    return r ? { format: formats.find((x) => x.ext === format.value), quality: q.value() } : null;
+    setTimeout(() => name.setSelectionRange(0, base(name.value).length), 0);
+    if ((await dlg.exec()) !== "ok")
+        return null;
+    const chosen = formats.find((f) => f.ext === type.value);
+    const n = name.value.trim() || tr("Sin título");
+    return chosen.ext === ext(n) || chosen.aliases?.includes(ext(n)) ? n : `${base(n)}.${chosen.ext}`;
 }
 
 // Pide un número entero (QInputDialog::getInt): devuelve el número o null si se cancela.

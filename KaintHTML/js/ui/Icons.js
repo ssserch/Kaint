@@ -672,7 +672,52 @@ export const shapeFillRule = (type) => (type === "gear" ? "evenodd" : "nonzero")
 
 // --- Creación ------------------------------------------------------------------------------
 
+// Ojo de visibilidad (Icons::eye de Kaint): abierto con la pupila; cerrado, el párpado con
+// pestañas. Y los botones de reproducir y pausa de las animaciones.
+const foreground = () => getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#000";
+function drawEye(ctx, open) {
+    const c = 8, w = 7, h = 16 * 0.32;
+    ctx.strokeStyle = ctx.fillStyle = foreground();
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(c - w, c);
+    ctx.quadraticCurveTo(c, c + 2 * h, c + w, c);
+    if (open) {
+        ctx.moveTo(c - w, c);
+        ctx.quadraticCurveTo(c, c - 2 * h, c + w, c);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(c, c, h * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+    }
+    for (const t of [-0.6, 0, 0.6]) {
+        const x = c + t * w, y = c + h * (1 - t * t) * 0.95;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + t * 2.5, y + 3.5);
+    }
+    ctx.stroke();
+}
+
+function drawPlay(ctx, pause) {
+    ctx.fillStyle = foreground();
+    ctx.beginPath();
+    if (pause) {
+        ctx.rect(4, 3, 3, 10);
+        ctx.rect(9, 3, 3, 10);
+    } else {
+        ctx.moveTo(4, 2.5);
+        ctx.lineTo(13, 8);
+        ctx.lineTo(4, 13.5);
+        ctx.closePath();
+    }
+    ctx.fill();
+}
+
 const drawn = {
+    "eye-open": [16, (ctx) => drawEye(ctx, true)], "eye-closed": [16, (ctx) => drawEye(ctx, false)],
+    "media-playback-start": [16, (ctx) => drawPlay(ctx, false)], "media-playback-pause": [16, (ctx) => drawPlay(ctx, true)],
     rectangleselect: [20, drawRectSelect], ellipseselect: [20, drawEllipseSelect], lassoselect: [20, drawLasso],
     magicwand: [20, drawMagicWand], moveselectedpixels: [20, drawMove], moveselection: [20, drawMoveSelection],
     zoom: [20, drawZoom], eraser: [20, drawEraser], pencil: [20, drawPencil], colorpicker: [20, drawColorPicker],

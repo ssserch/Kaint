@@ -803,7 +803,7 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
         const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
         const doc = window.kaint.doc, old = doc.dpi;
         doc.dpi = 300;
-        const back = await openFile(new File([await encode(doc, SaveFormats[0])], "x.png"));
+        const back = await openFile(new File([await encode(doc, SaveFormats.find((f) => f.ext === "png"))], "x.png"));
         doc.dpi = old;
         return back.dpi;
     });
@@ -831,6 +831,54 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     });
     check(r.json === "10,20,40,20,40,60,10,60,10,20" && r.pasted === 1300 && r.grown.x === 8 && r.grown.w === 104 && r.feathered.x < 10 && r.cm === "cm",
           `copiar y pegar la selección, ampliar, difuminar y unidades (${JSON.stringify(r)})`);
+}
+
+// Formatos como los de Kaint: GIF animado (una capa por fotograma, la duración en el nombre),
+// TIFF, TGA, DDS, BMP e ICO de ida y vuelta, Paint.NET (.pdn) con sus capas y "Configuración de
+// guardado" con la vista previa del archivo.
+{
+    const pdn = [...(await readFile(join(root, "tests/fixtures/capas.pdn")))];
+    const formats = await page.evaluate(async (pdnBytes) => {
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const { Document } = await import("./js/core/Document.js");
+        const doc = new Document(40, 30, { background: "#336699" });
+        doc.layers[0].name = "Uno (120ms)";
+        const { Layer } = await import("./js/core/Document.js");
+        const second = new Layer(40, 30, "Dos (300ms)");
+        second.ctx.fillStyle = "#ff0000";
+        second.ctx.fillRect(5, 5, 10, 10);
+        doc.layers.push(second);
+        const out = {};
+        for (const ext of ["gif", "tiff", "tga", "dds", "bmp", "ico", "png"]) {
+            const f = SaveFormats.find((x) => x.ext === ext);
+            const back = await openFile(new File([await encode(doc, f)], `prueba.${ext}`));
+            out[ext] = { w: back.width, layers: back.layers.map((l) => l.name), px: [...back.layers.at(-1).ctx.getImageData(7, 7, 1, 1).data] };
+        }
+        const p = await openFile(new File([new Uint8Array(pdnBytes)], "capas.pdn"));
+        out.pdn = { w: p.width, h: p.height, layers: p.layers.map((l) => `${l.name}/${l.opacity}/${l.blend}/${l.visible ? 1 : 0}`) };
+        return out;
+    }, pdn);
+    check(formats.gif.layers.join() === "Fotograma 1 (120ms),Fotograma 2 (300ms)" && formats.gif.px[0] > 200 && formats.gif.px[1] < 40,
+          `GIF animado de ida y vuelta (${JSON.stringify(formats.gif)})`);
+    check(["tiff", "tga", "dds", "bmp", "png"].every((e) => formats[e].w === 40 && formats[e].px[0] > 200 && formats[e].px[1] < 40) && formats.ico.w === 256,
+          `TIFF, TGA, DDS, BMP, ICO y PNG (${JSON.stringify(formats)})`);
+    check(formats.pdn.w === 40 && formats.pdn.h === 30 && formats.pdn.layers.join() === "Fondo/255/normal/1,Capa 2/96/overlay/1,Capa 3/255/screen/0",
+          `abrir .pdn con sus capas (${JSON.stringify(formats.pdn)})`);
+    await page.evaluate(async () => {
+        window.showSaveFilePicker = undefined;
+        const { Document } = await import("./js/core/Document.js");
+        window.kaint.addDocument(new Document(64, 48));
+    });
+    const saving = page.evaluate(() => window.kaint.writeFile(window.kaint.doc, "prueba.webp", null));
+    await page.waitForSelector(".save-config .barslider");
+    await page.waitForFunction(() => /\d/.test(document.querySelector(".save-config .save-status")?.textContent || ""));
+    const status = await page.textContent(".save-config .save-status");
+    const download = page.waitForEvent("download");
+    await page.click(".save-config .pushbutton.default");
+    const file = await download;
+    check(await saving && file.suggestedFilename() === "prueba.webp" && /Tamaño del archivo: [\d,.]+ (bytes|KiB|MiB)/.test(status),
+          `configuración de guardado con la vista previa (${status})`);
+    await page.evaluate(() => window.kaint.closeDocument(window.kaint.doc, false));
 }
 
 // Todas las páginas de Configuración se abren sin errores.

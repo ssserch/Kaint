@@ -1783,6 +1783,323 @@ fieldset.group > legend {
     flex: 1;
 }
 
+/* Configuración de guardado (SaveConfigDialog) y vista previa del archivo */
+.save-columns {
+    display: flex;
+    gap: 14px;
+    min-height: 380px;
+}
+
+.save-side {
+    display: flex;
+    flex-direction: column;
+    width: 340px;
+}
+
+.save-form .with-unit {
+    white-space: nowrap;
+    flex-wrap: wrap;
+}
+
+.save-form {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 8px;
+    align-items: center;
+}
+
+.save-row {
+    display: contents;
+}
+
+.save-row > label:first-child {
+    white-space: nowrap;
+}
+
+.save-row.wide > * {
+    grid-column: 1 / -1;
+}
+
+.save-row.disabled > *, .save-config .disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.save-form .barslider {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.barslider.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.save-form .note, .gif-advanced .note {
+    opacity: 0.7;
+    white-space: normal;
+}
+
+.with-unit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.with-unit input[type="number"] {
+    width: 80px;
+}
+
+.ico-sizes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 10px;
+}
+
+.save-form .pushbutton {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.save-status {
+    margin-top: 8px;
+}
+
+.encoded-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 360px;
+    flex: 1;
+}
+
+.encoded-preview .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.encoded-scroll {
+    flex: 1;
+    min-height: 280px;
+    max-height: 60vh;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--base);
+    border: 1px solid var(--line);
+}
+
+.encoded-scroll canvas {
+    flex: none;
+    margin: auto;
+}
+
+.encoded-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+}
+
+/* Configuración avanzada del GIF (como ezgif) */
+.gif-columns {
+    display: flex;
+    gap: 14px;
+    width: min(1100px, calc(100vw - 80px));
+    height: min(640px, calc(100vh - 140px));
+}
+
+.gif-page {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gif-side {
+    display: flex;
+    flex-direction: column;
+    width: 380px;
+}
+
+.gif-frames {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex: none;
+    padding-bottom: 4px;
+}
+
+.gif-card {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 6px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.gif-card.skipped {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.gif-card .row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gif-card input[type="number"] {
+    width: 70px;
+}
+
+.gif-thumb {
+    width: 100px;
+    height: 76px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+}
+
+.gif-button {
+    border: none;
+    border-radius: 3px;
+    padding: 3px 10px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.gif-button.skip {
+    background: var(--panel-close, #c42b1c);
+}
+
+.gif-button.enable {
+    background: var(--accent);
+}
+
+.gif-button:hover {
+    filter: brightness(1.15);
+}
+
+.gif-ranges {
+    display: grid;
+    grid-template-columns: auto 70px auto 70px auto auto;
+    gap: 4px 6px;
+    align-items: center;
+    justify-content: start;
+}
+
+.gif-ranges input[type="number"] {
+    width: 64px;
+}
+
+.gif-options {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 8px;
+    align-items: center;
+}
+
+.gif-options .wide {
+    grid-column: 1 / -1;
+}
+
+.gif-indent {
+    margin: 2px 0 6px 24px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Imagen > Animación */
+.anim-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(600px, calc(100vw - 80px));
+}
+
+.anim-dialog .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.anim-top {
+    display: flex;
+    gap: 10px;
+}
+
+.anim-list {
+    flex: 1;
+    min-width: 0;
+    height: 260px;
+    overflow: auto;
+    background: var(--base);
+    border: 1px solid var(--line);
+}
+
+.anim-head, .anim-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 100px;
+    gap: 6px;
+    align-items: center;
+    padding: 2px 6px;
+}
+
+.anim-head {
+    position: sticky;
+    top: 0;
+    background: var(--window);
+    border-bottom: 1px solid var(--line);
+}
+
+.anim-row.current {
+    background: var(--selection);
+}
+
+.anim-row input[type="number"] {
+    width: 90px;
+}
+
+.anim-layer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.anim-side {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.anim-preview {
+    width: 216px;
+    height: 161px;
+    border: 1px solid var(--line);
+    background: var(--base);
+}
+
+.anim-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 /* Tareas (TaskDialog) */
 .task {
     display: flex;

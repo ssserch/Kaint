@@ -3,7 +3,8 @@
 import { AppState } from "../AppState.js";
 import { Document, Layer } from "../core/Document.js";
 import { Effects, Categories, defaultValues, findEffect } from "../core/Effects.js";
-import { download, encode, formatFor, openFile, OpenAccept, SaveFormats, baseName } from "../core/ImageIO.js";
+import { animationFrames, baseName, download, encode, flattenedImage, formatFor, openFile, OpenAccept, OpenExtensions, SaveFormats } from "../core/ImageIO.js";
+import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
 import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
 import { scaleImage } from "../core/Resample.js";
@@ -16,14 +17,15 @@ import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
 import { applyThemeColors } from "./Themes.js";
 import {
-    aboutDialog, canvasSizeDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber, resizeDialog,
-    saveOptionsDialog, settingsDialog, TaskDialog,
+    aboutDialog, animationDialog, canvasSizeDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber, resizeDialog,
+    saveAsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
 import { computeEffect, effectDialog, effectInput, renderEffect } from "./EffectDialog.js";
 import { icon, iconUrl, refreshIcons, setActiveColors, unsavedStar } from "./Icons.js";
 import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
 import { ToolOptions } from "./ToolOptions.js";
+import { saveConfigDialog } from "./SaveDialog.js";
 import { formatLength, pixelsPerUnit, unitSuffix } from "./Units.js";
 import { ToolManager } from "../tools/Tool.js";
 import { EllipseSelectTool, LassoSelectTool, MagicWandTool, RectSelectTool } from "../tools/SelectionTools.js";
@@ -488,6 +490,7 @@ export class App extends EventTarget {
         A("rotCW", tr("Girar 90° en sentido &horario"), "object-rotate-right", "Ctrl+H", c(() => this.transformImage("cw")), has);
         A("rotCCW", tr("Girar 90° en sentido &antihorario"), "object-rotate-left", "Ctrl+G", c(() => this.transformImage("ccw")), has);
         A("rot180", tr("Girar &180°"), "image-rotate-180", "Ctrl+J", c(() => this.transformImage("180")), has);
+        A("animation", tr("A&nimación..."), "media-playback-start", null, c(() => this.editAnimation()), has);
         A("flatten", tr("&Acoplar"), "image-flatten", "Ctrl+Shift+F", c(() => this.flatten()), () => this.doc?.layers.length > 1);
         // Capas
         const many = () => this.doc?.layers.length > 1;
@@ -548,7 +551,7 @@ export class App extends EventTarget {
             { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), a("rulers"), "-",
                                                   a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
-                                                     a("rot180"), "-", a("flatten")] },
+                                                     a("rot180"), "-", a("animation"), "-", a("flatten")] },
             { title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
                                                     a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), a("rotateZoom"), "-", a("layerTop"),
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
@@ -901,7 +904,7 @@ export class App extends EventTarget {
     async open() {
         if (window.showOpenFilePicker) {
             try {
-                const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: "Images", accept: { "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".avif", ".ico", ".ora"] } }] });
+                const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: tr("Todos los tipos de imagen (%1)", OpenExtensions.map((e) => `*${e}`).join(" ")), accept: { "image/*": OpenExtensions } }] });
                 for (const h of handles)
                     await this.openFile(await h.getFile(), h);
                 return;
@@ -1015,50 +1018,111 @@ export class App extends EventTarget {
         return effect.pluginId ? pluginValues(effect.params, chosen.values) : chosen.values;
     }
 
-    // Guarda en el archivo abierto (si el navegador lo permite) o lo descarga.
+    // Guarda como Kaint (MainWindow::save, saveAs y writeFile): en el archivo abierto si el
+    // navegador deja escribir en él; si no, "Guardar como" con el diálogo del navegador (o el
+    // nombre y el tipo, y se descarga).
     async save(doc, saveAs = false) {
         if (!doc)
             return false;
         this.tools.finishCurrent();
-        let format = formatFor(doc.fileName || "imagen.png");
-        let quality = doc.saveQuality ?? 95;
-        if (doc.layers.length > 1 && !format.layered && !doc.fileHandle)
-            format = SaveFormats.find((f) => f.layered);
-        if (saveAs || !doc.fileHandle) {
-            if (window.showSaveFilePicker) {
-                try {
-                    const handle = await window.showSaveFilePicker({
-                        suggestedName: `${baseName(doc.displayName())}.${format.ext}`,
-                        types: SaveFormats.map((f) => ({ description: f.name, accept: { [f.mime]: [`.${f.ext}`] } })),
-                    });
-                    doc.fileHandle = handle;
-                    doc.fileName = handle.name;
-                    format = formatFor(handle.name);
-                } catch (e) {
-                    if (e.name === "AbortError")
-                        return false;
-                }
-            }
-            if (!doc.fileHandle) {
-                const r = await saveOptionsDialog(SaveFormats, format, quality);
-                if (!r)
+        if (!saveAs && doc.fileHandle && this.formatOf(doc.fileHandle.name))
+            return this.writeFile(doc, doc.fileHandle.name, doc.fileHandle);
+        // Sugerencia: el mismo nombre; si su formato no se puede escribir (o es nueva y tiene
+        // capas), OpenRaster.
+        let name = doc.fileName || `${tr("Sin título")}.${doc.layers.length > 1 ? "ora" : "png"}`;
+        if (!this.formatOf(name))
+            name = `${baseName(name)}.ora`;
+        if (window.showSaveFilePicker) {
+            const formats = this.saveFormats(), chosen = this.formatOf(name);
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: name,
+                    types: [chosen, ...formats.filter((f) => f !== chosen)].map((f) => ({
+                        description: tr(f.name), accept: { [f.mime]: [`.${f.ext}`, ...(f.aliases || []).map((x) => `.${x}`)] },
+                    })),
+                });
+                return this.writeFile(doc, handle.name, handle);
+            } catch (e) {
+                if (e.name === "AbortError")
                     return false;
-                format = r.format;
-                quality = r.quality;
-                doc.saveQuality = quality;
-                const blob = await encode(doc, format, quality);
-                doc.fileName = `${baseName(doc.displayName())}.${format.ext}`;
-                download(blob, doc.fileName);
-                doc.markSaved();
-                this.rebuildTabs();
-                return true;
             }
         }
-        format = formatFor(doc.fileHandle.name);
-        const blob = await encode(doc, format, quality);
-        const writable = await doc.fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
+        const r = await saveAsDialog(this.saveFormats(), name);
+        return r ? this.writeFile(doc, r, null) : false;
+    }
+
+    saveFormats() {
+        return SaveFormats;
+    }
+
+    formatOf(name) {
+        return formatFor(name);
+    }
+
+    async writeFile(doc, name, handle) {
+        let format = this.formatOf(name);
+        if (!format.layered && !format.animation && doc.layers.length > 1) {
+            // Como Paint.NET: el formato no admite capas, así que primero se acopla la imagen.
+            const ask = new TaskDialog(tr("Guardar"), "document-save",
+                                       tr("Para guardar en este formato de archivo primero tiene que acoplar la imagen, lo que la reducirá a una única capa."));
+            const flattenChoice = ask.addChoice("image-flatten", tr("Acoplar"),
+                                                tr("Se acoplará la imagen y, a continuación, se guardará. El acoplamiento queda en el historial, pero el archivo tendrá una sola capa."),
+                                                true);
+            const oraName = `${baseName(name)}.ora`;
+            const oraChoice = ask.addChoice("document-save-as", tr("No acoplar (guardar como .ora)"), tr("Se guarda con todas sus capas en «%1».", oraName));
+            ask.addChoice("dialog-cancel", tr("Cancelar"), tr("Cancelar la acción de guardado."));
+            const choice = await ask.exec();
+            if (choice === oraChoice) {
+                name = oraName;
+                format = this.formatOf(name);
+                if (handle && window.showSaveFilePicker) {
+                    try {
+                        handle = await window.showSaveFilePicker({ suggestedName: oraName, types: [{ description: tr(format.name), accept: { [format.mime]: [".ora"] } }] });
+                        name = handle.name;
+                    } catch {
+                        return false;
+                    }
+                } else {
+                    handle = null;
+                }
+            } else if (choice === flattenChoice) {
+                this.flatten(doc);
+            } else {
+                return false;
+            }
+        }
+        // Las opciones de cada formato se recuerdan; el GIF abierto conserva sus repeticiones.
+        let options = this.saveOptions?.[format.ext] ? structuredClone(this.saveOptions[format.ext]) : defaultSaveOptions();
+        if (format.animation && !this.saveOptions?.[format.ext])
+            options.loops = doc.gifLoops ?? 0;
+        let edited = null;
+        if (!format.plugin && hasSaveOptions(format.ext)) {
+            const frames = format.animation && doc.layers.length > 1 ? animationFrames(doc, 0, true) : [];
+            const r = await saveConfigDialog(format, flattenedImage(doc), options, frames, { dpi: doc.dpi, icc: doc.iccProfile || null });
+            if (!r)
+                return false;
+            options = r.options;
+            edited = r.frames;
+            this.saveOptions = { ...(this.saveOptions || {}), [format.ext]: options };
+        }
+        document.body.classList.add("busy");
+        try {
+            const blob = await encode(doc, format, options, edited);
+            if (handle) {
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } else {
+                download(blob, name);
+            }
+        } catch (e) {
+            await message(tr("No se pudo guardar"), tr("No se pudo guardar «%1»:\n%2", name, String(e?.message || e)), "dialog-warning");
+            return false;
+        } finally {
+            document.body.classList.remove("busy");
+        }
+        doc.fileHandle = handle;
+        doc.fileName = name;
         doc.markSaved();
         this.rebuildTabs();
         return true;
@@ -1392,8 +1456,21 @@ export class App extends EventTarget {
         doc.pushPixels(layer, doc.rect, before, tr(names[kind][0]), names[kind][1]);
     }
 
-    flatten() {
-        const doc = this.doc, before = doc.snapshot(), flat = doc.flattened();
+    // Duración de los fotogramas de un GIF (en el nombre de cada capa).
+    async editAnimation() {
+        const doc = this.doc;
+        const renamed = await animationDialog(doc.layers, this.saveOptions?.gif?.frameDelay ?? 100);
+        if (!renamed?.size)
+            return;
+        const before = doc.layerState();
+        for (const [index, name] of renamed)
+            doc.layers[index].name = name;
+        doc.layersChanged();
+        doc.pushLayers(before, tr("Duración de los fotogramas"), "media-playback-start");
+    }
+
+    flatten(doc = this.doc) {
+        const before = doc.snapshot(), flat = doc.flattened();
         const layer = doc.layers[0];
         layer.ctx.clearRect(0, 0, doc.width, doc.height);
         layer.ctx.drawImage(flat, 0, 0);

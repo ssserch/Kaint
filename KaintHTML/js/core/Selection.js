@@ -430,3 +430,63 @@ export class Selection {
         return segs;
     }
 }
+
+// Contorno suavizado de la máscara (>= 128): cuadrados en marcha con las esquinas cortadas
+// (Selection::smoothOutline de Kaint). Devuelve los polígonos cerrados: [[x, y, x, y, ...], ...].
+export function smoothContour(mask, w, h, bounds) {
+    const inside = (x, y) => x >= 0 && y >= 0 && x < w && y < h && mask[y * w + x] >= 128;
+    // Puntos con coordenadas dobladas para que sean enteros.
+    const stride = 2 * h + 16, key = (px, py) => (px + 4) * stride + (py + 4);
+    const segs = [], from = new Map();
+    for (let y = bounds.y - 1; y <= bounds.y + bounds.h - 1; ++y)
+        for (let x = bounds.x - 1; x <= bounds.x + bounds.w - 1; ++x) {
+            const code = (inside(x, y) << 3) | (inside(x + 1, y) << 2) | (inside(x + 1, y + 1) << 1) | inside(x, y + 1);
+            if (code === 0 || code === 15)
+                continue;
+            const T = [2 * x + 2, 2 * y + 1], R = [2 * x + 3, 2 * y + 2], B = [2 * x + 2, 2 * y + 3], L = [2 * x + 1, 2 * y + 2];
+            const add = (a, b) => {
+                from.set(key(a[0], a[1]), segs.length);
+                segs.push([a, b]);
+            };
+            switch (code) {
+            case 8: add(T, L); break;
+            case 4: add(R, T); break;
+            case 2: add(B, R); break;
+            case 1: add(L, B); break;
+            case 12: add(R, L); break;
+            case 6: add(B, T); break;
+            case 3: add(L, R); break;
+            case 9: add(T, B); break;
+            case 14: add(B, L); break;
+            case 13: add(R, B); break;
+            case 11: add(T, R); break;
+            case 7: add(L, T); break;
+            case 10: add(T, L); add(B, R); break;
+            case 5: add(R, T); add(L, B); break;
+            }
+        }
+    const loops = [], used = new Uint8Array(segs.length);
+    for (let start = 0; start < segs.length; ++start) {
+        if (used[start])
+            continue;
+        const loop = [];
+        for (let i = start; !used[i];) {
+            used[i] = 1;
+            loop.push(segs[i][0][0] / 2, segs[i][0][1] / 2);
+            const next = from.get(key(segs[i][1][0], segs[i][1][1]));
+            if (next === undefined)
+                break;
+            i = next;
+        }
+        const n = loop.length / 2;
+        if (n < 3)
+            continue;
+        const smooth = [];
+        for (let i = 0; i < n; ++i) {
+            const ax = loop[2 * i], ay = loop[2 * i + 1], bx = loop[2 * ((i + 1) % n)], by = loop[2 * ((i + 1) % n) + 1];
+            smooth.push(ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25, ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75);
+        }
+        loops.push(smooth);
+    }
+    return loops;
+}

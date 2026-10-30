@@ -4,6 +4,7 @@
 // se vuelven a pintar al cambiar de tema o de colores.
 import { IconPacks } from "../IconPacks.js";
 import { patternBit } from "../core/FillPattern.js";
+import { CustomShapes, fittedPath, tracePath } from "../core/CustomShapes.js";
 import { Settings } from "../Settings.js";
 
 // Nombre de los PNG de las herramientas en los paquetes de iconos de paint.js: si el activo trae
@@ -575,9 +576,9 @@ const options = {
         ctx.lineWidth = 2;
         ctx.strokeRect(1, 1, 30, 30);
     },
-    shape(ctx, type) {
+    shape(ctx, ...type) {
         ctx.beginPath();
-        shapePath(ctx, type, 4, 5, 24, 22, 4);
+        shapePath(ctx, type.join(":"), 4, 5, 24, 22, 4);
         stroke(ctx, fg(), 1.6);
     },
     sample(ctx, n) {
@@ -604,6 +605,15 @@ export const ShapeTypes = [
 export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
     if (w < 0) { x += w; w = -w; }
     if (h < 0) { y += h; h = -h; }
+    // Formas personalizadas (.xaml), estiradas hasta llenar el rectángulo.
+    if (type.startsWith("custom:")) {
+        const custom = CustomShapes.find(type.slice(7));
+        if (custom) {
+            tracePath(ctx, fittedPath(custom.path, x, y, w, h));
+            return;
+        }
+        type = "rectangle";
+    }
     const at = (fx, fy) => [x + fx * w, y + fy * h];
     const polygon = (pts) => {
         pts.forEach(([fx, fy], i) => (i ? ctx.lineTo(...at(fx, fy)) : ctx.moveTo(...at(fx, fy))));
@@ -686,7 +696,25 @@ export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
     }
 }
 
-export const shapeFillRule = (type) => (type === "gear" ? "evenodd" : "nonzero");
+export const shapeFillRule = (type) => (type.startsWith("custom:") ? CustomShapes.find(type.slice(7))?.path.rule || "nonzero"
+    : type === "gear" ? "evenodd" : "nonzero");
+
+// Las secciones del desplegable de formas (shapeGroups de Kaint): [nombre, [id...]].
+export const ShapeGroups = [
+    ["Formas básicas", ["rectangle", "roundedrect", "ellipse", "diamond", "trapezoid", "parallelogram", "triangle", "righttriangle"]],
+    ["Polígonos y estrellas", ["pentagon", "hexagon", "heptagon", "octagon", "star3", "star4", "star5", "star6"]],
+    ["Flechas", ["arrow", "notchedarrow", "pentagonarrow", "chevronarrow"]],
+    ["Bocadillos", ["rectcallout", "roundedrectcallout", "ellipsecallout", "cloudcallout"]],
+    ["Símbolos", ["lightningbolt", "checkmark", "multiply", "gear", "heart"]],
+];
+
+// Nombre de una forma (integrada o personalizada).
+export function shapeName(type) {
+    if (type.startsWith("custom:"))
+        return CustomShapes.find(type.slice(7))?.name || "";
+    const t = ShapeTypes.find(([id]) => id === type);
+    return t ? t[1] : "";
+}
 
 // --- Creación ------------------------------------------------------------------------------
 

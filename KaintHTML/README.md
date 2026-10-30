@@ -48,7 +48,8 @@ Safari download the saved file and paste with Ctrl+V instead.
 - **Toolbar options** like Kaint's: fill patterns, selection quality, tolerance alpha mode, fill
   accumulation, rounded rectangle radius, spiral gradients, the Overwrite blend mode and the
   sampling and gamma of Move Selected Pixels; the paint bucket, gradient and recolor tools use
-  Kaint's algorithms.
+  Kaint's algorithms. The Shapes menu has Kaint's sections and **custom shapes** (Paint.NET `.xaml`
+  files, added in Settings > Shapes and saved in the browser).
 - **Layers** with the 14 Paint.NET blend modes, opacity, visibility, drag to reorder (the layer
   follows the mouse, or a line marks where it will go) and their properties dialog; full
   **history** you can click through.
@@ -83,14 +84,14 @@ Safari download the saved file and paste with Ctrl+V instead.
   (custom background, checkerboard brightness, rulers), tools (the default toolbar options every
   session starts with), pen and tablet, performance (history memory limit), plugins, updates,
   diagnostics, icon packs (.zip files with an `asset-pack.json`, with a preview), fonts for the
-  Text tool and editable keyboard shortcuts.
+  Text tool, custom shapes and editable keyboard shortcuts.
 - **Recovery copies**: every few minutes, images with unsaved changes are copied into the browser
   (IndexedDB); if the page closes abruptly, Kaint offers them the next time it opens.
 - **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
   palette file to open or save, Rainbow and Small; **More** widens it with the RGB, HSV and
   opacity sliders, their number boxes and the hex code.
 
-Not available on the web: Paint.NET (.dll) and native plugins, custom shapes and scanning. Reopening the last session's files needs a browser with access to the system's
+Not available on the web: Paint.NET (.dll) and native plugins and scanning. Reopening the last session's files needs a browser with access to the system's
 files (Chrome, Edge...). Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use
 the menus for those.
 

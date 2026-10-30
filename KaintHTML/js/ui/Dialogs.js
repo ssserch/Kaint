@@ -8,6 +8,7 @@ import { MAX_WORKERS } from "../core/EffectRunner.js";
 import { remember, Settings } from "../Settings.js";
 import { AppState, defaultTools, LocalToolSettings, setToolDefaults, toolDefaults } from "../AppState.js";
 import { ToolOptionsPanel } from "./ToolOptions.js";
+import { CustomShapes } from "../core/CustomShapes.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
@@ -876,6 +877,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
         }],
         ["iconpacks", "document-open", tr("Paquetes de iconos"), () => iconPacksPage(() => show("iconpacks"))],
         ["fonts", "text", tr("Fuentes"), () => fontsPage(() => show("fonts"))],
+        ["shapes", "shapes", tr("Formas"), () => shapesPage(() => show("shapes"))],
         ["keyboard", "configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
     ];
     show = async (id) => {
@@ -892,6 +894,46 @@ export async function settingsDialog(app = null, startPage = "interface") {
     show(startPage);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
+}
+
+// Formas de Paint.NET (.xaml) para la herramienta Formas (SettingsDialog::createShapesPage).
+function shapesPage(refresh) {
+    const list = el("div", { className: "list shape-list" });
+    const selected = new Set();
+    for (const s of CustomShapes.all()) {
+        const row = el("div", { className: "row", dataset: { id: s.id } }, [icon(`opt-shape:custom:${s.id}`, 24), el("span", { textContent: s.name }),
+                                                                            el("small", { textContent: s.file, style: { opacity: 0.7, marginLeft: "auto" } })]);
+        row.addEventListener("click", (e) => {
+            if (!e.ctrlKey && !e.shiftKey)
+                selected.clear();
+            selected.has(s.id) ? selected.delete(s.id) : selected.add(s.id);
+            for (const r of list.children)
+                r.classList.toggle("selected", selected.has(r.dataset.id));
+            remove.disabled = !selected.size;
+        });
+        list.appendChild(row);
+    }
+    if (!list.children.length)
+        list.appendChild(el("p", { textContent: tr("No hay formas personalizadas."), style: { opacity: 0.7, margin: "6px" } }));
+    const status = el("p", { style: { whiteSpace: "pre-line" } });
+    const file = el("input", { type: "file", accept: ".xaml", multiple: true, hidden: true });
+    file.addEventListener("change", async () => {
+        const errors = await CustomShapes.add([...file.files]);
+        refresh();
+        if (errors.length)
+            await message(tr("Añadir formas"), tr("No se pudieron añadir:\n\n%1", errors.join("\n")));
+    });
+    const add = el("button", { className: "pushbutton", textContent: plain(tr("Añadir formas…")) });
+    add.addEventListener("click", () => file.click());
+    const remove = el("button", { className: "pushbutton", textContent: tr("Quitar"), disabled: true });
+    remove.addEventListener("click", () => {
+        CustomShapes.remove([...selected]);
+        refresh();
+    });
+    return [
+        el("p", { textContent: tr("Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se guardan en este navegador.") }),
+        list, el("div", { className: "row-buttons" }, [add, remove, file]), status,
+    ];
 }
 
 // Tema personalizado: parte de claro, oscuro o Windows 98 y cambia los colores que se quiera.

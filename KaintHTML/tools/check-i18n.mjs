@@ -36,6 +36,8 @@ for (const file of files) {
         for (const c of cats[1].matchAll(new RegExp(":\\s*" + str, "g"))) texts.add(unquote(c[1]));
     }
     if (file.endsWith("Icons.js")) {
+        const groups = src.match(/ShapeGroups = \[([\s\S]*?)\n\];/);
+        for (const c of groups[1].matchAll(new RegExp(String.raw`\[\s*` + str + String.raw`,\s*\[`, "g"))) texts.add(unquote(c[1]));
         const shapes = src.match(/ShapeTypes = \[([\s\S]*?)\];/);
         for (const c of shapes[1].matchAll(new RegExp(String.raw`\[\s*"[^"]*",\s*` + str, "g"))) texts.add(unquote(c[1]));
     }

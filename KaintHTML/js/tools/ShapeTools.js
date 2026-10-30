@@ -5,7 +5,8 @@ import { Tool } from "./Tool.js";
 import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
-import { miniCursor, shapeFillRule, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { CustomShapes } from "../core/CustomShapes.js";
 import { patternTile } from "../core/FillPattern.js";
 import { tr } from "../i18n.js";
 
@@ -402,8 +403,8 @@ export class ShapesTool extends EditableTool {
     }
 
     historyName() {
-        const shape = ShapeTypes.find(([id]) => id === this.settings.shape);
-        return shape ? tr(shape[1]) : this.name;
+        const name = shapeName(this.settings.shape);
+        return name ? (this.settings.shape.startsWith("custom:") ? name : tr(name)) : this.name;
     }
 
     editName() {
@@ -524,8 +525,10 @@ export class ShapesTool extends EditableTool {
 
     onKeyDown(e) {
         if (this.editing && e.key.toLowerCase() === "a" && !e.ctrlKey) {
-            const i = ShapeTypes.findIndex(([id]) => id === this.settings.shape);
-            AppState.updateTools({ shape: ShapeTypes[(i + (e.shiftKey ? -1 : 1) + ShapeTypes.length) % ShapeTypes.length][0] });
+            // Las integradas y, después, las personalizadas.
+            const all = [...ShapeTypes.map(([id]) => id), ...CustomShapes.all().map((c) => `custom:${c.id}`)];
+            const i = all.indexOf(this.settings.shape);
+            AppState.updateTools({ shape: all[(i + (e.shiftKey ? -1 : 1) + all.length) % all.length] });
             return true;
         }
         return super.onKeyDown(e);

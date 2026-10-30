@@ -1,6 +1,6 @@
 // Menús: la barra de menús y los menús emergentes (también los contextuales y los de los botones
-// con opciones). Una entrada es una acción, "-" (separador) o { text, icon, shortcut, checked,
-// enabled, run, submenu }. Aparecen con el fundido de paint.js (kaint.css).
+// con opciones). Una entrada es una acción, "-" (separador), { section } (título de sección) o
+// { text, icon, shortcut, checked, enabled, run, submenu }. Aparecen con el fundido de paint.js (kaint.css).
 import { icon } from "./Icons.js";
 import { mnemonicHtml, plain } from "../i18n.js";
 
@@ -63,6 +63,11 @@ export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above =
         if (entry === "-") {
             if (menu.lastChild && !menu.lastChild.classList.contains("separator"))
                 menu.appendChild(Object.assign(document.createElement("div"), { className: "separator" }));
+            continue;
+        }
+        // Título de sección (como las de ChoiceButton::addSection de Kaint).
+        if (entry.section !== undefined) {
+            menu.appendChild(Object.assign(document.createElement("div"), { className: "section", textContent: plain(entry.section) }));
             continue;
         }
         const item = document.createElement("div");

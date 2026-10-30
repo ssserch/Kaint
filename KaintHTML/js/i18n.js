@@ -113,6 +113,9 @@ const extra = {
     "Pide permiso al navegador para abrirlas.": "Ask the browser for permission to open them.",
     "Volver a abrir": "Reopen",
     "Volver a abrir las imágenes": "Reopen images",
+    "Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se guardan en este navegador.":
+        "Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom shapes” group. They're saved in this browser.",
+    "No hay formas personalizadas.": "There are no custom shapes.",
 };
 
 let language = "en";

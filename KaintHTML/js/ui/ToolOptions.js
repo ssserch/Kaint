@@ -4,7 +4,8 @@ import { AppState } from "../AppState.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
 import { FillPatterns } from "../core/FillPattern.js";
 import { el } from "./Dialogs.js";
-import { icon, ShapeTypes } from "./Icons.js";
+import { icon, ShapeGroups, shapeName } from "./Icons.js";
+import { CustomShapes } from "../core/CustomShapes.js";
 import { popupMenu } from "./Menu.js";
 import { tr } from "../i18n.js";
 import { UserFonts } from "../UserFonts.js";
@@ -43,15 +44,16 @@ function kit(model) {
     // Botón con menú de opciones (ChoiceButton de Kaint): choices = [[valor, icono, texto], ...].
     function choice(tip, key, choices, { showText = false } = {}) {
         const b = el("button", { className: "tbutton choice", title: tip });
+        const real = () => choices.filter((c) => Array.isArray(c));
         const refresh = () => {
-            const current = choices.find(([v]) => v === tools()[key]) || choices[0];
+            const current = real().find(([v]) => v === tools()[key]) || real()[0];
             b.replaceChildren(...[current[1] ? icon(current[1], 16) : null, showText ? el("span", { textContent: current[2] }) : null,
                                    el("span", { className: "arrow", textContent: "▼" })].filter(Boolean));
         };
         b.addEventListener("click", () => {
             const r = b.getBoundingClientRect();
-            popupMenu(choices.map(([v, iconName, text]) => ({ text, icon: iconName, checked: tools()[key] === v, run: () => set({ [key]: v }) })),
-                      r.left, r.bottom);
+            popupMenu(choices.map((c) => (Array.isArray(c)
+                ? { text: c[2], icon: c[1], checked: tools()[key] === c[0], run: () => set({ [key]: c[0] }) } : c)), r.left, r.bottom);
         });
         refresh();
         b.refresh = refresh;
@@ -136,6 +138,7 @@ export class ToolOptions {
         }
         app.tools.addEventListener("changed", () => this.rebuild());
         window.addEventListener("kaint-fonts", () => this.rebuild());
+        window.addEventListener("kaint-shapes", () => this.rebuild());
         // La rueda desplaza la barra cuando no cabe.
         element.addEventListener("wheel", (e) => {
             if (element.scrollWidth > element.clientWidth && !e.target.closest(".barslider")) {
@@ -317,7 +320,11 @@ export class ToolOptions {
                                                                    ["reflected", null, tr("Repetición reflejada")]], { showText: true }));
             break;
         case "shape":
-            this.group(choice(tr("Forma (A / Mayús+A)"), "shape", ShapeTypes.map(([id, name]) => [id, `opt-shape:${id}`, tr(name)])));
+            // Por secciones, como en Kaint, y al final las personalizadas (.xaml).
+            this.group(choice(tr("Forma (A / Mayús+A)"), "shape", [
+                ...ShapeGroups.flatMap(([group, ids]) => [{ section: tr(group) }, ...ids.map((id) => [id, `opt-shape:${id}`, tr(shapeName(id))])]),
+                ...(CustomShapes.all().length ? [{ section: tr("Formas personalizadas") }] : []),
+                ...CustomShapes.all().map((c) => [`custom:${c.id}`, `opt-shape:custom:${c.id}`, c.name])]));
             break;
         case "shapeStyle":
             this.group(choice(tr("Tipo de dibujo"), "shapeStyle", [

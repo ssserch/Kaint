@@ -1021,8 +1021,44 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `Sobrescribir, cubo de pintura y muestreo bicúbico (${JSON.stringify(opts)})`);
 }
 
+// Formas personalizadas de Paint.NET (.xaml) como las de Kaint: se añaden, aparecen en su grupo
+// del desplegable y se dibujan estiradas al rectángulo (la geometría combinada también).
+{
+    const xaml = `<ps:SimpleGeometryShape xmlns="clr-namespace:PaintDotNet.UI.Media;assembly=PaintDotNet.Framework"
+        xmlns:ps="clr-namespace:PaintDotNet.Shapes;assembly=PaintDotNet.Framework" DisplayName="Marco">
+      <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M 0,0 L 100,0 L 100,100 L 0,100 Z">
+        <CombinedGeometry.Geometry2><RectangleGeometry Rect="25,25,50,50" /></CombinedGeometry.Geometry2>
+      </CombinedGeometry></ps:SimpleGeometryShape>`;
+    const custom = await page.evaluate(async (xaml) => {
+        const k = window.kaint, { Document } = await import("./js/core/Document.js"), { AppState } = await import("./js/AppState.js");
+        const { CustomShapes } = await import("./js/core/CustomShapes.js");
+        const errors = await CustomShapes.add([new File([xaml], "marco.xaml"), new File(["<Nada/>"], "mala.xaml")]);
+        const shape = CustomShapes.all().find((c) => c.name === "Marco");
+        const doc = new Document(200, 200);
+        k.addDocument(doc);
+        k.tools.select("shapes");
+        const saved = { ...AppState.tools }, primary = { ...AppState.primary };
+        AppState.updateTools({ shape: `custom:${shape.id}`, shapeStyle: "fill", fill: 0, blend: "normal" });
+        AppState.setPrimary({ r: 0, g: 0, b: 255, a: 255 });
+        const t = k.tools.current;
+        t.onPointerDown({ x: 0, y: 0, button: "left" });
+        t.onPointerMove({ x: 200, y: 200, button: "left" });
+        t.onPointerUp({ x: 200, y: 200, button: "left" });
+        t.finish();
+        const px = (x, y) => [...doc.activeLayer.ctx.getImageData(x, y, 1, 1).data].join();
+        const out = { errors: errors.length, frame: px(20, 20), hole: px(100, 100), step: doc.history.steps[1]?.name };
+        AppState.updateTools(saved);
+        AppState.setPrimary(primary);
+        await k.closeDocument(doc, false);
+        CustomShapes.remove([shape.id]);
+        return out;
+    }, xaml);
+    check(custom.errors === 1 && custom.frame === "0,0,255,255" && custom.hole === "255,255,255,255" && custom.step === "Marco",
+          `formas personalizadas (${JSON.stringify(custom)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
-for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
+for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).
     await page.evaluate(async (id) => {
         (await import("./js/ui/Dialogs.js")).settingsDialog(window.kaint, id);

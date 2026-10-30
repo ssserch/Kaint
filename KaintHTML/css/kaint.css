@@ -569,6 +569,21 @@ input[type="checkbox"] {
     animation: kaint-fade-in 100ms ease-out;
 }
 
+.popup-menu .section {
+    padding: 4px 8px 2px;
+    font-weight: 600;
+    opacity: 0.75;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.popup-menu .section::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--line);
+}
+
 .popup-menu .item {
     display: grid;
     grid-template-columns: 22px 1fr auto 14px;
@@ -2261,7 +2276,7 @@ fieldset.group > legend {
     gap: 4px;
 }
 
-.settings .plugin-list, .settings .font-list {
+.settings .plugin-list, .settings .font-list, .settings .shape-list {
     flex: 1;
     min-height: 120px;
 }

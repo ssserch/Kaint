@@ -26,6 +26,12 @@ const defaults = {
     dropShadow: true,
     checkerBrightness: 191,
     askOnceOnClose: true,
+    // Al iniciar, volver a abrir los archivos de la última sesión; copias de recuperación de las
+    // imágenes sin guardar cada tantos minutos (0: nunca); memoria máxima del historial de cada
+    // imagen en MB (0: sin límite).
+    reopenLast: false,
+    autosaveMinutes: 5,
+    historyLimitMB: 4096,
     // Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes.
     replacePixels: true,
     // Herramientas Mover: ocultar el contorno y los tiradores mientras se arrastra.

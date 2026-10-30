@@ -21,7 +21,7 @@ const texts = new Set();
 const str = String.raw`"((?:[^"\\]|\\.)*)"`;
 for (const file of files) {
     const src = readFileSync(file, "utf8");
-    for (const m of src.matchAll(new RegExp(String.raw`\btr\(\s*` + str, "g"))) texts.add(unquote(m[1]));
+    for (const m of src.matchAll(new RegExp(String.raw`\btrn?\(\s*` + str, "g"))) texts.add(unquote(m[1]));
     // Concatenaciones tr("a" + "b")
     for (const m of src.matchAll(new RegExp(String.raw`\btr\(\s*` + str + String.raw`\s*\+\s*` + str, "g"))) {
         texts.delete(unquote(m[1]));

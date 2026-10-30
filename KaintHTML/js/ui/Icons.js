@@ -54,7 +54,7 @@ const files = {
     "help-docs": "menu_help_help_topics_icon", "help-forum": "menu_help_forum_icon", "help-tutorials": "menu_help_tutorials_icon",
     "settings-interface": "settings_u_i_24", "settings-canvas": "settings_canvas_24", "settings-tools": "settings_tools_24",
     "settings-diagnostics": "settings_diagnostics_24", "settings-tablet": "settings_pen_and_tablet_24",
-    "settings-plugins": "settings_plugins_24", "settings-updates": "settings_updates_24",
+    "settings-plugins": "settings_plugins_24", "settings-performance": "settings_graphics_24", "settings-updates": "settings_updates_24",
     "status-selection": "selection_icon", "status-cursor": "cursor_x_y_icon", palette: "swatch_icon", "color-swap": "swap_icon",
     "dialog-warning": "warning_icon", "dialog-cancel": "cancel_icon", "dialog-ok-apply": "tool_strip_checked",
     "image-list-menu": "tool_bar_image_list_menu_open_button", "anchor": "anchor_chooser_control_anchor_image",

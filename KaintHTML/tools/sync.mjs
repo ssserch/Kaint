@@ -18,6 +18,12 @@ for (const m of ts.matchAll(/<message>\s*<source>([\s\S]*?)<\/source>\s*(?:<comm
     if (translation && !(source in table))
         table[source] = translation;
 }
+// Con plural (%n): la lista de formas (una y varias).
+for (const m of ts.matchAll(/<message numerus="yes">\s*<source>([\s\S]*?)<\/source>\s*(?:<comment>[\s\S]*?<\/comment>\s*)?<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
+    const forms = [...m[2].matchAll(/<numerusform>([\s\S]*?)<\/numerusform>/g)].map((f) => decode(f[1]));
+    if (forms.length && forms.every(Boolean) && !(decode(m[1]) in table))
+        table[decode(m[1])] = forms;
+}
 const keys = Object.keys(table).sort();
 let out = "// Generado por tools/sync.mjs a partir de translations/kaint_en.ts: no se edita a mano.\n";
 out += "export default {\n";

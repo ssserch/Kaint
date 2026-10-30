@@ -2,7 +2,7 @@
 // los integrados reparten sus filas en franjas entre varios Web Workers (los hilos de Kaint) y
 // se pueden cancelar en cualquier momento; los de los complementos se calculan aquí mismo.
 
-const MAX_WORKERS = Math.max(1, Math.min(8, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 4));
+export const MAX_WORKERS = Math.max(1, Math.min(8, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 4));
 const idle = [];
 let supported = typeof Worker !== "undefined";
 let runs = 0;

@@ -4,6 +4,7 @@ import { icon } from "./Icons.js";
 import { shortcutLabel } from "./Actions.js";
 import { BlendModes, BlendNames, checkerPattern, thumbnail } from "../core/Raster.js";
 import { delayFromName, MIN_DELAY, nameWithDelay } from "../core/Codecs.js";
+import { MAX_WORKERS } from "../core/EffectRunner.js";
 import { remember, Settings } from "../Settings.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
@@ -732,6 +733,9 @@ export async function settingsDialog(app = null, startPage = "interface") {
             border.style.width = "60px";
             border.title = tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.");
             border.addEventListener("input", () => Settings.set("panelBorder", border.read()));
+            const autosave = numberInput(Settings.get("autosaveMinutes"), 0, 120);
+            autosave.style.width = "60px";
+            autosave.addEventListener("input", () => Settings.set("autosaveMinutes", autosave.read()));
             return [
                 check(tr("Animaciones"), "animations",
                       tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.")),
@@ -757,9 +761,15 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 heading(tr("Ventanas")),
                 el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
                 el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
+                heading(tr("Al iniciar")),
+                check(tr("Volver a abrir las imágenes de la última sesión"), "reopenLast",
+                      window.showOpenFilePicker ? "" : tr("Este navegador no deja volver a abrir los archivos: solo funciona en los que tienen acceso a los archivos del sistema.")),
                 heading(tr("Al cerrar")),
                 check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), "askOnceOnClose",
                       tr("Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.")),
+                // Copias de recuperación por si la página se cierra de golpe.
+                heading(tr("Recuperación")),
+                el("label", {}, [tr("Guardar una copia de recuperación de las imágenes sin guardar cada:"), autosave, tr("min"), note(tr("(0: nunca)"))]),
             ];
         }],
         ["canvas", "settings-canvas", tr("Lienzo"), () => {
@@ -811,6 +821,15 @@ export async function settingsDialog(app = null, startPage = "interface") {
             note(tr("Al dar la vuelta al lápiz se activa la herramienta Goma de borrar, y al volver a la punta, la herramienta de antes.")),
             note("PointerEvent" in window ? tr("El navegador admite lápices y tabletas.") : tr("No se detectó ningún lápiz ni tableta de dibujo.")),
         ]],
+        ["performance", "settings-performance", tr("Rendimiento"), () => {
+            const limit = numberInput(Settings.get("historyLimitMB"), 0, 1024 * 1024, 256);
+            limit.style.width = "90px";
+            limit.addEventListener("input", () => Settings.set("historyLimitMB", limit.read()));
+            return [el("p", { textContent: tr("Kaint dibuja y aplica los efectos con el procesador, repartiendo el trabajo entre %1 hilos.", MAX_WORKERS) }),
+                    heading(tr("Historial")),
+                    el("label", {}, [tr("Memoria máxima del historial de cada imagen:"), limit, tr("MB"), note(tr("(0: sin límite)"))]),
+                    note(tr("Si el historial de una imagen ocupa más, se descartan los pasos más antiguos (y se avisa en la barra de estado)."))];
+        }],
         ["plugins", "settings-plugins", tr("Complementos"), () => pluginsPage(() => show("plugins"))],
         ["updates", "settings-updates", tr("Actualizaciones"), () => {
             const status = el("p", { textContent: "" });

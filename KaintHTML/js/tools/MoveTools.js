@@ -421,7 +421,7 @@ export class MoveSelectedTool extends MoveToolBase {
             doc.setSelection(sel);
             doc.pixelsChanged(layer, null);
         };
-        s.step = { name, icon, undo: () => apply(before, selectionBefore), redo: () => apply(after, selAfter) };
+        s.step = { name, icon, bytes: before.data.length + after.data.length, undo: () => apply(before, selectionBefore), redo: () => apply(after, selAfter) };
         doc.selection = selAfter;
         doc.push(s.step);
         doc.pixelsChanged(layer, null);

@@ -106,6 +106,13 @@ const extra = {
     "plugin.json no es válido: %1": "plugin.json is not valid: %1",
     "¿Quieres quitar este complemento?": "Do you want to remove this plugin?",
     "Pantalla": "Screen",
+    "Ahora no": "Not now",
+    "El navegador pide permiso para volver a abrir las imágenes de la última sesión:\n%1": "The browser asks for permission to reopen the images from the last session:\n%1",
+    "Empezar con una imagen nueva.": "Start with a new image.",
+    "Este navegador no deja volver a abrir los archivos: solo funciona en los que tienen acceso a los archivos del sistema.": "This browser can't reopen files: it only works in browsers with access to the system's files.",
+    "Pide permiso al navegador para abrirlas.": "Ask the browser for permission to open them.",
+    "Volver a abrir": "Reopen",
+    "Volver a abrir las imágenes": "Reopen images",
 };
 
 let language = "en";
@@ -124,6 +131,17 @@ export function tr(text, ...args) {
     let out = text;
     if (language === "en")
         out = en[text] ?? extra[text] ?? text;
+    args.forEach((a, i) => {
+        out = out.split(`%${i + 1}`).join(String(a));
+    });
+    return out;
+}
+
+// Como tr() para un texto con plural: %n es el número (en inglés, con la forma que toca).
+export function trn(text, n, ...args) {
+    const forms = language === "en" ? en[text] ?? extra[text] : null;
+    let out = Array.isArray(forms) ? forms[n === 1 ? 0 : Math.min(1, forms.length - 1)] : text;
+    out = out.split("%n").join(String(n));
     args.forEach((a, i) => {
         out = out.split(`%${i + 1}`).join(String(a));
     });

@@ -51,14 +51,14 @@ export class StepRecorder {
         doc.pixelsChanged(layer, r);
         this.rect = r;
         if (replace) {
-            Object.assign(this.last, { rect: r, state, undo: () => apply(before), redo: () => apply(after) });
+            Object.assign(this.last, { rect: r, state, bytes: before.data.length + after.data.length, undo: () => apply(before), redo: () => apply(after) });
             this.pushing = true;
             doc.emit("history");
             this.pushing = false;
             return true;
         }
         const step = { name: this.steps ? editText : createText, icon, tool: this.tool.id, layer, base, rect: r, state,
-                       undo: () => apply(before), redo: () => apply(after) };
+                       bytes: before.data.length + after.data.length, undo: () => apply(before), redo: () => apply(after) };
         this.pushing = true;
         doc.push(step);
         this.pushing = false;

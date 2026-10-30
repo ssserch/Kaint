@@ -10,9 +10,10 @@ import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../c
 import { scaleImage } from "../core/Resample.js";
 import { transformPixels } from "../core/ColorProfiles.js";
 import { Selection, SelectionMode } from "../core/Selection.js";
+import { Recovery } from "../Recovery.js";
 import { Settings } from "../Settings.js";
 import { REPOSITORY, VERSION } from "../version.js";
-import { currentLanguage, tr } from "../i18n.js";
+import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
@@ -117,6 +118,9 @@ export class App extends EventTarget {
         if (!this.tools.current)
             this.tools.select("paintbrush");
         this.tools.addEventListener("changed", () => Settings.set("lastTool", this.tools.current.id));
+        // Copias de recuperación y archivos de la sesión (estos, después de restoreSession()).
+        Recovery.start();
+        this.sessionReady = false;
         this.addDocument(new Document(800, 600));
         updateActions();
     }
@@ -154,6 +158,18 @@ export class App extends EventTarget {
         this.updateToolIconColors();
         this.view.update();
         updateActions();
+        // Copias de recuperación cada tantos minutos y límite de memoria del historial.
+        const minutes = Math.max(0, Math.min(120, Number(Settings.get("autosaveMinutes")) || 0));
+        if (this.autosaveMinutes !== minutes) {
+            this.autosaveMinutes = minutes;
+            clearInterval(this.autosaveTimer);
+            this.autosaveTimer = minutes > 0 ? setInterval(() => this.autosave(), minutes * 60 * 1000) : null;
+        }
+        this.checkHistoryMemory();
+        if (this.reopenLast !== !!Settings.get("reopenLast")) {
+            this.reopenLast = !!Settings.get("reopenLast");
+            this.rememberSession();
+        }
     }
 
     updateToolIconColors() {
@@ -172,8 +188,11 @@ export class App extends EventTarget {
                 this.dispatchEvent(new CustomEvent(type, { detail: e.detail }));
             if (type === "pixels" || type === "modified")
                 this.updateTab(doc);
-            if (type === "history" && doc === this.doc)
+            if (type === "history" && doc === this.doc) {
                 this.syncToolWithHistory();
+                clearTimeout(this.historyTimer);
+                this.historyTimer = setTimeout(() => this.checkHistoryMemory(), 500);
+            }
             if (type === "history" || type === "selection" || type === "active" || type === "layers" || type === "size")
                 updateActions();
             if (type === "selection" || type === "size")
@@ -182,6 +201,7 @@ export class App extends EventTarget {
         ["history", "layers", "pixels", "active", "selection", "size", "modified"].forEach(forward);
         this.setCurrent(doc);
         this.rebuildTabs();
+        this.rememberSession();
     }
 
     setCurrent(doc) {
@@ -223,7 +243,121 @@ export class App extends EventTarget {
             this.setCurrent(this.docs[Math.min(i, this.docs.length - 1)] || null);
         }
         this.rebuildTabs();
+        this.rememberSession();
         return true;
+    }
+
+    // --- Sesión, recuperación e historial ---------------------------------------------------
+
+    // Los archivos abiertos, para volver a abrirlos la próxima vez (como session/files en Kaint).
+    rememberSession() {
+        if (this.sessionReady)
+            Recovery.rememberSession(Settings.get("reopenLast") ? this.docs : []);
+    }
+
+    // "Volver a abrir las imágenes de la última sesión" (MainWindow::restoreSessionOrNew): solo los
+    // archivos que el navegador deja volver a abrir; si pide permiso, se pregunta antes.
+    async restoreSession() {
+        try {
+            if (!Settings.get("reopenLast") || !window.showOpenFilePicker)
+                return;
+            const handles = await Recovery.lastSession();
+            if (!handles.length)
+                return;
+            const blank = this.doc, granted = new Set(), pending = [];
+            for (const h of handles) {
+                try {
+                    if ((await h.queryPermission({ mode: "read" })) === "granted")
+                        granted.add(h);
+                    else
+                        pending.push(h);
+                } catch {
+                    // El archivo ya no está.
+                }
+            }
+            if (pending.length) {
+                const dlg = new TaskDialog(tr("Volver a abrir las imágenes"), "document-open",
+                                           tr("El navegador pide permiso para volver a abrir las imágenes de la última sesión:\n%1",
+                                              pending.map((h) => `• ${h.name}`).join("\n")));
+                const reopen = dlg.addChoice("document-open", tr("Volver a abrir"), tr("Pide permiso al navegador para abrirlas."), true);
+                dlg.addChoice("dialog-cancel", tr("Ahora no"), tr("Empezar con una imagen nueva."));
+                if ((await dlg.exec()) === reopen) {
+                    for (const h of pending) {
+                        try {
+                            if ((await h.requestPermission({ mode: "read" })) === "granted")
+                                granted.add(h);
+                        } catch {
+                            // Sin permiso.
+                        }
+                    }
+                }
+            }
+            const before = this.docs.length;
+            for (const h of handles.filter((x) => granted.has(x))) {
+                try {
+                    await this.openFile(await h.getFile(), h);
+                } catch {
+                    // El archivo ya no está.
+                }
+            }
+            if (this.docs.length > before && blank && this.docs.includes(blank) && !blank.isModified() && blank.history.index === 0)
+                await this.closeDocument(blank, false);
+        } finally {
+            this.sessionReady = true;
+            this.rememberSession();
+        }
+    }
+
+    // Kaint se cerró de golpe: se ofrecen las copias de recuperación (MainWindow::offerRecovery).
+    async offerRecovery() {
+        const entries = await Recovery.orphaned();
+        if (!entries.length)
+            return;
+        const dlg = new TaskDialog(tr("Recuperar imágenes"), "edit-undo",
+                                   tr("Kaint no se cerró correctamente. Se pueden recuperar estas imágenes con cambios sin guardar:\n%1",
+                                      entries.map((e) => `• ${e.name}`).join("\n")));
+        const recover = dlg.addChoice("document-open", tr("Recuperar"), tr("Abre las imágenes tal como estaban en la última copia de recuperación."), true);
+        dlg.addChoice("edit-delete", tr("Descartar"), tr("Borra las copias de recuperación."));
+        if ((await dlg.exec()) === recover) {
+            const blank = this.doc;
+            for (const e of entries) {
+                try {
+                    this.addDocument(await Recovery.restore(e));
+                } catch {
+                    // Copia dañada.
+                }
+            }
+            if (this.docs.length > 1 && blank && !blank.isModified() && blank.history.index === 0 && !blank.fileName)
+                await this.closeDocument(blank, false);
+        }
+        await Recovery.discard(entries);
+        this.autosave();
+    }
+
+    autosave() {
+        return Recovery.save(this.docs);
+    }
+
+    // Si el historial de la imagen ocupa más de lo permitido, se descartan los pasos más antiguos
+    // (MainWindow::checkHistoryMemory).
+    checkHistoryMemory() {
+        const mb = Math.max(0, Number(Settings.get("historyLimitMB")) || 0);
+        if (!this.doc || mb <= 0)
+            return;
+        const dropped = this.doc.trimHistory(mb * 1024 * 1024);
+        if (dropped > 0)
+            this.showMessage(trn("El historial superaba %1 MB: se descartaron los %n pasos más antiguos.", dropped, mb), 8000);
+    }
+
+    // Un aviso en la barra de estado durante 'ms' milisegundos (QStatusBar::showMessage).
+    showMessage(text, ms = 5000) {
+        clearTimeout(this.messageTimer);
+        this.statusMessage = text;
+        this.refreshHint();
+        this.messageTimer = setTimeout(() => {
+            this.statusMessage = null;
+            this.refreshHint();
+        }, ms);
     }
 
     // Guarda todas las imágenes con cambios (las que no tienen archivo preguntan dónde).
@@ -718,7 +852,10 @@ export class App extends EventTarget {
             return;
         const tool = this.tools.current, doc = this.doc;
         let iconName = tool?.icon, text = this.toolHint || "";
-        if (doc && tool?.highlightSelection && !tool.isBusy() && !doc.selection.isEmpty() && text === tool.hint()) {
+        if (this.statusMessage) {
+            iconName = null;
+            text = this.statusMessage;
+        } else if (doc && tool?.highlightSelection && !tool.isBusy() && !doc.selection.isEmpty() && text === tool.hint()) {
             const u = this.unit(), ppu = pixelsPerUnit(u, doc.dpi), b = doc.selection.bounds();
             const len = (n) => `${formatLength(n, u, doc.dpi)} ${unitSuffix(u)}`;
             const area = doc.selection.area() / (ppu * ppu);
@@ -1127,6 +1264,7 @@ export class App extends EventTarget {
         doc.fileName = name;
         doc.markSaved();
         this.rebuildTabs();
+        this.rememberSession();
         return true;
     }
 
@@ -1254,7 +1392,7 @@ export class App extends EventTarget {
             doc.pixelsChanged(layer, r);
         };
         apply(after, none);
-        doc.push({ name, icon: iconName, undo: () => apply(before, selBefore), redo: () => apply(after, none) });
+        doc.push({ name, icon: iconName, bytes: before.data.length + after.data.length, undo: () => apply(before, selBefore), redo: () => apply(after, none) });
     }
 
     fillSelection() {

@@ -207,7 +207,7 @@ export class Document extends EventTarget {
             layer.ctx.putImageData(data, rect.x, rect.y);
             this.pixelsChanged(layer, rect);
         };
-        this.push({ name, icon, undo: () => apply(before), redo: () => apply(after) });
+        this.push({ name, icon, bytes: before.data.length + after.data.length, undo: () => apply(before), redo: () => apply(after) });
     }
 
     pushSelection(before, name = tr("Selección"), icon = "rectangleselect") {
@@ -232,7 +232,10 @@ export class Document extends EventTarget {
 
     pushLayers(before, name, icon) {
         const after = this.layerState();
-        this.push({ name, icon, undo: () => this.restoreLayerState(before), redo: () => this.restoreLayerState(after) });
+        // Lo que guarda el paso: las capas que solo están en uno de los dos estados.
+        const only = (a, b) => a.layers.filter((l) => !b.layers.includes(l)).reduce((n, l) => n + l.canvas.width * l.canvas.height * 4, 0);
+        this.push({ name, icon, bytes: only(before, after) + only(after, before),
+                    undo: () => this.restoreLayerState(before), redo: () => this.restoreLayerState(after) });
     }
 
     // Todo el documento (tamaño, capas con sus píxeles y selección): girar, recortar, acoplar...
@@ -267,6 +270,33 @@ export class Document extends EventTarget {
 
     pushSnapshot(before, name, icon) {
         const after = this.snapshot();
-        this.push({ name, icon, undo: () => this.restore(before), redo: () => this.restore(after) });
+        const bytes = (snap) => snap.layers.reduce((n, l) => n + l.canvas.width * l.canvas.height * 4, 0);
+        this.push({ name, icon, bytes: bytes(before) + bytes(after), undo: () => this.restore(before), redo: () => this.restore(after) });
+    }
+
+    // Lo que ocupan los pasos del historial (los píxeles que guardan para deshacer y rehacer).
+    historyBytes() {
+        return this.history.steps.reduce((n, s) => n + (s.bytes || 0), 0);
+    }
+
+    // Descarta los pasos más antiguos mientras el historial ocupe más de 'limit' bytes, como
+    // History::trim de Kaint: siempre se puede deshacer al menos el último paso. El más reciente
+    // de los descartados queda como el estado inicial. Devuelve cuántos se descartaron.
+    trimHistory(limit) {
+        const h = this.history;
+        if (limit <= 0)
+            return 0;
+        let total = this.historyBytes(), k = 0;
+        while (total > limit && k < h.index - 1)
+            total -= h.steps[++k].bytes || 0;
+        if (!k)
+            return 0;
+        const base = h.steps[k];
+        h.steps.splice(0, k + 1, { name: base.name, icon: base.icon, undo() {}, redo() {} });
+        h.index -= k;
+        this.cleanIndex = this.cleanIndex >= k ? this.cleanIndex - k : -1;
+        this.emit("history");
+        this.emit("modified");
+        return k;
     }
 }

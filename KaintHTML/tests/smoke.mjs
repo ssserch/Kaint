@@ -36,7 +36,8 @@ const check = (ok, what) => {
 };
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1400, height: 860 }, acceptDownloads: true });
+const context = await browser.newContext({ viewport: { width: 1400, height: 860 }, acceptDownloads: true });
+const page = await context.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(`${e.message}\n${e.stack}`));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -906,8 +907,61 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `perfil de colores (${JSON.stringify(icc)})`);
 }
 
+// Límite de memoria del historial (se descartan los pasos más antiguos y se avisa) y copias de
+// recuperación: una pestaña con cambios sin guardar se cuelga y Kaint ofrece recuperarlos.
+{
+    const trimmed = await page.evaluate(async () => {
+        const k = window.kaint, { Document } = await import("./js/core/Document.js");
+        const { Settings } = await import("./js/Settings.js");
+        const doc = new Document(800, 600);
+        k.addDocument(doc);
+        Settings.set("historyLimitMB", 10);
+        for (let i = 0; i < 5; ++i) {
+            const before = doc.snapshot();
+            doc.activeLayer.ctx.fillStyle = `rgb(${i * 50},0,0)`;
+            doc.activeLayer.ctx.fillRect(0, 0, 800, 600);
+            doc.pushSnapshot(before, `Paso ${i + 1}`, "edit-fill");
+        }
+        await new Promise((r) => setTimeout(r, 800));
+        const out = { steps: doc.history.steps.map((st) => st.name).join(), hint: document.querySelector("#status-bar .hint").textContent };
+        Settings.set("historyLimitMB", 4096);
+        await k.closeDocument(doc, false);
+        return out;
+    });
+    check(trimmed.steps === "Paso 3,Paso 4,Paso 5" && /3 pasos más antiguos/.test(trimmed.hint), `límite de memoria del historial (${JSON.stringify(trimmed)})`);
+
+    const other = await context.newPage();
+    await other.goto(url);
+    await other.waitForFunction(() => window.kaint?.doc);
+    await other.evaluate(async () => {
+        const doc = window.kaint.doc;
+        doc.name = "Recuperable";
+        const before = doc.snapshot();
+        doc.activeLayer.ctx.fillStyle = "#00ff00";
+        doc.activeLayer.ctx.fillRect(0, 0, 50, 50);
+        doc.pushSnapshot(before, "Relleno", "edit-fill");
+        await window.kaint.autosave();
+    });
+    const cdp = await context.newCDPSession(other);
+    cdp.send("Page.crash").catch(() => {});
+    await page.waitForTimeout(1000);
+    const offered = page.evaluate(() => window.kaint.offerRecovery());
+    await page.waitForSelector(".dialog .choice-button");
+    const text = await page.textContent(".dialog");
+    await page.click(".dialog .choice-button >> nth=0");
+    await offered;
+    const recovered = await page.evaluate(() => {
+        const d = window.kaint.doc;
+        return { name: d.displayName(), modified: d.isModified(), px: [...d.activeLayer.ctx.getImageData(10, 10, 1, 1).data].join() };
+    });
+    check(/Recuperable/.test(text) && recovered.name === "Recuperable" && recovered.modified && recovered.px === "0,255,0,255",
+          `copias de recuperación (${JSON.stringify(recovered)})`);
+    await page.evaluate(() => window.kaint.closeDocument(window.kaint.doc, false));
+    await other.close().catch(() => {});
+}
+
 // Todas las páginas de Configuración se abren sin errores.
-for (const id of ["interface", "canvas", "tools", "tablet", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
+for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).
     await page.evaluate(async (id) => {
         (await import("./js/ui/Dialogs.js")).settingsDialog(window.kaint, id);

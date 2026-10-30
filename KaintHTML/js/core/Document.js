@@ -62,6 +62,8 @@ export class Document extends EventTarget {
         this.height = height;
         // Resolución (píxeles por pulgada): el tamaño de impresión y las unidades de las reglas.
         this.dpi = dpi;
+        // Perfil de color (ColorProfiles.js); null es sRGB.
+        this.colorProfile = null;
         this.name = name;
         this.fileHandle = null;
         this.fileName = "";
@@ -236,7 +238,7 @@ export class Document extends EventTarget {
     // Todo el documento (tamaño, capas con sus píxeles y selección): girar, recortar, acoplar...
     snapshot() {
         return {
-            width: this.width, height: this.height, dpi: this.dpi, active: this.active, selection: this.selection,
+            width: this.width, height: this.height, dpi: this.dpi, colorProfile: this.colorProfile, active: this.active, selection: this.selection,
             layers: this.layers.map((l) => ({ layer: l, canvas: cloneCanvas(l.canvas), props: l.props() })),
         };
     }
@@ -245,9 +247,10 @@ export class Document extends EventTarget {
         const sizeChanged = snap.width !== this.width || snap.height !== this.height;
         this.width = snap.width;
         this.height = snap.height;
-        const dpiChanged = snap.dpi !== undefined && snap.dpi !== this.dpi;
+        const dpiChanged = (snap.dpi !== undefined && snap.dpi !== this.dpi) || snap.colorProfile !== this.colorProfile;
         if (snap.dpi !== undefined)
             this.dpi = snap.dpi;
+        this.colorProfile = snap.colorProfile ?? null;
         this.layers = snap.layers.map(({ layer, canvas, props }) => {
             layer.replaceCanvas(cloneCanvas(canvas));
             layer.setProps(props);

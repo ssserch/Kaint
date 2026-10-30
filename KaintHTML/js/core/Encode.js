@@ -119,7 +119,9 @@ function withMetadata(bytes, ext, { dpi = 0, icc = null } = {}) {
             out[16] = d >> 8; out[17] = d & 255;
         }
         if (icc) {
-            // APP2 ICC_PROFILE justo después de JFIF (en trozos de 65519 bytes como mucho).
+            // APP2 ICC_PROFILE justo después de JFIF (en trozos de 65519 bytes como mucho), en lugar
+            // del sRGB que pone el navegador.
+            out = withoutJpegIcc(out);
             const app0End = 4 + ((out[4] << 8) | out[5]), parts = [];
             const count = Math.ceil(icc.length / 65519);
             for (let i = 0; i < count; ++i) {
@@ -147,6 +149,74 @@ function withMetadata(bytes, ext, { dpi = 0, icc = null } = {}) {
     return bytes;
 }
 
+// El JPEG sin sus segmentos APP2 ICC_PROFILE.
+function withoutJpegIcc(bytes) {
+    const keep = [];
+    let i = 2, from = 0;
+    while (i + 4 <= bytes.length && bytes[i] === 0xff && bytes[i + 1] !== 0xda) {
+        const len = (bytes[i + 2] << 8) | bytes[i + 3];
+        if (bytes[i + 1] === 0xe2 && String.fromCharCode(...bytes.subarray(i + 4, i + 15)) === "ICC_PROFILE") {
+            keep.push(bytes.subarray(from, i));
+            from = i + 2 + len;
+        }
+        i += 2 + len;
+    }
+    if (!keep.length)
+        return bytes;
+    keep.push(bytes.subarray(from));
+    const out = new Uint8Array(keep.reduce((n, p) => n + p.length, 0));
+    let o = 0;
+    for (const p of keep) {
+        out.set(p, o);
+        o += p.length;
+    }
+    return out;
+}
+
+// WebP con el perfil de color: formato extendido (VP8X, con la marca ICC) y el trozo ICCP justo
+// después.
+function webpWithIcc(bytes, image, icc) {
+    if (!icc)
+        return bytes;
+    const chunk = (fourcc, data) => {
+        const out = new Uint8Array(8 + data.length + (data.length & 1));
+        for (let i = 0; i < 4; ++i) out[i] = fourcc.charCodeAt(i);
+        new DataView(out.buffer).setUint32(4, data.length, true);
+        out.set(data, 8);
+        return out;
+    };
+    let head, rest;
+    if (String.fromCharCode(...bytes.subarray(12, 16)) === "VP8X") {
+        head = bytes.slice(12, 30);
+        head[8] |= 0x20;
+        rest = bytes.subarray(30);
+        // Sin el sRGB que pone el navegador.
+        if (String.fromCharCode(...rest.subarray(0, 4)) === "ICCP") {
+            const len = rest[4] | (rest[5] << 8) | (rest[6] << 16) | (rest[7] << 24);
+            rest = rest.subarray(8 + len + (len & 1));
+        }
+    } else {
+        // VP8L lleva el bit de alfa en su cabecera; VP8 (con pérdida) simple no tiene alfa.
+        const alpha = String.fromCharCode(...bytes.subarray(12, 16)) === "VP8L" && (bytes[24] & 0x10) !== 0;
+        const vp8x = new Uint8Array(10), w = image.width - 1, h = image.height - 1;
+        vp8x[0] = 0x20 | (alpha ? 0x10 : 0);
+        vp8x.set([w & 255, (w >> 8) & 255, (w >> 16) & 255, h & 255, (h >> 8) & 255, (h >> 16) & 255], 4);
+        head = chunk("VP8X", vp8x);
+        rest = bytes.subarray(12);
+    }
+    const parts = [head, chunk("ICCP", icc), rest];
+    const total = 12 + parts.reduce((n, p) => n + p.length, 0), out = new Uint8Array(total);
+    out.set([0x52, 0x49, 0x46, 0x46]);
+    new DataView(out.buffer).setUint32(4, total - 8, true);
+    out.set([0x57, 0x45, 0x42, 0x50], 8);
+    let o = 12;
+    for (const p of parts) {
+        out.set(p, o);
+        o += p.length;
+    }
+    return out;
+}
+
 // Contenido del iCCP de PNG: nombre, método de compresión y el perfil comprimido.
 async function iccChunk(icc) {
     if (!icc)
@@ -171,7 +241,7 @@ export async function encodeImage(prepared, ext, o, extra = {}) {
     case "tga":
         return Codecs.encodeTga(prepared, { depth: prepared.depth || 32 });
     case "tiff":
-        return Codecs.encodeTiff(prepared, { dpi: dpi || 96 });
+        return Codecs.encodeTiff(prepared, { dpi: dpi || 96, icc });
     case "dds":
         return Codecs.encodeDds(prepared);
     case "png":
@@ -180,6 +250,8 @@ export async function encodeImage(prepared, ext, o, extra = {}) {
             return icc ? withMetadata(bytes, "png", { icc: await iccChunk(icc) }) : bytes;
         }
         return withMetadata(await canvasEncode(prepared, MIMES.png), "png", { dpi, icc: await iccChunk(icc) });
+    case "webp":
+        return webpWithIcc(await canvasEncode(prepared, MIMES.webp, o.quality / 100), prepared, icc);
     default:
         return withMetadata(await canvasEncode(prepared, MIMES[ext], traits(ext).quality ? o.quality / 100 : undefined), ext, { dpi, icc });
     }

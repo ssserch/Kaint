@@ -487,6 +487,68 @@ export async function layerPropertiesDialog(props, onPreview) {
     return r ? current() : null;
 }
 
+// Imagen > Perfil de colores (ColorProfileDialog de Kaint, como Paint.NET 5): el perfil actual y
+// otro de la lista o de un archivo .icc para convertir los colores (los píxeles cambian y la
+// imagen se ve igual) o asignarlo (solo cambia cómo se interpretan). Devuelve null o
+// { result: "convert" | "assign", profile }.
+export async function colorProfileDialog(current) {
+    const { NamedProfiles, describe, readIcc, sameProfile, SRGB } = await import("../core/ColorProfiles.js");
+    current ||= SRGB;
+    const dlg = new Dialog(tr("Perfil de colores"), { iconName: "color-profile" });
+    const profiles = [];
+    const list = el("select", { style: { minWidth: "220px" } });
+    const add = (p, selectIt) => {
+        let index = profiles.findIndex((q) => sameProfile(q, p));
+        if (index < 0) {
+            profiles.push(p);
+            list.appendChild(el("option", { value: profiles.length - 1, textContent: describe(p) }));
+            index = profiles.length - 1;
+        }
+        if (selectIt)
+            list.value = index;
+    };
+    // Los mismos perfiles que ofrece Paint.NET.
+    NamedProfiles.forEach((p) => add(p, false));
+    add(current, true);
+    const load = el("button", { className: "tbutton", type: "button", title: tr("Cargar un perfil de color (.icc, .icm)") }, [icon("document-open", 16)]);
+    const save = el("button", { className: "tbutton", type: "button", title: tr("Guardar el perfil elegido como archivo .icc") }, [icon("document-save", 16)]);
+    load.addEventListener("click", () => {
+        const input = el("input", { type: "file", accept: ".icc,.icm" });
+        input.addEventListener("change", async () => {
+            const f = input.files?.[0];
+            const p = f ? readIcc(new Uint8Array(await f.arrayBuffer())) : null;
+            if (!p) {
+                await message(tr("Perfil de colores"), tr("El archivo no contiene un perfil de color RGB válido."));
+                return;
+            }
+            add(p, true);
+            update();
+        });
+        input.click();
+    });
+    save.addEventListener("click", () => {
+        const p = profiles[Number(list.value)];
+        const a = el("a", { href: URL.createObjectURL(new Blob([p.icc], { type: "application/vnd.iccprofile" })), download: `${describe(p)}.icc` });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    dlg.body.appendChild(el("div", { className: "profile-grid" }, [
+        el("span", { textContent: tr("Actual:") }), el("b", { textContent: describe(current) }),
+        el("span", { textContent: tr("Nuevo:") }), el("span", { className: "row" }, [list, load, save]),
+    ]));
+    const convert = dlg.addButton(tr("Convertir"), "convert");
+    const assign = dlg.addButton(tr("Asignar"), "assign");
+    dlg.addButton(tr("Cancelar"), null);
+    convert.title = tr("Convierte los colores al perfil nuevo: los píxeles cambian y la imagen se ve igual.");
+    assign.title = tr("Asigna el perfil nuevo sin tocar los píxeles: cambia cómo se interpretan sus colores.");
+    // Igual que Paint.NET: con el mismo perfil no hay nada que hacer.
+    const update = () => (convert.disabled = assign.disabled = sameProfile(profiles[Number(list.value)], current));
+    list.addEventListener("change", update);
+    update();
+    const r = await dlg.exec();
+    return r ? { result: r, profile: profiles[Number(list.value)] } : null;
+}
+
 // Imagen > Animación (AnimationDialog de Kaint): la duración de cada fotograma de un GIF (cada
 // capa visible, la de abajo primero) con una vista previa que se reproduce. Devuelve null o un
 // Map índice de capa → nombre nuevo (la duración va en el nombre: "Fotograma 1 (100ms)").

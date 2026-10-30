@@ -450,7 +450,7 @@ function packBitsDecode(src, expected) {
 }
 
 // RGBA de 8 bits por muestra, LZW y alfa sin premultiplicar (como el TIFF de Kaint).
-export function encodeTiff(image, { dpi = 96 } = {}) {
+export function encodeTiff(image, { dpi = 96, icc = null } = {}) {
     const { width: w, height: h, data } = image;
     const rowsPerStrip = Math.max(1, Math.floor(65536 / (w * 4)));
     const strips = [];
@@ -462,7 +462,9 @@ export function encodeTiff(image, { dpi = 96 } = {}) {
     tag(273, 4, strips.map(() => 0)); tag(277, 3, 4); tag(278, 4, rowsPerStrip); tag(279, 4, strips.map((s) => s.length));
     tag(282, 5, [Math.round(dpi * 100), 100]); tag(283, 5, [Math.round(dpi * 100), 100]); tag(284, 3, 1); tag(296, 3, 2);
     tag(338, 3, 2);
-    const sizes = { 3: 2, 4: 4, 5: 8 };
+    if (icc)
+        tag(34675, 7, [...icc]);
+    const sizes = { 3: 2, 4: 4, 5: 8, 7: 1 };
     const valueBytes = (e) => (e.type === 5 ? 8 * (e.values.length / 2) : sizes[e.type] * e.values.length);
     // Cabecera, datos de las franjas, valores largos y el directorio.
     let offset = 8;
@@ -489,7 +491,8 @@ export function encodeTiff(image, { dpi = 96 } = {}) {
     }
     const writeValues = (e) => {
         for (const v of e.values) {
-            if (e.type === 3) out.u16(v);
+            if (e.type === 7) out.u8(v);
+            else if (e.type === 3) out.u16(v);
             else out.u32(v);
         }
     };

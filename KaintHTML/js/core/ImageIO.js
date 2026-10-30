@@ -4,6 +4,7 @@ import { Document, Layer } from "./Document.js";
 import { OraNames } from "./Raster.js";
 import { unzip, zip } from "./Zip.js";
 import * as Codecs from "./Codecs.js";
+import { iccFromImage, isSrgb, readIcc } from "./ColorProfiles.js";
 import { defaultSaveOptions, encodeAnimation, encodeImage, prepare } from "./Encode.js";
 import { tr } from "../i18n.js";
 
@@ -39,9 +40,10 @@ export function baseName(name) {
     return name.replace(/\.[^.]+$/, "");
 }
 
-async function decodeImage(blob) {
+// Con un perfil de color propio, los píxeles tal cual (se convierten al mostrarlos, como Kaint).
+async function decodeImage(blob, colorSpaceConversion = "default") {
     if ("createImageBitmap" in window)
-        return createImageBitmap(blob);
+        return createImageBitmap(blob, { colorSpaceConversion });
     const url = URL.createObjectURL(blob);
     try {
         const img = new Image();
@@ -95,14 +97,30 @@ export async function openFile(file) {
         doc = documentFrom(image.width, image.height, name, [{ name: tr("Fondo"), data: image.data }]);
         if (image.dpi)
             doc.dpi = image.dpi;
+        doc.colorProfile = await profileOf(bytes);
     } else {
-        const image = await decodeImage(file);
+        const bytes = new Uint8Array(await file.arrayBuffer()), profile = await profileOf(bytes);
+        const image = await decodeImage(file, profile ? "none" : "default");
         doc = Document.fromImage(image, name);
-        doc.dpi = readResolution(new Uint8Array(await file.slice(0, 65536).arrayBuffer())) || 96;
+        doc.dpi = readResolution(bytes) || 96;
+        doc.colorProfile = profile;
     }
     doc.fileName = file.name;
     return doc;
 }
+
+// El perfil de color incrustado (de matriz y curvas); null si no hay o no se entiende.
+async function profileOf(bytes) {
+    try {
+        const icc = await iccFromImage(bytes, Codecs.zlibDecompress);
+        return icc ? readIcc(icc) : null;
+    } catch {
+        return null;
+    }
+}
+
+// El perfil que se guarda en el archivo (solo si no es sRGB, como Kaint).
+export const embeddedProfile = (doc) => (doc.colorProfile && !isSrgb(doc.colorProfile) ? doc.colorProfile.icc : null);
 
 // --- Resolución (píxeles por pulgada) en PNG (pHYs) y JPEG (JFIF), como al guardar en Kaint ---
 
@@ -197,7 +215,7 @@ export async function encode(doc, format, options = defaultSaveOptions(), frames
     else if (format.animation && options.animation && doc.layers.length > 1)
         bytes = encodeAnimation(animationFrames(doc, options.frameDelay, options.gifHiddenLayers), options);
     else
-        bytes = await encodeImage(prepare(flattenedImage(doc), format.ext, options), format.ext, options, { dpi: doc.dpi, icc: doc.iccProfile || null });
+        bytes = await encodeImage(prepare(flattenedImage(doc), format.ext, options), format.ext, options, { dpi: doc.dpi, icc: embeddedProfile(doc) });
     return new Blob([bytes], { type: format.mime });
 }
 

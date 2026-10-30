@@ -6,6 +6,7 @@ import { checkerPattern, clampRect, context, createCanvas, unionRect } from "../
 import { handCursor, outlineCursor, paintMini } from "./Icons.js";
 import { Settings } from "../Settings.js";
 import { pixelsPerUnit } from "./Units.js";
+import { isSrgb, transformPixels } from "../core/ColorProfiles.js";
 
 const kMargin = 24;
 // Grosor de las reglas (Ver > Reglas).
@@ -131,8 +132,16 @@ export class CanvasView extends EventTarget {
             doc.compositeDirty = { x: 0, y: 0, w: doc.width, h: doc.height };
         }
         const dirty = doc.compositeDirty;
-        if (dirty && dirty.w > 0 && dirty.h > 0)
-            doc.composite(context(doc.compositeCanvas), dirty);
+        if (dirty && dirty.w > 0 && dirty.h > 0) {
+            const ctx = context(doc.compositeCanvas);
+            doc.composite(ctx, dirty);
+            // Con otro perfil de color, la imagen se ve convertida a sRGB (como Kaint).
+            if (doc.colorProfile && !isSrgb(doc.colorProfile)) {
+                const part = ctx.getImageData(dirty.x, dirty.y, dirty.w, dirty.h);
+                transformPixels(part.data, doc.colorProfile, null);
+                ctx.putImageData(part, dirty.x, dirty.y);
+            }
+        }
         doc.compositeDirty = null;
     }
 

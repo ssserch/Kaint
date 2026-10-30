@@ -2022,6 +2022,21 @@ fieldset.group > legend {
     gap: 4px;
 }
 
+/* Imagen > Perfil de colores */
+.profile-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 10px;
+    align-items: center;
+    min-width: 360px;
+}
+
+.profile-grid .row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 /* Imagen > Animación */
 .anim-dialog {
     display: flex;

@@ -3,11 +3,12 @@
 import { AppState } from "../AppState.js";
 import { Document, Layer } from "../core/Document.js";
 import { Effects, Categories, defaultValues, findEffect } from "../core/Effects.js";
-import { animationFrames, baseName, download, encode, flattenedImage, formatFor, openFile, OpenAccept, OpenExtensions, SaveFormats } from "../core/ImageIO.js";
+import { animationFrames, baseName, download, embeddedProfile, encode, flattenedImage, formatFor, openFile, OpenAccept, OpenExtensions, SaveFormats } from "../core/ImageIO.js";
 import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
 import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
 import { scaleImage } from "../core/Resample.js";
+import { transformPixels } from "../core/ColorProfiles.js";
 import { Selection, SelectionMode } from "../core/Selection.js";
 import { Settings } from "../Settings.js";
 import { REPOSITORY, VERSION } from "../version.js";
@@ -17,7 +18,7 @@ import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
 import { applyThemeColors } from "./Themes.js";
 import {
-    aboutDialog, animationDialog, canvasSizeDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber, resizeDialog,
+    aboutDialog, animationDialog, canvasSizeDialog, colorProfileDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber, resizeDialog,
     saveAsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
 import { computeEffect, effectDialog, effectInput, renderEffect } from "./EffectDialog.js";
@@ -490,6 +491,7 @@ export class App extends EventTarget {
         A("rotCW", tr("Girar 90° en sentido &horario"), "object-rotate-right", "Ctrl+H", c(() => this.transformImage("cw")), has);
         A("rotCCW", tr("Girar 90° en sentido &antihorario"), "object-rotate-left", "Ctrl+G", c(() => this.transformImage("ccw")), has);
         A("rot180", tr("Girar &180°"), "image-rotate-180", "Ctrl+J", c(() => this.transformImage("180")), has);
+        A("colorProfile", tr("&Perfil de colores..."), "color-profile", null, c(() => this.colorProfile()), has);
         A("animation", tr("A&nimación..."), "media-playback-start", null, c(() => this.editAnimation()), has);
         A("flatten", tr("&Acoplar"), "image-flatten", "Ctrl+Shift+F", c(() => this.flatten()), () => this.doc?.layers.length > 1);
         // Capas
@@ -551,7 +553,7 @@ export class App extends EventTarget {
             { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), a("rulers"), "-",
                                                   a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
-                                                     a("rot180"), "-", a("animation"), "-", a("flatten")] },
+                                                     a("rot180"), "-", a("colorProfile"), a("animation"), "-", a("flatten")] },
             { title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
                                                     a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), a("rotateZoom"), "-", a("layerTop"),
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
@@ -1098,7 +1100,7 @@ export class App extends EventTarget {
         let edited = null;
         if (!format.plugin && hasSaveOptions(format.ext)) {
             const frames = format.animation && doc.layers.length > 1 ? animationFrames(doc, 0, true) : [];
-            const r = await saveConfigDialog(format, flattenedImage(doc), options, frames, { dpi: doc.dpi, icc: doc.iccProfile || null });
+            const r = await saveConfigDialog(format, flattenedImage(doc), options, frames, { dpi: doc.dpi, icc: embeddedProfile(doc) });
             if (!r)
                 return false;
             options = r.options;
@@ -1454,6 +1456,28 @@ export class App extends EventTarget {
         const names = { flipH: ["Voltear horizontalmente", "layer-flip-horizontal"], flipV: ["Voltear verticalmente", "layer-flip-vertical"],
                         180: ["Girar 180°", "layer-rotate-180"] };
         doc.pushPixels(layer, doc.rect, before, tr(names[kind][0]), names[kind][1]);
+    }
+
+    // Imagen > Perfil de colores: convertir los colores a otro perfil o asignarlo.
+    async colorProfile() {
+        const doc = this.doc, r = await colorProfileDialog(doc.colorProfile);
+        if (!r)
+            return;
+        const before = doc.snapshot();
+        if (r.result === "convert") {
+            document.body.classList.add("busy");
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            for (const layer of doc.layers) {
+                const data = layer.ctx.getImageData(0, 0, doc.width, doc.height);
+                transformPixels(data.data, doc.colorProfile, r.profile);
+                layer.ctx.putImageData(data, 0, 0);
+            }
+            document.body.classList.remove("busy");
+        }
+        doc.colorProfile = r.profile;
+        doc.emit("size");
+        doc.layersChanged();
+        doc.pushSnapshot(before, r.result === "convert" ? tr("Convertir perfil de colores") : tr("Asignar perfil de colores"), "color-profile");
     }
 
     // Duración de los fotogramas de un GIF (en el nombre de cada capa).

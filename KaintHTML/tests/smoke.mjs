@@ -245,6 +245,8 @@ for (const id of ["huesat", "curves", "dropshadow", "clouds"]) {
 }
 check(await lastStep() === "Nubes", "los efectos con diálogo se aplican");
 await page.keyboard.press("Control+Shift+i");
+// Los efectos se calculan en hilos de trabajo: el paso llega un poco después.
+await page.waitForFunction(() => { const h = window.kaint.doc.history; return h.steps[h.index].name === "Invertir colores"; }, null, { timeout: 5000 }).catch(() => {});
 check(await lastStep() === "Invertir colores", "el atajo de Invertir colores aplica el efecto");
 await shot("efectos.png");
 
@@ -879,6 +881,29 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     check(await saving && file.suggestedFilename() === "prueba.webp" && /Tamaño del archivo: [\d,.]+ (bytes|KiB|MiB)/.test(status),
           `configuración de guardado con la vista previa (${status})`);
     await page.evaluate(() => window.kaint.closeDocument(window.kaint.doc, false));
+}
+
+// Perfil de colores como en Kaint: convertir de Adobe RGB a sRGB da los mismos números que Qt, y
+// el perfil se guarda dentro del PNG, el JPEG, el WebP y el TIFF y vuelve al abrirlos.
+{
+    const icc = await page.evaluate(async () => {
+        const P = await import("./js/core/ColorProfiles.js");
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const { Document } = await import("./js/core/Document.js");
+        const adobe = P.NamedProfiles.find((n) => n.name === "Adobe RGB");
+        const px = P.transformPixels(new Uint8ClampedArray([200, 100, 50, 255]), adobe, null);
+        const doc = new Document(16, 16, { background: "#c86432" });
+        doc.colorProfile = adobe;
+        const back = {};
+        for (const ext of ["png", "jpg", "webp", "tiff"]) {
+            const f = SaveFormats.find((x) => x.ext === ext);
+            const d = await openFile(new File([await encode(doc, f)], `perfil.${ext}`));
+            back[ext] = P.describe(d.colorProfile);
+        }
+        return { px: [...px].slice(0, 3), reread: P.describe(P.readIcc(adobe.icc)), back };
+    });
+    check(icc.px.join() === "227,100,42" && icc.reread === "Adobe RGB" && Object.values(icc.back).every((n) => n === "Adobe RGB"),
+          `perfil de colores (${JSON.stringify(icc)})`);
 }
 
 // Todas las páginas de Configuración se abren sin errores.

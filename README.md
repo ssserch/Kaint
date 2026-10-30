@@ -78,8 +78,8 @@ runs on Windows 10 and 11.
       <h4>Cursors, rulers and status bar</h4>
       Painting tools use their icon as the cursor, sized like the system cursor and with the hot
       spot on its tip; the selection tools, gradient, line, text and shapes keep the system pointer
-      (from your cursor theme) with a small icon beside it (the chosen shape, for Shapes), like
-      Paint.NET. The move tools show a curved arrow that turns as you rotate. Dark rulers (or the
+      (from your cursor theme, at its size and animated if it is) with a small icon beside it (the
+      chosen shape, for Shapes), like Paint.NET. The move tools show a curved arrow that turns as you rotate. Dark rulers (or the
       toolbar color) that the floating windows never cover, and the tool's icon in the status bar.
       Open and Save As use the system file dialog, the same one as Firefox (or Qt's, in
       <b>Settings</b>).

@@ -728,14 +728,16 @@ export class App extends EventTarget {
     }
 
     createToolBar() {
-        // La barra principal lleva los mismos iconos que los menús.
+        // La barra principal lleva los mismos iconos que los menús, salvo de Cortar a Anular la
+        // selección, que son como los de Paint.NET 4 (como en Kaint).
         const bar = document.getElementById("main-toolbar");
         const groups = [["new", "open", "save"], ["print"], ["cut", "copy", "paste"], ["crop", "deselect"], ["undo", "redo"], ["pixelGrid", "rulers"]];
+        const barIcons = { cut: "toolbar-cut", copy: "toolbar-copy", paste: "toolbar-paste", crop: "toolbar-crop", deselect: "toolbar-deselect" };
         groups.forEach((group, i) => {
             if (i)
                 bar.appendChild(el("span", { className: "sep" }));
             for (const id of group)
-                bar.appendChild(toolButton(this.actions.get(id), this.actions.get(id).icon, 16));
+                bar.appendChild(toolButton(this.actions.get(id), barIcons[id] || this.actions.get(id).icon, 16));
         });
     }
 

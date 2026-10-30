@@ -10,6 +10,8 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
+#include <iterator>
 
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -83,8 +85,9 @@ QString findFile(const QString& theme, const QStringList& names, const QStringLi
     return {};
 }
 
-// Imagen de un archivo XCursor del tamaño nominal más cercano a 'size' (el mayor si empatan).
-Image parse(const QString& file, int size)
+// Fotogramas de un archivo XCursor del tamaño nominal más cercano a 'size' (el mayor si empatan),
+// escalados a ese tamaño: varios si el puntero está animado.
+QList<Image> parse(const QString& file, int size)
 {
     QFile f(file);
     if (!f.open(QIODevice::ReadOnly))
@@ -97,41 +100,43 @@ Image parse(const QString& file, int size)
         return {};
     const quint32 header = u32(4), count = std::min<quint32>(u32(12), 4096);
     constexpr quint32 kImage = 0xfffd0002;
-    qint64 best = -1;
-    int bestSize = 0;
+    auto entry = [header](quint32 i) { return qint64(header) + qint64(i) * 12; };
+    int bestSize = -1;
     for (quint32 i = 0; i < count; ++i) {
-        const qint64 entry = qint64(header) + qint64(i) * 12;
-        if (u32(entry) != kImage)
+        if (u32(entry(i)) != kImage)
             continue;
-        const int nominal = int(u32(entry + 4));
+        const int nominal = int(u32(entry(i) + 4));
         const int d = std::abs(nominal - size), bestD = std::abs(bestSize - size);
-        if (best < 0 || d < bestD || (d == bestD && nominal > bestSize)) {
-            best = u32(entry + 8);
+        if (bestSize < 0 || d < bestD || (d == bestD && nominal > bestSize))
             bestSize = nominal;
+    }
+    QList<Image> frames;
+    for (quint32 i = 0; i < count && bestSize >= 0 && frames.size() < 256; ++i) {
+        if (u32(entry(i)) != kImage || int(u32(entry(i) + 4)) != bestSize)
+            continue;
+        // Trozo de imagen: cabecera, tipo, tamaño nominal, versión, ancho, alto, punto activo
+        // (x, y), retardo y los píxeles ARGB premultiplicados.
+        const qint64 chunk = u32(entry(i) + 8);
+        const quint32 w = u32(chunk + 16), h = u32(chunk + 20);
+        const qint64 pixels = chunk + u32(chunk);
+        if (w == 0 || h == 0 || w > 1024 || h > 1024 || pixels + qint64(w) * h * 4 > data.size())
+            continue;
+        QImage image(int(w), int(h), QImage::Format_ARGB32_Premultiplied);
+        for (quint32 y = 0; y < h; ++y) {
+            auto* line = reinterpret_cast<QRgb*>(image.scanLine(int(y)));
+            for (quint32 x = 0; x < w; ++x)
+                line[x] = u32(pixels + (qint64(y) * w + x) * 4);
         }
+        Image frame{image, QPoint(int(u32(chunk + 24)), int(u32(chunk + 28))), int(u32(chunk + 32))};
+        if (bestSize > 0 && bestSize != size) {
+            const qreal k = qreal(size) / bestSize;
+            frame.image = image.scaled(QSize(std::max(1, int(std::lround(w * k))), std::max(1, int(std::lround(h * k)))),
+                                       Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            frame.hotSpot = QPoint(int(std::lround(frame.hotSpot.x() * k)), int(std::lround(frame.hotSpot.y() * k)));
+        }
+        frames.append(frame);
     }
-    if (best < 0)
-        return {};
-    // Trozo de imagen: cabecera, tipo, tamaño nominal, versión, ancho, alto, punto activo (x, y),
-    // retardo y los píxeles ARGB premultiplicados.
-    const quint32 w = u32(best + 16), h = u32(best + 20);
-    const qint64 pixels = best + u32(best);
-    if (w == 0 || h == 0 || w > 1024 || h > 1024 || pixels + qint64(w) * h * 4 > data.size())
-        return {};
-    QImage image(int(w), int(h), QImage::Format_ARGB32_Premultiplied);
-    for (quint32 y = 0; y < h; ++y) {
-        auto* line = reinterpret_cast<QRgb*>(image.scanLine(int(y)));
-        for (quint32 x = 0; x < w; ++x)
-            line[x] = u32(pixels + (qint64(y) * w + x) * 4);
-    }
-    Image result{image, QPoint(int(u32(best + 24)), int(u32(best + 28)))};
-    if (bestSize > 0 && bestSize != size) {
-        const qreal k = qreal(size) / bestSize;
-        result.image = image.scaled(QSize(std::max(1, int(std::lround(w * k))), std::max(1, int(std::lround(h * k)))),
-                                    Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        result.hotSpot = QPoint(int(std::lround(result.hotSpot.x() * k)), int(std::lround(result.hotSpot.y() * k)));
-    }
-    return result;
+    return frames;
 }
 
 } // namespace
@@ -156,9 +161,25 @@ QString themeName()
     return QStringLiteral("default");
 }
 
-Image load(Shape shape, int pixelSize)
+int desktopSize()
 {
-    static QHash<QString, Image> cache;
+    // Plasma en Wayland no siempre exporta XCURSOR_SIZE: el de KDE o el de GTK.
+    const QString config = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    bool ok = false;
+    const QSettings kde(config + QStringLiteral("/kcminputrc"), QSettings::IniFormat);
+    if (const int size = kde.value(QStringLiteral("Mouse/cursorSize")).toInt(&ok); ok && size > 0)
+        return size;
+    for (const char* gtk : {"/gtk-4.0/settings.ini", "/gtk-3.0/settings.ini"}) {
+        const QSettings s(config + QLatin1String(gtk), QSettings::IniFormat);
+        if (const int size = s.value(QStringLiteral("Settings/gtk-cursor-theme-size")).toInt(&ok); ok && size > 0)
+            return size;
+    }
+    return 0;
+}
+
+QList<Image> load(Shape shape, int pixelSize)
+{
+    static QHash<QString, QList<Image>> cache;
     const QString theme = themeName();
     const QString key = QStringLiteral("%1/%2/%3").arg(theme).arg(int(shape)).arg(pixelSize);
     if (const auto it = cache.constFind(key); it != cache.cend())
@@ -171,12 +192,136 @@ Image load(Shape shape, int pixelSize)
     for (const QString& t : {theme, QStringLiteral("default"), QStringLiteral("breeze_cursors"), QStringLiteral("Adwaita")})
         if (file.isEmpty())
             file = findFile(t, names, paths, 0);
-    const Image image = file.isEmpty() ? Image() : parse(file, pixelSize);
-    cache.insert(key, image);
-    return image;
+    const QList<Image> frames = file.isEmpty() ? QList<Image>() : parse(file, pixelSize);
+    cache.insert(key, frames);
+    return frames;
 }
 
 #elif defined(Q_OS_WIN)
+
+namespace {
+
+// Archivo del puntero en el esquema elegido (Configuración del mouse), con las variables de
+// entorno puestas (%SystemRoot%...); vacío si no se cambió.
+QString cursorFile(Shape shape)
+{
+    const QSettings reg(QStringLiteral("HKEY_CURRENT_USER\\Control Panel\\Cursors"), QSettings::NativeFormat);
+    const QString value = reg.value(shape == Shape::IBeam ? QStringLiteral("IBeam") : QStringLiteral("Arrow")).toString();
+    if (value.isEmpty())
+        return {};
+    wchar_t expanded[1024];
+    const DWORD n = ExpandEnvironmentStringsW(reinterpret_cast<LPCWSTR>(value.utf16()), expanded, DWORD(std::size(expanded)));
+    return n > 0 && n <= std::size(expanded) ? QString::fromWCharArray(expanded, int(n) - 1) : value;
+}
+
+// Milisegundos de cada paso de un .ani (el puntero animado de Windows): los de la lista "rate" o
+// el de la cabecera "anih", en sesentavos de segundo; vacío si no es un .ani.
+QList<int> aniDelays(const QString& file)
+{
+    QFile f(file);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QByteArray data = f.read(16 << 20);
+    auto u32 = [&data](qint64 at) -> quint32 {
+        return at >= 0 && at + 4 <= data.size() ? qFromLittleEndian<quint32>(data.constData() + at) : 0;
+    };
+    if (!data.startsWith("RIFF") || data.mid(8, 4) != "ACON")
+        return {};
+    // Cabecera "anih": tamaño, fotogramas, pasos, ancho, alto, bits, planos, retardo y atributos.
+    int steps = 0, rate = 0;
+    QList<int> rates;
+    for (qint64 at = 12; at + 8 <= data.size();) {
+        const QByteArray id = data.mid(at, 4);
+        const qint64 size = u32(at + 4);
+        if (id == "anih" && size >= 36) {
+            const quint32 frames = u32(at + 12), count = u32(at + 16);
+            steps = int(std::min<quint32>(count ? count : frames, 256));
+            rate = int(u32(at + 36));
+        } else if (id == "rate") {
+            for (qint64 i = 0; i + 4 <= size && rates.size() < 256; i += 4)
+                rates.append(int(u32(at + 8 + i)));
+        }
+        at += 8 + size + (size & 1);
+    }
+    QList<int> delays;
+    for (int i = 0; i < steps; ++i)
+        delays.append(std::max(1, i < rates.size() ? rates.at(i) : rate) * 1000 / 60);
+    return delays;
+}
+
+// Tamaño de un puntero (el de su imagen, o la mitad de la máscara en los monocromos, que lleva
+// las dos) y su punto activo.
+QSize cursorSize(HCURSOR cursor, QPoint* hotSpot)
+{
+    ICONINFO info{};
+    if (!GetIconInfo(cursor, &info))
+        return {};
+    BITMAP bm{};
+    QSize size;
+    if (info.hbmColor && GetObjectW(info.hbmColor, sizeof(bm), &bm))
+        size = QSize(int(bm.bmWidth), int(bm.bmHeight));
+    else if (info.hbmMask && GetObjectW(info.hbmMask, sizeof(bm), &bm))
+        size = QSize(int(bm.bmWidth), int(bm.bmHeight) / 2);
+    *hotSpot = QPoint(int(info.xHotspot), int(info.yHotspot));
+    if (info.hbmColor)
+        DeleteObject(info.hbmColor);
+    if (info.hbmMask)
+        DeleteObject(info.hbmMask);
+    return size;
+}
+
+// Un paso de un puntero (el fotograma 'step' en los animados) a su tamaño, sobre transparente y,
+// si no trae alfa (los monocromos), recortado con su máscara. QImage::fromHICON no sirve: supone
+// que el punto activo está en el centro, como en los iconos, y saca la imagen del doble de ese
+// punto (en los punteros, pequeña y deformada).
+QImage cursorFrame(HCURSOR cursor, QSize size, UINT step)
+{
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = size.width();
+    bmi.bmiHeader.biHeight = -size.height(); // de arriba abajo
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    const HDC dc = CreateCompatibleDC(nullptr);
+    void* bits = nullptr;
+    const HBITMAP bitmap = dc ? CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+    QImage image;
+    if (bitmap && bits) {
+        const HGDIOBJ old = SelectObject(dc, bitmap);
+        auto draw = [&](UINT flags) {
+            std::memset(bits, 0, size_t(size.width()) * size_t(size.height()) * 4);
+            const bool ok = DrawIconEx(dc, 0, 0, cursor, size.width(), size.height(), step, nullptr, flags);
+            GdiFlush();
+            return ok ? QImage(static_cast<const uchar*>(bits), size.width(), size.height(), QImage::Format_ARGB32_Premultiplied).copy()
+                      : QImage();
+        };
+        image = draw(DI_NORMAL);
+        bool alpha = false;
+        for (int y = 0; y < image.height() && !alpha; ++y) {
+            const auto* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+            for (int x = 0; x < image.width() && !alpha; ++x)
+                alpha = qAlpha(line[x]) != 0;
+        }
+        if (!image.isNull() && !alpha) {
+            const QImage mask = draw(DI_MASK);
+            for (int y = 0; y < image.height(); ++y) {
+                auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
+                const auto* maskLine = mask.isNull() ? nullptr : reinterpret_cast<const QRgb*>(mask.constScanLine(y));
+                for (int x = 0; x < image.width(); ++x)
+                    line[x] = maskLine && qRed(maskLine[x]) ? 0 : line[x] | 0xff000000;
+            }
+        }
+        SelectObject(dc, old);
+    }
+    if (bitmap)
+        DeleteObject(bitmap);
+    if (dc)
+        DeleteDC(dc);
+    return image;
+}
+
+} // namespace
 
 QString themeName()
 {
@@ -185,40 +330,49 @@ QString themeName()
     return reg.value(QStringLiteral("."), QStringLiteral("Windows")).toString();
 }
 
-Image load(Shape shape, int pixelSize)
+int desktopSize()
 {
-    static QHash<QString, Image> cache;
-    const QString key = QStringLiteral("%1/%2/%3").arg(themeName()).arg(int(shape)).arg(pixelSize);
+    return 0;
+}
+
+QList<Image> load(Shape shape, int pixelSize)
+{
+    static QHash<QString, QList<Image>> cache;
+    const QString file = cursorFile(shape);
+    const QString key = QStringLiteral("%1/%2/%3/%4").arg(themeName(), file).arg(int(shape)).arg(pixelSize);
     if (const auto it = cache.constFind(key); it != cache.cend())
         return *it;
-    // El puntero actual del sistema (con el esquema, el tamaño y el color elegidos en Windows), a
-    // ese tamaño; si no se puede cargar así, el de tamaño normal.
-    const LPCWSTR id = MAKEINTRESOURCEW(shape == Shape::IBeam ? 32513 : 32512); // IDC_IBEAM, IDC_ARROW
-    HCURSOR owned = static_cast<HCURSOR>(LoadImageW(nullptr, id, IMAGE_CURSOR, pixelSize, pixelSize, LR_DEFAULTCOLOR));
-    const HCURSOR cursor = owned ? owned : LoadCursorW(nullptr, id);
-    Image image;
-    if (cursor) {
-        image.image = QImage::fromHICON(static_cast<HICON>(cursor)).convertToFormat(QImage::Format_ARGB32_Premultiplied);
-        ICONINFO info{};
-        if (GetIconInfo(static_cast<HICON>(cursor), &info)) {
-            image.hotSpot = QPoint(int(info.xHotspot), int(info.yHotspot));
-            if (info.hbmColor)
-                DeleteObject(info.hbmColor);
-            if (info.hbmMask)
-                DeleteObject(info.hbmMask);
+    // El archivo del puntero a ese tamaño (Windows elige el mejor que traiga y lo escala él, como
+    // al ponerlo); si no se puede, el puntero actual del sistema, al suyo.
+    const HCURSOR owned = file.isEmpty() ? nullptr
+                                         : static_cast<HCURSOR>(LoadImageW(nullptr, reinterpret_cast<LPCWSTR>(file.utf16()),
+                                                                           IMAGE_CURSOR, pixelSize, pixelSize, LR_LOADFROMFILE));
+    const HCURSOR cursor = owned ? owned : LoadCursorW(nullptr, MAKEINTRESOURCEW(shape == Shape::IBeam ? 32513 : 32512)); // IDC_IBEAM, IDC_ARROW
+    QList<Image> frames;
+    QPoint hotSpot;
+    if (const QSize size = cursor ? cursorSize(cursor, &hotSpot) : QSize(); !size.isEmpty()) {
+        // Los .ani, paso a paso (DrawIconEx dibuja el que se le pida).
+        const QList<int> delays = file.isEmpty() ? QList<int>() : aniDelays(file);
+        for (int i = 0; i < std::max<int>(1, int(delays.size())); ++i) {
+            const QImage image = cursorFrame(cursor, size, UINT(i));
+            if (image.isNull())
+                break;
+            frames.append({image, hotSpot, delays.isEmpty() ? 0 : delays.at(i)});
         }
     }
     if (owned)
         DestroyCursor(owned);
     // Un puntero cargado a otro tamaño (el de siempre) se escala al pedido.
-    if (!image.image.isNull() && image.image.width() != pixelSize && image.image.width() > 0) {
-        const qreal k = qreal(pixelSize) / image.image.width();
-        image.image = image.image.scaled(QSize(pixelSize, std::max(1, int(std::lround(image.image.height() * k)))),
+    for (Image& frame : frames) {
+        if (frame.image.width() == pixelSize)
+            continue;
+        const qreal k = qreal(pixelSize) / frame.image.width();
+        frame.image = frame.image.scaled(QSize(pixelSize, std::max(1, int(std::lround(frame.image.height() * k)))),
                                          Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        image.hotSpot = QPoint(int(std::lround(image.hotSpot.x() * k)), int(std::lround(image.hotSpot.y() * k)));
+        frame.hotSpot = QPoint(int(std::lround(frame.hotSpot.x() * k)), int(std::lround(frame.hotSpot.y() * k)));
     }
-    cache.insert(key, image);
-    return image;
+    cache.insert(key, frames);
+    return frames;
 }
 
 #else
@@ -228,7 +382,12 @@ QString themeName()
     return {};
 }
 
-Image load(Shape, int)
+int desktopSize()
+{
+    return 0;
+}
+
+QList<Image> load(Shape, int)
 {
     return {};
 }

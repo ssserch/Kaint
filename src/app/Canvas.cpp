@@ -53,6 +53,8 @@ Canvas::Canvas(QWidget* parent)
 
     m_autoScrollTimer.setInterval(16);
     connect(&m_autoScrollTimer, &QTimer::timeout, this, &Canvas::autoScrollStep);
+    m_cursorTimer.setSingleShot(true);
+    connect(&m_cursorTimer, &QTimer::timeout, this, &Canvas::nextCursorFrame);
 
     connect(&m_antsTimer, &QTimer::timeout, this, [this] {
         const bool selection = m_doc && !m_doc->selection().isEmpty();
@@ -462,17 +464,46 @@ void Canvas::updateOverlay()
 void Canvas::updateCursor()
 {
     if (m_panning)
-        viewport()->setCursor(Icons::handCursor(true));
+        applyCursor(Icons::handCursor(true));
     else if (m_spaceDown)
-        viewport()->setCursor(Icons::handCursor(false));
+        applyCursor(Icons::handCursor(false));
     else
-        viewport()->setCursor(m_tool && m_doc ? m_tool->cursor() : QCursor(Qt::ArrowCursor));
+        applyCursor(m_tool && m_doc ? m_tool->cursor() : QCursor(Qt::ArrowCursor));
 }
 
 void Canvas::setToolCursor(const QCursor& cursor)
 {
     if (!m_panning && !m_spaceDown)
-        viewport()->setCursor(cursor);
+        applyCursor(cursor);
+}
+
+void Canvas::applyCursor(const QCursor& cursor)
+{
+    // Las herramientas vuelven a poner su cursor al mover el ratón: si es el animado que ya se ve,
+    // sigue por su fotograma.
+    QList<Icons::CursorFrame> frames = Icons::cursorFrames(cursor);
+    if (!frames.isEmpty() && !m_cursorFrames.isEmpty()
+        && frames.first().cursor.pixmap().cacheKey() == m_cursorFrames.first().cursor.pixmap().cacheKey())
+        return;
+    m_cursorFrames = std::move(frames);
+    m_cursorFrame = 0;
+    if (m_cursorFrames.isEmpty())
+        m_cursorTimer.stop();
+    else
+        m_cursorTimer.start(std::max(20, m_cursorFrames.first().delay));
+    viewport()->setCursor(cursor);
+}
+
+void Canvas::nextCursorFrame()
+{
+    if (m_cursorFrames.isEmpty())
+        return;
+    m_cursorFrame = (m_cursorFrame + 1) % int(m_cursorFrames.size());
+    const Icons::CursorFrame& frame = m_cursorFrames.at(m_cursorFrame);
+    // Fuera del lienzo no hace falta cambiarlo (al volver, el siguiente fotograma llega enseguida).
+    if (viewport()->underMouse())
+        viewport()->setCursor(frame.cursor);
+    m_cursorTimer.start(std::max(20, frame.delay));
 }
 
 void Canvas::setRulersVisible(bool on)

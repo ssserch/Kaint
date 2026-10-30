@@ -42,6 +42,8 @@ QIcon png(const QString& file, const QString& onFile = {});
 QIcon named(const QString& name);
 // Archivo de paint.js (sin ".png") de un nombre de Kaint, o vacío.
 QString pngFile(const QString& name);
+// Gris y medio transparente: el aspecto de los iconos desactivados.
+QImage disabledImage(QImage image);
 // Nombres de la tabla de PNG cuyo archivo no está entre los recursos (para las pruebas).
 QStringList missingNamedIcons();
 // Nombre del icono de un ajuste o efecto ("effect-" + su identificador) si hay PNG; si no, fallback.
@@ -50,7 +52,8 @@ QString effectIcon(const QString& id, const QString& fallback);
 void paintUnsavedStar(QPainter& p, const QRectF& r);
 // Cursores de la mano (Mano, botón central y barra espaciadora): abierta o agarrando.
 QCursor handCursor(bool grabbing);
-// Tamaño de los cursores del sistema (XCURSOR_SIZE, o el de Windows), en píxeles lógicos.
+// Tamaño de los cursores del sistema (XCURSOR_SIZE, el de KDE o GTK, o el de Windows), en
+// píxeles lógicos.
 int cursorSize();
 // Cursor con el icono actual de una herramienta ("paintbrush", "zoom"...), a la medida del cursor
 // del sistema y con el punto activo en su punta; si no hay icono, 'fallback'.
@@ -64,6 +67,15 @@ QCursor rotateCursor(qreal angle);
 QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam = false);
 // El de una herramienta ("gradient", "text"...): su icono actual en miniatura.
 QCursor miniToolCursor(const QString& name, bool ibeam = false);
+// Un fotograma de un cursor animado y los milisegundos que se ve.
+struct CursorFrame {
+    QCursor cursor;
+    int delay = 0;
+};
+// Si el puntero del sistema está animado (temas XCursor con varios fotogramas, .ani de Windows),
+// los fotogramas del cursor que devolvió miniCursor() o miniToolCursor(), el primero el mismo;
+// vacío con los demás cursores.
+QList<CursorFrame> cursorFrames(const QCursor& cursor);
 // Con 'on' (por defecto), esos cursores usan la flecha y la I del tema de cursores del sistema
 // (donde se puede leer, como los temas XCursor de Linux); si no, las que dibuja Kaint.
 void setSystemPointer(bool on);

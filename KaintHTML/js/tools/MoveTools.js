@@ -308,7 +308,7 @@ class MoveToolBase extends Tool {
         // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint), salvo que
         // en Configuración no se oculten al arrastrar.
         if (s && this.drag)
-            view.strokeSegments(ctx, s.selBase.outline(), box.matrix());
+            view.strokeSelection(ctx, s.selBase, box.matrix());
         if (this.drag && Settings.get("hideMoveBox") !== false)
             return;
         const pts = box.handles().map((p) => view.imageToView(p.x, p.y));
@@ -565,7 +565,7 @@ export class MoveSelectionTool extends MoveToolBase {
 
     paintOverlay(ctx, view) {
         if (this.drag)
-            view.strokeSegments(ctx, this.drag.session.selBase.outline(), this.drag.session.box.matrix());
+            view.strokeSelection(ctx, this.drag.session.selBase, this.drag.session.box.matrix());
         super.paintOverlay(ctx, view);
     }
 }

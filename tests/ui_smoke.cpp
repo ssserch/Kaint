@@ -1182,10 +1182,33 @@ int main(int argc, char** argv)
                   && buttons.first()->icon().pixmap(QSize(22, 22)).toImage()
                          == Icons::tool(QStringLiteral("rectangleselect"), QIcon()).pixmap(QSize(22, 22)).toImage());
         }
-        // La barra principal lleva los mismos PNG que los menús.
+        // La barra principal lleva los mismos PNG que los menús, salvo de Cortar a Anular la
+        // selección, con iconos como los de Paint.NET 4: botones propios que hacen lo mismo que
+        // las acciones del menú y se activan y desactivan con ellas.
         if (auto* mainBar = w.findChild<QToolBar*>(QStringLiteral("MainToolBar"))) {
             QAction* save = findAction(&w, QStringLiteral("Guardar"));
             CHECK(save && mainBar->actions().contains(save));
+            auto named = [](const QList<QAction*>& list, const QString& text) -> QAction* {
+                for (QAction* a : list)
+                    if (a->text().remove(QLatin1Char('&')) == text)
+                        return a;
+                return nullptr;
+            };
+            const QList<QAction*> menuActions = w.findChildren<QAction*>(Qt::FindDirectChildrenOnly);
+            for (const QString& text : {QStringLiteral("Cortar"), QStringLiteral("Copiar"), QStringLiteral("Pegar"),
+                                        QStringLiteral("Recortar según la selección"), QStringLiteral("Anular la selección")}) {
+                QAction* menu = named(menuActions, text);
+                QAction* bar = named(mainBar->actions(), text);
+                CHECK(menu && bar && bar != menu && !mainBar->actions().contains(menu));
+                if (!menu || !bar)
+                    continue;
+                CHECK(bar->isEnabled() == menu->isEnabled());
+                CHECK(bar->icon().pixmap(QSize(16, 16)).toImage() != menu->icon().pixmap(QSize(16, 16)).toImage());
+                const bool enabled = menu->isEnabled();
+                menu->setEnabled(!enabled);
+                CHECK(bar->isEnabled() == !enabled);
+                menu->setEnabled(enabled);
+            }
         }
     }
 
@@ -1257,7 +1280,7 @@ int main(int argc, char** argv)
         CHECK(pencil.shape() == Qt::BitmapCursor && !pencil.pixmap().isNull());
         CHECK(pencil.hotSpot().x() < pencil.pixmap().width() / 3 && pencil.hotSpot().y() > pencil.pixmap().height() * 2 / 3);
         const QCursor move = Icons::toolCursor(QStringLiteral("moveselectedpixels"));
-        CHECK(move.hotSpot().x() < 4 && move.hotSpot().y() < 4);
+        CHECK(move.hotSpot().x() * 6 < move.pixmap().width() && move.hotSpot().y() * 6 < move.pixmap().height());
         tools->select(ToolId::Paintbrush);
         settle();
         CHECK(canvas->viewport()->cursor().shape() == Qt::BitmapCursor);
@@ -2745,28 +2768,33 @@ int main(int argc, char** argv)
     CHECK(!Icons::system({"edit-undo"}).isNull());
 
     // Cursores con miniatura: la flecha del tema de cursores del sistema (XCursor) con la
-    // miniatura al lado, o la de Kaint si no hay tema.
+    // miniatura al lado, o la de Kaint si no hay tema. Este puntero está animado: dos fotogramas,
+    // de 50 y 70 ms.
     {
         QTemporaryDir icons;
         QDir().mkpath(icons.filePath(QStringLiteral("Prueba/cursors")));
         QByteArray file("Xcur");
         auto u32 = [&file](quint32 v) { file.append(reinterpret_cast<const char*>(&v), 4); };
-        const quint32 side = 24;
-        u32(16); u32(0x10000); u32(1);
-        u32(0xfffd0002); u32(side); u32(16 + 12);
-        u32(36); u32(0xfffd0002); u32(side); u32(1); u32(side); u32(side); u32(5); u32(4); u32(0);
-        for (quint32 y = 0; y < side; ++y)
-            for (quint32 x = 0; x < side; ++x)
-                u32(x >= 5 && y >= 4 && x - 5 <= (y - 4) / 2 && y < 20 ? 0xff1e78dcu : 0u);
+        const quint32 side = 24, chunk = 36 + side * side * 4;
+        u32(16); u32(0x10000); u32(2);
+        u32(0xfffd0002); u32(side); u32(16 + 24);
+        u32(0xfffd0002); u32(side); u32(16 + 24 + chunk);
+        for (const quint32 delay : {50u, 70u}) {
+            u32(36); u32(0xfffd0002); u32(side); u32(1); u32(side); u32(side); u32(5); u32(4); u32(delay);
+            for (quint32 y = 0; y < side; ++y)
+                for (quint32 x = 0; x < side; ++x)
+                    u32(x >= 5 && y >= 4 && x - 5 <= (y - 4) / 2 && y < 20 ? 0xff1e78dcu : 0u);
+        }
         QFile out(icons.filePath(QStringLiteral("Prueba/cursors/left_ptr")));
         CHECK(out.open(QIODevice::WriteOnly) && out.write(file) == file.size());
         out.close();
         const QByteArray oldPath = qgetenv("XCURSOR_PATH"), oldTheme = qgetenv("XCURSOR_THEME");
         qputenv("XCURSOR_PATH", QFile::encodeName(icons.path()));
         qputenv("XCURSOR_THEME", "Prueba");
-        const SystemCursors::Image sys = SystemCursors::load(SystemCursors::Shape::Arrow, Icons::cursorSize());
+        const QList<SystemCursors::Image> sys = SystemCursors::load(SystemCursors::Shape::Arrow, Icons::cursorSize());
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
-        CHECK(!sys.image.isNull() && sys.hotSpot == QPoint(5, 4) * Icons::cursorSize() / int(side));
+        CHECK(sys.size() == 2 && !sys.first().image.isNull() && sys.first().hotSpot == QPoint(5, 4) * Icons::cursorSize() / int(side));
+        CHECK(sys.size() == 2 && sys.at(0).delay == 50 && sys.at(1).delay == 70);
         auto mini = [](QPainter& p, const QRectF& r) { p.fillRect(r, Qt::green); };
         const QCursor withSystem = Icons::miniCursor(QStringLiteral("prueba-sistema"), mini);
         CHECK(withSystem.hotSpot() == QPoint(5, 4) * Icons::cursorSize() / int(side));
@@ -2779,11 +2807,16 @@ int main(int argc, char** argv)
                 green = green || (c.green() > 200 && c.red() < 60 && qAlpha(img.pixel(x, y)) > 200);
             }
         CHECK(blue && green);
+        // Sus fotogramas, para que el lienzo los vaya cambiando (el primero, el mismo cursor).
+        const QList<Icons::CursorFrame> frames = Icons::cursorFrames(withSystem);
+        CHECK(frames.size() == 2 && frames.at(0).delay == 50 && frames.at(1).delay == 70);
+        CHECK(!frames.isEmpty() && frames.first().cursor.pixmap().cacheKey() == withSystem.pixmap().cacheKey());
         Icons::setSystemPointer(false);
-        CHECK(Icons::miniCursor(QStringLiteral("prueba-sistema"), mini).hotSpot() == QPoint(0, 0));
+        const QCursor drawn = Icons::miniCursor(QStringLiteral("prueba-sistema"), mini);
+        CHECK(drawn.hotSpot() == QPoint(0, 0) && Icons::cursorFrames(drawn).isEmpty());
         Icons::setSystemPointer(true);
 #else
-        CHECK(sys.image.isNull());
+        CHECK(sys.isEmpty());
 #endif
         qputenv("XCURSOR_PATH", oldPath);
         qputenv("XCURSOR_THEME", oldTheme);

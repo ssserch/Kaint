@@ -66,12 +66,12 @@
     <screenshot type="default">
       <caption>The dark theme with the tools, colors, history and layers windows</caption>
       <caption xml:lang="es">El tema oscuro con las ventanas de herramientas, colores, historial y capas</caption>
-      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.1/img/other/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.2/img/other/screenshot.png</image>
     </screenshot>
     <screenshot>
       <caption>The light theme</caption>
       <caption xml:lang="es">El tema claro</caption>
-      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.1/img/other/screenshot-light.png</image>
+      <image>https://raw.githubusercontent.com/ssserch/Kaint/v1.1.2/img/other/screenshot-light.png</image>
     </screenshot>
   </screenshots>
 
@@ -109,6 +109,16 @@
   </keywords>
 
   <releases>
+    <release version="1.1.2" date="2026-10-30">
+      <description>
+        <p>Fixes for the cursors and new icons in the main toolbar.</p>
+        <ul>
+          <li>Cursors with a tool thumbnail follow the pointer size chosen in KDE or GTK and play animated pointers</li>
+          <li>On Windows, those cursors are no longer blurry or distorted with custom pointers</li>
+          <li>New Cut, Copy, Paste, Crop to Selection and Deselect icons in the main toolbar</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.1" date="2026-10-29">
       <description>
         <p>A Paint.NET style for the interface, a welcome window and many fixes.</p>

@@ -318,17 +318,23 @@ check(await page.evaluate(() => document.documentElement.classList.contains("no-
                           && document.querySelector(".layer-list .row").getAnimations().length === 0), "sin animaciones no se deslizan");
 
 // Como Kaint de escritorio: iconos de herramientas dibujados (Formas ocupa su fila), barras con
-// los PNG de los menús e icono de la herramienta en la barra de estado.
+// los PNG de los menús salvo de Cortar a Anular la selección (dibujados como los de Paint.NET 4,
+// en gris los que no se pueden usar) e icono de la herramienta en la barra de estado.
 await page.evaluate(() => window.kaint.addDocument(new window.kaint.doc.constructor(400, 300)));
 await tool("paintbrush");
 const icons = await page.evaluate(() => {
     const buttons = [...document.querySelectorAll(".tools-grid .tbutton")];
     const last = buttons[buttons.length - 1].getBoundingClientRect(), first = buttons[0].getBoundingClientRect();
     return { drawn: buttons.every((b) => b.querySelector(".kicon").tagName === "CANVAS"), lastWide: last.width > first.width * 1.5,
-             toolbar: [...document.querySelectorAll("#main-toolbar .kicon")].every((i) => i.tagName === "IMG"),
+             toolbar: [...document.querySelectorAll("#main-toolbar .kicon")].every((i) => i.tagName === (i.dataset.icon.startsWith("toolbar-") ? "CANVAS" : "IMG")),
+             drawnBar: [...document.querySelectorAll("#main-toolbar .kicon")].filter((i) => i.tagName === "CANVAS").map((i) => i.dataset.icon).join(),
+             cutGray: getComputedStyle(document.querySelector('#main-toolbar .kicon[data-icon="toolbar-cut"]')).filter.includes("grayscale")
+                      && document.querySelector('#main-toolbar .kicon[data-icon="toolbar-cut"]').closest("button").disabled,
+             pasteColored: getComputedStyle(document.querySelector('#main-toolbar .kicon[data-icon="toolbar-paste"]')).filter === "none",
              status: document.querySelector(".status-bar .hint-icon .kicon")?.dataset.icon };
 });
-check(icons.drawn && icons.lastWide && icons.toolbar && icons.status === "paintbrush", `iconos de herramientas y barras (${JSON.stringify(icons)})`);
+check(icons.drawn && icons.lastWide && icons.toolbar && icons.drawnBar === "toolbar-cut,toolbar-copy,toolbar-paste,toolbar-crop,toolbar-deselect"
+      && icons.cutGray && icons.pasteColored && icons.status === "paintbrush", `iconos de herramientas y barras (${JSON.stringify(icons)})`);
 
 // Mover píxeles seleccionados: sin selección, un clic selecciona todo; cada arrastre es un paso
 await setColors({ r: 0, g: 0, b: 0, a: 255 }, { r: 255, g: 255, b: 255, a: 255 });

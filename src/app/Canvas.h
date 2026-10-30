@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/Icons.h"
 #include "app/Ruler.h"
 
 #include <QAbstractScrollArea>
@@ -119,6 +120,8 @@ private:
     void onSelectionChanged();
     void onColorSpaceChanged();
     void renderRegion(const QRect& r);
+    void applyCursor(const QCursor& cursor);
+    void nextCursorFrame();
     void drawSelection(QPainter& p) const;
     void drawPixelGrid(QPainter& p, const QRect& src) const;
     QRect brushOutlineRect(const QPointF& center) const;
@@ -159,6 +162,11 @@ private:
     Qt::KeyboardModifiers m_lastModifiers;
     QPointF m_mouseView;
     bool m_mouseInside = false;
+
+    // Cursor animado (el puntero del sistema con la miniatura): sus fotogramas y el que se ve.
+    QList<Icons::CursorFrame> m_cursorFrames;
+    int m_cursorFrame = 0;
+    QTimer m_cursorTimer;
 
     QTimer m_antsTimer;
     int m_antsOffset = 0;

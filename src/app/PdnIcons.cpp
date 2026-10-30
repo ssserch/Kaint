@@ -11,8 +11,6 @@
 #include <QPainterPath>
 #include <QPainterPathStroker>
 #include <QSettings>
-#include <QStyle>
-#include <QStyleOption>
 #include <QtMath>
 
 #include <algorithm>
@@ -553,6 +551,116 @@ void drawShape(QPainter& p)
     p.drawEllipse(QRectF(5.8, 8.2, 8.8, 8.8));
 }
 
+// Iconos de la barra principal de Cortar a Anular la selección, como los de Paint.NET 4 (los menús
+// llevan los PNG): la tijera con los mangos azules, las dos hojas, el portapapeles, recortar con
+// la foto y la X roja sobre la selección. Se dibujan en una rejilla de 16 px.
+constexpr int BS = 16;
+
+// Hoja blanca con la esquina de arriba a la derecha doblada.
+void drawSheet(QPainter& p, const QRectF& r, qreal fold)
+{
+    QPainterPath sheet;
+    sheet.moveTo(r.topLeft());
+    sheet.lineTo(r.right() - fold, r.top());
+    sheet.lineTo(r.right(), r.top() + fold);
+    sheet.lineTo(r.bottomRight());
+    sheet.lineTo(r.bottomLeft());
+    sheet.closeSubpath();
+    p.setPen(QPen(QColor(112, 116, 124), 1, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+    p.setBrush(Qt::white);
+    p.drawPath(sheet);
+    QPainterPath ear;
+    ear.moveTo(r.right() - fold, r.top());
+    ear.lineTo(r.right() - fold, r.top() + fold);
+    ear.lineTo(r.right(), r.top() + fold);
+    ear.closeSubpath();
+    p.setBrush(QColor(218, 222, 228));
+    p.drawPath(ear);
+}
+
+void drawCut(QPainter& p)
+{
+    // Hojas grises en V que se cruzan en el eje y mangos azules en anilla.
+    aa(p);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(86, 92, 102));
+    p.drawPolygon(QPolygonF({{2.6, 0.4}, {4.4, 0.4}, {10.0, 10.2}, {8.6, 11.0}}));
+    p.drawPolygon(QPolygonF({{13.4, 0.4}, {11.6, 0.4}, {6.0, 10.2}, {7.4, 11.0}}));
+    p.setPen(QPen(QColor(40, 84, 180), 1.7));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(4.4, 12.9), 2.5, 2.2);
+    p.drawEllipse(QPointF(11.6, 12.9), 2.5, 2.2);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(200, 206, 214));
+    p.drawEllipse(QPointF(8, 8.2), 0.75, 0.75);
+}
+
+void drawCopy(QPainter& p)
+{
+    aa(p);
+    drawSheet(p, QRectF(1.5, 0.5, 8, 10), 3);
+    drawSheet(p, QRectF(5.5, 4.5, 9, 11), 3);
+}
+
+void drawPaste(QPainter& p)
+{
+    // Portapapeles de cartón con la pinza oscura y una hoja delante.
+    aa(p);
+    p.setPen(QPen(QColor(178, 120, 42), 1));
+    p.setBrush(QColor(234, 174, 84));
+    p.drawRoundedRect(QRectF(1.5, 1.5, 10, 13), 1, 1);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(72, 80, 76));
+    p.drawRoundedRect(QRectF(4, 0.3, 5, 3), 1.2, 1.2);
+    drawSheet(p, QRectF(7.5, 6.5, 7, 9), 2.5);
+}
+
+void drawCrop(QPainter& p)
+{
+    // La foto (cielo y montañas) dentro de la selección punteada y las marcas de recorte, que
+    // sobresalen por arriba a la izquierda y por abajo a la derecha.
+    aa(p);
+    const QColor navy(36, 52, 134);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(196, 216, 246));
+    p.drawRect(QRectF(5, 5, 6, 6));
+    p.setBrush(navy);
+    p.drawPolygon(QPolygonF({{5, 11}, {7.1, 7.4}, {8.6, 9.4}, {9.6, 8.1}, {11, 11}}));
+    QPen dash(navy, 1, Qt::CustomDashLine, Qt::FlatCap);
+    dash.setDashPattern({1, 1});
+    p.setPen(dash);
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(QRectF(3.5, 3.5, 9, 9));
+    p.setPen(QPen(navy, 1, Qt::SolidLine, Qt::FlatCap));
+    p.drawLine(QPointF(3.5, 0), QPointF(3.5, 6));
+    p.drawLine(QPointF(0, 3.5), QPointF(6, 3.5));
+    p.drawLine(QPointF(12.5, 10), QPointF(12.5, 16));
+    p.drawLine(QPointF(10, 12.5), QPointF(16, 12.5));
+}
+
+void drawDeselect(QPainter& p)
+{
+    // Selección punteada con el interior azul y, encima, la X roja con borde blanco.
+    aa(p);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(204, 226, 250));
+    p.drawRect(QRectF(5, 5, 10, 10));
+    QPen dash(QColor(62, 70, 86), 1, Qt::CustomDashLine, Qt::FlatCap);
+    dash.setDashPattern({2, 1});
+    p.setPen(dash);
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(QRectF(5.5, 5.5, 9, 9));
+    QPainterPath x;
+    x.moveTo(2, 2);
+    x.lineTo(7.5, 7.5);
+    x.moveTo(7.5, 2);
+    x.lineTo(2, 7.5);
+    p.setPen(QPen(Qt::white, 4.2, Qt::SolidLine, Qt::RoundCap));
+    p.drawPath(x);
+    p.setPen(QPen(QColor(224, 38, 50), 2.2, Qt::SolidLine, Qt::RoundCap));
+    p.drawPath(x);
+}
+
 // Nombre de Kaint → dibujo, rejilla en la que se dibuja y archivo de paint.js con el que lo puede
 // sustituir un paquete de iconos.
 struct Entry {
@@ -584,6 +692,11 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("text"), {TS, drawText, "text_tool_icon"}},
         {QStringLiteral("linecurve"), {TS, drawLine, "line_tool_icon"}},
         {QStringLiteral("shapes"), {TS, drawShape, "shapes_tool_icon"}},
+        {QStringLiteral("toolbar-cut"), {BS, drawCut, "menu_edit_cut_icon"}},
+        {QStringLiteral("toolbar-copy"), {BS, drawCopy, "menu_edit_copy_icon"}},
+        {QStringLiteral("toolbar-paste"), {BS, drawPaste, "menu_edit_paste_icon"}},
+        {QStringLiteral("toolbar-crop"), {BS, drawCrop, "menu_image_crop_icon"}},
+        {QStringLiteral("toolbar-deselect"), {BS, drawDeselect, "menu_edit_deselect_icon"}},
     };
     return icons;
 }
@@ -630,15 +743,9 @@ public:
                 m_entry.paint(p);
             }
         }
-        QPixmap pm = QPixmap::fromImage(image);
+        // Desactivados, como los PNG: en gris y medio transparentes.
+        QPixmap pm = QPixmap::fromImage(mode == QIcon::Disabled ? disabledImage(image) : image);
         pm.setDevicePixelRatio(dpr);
-        if (mode == QIcon::Disabled) {
-            QStyleOption opt;
-            opt.palette = QApplication::palette();
-            const QPixmap generated = QApplication::style()->generatedIconPixmap(mode, pm, &opt);
-            if (!generated.isNull())
-                return generated;
-        }
         return pm;
     }
 
@@ -709,7 +816,8 @@ int cursorSize()
         const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
         return std::max(16, int(std::lround(GetSystemMetrics(SM_CXCURSOR) / dpr)));
 #else
-        return 24;
+        const int desktop = SystemCursors::desktopSize();
+        return desktop >= 16 && desktop <= 256 ? desktop : 24;
 #endif
     }();
     return size;
@@ -763,22 +871,24 @@ void setSystemPointer(bool on)
 namespace {
 
 // La flecha (o la I) del tema de cursores del sistema con la miniatura al lado, colocada respecto
-// a lo que se ve del puntero como la de Kaint (abajo a la derecha de la flecha); nulo si el
-// sistema no tiene un tema que leer.
-QCursor systemMiniCursor(const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam, qreal dpr)
+// a lo que se ve del puntero como la de Kaint (abajo a la derecha de la flecha): un cursor por
+// fotograma si el puntero está animado; vacío si el sistema no tiene un tema que leer.
+QList<CursorFrame> systemMiniCursor(const std::function<void(QPainter&, const QRectF&)>& paint, bool ibeam, qreal dpr)
 {
-    const SystemCursors::Image sys = SystemCursors::load(ibeam ? SystemCursors::Shape::IBeam : SystemCursors::Shape::Arrow,
-                                                         int(std::lround(cursorSize() * dpr)));
-    if (sys.image.isNull())
-        return {};
-    // Parte visible del puntero (los temas dejan márgenes transparentes).
-    const QImage& src = sys.image;
+    const QList<SystemCursors::Image> frames = SystemCursors::load(ibeam ? SystemCursors::Shape::IBeam : SystemCursors::Shape::Arrow,
+                                                                   int(std::lround(cursorSize() * dpr)));
+    // Parte visible del puntero en todos sus fotogramas (los temas dejan márgenes transparentes).
     QRect shape;
-    for (int y = 0; y < src.height(); ++y) {
-        const auto* line = reinterpret_cast<const QRgb*>(src.constScanLine(y));
-        for (int x = 0; x < src.width(); ++x)
-            if (qAlpha(line[x]) > 32)
-                shape |= QRect(x, y, 1, 1);
+    QSize pixels;
+    for (const SystemCursors::Image& frame : frames) {
+        const QImage& src = frame.image;
+        pixels = pixels.expandedTo(src.size());
+        for (int y = 0; y < src.height(); ++y) {
+            const auto* line = reinterpret_cast<const QRgb*>(src.constScanLine(y));
+            for (int x = 0; x < src.width(); ++x)
+                if (qAlpha(line[x]) > 32)
+                    shape |= QRect(x, y, 1, 1);
+        }
     }
     if (shape.isEmpty())
         return {};
@@ -788,20 +898,32 @@ QCursor systemMiniCursor(const std::function<void(QPainter&, const QRectF&)>& pa
     const qreal side = std::round(visible.height() * (ibeam ? 14.0 / 14.0 : 14.0 / 18.0));
     const QPointF at = ibeam ? QPointF(visible.right() + 2, visible.top() + std::round(visible.height() * 10.0 / 14.0))
                              : QPointF(visible.right() + 1, visible.top() + std::round(visible.height() * 13.0 / 18.0));
-    const QSizeF logical(std::max(src.width() / dpr, at.x() + side), std::max(src.height() / dpr, at.y() + side));
-    QImage image((logical * dpr).toSize(), QImage::Format_ARGB32_Premultiplied);
-    image.setDevicePixelRatio(dpr);
-    image.fill(Qt::transparent);
-    {
-        QPainter p(&image);
-        p.setRenderHint(QPainter::Antialiasing);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        QImage pointer = src;
-        pointer.setDevicePixelRatio(dpr);
-        p.drawImage(QPointF(0, 0), pointer);
-        paint(p, QRectF(at, QSizeF(side, side)));
+    const QSizeF logical(std::max(pixels.width() / dpr, at.x() + side), std::max(pixels.height() / dpr, at.y() + side));
+    QList<CursorFrame> cursors;
+    for (const SystemCursors::Image& frame : frames) {
+        QImage image((logical * dpr).toSize(), QImage::Format_ARGB32_Premultiplied);
+        image.setDevicePixelRatio(dpr);
+        image.fill(Qt::transparent);
+        {
+            QPainter p(&image);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setRenderHint(QPainter::SmoothPixmapTransform);
+            QImage pointer = frame.image;
+            pointer.setDevicePixelRatio(dpr);
+            p.drawImage(QPointF(0, 0), pointer);
+            paint(p, QRectF(at, QSizeF(side, side)));
+        }
+        const QPoint hot(int(std::lround(frame.hotSpot.x() / dpr)), int(std::lround(frame.hotSpot.y() / dpr)));
+        cursors.append({QCursor(QPixmap::fromImage(image), hot.x(), hot.y()), frame.delay});
     }
-    return QCursor(QPixmap::fromImage(image), int(std::lround(sys.hotSpot.x() / dpr)), int(std::lround(sys.hotSpot.y() / dpr)));
+    return cursors;
+}
+
+// Fotogramas de los cursores animados de miniCursor(), por la clave del pixmap del primero.
+QHash<qint64, QList<CursorFrame>>& animations()
+{
+    static QHash<qint64, QList<CursorFrame>> table;
+    return table;
 }
 
 } // namespace
@@ -823,11 +945,16 @@ QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const
     static QHash<QString, QCursor> cache;
     if (const auto it = cache.constFind(cacheKey); it != cache.cend())
         return *it;
+    if (cache.size() > 256) {
+        cache.clear();
+        animations().clear();
+    }
     if (g_systemPointer) {
-        const QCursor cursor = systemMiniCursor(paint, ibeam, dpr);
-        if (!cursor.pixmap().isNull()) {
-            if (cache.size() > 256)
-                cache.clear();
+        const QList<CursorFrame> frames = systemMiniCursor(paint, ibeam, dpr);
+        if (!frames.isEmpty()) {
+            const QCursor& cursor = frames.first().cursor;
+            if (frames.size() > 1)
+                animations().insert(cursor.pixmap().cacheKey(), frames);
             cache.insert(cacheKey, cursor);
             return cursor;
         }
@@ -869,10 +996,14 @@ QCursor miniCursor(const QString& key, const std::function<void(QPainter&, const
     }
     const QPointF hot = ibeam ? QPointF(4, 8) : QPointF(0, 0);
     const QCursor cursor(QPixmap::fromImage(image), int(std::lround(hot.x() * scale)), int(std::lround(hot.y() * scale)));
-    if (cache.size() > 256)
-        cache.clear();
     cache.insert(cacheKey, cursor);
     return cursor;
+}
+
+QList<CursorFrame> cursorFrames(const QCursor& cursor)
+{
+    const QPixmap pm = cursor.pixmap();
+    return pm.isNull() ? QList<CursorFrame>() : animations().value(pm.cacheKey());
 }
 
 QCursor miniToolCursor(const QString& name, bool ibeam)

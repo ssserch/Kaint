@@ -51,6 +51,9 @@ export class Selection {
         this.mask = mask;
         // Rectángulo exacto si la selección es un rectángulo (contorno nítido y más rápido).
         this.rect = rect;
+        // Trazado (Path2D, en píxeles de la imagen) de las que salen de uno, como la elipse y el
+        // lazo (withPath): como en Kaint, su contorno es el trazado y no los bordes de los píxeles.
+        this.path = null;
         this._bounds = undefined;
         this._outline = null;
         this._maskCanvas = null;
@@ -72,16 +75,26 @@ export class Selection {
         return new Selection(width, height, mask, r);
     }
 
-    // Rasteriza un trazado (función que recibe el contexto y define el trazado) relleno.
+    // Rasteriza un trazado (función que recibe un Path2D y lo define) relleno; la selección se
+    // queda con él para dibujar su contorno.
     static fromPath(width, height, buildPath, antialias = true, fillRule = "nonzero") {
         const canvas = createCanvas(width, height);
         const ctx = context(canvas);
         ctx.imageSmoothingEnabled = antialias;
-        ctx.beginPath();
-        buildPath(ctx);
+        const path = new Path2D();
+        buildPath(path);
         ctx.fillStyle = "#fff";
-        ctx.fill(fillRule);
-        return Selection.fromAlpha(canvas, antialias);
+        ctx.fill(path, fillRule);
+        return Selection.fromAlpha(canvas, antialias).withPath(path);
+    }
+
+    // La misma selección con el trazado 'path' pasado por 'matrix' (si tiene máscara).
+    withPath(path, matrix = undefined) {
+        if (this.mask && path) {
+            this.path = new Path2D();
+            this.path.addPath(path, matrix);
+        }
+        return this;
     }
 
     // La máscara a partir del alfa de un lienzo del tamaño de la imagen.
@@ -201,7 +214,15 @@ export class Selection {
                 out[i] = 255 - this.mask[i];
         else
             out.fill(255);
-        return Selection.fromMask(this.width, this.height, out);
+        // Como en Kaint, el contorno del trazado y el borde de la imagen.
+        const inverted = Selection.fromMask(this.width, this.height, out);
+        if (this.path) {
+            const frame = new Path2D();
+            frame.rect(0, 0, this.width, this.height);
+            frame.addPath(this.path);
+            inverted.withPath(frame);
+        }
+        return inverted;
     }
 
     // Copiar selección (como Paint.NET y Kaint): los polígonos en JSON ("polygonList"), uno por
@@ -327,7 +348,7 @@ export class Selection {
                     out[y * width + x] = this.mask[sy * this.width + sx];
             }
         }
-        return Selection.fromMask(width, height, out);
+        return Selection.fromMask(width, height, out).withPath(this.path, new DOMMatrix([1, 0, 0, 1, dx, dy]));
     }
 
     // La máscara transformada por una matriz (DOMMatrix) (Mover selección, girar, voltear).
@@ -339,7 +360,7 @@ export class Selection {
         ctx.imageSmoothingEnabled = antialias;
         ctx.setTransform(matrix);
         ctx.drawImage(this.maskCanvas(), 0, 0);
-        return Selection.fromAlpha(canvas, antialias);
+        return Selection.fromAlpha(canvas, antialias).withPath(this.path, matrix);
     }
 
     // La cobertura con la que se recorta lo que se pinta (Raster::clipCoverage de Kaint): con la
@@ -390,44 +411,72 @@ export class Selection {
         return canvas;
     }
 
-    // Bordes entre píxeles dentro y fuera (umbral 128), unidos en tramos: [x1, y1, x2, y2, ...].
+    // Bordes entre píxeles dentro y fuera (umbral 128) unidos en contornos cerrados, para que las
+    // hormigas sigan de un tramo al siguiente (sueltos, el trazo empezaba en cada escalón y las
+    // diagonales salían negras): [[x, y, x, y, ...], ...], solo las esquinas.
     outline() {
         if (this._outline)
             return this._outline;
-        const segs = [];
+        const loops = [];
         if (this.rect) {
             const r = this.rect;
-            segs.push(r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h,
-                      r.x + r.w, r.y + r.h, r.x, r.y + r.h, r.x, r.y + r.h, r.x, r.y);
+            loops.push([r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x, r.y + r.h]);
         } else if (this.mask) {
-            const w = this.width, h = this.height, m = this.mask;
+            const w = this.width, h = this.height, m = this.mask, W = w + 1;
             const inside = (x, y) => x >= 0 && y >= 0 && x < w && y < h && m[y * w + x] >= 128;
             const b = this.bounds();
-            for (let y = b.y; y <= b.y + b.h; ++y) {
-                let start = -1;
-                for (let x = b.x; x <= b.x + b.w; ++x) {
-                    const edge = x < b.x + b.w && inside(x, y) !== inside(x, y - 1);
-                    if (edge && start < 0) start = x;
-                    if (!edge && start >= 0) {
-                        segs.push(start, y, x, y);
-                        start = -1;
-                    }
+            // Aristas de un píxel con lo seleccionado a la derecha, por vértice de salida: una o, si
+            // dos píxeles se tocan por la esquina, dos.
+            const first = new Map(), second = new Map(), starts = [];
+            const add = (x0, y0, x1, y1) => {
+                const k = y0 * W + x0, v = y1 * W + x1;
+                if (first.has(k)) {
+                    second.set(k, v);
+                } else {
+                    first.set(k, v);
+                    starts.push(k);
                 }
-            }
-            for (let x = b.x; x <= b.x + b.w; ++x) {
-                let start = -1;
-                for (let y = b.y; y <= b.y + b.h; ++y) {
-                    const edge = y < b.y + b.h && inside(x, y) !== inside(x - 1, y);
-                    if (edge && start < 0) start = y;
-                    if (!edge && start >= 0) {
-                        segs.push(x, start, x, y);
-                        start = -1;
-                    }
+            };
+            for (let y = b.y; y <= b.y + b.h; ++y)
+                for (let x = b.x; x < b.x + b.w; ++x) {
+                    const below = inside(x, y), above = inside(x, y - 1);
+                    if (below && !above) add(x, y, x + 1, y);
+                    else if (above && !below) add(x + 1, y, x, y);
                 }
+            for (let x = b.x; x <= b.x + b.w; ++x)
+                for (let y = b.y; y < b.y + b.h; ++y) {
+                    const right = inside(x, y), left = inside(x - 1, y);
+                    if (right && !left) add(x, y + 1, x, y);
+                    else if (left && !right) add(x, y, x, y + 1);
+                }
+            const take = (k) => {
+                const map = second.has(k) ? second : first, v = map.get(k);
+                map.delete(k);
+                return v;
+            };
+            // Cada vértice tiene tantas aristas de entrada como de salida: el recorrido siempre
+            // vuelve a donde empezó.
+            for (const start of starts) {
+                if (!first.has(start))
+                    continue;
+                const loop = [];
+                let k = start, vertical = null;
+                do {
+                    const v = take(k);
+                    if (v === undefined)
+                        break;
+                    const x = k % W, y = (k - x) / W, now = v % W === x;
+                    if (now !== vertical)
+                        loop.push(x, y);
+                    vertical = now;
+                    k = v;
+                } while (k !== start);
+                if (loop.length >= 6)
+                    loops.push(loop);
             }
         }
-        this._outline = segs;
-        return segs;
+        this._outline = loops;
+        return loops;
     }
 }
 

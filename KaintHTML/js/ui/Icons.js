@@ -7,9 +7,12 @@ import { patternBit } from "../core/FillPattern.js";
 import { CustomShapes, fittedPath, tracePath } from "../core/CustomShapes.js";
 import { Settings } from "../Settings.js";
 
-// Nombre de los PNG de las herramientas en los paquetes de iconos de paint.js: si el activo trae
-// uno, sustituye al dibujo de Kaint en el botón y en el cursor.
+// Nombre de los PNG de las herramientas (y de los botones dibujados de la barra) en los paquetes
+// de iconos de paint.js: si el activo trae uno, sustituye al dibujo de Kaint en el botón y en el
+// cursor.
 const toolFiles = {
+    "toolbar-cut": "menu_edit_cut_icon", "toolbar-copy": "menu_edit_copy_icon", "toolbar-paste": "menu_edit_paste_icon",
+    "toolbar-crop": "menu_image_crop_icon", "toolbar-deselect": "menu_edit_deselect_icon",
     rectangleselect: "rectangle_select_tool_icon", ellipseselect: "ellipse_select_tool_icon",
     lassoselect: "lasso_select_tool_icon", magicwand: "magic_wand_tool_icon", moveselectedpixels: "move_tool_icon",
     moveselection: "move_selection_tool_icon", zoom: "zoom_tool_icon", eraser: "eraser_tool_icon",
@@ -340,7 +343,94 @@ function drawPanGrab(ctx) {
 
 // --- Barra principal (rejilla de 16 px) -----------------------------------------------------
 
-// Arco con punta de flecha al final (ángulos en grados, positivos en sentido antihorario).
+// De Cortar a Anular la selección, como los de Paint.NET 4 (los menús llevan los PNG): la tijera
+// con los mangos azules, las dos hojas, el portapapeles, recortar con la foto y la X roja sobre
+// la selección (los mismos dibujos que en PdnIcons.cpp).
+
+// Hoja blanca con la esquina de arriba a la derecha doblada.
+function drawSheet(ctx, x, y, w, h, fold) {
+    const line = rgb(112, 116, 124);
+    poly(ctx, [[x, y], [x + w - fold, y], [x + w, y + fold], [x + w, y + h], [x, y + h]]);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    stroke(ctx, line, 1, "square");
+    poly(ctx, [[x + w - fold, y], [x + w - fold, y + fold], [x + w, y + fold]]);
+    ctx.fillStyle = rgb(218, 222, 228);
+    ctx.fill();
+    stroke(ctx, line, 1, "square");
+}
+
+function drawCut(ctx) {
+    // Hojas grises en V que se cruzan en el eje y mangos azules en anilla.
+    ctx.fillStyle = rgb(86, 92, 102);
+    poly(ctx, [[2.6, 0.4], [4.4, 0.4], [10, 10.2], [8.6, 11]]);
+    ctx.fill();
+    poly(ctx, [[13.4, 0.4], [11.6, 0.4], [6, 10.2], [7.4, 11]]);
+    ctx.fill();
+    for (const cx of [4.4, 11.6]) {
+        ellipseAt(ctx, cx - 2.5, 12.9 - 2.2, 5, 4.4);
+        stroke(ctx, rgb(40, 84, 180), 1.7);
+    }
+    ellipseAt(ctx, 8 - 0.75, 8.2 - 0.75, 1.5, 1.5);
+    ctx.fillStyle = rgb(200, 206, 214);
+    ctx.fill();
+}
+
+function drawCopy(ctx) {
+    drawSheet(ctx, 1.5, 0.5, 8, 10, 3);
+    drawSheet(ctx, 5.5, 4.5, 9, 11, 3);
+}
+
+function drawPaste(ctx) {
+    // Portapapeles de cartón con la pinza oscura y una hoja delante.
+    roundRect(ctx, 1.5, 1.5, 10, 13, 1);
+    ctx.fillStyle = rgb(234, 174, 84);
+    ctx.fill();
+    stroke(ctx, rgb(178, 120, 42), 1);
+    roundRect(ctx, 4, 0.3, 5, 3, 1.2);
+    ctx.fillStyle = rgb(72, 80, 76);
+    ctx.fill();
+    drawSheet(ctx, 7.5, 6.5, 7, 9, 2.5);
+}
+
+function drawCrop(ctx) {
+    // La foto (cielo y montañas) dentro de la selección punteada y las marcas de recorte, que
+    // sobresalen por arriba a la izquierda y por abajo a la derecha.
+    const navy = rgb(36, 52, 134);
+    ctx.fillStyle = rgb(196, 216, 246);
+    ctx.fillRect(5, 5, 6, 6);
+    ctx.fillStyle = navy;
+    poly(ctx, [[5, 11], [7.1, 7.4], [8.6, 9.4], [9.6, 8.1], [11, 11]]);
+    ctx.fill();
+    ctx.setLineDash([1, 1]);
+    ctx.beginPath();
+    ctx.rect(3.5, 3.5, 9, 9);
+    stroke(ctx, navy, 1);
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(3.5, 0); ctx.lineTo(3.5, 6);
+    ctx.moveTo(0, 3.5); ctx.lineTo(6, 3.5);
+    ctx.moveTo(12.5, 10); ctx.lineTo(12.5, 16);
+    ctx.moveTo(10, 12.5); ctx.lineTo(16, 12.5);
+    stroke(ctx, navy, 1);
+}
+
+function drawDeselect(ctx) {
+    // Selección punteada con el interior azul y, encima, la X roja con borde blanco.
+    ctx.fillStyle = rgb(204, 226, 250);
+    ctx.fillRect(5, 5, 10, 10);
+    ctx.setLineDash([2, 1]);
+    ctx.beginPath();
+    ctx.rect(5.5, 5.5, 9, 9);
+    stroke(ctx, rgb(62, 70, 86), 1);
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(2, 2); ctx.lineTo(7.5, 7.5);
+    ctx.moveTo(7.5, 2); ctx.lineTo(2, 7.5);
+    stroke(ctx, "#fff", 4.2, "round");
+    stroke(ctx, rgb(224, 38, 50), 2.2, "round");
+}
+
 // --- Herramientas con sus dibujos de siempre (PdnIcons.cpp, rejilla de 20 px) -------------
 
 function ants(ctx) {
@@ -803,6 +893,8 @@ const drawn = {
     clonestamp: [20, drawCloneStamp], text: [20, drawTextTool], linecurve: [20, drawLineTool], shapes: [20, drawShapesTool],
     paintbrush: [20, drawBrush], paintbucket: [20, drawFill], recolor: [20, drawRecolor], gradient: [20, drawGradientTool],
     pan: [20, drawPan], "pan-grab": [20, drawPanGrab],
+    "toolbar-cut": [16, drawCut], "toolbar-copy": [16, drawCopy], "toolbar-paste": [16, drawPaste],
+    "toolbar-crop": [16, drawCrop], "toolbar-deselect": [16, drawDeselect],
 };
 
 function painterFor(name) {

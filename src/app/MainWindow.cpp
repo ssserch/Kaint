@@ -1022,9 +1022,25 @@ void MainWindow::createToolBars()
     main->addSeparator();
     main->addAction(A["print"]);
     main->addSeparator();
-    main->addActions({A["cut"], A["copy"], A["paste"]});
+    // De Cortar a Anular la selección, la barra lleva iconos como los de Paint.NET 4 (los menús
+    // siguen con los PNG): botones de acciones propias que hacen lo mismo que las del menú y se
+    // activan con ellas.
+    auto barAction = [main](QAction* a, const char* icon) {
+        auto* b = new QAction(Icons::theme({icon}), a->text(), main);
+        QObject::connect(b, &QAction::triggered, a, &QAction::trigger);
+        auto sync = [a, b] {
+            b->setText(a->text());
+            b->setToolTip(a->toolTip());
+            b->setEnabled(a->isEnabled());
+        };
+        sync();
+        QObject::connect(a, &QAction::changed, b, sync);
+        return b;
+    };
+    main->addActions({barAction(A["cut"], "toolbar-cut"), barAction(A["copy"], "toolbar-copy"),
+                      barAction(A["paste"], "toolbar-paste")});
     main->addSeparator();
-    main->addActions({A["crop"], A["deselect"]});
+    main->addActions({barAction(A["crop"], "toolbar-crop"), barAction(A["deselect"], "toolbar-deselect")});
     main->addSeparator();
     main->addActions({A["undo"], A["redo"]});
     main->addSeparator();

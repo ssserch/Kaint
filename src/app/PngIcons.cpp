@@ -207,20 +207,6 @@ QString sourcePath(const QString& file)
     return packed.isEmpty() ? resourcePath(file) : packed;
 }
 
-// Gris y medio transparente: el aspecto de las opciones desactivadas.
-QImage disabledImage(QImage image)
-{
-    image = image.convertToFormat(QImage::Format_ARGB32);
-    for (int y = 0; y < image.height(); ++y) {
-        QRgb* line = reinterpret_cast<QRgb*>(image.scanLine(y));
-        for (int x = 0; x < image.width(); ++x) {
-            const int gray = qGray(line[x]);
-            line[x] = qRgba(gray, gray, gray, qAlpha(line[x]) * 45 / 100);
-        }
-    }
-    return image;
-}
-
 class PngIconEngine : public QIconEngine {
 public:
     PngIconEngine(const QString& file, const QString& onFile)
@@ -284,6 +270,19 @@ private:
 };
 
 } // namespace
+
+QImage disabledImage(QImage image)
+{
+    image = image.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < image.height(); ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(image.scanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            const int gray = qGray(line[x]);
+            line[x] = qRgba(gray, gray, gray, qAlpha(line[x]) * 45 / 100);
+        }
+    }
+    return image;
+}
 
 QIcon png(const QString& file, const QString& onFile)
 {

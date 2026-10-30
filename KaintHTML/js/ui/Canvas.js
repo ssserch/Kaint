@@ -617,32 +617,57 @@ export class CanvasView extends EventTarget {
             ctx.drawImage(sel.tintCanvas, p.x, p.y, b.w * this.scale, b.h * this.scale);
             ctx.restore();
         }
-        this.strokeSegments(ctx, sel.outline());
+        this.strokeSelection(ctx, sel);
     }
 
-    // Tramos de contorno [x1, y1, x2, y2, ...] en coordenadas de la imagen, con hormigas.
-    strokeSegments(ctx, segs, transform = null) {
+    // Contorno de una selección con hormigas ('transform': donde quedará al moverla): el trazado de
+    // las que salen de uno (elipse, lazo...), como en Kaint, o los bordes de los píxeles.
+    strokeSelection(ctx, sel, transform = null) {
+        if (sel.path)
+            this.strokePath(ctx, sel.path, transform);
+        else
+            this.strokeOutline(ctx, sel.outline(), transform);
+    }
+
+    // Blanco y, encima, negro a trazos que se mueven, de un píxel de la pantalla.
+    strokeAnts(ctx, path) {
         ctx.save();
-        const px = (n) => Math.round(n * this.dpr) / this.dpr + 0.5 / this.dpr;
-        ctx.beginPath();
-        for (let i = 0; i < segs.length; i += 4) {
-            let [x1, y1, x2, y2] = [segs[i], segs[i + 1], segs[i + 2], segs[i + 3]];
-            if (transform) {
-                const a = transform.transformPoint({ x: x1, y: y1 }), b = transform.transformPoint({ x: x2, y: y2 });
-                [x1, y1, x2, y2] = [a.x, a.y, b.x, b.y];
-            }
-            const a = this.imageToView(x1, y1), b = this.imageToView(x2, y2);
-            ctx.moveTo(transform ? a.x : px(a.x), transform ? a.y : px(a.y));
-            ctx.lineTo(transform ? b.x : px(b.x), transform ? b.y : px(b.y));
-        }
         ctx.lineWidth = 1 / this.dpr;
         ctx.strokeStyle = "#fff";
-        ctx.stroke();
+        ctx.stroke(path);
         ctx.setLineDash([4 / this.dpr, 4 / this.dpr]);
         ctx.lineDashOffset = -this.antsOffset / this.dpr;
         ctx.strokeStyle = "#000";
-        ctx.stroke();
+        ctx.stroke(path);
         ctx.restore();
+    }
+
+    // Un trazado en coordenadas de la imagen, suavizado como en Kaint.
+    strokePath(ctx, path, transform = null) {
+        let m = new DOMMatrix([this.scale, 0, 0, this.scale, this.origin.x, this.origin.y]);
+        if (transform)
+            m = m.multiply(transform);
+        const view = new Path2D();
+        view.addPath(path, m);
+        this.strokeAnts(ctx, view);
+    }
+
+    // Contornos cerrados [[x, y, x, y, ...], ...] en coordenadas de la imagen; sin transformar, en
+    // píxeles enteros de la pantalla para que se vean nítidos.
+    strokeOutline(ctx, loops, transform = null) {
+        const px = (n) => Math.round(n * this.dpr) / this.dpr + 0.5 / this.dpr;
+        const path = new Path2D();
+        for (const loop of loops) {
+            for (let i = 0; i < loop.length; i += 2) {
+                let p = { x: loop[i], y: loop[i + 1] };
+                if (transform)
+                    p = transform.transformPoint(p);
+                const v = this.imageToView(p.x, p.y), x = transform ? v.x : px(v.x), y = transform ? v.y : px(v.y);
+                i ? path.lineTo(x, y) : path.moveTo(x, y);
+            }
+            path.closePath();
+        }
+        this.strokeAnts(ctx, path);
     }
 
     // Rectángulo de la imagen dibujado como una selección rectangular (la herramienta Zum).
@@ -652,8 +677,7 @@ export class CanvasView extends EventTarget {
             ctx.fillStyle = "rgba(0,120,215,0.18)";
             ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
         }
-        this.strokeSegments(ctx, [r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x + r.w, r.y + r.h,
-                                  r.x, r.y + r.h, r.x, r.y + r.h, r.x, r.y]);
+        this.strokeOutline(ctx, [[r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x, r.y + r.h]]);
     }
 
     setOverlayAnts(on) {

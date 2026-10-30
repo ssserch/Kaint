@@ -129,6 +129,64 @@ const blendFns = {
 };
 
 // Mezcla 'src' sobre 'dst' (ImageData del mismo tamaño, alfa directo) con la fórmula de Paint.NET.
+// lerpStraight de Kaint (src/core/Pixels.h) sobre el píxel RGBA de 'o' en 'j'.
+export function lerpStraight(o, j, r, g, b, a, t) {
+    if (t <= 0)
+        return;
+    if (t >= 255) {
+        o[j] = r; o[j + 1] = g; o[j + 2] = b; o[j + 3] = a;
+        return;
+    }
+    const it = 255 - t, wa = o[j + 3] * it, wb = a * t, w = wa + wb;
+    if (w === 0) {
+        o[j] = Math.trunc((o[j] * it + r * t + 127) / 255);
+        o[j + 1] = Math.trunc((o[j + 1] * it + g * t + 127) / 255);
+        o[j + 2] = Math.trunc((o[j + 2] * it + b * t + 127) / 255);
+        o[j + 3] = 0;
+        return;
+    }
+    const ch = (ca, cb) => Math.trunc((ca * wa + cb * wb + Math.trunc(w / 2)) / w);
+    o[j] = ch(o[j], r); o[j + 1] = ch(o[j + 1], g); o[j + 2] = ch(o[j + 2], b);
+    o[j + 3] = Math.trunc((w + 127) / 255);
+}
+
+// scaleAlpha de Kaint: el alfa multiplicado por m (0..255), redondeado.
+export function scaleAlpha(alpha, m) {
+    return m >= 255 ? alpha : m <= 0 ? 0 : Math.trunc((alpha * m + 127) / 255);
+}
+
+// Compone lo que dibuja una herramienta (formas, líneas, texto) como compositeRegion de Kaint:
+// 'cover' es la figura con los colores opacos (su alfa es la cobertura) y 'real', con los colores de
+// verdad (el alfa de cada color sale de la proporción entre los dos). Sin suavizado, cada píxel
+// queda entero o fuera; 'clip' es la cobertura de la selección (o null) en un lienzo de 'width' de
+// ancho. Con "overwrite", lo de debajo se sustituye en la proporción de la cobertura.
+export function compositeTool(ctx, cover, real, rect, { mode = "normal", antialias = true, clip = null, width = 0 } = {}) {
+    const base = ctx.getImageData(rect.x, rect.y, rect.w, rect.h), d = base.data;
+    const c = context(cover).getImageData(rect.x, rect.y, rect.w, rect.h).data;
+    const r = context(real).getImageData(rect.x, rect.y, rect.w, rect.h).data;
+    const overwrite = mode === "overwrite", top = overwrite ? null : new ImageData(rect.w, rect.h), t = top?.data;
+    for (let y = 0; y < rect.h; ++y)
+        for (let x = 0; x < rect.w; ++x) {
+            const i = (y * rect.w + x) * 4, raw = c[i + 3];
+            if (!raw)
+                continue;
+            let cov = antialias ? raw : raw >= 128 ? 255 : 0;
+            if (clip)
+                cov = Math.trunc((cov * clip[(rect.y + y) * width + rect.x + x]) / 255);
+            if (!cov)
+                continue;
+            const alpha = Math.min(255, Math.round((r[i + 3] * 255) / raw));
+            if (overwrite) {
+                lerpStraight(d, i, c[i], c[i + 1], c[i + 2], alpha, cov);
+            } else {
+                t[i] = c[i]; t[i + 1] = c[i + 1]; t[i + 2] = c[i + 2]; t[i + 3] = scaleAlpha(alpha, cov);
+            }
+        }
+    if (!overwrite)
+        blendPixels(base, top, mode);
+    ctx.putImageData(base, rect.x, rect.y);
+}
+
 export function blendPixels(dst, src, mode, opacity = 255) {
     const F = blendFns[mode] || blendFns.normal;
     const d = dst.data, s = src.data;

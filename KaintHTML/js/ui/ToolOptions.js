@@ -209,12 +209,50 @@ export class ToolOptions {
         case "tolerance":
             this.group(label(tr("Tolerancia:")), barSlider("tolerance", 0, 100, (v) => `${v}%`));
             break;
+        case "tolAlpha":
+            this.group(choice(tr("Modo alfa de la tolerancia"), "toleranceStraight", [[false, "opt-tolalpha:0", tr("Premultiplicado")],
+                                                                                    [true, "opt-tolalpha:1", tr("Directo")]]));
+            break;
+        case "accumulate":
+            this.group(choice(tr("Acumulación del relleno"), "fillAccumulate", [[true, "opt-accumulate:1", tr("Acumular rellenos")],
+                                                                              [false, "opt-accumulate:0", tr("No acumular rellenos")]]));
+            break;
+        case "cornerRadius": {
+            // Solo con el rectángulo redondeado y su bocadillo (ToolOptionsEditor::groupApplies).
+            const input = el("input", { type: "number", min: 0, max: 1000, title: tr("Radio de las esquinas del rectángulo redondeado"),
+                                        style: { width: "52px" } });
+            input.addEventListener("change", () => set({ cornerRadius: Math.max(0, Math.min(1000, Math.round(Number(input.value) || 0))) }));
+            const step = (d) => set({ cornerRadius: Math.max(0, Math.min(1000, tools().cornerRadius + d)) });
+            const box = el("span", { className: "group" }, [label(tr("Radio:")), stepper(false, step, tr("Reducir")), input,
+                                                            stepper(true, step, tr("Aumentar"))]);
+            box.refresh = () => {
+                box.style.display = this.model === AppState && !["roundedrect", "roundedrectcallout"].includes(tools().shape) ? "none" : "";
+                if (document.activeElement !== input)
+                    input.value = tools().cornerRadius;
+            };
+            box.refresh();
+            this.group(box);
+            break;
+        }
+        case "interpolation":
+            this.group(label(tr("Muestreo:")), choice(tr("Muestreo"), "moveInterpolation", [
+                ["nearest", null, tr("Vecino más cercano")], ["bilinear", null, tr("Bilineal")], ["bicubic", null, tr("Bicúbico")]], { showText: true }));
+            break;
+        case "gamma":
+            this.group(choice(tr("Gamma"), "moveGamma", [[true, "opt-gamma:1", tr("Gamma corregido")], [false, "opt-gamma:0", tr("Ignorar gama")]]));
+            break;
+        case "moveQuality":
+            this.group(choice(tr("Calidad de selección"), "moveSelectionAntialias", [
+                [false, "opt-selquality:0", tr("Calidad de selección pixelada")],
+                [true, "opt-selquality:1", tr("Calidad de selección con antidentado")]]));
+            break;
         case "antialias":
             this.group(choice(tr("Suavizado"), "antialias", [[true, "opt-aa:1", tr("Suavizado activado")],
                                                              [false, "opt-aa:0", tr("Suavizado desactivado")]]));
             break;
         case "blend":
-            this.group(choice(tr("Modo de fusión"), "blend", BlendModes.map((m) => [m, "opt-blend", tr(BlendNames[m][1])]), { showText: true }));
+            this.group(choice(tr("Modo de fusión"), "blend", [...BlendModes.map((m) => [m, "opt-blend", tr(BlendNames[m][1])]),
+                                                             ["overwrite", "opt-blend", tr("Sobrescribir")]], { showText: true }));
             break;
         case "flood":
             this.group(label(tr("Modo de saturación")), choice(tr("Modo de saturación"), "floodGlobal",
@@ -264,7 +302,9 @@ export class ToolOptions {
             this.group(toggles("gradient", [
                 ["linear", "opt-gradient:linear", tr("Lineal")], ["reflected", "opt-gradient:reflected", tr("Lineal (reflejado)")],
                 ["diamond", "opt-gradient:diamond", tr("Rombo")], ["radial", "opt-gradient:radial", tr("Radial")],
-                ["conical", "opt-gradient:conical", tr("Cónico")]]));
+                ["conical", "opt-gradient:conical", tr("Cónico")],
+                ["spiralcw", "opt-gradient:spiralcw", tr("Espiral (en el sentido de las agujas del reloj)")],
+                ["spiralccw", "opt-gradient:spiralccw", tr("Espiral (en sentido contrario a las agujas del reloj)")]]));
             this.group(choice(tr("Modo"), "gradientTransparency", [[false, null, tr("Modo de color")],
                                                                    [true, null, tr("Modo de transparencia")]], { showText: true }));
             this.group(choice(tr("Repetición"), "gradientRepeat", [["none", null, tr("Sin repetición")],
@@ -339,14 +379,15 @@ export class ToolOptions {
 // Kaint) con las opciones de cada una.
 const sections = () => [
     [tr("Pincel y relleno"), ["brushSize", "hardness", "spacing"]],
-    [tr("Forma y estilo"), ["shape", "shapeStyle", "curve", "dash", "caps"]],
+    [tr("Forma y estilo"), ["shape", "shapeStyle", "cornerRadius", "curve", "dash", "caps"]],
     [tr("Selección"), ["selectionMode", "rectMode", "afterSelect"]],
+    [tr("Mover píxeles seleccionados"), ["interpolation", "gamma"]],
     [tr("Texto"), ["text"]],
     [tr("Degradado"), ["gradient"]],
-    [tr("Varita mágica, cubo de pintura y volver a colorear"), ["flood", "tolerance", "recolor"]],
+    [tr("Varita mágica, cubo de pintura y volver a colorear"), ["flood", "tolerance", "tolAlpha", "recolor"]],
     [tr("Selector de color"), ["picker"]],
     [tr("Muestreo"), ["sampling"]],
-    [tr("Opciones"), ["smoothing", "pressure", "antialias", "blend", "selectionQuality"]],
+    [tr("Opciones"), ["smoothing", "pressure", "antialias", "accumulate", "blend", "selectionQuality", "moveQuality"]],
 ];
 
 // Todas las opciones, por secciones (ToolOptionsPanel de Kaint): las predeterminadas de

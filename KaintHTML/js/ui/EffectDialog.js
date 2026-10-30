@@ -25,7 +25,7 @@ export function effectInput(doc) {
     const layer = doc.activeLayer, sel = doc.selection;
     const rect = clampRect(sel.bounds() || { x: 0, y: 0, w: doc.width, h: doc.height }, doc.width, doc.height);
     const src = layer.ctx.getImageData(0, 0, doc.width, doc.height);
-    const mask = sel.mask || null;
+    const mask = sel.clipMask(AppState.selectionAntialias()) || null;
     return { doc, layer, rect, src, mask, info: { primary: { ...AppState.primary }, secondary: { ...AppState.secondary }, selection: mask } };
 }
 

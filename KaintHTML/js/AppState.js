@@ -42,6 +42,13 @@ export const defaultTools = () => ({
     pickerSize: 1,
     pickerAfter: "stay",
     recolorSampling: "secondary",
+    // Mover selección: píxel a píxel por defecto. Mover píxeles seleccionados: muestreo y gamma.
+    moveSelectionAntialias: false,
+    moveInterpolation: "bicubic",
+    moveGamma: true,
+    // Modo alfa de la tolerancia (directo o premultiplicado) y acumular los rellenos del cubo.
+    toleranceStraight: false,
+    fillAccumulate: true,
 });
 
 // Opciones predeterminadas de las herramientas (Configuración > Herramientas), como
@@ -198,6 +205,12 @@ class State extends EventTarget {
     updateTools(changes) {
         Object.assign(this.tools, changes);
         this.emit("tools");
+    }
+
+    // Calidad de selección con la que recorta la herramienta actual (Raster::selectionAntialias de
+    // Kaint): Mover selección tiene la suya.
+    selectionAntialias() {
+        return !!(this.currentTool === "moveselection" ? this.tools.moveSelectionAntialias : this.tools.selectionAntialias);
     }
 
     setPalette(colors) {

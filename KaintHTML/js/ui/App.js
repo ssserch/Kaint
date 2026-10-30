@@ -117,7 +117,11 @@ export class App extends EventTarget {
         this.tools.select(Settings.get("startTool") || Settings.get("lastTool") || "paintbrush");
         if (!this.tools.current)
             this.tools.select("paintbrush");
-        this.tools.addEventListener("changed", () => Settings.set("lastTool", this.tools.current.id));
+        AppState.currentTool = this.tools.current.id;
+        this.tools.addEventListener("changed", () => {
+            AppState.currentTool = this.tools.current.id;
+            Settings.set("lastTool", this.tools.current.id);
+        });
         // Copias de recuperación y archivos de la sesión (estos, después de restoreSession()).
         Recovery.start();
         this.sessionReady = false;
@@ -1302,7 +1306,7 @@ export class App extends EventTarget {
         ctx.drawImage(source, -b.x, -b.y);
         if (!sel.isEmpty()) {
             ctx.globalCompositeOperation = "destination-in";
-            ctx.drawImage(sel.maskCanvas(), -b.x, -b.y);
+            ctx.drawImage(sel.clipCanvas(AppState.selectionAntialias()), -b.x, -b.y);
         }
         return out;
     }
@@ -1382,7 +1386,7 @@ export class App extends EventTarget {
         const selBefore = doc.selection;
         layer.ctx.save();
         layer.ctx.globalCompositeOperation = "destination-out";
-        layer.ctx.drawImage(sel.maskCanvas(), 0, 0);
+        layer.ctx.drawImage(sel.clipCanvas(AppState.selectionAntialias()), 0, 0);
         layer.ctx.restore();
         const after = layer.ctx.getImageData(r.x, r.y, r.w, r.h);
         const none = Selection.none(doc.width, doc.height);
@@ -1402,7 +1406,7 @@ export class App extends EventTarget {
         f.fillStyle = `rgba(${c.r},${c.g},${c.b},${c.a / 255})`;
         f.fillRect(r.x, r.y, r.w, r.h);
         f.globalCompositeOperation = "destination-in";
-        f.drawImage(sel.maskCanvas(), 0, 0);
+        f.drawImage(sel.clipCanvas(AppState.selectionAntialias()), 0, 0);
         layer.ctx.drawImage(fill, 0, 0);
         doc.pixelsChanged(layer, r);
         doc.pushPixels(layer, r, before, tr("Rellenar la selección"), "edit-fill-selection");
@@ -1479,7 +1483,7 @@ export class App extends EventTarget {
             ctx.drawImage(layer.canvas, -b.x, -b.y);
             if (!doc.selection.rect) {
                 ctx.globalCompositeOperation = "destination-in";
-                ctx.drawImage(doc.selection.maskCanvas(), -b.x, -b.y);
+                ctx.drawImage(doc.selection.clipCanvas(AppState.selectionAntialias()), -b.x, -b.y);
             }
             layer.replaceCanvas(c);
         }

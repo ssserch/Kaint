@@ -342,6 +342,32 @@ export class Selection {
         return Selection.fromAlpha(canvas, antialias);
     }
 
+    // La cobertura con la que se recorta lo que se pinta (Raster::clipCoverage de Kaint): con la
+    // calidad de selección pixelada, cada píxel queda dentro (128 o más) o fuera del todo.
+    clipMask(antialias) {
+        if (!this.mask || antialias)
+            return this.mask;
+        this._hardMask ||= this.mask.map((v) => (v >= 128 ? 255 : 0));
+        return this._hardMask;
+    }
+
+    // Como maskCanvas(), con la cobertura de clipMask().
+    clipCanvas(antialias) {
+        if (!this.mask || antialias)
+            return this.maskCanvas();
+        if (!this._hardCanvas) {
+            const canvas = createCanvas(this.width, this.height), ctx = context(canvas);
+            const img = ctx.createImageData(this.width, this.height), d = img.data, mask = this.clipMask(false);
+            for (let i = 0, j = 0; i < mask.length; ++i, j += 4) {
+                d[j] = d[j + 1] = d[j + 2] = 255;
+                d[j + 3] = mask[i];
+            }
+            ctx.putImageData(img, 0, 0);
+            this._hardCanvas = canvas;
+        }
+        return this._hardCanvas;
+    }
+
     // Lienzo blanco con el alfa de la máscara (para recortar con 'destination-in').
     maskCanvas() {
         if (this._maskCanvas)

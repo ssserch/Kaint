@@ -977,6 +977,50 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     check(loaded === 33 && reset[0] === 75 && reset[1] === 33, `opciones predeterminadas de las herramientas (${loaded}, ${reset})`);
 }
 
+// Opciones de la barra como las de Kaint: "Sobrescribir" con un color transparente abre un hueco,
+// el cubo desmezcla el borde suavizado y Mover píxeles seleccionados gira con el muestreo bicúbico.
+{
+    const opts = await page.evaluate(async () => {
+        const k = window.kaint, { Document } = await import("./js/core/Document.js"), { AppState } = await import("./js/AppState.js");
+        const doc = new Document(300, 200);
+        k.addDocument(doc);
+        const px = (x, y) => [...doc.activeLayer.ctx.getImageData(x, y, 1, 1).data].join();
+        const out = {};
+        k.tools.select("paintbrush");
+        const saved = { ...AppState.tools }, primary = { ...AppState.primary };
+        AppState.updateTools({ blend: "overwrite", brushSize: 20, antialias: false });
+        AppState.setPrimary({ r: 0, g: 0, b: 0, a: 0 });
+        const brush = k.tools.current;
+        brush.onPointerDown({ x: 50, y: 50, button: "left" });
+        brush.onPointerUp({ x: 50, y: 50, button: "left" });
+        out.hole = px(50, 50);
+        AppState.updateTools({ blend: "normal", antialias: true });
+        const c = doc.activeLayer.ctx;
+        c.fillStyle = "#fff"; c.fillRect(0, 0, 300, 200); c.fillStyle = "#000";
+        c.beginPath(); c.arc(100, 100, 40, 0, Math.PI * 2); c.fill();
+        AppState.setPrimary({ r: 255, g: 0, b: 0, a: 255 });
+        k.tools.select("paintbucket");
+        const bucket = k.tools.current;
+        bucket.onPointerDown({ x: 100.5, y: 100.5, button: "left" });
+        bucket.onPointerUp({});
+        out.edge = px(140, 100);
+        out.inside = px(100, 100);
+        bucket.finish();
+        const { drawTransformed } = await import("./js/core/Resample.js");
+        const src = new ImageData(new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 255]), 2, 2);
+        const dst = new ImageData(4, 4);
+        drawTransformed(dst, src, new DOMMatrix().scale(2, 2), "bicubic", false);
+        out.bicubic = [...dst.data.slice(4, 8)].join();
+        AppState.updateTools(saved);
+        AppState.setPrimary(primary);
+        await k.closeDocument(doc, false);
+        return out;
+    });
+    check(opts.hole === "0,0,0,0" && opts.inside === "255,0,0,255" && /^255,\d+,\d+,255$/.test(opts.edge) && opts.edge !== "255,0,0,255" &&
+          opts.bicubic !== "0,0,0,255" && opts.bicubic !== "255,255,255,255",
+          `Sobrescribir, cubo de pintura y muestreo bicúbico (${JSON.stringify(opts)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

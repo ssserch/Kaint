@@ -184,3 +184,128 @@ export function scaleImage(image, w, h, method = "adaptive", gammaCorrect = fals
     }
     return finish(separable(src, sw, sh, w, h, kernelWeights(sw, w, kernel, support, true), kernelWeights(sh, h, kernel, support, true), gammaCorrect), true);
 }
+
+// --- Transformaciones (Mover píxeles seleccionados) ---------------------------------------
+
+// Al reducir, antes se promedia por áreas (si no, sale pixelado), como Resample::prefiltered de
+// Kaint: si la matriz (DOMMatrix, de los píxeles de 'image' al destino) encoge un eje por debajo
+// de 0,85, devuelve la imagen reducida y la matriz ajustada. 'cache' (un objeto) guarda la última.
+export function prefiltered(image, matrix, gammaCorrect, cache = {}) {
+    const sx = Math.hypot(matrix.a, matrix.b), sy = Math.hypot(matrix.c, matrix.d);
+    if (sx >= 0.85 && sy >= 0.85)
+        return { image, matrix };
+    const w = Math.max(1, Math.round(image.width * Math.min(1, sx))), h = Math.max(1, Math.round(image.height * Math.min(1, sy)));
+    if (cache.source !== image || cache.w !== w || cache.h !== h || cache.gamma !== gammaCorrect)
+        Object.assign(cache, { source: image, w, h, gamma: gammaCorrect, image: scaleImage(image, w, h, "supersampling", gammaCorrect) });
+    return { image: cache.image, matrix: matrix.multiply(new DOMMatrix().scale(image.width / w, image.height / h)) };
+}
+
+// Píxeles en luz lineal (premultiplicados, de 0 a 1), para muestrear con la corrección gamma
+// (LinearImage de Kaint).
+function linearImage(px, w, h) {
+    luts();
+    const out = new Float32Array(w * h * 4);
+    for (let i = 0; i < w * h; ++i) {
+        const u = qUnpremultiply(px[i]), a = qAlpha(u) / 255, k = i * 4;
+        out[k] = (linearLut[qRed(u)] / ONE) * a;
+        out[k + 1] = (linearLut[qGreen(u)] / ONE) * a;
+        out[k + 2] = (linearLut[qBlue(u)] / ONE) * a;
+        out[k + 3] = a;
+    }
+    return out;
+}
+
+// De vuelta a sRGB premultiplicado de 8 bits.
+function linearToPremul(c) {
+    const a = Math.min(1, Math.max(0, c[3]));
+    if (a <= 0.5 / 255)
+        return 0;
+    const ch = (v) => srgbLut[Math.round(Math.min(1, Math.max(0, v / a)) * ONE)];
+    return qPremultiply(qRgba(ch(c[0]), ch(c[1]), ch(c[2]), Math.round(a * 255)));
+}
+
+// Dibuja 'source' (ImageData, alfa directo) transformada por 'matrix' (DOMMatrix: de sus píxeles
+// a los de 'dst') sobre 'dst' (ImageData transparente, alfa directo), con el muestreo bicúbico o el
+// bilineal con la corrección gamma (Resample::drawTransformed de Kaint).
+export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect) {
+    const inv = matrix.inverse();
+    if (!Number.isFinite(inv.a) || !Number.isFinite(inv.d))
+        return;
+    const sw = source.width, sh = source.height, dw = dst.width, dh = dst.height;
+    const corners = [[0, 0], [sw, 0], [0, sh], [sw, sh]].map(([x, y]) => [matrix.a * x + matrix.c * y + matrix.e, matrix.b * x + matrix.d * y + matrix.f]);
+    const x0 = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[0]))) - 2), x1 = Math.min(dw - 1, Math.ceil(Math.max(...corners.map((p) => p[0]))) + 2);
+    const y0 = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[1]))) - 2), y1 = Math.min(dh - 1, Math.ceil(Math.max(...corners.map((p) => p[1]))) + 2);
+    const px = new Uint32Array(new Uint8ClampedArray(source.data).buffer).map(qPremultiply);
+    const out = new Uint32Array(dst.data.buffer, dst.data.byteOffset, dw * dh);
+    const weights = (t) => [kCatmullRom(t + 1), kCatmullRom(t), kCatmullRom(t - 1), kCatmullRom(t - 2)];
+    if (gammaCorrect && interpolation !== "nearest") {
+        const lin = linearImage(px, sw, sh), zero = [0, 0, 0, 0];
+        const at = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? null : (y * sw + x) * 4);
+        const c = new Float32Array(4);
+        for (let y = y0; y <= y1; ++y)
+            for (let x = x0; x <= x1; ++x) {
+                const X = x + 0.5, Y = y + 0.5;
+                let sx = inv.a * X + inv.c * Y + inv.e - 0.5, sy = inv.b * X + inv.d * Y + inv.f - 0.5;
+                const ix = Math.floor(sx), iy = Math.floor(sy);
+                c.fill(0);
+                if (interpolation === "bilinear") {
+                    const tx = Math.fround(sx - ix), ty = Math.fround(sy - iy);
+                    const p = [at(ix, iy), at(ix + 1, iy), at(ix, iy + 1), at(ix + 1, iy + 1)];
+                    for (let k = 0; k < 4; ++k) {
+                        const v = (q) => (q === null ? zero[k] : lin[q + k]);
+                        c[k] = (v(p[0]) * (1 - tx) + v(p[1]) * tx) * (1 - ty) + (v(p[2]) * (1 - tx) + v(p[3]) * tx) * ty;
+                    }
+                } else {
+                    const wx = weights(sx - ix), wy = weights(sy - iy);
+                    for (let j = 0; j < 4; ++j)
+                        for (let i = 0; i < 4; ++i) {
+                            const q = at(ix + i - 1, iy + j - 1);
+                            if (q === null)
+                                continue;
+                            const wgt = Math.fround(wx[i] * wy[j]);
+                            for (let k = 0; k < 4; ++k)
+                                c[k] += lin[q + k] * wgt;
+                        }
+                    c[3] = Math.min(1, Math.max(0, c[3]));
+                    for (let k = 0; k < 3; ++k)
+                        c[k] = Math.min(c[3], Math.max(0, c[k]));
+                }
+                const s = linearToPremul(c);
+                if (qAlpha(s))
+                    out[y * dw + x] = qUnpremultiply(s);
+            }
+        return;
+    }
+    const pixel = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? 0 : px[y * sw + x]);
+    for (let y = y0; y <= y1; ++y)
+        for (let x = x0; x <= x1; ++x) {
+            const X = x + 0.5, Y = y + 0.5;
+            const sx = inv.a * X + inv.c * Y + inv.e, sy = inv.b * X + inv.d * Y + inv.f;
+            let s;
+            if (interpolation === "nearest") {
+                s = pixel(Math.floor(sx), Math.floor(sy));
+            } else if (interpolation === "bilinear") {
+                const fx = sx - 0.5, fy = sy - 0.5, ix = Math.floor(fx), iy = Math.floor(fy);
+                const tx = Math.trunc((fx - ix) * 256), ty = Math.trunc((fy - iy) * 256);
+                const p00 = pixel(ix, iy), p10 = pixel(ix + 1, iy), p01 = pixel(ix, iy + 1), p11 = pixel(ix + 1, iy + 1);
+                const mix = (f) => {
+                    const top = f(p00) * (256 - tx) + f(p10) * tx, bottom = f(p01) * (256 - tx) + f(p11) * tx;
+                    return (top * (256 - ty) + bottom * ty + 32768) >> 16;
+                };
+                s = qRgba(mix(qRed), mix(qGreen), mix(qBlue), mix(qAlpha));
+            } else {
+                const fx = sx - 0.5, fy = sy - 0.5, ix = Math.floor(fx), iy = Math.floor(fy);
+                const wx = weights(fx - ix), wy = weights(fy - iy), acc = [0, 0, 0, 0];
+                for (let j = 0; j < 4; ++j)
+                    for (let i = 0; i < 4; ++i) {
+                        const p = pixel(ix + i - 1, iy + j - 1), w = wx[i] * wy[j];
+                        acc[0] += qRed(p) * w; acc[1] += qGreen(p) * w; acc[2] += qBlue(p) * w; acc[3] += qAlpha(p) * w;
+                    }
+                const a = clamp255f(Math.fround(acc[3]));
+                s = qRgba(Math.min(a, clamp255f(Math.fround(acc[0]))), Math.min(a, clamp255f(Math.fround(acc[1]))),
+                          Math.min(a, clamp255f(Math.fround(acc[2]))), a);
+            }
+            if (qAlpha(s))
+                out[y * dw + x] = qUnpremultiply(s);
+        }
+}

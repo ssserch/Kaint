@@ -91,7 +91,10 @@ const files = {
 const optionFiles = {
     "opt-gradient:linear": "enum_gradient_type_linear_clamped", "opt-gradient:reflected": "enum_gradient_type_linear_reflected",
     "opt-gradient:diamond": "enum_gradient_type_linear_diamond", "opt-gradient:radial": "enum_gradient_type_radial",
-    "opt-gradient:conical": "enum_gradient_type_conical",
+    "opt-gradient:conical": "enum_gradient_type_conical", "opt-gradient:spiralcw": "enum_gradient_type_spiral",
+    "opt-gradient:spiralccw": "enum_gradient_type_spiral_counter_clockwise",
+    "opt-tolalpha:0": "enum_tolerance_alpha_mode_premultiplied", "opt-tolalpha:1": "enum_tolerance_alpha_mode_straight",
+    "opt-gamma:1": "enum_tool_gamma_mode_linear", "opt-gamma:0": "enum_tool_gamma_mode_companded",
     "opt-style:outline": "enum_shape_draw_type_outline_dark", "opt-style:fill": "enum_shape_draw_type_interior",
     "opt-style:both": "enum_shape_draw_type_both_dark",
     "opt-curve:straight": "enum_curve_type_straight", "opt-curve:spline": "enum_curve_type_spline",
@@ -700,6 +703,37 @@ function drawEye(ctx, open) {
     ctx.stroke();
 }
 
+// Dos manchas translúcidas: con acumulación, donde se solapan el color se refuerza
+// (Icons::fillAccumulate de Kaint).
+function drawAccumulate(ctx, on) {
+    const d = 16 * 0.62, a = [1, 1], b = [15 - d, 15 - d];
+    ctx.save();
+    ctx.globalAlpha = 150 / 255;
+    ctx.fillStyle = accent();
+    if (on) {
+        for (const [x, y] of [a, b]) {
+            ctx.beginPath();
+            ctx.ellipse(x + d / 2, y + d / 2, d / 2, d / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else {
+        ctx.beginPath();
+        for (const [x, y] of [a, b]) {
+            ctx.moveTo(x + d, y + d / 2);
+            ctx.ellipse(x + d / 2, y + d / 2, d / 2, d / 2, 0, 0, Math.PI * 2);
+        }
+        ctx.fill("nonzero");
+    }
+    ctx.restore();
+    ctx.strokeStyle = fg();
+    ctx.lineWidth = 1;
+    for (const [x, y] of [a, b]) {
+        ctx.beginPath();
+        ctx.ellipse(x + d / 2, y + d / 2, d / 2, d / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
 function drawPlay(ctx, pause) {
     ctx.fillStyle = foreground();
     ctx.beginPath();
@@ -718,6 +752,7 @@ function drawPlay(ctx, pause) {
 const drawn = {
     "eye-open": [16, (ctx) => drawEye(ctx, true)], "eye-closed": [16, (ctx) => drawEye(ctx, false)],
     "media-playback-start": [16, (ctx) => drawPlay(ctx, false)], "media-playback-pause": [16, (ctx) => drawPlay(ctx, true)],
+    "opt-accumulate:1": [16, (ctx) => drawAccumulate(ctx, true)], "opt-accumulate:0": [16, (ctx) => drawAccumulate(ctx, false)],
     rectangleselect: [20, drawRectSelect], ellipseselect: [20, drawEllipseSelect], lassoselect: [20, drawLasso],
     magicwand: [20, drawMagicWand], moveselectedpixels: [20, drawMove], moveselection: [20, drawMoveSelection],
     zoom: [20, drawZoom], eraser: [20, drawEraser], pencil: [20, drawPencil], colorpicker: [20, drawColorPicker],

@@ -95,7 +95,7 @@ export class ColorPickerTool extends Tool {
     get name() { return tr("Selector de color"); }
     get icon() { return "colorpicker"; }
     get letter() { return "K"; }
-    get options() { return ["picker"]; }
+    get options() { return ["picker", "selectionQuality"]; }
     hint() {
         return tr("Clic izquierdo: tomar el color principal · clic derecho: el secundario. "
                   + "Ctrl: muestrear la imagen en lugar de la capa (o al revés).");

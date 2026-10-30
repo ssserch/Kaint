@@ -140,7 +140,7 @@ export class RectSelectTool extends ShapeSelectTool {
     get icon() { return "rectangleselect"; }
     get letter() { return "S"; }
     get ellipse() { return false; }
-    get options() { return ["selectionMode", "rectMode", "afterSelect"]; }
+    get options() { return ["selectionMode", "rectMode", "afterSelect", "selectionQuality"]; }
     hint() { return tr("Arrastra para seleccionar un rectángulo. Mayús: cuadrado. ") + selectHint(); }
 }
 
@@ -195,7 +195,7 @@ export class MagicWandTool extends SelectTool {
     get name() { return tr("Varita mágica"); }
     get icon() { return "magicwand"; }
     get letter() { return "S"; }
-    get options() { return ["selectionMode", "flood", "tolerance", "sampling", "afterSelect"]; }
+    get options() { return ["selectionMode", "flood", "tolerance", "tolAlpha", "sampling", "afterSelect", "selectionQuality", "finish"]; }
 
     hint() {
         return this.session
@@ -221,7 +221,7 @@ export class MagicWandTool extends SelectTool {
 
     recompute() {
         const doc = this.doc, s = this.settings;
-        const mask = floodMask(this.sample, this.seed.x, this.seed.y, s.tolerance, s.floodGlobal !== this.shiftGlobal);
+        const mask = floodMask(this.sample, this.seed.x, this.seed.y, s.tolerance, s.floodGlobal !== this.shiftGlobal, !!s.toleranceStraight);
         this.preview(Selection.fromMask(doc.width, doc.height, mask));
         this.repaint();
     }

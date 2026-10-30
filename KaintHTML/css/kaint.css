@@ -1135,6 +1135,13 @@ input[type="checkbox"] {
     min-width: 96px;
 }
 
+.status-bar .unit-button {
+    min-width: 28px;
+    height: 22px;
+    padding: 0 6px;
+    margin-right: 4px;
+}
+
 .status-bar .zoom-box {
     width: 82px;
 }
@@ -1332,31 +1339,448 @@ input[type="checkbox"] {
     background: var(--line);
 }
 
-/* Diálogo de efecto */
-.param {
-    display: grid;
-    grid-template-columns: 1fr 64px 26px;
-    gap: 2px 6px;
+/* Diálogo de efecto (EffectDialog de Kaint) */
+.backdrop.see-through {
+    background: transparent;
+}
+
+body.busy, body.busy * {
+    cursor: progress !important;
+}
+
+.effect-dialog > .body {
+    min-width: 356px;
+    display: flex;
+    flex-direction: column;
+}
+
+.effect-dialog .push-left {
+    margin-right: auto;
+}
+
+.fx-param.disabled, .fx-param .disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.fx-header {
+    display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    gap: 6px;
+    margin: 6px 0 2px;
 }
 
-.param > .label {
-    grid-column: 1 / -1;
+.fx-header.line::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
 }
 
-.param input[type="range"] {
+.fx-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fx-row.fx-top {
+    align-items: flex-start;
+}
+
+.fx-row.fx-center {
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.fx-slider {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+}
+
+.fx-slider input[type="range"] {
     width: 100%;
+    margin: 0;
 }
 
-.param input[type="number"] {
+.fx-gradient {
+    height: 5px;
+    margin: 0 6px 2px;
+}
+
+.fx-row input[type="number"] {
+    width: 80px;
+}
+
+.fx-sliders {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fx-check {
+    display: inline-flex;
+    align-items: center;
+    margin: 6px 0 2px;
+}
+
+.fx-choice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.fx-choice select {
+    max-width: 230px;
+}
+
+.fx-param > .fx-row > .pushbutton {
+    margin-top: 6px;
+}
+
+.fx-description, .fx-note {
+    margin: 2px 0 4px;
+    max-width: 380px;
+    white-space: normal;
+}
+
+.fx-note {
+    margin-top: 10px;
+}
+
+.fx-param textarea, .fx-param input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.fx-param textarea {
+    background: var(--base);
+    color: var(--text);
+    border: 1px solid var(--field);
+    border-radius: var(--radius);
+    resize: vertical;
+}
+
+.fx-angle-chooser {
+    cursor: pointer;
+    flex: none;
+}
+
+.fx-pan, .fx-rollball {
+    flex: none;
+}
+
+/* Botón de color: la muestra sobre el damero */
+.fx-color {
+    width: 72px;
+    height: 26px;
+    padding: 2px;
+    margin-top: 2px;
+    background: var(--button);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.fx-color span, .color-dialog .compare span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(var(--c), var(--c)),
+                repeating-conic-gradient(#bfbfbf 0% 25%, #8f8f8f 0% 50%) 0 0 / 10px 10px;
+}
+
+/* Pestañas (QTabWidget) */
+.fx-tabs {
+    margin-top: 2px;
+}
+
+.fx-tabbar {
+    display: flex;
+    gap: 2px;
+    margin-bottom: -1px;
+}
+
+.fx-tab {
+    padding: 4px 10px;
+    background: var(--button);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.fx-tab.current {
+    background: var(--window);
+    border-bottom-color: var(--window);
+    position: relative;
+    z-index: 1;
+}
+
+.fx-pages {
+    border: 1px solid var(--border);
+    padding: 4px 10px 10px;
+}
+
+/* Curvas */
+.fx-curves-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fx-curves {
+    display: block;
+    width: 340px;
+    height: 340px;
+    align-self: center;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.fx-curves-editor .coords {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Niveles */
+.fx-levels {
+    display: grid;
+    grid-template-columns: 120px auto 26px 26px auto 120px;
+    grid-template-rows: auto 256px;
+    gap: 2px 6px;
+}
+
+.fx-levels .span2 {
+    grid-column: span 2;
+}
+
+.fx-levels .fx-header {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.fx-levels-column {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fx-levels-column input[type="number"] {
     width: 64px;
 }
 
-.curve-editor {
-    background: var(--base);
+.fx-histogram, .fx-levels-bar {
+    display: block;
+    width: 100%;
+    height: 256px;
+    min-width: 0;
+    touch-action: none;
+}
+
+.fx-swatch {
+    width: 44px;
+    height: 20px;
+    border: 1px solid var(--border);
+    box-sizing: border-box;
+}
+
+/* Progreso de los efectos */
+.status-bar .effect-progress {
+    width: 120px;
+    height: 12px;
+    margin: 0 6px;
+    accent-color: var(--accent);
+}
+
+.progress-text {
+    margin-bottom: 8px;
+    min-width: 300px;
+}
+
+.dialog progress {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+/* Selector de color con transparencia */
+.color-dialog {
+    display: flex;
+    gap: 14px;
+}
+
+.color-dialog .left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.color-dialog .wheel-row {
+    display: flex;
+    gap: 4px;
+}
+
+.color-dialog .wheel-box {
+    width: 168px;
+    height: 168px;
+}
+
+.color-dialog .wheel {
+    width: 100%;
+    height: 100%;
+}
+
+.color-dialog .channel-slider.vertical {
+    width: 18px;
+    height: 168px;
+}
+
+.color-dialog .compare {
+    display: flex;
+    height: 30px;
+    border: 1px solid var(--border);
+}
+
+.color-dialog .compare span {
+    flex: 1;
+}
+
+.color-dialog .compare .old {
+    cursor: pointer;
+}
+
+.color-dialog .channels {
+    display: grid;
+    grid-template-columns: auto 180px 64px;
+    gap: 3px 6px;
+    align-items: center;
+    align-content: start;
+}
+
+.color-dialog .channels .section {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.color-dialog .channels .section::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+.color-dialog .channel-slider:not(.vertical) {
+    width: 180px;
+    height: 16px;
+}
+
+.color-dialog .hex {
+    grid-column: span 2;
+    width: 100px;
+}
+
+/* Diálogos de tamaño (Imagen nueva, Cambiar el tamaño, Tamaño del lienzo) */
+.size-dialog, .size-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.size-dialog {
+    min-width: 360px;
+}
+
+.size-dialog .row, .size-editor .row, .layer-props .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.size-dialog .row.indent {
+    padding-left: 92px;
+}
+
+.size-dialog .row > label:first-child, .layer-props .row > label:first-child {
+    white-space: nowrap;
+}
+
+.size-dialog select {
+    flex: 1;
+}
+
+.size-editor .with-unit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.size-editor label.disabled {
+    opacity: 0.5;
+}
+
+fieldset.group {
+    margin: 0;
+    padding: 4px 10px 8px;
     border: 1px solid var(--line);
-    cursor: crosshair;
+    border-radius: var(--radius);
+}
+
+fieldset.group > legend {
+    padding: 0 4px;
+}
+
+.size-grid {
+    display: grid;
+    grid-template-columns: 80px 96px auto;
+    gap: 4px 6px;
+    align-items: center;
+    justify-items: start;
+}
+
+.size-grid input[type="number"] {
+    width: 96px;
+    box-sizing: border-box;
+}
+
+.anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 44px);
+    gap: 2px;
+    justify-content: center;
+    padding: 6px 0;
+}
+
+.anchor-cell {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.layer-props {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 300px;
+}
+
+.layer-props > label:not(:first-child) {
+    margin-top: 6px;
+}
+
+.layer-props .row {
+    margin-top: 6px;
+}
+
+.layer-props .row select {
+    flex: 1;
 }
 
 /* Tareas (TaskDialog) */

@@ -5,6 +5,7 @@
 import { checkerPattern, clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
 import { handCursor, outlineCursor, paintMini } from "./Icons.js";
 import { Settings } from "../Settings.js";
+import { pixelsPerUnit } from "./Units.js";
 
 const kMargin = 24;
 // Grosor de las reglas (Ver > Reglas).
@@ -487,23 +488,28 @@ export class CanvasView extends EventTarget {
             ctx.fillRect(0, 0, w, h);
             const doc = this.doc;
             if (doc) {
-                const t = kRuler, length = vertical ? h : w, origin = vertical ? this.origin.y : this.origin.x, s = this.scale;
+                // En la unidad de medida elegida (Ver > Píxeles, Pulgadas o Centímetros).
+                const unit = Settings.get("unit") ?? 0, ppu = pixelsPerUnit(unit, doc.dpi);
+                const t = kRuler, length = vertical ? h : w, origin = vertical ? this.origin.y : this.origin.x, s = this.scale * ppu;
                 const b = doc.selection.bounds();
                 if (b) {
                     ctx.globalAlpha = paintJs ? 0.45 : 0.35;
                     ctx.fillStyle = accent;
-                    const a = origin + (vertical ? b.y : b.x) * s, size = (vertical ? b.h : b.w) * s;
+                    const a = origin + (vertical ? b.y : b.x) * this.scale, size = (vertical ? b.h : b.w) * this.scale;
                     vertical ? ctx.fillRect(0, a, t, size) : ctx.fillRect(a, 0, size, t);
                     ctx.globalAlpha = 1;
                 }
+                // paint.js: en píxeles 1, 2, 5, 10, 20, 40, 80... con al menos 35 px entre marcas; si
+                // no (o en pulgadas y centímetros), 1, 2, 5 × 10^n con al menos ~60 px.
                 let step = 1;
-                if (paintJs) {
+                if (paintJs && unit === 0) {
                     while (step * s < 35 && step < 1e7)
                         step *= step === 2 ? 2.5 : 2;
                 } else {
-                    outer: for (let mag = 1; mag < 1e7; mag *= 10)
+                    const minGap = paintJs ? 35 : 60;
+                    outer: for (let mag = 1e-3; mag < 1e7; mag *= 10)
                         for (const k of [1, 2, 5])
-                            if (k * mag * s >= 60) {
+                            if (k * mag * s >= minGap) {
                                 step = k * mag;
                                 break outer;
                             }
@@ -529,7 +535,7 @@ export class CanvasView extends EventTarget {
                     if (!major)
                         continue;
                     ctx.fillStyle = colors.text;
-                    const label = String(Math.round(value));
+                    const label = String(Math.abs(value) < step * 1e-6 ? 0 : Number(value.toPrecision(6)));
                     if (vertical) {
                         // Como paint.js, de abajo arriba sobre la marca.
                         ctx.save();

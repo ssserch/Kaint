@@ -4,6 +4,46 @@ import { context, createCanvas } from "./Raster.js";
 
 export const SelectionMode = { Replace: "replace", Union: "union", Exclude: "exclude", Intersect: "intersect", Xor: "xor" };
 
+// Distancia (euclídea, al cuadrado) de cada píxel al más cercano con 'inside' igual al pedido:
+// transformada de Felzenszwalb y Huttenlocher, separable y lineal.
+function squaredDistance(mask, w, h, toInside) {
+    const INF = 1e20, d = new Float32Array(w * h);
+    for (let i = 0; i < d.length; ++i)
+        d[i] = (mask[i] >= 128) === toInside ? 0 : INF;
+    const n = Math.max(w, h), tmp = new Float32Array(n), v = new Int32Array(n), z = new Float32Array(n + 1);
+    const pass = (offset, count, stride) => {
+        for (let i = 0; i < count; ++i)
+            tmp[i] = d[offset + i * stride];
+        let k = 0;
+        v[0] = 0;
+        z[0] = -INF;
+        z[1] = INF;
+        for (let q = 1; q < count; ++q) {
+            let s = (tmp[q] + q * q - (tmp[v[k]] + v[k] * v[k])) / (2 * (q - v[k]));
+            while (s <= z[k]) {
+                --k;
+                s = (tmp[q] + q * q - (tmp[v[k]] + v[k] * v[k])) / (2 * (q - v[k]));
+            }
+            ++k;
+            v[k] = q;
+            z[k] = s;
+            z[k + 1] = INF;
+        }
+        k = 0;
+        for (let q = 0; q < count; ++q) {
+            while (z[k + 1] < q)
+                ++k;
+            const dq = q - v[k];
+            d[offset + q * stride] = dq * dq + tmp[v[k]];
+        }
+    };
+    for (let x = 0; x < w; ++x)
+        pass(x, h, w);
+    for (let y = 0; y < h; ++y)
+        pass(y * w, w, 1);
+    return d;
+}
+
 export class Selection {
     constructor(width, height, mask = null, rect = null) {
         this.width = width;
@@ -162,6 +202,114 @@ export class Selection {
         else
             out.fill(255);
         return Selection.fromMask(this.width, this.height, out);
+    }
+
+    // Copiar selección (como Paint.NET y Kaint): los polígonos en JSON ("polygonList"), uno por
+    // cada rectángulo de píxeles seleccionados que se repite de fila en fila.
+    toJson() {
+        const polygons = [];
+        const box = (x0, y0, x1, y1) => polygons.push([x0, y0, x1, y0, x1, y1, x0, y1, x0, y0].join(","));
+        if (this.rect) {
+            box(this.rect.x, this.rect.y, this.rect.x + this.rect.w, this.rect.y + this.rect.h);
+        } else if (this.mask) {
+            const b = this.bounds(), w = this.width;
+            let open = [];
+            for (let y = b.y; y <= b.y + b.h; ++y) {
+                const runs = [];
+                if (y < b.y + b.h)
+                    for (let x = b.x; x < b.x + b.w;) {
+                        while (x < b.x + b.w && this.mask[y * w + x] < 128)
+                            ++x;
+                        const start = x;
+                        while (x < b.x + b.w && this.mask[y * w + x] >= 128)
+                            ++x;
+                        if (x > start)
+                            runs.push([start, x]);
+                    }
+                const next = [];
+                for (const r of open) {
+                    const k = runs.findIndex(([a, c]) => a === r.x0 && c === r.x1);
+                    if (k >= 0) {
+                        next.push(r);
+                        runs.splice(k, 1);
+                    } else {
+                        box(r.x0, r.y0, r.x1, y);
+                    }
+                }
+                for (const [x0, x1] of runs)
+                    next.push({ x0, x1, y0: y });
+                open = next;
+            }
+        }
+        return JSON.stringify({ polygonList: polygons }, null, 4);
+    }
+
+    // Pegar selección: los polígonos de toJson() (o de Paint.NET); null si el texto no es una
+    // selección.
+    static fromJson(text, width, height) {
+        let list;
+        try {
+            list = JSON.parse(text)?.polygonList;
+        } catch {
+            return null;
+        }
+        if (!Array.isArray(list) || !list.length)
+            return null;
+        const polygons = list.map((p) => String(p).split(",").map((n) => parseFloat(n.trim())).filter(Number.isFinite))
+            .filter((p) => p.length >= 6);
+        if (!polygons.length)
+            return null;
+        return Selection.fromPath(width, height, (ctx) => {
+            for (const p of polygons) {
+                ctx.moveTo(p[0], p[1]);
+                for (let i = 2; i + 1 < p.length; i += 2)
+                    ctx.lineTo(p[i], p[i + 1]);
+                ctx.closePath();
+            }
+        }, true, "evenodd");
+    }
+
+    // Ampliar (radio > 0) o reducir (radio < 0) la selección: cuenta la distancia euclídea a lo
+    // seleccionado (o, al reducir, a lo no seleccionado), con el borde suavizado.
+    grown(radius) {
+        if (!this.mask || !radius)
+            return this;
+        const w = this.width, h = this.height, grow = radius > 0, r = Math.abs(radius);
+        const dist = squaredDistance(this.mask, w, h, grow), out = new Uint8Array(w * h);
+        for (let i = 0; i < out.length; ++i) {
+            const d = Math.sqrt(dist[i]);
+            out[i] = Math.round(Math.min(1, Math.max(0, grow ? r - d + 1 : d - r)) * 255);
+        }
+        return Selection.fromMask(w, h, out);
+    }
+
+    // Difuminar el borde: desenfoque gaussiano de la máscara (sigma = radio / 2).
+    feathered(radius) {
+        if (!this.mask || radius <= 0)
+            return this;
+        const w = this.width, h = this.height, sigma = radius / 2, half = Math.ceil(sigma * 3);
+        const kernel = new Float32Array(2 * half + 1);
+        let sum = 0;
+        for (let i = -half; i <= half; ++i)
+            sum += kernel[i + half] = Math.exp(-(i * i) / (2 * sigma * sigma));
+        for (let i = 0; i < kernel.length; ++i)
+            kernel[i] /= sum;
+        const a = Float32Array.from(this.mask), b = new Float32Array(w * h), out = new Uint8Array(w * h);
+        for (let y = 0; y < h; ++y)
+            for (let x = 0; x < w; ++x) {
+                let acc = 0;
+                for (let i = -half; i <= half; ++i)
+                    acc += kernel[i + half] * a[y * w + Math.min(w - 1, Math.max(0, x + i))];
+                b[y * w + x] = acc;
+            }
+        for (let y = 0; y < h; ++y)
+            for (let x = 0; x < w; ++x) {
+                let acc = 0;
+                for (let i = -half; i <= half; ++i)
+                    acc += kernel[i + half] * b[Math.min(h - 1, Math.max(0, y + i)) * w + x];
+                out[y * w + x] = Math.min(255, Math.max(0, Math.round(acc)));
+            }
+        return Selection.fromMask(w, h, out);
     }
 
     // La misma máscara en otro tamaño de imagen (recortar, tamaño del lienzo), desplazada.

@@ -47,7 +47,7 @@ function normalize(entry) {
 }
 
 // Abre un menú en (x, y) de la pantalla; 'level' es la profundidad (submenús).
-export function popupMenu(entries, x, y, { level = 0, onClose, minWidth } = {}) {
+export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false } = {}) {
     while (openMenus.length > level)
         openMenus.pop().remove();
     const menu = document.createElement("div");
@@ -121,7 +121,8 @@ export function popupMenu(entries, x, y, { level = 0, onClose, minWidth } = {}) 
     // Dentro de la ventana
     const r = menu.getBoundingClientRect();
     menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - r.width - 2))}px`;
-    menu.style.top = `${Math.max(0, Math.min(y, window.innerHeight - r.height - 2))}px`;
+    // 'above': el menú sube desde y (botones de la barra de estado).
+    menu.style.top = `${Math.max(0, Math.min(above ? y - r.height : y, window.innerHeight - r.height - 2))}px`;
     menu.items = items;
     menu.onCloseCallback = onClose;
     openMenus.push(menu);

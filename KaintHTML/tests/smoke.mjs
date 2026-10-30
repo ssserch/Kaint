@@ -225,7 +225,9 @@ check(await page.evaluate(() => window.kaint.doc.width === 100 && window.kaint.d
 await page.keyboard.press("Control+z");
 const sizeDone = page.evaluate(() => window.kaint.canvasSize());
 await page.waitForSelector(".dialog");
-await page.fill(".dialog input[type=number] >> nth=0", "900");
+// Como en Kaint: empieza por porcentaje; por tamaño absoluto se escribe la anchura.
+await page.check(".dialog .size-editor input[type=radio] >> nth=1");
+await page.fill(".dialog .size-grid input[type=number] >> nth=0", "900");
 await page.click(".dialog .pushbutton.default");
 await sizeDone;
 check(await page.evaluate(() => window.kaint.doc.width === 900), "tamaño del lienzo");
@@ -720,6 +722,115 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     await page.evaluate(async () => (await import("./js/Settings.js")).Settings.set("menuMnemonics", false));
     check(off === "none" && alt === "underline" && released === "none" && always === "underline",
           `subrayado de las letras de acceso (${off}, ${alt}, ${released}, ${always})`);
+}
+
+// Efectos como los de Kaint: los mismos 55 (con Cuantizar, Boceto borroso, Enderezar y Giro y
+// zum), las mismas opciones (el desenfoque gaussiano con Potenciar Gamma y Calidad), el diálogo con
+// sus controles, Ctrl+Z dentro del diálogo y el cálculo en segundo plano igual al de aquí.
+{
+    const fx = await page.evaluate(async () => {
+        const { Effects, findEffect, defaultValues } = await import("./js/core/Effects.js");
+        const { startEffect } = await import("./js/core/EffectRunner.js");
+        const gauss = findEffect("gaussianblur");
+        const w = 64, h = 48, data = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = (i / 4) % 256; data[i + 1] = (i / 4 / w) * 5; data[i + 2] = (i * 3) % 256; data[i + 3] = 128 + ((i / 4) % 128);
+        }
+        const src = new ImageData(data, w, h), values = { ...defaultValues(gauss), radius: 6, gamma: 1.5, quality: 3 };
+        const rect = { x: 3, y: 5, w: 50, h: 37 };
+        const here = gauss.render(src, values, rect, {}).data;
+        const there = (await startEffect(gauss, src, values, rect, {}).promise).data;
+        return {
+            count: Effects.filter((e) => e.builtin).length, gaussian: gauss.params.map((p) => p.key).join(","),
+            extra: ["quantize", "sketchblur", "straighten", "rotatezoom"].every((id) => findEffect(id)),
+            same: here.every((v, i) => v === there[i]),
+        };
+    });
+    check(fx.count === 55 && fx.gaussian === "radius,gamma,quality" && fx.extra && fx.same, `efectos como los de Kaint (${JSON.stringify(fx)})`);
+    const done = page.evaluate(async () => {
+        const { findEffect } = await import("./js/core/Effects.js");
+        return window.kaint.runEffect(findEffect("gaussianblur"), false);
+    });
+    await page.waitForSelector(".effect-dialog");
+    const ui = await page.evaluate(() => ({ sliders: document.querySelectorAll(".effect-dialog input[type=range]").length,
+                                             resets: document.querySelectorAll(".effect-dialog .fx-reset").length }));
+    const radius = page.locator(".effect-dialog input[type=number] >> nth=0");
+    await radius.fill("12");
+    await radius.dispatchEvent("change");
+    await page.waitForTimeout(700);
+    await page.keyboard.press("Control+z");
+    const undone = await radius.inputValue();
+    await page.click(".effect-dialog .pushbutton.default");
+    await done;
+    check(ui.sliders === 3 && ui.resets === 3 && undone === "2.0" && await lastStep() === "Desenfoque gaussiano",
+          `diálogo del desenfoque gaussiano (${JSON.stringify(ui)}, deshacer: ${undone})`);
+    // Controles especiales: ángulo, centro con miniatura, globo, color, pestañas, curvas y niveles.
+    const special = {};
+    for (const [id, selector] of [["motionblur", ".fx-angle-chooser"], ["zoomblur", ".fx-pan"], ["rotatezoom", ".fx-rollball"],
+                                  ["dropshadow", ".fx-color"], ["clouds", ".fx-tab"], ["curves", ".fx-curves"], ["levels", ".fx-histogram"]]) {
+        const run = page.evaluate(async (id) => {
+            const { findEffect } = await import("./js/core/Effects.js");
+            return window.kaint.runEffect(findEffect(id), false);
+        }, id);
+        await page.waitForSelector(".effect-dialog");
+        special[id] = await page.evaluate((sel) => document.querySelectorAll(`.effect-dialog ${sel}`).length, selector);
+        await page.keyboard.press("Escape");
+        await run;
+    }
+    check(Object.values(special).every((n) => n > 0) && special.clouds === 2 && special.levels === 2, `controles de los efectos (${JSON.stringify(special)})`);
+    await page.click("#menubar >> text=Capas");
+    const layersMenu = await page.evaluate(() => [...document.querySelectorAll(".popup-menu .item")].map((i) => i.textContent));
+    await page.keyboard.press("Escape");
+    check(layersMenu.some((t) => t.startsWith("Giro y zum")), "el menú Capas tiene «Giro y zum...»");
+}
+
+// Cambiar el tamaño como en Kaint: remuestreo (con supermuestreo y Lanczos), por porcentaje y la
+// resolución, que se guarda en el archivo.
+{
+    const before = await page.evaluate(() => ({ w: window.kaint.doc.width, h: window.kaint.doc.height }));
+    const done = page.evaluate(() => window.kaint.resizeImage());
+    await page.waitForSelector(".dialog .size-editor");
+    const methods = await page.evaluate(() => [...document.querySelector(".dialog select").options].map((o) => o.value));
+    await page.fill(".dialog .size-editor input[type=number] >> nth=0", "50");
+    await page.click(".dialog .pushbutton.default");
+    await done;
+    const after = await page.evaluate(() => ({ w: window.kaint.doc.width, h: window.kaint.doc.height, step: window.kaint.doc.history.steps[window.kaint.doc.history.index].name }));
+    check(methods.length === 8 && methods.includes("supersampling") && methods.includes("lanczos")
+          && after.w === Math.round(before.w / 2) && after.h === Math.round(before.h / 2) && after.step === "Cambiar el tamaño",
+          `cambiar el tamaño al 50 % (${JSON.stringify(before)} → ${JSON.stringify(after)})`);
+    await page.keyboard.press("Control+z");
+    const dpi = await page.evaluate(async () => {
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const doc = window.kaint.doc, old = doc.dpi;
+        doc.dpi = 300;
+        const back = await openFile(new File([await encode(doc, SaveFormats[0])], "x.png"));
+        doc.dpi = old;
+        return back.dpi;
+    });
+    check(dpi === 300, `la resolución se guarda en el PNG (${dpi})`);
+}
+
+// Edición > Copiar selección, Pegar selección y Ampliar la selección; Ver > unidades.
+{
+    const r = await page.evaluate(async () => {
+        const app = window.kaint, doc = app.doc;
+        const { Selection, SelectionMode } = await import("./js/core/Selection.js");
+        doc.setSelection(Selection.rect(doc.width, doc.height, 10, 20, 30, 40));
+        await app.copySelection();
+        const json = app.selectionClipboard;
+        doc.setSelection(Selection.rect(doc.width, doc.height, 100, 100, 10, 10));
+        await app.pasteSelection(SelectionMode.Union);
+        const pasted = doc.selection.area();
+        const grown = doc.selection.grown(2).bounds();
+        const feathered = doc.selection.feathered(4).bounds();
+        app.setUnit(2);
+        const cm = app.unitButton.textContent;
+        app.setUnit(0);
+        app.deselect();
+        return { json: JSON.parse(json).polygonList[0], pasted, grown, feathered, cm };
+    });
+    check(r.json === "10,20,40,20,40,60,10,60,10,20" && r.pasted === 1300 && r.grown.x === 8 && r.grown.w === 104 && r.feathered.x < 10 && r.cm === "cm",
+          `copiar y pegar la selección, ampliar, difuminar y unidades (${JSON.stringify(r)})`);
 }
 
 // Todas las páginas de Configuración se abren sin errores.

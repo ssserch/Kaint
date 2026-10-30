@@ -56,10 +56,12 @@ export class History {
 }
 
 export class Document extends EventTarget {
-    constructor(width, height, { name = "", background = "#ffffff", historyName, historyIcon = "document-new" } = {}) {
+    constructor(width, height, { name = "", background = "#ffffff", historyName, historyIcon = "document-new", dpi = 96 } = {}) {
         super();
         this.width = width;
         this.height = height;
+        // Resolución (píxeles por pulgada): el tamaño de impresión y las unidades de las reglas.
+        this.dpi = dpi;
         this.name = name;
         this.fileHandle = null;
         this.fileName = "";
@@ -234,7 +236,7 @@ export class Document extends EventTarget {
     // Todo el documento (tamaño, capas con sus píxeles y selección): girar, recortar, acoplar...
     snapshot() {
         return {
-            width: this.width, height: this.height, active: this.active, selection: this.selection,
+            width: this.width, height: this.height, dpi: this.dpi, active: this.active, selection: this.selection,
             layers: this.layers.map((l) => ({ layer: l, canvas: cloneCanvas(l.canvas), props: l.props() })),
         };
     }
@@ -243,6 +245,9 @@ export class Document extends EventTarget {
         const sizeChanged = snap.width !== this.width || snap.height !== this.height;
         this.width = snap.width;
         this.height = snap.height;
+        const dpiChanged = snap.dpi !== undefined && snap.dpi !== this.dpi;
+        if (snap.dpi !== undefined)
+            this.dpi = snap.dpi;
         this.layers = snap.layers.map(({ layer, canvas, props }) => {
             layer.replaceCanvas(cloneCanvas(canvas));
             layer.setProps(props);
@@ -250,7 +255,7 @@ export class Document extends EventTarget {
         });
         this.active = Math.min(snap.active, this.layers.length - 1);
         this.selection = snap.selection;
-        if (sizeChanged)
+        if (sizeChanged || dpiChanged)
             this.emit("size");
         this.emit("selection");
         this.layersChanged();

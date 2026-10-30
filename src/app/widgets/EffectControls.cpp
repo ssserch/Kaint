@@ -264,7 +264,9 @@ void HistogramView::paintEvent(QPaintEvent*)
                 peak = std::max(peak, v);
     static const QColor colors[3] = {QColor(230, 40, 40, 120), QColor(40, 190, 40, 120), QColor(40, 80, 240, 120)};
     p.setRenderHint(QPainter::Antialiasing);
-    p.setCompositionMode(QPainter::CompositionMode_Multiply);
+    // Sobre un fondo oscuro, "multiplicar" apenas deja ver los canales: ahí se aclara.
+    const bool dark = palette().color(QPalette::Base).lightness() < 128;
+    p.setCompositionMode(dark ? QPainter::CompositionMode_Screen : QPainter::CompositionMode_Multiply);
     for (int c = 0; c < 3; ++c) {
         if (!m_shown[size_t(c)])
             continue;

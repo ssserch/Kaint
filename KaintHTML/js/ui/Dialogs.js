@@ -3,13 +3,14 @@
 import { icon } from "./Icons.js";
 import { shortcutLabel } from "./Actions.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
-import { Settings } from "../Settings.js";
+import { remember, Settings } from "../Settings.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
 import { ColorRoles, Presets } from "./Themes.js";
-import { plain, tr } from "../i18n.js";
+import { currentLanguage, plain, tr } from "../i18n.js";
+import { ResampleMethods } from "../core/Resample.js";
 
 let openDialogs = 0;
 
@@ -118,6 +119,9 @@ export class Dialog {
 
     exec() {
         openDialogs++;
+        // Al cerrarse, el foco vuelve a donde estaba (por ejemplo, al diálogo de un efecto después
+        // de elegir un color).
+        this.returnFocus = document.activeElement;
         document.body.appendChild(this.backdrop);
         // El foco entra ya (si no, un Esc o un Intro pulsado justo al abrirse se perdía); se repite
         // tras el primer pintado por si el navegador aún no lo aceptaba.
@@ -133,6 +137,8 @@ export class Dialog {
             return;
         openDialogs--;
         this.backdrop.remove();
+        if (this.returnFocus?.isConnected)
+            this.returnFocus.focus({ preventScroll: true });
         const resolve = this.resolve;
         this.resolve = null;
         this.onClose?.(value);
@@ -231,102 +237,248 @@ export async function message(title, text, iconName = "dialog-warning") {
 
 // --- Imagen ------------------------------------------------------------------------------
 
-export async function newImageDialog(width, height) {
-    const dlg = new Dialog(tr("Imagen nueva"), { iconName: "document-new" });
-    const w = numberInput(width, 1, 16384), h = numberInput(height, 1, 16384);
-    const keep = checkbox(tr("Mantener la relación de aspecto"), false);
-    const bg = select([["white", tr("Blanco")], ["secondary", tr("Color secundario")], ["transparent", tr("Transparente")]], "white");
-    const ratio = width / height;
-    w.addEventListener("input", () => { if (keep.input.checked) h.value = Math.max(1, Math.round(w.read() / ratio)); });
-    h.addEventListener("input", () => { if (keep.input.checked) w.value = Math.max(1, Math.round(h.read() * ratio)); });
-    dlg.body.appendChild(el("div", { className: "form" }, [
-        el("label", { textContent: tr("Anchura:") }), w, el("label", { textContent: tr("Altura:") }), h,
-        el("div", { className: "wide" }, [keep]),
-        el("label", { textContent: tr("Fondo:") }), bg,
-    ]));
-    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
-    dlg.addButton(tr("Cancelar"), null);
-    const r = await dlg.exec();
-    return r ? { width: w.read(), height: h.read(), background: bg.value } : null;
+// Tamaño en memoria de una capa (o de varias), como en los diálogos de Kaint.
+function memoryText(w, h, layers = 1) {
+    const mb = (w * h * 4 * layers) / (1024 * 1024), lang = currentLanguage();
+    const n = (v, d) => v.toLocaleString(lang, { minimumFractionDigits: d, maximumFractionDigits: d });
+    return mb >= 1024 ? tr("%1 GB", n(mb / 1024, 2)) : tr("%1 MB", n(mb, 1));
 }
 
-export async function resizeDialog(width, height) {
-    const dlg = new Dialog(tr("Cambiar el tamaño"), { iconName: "transform-scale" });
-    const byPercent = el("input", { type: "radio", name: "mode", checked: false });
-    const byAbsolute = el("input", { type: "radio", name: "mode", checked: true });
-    const percent = numberInput(100, 1, 1000);
-    const w = numberInput(width, 1, 16384), h = numberInput(height, 1, 16384);
+const MAX_SIDE = 65535;
+
+// Recuadro con título (QGroupBox).
+function groupBox(title, children) {
+    return el("fieldset", { className: "group" }, [el("legend", { textContent: title }), ...children]);
+}
+
+// Tamaño como en los diálogos de Paint.NET (SizeEditor de Kaint): por porcentaje o absoluto,
+// "Mantener la relación de aspecto", tamaño en píxeles y tamaño de impresión (resolución en
+// píxeles/pulgada o píxeles/cm y ancho/alto en pulgadas o centímetros).
+function sizeEditor(original, dpi, allowPercent, onChange) {
+    const aspect = original.h > 0 ? original.w / original.h : 1;
+    let currentDpi = dpi, updating = false;
+    const element = el("div", { className: "size-editor" });
+    let byPercent = null, percent = null, percentRow = null;
+    if (allowPercent) {
+        const name = `size-${Math.random().toString(36).slice(2)}`;
+        byPercent = el("input", { type: "radio", name, checked: true });
+        const byAbsolute = el("input", { type: "radio", name });
+        percent = numberInput(100, 1, 10000);
+        percentRow = el("span", { className: "with-unit" }, [percent, el("span", { textContent: "%" })]);
+        element.append(el("div", { className: "row" }, [el("label", {}, [byPercent, tr("Por porcentaje:")]), percentRow]),
+                       el("label", { className: "row" }, [byAbsolute, tr("Por tamaño absoluto")]));
+        byPercent.addEventListener("change", () => updateMode());
+        byAbsolute.addEventListener("change", () => updateMode());
+        percent.addEventListener("input", () => onPercent());
+    }
     const keep = checkbox(tr("Mantener la relación de aspecto"), true);
-    const method = select([["high", tr("Bicúbico")], ["bilinear", tr("Bilineal")], ["nearest", tr("Vecino más cercano")]], "high");
-    const ratio = width / height;
-    const sync = () => {
-        percent.disabled = !byPercent.checked;
-        w.disabled = h.disabled = byPercent.checked;
+    element.appendChild(keep);
+
+    // Como en Paint.NET: cada número en su campo y la unidad a la derecha.
+    const width = numberInput(original.w, 1, MAX_SIDE), height = numberInput(original.h, 1, MAX_SIDE);
+    const resolution = numberInput(0, 0.01, 99999, 0.01, 2);
+    // Píxeles/centímetro por defecto; se recuerda la última unidad elegida.
+    const unit = remember("resolutionUnit") === 0 ? 0 : 1;
+    const resolutionUnit = select([["0", tr("píxeles/pulgada")], ["1", tr("píxeles/cm")]], String(unit));
+    const printWidth = numberInput(0, 0.01, 999999, 0.01, 2), printHeight = numberInput(0, 0.01, 999999, 0.01, 2);
+    const printUnit = select([["0", tr("pulgadas")], ["1", tr("centímetros")]], String(unit));
+    const printHeightUnit = el("span");
+    const label = (text) => el("label", { textContent: text });
+    element.append(
+        groupBox(tr("Tamaño en píxeles"), [el("div", { className: "size-grid" }, [
+            label(tr("Anchura:")), width, el("span", { textContent: tr("píxeles") }),
+            label(tr("Altura:")), height, el("span", { textContent: tr("píxeles") }),
+            label(tr("Resolución:")), resolution, resolutionUnit,
+        ])]),
+        groupBox(tr("Tamaño de la impresión"), [el("div", { className: "size-grid" }, [
+            label(tr("Anchura:")), printWidth, printUnit,
+            label(tr("Altura:")), printHeight, printHeightUnit,
+        ])]),
+    );
+    const fixed = (input, v) => (input.value = v.toFixed(2));
+    const unitPixels = () => (resolutionUnit.value === "1" ? currentDpi / 2.54 : currentDpi);
+    const clampSide = (v) => Math.min(MAX_SIDE, Math.max(1, Math.round(v)));
+    const changed = () => onChange?.({ w: width.read(), h: height.read() });
+    const syncPrint = () => {
+        printHeightUnit.textContent = printUnit.selectedOptions[0]?.textContent || "";
+        fixed(printWidth, width.read() / unitPixels());
+        fixed(printHeight, height.read() / unitPixels());
     };
-    byPercent.addEventListener("change", sync);
-    byAbsolute.addEventListener("change", sync);
-    percent.addEventListener("input", () => {
-        w.value = Math.max(1, Math.round((width * percent.read()) / 100));
-        h.value = Math.max(1, Math.round((height * percent.read()) / 100));
+    const onPixels = (widthChanged) => {
+        if (updating)
+            return;
+        if (keep.input.checked) {
+            if (widthChanged)
+                height.value = clampSide(width.read() / aspect);
+            else
+                width.value = clampSide(height.read() * aspect);
+        }
+        syncPrint();
+        changed();
+    };
+    const setValue = (w, h) => {
+        width.value = w;
+        height.value = h;
+        syncPrint();
+        changed();
+    };
+    function onPercent() {
+        if (!percent || !byPercent.checked)
+            return;
+        const f = percent.read() / 100;
+        setValue(clampSide(original.w * f), clampSide(original.h * f));
+    }
+    function updateMode() {
+        const p = byPercent?.checked ?? false;
+        if (percent)
+            percent.disabled = !p;
+        for (const w of [width, height, printWidth, printHeight, keep.input])
+            w.disabled = p;
+        keep.classList.toggle("disabled", p);
+        if (p)
+            onPercent();
+    }
+    const onPrint = (widthChanged) => {
+        if (widthChanged)
+            width.value = clampSide(printWidth.read() * unitPixels());
+        else
+            height.value = clampSide(printHeight.read() * unitPixels());
+        onPixels(widthChanged);
+    };
+    width.addEventListener("input", () => onPixels(true));
+    height.addEventListener("input", () => onPixels(false));
+    printWidth.addEventListener("input", () => onPrint(true));
+    printHeight.addEventListener("input", () => onPrint(false));
+    resolution.addEventListener("input", () => {
+        // La resolución exacta solo cambia cuando se escribe otra (el campo la muestra redondeada).
+        currentDpi = resolutionUnit.value === "1" ? resolution.read() * 2.54 : resolution.read();
+        if (keep.input.checked && !byPercent?.checked) {
+            width.value = clampSide(printWidth.read() * unitPixels());
+            onPixels(true);
+        } else {
+            syncPrint();
+            changed();
+        }
     });
-    w.addEventListener("input", () => { if (keep.input.checked) h.value = Math.max(1, Math.round(w.read() / ratio)); });
-    h.addEventListener("input", () => { if (keep.input.checked) w.value = Math.max(1, Math.round(h.read() * ratio)); });
-    dlg.body.appendChild(el("div", { className: "form" }, [
-        el("label", { textContent: tr("Remuestreo:") }), method,
-        el("label", { className: "wide" }, [byPercent, " ", tr("Por porcentaje:")]), el("span"), percent,
-        el("label", { className: "wide" }, [byAbsolute, " ", tr("Por tamaño absoluto")]),
-        el("div", { className: "wide" }, [keep]),
-        el("label", { textContent: tr("Anchura:") }), w, el("label", { textContent: tr("Altura:") }), h,
+    resolutionUnit.addEventListener("change", () => {
+        const u = Number(resolutionUnit.value);
+        fixed(resolution, u === 1 ? currentDpi / 2.54 : currentDpi);
+        remember("resolutionUnit", u);
+        printUnit.value = String(u);
+        syncPrint();
+    });
+    printUnit.addEventListener("change", () => {
+        resolutionUnit.value = printUnit.value;
+        resolutionUnit.dispatchEvent(new Event("change"));
+    });
+    keep.input.addEventListener("change", () => keep.input.checked && onPixels(true));
+    fixed(resolution, unit === 1 ? dpi / 2.54 : dpi);
+    syncPrint();
+    updateMode();
+    return {
+        element,
+        value: () => ({ w: width.read(), h: height.read() }),
+        dpi: () => currentDpi,
+        setKeepAspect(on) { keep.input.checked = on; },
+    };
+}
+
+export async function newImageDialog(width, height, dpi = 96) {
+    const dlg = new Dialog(tr("Imagen nueva"), { iconName: "document-new" });
+    const memory = el("div");
+    const size = sizeEditor({ w: width, h: height }, dpi, false, (s) => (memory.textContent = tr("Nuevo tamaño: %1", memoryText(s.w, s.h))));
+    size.setKeepAspect(false);
+    const bg = select([["white", tr("Blanco")], ["secondary", tr("Color secundario")], ["transparent", tr("Transparente")]], "white");
+    memory.textContent = tr("Nuevo tamaño: %1", memoryText(width, height));
+    // Como en Paint.NET: el tamaño en memoria arriba; el fondo, abajo.
+    dlg.body.appendChild(el("div", { className: "size-dialog" }, [
+        memory, size.element, el("div", { className: "row" }, [el("label", { textContent: tr("Fondo:") }), bg]),
     ]));
-    sync();
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
     const r = await dlg.exec();
-    return r ? { width: w.read(), height: h.read(), method: method.value } : null;
+    return r ? { width: size.value().w, height: size.value().h, background: bg.value, dpi: size.dpi() } : null;
 }
 
-export async function canvasSizeDialog(width, height) {
+export async function resizeDialog(width, height, dpi = 96) {
+    const dlg = new Dialog(tr("Cambiar el tamaño"), { iconName: "transform-scale" });
+    const method = select(ResampleMethods.map(([id, name]) => [id, tr(name)]), "adaptive");
+    const gamma = checkbox(tr("Corrección gamma (en luz lineal)"), false);
+    gamma.title = tr("Calcula el remuestreo en luz lineal: los detalles finos conservan su brillo");
+    const memory = el("span");
+    const update = (s) => (memory.textContent = tr("%1 × %2 (%3 por capa)", s.w, s.h, memoryText(s.w, s.h)));
+    const size = sizeEditor({ w: width, h: height }, dpi, true, update);
+    update(size.value());
+    dlg.body.appendChild(el("div", { className: "size-dialog" }, [
+        el("div", { className: "row" }, [el("label", { textContent: tr("Remuestreo:") }), method]),
+        el("div", { className: "row indent" }, [gamma]),
+        size.element,
+        el("div", { className: "row" }, [el("span", { textContent: tr("Tamaño actual: %1 × %2 · nuevo:", width, height) }), memory]),
+    ]));
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    const r = await dlg.exec();
+    return r ? { width: size.value().w, height: size.value().h, method: method.value, gamma: gamma.input.checked, dpi: size.dpi() } : null;
+}
+
+export async function canvasSizeDialog(width, height, dpi = 96) {
     const dlg = new Dialog(tr("Tamaño del lienzo"), { iconName: "transform-crop-and-resize" });
-    const w = numberInput(width, 1, 16384), h = numberInput(height, 1, 16384);
+    const memory = el("span", { textContent: memoryText(width, height) });
+    const size = sizeEditor({ w: width, h: height }, dpi, true, (s) => (memory.textContent = memoryText(s.w, s.h)));
+    size.setKeepAspect(false);
+    // Anclaje: el ancla en la casilla elegida y flechas desde ella hacia donde crece el lienzo.
     let anchor = [1, 1];
-    const grid = el("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 28px)", gap: "2px" } });
     const cells = [];
+    const arrows = [["↖", "↑", "↗"], ["←", "●", "→"], ["↙", "↓", "↘"]];
+    const updateArrows = () => cells.forEach((b, i) => {
+        const r = Math.floor(i / 3), c = i % 3, dr = r - anchor[1], dc = c - anchor[0];
+        b.classList.toggle("checked", dr === 0 && dc === 0);
+        b.replaceChildren();
+        if (dr === 0 && dc === 0)
+            b.appendChild(icon("anchor", 24));
+        else if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1)
+            b.textContent = arrows[dr + 1][dc + 1];
+    });
+    const grid = el("div", { className: "anchor-grid" });
     for (let y = 0; y < 3; ++y)
         for (let x = 0; x < 3; ++x) {
-            const b = el("button", { className: "tbutton", style: { width: "28px", height: "28px" } });
+            const b = el("button", { className: "tbutton anchor-cell", type: "button" });
             b.addEventListener("click", () => {
                 anchor = [x, y];
-                cells.forEach((c, i) => c.classList.toggle("checked", i === y * 3 + x));
+                updateArrows();
             });
             cells.push(b);
             grid.appendChild(b);
         }
-    cells[4].classList.add("checked");
-    dlg.body.appendChild(el("div", { className: "form" }, [
-        el("label", { textContent: tr("Anchura:") }), w, el("label", { textContent: tr("Altura:") }), h,
-        el("label", { textContent: tr("Anclaje") }), grid,
+    updateArrows();
+    dlg.body.appendChild(el("div", { className: "size-dialog" }, [
+        el("div", { textContent: tr("Tamaño actual: %1 × %2 píxeles", width, height) }),
+        size.element,
+        groupBox(tr("Anclaje"), [grid]),
+        el("div", { className: "row" }, [el("span", { textContent: tr("Memoria por capa:") }), memory]),
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
     const r = await dlg.exec();
-    return r ? { width: w.read(), height: h.read(), anchor } : null;
+    return r ? { width: size.value().w, height: size.value().h, anchor, dpi: size.dpi() } : null;
 }
 
-// Propiedades de la capa con vista previa al momento (onPreview recibe las propiedades).
+// Propiedades de la capa con vista previa al momento (onPreview recibe las propiedades). Como
+// en Paint.NET 5: Nombre, Opacidad, Modo de fusión y Visible.
 export async function layerPropertiesDialog(props, onPreview) {
     const dlg = new Dialog(tr("Propiedades de la capa"), { iconName: "layer-properties" });
     const name = el("input", { type: "text", value: props.name });
     const visible = checkbox(tr("Visible"), props.visible);
     const blend = select(BlendModes.map((m) => [m, tr(BlendNames[m][0])]), props.blend);
     const opacity = slider(props.opacity, 0, 255, 1);
-    const current = () => ({ name: name.value, visible: visible.input.checked, blend: blend.value, opacity: opacity.value() });
+    const current = () => ({ name: name.value || props.name, visible: visible.input.checked, blend: blend.value, opacity: opacity.value() });
     for (const c of [name, visible.input, blend, ...opacity.querySelectorAll("input")])
         c.addEventListener("input", () => onPreview(current()));
-    dlg.body.appendChild(el("div", { className: "form" }, [
+    dlg.body.appendChild(el("div", { className: "layer-props" }, [
         el("label", { textContent: tr("Nombre") }), name,
-        el("div", { className: "wide" }, [visible]),
-        el("label", { textContent: tr("Modo de fusión") }), blend,
         el("label", { textContent: tr("Opacidad") }), opacity,
+        el("div", { className: "row" }, [el("label", { textContent: tr("Modo de fusión:") }), blend]),
+        visible,
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
@@ -352,6 +504,17 @@ export async function saveOptionsDialog(formats, chosen, quality) {
     dlg.addButton(tr("Cancelar"), null);
     const r = await dlg.exec();
     return r ? { format: formats.find((x) => x.ext === format.value), quality: q.value() } : null;
+}
+
+// Pide un número entero (QInputDialog::getInt): devuelve el número o null si se cancela.
+export async function promptNumber(title, label, value, min, max) {
+    const dlg = new Dialog(title);
+    const input = numberInput(value, min, max);
+    dlg.body.appendChild(el("label", { style: { display: "flex", gap: "8px", alignItems: "center" } }, [plain(label), input]));
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    setTimeout(() => input.select(), 0);
+    return (await dlg.exec()) === "ok" ? input.read() : null;
 }
 
 // Pide un texto (nombre de una paleta...): devuelve el texto o null si se cancela.
@@ -482,6 +645,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
             return [
                 el("label", {}, [tr("Herramienta predeterminada:"), start]),
                 heading(tr("Mover y pegar")),
+                check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), "hideMoveBox"),
                 check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
                       tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
             ];

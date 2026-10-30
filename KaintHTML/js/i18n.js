@@ -23,6 +23,8 @@ const extra = {
     "Los cambios de idioma se aplican al recargar la página.": "Language changes apply when the page reloads.",
     "Recargar": "Reload",
     "El idioma se aplica al recargar la página.": "The language is applied when the page reloads.",
+    "Color anterior (izquierda) y nuevo (derecha)": "Previous color (left) and new one (right)",
+    "Ctrl: solo tono · Alt: solo saturación · Mayús: radios de 15°": "Ctrl: hue only · Alt: saturation only · Shift: 15° steps",
     "Ctrl": "Ctrl",
     "Mayús": "Shift",
     "Supr": "Del",

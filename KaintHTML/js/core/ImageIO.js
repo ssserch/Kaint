@@ -2,7 +2,7 @@
 // OpenRaster (.ora) con sus capas, como src/core/Ora.cpp de Kaint.
 import { Document, Layer } from "./Document.js";
 import { OraNames } from "./Raster.js";
-import { unzip, zip } from "./Zip.js";
+import { crc32, unzip, zip } from "./Zip.js";
 import { tr } from "../i18n.js";
 
 export const SaveFormats = [
@@ -43,7 +43,54 @@ export async function openFile(file) {
     const image = await decodeImage(file);
     const doc = Document.fromImage(image, baseName(file.name));
     doc.fileName = file.name;
+    doc.dpi = readResolution(new Uint8Array(await file.slice(0, 65536).arrayBuffer())) || 96;
     return doc;
+}
+
+// --- Resolución (píxeles por pulgada) en PNG (pHYs) y JPEG (JFIF), como al guardar en Kaint ---
+
+function readResolution(b) {
+    const u32 = (i) => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+    if (b[0] === 0x89 && b[1] === 0x50) {
+        for (let i = 8; i + 8 <= b.length;) {
+            const len = u32(i), type = String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]);
+            if (type === "pHYs" && i + 17 <= b.length)
+                return b[i + 16] === 1 ? Math.round(u32(i + 8) * 0.0254 * 100) / 100 : 0;
+            if (type === "IDAT" || type === "IEND")
+                break;
+            i += 12 + len;
+        }
+    } else if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff && b[3] === 0xe0 && String.fromCharCode(...b.slice(6, 11)) === "JFIF\0") {
+        const units = b[13], x = (b[14] << 8) | b[15];
+        return units === 1 ? x : units === 2 ? Math.round(x * 2.54 * 100) / 100 : 0;
+    }
+    return 0;
+}
+
+async function withResolution(blob, mime, dpi) {
+    if (!dpi)
+        return blob;
+    const b = new Uint8Array(await blob.arrayBuffer());
+    if (mime === "image/png" && b[12] === 0x49 && b[13] === 0x48) {
+        // pHYs justo después de IHDR (en píxeles por metro).
+        const ppm = Math.round(dpi / 0.0254), chunk = new Uint8Array(21), view = new DataView(chunk.buffer);
+        view.setUint32(0, 9);
+        chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+        view.setUint32(8, ppm);
+        view.setUint32(12, ppm);
+        chunk[16] = 1;
+        view.setUint32(17, crc32(chunk.subarray(4, 17)));
+        const at = 8 + 25;
+        return new Blob([b.subarray(0, at), chunk, b.subarray(at)], { type: mime });
+    }
+    if (mime === "image/jpeg" && b[2] === 0xff && b[3] === 0xe0 && String.fromCharCode(...b.slice(6, 11)) === "JFIF\0") {
+        const d = Math.min(65535, Math.round(dpi));
+        b[13] = 1;
+        b[14] = d >> 8; b[15] = d & 255;
+        b[16] = d >> 8; b[17] = d & 255;
+        return new Blob([b], { type: mime });
+    }
+    return blob;
 }
 
 async function openOra(file) {
@@ -94,7 +141,7 @@ export async function encode(doc, format, quality = 95) {
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, flat.width, flat.height);
     }
-    return canvasBlob(flat, format.mime, format.quality ? quality / 100 : undefined);
+    return withResolution(await canvasBlob(flat, format.mime, format.quality ? quality / 100 : undefined), format.mime, doc.dpi);
 }
 
 // Formato de un complemento: recibe las capas (o la imagen combinada) en RGBA y devuelve los bytes.

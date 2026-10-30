@@ -48,9 +48,20 @@ Safari download the saved file and paste with Ctrl+V instead.
 - **Layers** with the 14 Paint.NET blend modes, opacity, visibility, drag to reorder (the layer
   follows the mouse, or a line marks where it will go) and their properties dialog; full
   **history** you can click through.
-- **Adjustments and effects** with live preview, including Curves, Levels, Hue/Saturation,
-  Gaussian, motion, radial and zoom blur, distortions, noise, photo effects, clouds, fractals and
-  drop shadow; **Ctrl+F** repeats the last one.
+- **All of Kaint's adjustments and effects** (55, Layers > Rotate / Zoom included) with the same
+  options and algorithms (ported from Kaint's C++), and dialogs like Kaint's: sliders with reset
+  buttons and color strips, angle chooser, center picker over a thumbnail, rotation ball, color
+  picker with transparency, tabs, linked values, Curves (luminosity or RGB) and Levels (input and
+  output histograms, Auto), and Ctrl+Z / Ctrl+Y for the dialog's changes. The live preview is
+  computed in the background, split among several Web Workers (like Kaint's threads), so the page
+  never freezes and every change cancels the previous preview; **Ctrl+F** repeats the last one.
+- **Image size dialogs** like Kaint's: by percentage or absolute size, keep aspect ratio,
+  resolution (pixels/inch or pixels/cm) and print size, memory per layer; Resize with Kaint's eight
+  resampling methods and gamma correction; Canvas Size with the anchor arrows. The resolution is
+  saved in PNG and JPEG files.
+- **Edit** > Copy Selection and Paste Selection (the Paint.NET JSON shape, with the five combine
+  modes) and Grow, Shrink and Feather Selection; **View** > Pixels, Inches and Centimeters for the
+  rulers and the status bar.
 - **Files**: opens PNG, JPEG, WebP, GIF, BMP, AVIF and ICO images and **OpenRaster (.ora)** with
   its layers; saves PNG, JPEG, WebP and OpenRaster. Drop images onto the window to open them.
 - **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
@@ -66,7 +77,8 @@ Safari download the saved file and paste with Ctrl+V instead.
   opacity sliders, their number boxes and the hex code.
 
 Not available on the web: Paint.NET (.dll) and native plugins, recovery copies, custom shapes,
-brush fill patterns, inches and centimeters, `.pdn` files, GIF animation editing and scanning. Browsers keep
+brush fill patterns, the tool defaults in Settings, color profiles, `.pdn` files, GIF animation
+editing and saving (and other formats such as TGA or TIFF) and scanning. Browsers keep
 some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use the menus for those.
 
 ## Development

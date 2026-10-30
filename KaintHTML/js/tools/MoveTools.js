@@ -303,10 +303,11 @@ class MoveToolBase extends Tool {
         const box = this.drag ? this.drag.session.box : this.restBox();
         if (!box || (!s && this.doc.selection.isEmpty()))
             return;
-        // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint).
+        // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint), salvo que
+        // en Configuración no se oculten al arrastrar.
         if (s && this.drag)
             view.strokeSegments(ctx, s.selBase.outline(), box.matrix());
-        if (this.drag)
+        if (this.drag && Settings.get("hideMoveBox") !== false)
             return;
         const pts = box.handles().map((p) => view.imageToView(p.x, p.y));
         ctx.setLineDash([3, 3]);
@@ -326,7 +327,7 @@ class MoveToolBase extends Tool {
     }
 
     hidesSelectionOutline() {
-        return !!this.drag;
+        return !!this.drag && Settings.get("hideMoveBox") !== false;
     }
 }
 

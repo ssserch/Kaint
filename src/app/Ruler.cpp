@@ -4,6 +4,7 @@
 #include "app/Theme.h"
 #include "core/Document.h"
 
+#include <QLinearGradient>
 #include <QPainter>
 
 #include <cmath>
@@ -50,7 +51,7 @@ QSize Ruler::sizeHint() const
 
 namespace {
 
-Ruler::Style g_style = Ruler::Style::PaintJs;
+Ruler::Style g_style = Ruler::Style::Auto;
 
 // Colores de la regla de paint.js: siempre oscura, con las marcas grises y los números claros.
 const QColor kPaintJsBackground(0x20, 0x20, 0x20);
@@ -70,19 +71,33 @@ Ruler::Style Ruler::style()
     return g_style;
 }
 
+bool Ruler::dark()
+{
+    return g_style == Style::PaintJs || (g_style == Style::Auto && Theme::active().dark);
+}
+
 QColor Ruler::background()
 {
-    return g_style == Style::PaintJs ? kPaintJsBackground : Theme::active().toolBar;
+    return dark() ? kPaintJsBackground : Theme::active().toolBar;
 }
 
 void Ruler::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     const QPalette& pal = palette();
-    const bool paintJs = g_style == Style::PaintJs;
+    const bool paintJs = dark();
     // paint.js: oscura; si no, como en Paint.NET, del color de la barra de herramientas que tiene
     // encima.
-    p.fillRect(rect(), background());
+    // Azul: en degradado hacia el lienzo, como en Paint.NET.
+    const bool blue = !paintJs && Theme::active().blue;
+    if (blue) {
+        QLinearGradient g(QPointF(0, 0), m_orientation == Qt::Horizontal ? QPointF(0, height()) : QPointF(width(), 0));
+        g.setColorAt(0, QColor(0xfb, 0xfd, 0xff));
+        g.setColorAt(1, QColor(0xf2, 0xf6, 0xfc));
+        p.fillRect(rect(), g);
+    } else {
+        p.fillRect(rect(), background());
+    }
     const Document* doc = m_canvas->document();
     if (!doc)
         return;
@@ -179,9 +194,10 @@ void Ruler::paintEvent(QPaintEvent*)
         }
     }
 
-    // Posición del cursor.
+    // Posición del cursor: como en Paint.NET, la marca se queda en la última posición aunque el
+    // puntero salga del lienzo o de la ventana.
     const QPointF cursor = m_canvas->cursorImagePos();
-    if (m_canvas->cursorInside()) {
+    if (m_canvas->cursorSeen()) {
         const double c = toRuler(horiz ? cursor.x() : cursor.y());
         p.setPen(QPen(pal.color(QPalette::Highlight), 1));
         if (horiz)
@@ -189,7 +205,7 @@ void Ruler::paintEvent(QPaintEvent*)
         else
             p.drawLine(QPointF(0, c), QPointF(width(), c));
     }
-    p.setPen(paintJs ? kPaintJsEdge : pal.color(QPalette::Mid));
+    p.setPen(paintJs ? kPaintJsEdge : blue ? QColor(0x82, 0x90, 0xa3) : pal.color(QPalette::Mid));
     if (horiz)
         p.drawLine(0, height() - 1, width(), height() - 1);
     else

@@ -1,7 +1,6 @@
 #include "app/panels/HistoryPanel.h"
 
 #include "app/Icons.h"
-#include "app/Theme.h"
 #include "core/Commands.h"
 #include "core/Document.h"
 
@@ -100,13 +99,12 @@ HistoryPanel::HistoryPanel(QUndoGroup* group, QAction* undo, QAction* redo, QWid
     layout->addWidget(m_view, 1);
     layout->addWidget(strip);
 
-    // Paint.NET solo tiene deshacer y rehacer.
-    auto applyLook = [this] {
-        for (QWidget* b : std::as_const(m_jumps))
-            b->setVisible(!Theme::paintNetLook());
-    };
-    applyLook();
-    connect(Theme::notifier(), &Theme::Notifier::changed, this, applyLook);
+}
+
+void HistoryPanel::setJumpButtonsVisible(bool on)
+{
+    for (QWidget* b : std::as_const(m_jumps))
+        b->setVisible(on);
 }
 
 void HistoryPanel::setDocument(Document* doc)

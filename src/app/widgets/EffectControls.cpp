@@ -190,7 +190,9 @@ void ColorButton::paintEvent(QPaintEvent*)
     QPainter p(this);
     const QRectF r = QRectF(rect()).adjusted(1.5, 1.5, -1.5, -1.5);
     paintCheckerboard(p, r);
-    p.fillRect(r, m_color);
+    // Desactivado, en gris (como el selector del color del borde del lienzo sin su casilla).
+    const int gray = qGray(m_color.rgb());
+    p.fillRect(r, isEnabled() ? m_color : QColor(gray, gray, gray, m_color.alpha()));
     p.setPen(QPen(palette().color(QPalette::Mid), 1));
     p.drawRect(r);
 }

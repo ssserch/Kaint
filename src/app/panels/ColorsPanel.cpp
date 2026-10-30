@@ -166,6 +166,7 @@ ColorsPanel::ColorsPanel(QWidget* parent)
     paletteRow->addStretch();
 
     auto* left = new QVBoxLayout;
+    m_leftLayout = left;
     left->setSpacing(4);
     left->addLayout(m_topRow);
     left->addLayout(middle, 1);
@@ -174,6 +175,7 @@ ColorsPanel::ColorsPanel(QWidget* parent)
 
     // Ampliado, como en Paint.NET, crece a lo ancho: los deslizadores van a la derecha.
     auto* layout = new QHBoxLayout(this);
+    m_mainLayout = layout;
     layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(10);
     layout->addLayout(left);
@@ -236,12 +238,14 @@ void ColorsPanel::applyLook()
 {
     // Paint.NET 5: sin el selector de ranura ni el brillo vertical (la ranura se elige en las
     // muestras), «Más >>» y la rueda con el tono en el sentido de las agujas del reloj.
+    // Como en Paint.NET, «Más» no cambia lo que ya se ve (la rueda conserva su tamaño): solo añade
+    // los deslizadores a la derecha y más colores a la paleta.
     const bool paintNet = Theme::paintNetLook();
     const bool expanded = isExpanded();
-    m_target->setVisible(!expanded && !paintNet);
-    m_value->setVisible(!expanded && !paintNet);
-    // Paint.NET compacto: «Más >>» a la derecha de las muestras, encima de la rueda.
-    const bool beside = paintNet && !expanded;
+    m_target->setVisible(!paintNet);
+    m_value->setVisible(!paintNet);
+    // Paint.NET: «Más >>» a la derecha de las muestras, encima de la rueda.
+    const bool beside = paintNet;
     if (beside && m_topRow->indexOf(m_more) >= 0) {
         m_topRow->removeWidget(m_more);
         m_wheelColumn->insertWidget(0, m_more, 0, Qt::AlignRight);
@@ -297,19 +301,15 @@ QSize ColorsPanel::sizeForLayout(const QVariant& state) const
 
 void ColorsPanel::setExpanded(bool on)
 {
-    // Ampliado: las muestras suben junto al botón, sin el selector de ranura ni el brillo
-    // vertical (ya están los deslizadores). La escala se mantiene.
+    // Ampliado: la columna de la izquierda (muestras, rueda y paleta) se queda como estaba y a la
+    // derecha aparecen los deslizadores. La escala se mantiene: las dos columnas crecen en
+    // proporción a su tamaño recomendado (si no, todo el ancho de más iba a los deslizadores).
     const double keep = scale();
-    if (on) {
-        m_swatchColumn->removeWidget(m_swatches);
-        m_topRow->insertWidget(0, m_swatches, 0, Qt::AlignTop);
-    } else {
-        m_topRow->removeWidget(m_swatches);
-        m_swatchColumn->insertWidget(0, m_swatches);
-    }
     m_extended->setVisible(on);
     applyLook();
     m_palette->setVisibleCount(on ? Palette::kColorCount : 32);
+    m_mainLayout->setStretch(0, on ? std::max(1, m_leftLayout->sizeHint().width()) : 0);
+    m_mainLayout->setStretch(1, on ? std::max(1, m_extended->sizeHint().width()) : 1);
     emit layoutChanged(keep);
 }
 

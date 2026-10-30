@@ -923,6 +923,7 @@ void Canvas::mouseMoveEvent(QMouseEvent* e)
     const QPointF previous = m_mouseView;
     m_mouseView = e->position();
     m_mouseInside = true;
+    m_mouseSeen = true;
     if (!m_doc)
         return;
     const QPointF img = viewToImage(e->position());

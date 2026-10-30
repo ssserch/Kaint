@@ -26,6 +26,32 @@ void Tool::repaint() const
 
 QCursor Tool::cursor() const
 {
+    // Estilo Paint.NET: sus cursores en pixel art (la cruz sola en las que dibujan con el contorno
+    // del pincel o de la forma); las dos de mover usan el puntero de mover del sistema.
+    if (Icons::cursorStyle() == Icons::CursorStyle::PaintNet) {
+        static const QHash<int, QString> pixel{
+            {int(ToolId::RectSelect), QStringLiteral("rectselect")},
+            {int(ToolId::LassoSelect), QStringLiteral("cross")},
+            {int(ToolId::EllipseSelect), QStringLiteral("ellipseselect")},
+            {int(ToolId::Zoom), QStringLiteral("zoom")},
+            {int(ToolId::MagicWand), QStringLiteral("magicwand")},
+            {int(ToolId::PaintBucket), QStringLiteral("paintbucket")},
+            {int(ToolId::Gradient), QStringLiteral("cross")},
+            {int(ToolId::Paintbrush), QStringLiteral("cross")},
+            {int(ToolId::Eraser), QStringLiteral("eraser")},
+            {int(ToolId::Pencil), QStringLiteral("pencil")},
+            {int(ToolId::ColorPicker), QStringLiteral("colorpicker")},
+            {int(ToolId::CloneStamp), QStringLiteral("clonestamp")},
+            {int(ToolId::Recolor), QStringLiteral("recolor")},
+            {int(ToolId::Text), QStringLiteral("text")},
+            {int(ToolId::Line), QStringLiteral("cross")},
+            {int(ToolId::Shapes), QStringLiteral("cross")},
+        };
+        if (id() == ToolId::MoveSelected || id() == ToolId::MoveSelection)
+            return QCursor(Qt::SizeAllCursor);
+        if (const auto it = pixel.constFind(int(id())); it != pixel.cend())
+            return Icons::pixelCursor(*it);
+    }
     static const QHash<int, QString> names{
         {int(ToolId::RectSelect), QStringLiteral("rectangleselect")},
         {int(ToolId::MoveSelected), QStringLiteral("moveselectedpixels")},

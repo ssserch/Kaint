@@ -1,18 +1,24 @@
 // Mover píxeles seleccionados y Mover selección (src/app/tools/MoveTools.cpp y TransformBox):
-// arrastrar mueve, los tiradores cambian el tamaño (Mayús: proporción) y el botón derecho o
-// arrastrar fuera del borde gira. Como en Kaint, cada arrastre es un paso del historial y los
-// píxeles siguen "flotando" mientras ese paso sea el último (moverlos otra vez no los degrada).
-// Sin selección, un clic con Mover píxeles seleccionados selecciona todo el lienzo.
+// arrastrar mueve, los tiradores y el borde (con la mano) cambian el tamaño (Mayús: proporción),
+// el botón derecho o arrastrar justo fuera del borde gira alrededor del punto central (que se
+// puede mover) y el icono de abajo a la derecha mueve. Como en Kaint, cada arrastre es un paso
+// del historial y los píxeles siguen "flotando" mientras ese paso sea el último (moverlos otra vez
+// no los degrada). Sin selección, un clic con Mover píxeles seleccionados selecciona todo el lienzo.
 import { AppState } from "../AppState.js";
 import { Tool } from "./Tool.js";
 import { Selection } from "../core/Selection.js";
-import { cloneCanvas, context, createCanvas } from "../core/Raster.js";
+import { clampRect, cloneCanvas, context, createCanvas, unionRect } from "../core/Raster.js";
 import { drawTransformed, prefiltered } from "../core/Resample.js";
-import { iconCursor, rotateCursor } from "../ui/Icons.js";
+import { handCursor, iconCursor, rotateCursor, toolPixelCursor } from "../ui/Icons.js";
 import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
 
-// Caja de transformación: rectángulo base, desplazamiento, escala y giro alrededor del centro.
+// Distancias en la pantalla, como TransformBox de Kaint: franja junto al borde en la que se estira
+// con la mano, franja de fuera en la que se gira y radio de los tiradores.
+const kEdgeBand = 6, kRotateBand = 30, kHitRadius = 8;
+
+// Caja de transformación: rectángulo base, desplazamiento, escala y giro, y el punto de giro
+// ('pivot', en las coordenadas del rectángulo base; null: su centro), que sigue a la caja.
 class TransformBox {
     constructor(rect) {
         this.base = rect;
@@ -21,6 +27,38 @@ class TransformBox {
         this.sx = 1;
         this.sy = 1;
         this.angle = 0;
+        this.pivot = null;
+    }
+
+    // Punto de giro en la imagen.
+    pivotPoint() {
+        const b = this.base;
+        return this.matrix().transformPoint(this.pivot || { x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    }
+
+    pivotMoved() {
+        const b = this.base;
+        return !!this.pivot && Math.hypot(this.pivot.x - (b.x + b.w / 2), this.pivot.y - (b.y + b.h / 2)) > 0.5;
+    }
+
+    setPivot(p) {
+        const q = this.matrix().inverse().transformPoint(p);
+        this.pivot = { x: q.x, y: q.y };
+    }
+
+    // Gira 'delta' radianes alrededor de 'p' (un punto de la imagen).
+    rotateAround(delta, p) {
+        const c = this.center(), cs = Math.cos(delta), sn = Math.sin(delta), dx = c.x - p.x, dy = c.y - p.y;
+        this.tx += p.x + dx * cs - dy * sn - c.x;
+        this.ty += p.y + dx * sn + dy * cs - c.y;
+        this.angle += delta;
+    }
+
+    // Esquinas en la imagen: arriba a la izquierda, arriba a la derecha, abajo a la derecha y abajo a
+    // la izquierda.
+    corners() {
+        const h = this.handles();
+        return [h[0], h[2], h[4], h[6]];
     }
 
     center() {
@@ -28,8 +66,12 @@ class TransformBox {
     }
 
     matrix() {
+        // Compuesta a mano (en dobles): con translate/rotate/scale de DOMMatrix, las esquinas
+        // ajustadas a píxeles quedaban a una millonésima del entero.
         const c0 = { x: this.base.x + this.base.w / 2, y: this.base.y + this.base.h / 2 }, c = this.center();
-        return new DOMMatrix().translate(c.x, c.y).rotate((this.angle * 180) / Math.PI).scale(this.sx, this.sy).translate(-c0.x, -c0.y);
+        const cs = Math.cos(this.angle), sn = Math.sin(this.angle);
+        const a = cs * this.sx, b = sn * this.sx, cc = -sn * this.sy, d = cs * this.sy;
+        return new DOMMatrix([a, b, cc, d, c.x - (a * c0.x + cc * c0.y), c.y - (b * c0.x + d * c0.y)]);
     }
 
     isIdentity() {
@@ -119,6 +161,105 @@ class TransformBox {
     }
 }
 
+// Tirador al que equivale un punto de la pantalla cerca del contorno (a menos de kEdgeBand): el del
+// lado más cercano (1 arriba, 3 derecha, 5 abajo, 7 izquierda) o, cerca de sus extremos, el de la
+// esquina; -1 si está lejos. También devuelve la distancia al contorno.
+function edgeHandle(corners, p) {
+    const kCornerBand = 10;
+    let handle = -1, distance = Infinity;
+    for (let i = 0; i < 4; ++i) {
+        const a = corners[i], b = corners[(i + 1) % 4], abx = b.x - a.x, aby = b.y - a.y;
+        const len = Math.hypot(abx, aby);
+        const t = len > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / (len * len))) : 0;
+        const d = Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t));
+        if (d >= distance)
+            continue;
+        distance = d;
+        handle = d > kEdgeBand ? -1 : t * len < kCornerBand ? (2 * i) % 8 : (1 - t) * len < kCornerBand ? (2 * i + 2) % 8 : 2 * i + 1;
+    }
+    return { handle, distance };
+}
+
+// Tiradores de Kaint (Handles::draw): redondos, el botón azul de restablecer el punto de giro y el
+// icono de mover (cuadro con cuatro flechas).
+function drawHandle(ctx, c, shape) {
+    const dark = "rgba(30,30,30,0.9)", light = "rgba(255,255,255,0.94)";
+    ctx.save();
+    ctx.lineWidth = 1;
+    if (shape === "circle") {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = light;
+        ctx.fill();
+        ctx.strokeStyle = dark;
+        ctx.stroke();
+    } else if (shape === "resetPivot") {
+        ctx.translate(c.x, c.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = "#0078d7";
+        ctx.strokeStyle = dark;
+        ctx.fillRect(-6.5, -6.5, 13, 13);
+        ctx.strokeRect(-6.5, -6.5, 13, 13);
+        ctx.rotate(-Math.PI / 4);
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, (-30 * Math.PI) / 180, (-300 * Math.PI) / 180, true);
+        ctx.strokeStyle = light;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(1.5, -5.5);
+        ctx.lineTo(4.5, -3.5);
+        ctx.lineTo(1.5, -1.5);
+        ctx.closePath();
+        ctx.fillStyle = light;
+        ctx.fill();
+    } else if (shape === "move") {
+        ctx.beginPath();
+        ctx.roundRect(c.x - 9, c.y - 9, 18, 18, 3);
+        ctx.fillStyle = light;
+        ctx.fill();
+        ctx.strokeStyle = dark;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(c.x - 6, c.y);
+        ctx.lineTo(c.x + 6, c.y);
+        ctx.moveTo(c.x, c.y - 6);
+        ctx.lineTo(c.x, c.y + 6);
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.fillStyle = dark;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const tx = c.x + dx * 7, ty = c.y + dy * 7, sx = -dy, sy = dx;
+            ctx.beginPath();
+            ctx.moveTo(tx, ty);
+            ctx.lineTo(tx - dx * 3 + sx * 2.5, ty - dy * 3 + sy * 2.5);
+            ctx.lineTo(tx - dx * 3 - sx * 2.5, ty - dy * 3 - sy * 2.5);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+// Punto de giro (Handles::drawPivot): círculo con una cruz girada como la caja.
+function drawPivot(ctx, c, angle) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.fill();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(4, 0);
+    ctx.moveTo(0, -4);
+    ctx.lineTo(0, 4);
+    ctx.strokeStyle = "rgba(30,30,30,0.9)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+}
+
 class MoveToolBase extends Tool {
     get options() {
         return ["finish"];
@@ -133,7 +274,7 @@ class MoveToolBase extends Tool {
     }
 
     cursor() {
-        return iconCursor(this.icon, null, null, "move");
+        return toolPixelCursor(this.id) || iconCursor(this.icon, null, null, "move");
     }
 
     // La sesión (píxeles o selección levantados) sigue viva mientras su paso sea el último del
@@ -150,32 +291,56 @@ class MoveToolBase extends Tool {
         return s;
     }
 
-    // Caja que se ve y se agarra: la de la sesión o la de la selección.
+    // Caja que se ve y se agarra: la de la sesión o la de la selección (guardada mientras la
+    // selección no cambie, para conservar su punto de giro).
     restBox() {
         const s = this.session();
         if (s)
             return s.box;
-        const b = this.doc?.selection.bounds();
-        return b ? new TransformBox(b) : null;
+        const sel = this.doc?.selection, b = sel?.bounds();
+        if (!b)
+            return null;
+        if (this.rest?.selection !== sel)
+            this.rest = { selection: sel, box: new TransformBox(b) };
+        return this.rest.box;
     }
 
-    handleAt(e, box) {
-        if (!box)
-            return -1;
-        for (const [i, p] of box.handles().entries()) {
-            const v = this.view.imageToView(p.x, p.y);
-            if (Math.hypot(v.x - e.vx, v.y - e.vy) <= 7)
-                return i;
-        }
-        return -1;
+    // Lo que se ve de la caja en la pantalla: tiradores, esquinas, límites, punto de giro, botón de
+    // restablecerlo y el icono de mover.
+    viewGeometry(box) {
+        const toView = (p) => this.view.imageToView(p.x, p.y);
+        const corners = box.corners().map(toView);
+        const xs = corners.map((c) => c.x), ys = corners.map((c) => c.y);
+        const bounds = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+        const pivot = toView(box.pivotPoint());
+        return { handles: box.handles().map(toView), corners, bounds, pivot, reset: { x: pivot.x + 18, y: pivot.y - 18 },
+                 moveIcon: { x: bounds.x1 + 16, y: bounds.y1 + 16 } };
     }
 
-    // Qué hace el botón en ese punto: tirador, mover (dentro) o girar (fuera o botón derecho).
+    // Qué hace el botón en ese punto, como TransformBox::hit de Kaint: restablecer o mover el punto
+    // de giro, un tirador, el icono de mover, la mano junto al borde (estira hacia ese lado), girar
+    // justo fuera o con el botón derecho, y si no, mover.
     hit(e, box) {
-        const handle = e.button !== "right" ? this.handleAt(e, box) : -1;
+        if (e.button === "right")
+            return { kind: "rotate" };
+        if (!box)
+            return { kind: "move" };
+        const g = this.viewGeometry(box), near = (v, r) => Math.hypot(v.x - e.vx, v.y - e.vy) <= r;
+        if (box.pivotMoved() && near(g.reset, 9))
+            return { kind: "resetPivot" };
+        if (near(g.pivot, kHitRadius))
+            return { kind: "pivot" };
+        const handle = g.handles.findIndex((v) => near(v, kHitRadius));
         if (handle >= 0)
             return { kind: "resize", handle };
-        if (e.button === "right" || (box && !box.inside({ x: e.x, y: e.y })))
+        if (near(g.moveIcon, 10))
+            return { kind: "move" };
+        const inside = box.inside({ x: e.x, y: e.y });
+        const room = Math.min(g.bounds.x1 - g.bounds.x0, g.bounds.y1 - g.bounds.y0) > 4 * kEdgeBand;
+        const edge = edgeHandle(g.corners, { x: e.vx, y: e.vy });
+        if (edge.handle >= 0 && (!inside || room))
+            return { kind: "resize", handle: edge.handle };
+        if (!inside && edge.distance <= kRotateBand)
             return { kind: "rotate" };
         return { kind: "move" };
     }
@@ -184,14 +349,30 @@ class MoveToolBase extends Tool {
         const doc = this.doc;
         if (!doc || (e.button !== "left" && e.button !== "right"))
             return;
-        let hit = this.hit(e, this.restBox());
+        const rest = this.restBox();
+        let hit = this.hit(e, rest);
+        // El punto de giro no levanta nada: solo se coloca (o vuelve al centro).
+        if (hit.kind === "resetPivot") {
+            rest.pivot = null;
+            this.view.update();
+            return;
+        }
+        if (hit.kind === "pivot") {
+            this.drag = { kind: "pivot", box: rest, session: null };
+            return;
+        }
         const session = this.begin(e);
         if (!session)
             return;
+        // La caja nueva (píxeles recién levantados) conserva el punto de giro de la que se veía.
+        if (session.box !== rest && rest && !session.step && session.box.isIdentity())
+            session.box.pivot = rest.pivot;
         if (this.selectedAll)
             hit = { kind: "move" };
-        const box = session.box, p = { x: e.x, y: e.y }, c = box.center();
-        this.drag = { ...hit, session, start: box.save(), from: p, fromAngle: Math.atan2(p.y - c.y, p.x - c.x) };
+        const box = session.box, p = { x: e.x, y: e.y }, pivot = box.pivotPoint();
+        this.drag = { ...hit, session, start: box.save(), from: p, pivot, fromAngle: Math.atan2(p.y - pivot.y, p.x - pivot.x) };
+        if (hit.kind === "resize")
+            this.view.setCursor(handCursor(true));
     }
 
     onPointerMove(e) {
@@ -199,6 +380,36 @@ class MoveToolBase extends Tool {
             this.hoverCursor(e);
             return;
         }
+        if (this.drag.kind === "pivot") {
+            this.drag.box.setPivot({ x: e.x, y: e.y });
+            this.view.update();
+            return;
+        }
+        this.applyMove(e);
+    }
+
+    // La capa se vuelve a dibujar una vez por fotograma: con ratones rápidos llegaban decenas de
+    // movimientos por fotograma y cada uno la redibujaba (iba a tirones).
+    scheduleRender(session) {
+        this.renderPending = session;
+        if (!this.renderFrame)
+            this.renderFrame = requestAnimationFrame(() => {
+                this.renderFrame = 0;
+                const s = this.renderPending;
+                this.renderPending = null;
+                if (s && this.drag?.session === s)
+                    this.render(s);
+            });
+    }
+
+    cancelRender() {
+        if (this.renderFrame)
+            cancelAnimationFrame(this.renderFrame);
+        this.renderFrame = 0;
+        this.renderPending = null;
+    }
+
+    applyMove(e) {
         const p = { x: e.x, y: e.y }, d = this.drag, box = d.session.box;
         // Píxel a píxel (por defecto, como la selección): nada queda a medio píxel.
         const snap = !AppState.selectionAntialias();
@@ -212,29 +423,35 @@ class MoveToolBase extends Tool {
             if (snap)
                 box.snapToPixels();
         } else {
-            const c = box.center();
-            let a = d.start.angle + Math.atan2(p.y - c.y, p.x - c.x) - d.fromAngle;
+            // Alrededor del punto de giro del principio del arrastre (desde la caja de entonces, así
+            // el ajuste a píxeles no se va acumulando).
+            box.restore(d.start);
+            let delta = Math.atan2(p.y - d.pivot.y, p.x - d.pivot.x) - d.fromAngle;
             if (e.shift)
-                a = Math.round(a / (Math.PI / 12)) * (Math.PI / 12);
-            box.angle = a;
-            // El giro es alrededor del centro de antes (si no, el ajuste a píxeles lo iría moviendo).
-            box.tx = d.start.tx;
-            box.ty = d.start.ty;
+                delta = Math.round((d.start.angle + delta) / (Math.PI / 12)) * (Math.PI / 12) - d.start.angle;
+            box.rotateAround(delta, d.pivot);
             if (snap)
                 box.snapToPixels();
-            this.setHint(tr("Ángulo: %1°", ((-a * 180) / Math.PI).toFixed(2)));
+            this.setHint(tr("Ángulo: %1°", ((-box.angle * 180) / Math.PI).toFixed(2)));
             this.view.setCursor(rotateCursor(this.angleTo(box, e)));
         }
-        this.render(d.session);
+        this.scheduleRender(d.session);
     }
 
-    onPointerUp() {
+    onPointerUp(e) {
         const d = this.drag;
         if (!d)
             return;
+        this.cancelRender();
         this.drag = null;
         this.selectedAll = false;
+        if (d.kind === "pivot") {
+            this.view.update();
+            return;
+        }
         this.setHint(this.hint());
+        if (d.kind === "resize" && e)
+            this.hoverCursor(e);
         if (d.session.box.same(d.start)) {
             this.unmoved(d.session);
             return;
@@ -244,23 +461,24 @@ class MoveToolBase extends Tool {
 
     hoverCursor(e) {
         const box = this.restBox();
-        const canvas = this.view.canvas;
         if (!box || this.doc.selection.isEmpty()) {
             this.view.setCursor(this.cursor());
             return;
         }
         const hit = this.hit(e, box);
-        this.view.setCursor(hit.kind === "resize" ? "pointer" : hit.kind === "rotate" ? rotateCursor(this.angleTo(box, e)) : this.cursor());
+        this.view.setCursor(hit.kind === "resize" ? handCursor(false)
+                            : hit.kind === "rotate" ? rotateCursor(this.angleTo(box, e))
+                            : hit.kind === "pivot" || hit.kind === "resetPivot" ? "default" : this.cursor());
     }
 
-    // Dirección (en la vista) desde el puntero hacia el centro de la caja: la de la flecha de girar.
+    // Dirección (en la vista) desde el puntero hacia el punto de giro: la de la flecha de girar.
     angleTo(box, e) {
-        const c = box.center(), v = this.view.imageToView(c.x, c.y);
+        const c = box.pivotPoint(), v = this.view.imageToView(c.x, c.y);
         return Math.atan2(v.y - e.vy, v.x - e.vx);
     }
 
     isBusy() {
-        return !!this.drag;
+        return !!this.drag && this.drag.kind !== "pivot";
     }
 
     // Se deja de arrastrar sin aplicar nada (Esc, deshacer durante el arrastre).
@@ -268,8 +486,13 @@ class MoveToolBase extends Tool {
         const d = this.drag;
         if (!d)
             return;
+        this.cancelRender();
         this.drag = null;
         this.selectedAll = false;
+        if (d.kind === "pivot") {
+            this.view.update();
+            return;
+        }
         d.session.box.restore(d.start);
         this.unmoved(d.session);
         this.view.update();
@@ -300,36 +523,36 @@ class MoveToolBase extends Tool {
         return true;
     }
 
+    // Como el cuadro de transformación de Kaint: tiradores redondos, el punto de giro (un círculo
+    // con una cruz que gira con la caja), el botón para devolverlo al centro si se movió y el icono
+    // de mover abajo a la derecha. El contorno es el de la selección (lo dibuja el lienzo).
     paintOverlay(ctx, view) {
         const s = this.session();
-        const box = this.drag ? this.drag.session.box : this.restBox();
+        const dragging = this.drag && this.drag.kind !== "pivot";
+        const box = dragging ? this.drag.session.box : this.restBox();
         if (!box || (!s && this.doc.selection.isEmpty()))
             return;
-        // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint), salvo que
-        // en Configuración no se oculten al arrastrar.
-        if (s && this.drag)
+        // La selección se ve donde quedará; mientras se arrastra (salvo que en Configuración no se
+        // oculte nada), solo el icono de mover y, al girar, el punto de giro.
+        if (s && dragging)
             view.strokeSelection(ctx, s.selBase, box.matrix());
-        if (this.drag && Settings.get("hideMoveBox") !== false)
-            return;
-        const pts = box.handles().map((p) => view.imageToView(p.x, p.y));
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = "rgba(0,0,0,0.55)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        [0, 2, 4, 6].forEach((i, k) => (k ? ctx.lineTo(pts[i].x, pts[i].y) : ctx.moveTo(pts[i].x, pts[i].y)));
-        ctx.closePath();
-        ctx.stroke();
-        ctx.setLineDash([]);
-        for (const v of pts) {
-            ctx.fillStyle = "#fff";
-            ctx.fillRect(v.x - 3.5, v.y - 3.5, 7, 7);
-            ctx.strokeStyle = "#000";
-            ctx.strokeRect(v.x - 3.5, v.y - 3.5, 7, 7);
+        const g = this.viewGeometry(box);
+        const hide = dragging && Settings.get("hideMoveBox") !== false;
+        ctx.save();
+        if (!hide)
+            for (const v of g.handles)
+                drawHandle(ctx, v, "circle");
+        if (!hide || this.drag.kind === "rotate") {
+            drawPivot(ctx, g.pivot, box.angle);
+            if (box.pivotMoved() && !hide)
+                drawHandle(ctx, g.reset, "resetPivot");
         }
+        drawHandle(ctx, g.moveIcon, "move");
+        ctx.restore();
     }
 
     hidesSelectionOutline() {
-        return !!this.drag && Settings.get("hideMoveBox") !== false;
+        return !!this.drag && this.drag.kind !== "pivot" && Settings.get("hideMoveBox") !== false;
     }
 }
 
@@ -406,10 +629,22 @@ export class MoveSelectedTool extends MoveToolBase {
     // reemplazan a los de debajo, también a los transparentes.
     render(s, exact = false) {
         const doc = s.doc, p = context(s.preview), m = s.box.matrix();
+        // Solo se vuelve a dibujar la zona que cambia (donde estaban los píxeles y donde quedan): con
+        // la capa entera en cada movimiento, las imágenes grandes iban a tirones.
+        const now = this.floatingBounds(s, m);
+        const area = s.drawn && s.drawnFor === s.preview ? unionRect(s.drawn, now) : { x: 0, y: 0, w: doc.width, h: doc.height };
+        s.drawn = now;
+        s.drawnFor = s.preview;
+        if (area.w <= 0 || area.h <= 0)
+            return;
+        p.save();
         p.setTransform(1, 0, 0, 1, 0, 0);
+        p.beginPath();
+        p.rect(area.x, area.y, area.w, area.h);
+        p.clip();
         p.globalCompositeOperation = "source-over";
-        p.clearRect(0, 0, doc.width, doc.height);
-        p.drawImage(s.base, 0, 0);
+        p.clearRect(area.x, area.y, area.w, area.h);
+        p.drawImage(s.base, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
         const smooth = s.box.sx !== 1 || s.box.sy !== 1 || !!s.box.angle;
         if (Settings.get("replacePixels")) {
             p.setTransform(m);
@@ -419,8 +654,18 @@ export class MoveSelectedTool extends MoveToolBase {
             p.globalCompositeOperation = "source-over";
         }
         this.drawFloating(s, p, m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y)), exact);
-        p.setTransform(1, 0, 0, 1, 0, 0);
-        doc.setPreview({ layer: s.layer, canvas: s.preview });
+        p.restore();
+        doc.setPreview({ layer: s.layer, canvas: s.preview }, area);
+    }
+
+    // Rectángulo (en la imagen) que ocupan los píxeles con la transformación 'm', con un margen para
+    // lo que el remuestreo pinta fuera del borde.
+    floatingBounds(s, m) {
+        const b = s.box.base;
+        const pts = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].map(([x, y]) => m.transformPoint({ x, y }));
+        const x0 = Math.floor(Math.min(...pts.map((q) => q.x))) - 3, y0 = Math.floor(Math.min(...pts.map((q) => q.y))) - 3;
+        const x1 = Math.ceil(Math.max(...pts.map((q) => q.x))) + 3, y1 = Math.ceil(Math.max(...pts.map((q) => q.y))) + 3;
+        return clampRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, s.doc.width, s.doc.height);
     }
 
     // Los píxeles levantados con la transformación, el muestreo y la gamma de la barra
@@ -449,8 +694,10 @@ export class MoveSelectedTool extends MoveToolBase {
         const x1 = Math.min(doc.width, Math.ceil(Math.max(...xs)) + 2), y1 = Math.min(doc.height, Math.ceil(Math.max(...ys)) + 2);
         if (x1 <= x0 || y1 <= y0)
             return;
-        const ours = interp === "bicubic" || (gamma && interp === "bilinear");
-        if (ours && (exact || (x1 - x0) * (y1 - y0) <= 300000)) {
+        const ours = interp !== "nearest" && (interp !== "bilinear" || gamma);
+        // Mientras se arrastra, el remuestreo exacto (en JavaScript) solo en zonas pequeñas: en las
+        // grandes cada movimiento tardaba demasiado. Al soltar queda el exacto.
+        if (ours && (exact || (x1 - x0) * (y1 - y0) <= 40000)) {
             const tmp = new ImageData(x1 - x0, y1 - y0);
             drawTransformed(tmp, pre.image, new DOMMatrix().translate(-x0, -y0).multiply(m), interp, gamma);
             const c = createCanvas(tmp.width, tmp.height);
@@ -470,7 +717,7 @@ export class MoveSelectedTool extends MoveToolBase {
         }
         p.setTransform(m);
         p.imageSmoothingEnabled = interp !== "nearest";
-        p.imageSmoothingQuality = interp === "bicubic" ? "high" : "low";
+        p.imageSmoothingQuality = interp === "bicubic" || interp === "anisotropic" ? "high" : interp === "multisample" ? "medium" : "low";
         p.drawImage(source, 0, 0);
     }
 
@@ -564,7 +811,7 @@ export class MoveSelectionTool extends MoveToolBase {
     }
 
     paintOverlay(ctx, view) {
-        if (this.drag)
+        if (this.drag?.session)
             view.strokeSelection(ctx, this.drag.session.selBase, this.drag.session.box.matrix());
         super.paintOverlay(ctx, view);
     }

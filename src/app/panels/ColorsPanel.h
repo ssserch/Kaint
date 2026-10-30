@@ -45,6 +45,8 @@ private:
     void applyLook();
     double minimumScale() const;
 
+    QHBoxLayout* m_mainLayout;
+    QVBoxLayout* m_leftLayout;
     QHBoxLayout* m_topRow;
     QVBoxLayout* m_swatchColumn;
     QVBoxLayout* m_wheelColumn;

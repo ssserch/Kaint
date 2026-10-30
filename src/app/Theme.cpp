@@ -757,6 +757,22 @@ Spec windows98()
     return s;
 }
 
+Spec blue()
+{
+    // Como el tema Azul de Paint.NET 5: el claro, con los menús casi blancos, las barras de
+    // herramientas y las reglas en degradado azulado (los degradados van en la hoja de estilo y en
+    // la regla) y la barra de estado azul claro.
+    Spec s = preset(false);
+    s.blue = true;
+    s.toolBar = rgb(0xfbfdff);
+    s.statusBar = rgb(0xebf2fa);
+    s.border = rgb(0x8fa6c3);
+    s.hover = rgb(0xe5f1fb);
+    s.selection = rgb(0xcce4f7);
+    s.selectionBorder = rgb(0x3c7fb1);
+    return s;
+}
+
 Spec resolved(const Spec& custom)
 {
     Spec s = custom;
@@ -952,8 +968,14 @@ QString paintNetStyleSheet(const Spec& s, const QColor& line)
 {
     const QColor edge(0x00, 0x78, 0xd7);
     const QColor tab = s.dark ? QColor(0x3a, 0x63, 0xc0) : QColor(0xcc, 0xe8, 0xff);
+    // Los menús van en un recuadro con borde arriba y a los lados, como en Paint.NET (gris en el
+    // claro y azul oscuro en el Azul), con algo de espacio antes de «Archivo».
+    const QColor menuEdge = s.blue ? QColor(0x36, 0x5d, 0x90) : s.dark ? line : QColor(0xb8, 0xb8, 0xb8);
     QString qss = QStringLiteral(R"(
-QMenuBar { border: none; border-radius: 0px; padding: 0px 3px; }
+QMenuBar { border: 1px solid %1; border-bottom: none; border-radius: 0px; padding: 0px 4px; }
+)")
+                      .arg(css(menuEdge));
+    qss += QStringLiteral(R"(
 QMenuBar::item { padding: 4px 4px; border-radius: 0px; }
 QToolBar { spacing: 0px; padding: 0px 2px; }
 QToolBar::separator { margin: 3px 2px; }
@@ -967,7 +989,7 @@ QPushButton#ColorsMoreButton:pressed, QPushButton#ColorsMoreButton:checked { bac
 QWidget#PanelButtons { background: %4; border-top: 1px solid %5; }
 FloatingPanel QAbstractItemView { background: %6; }
 )")
-                      .arg(css(tab), css(edge), css(line), css(s.toolBar), css(line), css(s.panel));
+               .arg(css(tab), css(edge), css(line), css(s.toolBar), css(line), css(s.panel));
     if (s.dark)
         qss += QStringLiteral(R"(
 FloatingPanel QAbstractItemView::indicator { background: #ffffff; border: 1px solid #333333; border-radius: 0px; }
@@ -1190,8 +1212,28 @@ QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image:
     // Tirador de los deslizadores mientras se pulsa (SliderBehavior): del color del texto, como el
     // blanco de Paint.NET en el tema oscuro.
     qss += QStringLiteral("QSlider[kaintPressed=\"true\"]::handle { background: %1; }\n").arg(css(s.text));
+    // Botones de las ventanas de la esquina superior derecha, como en Paint.NET: los activos con
+    // el acento translúcido sobre la franja y un borde del acento (no el celeste de la selección).
+    if (!s.classic)
+        qss += QStringLiteral(R"(
+QWidget#CornerButtons QToolButton:checked { background: %1; border: 1px solid %2; }
+QWidget#CornerButtons QToolButton:checked:hover { background: %3; }
+)")
+                   .arg(QStringLiteral("rgba(%1, %2, %3, 64)").arg(s.accent.red()).arg(s.accent.green()).arg(s.accent.blue()),
+                        css(s.accent),
+                        QStringLiteral("rgba(%1, %2, %3, 96)").arg(s.accent.red()).arg(s.accent.green()).arg(s.accent.blue()));
     if (s.paintNet)
         qss += paintNetStyleSheet(s, line);
+    // Azul: las dos barras de herramientas forman un degradado de casi blanco a azul claro, con una
+    // línea azul oscura debajo; la franja de botones de las ventanas, azulada.
+    if (s.blue)
+        qss += QStringLiteral(R"(
+QToolBar#MainToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fafdff, stop:1 #ecf2fa); }
+QToolBar#ToolOptionsBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ebf1f9, stop:0.65 #dce7f5, stop:1 #dce7f5);
+                          border-bottom: 1px solid #365d90; }
+QStatusBar { border-top: 1px solid #a9bcd4; }
+QWidget#PanelButtons { background: #d5dde7; border-top: 1px solid #58769c; }
+)");
     return qss;
 }
 
@@ -1259,6 +1301,8 @@ void apply(Scheme scheme)
         g_active = resolved(custom());
     else if (scheme == Scheme::Windows98)
         g_active = windows98();
+    else if (scheme == Scheme::Blue)
+        g_active = withTitleBarColor(blue(), g_titleBar);
     else
         g_active = withTitleBarColor(preset(scheme == Scheme::Dark || (scheme == Scheme::System && systemPrefersDark())),
                                      g_titleBar);
@@ -1411,6 +1455,54 @@ void styleTitleBar(QWidget* window, const QColor& band)
 #endif
 }
 
+#ifdef Q_OS_WIN
+namespace {
+// Mientras se pide a Windows que la pinte inactiva, ese WM_NCACTIVATE se deja pasar.
+bool g_forceInactiveTitle = false;
+} // namespace
+#endif
+
+bool keepTitleBarActive(QWidget* window, const QByteArray& type, void* message, qintptr* result)
+{
+#ifdef Q_OS_WIN
+    Q_UNUSED(window);
+    auto* msg = static_cast<MSG*>(message);
+    if (type != "windows_generic_MSG" || msg->message != WM_NCACTIVATE || msg->wParam || g_forceInactiveTitle)
+        return false;
+    // Se pinta activa; si la ventana nueva resulta ser de otro programa, syncTitleBarActivation la
+    // vuelve a pintar inactiva.
+    *result = DefWindowProcW(msg->hwnd, WM_NCACTIVATE, TRUE, msg->lParam);
+    return true;
+#else
+    Q_UNUSED(window);
+    Q_UNUSED(type);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+    return false;
+#endif
+}
+
+void syncTitleBarActivation(QWidget* window)
+{
+#ifdef Q_OS_WIN
+    const auto own = reinterpret_cast<HWND>(window->winId());
+    const HWND active = GetForegroundWindow();
+    DWORD pid = 0;
+    if (active)
+        GetWindowThreadProcessId(active, &pid);
+    if (active && pid == GetCurrentProcessId()) {
+        if (active != own)
+            SendMessageW(own, WM_NCACTIVATE, TRUE, 0);
+        return;
+    }
+    g_forceInactiveTitle = true;
+    SendMessageW(own, WM_NCACTIVATE, FALSE, 0);
+    g_forceInactiveTitle = false;
+#else
+    Q_UNUSED(window);
+#endif
+}
+
 bool isDark()
 {
     const QPalette p = QApplication::palette();
@@ -1429,7 +1521,8 @@ void Notifier::systemSettingChanged()
     const int before = g_systemDark;
     g_systemDark = readSystemScheme() == 1 ? 1 : 0;
     // Claro, oscuro y sistema llevan el color de énfasis de las barras de título (Windows).
-    const bool accented = g_current == Scheme::System || g_current == Scheme::Light || g_current == Scheme::Dark;
+    const bool accented = g_current == Scheme::System || g_current == Scheme::Light || g_current == Scheme::Dark
+                       || g_current == Scheme::Blue;
     if ((before != g_systemDark && g_current == Scheme::System) || (accented && titleBarColor() != g_titleBar))
         apply(g_current);
 }

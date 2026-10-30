@@ -12,6 +12,8 @@ class TransformBox {
 public:
     enum class Mode { None, Translate, Scale, Rotate, Pivot, ResetPivot };
     static constexpr double kRotateBand = 30;
+    // Franja junto al contorno (por dentro y por fuera) en la que se estira con la mano.
+    static constexpr double kEdgeBand = 6;
 
     // Conserva el punto de giro si el rectángulo no cambia.
     void set(const QRectF& localRect, const QTransform& toCanvas);

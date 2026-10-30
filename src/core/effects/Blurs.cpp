@@ -405,7 +405,7 @@ void registerBlurs(QList<const Effect*>& list)
          renderFragment});
     add({"gaussianblur", QObject::tr("Desenfoque gaussiano"), catBlurs(), "blurimage", {},
          {P::real("radius", QObject::tr("Radio"), 0, 200, 2, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), 0, 7, 0, 2),
-          P::integer("quality", QObject::tr("Calidad"), 1, 4, 4)},
+          P::integer("quality", QObject::tr("Calidad"), 1, 4, 3)},
          renderGaussian});
     add({"median", QObject::tr("Desenfoque por mediana"), catBlurs(), "blurfx", {},
          {P::integer("radius", QObject::tr("Radio"), 1, 200, 10),

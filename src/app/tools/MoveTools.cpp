@@ -30,7 +30,8 @@ QPoint arrowDelta(QKeyEvent* e)
 QCursor transformCursor(TransformBox::Mode mode, const QCursor& translate, qreal angle)
 {
     switch (mode) {
-    case TransformBox::Mode::Scale: return Qt::PointingHandCursor;
+    // La mano abierta sobre los tiradores y el borde (agarrando mientras se estira).
+    case TransformBox::Mode::Scale: return Icons::handCursor(false);
     case TransformBox::Mode::Pivot:
     case TransformBox::Mode::ResetPivot: return Qt::ArrowCursor;
     case TransformBox::Mode::Rotate: return Icons::rotateCursor(angle);
@@ -215,6 +216,8 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
     m_box.set(QRectF(m_float->pixels.rect()), m_float->pixelsToCanvas(m_startTransform));
     m_box.begin(mode, handle, e.pos);
     m_active = true;
+    if (mode == TransformBox::Mode::Scale)
+        canvas()->setToolCursor(Icons::handCursor(true));
     repaint();
 }
 
@@ -318,6 +321,8 @@ void MoveSelectedTool::mouseRelease(const ToolEvent&)
     if (!m_active)
         return;
     m_active = false;
+    if (m_box.mode() == TransformBox::Mode::Scale)
+        canvas()->setToolCursor(Icons::handCursor(false));
     m_box.end();
     if (m_pivotDrag) {
         m_pivotDrag = false;
@@ -473,6 +478,8 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
     m_pivotDrag = mode == TransformBox::Mode::Pivot;
     m_box.begin(mode, handle, e.pos);
     m_active = true;
+    if (mode == TransformBox::Mode::Scale)
+        canvas()->setToolCursor(Icons::handCursor(true));
     repaint();
 }
 
@@ -521,6 +528,8 @@ void MoveSelectionTool::mouseRelease(const ToolEvent&)
     if (!m_active)
         return;
     m_active = false;
+    if (m_box.mode() == TransformBox::Mode::Scale)
+        canvas()->setToolCursor(Icons::handCursor(false));
     m_box.end();
     if (m_pivotDrag) {
         m_pivotDrag = false;

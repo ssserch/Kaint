@@ -1001,9 +1001,44 @@ window.addEventListener("kaint-iconpack", () => {
     refreshIcons();
 });
 
+// Cursores de Paint.NET en pixel art (Configuración > Interfaz de usuario > Cursores): los de
+// assets/cursors, los mismos que Kaint (data/cursors), con su punto activo y la versión 2× para
+// las pantallas de alta densidad (sin suavizar).
+const pixelHotSpots = {
+    cross: [8, 8], rectselect: [8, 14], ellipseselect: [8, 14], magicwand: [8, 8], paintbucket: [19, 20],
+    pencil: [1, 14], colorpicker: [1, 14], text: [4, 9], zoom: [7, 7], eraser: [8, 14], clonestamp: [8, 14],
+    recolor: [8, 14], "hand-open": [9, 9], "hand-closed": [9, 9],
+};
+const pdnToolCursors = {
+    rectangleselect: "rectselect", lassoselect: "cross", ellipseselect: "ellipseselect", zoom: "zoom", magicwand: "magicwand",
+    paintbucket: "paintbucket", gradient: "cross", paintbrush: "cross", eraser: "eraser", pencil: "pencil",
+    colorpicker: "colorpicker", clonestamp: "clonestamp", recolor: "recolor", text: "text", linecurve: "cross", shapes: "cross",
+};
+
+export function pdnCursors() {
+    return Settings.get("cursorStyle") === 1;
+}
+
+export function pixelCursor(name, fallback = "crosshair") {
+    const [x, y] = pixelHotSpots[name] || [8, 8];
+    return `-webkit-image-set(url(assets/cursors/${name}.png) 1x, url(assets/cursors/${name}@2x.png) 2x) ${x} ${y}, ${fallback}`;
+}
+
+// El cursor de Paint.NET de una herramienta (las dos de mover usan el de mover del sistema), o null
+// con los cursores de Kaint.
+export function toolPixelCursor(id) {
+    if (!pdnCursors())
+        return null;
+    if (id === "moveselectedpixels" || id === "moveselection")
+        return "move";
+    return pdnToolCursors[id] ? pixelCursor(pdnToolCursors[id]) : null;
+}
+
 // Cursor de la mano (abierta o agarrando), dibujado como el icono de la herramienta.
 const cursorCache = {};
 export function handCursor(grabbing) {
+    if (pdnCursors())
+        return pixelCursor(grabbing ? "hand-closed" : "hand-open", grabbing ? "grabbing" : "grab");
     const key = grabbing ? "pan-grab" : "pan";
     const packed = IconPacks.file("cursors", grabbing ? "hand_closed_cursor" : "hand_open_cursor");
     if (packed)

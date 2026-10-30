@@ -72,10 +72,12 @@
 #include <QNetworkRequest>
 #include <QPainter>
 #include <QPointer>
-#include <QPageSetupDialog>
 #include <QPrintPreviewDialog>
 #include <QPrintPreviewWidget>
 #include <QPrinter>
+#ifdef Q_OS_WIN
+#include <QPrinterInfo>
+#endif
 #include <QProcess>
 #include <QProgressBar>
 #include <QProgressDialog>
@@ -565,6 +567,9 @@ MainWindow::MainWindow()
     applySettings();
     applyThemeLayout();
     connect(Theme::notifier(), &Theme::Notifier::changed, this, &MainWindow::applyThemeLayout);
+    // Al pasar a otro programa (o volver) con un diálogo de Kaint delante, la barra de título de
+    // la principal cambia con él.
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, &MainWindow::syncTitleBarActivation);
     ensurePolished();
     keepOpaque();
 
@@ -614,8 +619,6 @@ void MainWindow::createActions()
     A["saveAll"] = makeAction(tr("Guardar &todo"), {"document-save-all"}, QKeySequence(QStringLiteral("Ctrl+Alt+S")),
                               [this] { saveAll(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
-    A["pageSetup"] = makeAction(tr("Configurar pá&gina..."), {"document-page-setup", "document-properties"}, {},
-                                [this] { pageSetup(); });
     A["close"] = makeAction(tr("&Cerrar"), {"document-close"}, QKeySequence(QStringLiteral("Ctrl+W")),
                             [this] { closeDocument(m_doc); }, doc);
     A["close"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+W")), QKeySequence(QStringLiteral("Ctrl+F4"))});
@@ -876,7 +879,6 @@ void MainWindow::createMenus()
     file->addSeparator();
     file->addActions({A["save"], A["saveAs"], A["saveAll"]});
     file->addSeparator();
-    file->addAction(A["pageSetup"]);
     file->addAction(A["print"]);
     file->addSeparator();
     file->addAction(A["close"]);
@@ -1104,6 +1106,7 @@ void MainWindow::createTopRow()
     m_topLayout->setColumnStretch(3, 1);
 
     m_cornerButtons = new QWidget(top);
+    m_cornerButtons->setObjectName(QStringLiteral("CornerButtons"));
     m_cornerLayout = new QHBoxLayout(m_cornerButtons);
     m_cornerLayout->setContentsMargins(0, 0, 0, 0);
     m_cornerLayout->setSpacing(0);
@@ -1310,10 +1313,13 @@ void MainWindow::createStatusBar()
         m_zoomBox->setEditText(zoomText(z));
     });
     connect(m_canvas, &Canvas::cursorMoved, this, [this](QPoint p, bool inside) {
-        if (!inside || !m_doc) {
+        // Como en Paint.NET, al salir del lienzo (o de Kaint) se queda la última posición.
+        if (!m_doc) {
             m_posLabel->clear();
             return;
         }
+        if (!inside)
+            return;
         const Unit u = m_canvas->unit();
         m_posLabel->setText(QStringLiteral("%1, %2").arg(formatLength(p.x(), u, m_doc->dpi()),
                                                          formatLength(p.y(), u, m_doc->dpi())));
@@ -2101,6 +2107,18 @@ void MainWindow::print()
         pr->setDocName(QFileInfo(m_doc->filePath()).fileName());
     QPrintPreviewDialog preview(pr, this);
     preview.setWindowTitle(tr("Imprimir"));
+#ifdef Q_OS_WIN
+    // "Configurar página" (en Archivo ya no está): el diálogo de Windows de Qt se cierra de golpe si
+    // no hay una impresora predeterminada que se pueda usar (usa su configuración sin comprobarla),
+    // así que solo se ofrece con una.
+    if (pr->outputFormat() != QPrinter::NativeFormat || QPrinterInfo::defaultPrinter().isNull()) {
+        const QString pageSetupText = QCoreApplication::translate("QPrintPreviewDialog", "Page setup");
+        for (QToolBar* bar : preview.findChildren<QToolBar*>())
+            for (QAction* a : bar->actions())
+                if (a->text() == pageSetupText || a->toolTip() == pageSetupText)
+                    a->setVisible(false);
+    }
+#endif
     connect(&preview, &QPrintPreviewDialog::paintRequested, this,
             [this, image, dpi](QPrinter* target) { renderPrint(target, image, dpi, m_printActualSize); });
     if (auto* bar = preview.findChild<QToolBar*>()) {
@@ -2118,12 +2136,6 @@ void MainWindow::print()
     }
     preview.resize(900, 700);
     preview.exec();
-}
-
-void MainWindow::pageSetup()
-{
-    QPageSetupDialog dlg(printer(), this);
-    dlg.exec();
 }
 
 void MainWindow::closeEvent(QCloseEvent* e)
@@ -3015,6 +3027,7 @@ void MainWindow::showWelcome()
     // El tema y el estilo se ven al momento (menos entrar o salir del tema KDE, que reinicia).
     connect(&dlg, &WelcomeDialog::previewRequested, this, [this](const AppSettings& s) {
         m_settings.uiStyle = s.uiStyle;
+        m_settings.cursorStyle = s.cursorStyle;
         if (!Theme::needsRestart(Theme::Scheme(s.colorScheme)))
             m_settings.colorScheme = s.colorScheme;
         applySettings();
@@ -3022,6 +3035,7 @@ void MainWindow::showWelcome()
     dlg.exec();
     const AppSettings chosen = dlg.settings();
     m_settings.uiStyle = chosen.uiStyle;
+    m_settings.cursorStyle = chosen.cursorStyle;
     m_settings.discordEnabled = chosen.discordEnabled;
     m_settings.welcomed = true;
     const bool restart = chosen.language != m_settings.language || Theme::needsRestart(Theme::Scheme(chosen.colorScheme));
@@ -3057,6 +3071,22 @@ void MainWindow::keepOpaque()
     setAttribute(Qt::WA_NoSystemBackground, false);
 }
 
+bool MainWindow::nativeEvent(const QByteArray& type, void* message, qintptr* result)
+{
+    // Windows, como Paint.NET: mientras la ventana activa sea una de Kaint (Configuración, un
+    // efecto, un aviso...), la barra de título de la principal se sigue viendo activa.
+    if (Theme::keepTitleBarActive(this, type, message, result)) {
+        QTimer::singleShot(0, this, &MainWindow::syncTitleBarActivation);
+        return true;
+    }
+    return QMainWindow::nativeEvent(type, message, result);
+}
+
+void MainWindow::syncTitleBarActivation()
+{
+    Theme::syncTitleBarActivation(this);
+}
+
 void MainWindow::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::StyleChange)
@@ -3076,6 +3106,11 @@ void MainWindow::applyThemeLayout()
     applyCanvasAppearance();
     const Theme::Spec spec = Theme::active();
     Theme::styleTitleBar(this, TopRow::bandColor());
+    // Paint.NET: los menús pegados arriba (sin franja encima aunque la tira de imágenes sea más
+    // alta) y con un margen de la franja a su izquierda, antes de «Archivo».
+    const bool paintNet = Theme::paintNetLook();
+    m_topLayout->setContentsMargins(paintNet ? 4 : 0, 0, 4, 0);
+    m_topLayout->setAlignment(m_menuBar, Qt::AlignLeft | (paintNet ? Qt::AlignTop : Qt::AlignBottom));
     if (QWidget* top = menuWidget())
         top->update();
     const QSize icon(spec.iconSize, spec.iconSize);
@@ -3104,8 +3139,10 @@ void MainWindow::applySettings()
     m_canvas->setAutoScroll(m_settings.autoScroll);
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, !m_settings.systemFileDialogs);
     Icons::setSystemPointer(m_settings.systemPointer);
+    Icons::setCursorStyle(Icons::CursorStyle(m_settings.cursorStyle));
     Theme::setUnderlineShortcuts(m_settings.menuMnemonics);
     m_layers->setDropLineMode(m_settings.layerDropLine);
+    m_history->setJumpButtonsVisible(m_settings.historyJumpButtons);
     ToolPreferences preferences;
     preferences.hideBoxWhileDragging = m_settings.hideMoveBox;
     preferences.replacePixels = m_settings.replacePixels;

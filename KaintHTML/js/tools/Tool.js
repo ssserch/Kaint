@@ -1,7 +1,7 @@
 // Base de las herramientas (src/app/tools/Tool.h de Kaint) y el gestor que las cambia con sus
 // atajos de una letra (pulsar la misma letra pasa a la siguiente herramienta que la comparte).
 import { AppState } from "../AppState.js";
-import { iconCursor, miniCursor } from "../ui/Icons.js";
+import { iconCursor, miniCursor, toolPixelCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
 const miniCursorTools = new Set(["rectangleselect", "ellipseselect", "lassoselect", "gradient", "linecurve"]);
@@ -39,7 +39,7 @@ export class Tool {
     // Como en Kaint, el icono actual de la herramienta con el punto activo en su punta; la
     // selección, el degradado y la línea dejan ver el puntero con su icono en miniatura al lado.
     cursor() {
-        return miniCursorTools.has(this.id) ? miniCursor(this.icon) : iconCursor(this.icon);
+        return toolPixelCursor(this.id) || (miniCursorTools.has(this.id) ? miniCursor(this.icon) : iconCursor(this.icon));
     }
 
     activate() {}

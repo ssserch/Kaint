@@ -54,6 +54,7 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     scheme->addItem(tr("Seguir al sistema"), int(Theme::Scheme::System));
     scheme->addItem(tr("Claro"), int(Theme::Scheme::Light));
     scheme->addItem(tr("Oscuro"), int(Theme::Scheme::Dark));
+    scheme->addItem(tr("Azul"), int(Theme::Scheme::Blue));
 #ifndef Q_OS_WIN
     scheme->addItem(tr("KDE"), int(Theme::Scheme::Kde));
 #endif
@@ -66,6 +67,11 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     look->setItemData(1, tr("Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos."),
                       Qt::ToolTipRole);
     look->setCurrentIndex(std::max(0, look->findData(m_settings.uiStyle)));
+    auto* cursors = new QComboBox(this);
+    cursors->addItem(QStringLiteral("Kaint"), 0);
+    cursors->addItem(QStringLiteral("Paint.NET"), 1);
+    cursors->setItemData(1, tr("Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta."), Qt::ToolTipRole);
+    cursors->setCurrentIndex(std::max(0, cursors->findData(m_settings.cursorStyle)));
     auto* language = new QComboBox(this);
     language->addItem(QStringLiteral("English"), QStringLiteral("en"));
     language->addItem(QStringLiteral("Español"), QStringLiteral("es"));
@@ -81,6 +87,7 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
     form->addRow(tr("Tema:"), scheme);
     form->addRow(tr("Estilo de la interfaz:"), look);
+    form->addRow(tr("Cursores:"), cursors);
     form->addRow(tr("Idioma:"), language);
 
     auto* box = new QDialogButtonBox(this);
@@ -109,6 +116,10 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     });
     connect(look, &QComboBox::activated, this, [this, look](int i) {
         m_settings.uiStyle = look->itemData(i).toInt();
+        emit previewRequested(m_settings);
+    });
+    connect(cursors, &QComboBox::activated, this, [this, cursors](int i) {
+        m_settings.cursorStyle = cursors->itemData(i).toInt();
         emit previewRequested(m_settings);
     });
     connect(language, &QComboBox::activated, this, [this, language, restartNote, startLanguage](int i) {

@@ -446,6 +446,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <source>Discord rechazó la conexión: %1</source>
         <translation>Discord refused the connection: %1</translation>
     </message>
+    <message>
+        <source>Conectado, pero Discord rechazó la actividad completa (se muestra una más sencilla): %1</source>
+        <translation>Connected, but Discord rejected the full activity (a simpler one is shown): %1</translation>
+    </message>
 </context>
 <context>
     <name>Document</name>
@@ -4709,6 +4713,70 @@ Do you want to replace them?</translation>
         <source>Abrir la carpeta de configuración</source>
         <translation>Open settings folder</translation>
     </message>
+    <message>
+        <source>Según el tema</source>
+        <translation>Follow the theme</translation>
+    </message>
+    <message>
+        <source>Oscura con los temas oscuros y del color de la barra de herramientas con los claros.</source>
+        <translation>Dark with dark themes and the color of the toolbar with light ones.</translation>
+    </message>
+    <message>
+        <source>Azul</source>
+        <translation>Blue</translation>
+    </message>
+    <message>
+        <source>El claro con las barras en degradado azulado, como el tema Azul de Paint.NET.</source>
+        <translation>The light theme with bluish gradient bars, like the Blue theme of Paint.NET.</translation>
+    </message>
+    <message>
+        <source>Usar un color personalizado para el borde del lienzo</source>
+        <translation>Use a custom color for the canvas border</translation>
+    </message>
+    <message>
+        <source>Elegir el color con más opciones</source>
+        <translation>Choose the color with more options</translation>
+    </message>
+    <message>
+        <source>Saturación</source>
+        <translation>Saturation</translation>
+    </message>
+    <message>
+        <source>Brillo</source>
+        <translation>Brightness</translation>
+    </message>
+    <message>
+        <source>R:</source>
+        <translation>R:</translation>
+    </message>
+    <message>
+        <source>V:</source>
+        <translation>G:</translation>
+    </message>
+    <message>
+        <source>A:</source>
+        <translation>B:</translation>
+    </message>
+    <message>
+        <source>Mostrar los botones de ir al principio y al final del historial</source>
+        <translation>Show the buttons to go to the beginning and the end of the history</translation>
+    </message>
+    <message>
+        <source>En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio.</source>
+        <translation>In the History window, next to undo and redo: they go back to the original image or to the latest change.</translation>
+    </message>
+    <message>
+        <source>Cursores:</source>
+        <translation>Cursors:</translation>
+    </message>
+    <message>
+        <source>Los iconos de las herramientas, a la medida del puntero del sistema.</source>
+        <translation>The tool icons, sized like the system pointer.</translation>
+    </message>
+    <message>
+        <source>Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.</source>
+        <translation>The ones from Paint.NET, in pixel art: the crosshair with the drawing of the tool.</translation>
+    </message>
 </context>
 <context>
     <name>ShapesTool</name>
@@ -5832,6 +5900,18 @@ Do you want to replace them?</translation>
     <message>
         <source>Empezar</source>
         <translation>Get Started</translation>
+    </message>
+    <message>
+        <source>Azul</source>
+        <translation>Blue</translation>
+    </message>
+    <message>
+        <source>Cursores:</source>
+        <translation>Cursors:</translation>
+    </message>
+    <message>
+        <source>Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.</source>
+        <translation>The ones from Paint.NET, in pixel art: the crosshair with the drawing of the tool.</translation>
     </message>
 </context>
 <context>

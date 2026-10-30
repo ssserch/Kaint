@@ -13,8 +13,8 @@ class QWidget;
 
 // Temas de la interfaz.
 //
-// "Seguir al sistema", "Claro" y "Oscuro" imitan Paint.NET en Windows 10 (el primero elige
-// claro u oscuro según el escritorio). "KDE" usa el estilo y los colores reales de Plasma.
+// "Seguir al sistema", "Claro", "Oscuro" y "Azul" imitan Paint.NET en Windows 10 (el primero
+// elige claro u oscuro según el escritorio). "KDE" usa el estilo y los colores reales de Plasma.
 // "Personalizado" parte de claro u oscuro y deja cambiar colores, fondo del lienzo y diseño.
 // "Windows 98" es el clásico gris con relieve (basado en 98.css); también es una plantilla del
 // personalizado. Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y
@@ -22,7 +22,7 @@ class QWidget;
 // salir de él reinicia Kaint.
 namespace Theme {
 
-enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5 };
+enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5, Blue = 6 };
 enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
 enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
 enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
@@ -82,6 +82,8 @@ struct Spec {
     QString iconTheme;
     // Con el aspecto de Paint.NET (lo pone apply(), no se guarda en el tema).
     bool paintNet = false;
+    // Tema Azul de Paint.NET: barras, reglas y menús en degradado azulado (no se guarda).
+    bool blue = false;
 
     bool operator==(const Spec&) const = default;
 };
@@ -97,6 +99,8 @@ extern const std::array<ColorRole, 19> kColorRoles;
 // Temas de Paint.NET, Windows 98 y el personalizado con sus huecos rellenos.
 Spec preset(bool dark);
 Spec windows98();
+// El tema Azul de Paint.NET 5: el claro con las barras en degradado azulado.
+Spec blue();
 Spec resolved(const Spec& custom);
 // 'embedImage' guarda también la imagen de fondo (para exportar el tema y compartirlo).
 QJsonObject toJson(const Spec& spec, bool embedImage = false);
@@ -142,6 +146,13 @@ Spec withTitleBarColor(Spec spec, const QColor& titleBar);
 // Barra de título nativa a juego con el tema: en Windows, modo oscuro y el color 'band' (no
 // válido: el del sistema).
 void styleTitleBar(QWidget* window, const QColor& band);
+// Windows, como Paint.NET: la barra de título de 'window' se sigue viendo activa (con el color de
+// énfasis, no gris) mientras la ventana activa sea otra de Kaint. Para nativeEvent(): verdadero si
+// se ocupó del mensaje (entonces hay que llamar después a syncTitleBarActivation, ya cambiada la
+// activación); en las demás plataformas no hace nada.
+bool keepTitleBarActive(QWidget* window, const QByteArray& type, void* message, qintptr* result);
+// La pinta inactiva si la ventana activa ya no es de Kaint (también al pasar a otro programa).
+void syncTitleBarActivation(QWidget* window);
 
 // Fondo del área de trabajo (alrededor de la imagen): color e imagen del tema. 'color' no válido
 // usa el del tema.

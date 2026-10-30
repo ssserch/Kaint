@@ -225,9 +225,14 @@ function linearToPremul(c) {
 }
 
 // Dibuja 'source' (ImageData, alfa directo) transformada por 'matrix' (DOMMatrix: de sus píxeles
-// a los de 'dst') sobre 'dst' (ImageData transparente, alfa directo), con el muestreo bicúbico o el
-// bilineal con la corrección gamma (Resample::drawTransformed de Kaint).
+// a los de 'dst') sobre 'dst' (ImageData transparente, alfa directo), con el muestreo bicúbico, el
+// bilineal con la corrección gamma, la multimuestra bilineal (2×2 muestras por píxel) o el
+// anisotrópico (más muestras en el eje en que se encoge) (Resample::drawTransformed de Kaint).
 export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect) {
+    if (interpolation === "multisample" || interpolation === "anisotropic") {
+        drawMultisampled(dst, source, matrix, interpolation, gammaCorrect);
+        return;
+    }
     const inv = matrix.inverse();
     if (!Number.isFinite(inv.a) || !Number.isFinite(inv.d))
         return;
@@ -304,6 +309,62 @@ export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect
                 const a = clamp255f(Math.fround(acc[3]));
                 s = qRgba(Math.min(a, clamp255f(Math.fround(acc[0]))), Math.min(a, clamp255f(Math.fround(acc[1]))),
                           Math.min(a, clamp255f(Math.fround(acc[2]))), a);
+            }
+            if (qAlpha(s))
+                out[y * dw + x] = qUnpremultiply(s);
+        }
+}
+
+// Multimuestra bilineal y anisotrópico: la media de varias muestras bilineales repartidas por cada
+// píxel de destino (2×2; en el anisotrópico, tantas en cada eje de la pantalla como píxeles de la
+// imagen abarque el píxel en ese eje, hasta 8).
+function drawMultisampled(dst, source, matrix, interpolation, gammaCorrect) {
+    const inv = matrix.inverse();
+    if (!Number.isFinite(inv.a) || !Number.isFinite(inv.d))
+        return;
+    const sw = source.width, sh = source.height, dw = dst.width, dh = dst.height;
+    const corners = [[0, 0], [sw, 0], [0, sh], [sw, sh]].map(([x, y]) => [matrix.a * x + matrix.c * y + matrix.e, matrix.b * x + matrix.d * y + matrix.f]);
+    const x0 = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[0]))) - 2), x1 = Math.min(dw - 1, Math.ceil(Math.max(...corners.map((p) => p[0]))) + 2);
+    const y0 = Math.max(0, Math.floor(Math.min(...corners.map((p) => p[1]))) - 2), y1 = Math.min(dh - 1, Math.ceil(Math.max(...corners.map((p) => p[1]))) + 2);
+    let nx = 2, ny = 2;
+    if (interpolation === "anisotropic") {
+        nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(inv.a, inv.b) - 1e-6)));
+        ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(inv.c, inv.d) - 1e-6)));
+    }
+    const n = nx * ny;
+    const px = new Uint32Array(new Uint8ClampedArray(source.data).buffer).map(qPremultiply);
+    const out = new Uint32Array(dst.data.buffer, dst.data.byteOffset, dw * dh);
+    const lin = gammaCorrect ? linearImage(px, sw, sh) : null;
+    const pixel = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? 0 : px[y * sw + x]);
+    const at = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? -1 : (y * sw + x) * 4);
+    const c = new Float32Array(4), acc = [0, 0, 0, 0];
+    for (let y = y0; y <= y1; ++y)
+        for (let x = x0; x <= x1; ++x) {
+            c.fill(0);
+            acc.fill(0);
+            for (let j = 0; j < ny; ++j)
+                for (let i = 0; i < nx; ++i) {
+                    const X = x + (i + 0.5) / nx, Y = y + (j + 0.5) / ny;
+                    const fx = inv.a * X + inv.c * Y + inv.e - 0.5, fy = inv.b * X + inv.d * Y + inv.f - 0.5;
+                    const ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+                    const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+                    if (lin) {
+                        for (const [q, w] of [[at(ix, iy), w00], [at(ix + 1, iy), w10], [at(ix, iy + 1), w01], [at(ix + 1, iy + 1), w11]])
+                            if (q >= 0)
+                                for (let k = 0; k < 4; ++k)
+                                    c[k] += (lin[q + k] * w) / n;
+                    } else {
+                        for (const [p, w] of [[pixel(ix, iy), w00], [pixel(ix + 1, iy), w10], [pixel(ix, iy + 1), w01], [pixel(ix + 1, iy + 1), w11]]) {
+                            acc[0] += qRed(p) * w; acc[1] += qGreen(p) * w; acc[2] += qBlue(p) * w; acc[3] += qAlpha(p) * w;
+                        }
+                    }
+                }
+            let s;
+            if (lin) {
+                s = linearToPremul(c);
+            } else {
+                const a = clamp255f(acc[3] / n);
+                s = qRgba(Math.min(a, clamp255f(acc[0] / n)), Math.min(a, clamp255f(acc[1] / n)), Math.min(a, clamp255f(acc[2] / n)), a);
             }
             if (qAlpha(s))
                 out[y * dw + x] = qUnpremultiply(s);

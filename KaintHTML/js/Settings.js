@@ -21,7 +21,7 @@ const defaults = {
     welcomed: false,
     // Subrayar siempre las letras de acceso de los menús (si no, como en Windows, solo con Alt).
     menuMnemonics: false,
-    colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro
+    colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul
     language: navigator.language?.toLowerCase().startsWith("es") ? "es" : "en",
     dropShadow: true,
     checkerBrightness: 191,
@@ -43,6 +43,8 @@ const defaults = {
     // Ver > Reglas y su estilo: 0, oscura como la de paint.js; 1, del color de la barra.
     rulers: false,
     rulerStyle: 0,
+    historyJumpButtons: true,
+    cursorStyle: 0,
     // Unidades de medida (Ver): 0, píxeles; 1, pulgadas; 2, centímetros.
     unit: 0,
     // Atajos cambiados en Configuración > Atajos de teclado (id de la acción → combinación).

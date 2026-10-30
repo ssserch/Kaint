@@ -39,6 +39,7 @@ QColor g_primary;
 QColor g_secondary;
 // Cursores con miniatura: la flecha (o la I) del tema de cursores del sistema o la de Kaint.
 bool g_systemPointer = true;
+CursorStyle g_cursorStyle = CursorStyle::Kaint;
 
 QColor mix(const QColor& a, const QColor& b, qreal t)
 {
@@ -823,6 +824,22 @@ int cursorSize()
     return size;
 }
 
+namespace {
+
+// Tamaño de referencia de los cursores dibujados por Kaint. El puntero de Windows mide 32 px de
+// fábrica pero su flecha ocupa lo mismo que la de un tema XCursor de 24: con 32, los iconos se
+// veían bastante más grandes que los de Paint.NET.
+int drawnCursorSize()
+{
+#ifdef Q_OS_WIN
+    return std::max(16, cursorSize() * 3 / 4);
+#else
+    return cursorSize();
+#endif
+}
+
+} // namespace
+
 QCursor toolCursor(const QString& name, Qt::CursorShape fallback)
 {
     // Punta de cada icono en su rejilla de 20 px (la del lápiz, la del pincel, el chorro del cubo...).
@@ -841,7 +858,7 @@ QCursor toolCursor(const QString& name, Qt::CursorShape fallback)
     if (icon.isNull())
         return QCursor(fallback);
     // Como el puntero del sistema: el dibujo ocupa unos 5/6 del tamaño del cursor (20 px con 24).
-    const int side = std::max(16, cursorSize() * 5 / 6);
+    const int side = std::max(16, drawnCursorSize() * 5 / 6);
     const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
     const QString key = QStringLiteral("%1/%2/%3/%4/%5/%6")
                             .arg(name)
@@ -1027,7 +1044,7 @@ QCursor rotateCursor(qreal angle)
     if (const auto it = cache.constFind(index); it != cache.cend())
         return *it;
     const qreal a = index * 2 * M_PI / steps;
-    const qreal scale = cursorSize() / 24.0;
+    const qreal scale = drawnCursorSize() / 24.0;
     const int side = int(std::ceil(40 * scale));
     const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
     QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
@@ -1070,8 +1087,51 @@ QCursor rotateCursor(qreal angle)
     return cursor;
 }
 
+void setCursorStyle(CursorStyle style)
+{
+    g_cursorStyle = style;
+}
+
+CursorStyle cursorStyle()
+{
+    return g_cursorStyle;
+}
+
+QCursor pixelCursor(const QString& name)
+{
+    // Puntos activos de data/cursors/hotspots.json (los escribe data/cursors/generate.py).
+    static const QHash<QString, QPoint> hotSpots{
+        {QStringLiteral("cross"), {8, 8}},         {QStringLiteral("rectselect"), {8, 14}},
+        {QStringLiteral("ellipseselect"), {8, 14}}, {QStringLiteral("magicwand"), {8, 8}},
+        {QStringLiteral("paintbucket"), {19, 20}},  {QStringLiteral("pencil"), {1, 14}},
+        {QStringLiteral("colorpicker"), {1, 14}},   {QStringLiteral("text"), {4, 9}},
+        {QStringLiteral("zoom"), {7, 7}},           {QStringLiteral("eraser"), {8, 14}},
+        {QStringLiteral("clonestamp"), {8, 14}},    {QStringLiteral("recolor"), {8, 14}},
+        {QStringLiteral("hand-open"), {9, 9}},      {QStringLiteral("hand-closed"), {9, 9}},
+    };
+    // Pixel art: se amplía a un múltiplo entero (2× desde un 175 % de escala) y se usa tal cual, sin
+    // que el sistema lo vuelva a escalar suavizándolo.
+    const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
+    const int k = std::max(1, int(std::floor(dpr + 0.25)));
+    const QString key = QStringLiteral("%1/%2").arg(name).arg(dpr);
+    static QHash<QString, QCursor> cache;
+    if (const auto it = cache.constFind(key); it != cache.cend())
+        return *it;
+    const QImage image(QStringLiteral(":/kaint/cursors/%1.png").arg(name));
+    if (image.isNull())
+        return QCursor(Qt::CrossCursor);
+    QPixmap pm = QPixmap::fromImage(image.scaled(image.size() * k, Qt::IgnoreAspectRatio, Qt::FastTransformation));
+    pm.setDevicePixelRatio(dpr);
+    const QPoint hot = hotSpots.value(name, QPoint(image.width() / 2, image.height() / 2));
+    const QCursor cursor(pm, int(std::lround(hot.x() * k / dpr)), int(std::lround(hot.y() * k / dpr)));
+    cache.insert(key, cursor);
+    return cursor;
+}
+
 QCursor handCursor(bool grabbing)
 {
+    if (g_cursorStyle == CursorStyle::PaintNet)
+        return pixelCursor(grabbing ? QStringLiteral("hand-closed") : QStringLiteral("hand-open"));
     // La del paquete de iconos (los cursores de la mano de paint.js) o la dibujada.
     const QString packed = IconPacks::file(QStringLiteral("cursors"), grabbing ? QStringLiteral("hand_closed_cursor")
                                                                                 : QStringLiteral("hand_open_cursor"));

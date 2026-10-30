@@ -4,6 +4,7 @@
 #include "app/DiscordPresence.h"
 #include "app/IconPacks.h"
 #include "app/Icons.h"
+#include "app/Ruler.h"
 #include "app/Shortcuts.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
@@ -12,6 +13,7 @@
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/ThemeDialog.h"
 #include "app/tools/ToolManager.h"
+#include "app/widgets/ColorWidgets.h"
 #include "app/widgets/EffectControls.h"
 #include "app/widgets/UnitField.h"
 #include "core/CustomShapes.h"
@@ -30,6 +32,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QImageReader>
@@ -62,6 +65,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <memory>
+
 AppSettings AppSettings::load()
 {
     QSettings s;
@@ -77,12 +82,14 @@ AppSettings AppSettings::load()
     a.systemFileDialogs = get("systemFileDialogs", a.systemFileDialogs);
     a.systemPointer = get("systemPointer", a.systemPointer);
     a.layerDropLine = get("layerDropLine", a.layerDropLine);
+    a.historyJumpButtons = get("historyJumpButtons", a.historyJumpButtons);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
+    a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
     a.menuMnemonics = get("menuMnemonics", a.menuMnemonics);
-    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 5);
+    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 6);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
         a.colorScheme = int(Theme::Scheme::System);
@@ -92,7 +99,7 @@ AppSettings AppSettings::load()
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);
     a.rulers = get("rulers", a.rulers);
-    a.rulerStyle = std::clamp(get("rulerStyle", a.rulerStyle), 0, 1);
+    a.rulerStyle = std::clamp(get("rulerStyle", a.rulerStyle), 0, 2);
     a.dropShadow = get("dropShadow", a.dropShadow);
     a.canvasBorderLight = s.value(QStringLiteral("canvasBorderLight"), QColor()).value<QColor>();
     a.canvasBorderDark = s.value(QStringLiteral("canvasBorderDark"), QColor()).value<QColor>();
@@ -134,9 +141,11 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("systemFileDialogs"), systemFileDialogs);
     s.setValue(QStringLiteral("systemPointer"), systemPointer);
     s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
+    s.setValue(QStringLiteral("historyJumpButtons"), historyJumpButtons);
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
     s.setValue(QStringLiteral("panelBorder"), panelBorder);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
+    s.setValue(QStringLiteral("cursorStyle"), cursorStyle);
     s.setValue(QStringLiteral("welcomed"), welcomed);
     s.setValue(QStringLiteral("menuMnemonics"), menuMnemonics);
     s.setValue(QStringLiteral("colorScheme"), colorScheme);
@@ -318,8 +327,10 @@ QWidget* SettingsDialog::createInterfacePage()
           tr("El mismo que usan Firefox y los demás programas del escritorio. Desactivado, se usa el de Qt que trae Kaint."));
     check(tr("Al arrastrar una capa, marcar con una línea dónde quedará"), &AppSettings::layerDropLine,
           tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra."));
+    check(tr("Mostrar los botones de ir al principio y al final del historial"), &AppSettings::historyJumpButtons,
+          tr("En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio."));
 
-    // Temas: los tres primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
+    // Temas: los cuatro primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
     // tema nativo aparte: claro y oscuro ya son los de Windows, como en Paint.NET.
     auto* schemeRow = new QHBoxLayout;
     auto* scheme = new QComboBox(page.widget);
@@ -330,6 +341,7 @@ QWidget* SettingsDialog::createInterfacePage()
     addScheme(tr("Seguir al sistema"), Theme::Scheme::System, tr("Claro u oscuro de Paint.NET, según el modo del escritorio."));
     addScheme(tr("Claro"), Theme::Scheme::Light, {});
     addScheme(tr("Oscuro"), Theme::Scheme::Dark, {});
+    addScheme(tr("Azul"), Theme::Scheme::Blue, tr("El claro con las barras en degradado azulado, como el tema Azul de Paint.NET."));
 #ifndef Q_OS_WIN
     addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
@@ -360,6 +372,23 @@ QWidget* SettingsDialog::createInterfacePage()
     page.layout->addLayout(lookRow);
     connect(look, &QComboBox::activated, this, [this, look](int i) {
         m_settings.uiStyle = look->itemData(i).toInt();
+        changed();
+    });
+
+    // Cursores: los iconos de Kaint o los de Paint.NET en pixel art.
+    auto* cursorRow = new QHBoxLayout;
+    auto* cursors = new QComboBox(page.widget);
+    cursors->addItem(QStringLiteral("Kaint"), 0);
+    cursors->setItemData(0, tr("Los iconos de las herramientas, a la medida del puntero del sistema."), Qt::ToolTipRole);
+    cursors->addItem(QStringLiteral("Paint.NET"), 1);
+    cursors->setItemData(1, tr("Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta."), Qt::ToolTipRole);
+    cursors->setCurrentIndex(std::max(0, cursors->findData(m_settings.cursorStyle)));
+    cursorRow->addWidget(new QLabel(tr("Cursores:"), page.widget));
+    cursorRow->addWidget(cursors);
+    cursorRow->addStretch();
+    page.layout->addLayout(cursorRow);
+    connect(cursors, &QComboBox::activated, this, [this, cursors](int i) {
+        m_settings.cursorStyle = cursors->itemData(i).toInt();
         changed();
     });
 
@@ -501,31 +530,102 @@ QWidget* SettingsDialog::createCanvasPage()
     });
     page.layout->addWidget(shadow);
 
-    // Color del fondo alrededor de la imagen, por separado para los temas claros y los oscuros
-    // (al cambiar de tema se usa el suyo).
-    auto borderRow = [&](const QString& text, QColor AppSettings::*field, bool dark) {
-        auto* row = new QHBoxLayout;
-        auto* custom = new QCheckBox(text, page.widget);
-        custom->setChecked((m_settings.*field).isValid());
-        auto* border = new ColorButton(page.widget);
-        border->setColor((m_settings.*field).isValid() ? m_settings.*field : Theme::preset(dark).workspace);
-        border->setEnabled(custom->isChecked());
-        row->addWidget(custom);
-        row->addWidget(border);
-        row->addStretch();
-        page.layout->addLayout(row);
-        auto apply = [this, custom, border, field] {
-            m_settings.*field = custom->isChecked() ? border->color() : QColor();
-            border->setEnabled(custom->isChecked());
-            changed();
-        };
-        connect(custom, &QCheckBox::toggled, this, apply);
-        connect(border, &ColorButton::colorChanged, this, apply);
+    // Color del borde del lienzo (el fondo alrededor de la imagen), como en Paint.NET: la casilla
+    // activa el selector de color, que se ve en gris mientras está desactivado. Se guarda uno para
+    // los temas claros y otro para los oscuros: aquí se edita el del tema actual.
+    QColor AppSettings::*field = Theme::isDark() ? &AppSettings::canvasBorderDark : &AppSettings::canvasBorderLight;
+    const QColor themeBorder = Theme::active().workspace;
+    auto* custom = new QCheckBox(tr("Usar un color personalizado para el borde del lienzo"), page.widget);
+    custom->setChecked((m_settings.*field).isValid());
+    page.layout->addWidget(custom);
+
+    auto* picker = new QWidget(page.widget);
+    picker->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    auto* pickerRow = new QHBoxLayout(picker);
+    pickerRow->setContentsMargins(20, 0, 0, 4);
+    auto* swatch = new ColorButton(picker);
+    swatch->setFixedSize(26, 26);
+    swatch->setToolTip(tr("Elegir el color con más opciones"));
+    auto* wheel = new ColorWheel(picker);
+    wheel->setClockwise(true);
+    wheel->setFixedSize(112, 112);
+    auto* saturation = new ColorSlider(ColorSlider::Saturation, Qt::Vertical, picker);
+    saturation->setFixedSize(16, 112);
+    saturation->setToolTip(tr("Saturación"));
+    auto* value = new ColorSlider(ColorSlider::Value, Qt::Vertical, picker);
+    value->setFixedSize(16, 112);
+    value->setToolTip(tr("Brillo"));
+    auto* channels = new QGridLayout;
+    channels->setVerticalSpacing(2);
+    QList<QSpinBox*> spins;
+    const QStringList names{tr("R:"), tr("V:"), tr("A:")};
+    for (int i = 0; i < 3; ++i) {
+        auto* spin = new QSpinBox(picker);
+        spin->setRange(0, 255);
+        spin->setAlignment(Qt::AlignRight);
+        channels->addWidget(new QLabel(names.at(i), picker), i, 0);
+        channels->addWidget(spin, i, 1);
+        spins << spin;
+    }
+    auto* resetBorder = new QToolButton(picker);
+    resetBorder->setIcon(Icons::theme({"edit-reset", "edit-undo"}));
+    resetBorder->setToolTip(tr("Restablecer"));
+    channels->addWidget(resetBorder, 3, 1, Qt::AlignLeft);
+    pickerRow->addWidget(swatch, 0, Qt::AlignTop);
+    pickerRow->addWidget(wheel, 0, Qt::AlignTop);
+    pickerRow->addWidget(saturation, 0, Qt::AlignTop);
+    pickerRow->addWidget(value, 0, Qt::AlignTop);
+    pickerRow->addSpacing(12);
+    pickerRow->addLayout(channels);
+    pickerRow->addStretch();
+    page.layout->addWidget(picker);
+
+    auto border = std::make_shared<QColor>((m_settings.*field).isValid() ? m_settings.*field : themeBorder);
+    auto show = [=] {
+        const QColor c = *border;
+        wheel->setColor(c);
+        saturation->setColor(c);
+        value->setColor(c);
+        {
+            const QSignalBlocker b(swatch);
+            swatch->setColor(c);
+        }
+        const int rgb[3] = {c.red(), c.green(), c.blue()};
+        for (int i = 0; i < 3; ++i) {
+            const QSignalBlocker b(spins.at(i));
+            spins.at(i)->setValue(rgb[i]);
+        }
     };
-    borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas claros"), &AppSettings::canvasBorderLight,
-              false);
-    borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas oscuros"), &AppSettings::canvasBorderDark,
-              true);
+    auto store = [this, custom, picker, field, border] {
+        picker->setEnabled(custom->isChecked());
+        m_settings.*field = custom->isChecked() ? *border : QColor();
+        changed();
+    };
+    auto setBorder = [border, show, store](const QColor& c) {
+        QColor opaque = c.toRgb();
+        opaque.setAlpha(255);
+        *border = opaque;
+        show();
+        store();
+    };
+    show();
+    picker->setEnabled(custom->isChecked());
+    connect(custom, &QCheckBox::toggled, this, store);
+    connect(swatch, &ColorButton::colorChanged, this, setBorder);
+    connect(wheel, &ColorWheel::colorPicked, this, [setBorder](const QColor& c, Qt::MouseButton) { setBorder(c); });
+    connect(saturation, &ColorSlider::valueChanged, this, [border, setBorder](int v) {
+        setBorder(QColor::fromHsv(std::max(0, border->hsvHue()), v * 255 / 100, border->value()));
+    });
+    connect(value, &ColorSlider::valueChanged, this, [border, setBorder](int v) {
+        setBorder(QColor::fromHsv(std::max(0, border->hsvHue()), border->hsvSaturation(), v * 255 / 100));
+    });
+    for (int i = 0; i < 3; ++i)
+        connect(spins.at(i), &QSpinBox::valueChanged, this, [border, setBorder, i](int v) {
+            QColor c = *border;
+            i == 0 ? c.setRed(v) : i == 1 ? c.setGreen(v) : c.setBlue(v);
+            setBorder(c);
+        });
+    connect(resetBorder, &QToolButton::clicked, this, [setBorder, themeBorder] { setBorder(themeBorder); });
 
     // Brillo del tablero de transparencia (0..1 como en Paint.NET).
     page.layout->addWidget(new QLabel(tr("Brillo de tablero de ajedrez de transparencia"), page.widget));
@@ -561,11 +661,14 @@ QWidget* SettingsDialog::createCanvasPage()
     connect(spin, &QDoubleSpinBox::valueChanged, this, set);
     connect(reset, &QToolButton::clicked, this, [set] { set(191 / 255.0); });
 
-    // Regla (Ver > Reglas): oscura o del color de la barra de herramientas.
+    // Regla (Ver > Reglas): según el tema, del color de la barra de herramientas u oscura.
     auto* rulerRow = new QHBoxLayout;
     auto* ruler = new QComboBox(page.widget);
-    ruler->addItem(tr("Oscura"), 0);
-    ruler->addItem(tr("Del color de la barra de herramientas"), 1);
+    ruler->addItem(tr("Según el tema"), int(Ruler::Style::Auto));
+    ruler->setItemData(0, tr("Oscura con los temas oscuros y del color de la barra de herramientas con los claros."),
+                       Qt::ToolTipRole);
+    ruler->addItem(tr("Del color de la barra de herramientas"), int(Ruler::Style::ToolBar));
+    ruler->addItem(tr("Oscura"), int(Ruler::Style::PaintJs));
     ruler->setCurrentIndex(std::max(0, ruler->findData(m_settings.rulerStyle)));
     rulerRow->addWidget(new QLabel(tr("Reglas:"), page.widget));
     rulerRow->addWidget(ruler);

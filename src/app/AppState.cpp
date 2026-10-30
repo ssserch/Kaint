@@ -142,7 +142,7 @@ ToolSettings AppState::toolDefaults() const
     t.curveType = CurveType(num("curveType", int(t.curveType)));
     // Clave nueva al pasar a bicúbico por defecto (la anterior guardaba el vecino más próximo de
     // fábrica).
-    t.moveInterpolation = Resample::Interpolation(num("moveResampling", int(t.moveInterpolation)));
+    t.moveInterpolation = Resample::Interpolation(std::clamp(num("moveResampling", int(t.moveInterpolation)), 0, 4));
     t.moveGamma = num("moveGamma", t.moveGamma);
     t.afterSelect = AfterSelect(std::clamp(num("afterSelect", int(t.afterSelect)), 0, 2));
     return t;

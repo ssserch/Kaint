@@ -14,6 +14,8 @@ class HistoryPanel : public QWidget {
 public:
     HistoryPanel(QUndoGroup* group, QAction* undo, QAction* redo, QWidget* parent = nullptr);
     void setDocument(Document* doc);
+    // Ir al principio y al final, junto a deshacer y rehacer (Configuración > Interfaz de usuario).
+    void setJumpButtonsVisible(bool on);
 
 signals:
     void aboutToJump();
@@ -24,6 +26,6 @@ protected:
 private:
     QUndoGroup* m_group;
     QUndoView* m_view;
-    // Ir al principio y al final (no están con el aspecto de Paint.NET).
+    // Ir al principio y al final.
     QList<QWidget*> m_jumps;
 };

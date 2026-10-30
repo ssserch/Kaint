@@ -184,8 +184,33 @@ void ColorPickerTool::mousePress(const ToolEvent& e)
 
 void ColorPickerTool::mouseMove(const ToolEvent& e)
 {
+    if (!m_hasHover || e.pixel() != m_hover) {
+        m_hover = e.pixel();
+        m_hasHover = true;
+        if (Icons::cursorStyle() == Icons::CursorStyle::PaintNet)
+            repaint();
+    }
     if (m_button != Qt::NoButton)
         pick(e, m_button);
+}
+
+void ColorPickerTool::paintOverlay(QPainter& p)
+{
+    // Como en Paint.NET: un cuadrado sigue al puntero píxel a píxel y marca lo que se toma (el
+    // píxel, o el cuadro de N × N de la barra).
+    if (Icons::cursorStyle() != Icons::CursorStyle::PaintNet || !m_hasHover || !canvas() || !canvas()->cursorInside())
+        return;
+    const int half = std::max(0, AppState::instance()->tools().pickerSize / 2);
+    const QRectF area(QPointF(m_hover - QPoint(half, half)), QSizeF(2 * half + 1, 2 * half + 1));
+    const QRect r = canvas()->imageToView(area).toAlignedRect();
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(Qt::black, 1));
+    p.drawRect(r.adjusted(-1, -1, 0, 0));
+    p.setPen(QPen(Qt::white, 1));
+    p.drawRect(r.adjusted(0, 0, -1, -1));
+    p.restore();
 }
 
 void ColorPickerTool::mouseRelease(const ToolEvent&)

@@ -1,5 +1,6 @@
-// Temas de Kaint (src/app/Theme.cpp): claro y oscuro de Paint.NET, Windows 98 (con los colores de
-// 98.css y botones en relieve) y el personalizado, que parte de uno de ellos y cambia sus colores.
+// Temas de Kaint (src/app/Theme.cpp): claro, oscuro y azul de Paint.NET, Windows 98 (con los
+// colores de 98.css y botones en relieve) y el personalizado, que parte de uno de ellos y cambia sus
+// colores.
 import { Settings } from "../Settings.js";
 
 // Colores editables: clave, variable de CSS y nombre (los mismos que en el tema personalizado de
@@ -31,10 +32,17 @@ export const Presets = {
              selectionBorder: "#000080", hover: "#c0c0c0", workspace: "#008080" },
 };
 
+// El Azul de Paint.NET (Theme::blue de Kaint): el claro con los menús casi blancos, las barras y
+// las reglas en degradado azulado (en la hoja de estilo, con la clase "blue") y la barra de estado
+// azul claro.
+const BlueColors = { toolBar: "#fbfdff", statusBar: "#ebf2fa", border: "#8fa6c3", hover: "#e5f1fb" };
+
 // Esquema guardado → { base: "light" | "dark" | "win98", custom }.
 export function resolveScheme(scheme, systemDark) {
     if (scheme === 4)
         return { base: "win98" };
+    if (scheme === 6)
+        return { base: "light", colors: BlueColors, blue: true };
     if (scheme === 5) {
         const custom = Settings.get("customTheme") || {};
         return { base: Presets[custom.base] ? custom.base : "dark", colors: custom.colors || {} };
@@ -45,10 +53,11 @@ export function resolveScheme(scheme, systemDark) {
 // Aplica el tema: clases del documento (oscuro, clásico) y, con Windows 98 y el personalizado, los
 // colores en las variables de CSS.
 export function applyThemeColors(root, scheme, systemDark) {
-    const { base, colors } = resolveScheme(scheme, systemDark);
+    const { base, colors, blue } = resolveScheme(scheme, systemDark);
     const classic = base === "win98";
     root.classList.toggle("dark", base === "dark");
     root.classList.toggle("classic", classic);
+    root.classList.toggle("blue", !!blue);
     for (const [key, cssVar] of ColorRoles) {
         const value = colors?.[key] || (classic ? Presets.win98[key] : null);
         if (value)

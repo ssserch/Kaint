@@ -59,7 +59,9 @@ public:
     QString effectiveClientId() const;
 
     // Partes del protocolo (también para las pruebas).
-    static QJsonObject buildActivity(const PresenceInfo& info, const PresenceOptions& options, qint64 startSeconds);
+    // 'minimal': solo el archivo y el tiempo (si Discord rechazó la actividad completa).
+    static QJsonObject buildActivity(const PresenceInfo& info, const PresenceOptions& options, qint64 startSeconds,
+                                     bool minimal = false);
     static QByteArray frame(int opcode, const QJsonObject& payload);
     static QStringList socketPaths();
 
@@ -92,4 +94,7 @@ private:
     QElapsedTimer m_lastSend;
     int m_minSendMs = 4000;
     int m_nonce = 0;
+    // Discord rechazó la actividad completa: se envía la sencilla y se muestra el motivo.
+    bool m_minimal = false;
+    QString m_activityError;
 };

@@ -25,6 +25,34 @@ qreal distanceToOutline(const QPolygonF& poly, const QPointF& p)
     return best;
 }
 
+// Tirador al que equivale un punto cerca del contorno (a menos de kEdgeBand): el del lado más
+// cercano (1 arriba, 3 derecha, 5 abajo, 7 izquierda) o, cerca de sus extremos, el de la esquina;
+// -1 si está lejos. 'poly' son las esquinas en pantalla en el orden de QPolygonF(QRectF).
+int edgeHandle(const QPolygonF& poly, const QPointF& p)
+{
+    constexpr qreal kCornerBand = 10;
+    int best = -1;
+    qreal bestDist = TransformBox::kEdgeBand;
+    for (int i = 0; i < 4 && i + 1 < poly.size(); ++i) {
+        const QPointF a = poly[i], b = poly[i + 1];
+        const QPointF ab = b - a;
+        const qreal len = std::sqrt(QPointF::dotProduct(ab, ab));
+        const qreal t = len > 0 ? std::clamp(QPointF::dotProduct(p - a, ab) / (len * len), 0.0, 1.0) : 0.0;
+        const qreal d = QLineF(p, a + ab * t).length();
+        if (d > bestDist)
+            continue;
+        bestDist = d;
+        // Esquinas: 0 sup-izq, 2 sup-der, 4 inf-der, 6 inf-izq (el lado i va de la 2i a la 2i+2).
+        if (t * len < kCornerBand)
+            best = (2 * i) % 8;
+        else if ((1 - t) * len < kCornerBand)
+            best = (2 * i + 2) % 8;
+        else
+            best = 2 * i + 1;
+    }
+    return best;
+}
+
 } // namespace
 
 void TransformBox::set(const QRectF& localRect, const QTransform& toCanvas)
@@ -103,6 +131,20 @@ TransformBox::Mode TransformBox::hit(const QPointF& viewPos, const QTransform& i
                 *handle = i;
             return Mode::Scale;
         }
+    }
+    // El icono de mover (abajo a la derecha, fuera del cuadro) mueve, como en Paint.NET: así se
+    // puede arrastrar una selección muy pequeña.
+    if (Handles::hit(viewPos, Handles::moveIconPos(poly.boundingRect()), 10))
+        return Mode::Translate;
+    // Cerca del borde, por dentro o por fuera, la mano estira hacia ese lado, como en Paint.NET: los
+    // lados de arriba y abajo en vertical, los laterales en horizontal y cerca de una esquina en
+    // los dos ejes. Por dentro solo si el cuadro es lo bastante grande para poder moverlo aún.
+    const QRectF bounds = poly.boundingRect();
+    const bool roomInside = std::min(bounds.width(), bounds.height()) > 4 * kEdgeBand;
+    if (const int edge = edgeHandle(poly, viewPos); edge >= 0 && (!in || roomInside)) {
+        if (handle)
+            *handle = edge;
+        return Mode::Scale;
     }
     if (!in && distanceToOutline(poly, viewPos) <= kRotateBand)
         return Mode::Rotate;

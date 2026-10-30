@@ -69,6 +69,8 @@ public:
     Unit unit() const { return m_unit; }
     QPointF cursorImagePos() const { return viewToImage(m_mouseView); }
     bool cursorInside() const { return m_mouseInside; }
+    // El puntero pasó alguna vez por el lienzo (su última posición sigue valiendo al salir).
+    bool cursorSeen() const { return m_mouseSeen; }
 
     // Ajustes del lienzo (diálogo Configuración)
     void setAppearance(bool dropShadow, const QColor& border, int checkerBrightness);
@@ -162,6 +164,7 @@ private:
     Qt::KeyboardModifiers m_lastModifiers;
     QPointF m_mouseView;
     bool m_mouseInside = false;
+    bool m_mouseSeen = false;
 
     // Cursor animado (el puntero del sistema con la miniatura): sus fotogramas y el que se ve.
     QList<Icons::CursorFrame> m_cursorFrames;

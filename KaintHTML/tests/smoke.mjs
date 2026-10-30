@@ -618,17 +618,17 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     const corners = await page.evaluate(async () => {
         const { Selection } = await import("./js/core/Selection.js");
         const k = window.kaint, doc = k.doc;
-        doc.setSelection(Selection.rect(doc.width, doc.height, 10, 10, 1, 20));
+        doc.setSelection(Selection.rect(doc.width, doc.height, 10, 10, 40, 20));
         k.tools.select("moveselectedpixels");
         const tool = k.tools.current, view = k.view;
         const ev = (x, y, button = "left") => { const v = view.imageToView(x, y); return { x, y, vx: v.x, vy: v.y, button, shift: false, ctrl: false, alt: false }; };
-        tool.onPointerDown(ev(11, 20));
+        tool.onPointerDown(ev(50, 20));
         tool.drag = { ...tool.drag, kind: "resize", handle: 3 };
-        tool.onPointerMove(ev(14.37, 20));
-        tool.onPointerMove(ev(16.71, 20.4));
+        tool.onPointerMove(ev(53.37, 20));
+        tool.onPointerMove(ev(55.71, 20.4));
         const box = tool.drag.session.box, m = box.matrix(), b = box.base;
         const pts = [m.transformPoint({ x: b.x, y: b.y }), m.transformPoint({ x: b.x + b.w, y: b.y + b.h })];
-        tool.onPointerUp(ev(16.71, 20.4));
+        tool.onPointerUp(ev(55.71, 20.4));
         k.undo();
         k.undo();
         return pts.flatMap((q) => [q.x, q.y]);

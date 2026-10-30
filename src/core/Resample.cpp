@@ -38,11 +38,21 @@ const QList<Method>& all()
 QString name(Interpolation interpolation)
 {
     switch (interpolation) {
-    case Interpolation::NearestNeighbor: return QObject::tr("Vecino más cercano");
+    case Interpolation::NearestNeighbor: return QObject::tr("Vecino más próximo");
     case Interpolation::Bilinear: return QObject::tr("Bilineal");
     case Interpolation::Bicubic: return QObject::tr("Bicúbico");
+    case Interpolation::BilinearMultisample: return QObject::tr("Multimuestra bilineal");
+    case Interpolation::Anisotropic: return QObject::tr("Anisotrópico");
     }
     return {};
+}
+
+const QList<Interpolation>& interpolations()
+{
+    static const QList<Interpolation> list{Interpolation::NearestNeighbor, Interpolation::Bilinear,
+                                           Interpolation::BilinearMultisample, Interpolation::Anisotropic,
+                                           Interpolation::Bicubic};
+    return list;
 }
 
 namespace {
@@ -422,7 +432,8 @@ struct LinearImage {
         return qPremultiply(qRgba(ch(c[0]), ch(c[1]), ch(c[2]), int(std::lround(a * 255))));
     }
 
-    QRgb bilinear(double x, double y) const
+    // Suma a 'acc' la muestra bilineal de (x, y) en luz lineal, con peso 'w'.
+    void addBilinear(double x, double y, float w, float* acc) const
     {
         x -= 0.5;
         y -= 0.5;
@@ -432,9 +443,14 @@ struct LinearImage {
         const float* p10 = at(ix + 1, iy);
         const float* p01 = at(ix, iy + 1);
         const float* p11 = at(ix + 1, iy + 1);
-        float c[4];
         for (int k = 0; k < 4; ++k)
-            c[k] = (p00[k] * (1 - tx) + p10[k] * tx) * (1 - ty) + (p01[k] * (1 - tx) + p11[k] * tx) * ty;
+            acc[k] += w * ((p00[k] * (1 - tx) + p10[k] * tx) * (1 - ty) + (p01[k] * (1 - tx) + p11[k] * tx) * ty);
+    }
+
+    QRgb bilinear(double x, double y) const
+    {
+        float c[4] = {0, 0, 0, 0};
+        addBilinear(x, y, 1.f, c);
         return toPremul(c);
     }
 
@@ -505,16 +521,40 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
         return;
     const QImage src = source.convertToFormat(kPremulFormat);
     const bool dstPremul = isPremultiplied(dst);
+
+    // Multimuestra bilineal y anisotrópico: varias muestras bilineales repartidas por el píxel de
+    // destino (2×2; en el anisotrópico, tantas en cada eje de la pantalla como píxeles de la imagen
+    // abarque el píxel en ese eje, hasta 8) y su media.
+    int nx = 1, ny = 1;
+    if (interpolation == Interpolation::BilinearMultisample) {
+        nx = ny = 2;
+    } else if (interpolation == Interpolation::Anisotropic) {
+        nx = std::clamp(int(std::ceil(std::hypot(inv.m11(), inv.m12()) - 1e-6)), 1, 8);
+        ny = std::clamp(int(std::ceil(std::hypot(inv.m21(), inv.m22()) - 1e-6)), 1, 8);
+    }
+    const bool multi = interpolation == Interpolation::BilinearMultisample || interpolation == Interpolation::Anisotropic;
+
     if (gammaCorrect && interpolation != Interpolation::NearestNeighbor) {
         const LinearImage lin(src);
         const Pixels out(dst);
+        const float weight = 1.f / float(nx * ny);
         parallelRows(area.top(), area.bottom() + 1, [&](int y0, int y1) {
             for (int y = y0; y < y1; ++y) {
                 QRgb* d = out.row(y);
                 for (int x = area.left(); x <= area.right(); ++x) {
-                    const QPointF p = inv.map(QPointF(x + 0.5, y + 0.5));
-                    const QRgb s = interpolation == Interpolation::Bilinear ? lin.bilinear(p.x(), p.y())
-                                                                           : lin.bicubic(p.x(), p.y());
+                    QRgb s;
+                    if (multi) {
+                        float acc[4] = {0, 0, 0, 0};
+                        for (int j = 0; j < ny; ++j)
+                            for (int i = 0; i < nx; ++i) {
+                                const QPointF p = inv.map(QPointF(x + (i + 0.5) / nx, y + (j + 0.5) / ny));
+                                lin.addBilinear(p.x(), p.y(), weight, acc);
+                            }
+                        s = LinearImage::toPremul(acc);
+                    } else {
+                        const QPointF p = inv.map(QPointF(x + 0.5, y + 0.5));
+                        s = interpolation == Interpolation::Bilinear ? lin.bilinear(p.x(), p.y()) : lin.bicubic(p.x(), p.y());
+                    }
                     if (qAlpha(s))
                         d[x] = dstPremul ? overPixel(d[x], s) : overStraight(d[x], qUnpremultiply(s));
                 }
@@ -537,6 +577,19 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
                 case Interpolation::Bilinear:
                     s = sampleBilinearTransparent(in, p.x(), p.y());
                     break;
+                case Interpolation::BilinearMultisample:
+                case Interpolation::Anisotropic: {
+                    int acc[4] = {0, 0, 0, 0};
+                    for (int j = 0; j < ny; ++j)
+                        for (int i = 0; i < nx; ++i) {
+                            const QPointF q = inv.map(QPointF(x + (i + 0.5) / nx, y + (j + 0.5) / ny));
+                            const QRgb c = sampleBilinearTransparent(in, q.x(), q.y());
+                            acc[0] += qRed(c), acc[1] += qGreen(c), acc[2] += qBlue(c), acc[3] += qAlpha(c);
+                        }
+                    const int n = nx * ny;
+                    s = qRgba((acc[0] + n / 2) / n, (acc[1] + n / 2) / n, (acc[2] + n / 2) / n, (acc[3] + n / 2) / n);
+                    break;
+                }
                 case Interpolation::Bicubic:
                 default:
                     s = sampleBicubic(in, p.x(), p.y());

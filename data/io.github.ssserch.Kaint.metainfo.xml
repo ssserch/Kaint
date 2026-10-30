@@ -109,6 +109,21 @@
   </keywords>
 
   <releases>
+    <release version="1.1.3" date="2026-10-30">
+      <description>
+        <p>Paint.NET-style cursors, the Blue theme and closer Paint.NET behavior.</p>
+        <ul>
+          <li>Optional Paint.NET cursors in pixel art, chosen in Settings or on first start</li>
+          <li>The hand near the edges of a selection stretches it with the Move tools</li>
+          <li>New Bilinear Multisample and Anisotropic sampling for Move Selected Pixels</li>
+          <li>New Blue theme, and rulers that follow the theme in light mode</li>
+          <li>Canvas settings with a color wheel for the canvas border, like Paint.NET</li>
+          <li>The cursor position stays visible after leaving the canvas</li>
+          <li>On Windows, the title bar stays active while a Kaint dialog is open and cursors are smaller</li>
+          <li>Page Setup removed from the File menu (it could crash on Windows)</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.2" date="2026-10-30">
       <description>
         <p>Fixes for the cursors and new icons in the main toolbar.</p>

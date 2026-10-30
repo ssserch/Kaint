@@ -440,6 +440,21 @@ static void testShrinkTransform()
             if (qAlpha(out.pixel(x, y)) == 255 && (qGray(out.pixel(x, y)) < 90 || qGray(out.pixel(x, y)) > 165))
                 ++extreme;
     CHECK(extreme == 0);
+
+    // Multimuestra bilineal y anisotrópico (como en Paint.NET): sin prefiltro, las rayas de 1 px
+    // reducidas a la mitad quedan grises (varias muestras por píxel), no blancas o negras.
+    for (auto mode : {Resample::Interpolation::BilinearMultisample, Resample::Interpolation::Anisotropic}) {
+        QImage half(128, 128, QImage::Format_ARGB32_Premultiplied);
+        half.fill(Qt::transparent);
+        Resample::drawTransformed(half, stripes.convertToFormat(QImage::Format_ARGB32_Premultiplied),
+                                  QTransform::fromScale(0.5, 0.5), mode, half.rect());
+        int gray = 0;
+        for (int y = 30; y < 90; ++y)
+            for (int x = 30; x < 90; ++x)
+                gray += qAbs(qGray(half.pixel(x, y)) - 128) < 40;
+        CHECK(gray > 3000);
+    }
+    CHECK(Resample::interpolations().size() == 5);
 }
 
 static void testResample()

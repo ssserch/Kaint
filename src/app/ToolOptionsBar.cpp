@@ -399,8 +399,7 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
 
     // --- Mover píxeles seleccionados --------------------------------------
     m_interpolation = new ChoiceButton(tr("Muestreo"), parent);
-    for (auto i : {Resample::Interpolation::NearestNeighbor, Resample::Interpolation::Bilinear,
-                   Resample::Interpolation::Bicubic})
+    for (Resample::Interpolation i : Resample::interpolations())
         m_interpolation->addChoice(QIcon(), Resample::name(i), int(i));
     m_interpolation->setShowText(true);
     m_interpolation->onChosen = [update](int v) {

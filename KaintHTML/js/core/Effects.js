@@ -1553,7 +1553,7 @@ const blurs = [
     },
     {
         id: "gaussianblur", name: "Desenfoque gaussiano", category: "blurs",
-        params: [P.real("radius", "Radio", 0, 200, 2, 1), P.real("gamma", "Potenciar Gamma", 0, 7, 0, 2), P.int("quality", "Calidad", 1, 4, 4)],
+        params: [P.real("radius", "Radio", 0, 200, 2, 1), P.real("gamma", "Potenciar Gamma", 0, 7, 0, 2), P.int("quality", "Calidad", 1, 4, 3)],
         run(a) {
             const radius = a.values.radius, passes = clamp(Math.round(a.values.quality), 1, 4);
             blurWithGamma(a, a.values.gamma, tentMargin(Math.ceil(radius)) + 4, (img, area) => multiBox(img, area, radius, passes));

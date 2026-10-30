@@ -66,6 +66,7 @@ public:
 
 protected:
     void changeEvent(QEvent* e) override;
+    bool nativeEvent(const QByteArray& type, void* message, qintptr* result) override;
     void closeEvent(QCloseEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* e) override;
     void dragEnterEvent(QDragEnterEvent* e) override;
@@ -143,7 +144,6 @@ private:
     void colorProfile();
     void editAnimation();
     QPrinter* printer();
-    void pageSetup();
     void flatten();
     void flattenDocument(Document* doc);
 
@@ -189,6 +189,8 @@ private:
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();
+    // Windows: la barra de título se ve activa mientras la ventana activa sea de Kaint.
+    void syncTitleBarActivation();
     PresenceInfo presenceInfo() const;
     void updatePresence();
 

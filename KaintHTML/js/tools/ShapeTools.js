@@ -5,7 +5,7 @@ import { Tool } from "./Tool.js";
 import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
-import { miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes, toolPixelCursor } from "../ui/Icons.js";
 import { CustomShapes } from "../core/CustomShapes.js";
 import { patternTile } from "../core/FillPattern.js";
 import { tr } from "../i18n.js";
@@ -393,7 +393,7 @@ export class ShapesTool extends EditableTool {
 
     // Junto al puntero, la figura elegida.
     cursor() {
-        return miniCursor(`opt-shape:${this.settings.shape}`);
+        return toolPixelCursor(this.id) || miniCursor(`opt-shape:${this.settings.shape}`);
     }
 
     hint() {

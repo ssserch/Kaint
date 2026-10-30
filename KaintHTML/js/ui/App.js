@@ -158,6 +158,7 @@ export class App extends EventTarget {
         root.classList.toggle("pdn", Settings.get("uiStyle") === 1);
         // Letras de acceso de los menús: siempre subrayadas o solo con Alt.
         root.classList.toggle("mnemonics", !!Settings.get("menuMnemonics"));
+        root.classList.toggle("no-history-jumps", Settings.get("historyJumpButtons") === false);
         root.style.setProperty("--window-border", `${Math.max(1, Math.min(12, Number(Settings.get("panelBorder")) || 1))}px`);
         this.updateToolIconColors();
         this.view.update();
@@ -896,8 +897,15 @@ export class App extends EventTarget {
     }
 
     updateCursorPos(e) {
-        const u = this.unit(), dpi = this.doc?.dpi;
-        this.posLabel.textContent = e && this.doc ? `${formatLength(Math.floor(e.x), u, dpi)}, ${formatLength(Math.floor(e.y), u, dpi)}` : "";
+        // Como en Paint.NET, al salir del lienzo se queda la última posición.
+        if (!this.doc) {
+            this.posLabel.textContent = "";
+            return;
+        }
+        if (!e)
+            return;
+        const u = this.unit(), dpi = this.doc.dpi;
+        this.posLabel.textContent = `${formatLength(Math.floor(e.x), u, dpi)}, ${formatLength(Math.floor(e.y), u, dpi)}`;
     }
 
     updateZoomBox() {

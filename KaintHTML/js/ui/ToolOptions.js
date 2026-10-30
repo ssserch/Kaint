@@ -244,7 +244,8 @@ export class ToolOptions {
         }
         case "interpolation":
             this.group(label(tr("Muestreo:")), choice(tr("Muestreo"), "moveInterpolation", [
-                ["nearest", null, tr("Vecino más cercano")], ["bilinear", null, tr("Bilineal")], ["bicubic", null, tr("Bicúbico")]], { showText: true }));
+                ["nearest", null, tr("Vecino más próximo")], ["bilinear", null, tr("Bilineal")], ["multisample", null, tr("Multimuestra bilineal")],
+                ["anisotropic", null, tr("Anisotrópico")], ["bicubic", null, tr("Bicúbico")]], { showText: true }));
             break;
         case "gamma":
             this.group(choice(tr("Gamma"), "moveGamma", [[true, "opt-gamma:1", tr("Gamma corregido")], [false, "opt-gamma:0", tr("Ignorar gama")]]));

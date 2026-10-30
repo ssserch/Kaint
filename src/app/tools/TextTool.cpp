@@ -104,6 +104,8 @@ QIcon TextTool::icon() const { return Icons::tool(QStringLiteral("text"), Icons:
 
 QCursor TextTool::cursor() const
 {
+    if (Icons::cursorStyle() == Icons::CursorStyle::PaintNet)
+        return Tool::cursor();
     return Icons::miniToolCursor(QStringLiteral("text"), true);
 }
 

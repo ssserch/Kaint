@@ -2,7 +2,7 @@
 import { Tool } from "./Tool.js";
 import { AppState } from "../AppState.js";
 import { context } from "../core/Raster.js";
-import { handCursor } from "../ui/Icons.js";
+import { handCursor, pdnCursors } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
 export class ZoomTool extends Tool {
@@ -128,8 +128,27 @@ export class ColorPickerTool extends Tool {
     }
 
     onPointerMove(e) {
+        if (pdnCursors() && (Math.floor(e.x) !== this.hover?.x || Math.floor(e.y) !== this.hover?.y))
+            this.view.update();
+        this.hover = { x: Math.floor(e.x), y: Math.floor(e.y) };
         if (this.button)
             this.pick(e);
+    }
+
+    // Como en Paint.NET (con sus cursores): un cuadrado sigue al puntero píxel a píxel y marca lo
+    // que se toma (el píxel, o el cuadro de N × N de la barra).
+    paintOverlay(ctx, view) {
+        if (!pdnCursors() || !this.hover || !view.mouse)
+            return;
+        const half = Math.floor(this.settings.pickerSize / 2);
+        const a = view.imageToView(this.hover.x - half, this.hover.y - half);
+        const b = view.imageToView(this.hover.x + half + 1, this.hover.y + half + 1);
+        const x = Math.round(a.x) + 0.5, y = Math.round(a.y) + 0.5, w = Math.round(b.x) - Math.round(a.x), h = Math.round(b.y) - Math.round(a.y);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#000";
+        ctx.strokeRect(x - 1, y - 1, w + 1, h + 1);
+        ctx.strokeStyle = "#fff";
+        ctx.strokeRect(x, y, w - 1, h - 1);
     }
 
     onPointerUp() {

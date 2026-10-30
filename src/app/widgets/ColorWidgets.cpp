@@ -26,6 +26,36 @@ void paintCheckerboard(QPainter& p, const QRectF& r, int cell)
 
 namespace {
 
+// Desactivados (como el color del borde del lienzo en Configuración sin su casilla), la rueda y
+// los deslizadores se ven en escala de grises, como en Paint.NET: se pintan en una imagen que se
+// pasa a gris.
+template<typename Paint>
+void paintMaybeGray(QWidget* w, Paint&& paint)
+{
+    if (w->isEnabled()) {
+        QPainter p(w);
+        paint(p);
+        return;
+    }
+    const qreal dpr = w->devicePixelRatioF();
+    QImage buffer(w->size() * dpr, QImage::Format_ARGB32_Premultiplied);
+    buffer.setDevicePixelRatio(dpr);
+    buffer.fill(Qt::transparent);
+    {
+        QPainter p(&buffer);
+        paint(p);
+    }
+    for (int y = 0; y < buffer.height(); ++y) {
+        auto* line = reinterpret_cast<QRgb*>(buffer.scanLine(y));
+        for (int x = 0; x < buffer.width(); ++x) {
+            const int v = qGray(line[x]);
+            line[x] = qRgba(v, v, v, qAlpha(line[x]));
+        }
+    }
+    QPainter p(w);
+    p.drawImage(QPointF(0, 0), buffer);
+}
+
 qreal hueOf(const QColor& c)
 {
     const qreal h = c.hsvHueF();
@@ -98,7 +128,11 @@ void ColorWheel::setColor(const QColor& c)
 
 void ColorWheel::paintEvent(QPaintEvent*)
 {
-    QPainter p(this);
+    paintMaybeGray(this, [this](QPainter& p) { paintWheel(p); });
+}
+
+void ColorWheel::paintWheel(QPainter& p)
+{
     p.setRenderHint(QPainter::Antialiasing);
     const QRectF r = wheelRect();
     p.drawImage(r.topLeft(), m_wheel);
@@ -228,7 +262,11 @@ void ColorSlider::setColor(const QColor& c)
 
 void ColorSlider::paintEvent(QPaintEvent*)
 {
-    QPainter p(this);
+    paintMaybeGray(this, [this](QPainter& p) { paintSlider(p); });
+}
+
+void ColorSlider::paintSlider(QPainter& p)
+{
     const bool horiz = m_orientation == Qt::Horizontal;
     const QRectF bar = horiz ? QRectF(4, 3, width() - 8, height() - 6) : QRectF(3, 4, width() - 6, height() - 8);
     if (m_channel == Alpha)

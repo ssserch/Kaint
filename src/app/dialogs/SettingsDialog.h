@@ -37,12 +37,17 @@ struct AppSettings {
     // Capas: al arrastrar una, se mueve en la lista con el ratón; con esto, se queda en su sitio
     // y una línea marca dónde quedará.
     bool layerDropLine = false;
+    // Botones de ir al principio y al final del historial, junto a deshacer y rehacer.
+    bool historyJumpButtons = true;
     // Ventanas flotantes: 0, como las de paint.js (Windows 10); 1, compactas. Grosor del borde
     // en píxeles.
     int panelStyle = 0;
     int panelBorder = 1;
     // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (Theme::Look).
     int uiStyle = 0;
+    // Cursores de las herramientas: 0, los de Kaint; 1, los de Paint.NET en pixel art
+    // (Icons::CursorStyle).
+    int cursorStyle = 0;
     // Se mostró la bienvenida del primer inicio.
     bool welcomed = false;
     // Subrayar siempre las letras de acceso de los menús (si no, solo con Alt).
@@ -53,7 +58,8 @@ struct AppSettings {
     int autosaveMinutes = 5;
     int unit = 0;
     bool rulers = false;
-    // 0: oscura, como la de paint.js; 1: del color de la barra de herramientas.
+    // Ruler::Style: 0, según el tema; 1, del color de la barra de herramientas; 2, oscura, como la
+    // de paint.js (antes el 0 era la oscura).
     int rulerStyle = 0;
     bool dropShadow = true;
     // Color propio del fondo alrededor de la imagen, uno para los temas claros y otro para los

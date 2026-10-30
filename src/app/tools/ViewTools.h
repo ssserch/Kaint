@@ -66,6 +66,7 @@ public:
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;
     void mouseRelease(const ToolEvent& e) override;
+    void paintOverlay(QPainter& p) override;
 
 signals:
     void switchBackRequested();
@@ -74,4 +75,7 @@ signals:
 private:
     void pick(const ToolEvent& e, Qt::MouseButton button);
     Qt::MouseButton m_button = Qt::NoButton;
+    // Píxel bajo el puntero (con los cursores de Paint.NET se marca lo que se va a muestrear).
+    QPoint m_hover;
+    bool m_hasHover = false;
 };

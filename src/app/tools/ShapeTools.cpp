@@ -488,6 +488,8 @@ QIcon ShapesTool::icon() const { return Icons::tool(QStringLiteral("shapes"), Ic
 
 QCursor ShapesTool::cursor() const
 {
+    if (Icons::cursorStyle() == Icons::CursorStyle::PaintNet)
+        return Tool::cursor();
     // Junto al puntero, la forma elegida (también las personalizadas), en negro con borde blanco
     // para que se vea sobre cualquier imagen.
     const ToolSettings s = AppState::instance()->tools();

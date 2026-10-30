@@ -7,7 +7,7 @@ import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
 import { Settings } from "../Settings.js";
-import { miniCursor } from "../ui/Icons.js";
+import { miniCursor, toolPixelCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
 export class TextTool extends Tool {
@@ -49,7 +49,7 @@ export class TextTool extends Tool {
     }
 
     cursor() {
-        return miniCursor("text", true);
+        return toolPixelCursor(this.id) || miniCursor("text", true);
     }
 
     wantsKeyboard() {

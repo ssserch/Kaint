@@ -15,8 +15,10 @@ QString formatLength(double pixels, Unit unit, double dpi);
 class Ruler : public QWidget {
     Q_OBJECT
 public:
-    // Oscura con números claros, como la de paint.js, o del color de la barra de herramientas.
-    enum class Style { PaintJs, ToolBar };
+    // Según el tema (oscura como la de paint.js con los temas oscuros y del color de la barra de
+    // herramientas con los claros, como en Paint.NET), siempre del color de la barra o siempre
+    // oscura con números claros. Los valores son los que se guardan en la configuración.
+    enum class Style { Auto = 0, ToolBar = 1, PaintJs = 2 };
 
     Ruler(Qt::Orientation orientation, Canvas* canvas, QWidget* parent);
     static constexpr int kThickness = 20;
@@ -24,6 +26,8 @@ public:
 
     static void setStyle(Style style);
     static Style style();
+    // Si se dibuja oscura, como la de paint.js (con Auto, según el tema).
+    static bool dark();
     // Fondo de las reglas (también el de la esquina entre las dos).
     static QColor background();
 

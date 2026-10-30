@@ -6,6 +6,7 @@
 #include <QPointer>
 #include <QWidget>
 
+class QPainter;
 class QVariantAnimation;
 
 // Rueda de tono/saturación (el brillo va en un deslizador aparte).
@@ -33,6 +34,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* e) override;
 
 private:
+    void paintWheel(QPainter& p);
     void pickAt(const QPointF& p, Qt::KeyboardModifiers mods);
     QRectF wheelRect() const;
 
@@ -65,6 +67,7 @@ protected:
     void wheelEvent(QWheelEvent* e) override;
 
 private:
+    void paintSlider(QPainter& p);
     QColor colorAt(qreal t) const;
     void setFromPos(const QPointF& p);
 

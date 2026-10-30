@@ -50,8 +50,17 @@ QStringList missingNamedIcons();
 QString effectIcon(const QString& id, const QString& fallback);
 // Estrella naranja de ocho rayos que marca las imágenes con cambios sin guardar (como Paint.NET).
 void paintUnsavedStar(QPainter& p, const QRectF& r);
-// Cursores de la mano (Mano, botón central y barra espaciadora): abierta o agarrando.
+// Cursores de la mano (Mano, botón central, barra espaciadora y cambiar el tamaño de lo que se
+// mueve desde su borde): abierta o agarrando.
 QCursor handCursor(bool grabbing);
+// Estilo de los cursores (Configuración > Interfaz de usuario): los de Kaint (sus iconos de
+// herramientas) o los de Paint.NET, en pixel art.
+enum class CursorStyle { Kaint = 0, PaintNet = 1 };
+void setCursorStyle(CursorStyle style);
+CursorStyle cursorStyle();
+// Un cursor en pixel art de data/cursors ("cross", "pencil", "hand-open"...) con su punto activo,
+// escalado sin suavizar; la cruz del sistema si no existe.
+QCursor pixelCursor(const QString& name);
 // Tamaño de los cursores del sistema (XCURSOR_SIZE, el de KDE o GTK, o el de Windows), en
 // píxeles lógicos.
 int cursorSize();

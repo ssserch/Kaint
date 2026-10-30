@@ -228,6 +228,9 @@ qt_add_resources(kaintui kaint_icon_themes PREFIX "/kaint/icon-themes" BASE data
 # Iconos de la interfaz en PNG (data/ui-icons)
 file(GLOB KAINT_UI_ICONS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/ui-icons/*.png")
 qt_add_resources(kaintui kaint_ui_icons PREFIX "/kaint/ui-icons" BASE data/ui-icons FILES ${KAINT_UI_ICONS})
+# Cursores en pixel art del estilo Paint.NET (data/cursors/generate.py los dibuja).
+file(GLOB KAINT_CURSORS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/cursors/*.png")
+qt_add_resources(kaintui kaint_cursors PREFIX "/kaint/cursors" BASE data/cursors FILES ${KAINT_CURSORS})
 
 
 qt_add_executable(kaint src/app/main.cpp)

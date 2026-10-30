@@ -473,8 +473,9 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
     // Al reducir, antes se promedia por áreas (si no, sale pixelado); al ampliar, el vecino más
     // cercano (por defecto) deja los píxeles nítidos.
     const QImage source = Resample::prefiltered(pixels, &toTmp, gammaCorrect && interpolation != Resample::Interpolation::NearestNeighbor);
-    if (interpolation == Resample::Interpolation::Bicubic
-        || (gammaCorrect && interpolation == Resample::Interpolation::Bilinear)) {
+    // Bilineal sin gamma y vecino más próximo, con QPainter (más rápido); lo demás, con lo de Kaint.
+    if (interpolation != Resample::Interpolation::NearestNeighbor
+        && (interpolation != Resample::Interpolation::Bilinear || gammaCorrect)) {
         Resample::drawTransformed(tmp, source, toTmp, interpolation, tmp.rect(), gammaCorrect);
     } else {
         QPainter p(&tmp);

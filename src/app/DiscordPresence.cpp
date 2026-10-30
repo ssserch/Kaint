@@ -123,13 +123,17 @@ QByteArray DiscordPresence::frame(int opcode, const QJsonObject& payload)
     return out + json;
 }
 
-QJsonObject DiscordPresence::buildActivity(const PresenceInfo& info, const PresenceOptions& options, qint64 startSeconds)
+QJsonObject DiscordPresence::buildActivity(const PresenceInfo& info, const PresenceOptions& options, qint64 startSeconds,
+                                           bool minimal)
 {
     QJsonObject activity;
     QString details;
     QStringList state;
     if (!info.hasDocument) {
         details = QObject::tr("Sin imágenes abiertas");
+    } else if (minimal) {
+        details = options.showFile && !info.fileName.isEmpty() ? QObject::tr("Editando «%1»").arg(info.fileName)
+                                                               : QObject::tr("Editando una imagen");
     } else {
         if (options.showFile)
             details = info.fileName.isEmpty() ? QObject::tr("Editando una imagen sin título")
@@ -155,11 +159,13 @@ QJsonObject DiscordPresence::buildActivity(const PresenceInfo& info, const Prese
         activity.insert(QStringLiteral("state"), limited(state.join(QStringLiteral(" · "))));
     if (options.showElapsed)
         activity.insert(QStringLiteral("timestamps"), QJsonObject{{QStringLiteral("start"), startSeconds}});
-    QJsonObject assets{{QStringLiteral("large_image"), largeImageKey()},
-                       {QStringLiteral("large_text"), QStringLiteral("Kaint %1").arg(QStringLiteral(KAINT_VERSION))}};
-    if (options.showTool && info.hasDocument && !info.tool.isEmpty())
-        assets.insert(QStringLiteral("small_text"), limited(info.tool));
-    activity.insert(QStringLiteral("assets"), assets);
+    // La herramienta va en el texto de la imagen grande: el Discord de Windows rechaza un
+    // "small_text" sin imagen pequeña (y la actividad se quedaba en la primera, sin imágenes).
+    QString largeText = QStringLiteral("Kaint %1").arg(QStringLiteral(KAINT_VERSION));
+    if (!minimal && options.showTool && info.hasDocument && !info.tool.isEmpty())
+        largeText += QStringLiteral(" · ") + info.tool;
+    activity.insert(QStringLiteral("assets"), QJsonObject{{QStringLiteral("large_image"), largeImageKey()},
+                                                          {QStringLiteral("large_text"), limited(largeText)}});
     return activity;
 }
 
@@ -171,7 +177,11 @@ QString DiscordPresence::statusText() const
         return tr("Sin configurar: falta el ID de la aplicación de Discord (discord.json o el campo de abajo).");
     case Status::NoDiscord: return tr("Discord no está abierto en este equipo; se volverá a intentar.");
     case Status::Connecting: return tr("Conectando con Discord…");
-    case Status::Connected: return tr("Conectado: Discord muestra tu actividad en Kaint.");
+    case Status::Connected:
+        if (!m_activityError.isEmpty())
+            return tr("Conectado, pero Discord rechazó la actividad completa (se muestra una más sencilla): %1")
+                .arg(m_activityError);
+        return tr("Conectado: Discord muestra tu actividad en Kaint.");
     case Status::Error: return tr("Discord rechazó la conexión: %1").arg(m_error);
     }
     return {};
@@ -256,6 +266,8 @@ void DiscordPresence::connectToDiscord()
         m_retry.start();
     });
     m_buffer.clear();
+    m_minimal = false;
+    m_activityError.clear();
     m_socket->write(frame(Handshake, QJsonObject{{QStringLiteral("v"), 1}, {QStringLiteral("client_id"), effectiveClientId()}}));
     m_socket->flush();
 }
@@ -312,7 +324,20 @@ void DiscordPresence::handleFrame(int opcode, const QByteArray& data)
             m_dirty = true;
             scheduleSend();
         } else if (msg.value(QStringLiteral("evt")).toString() == QLatin1String("ERROR")) {
-            setStatus(Status::Error, msg.value(QStringLiteral("data")).toObject().value(QStringLiteral("message")).toString());
+            const QString message = msg.value(QStringLiteral("data")).toObject().value(QStringLiteral("message")).toString();
+            if (m_ready && msg.value(QStringLiteral("cmd")).toString() == QLatin1String("SET_ACTIVITY")) {
+                // Se rechazó la actividad (no la conexión): Discord seguiría mostrando la anterior
+                // ("Sin imágenes abiertas"). Se vuelve a enviar una más sencilla.
+                if (!m_minimal) {
+                    m_minimal = true;
+                    m_activityError = message;
+                    m_dirty = true;
+                    scheduleSend();
+                    emit statusChanged();
+                }
+            } else {
+                setStatus(Status::Error, message);
+            }
         }
         break;
     case Close:
@@ -341,7 +366,7 @@ void DiscordPresence::sendActivity()
     if (!m_socket || !m_ready || !m_dirty)
         return;
     const QJsonObject args{{QStringLiteral("pid"), qint64(QCoreApplication::applicationPid())},
-                           {QStringLiteral("activity"), buildActivity(m_info, m_options, m_start)}};
+                           {QStringLiteral("activity"), buildActivity(m_info, m_options, m_start, m_minimal)}};
     const QJsonObject payload{{QStringLiteral("cmd"), QStringLiteral("SET_ACTIVITY")},
                               {QStringLiteral("args"), args},
                               {QStringLiteral("nonce"), QStringLiteral("kaint-%1").arg(++m_nonce)}};

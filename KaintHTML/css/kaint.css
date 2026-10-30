@@ -406,6 +406,13 @@ u {
     width: 8px;
 }
 
+/* Como en Paint.NET, las ventanas visibles con el acento translúcido y su borde (no el celeste de
+   la selección). */
+:root:not(.classic) .corner-buttons .tbutton.checked {
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
+    border-color: var(--accent);
+}
+
 /* Barra de opciones de la herramienta */
 /* Una sola fila de alto fijo: cambiar de herramienta no mueve el lienzo (lo que no cabe se
    desplaza con la rueda). */
@@ -2611,7 +2618,8 @@ fieldset.group > legend {
     padding: 0 2px;
 }
 
-:root.pdn .history-jump {
+/* Ir al principio y al final del historial (Configuración > Interfaz de usuario). */
+:root.no-history-jumps .history-jump {
     display: none;
 }
 
@@ -2638,6 +2646,12 @@ fieldset.group > legend {
 :root.pdn .tools-grid .tbutton .kicon {
     width: 20px !important;
     height: 20px !important;
+}
+
+/* Formas, como en el estilo de Kaint: ocupa lo que quede de su fila con el icono centrado (la regla
+   de arriba, más específica, la dejaba en una sola casilla). */
+:root.pdn .tools-grid .tbutton:last-child {
+    width: auto;
 }
 
 /* Casillas de las capas: blancas con la marca oscura, como en Paint.NET. */
@@ -2730,4 +2744,51 @@ fieldset.group > legend {
 
 :root.classic .pushbutton:active {
     box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+
+/* Azul (como el de Paint.NET): las dos barras de herramientas en un degradado de casi blanco a azul
+   claro con una línea azul oscura debajo, los menús casi blancos con borde azul y la franja de
+   botones de las ventanas azulada (las reglas las dibuja el lienzo en degradado). */
+:root.blue #main-toolbar {
+    background: linear-gradient(#fafdff, #ecf2fa);
+}
+
+:root.blue .tool-options {
+    background: linear-gradient(#ebf1f9, #dce7f5 65%, #dce7f5);
+    border-bottom: 1px solid #365d90;
+}
+
+:root.blue .menubar {
+    background: #fbfdff;
+    border-color: #365d90;
+}
+
+:root.blue .status-bar {
+    border-top-color: #a9bcd4;
+}
+
+:root.blue .panel-buttons {
+    background: #d5dde7;
+    border-top-color: #58769c;
+}
+
+/* Paint.NET: los menús pegados arriba (sin franja encima) en un recuadro con borde arriba y a los
+   lados, con un margen de la franja a su izquierda antes de «Archivo». */
+:root.pdn #top-row {
+    padding-top: 0;
+    padding-left: 4px;
+}
+
+:root.pdn .menubar {
+    border: 1px solid #b8b8b8;
+    border-bottom: none;
+    padding: 0 4px;
+}
+
+:root.pdn.dark .menubar {
+    border-color: var(--line);
+}
+
+:root.pdn.blue .menubar {
+    border-color: #365d90;
 }

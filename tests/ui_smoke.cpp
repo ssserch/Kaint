@@ -182,7 +182,8 @@ static void testDiscordPresence()
     CHECK(state.contains(QStringLiteral("Sombras")) && state.contains(QStringLiteral("2 de 3")));
     CHECK(state.contains(QStringLiteral("PNG")) && state.contains(QStringLiteral("1920 × 1080")));
     CHECK(a.value(QStringLiteral("timestamps")).toObject().value(QStringLiteral("start")).toInteger() == 1000);
-    CHECK(a.value(QStringLiteral("assets")).toObject().value(QStringLiteral("small_text")).toString() == QLatin1String("Pincel"));
+    CHECK(a.value(QStringLiteral("assets")).toObject().value(QStringLiteral("large_text")).toString().contains(QLatin1String("Pincel")));
+    CHECK(!a.value(QStringLiteral("assets")).toObject().contains(QStringLiteral("small_text")));
     options.showFile = options.showLayer = options.showFileInfo = options.showTool = options.showElapsed = false;
     a = DiscordPresence::buildActivity(info, options, 1000);
     CHECK(!QJsonDocument(a).toJson().contains("foto") && !a.contains(QStringLiteral("state")));
@@ -252,6 +253,15 @@ static void testTransformBox()
     CHECK(box.hit(QPointF(220, 50), view, false, nullptr) == TransformBox::Mode::Rotate);
     CHECK(box.hit(QPointF(100, -25), view, false, nullptr) == TransformBox::Mode::Rotate);
     CHECK(box.hit(QPointF(150, 60), view, false, nullptr) == TransformBox::Mode::Translate);
+    // Junto al borde (por dentro o por fuera) se estira con la mano hacia ese lado; el icono de
+    // mover, abajo a la derecha, mueve.
+    handle = -1;
+    CHECK(box.hit(QPointF(70, 3), view, false, &handle) == TransformBox::Mode::Scale && handle == 1);
+    CHECK(box.hit(QPointF(204, 30), view, false, &handle) == TransformBox::Mode::Scale && handle == 3);
+    CHECK(box.hit(QPointF(130, 97), view, false, &handle) == TransformBox::Mode::Scale && handle == 5);
+    CHECK(box.hit(QPointF(-3, 70), view, false, &handle) == TransformBox::Mode::Scale && handle == 7);
+    CHECK(box.hit(QPointF(205, -4), view, false, &handle) == TransformBox::Mode::Scale && handle == 2);
+    CHECK(box.hit(Handles::moveIconPos(QRectF(0, 0, 200, 100)), view, false, nullptr) == TransformBox::Mode::Translate);
 
     // Píxel a píxel: sin giro, las esquinas caen en píxeles enteros; girado 90°, también; con
     // otros giros no se toca (si se redondeara el desplazamiento, temblaría al girar).
@@ -310,8 +320,15 @@ static void testTheme()
     CHECK(Theme::current() == Theme::Scheme::Light && !Theme::isDark());
     CHECK(QApplication::palette().color(QPalette::Window) == Theme::preset(false).window);
     CHECK(qApp->styleSheet().contains(QStringLiteral("QMenuBar")));
+    // Azul: el claro con las barras en degradado azulado.
+    Theme::apply(Theme::Scheme::Blue);
+    CHECK(Theme::current() == Theme::Scheme::Blue && !Theme::isDark() && Theme::active().blue);
+    CHECK(qApp->styleSheet().contains(QStringLiteral("qlineargradient")) && qApp->styleSheet().contains(QStringLiteral("CornerButtons")));
     Theme::apply(Theme::Scheme::Dark);
-    CHECK(Theme::isDark() && Theme::workspaceColor() == Theme::preset(true).workspace);
+    CHECK(Theme::isDark() && Theme::workspaceColor() == Theme::preset(true).workspace && !Theme::active().blue);
+    // Cursores de Paint.NET en pixel art (los de data/cursors).
+    for (const char* name : {"cross", "rectselect", "pencil", "colorpicker", "hand-open", "hand-closed"})
+        CHECK(!Icons::pixelCursor(QLatin1String(name)).pixmap().isNull());
     // Sin color de énfasis en las barras de título (fuera de Windows), cabeceras del tema.
     CHECK(!Theme::titleBarColor().isValid() && Theme::active().panelTitle == Theme::preset(true).panelTitle);
     // Con él (morado de Windows), las cabeceras de las ventanas flotantes lo llevan, como en Paint.NET.
@@ -1346,7 +1363,8 @@ int main(int argc, char** argv)
         }
     }
 
-    // Reglas como las de paint.js: oscuras, y las ventanas flotantes no las tapan.
+    // Reglas: según el tema (oscuras como las de paint.js con un tema oscuro, del color de la barra
+    // con uno claro), y las ventanas flotantes no las tapan.
     {
         QAction* rulers = findAction(&w, QStringLiteral("Reglas"));
         CHECK(rulers);
@@ -1359,7 +1377,7 @@ int main(int argc, char** argv)
             const auto rulerWidgets = canvas->findChildren<Ruler*>();
             CHECK(!rulerWidgets.isEmpty());
             if (!rulerWidgets.isEmpty())
-                CHECK(rulerWidgets.first()->grab().toImage().pixelColor(2, 2).lightness() < 60);
+                CHECK((rulerWidgets.first()->grab().toImage().pixelColor(2, 2).lightness() < 60) == Theme::active().dark);
             FloatingPanel* toolsWindow = nullptr;
             for (FloatingPanel* p : workspace->panels())
                 if (p->id() == QStringLiteral("tools"))
@@ -1505,7 +1523,8 @@ int main(int argc, char** argv)
         printer.setOutputFileName(dir.filePath(QStringLiteral("real.pdf")));
         MainWindow::renderPrint(&printer, doc->flattened(), doc->dpi(), true);
         CHECK(QFileInfo(dir.filePath(QStringLiteral("real.pdf"))).size() > 1000);
-        CHECK(findAction(&w, QStringLiteral("Configurar página...")));
+        // "Configurar página" ya no está en Archivo (el diálogo de Windows se cerraba de golpe).
+        CHECK(!findAction(&w, QStringLiteral("Configurar página...")));
         CHECK(findAction(&w, QStringLiteral("Animación...")));
     }
     {
@@ -2844,7 +2863,9 @@ int main(int argc, char** argv)
         CHECK(Theme::paintNetLook() && Theme::active().radius == 0 && Theme::active().paintNet);
         CHECK(qApp->styleSheet().contains(QStringLiteral("ColorsMoreButton")));
         if (moreButton && target && first) {
-            CHECK(moreButton->text() == QStringLiteral("Más >>") && !target->isVisibleTo(colors) && first->isHidden());
+            // Ir al principio y al final del historial se muestran según la configuración (de fábrica,
+            // también con el aspecto de Paint.NET).
+            CHECK(moreButton->text() == QStringLiteral("Más >>") && !target->isVisibleTo(colors) && !first->isHidden());
         }
         CHECK(QApplication::style()->styleHint(QStyle::SH_UnderlineShortcut) == 0);
         Theme::setLook(Theme::Look::Kaint);
@@ -2879,7 +2900,7 @@ int main(int argc, char** argv)
         welcome.show();
         settle();
         const QList<QComboBox*> combos = welcome.findChildren<QComboBox*>();
-        CHECK(combos.size() == 3 && welcome.findChild<QCheckBox*>() && welcome.findChild<WaveLabel*>());
+        CHECK(combos.size() == 4 && welcome.findChild<QCheckBox*>() && welcome.findChild<WaveLabel*>());
         bool donate = false;
         for (QToolButton* b : welcome.findChildren<QToolButton*>())
             donate = donate || b->text().contains(QStringLiteral("Donar"));
@@ -2895,7 +2916,7 @@ int main(int argc, char** argv)
                 c->setCurrentIndex(1);
                 emit c->activated(1);
             }
-        CHECK(previewSent && previewed.uiStyle == 1 && welcome.settings().uiStyle == 1);
+        CHECK(previewSent && previewed.uiStyle == 1 && welcome.settings().uiStyle == 1 && previewed.cursorStyle == 1);
         welcome.close();
     }
 

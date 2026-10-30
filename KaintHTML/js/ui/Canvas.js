@@ -3,7 +3,7 @@
 // píxeles, la selección con hormigas y lo que dibuje la herramienta; reparte el ratón a la
 // herramienta y se desplaza con la rueda, el botón central o la barra espaciadora.
 import { checkerPattern, clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
-import { handCursor, outlineCursor, paintMini } from "./Icons.js";
+import { handCursor, outlineCursor, paintMini, pdnCursors } from "./Icons.js";
 import { Settings } from "../Settings.js";
 import { pixelsPerUnit } from "./Units.js";
 import { isSrgb, transformPixels } from "../core/ColorProfiles.js";
@@ -475,7 +475,9 @@ export class CanvasView extends EventTarget {
     renderRulers() {
         if (!this.rulersVisible)
             return;
-        const paintJs = Settings.get("rulerStyle") !== 1;
+        // 0: según el tema (oscura con los temas oscuros); 1: del color de la barra; 2: oscura.
+        const style = Settings.get("rulerStyle");
+        const paintJs = style === 2 || (style !== 1 && document.documentElement.classList.contains("dark"));
         this.workspace.classList.toggle("ruler-classic", !paintJs);
         const styles = getComputedStyle(document.documentElement);
         const theme = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
@@ -493,7 +495,15 @@ export class CanvasView extends EventTarget {
             }
             const ctx = canvas.getContext("2d");
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.fillStyle = colors.bg;
+            // Azul: en degradado hacia el lienzo, como en Paint.NET.
+            if (!paintJs && document.documentElement.classList.contains("blue")) {
+                const g = vertical ? ctx.createLinearGradient(0, 0, w, 0) : ctx.createLinearGradient(0, 0, 0, h);
+                g.addColorStop(0, "#fbfdff");
+                g.addColorStop(1, "#f2f6fc");
+                ctx.fillStyle = g;
+            } else {
+                ctx.fillStyle = colors.bg;
+            }
             ctx.fillRect(0, 0, w, h);
             const doc = this.doc;
             if (doc) {
@@ -556,8 +566,10 @@ export class CanvasView extends EventTarget {
                         ctx.fillText(label, pos + 2, 12);
                     }
                 }
-                if (this.mouse) {
-                    const c = Math.round(vertical ? this.mouse.vy : this.mouse.vx) + 0.5;
+                // Como en Paint.NET, la marca se queda en la última posición del puntero aunque salga.
+                if (this.lastMouse) {
+                    const m = this.imageToView(this.lastMouse.x, this.lastMouse.y);
+                    const c = Math.round(vertical ? m.y : m.x) + 0.5;
                     ctx.strokeStyle = accent;
                     ctx.beginPath();
                     vertical ? (ctx.moveTo(0, c), ctx.lineTo(t, c)) : (ctx.moveTo(c, 0), ctx.lineTo(c, t));
@@ -735,6 +747,9 @@ export class CanvasView extends EventTarget {
     // Con los pinceles, el contorno va en el propio cursor si cabe: así no se queda atrás del
     // puntero (dibujado en el lienzo, llega un fotograma o más tarde).
     brushCursor() {
+        // Con los cursores de Paint.NET el cursor es la cruz y el contorno se dibuja en el lienzo.
+        if (pdnCursors())
+            return null;
         const diameter = this.doc ? this.tool?.brushDiameter?.() ?? 0 : 0;
         const r = (diameter * this.scale) / 2;
         return r >= 2 ? outlineCursor(this.tool.icon, r) : null;
@@ -785,6 +800,7 @@ export class CanvasView extends EventTarget {
                 return;
             const te = this.toolEvent(e);
             this.mouse = te;
+            this.lastMouse = { x: te.x, y: te.y };
             this.placeMini();
             this.checkOutlineEdge(e);
             this.dispatchEvent(new CustomEvent("cursor", { detail: te }));

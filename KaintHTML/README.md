@@ -62,24 +62,34 @@ Safari download the saved file and paste with Ctrl+V instead.
 - **Edit** > Copy Selection and Paste Selection (the Paint.NET JSON shape, with the five combine
   modes) and Grow, Shrink and Feather Selection; **View** > Pixels, Inches and Centimeters for the
   rulers and the status bar.
-- **Files**: opens PNG, JPEG, WebP, GIF, BMP, AVIF and ICO images and **OpenRaster (.ora)** with
-  its layers; saves PNG, JPEG, WebP and OpenRaster. Drop images onto the window to open them.
+- **Files** like Kaint's: opens PNG, JPEG, WebP, GIF (animated GIFs as one layer per frame), BMP,
+  AVIF, ICO, TGA, TIFF and DDS images, **OpenRaster (.ora)** and **Paint.NET (.pdn)** with their
+  layers; saves OpenRaster, PNG, JPEG, WebP, DDS, TIFF, GIF (animated, with Kaint's advanced
+  options), BMP, TGA and ICO. **Save Configuration** shows the encoded file and its size, with the
+  quality, bit depth, dithering and transparency threshold. **Image > Animation** edits the frame
+  durations and **Image > Color Profile** converts or assigns sRGB, Adobe RGB, Display P3 or
+  ProPhoto RGB (the profile is read from and embedded in PNG, JPEG, WebP and TIFF files). Drop
+  images onto the window to open them.
 - **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
   editable colors, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
   compact, borderless windows); **English and Spanish** (Kaint's own translations) and Kaint's
   **animations**. The first visit shows a welcome window with the theme, style and language, and
   About looks like Kaint's, with its animated logo.
-- **Settings** like Kaint's: interface, canvas (custom background, checkerboard brightness,
-  rulers), tools, pen and tablet, plugins, updates, diagnostics, icon packs (.zip files with an
-  `asset-pack.json`, with a preview), fonts for the Text tool and editable keyboard shortcuts.
+- **Settings** like Kaint's: interface (reopen the last session's files, recovery copies), canvas
+  (custom background, checkerboard brightness, rulers), tools (the default toolbar options every
+  session starts with), pen and tablet, performance (history memory limit), plugins, updates,
+  diagnostics, icon packs (.zip files with an `asset-pack.json`, with a preview), fonts for the
+  Text tool and editable keyboard shortcuts.
+- **Recovery copies**: every few minutes, images with unsaved changes are copied into the browser
+  (IndexedDB); if the page closes abruptly, Kaint offers them the next time it opens.
 - **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
   palette file to open or save, Rainbow and Small; **More** widens it with the RGB, HSV and
   opacity sliders, their number boxes and the hex code.
 
-Not available on the web: Paint.NET (.dll) and native plugins, recovery copies, custom shapes,
-brush fill patterns, the tool defaults in Settings, color profiles, `.pdn` files, GIF animation
-editing and saving (and other formats such as TGA or TIFF) and scanning. Browsers keep
-some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use the menus for those.
+Not available on the web: Paint.NET (.dll) and native plugins, custom shapes, brush fill patterns
+and scanning. Reopening the last session's files needs a browser with access to the system's
+files (Chrome, Edge...). Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use
+the menus for those.
 
 ## Development
 

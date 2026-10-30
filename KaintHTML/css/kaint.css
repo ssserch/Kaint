@@ -438,6 +438,34 @@ u {
     white-space: nowrap;
 }
 
+/* Configuración > Herramientas: todas las opciones por secciones, en filas que se reparten el
+   ancho (ToolOptionsPanel de Kaint). */
+.tool-options-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tool-options-panel .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    padding: 2px 0 0 8px;
+}
+
+.tool-options-panel .group {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.settings .page .tool-options-panel label.title {
+    display: inline;
+    margin: 0 2px 0 0;
+    white-space: nowrap;
+}
+
 /* --- Controles -------------------------------------------------------------------------- */
 
 .field, .combo, input[type="number"], input[type="text"], select {

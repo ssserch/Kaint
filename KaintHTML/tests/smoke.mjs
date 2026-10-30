@@ -960,6 +960,23 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     await other.close().catch(() => {});
 }
 
+// Configuración > Herramientas: las opciones predeterminadas (con ellas empieza cada sesión) se
+// cargan desde la barra y se restablecen, sin cambiar la barra.
+{
+    await page.evaluate(async () => {
+        (await import("./js/AppState.js")).AppState.updateTools({ hardness: 33 });
+        (await import("./js/ui/Dialogs.js")).settingsDialog(window.kaint, "tools");
+    });
+    await page.waitForSelector(".tool-options-panel .flow");
+    await page.click(".settings .page .row-buttons .pushbutton >> nth=0");
+    const loaded = await page.evaluate(() => JSON.parse(localStorage.getItem("kaint.toolDefaults")).hardness);
+    await page.click(".settings .page .row-buttons .pushbutton >> nth=1");
+    const reset = await page.evaluate(async () => [JSON.parse(localStorage.getItem("kaint.toolDefaults")).hardness,
+                                                   (await import("./js/AppState.js")).AppState.tools.hardness]);
+    await page.keyboard.press("Escape");
+    check(loaded === 33 && reset[0] === 75 && reset[1] === 33, `opciones predeterminadas de las herramientas (${loaded}, ${reset})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

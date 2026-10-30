@@ -44,6 +44,35 @@ export const defaultTools = () => ({
     recolorSampling: "secondary",
 });
 
+// Opciones predeterminadas de las herramientas (Configuración > Herramientas), como
+// AppState::toolDefaults de Kaint: con ellas empieza cada sesión; lo último usado no se guarda.
+export function toolDefaults() {
+    return { ...defaultTools(), ...(remember("toolDefaults") || {}) };
+}
+
+export function setToolDefaults(tools) {
+    remember("toolDefaults", { ...tools });
+}
+
+// Unas opciones de herramienta propias (LocalToolSettings de Kaint): las de Configuración >
+// Herramientas. Eventos: "tools".
+export class LocalToolSettings extends EventTarget {
+    constructor(initial) {
+        super();
+        this.tools = { ...initial };
+    }
+
+    updateTools(changes) {
+        Object.assign(this.tools, changes);
+        this.dispatchEvent(new Event("tools"));
+    }
+
+    set(tools) {
+        this.tools = { ...tools };
+        this.dispatchEvent(new Event("tools"));
+    }
+}
+
 // Paleta de Paint.NET (la de Kaint, src/core/Palette.cpp): 64 colores y los 32 primeros otra
 // vez con la mitad de opacidad.
 const paletteRgb = [
@@ -117,7 +146,14 @@ class State extends EventTarget {
         this.primary = { r: 0, g: 0, b: 0, a: 255 };
         this.secondary = { r: 255, g: 255, b: 255, a: 255 };
         this.secondaryActive = false;
-        this.tools = { ...defaultTools(), ...(remember("tools") || {}) };
+        // Ni los colores ni las opciones de las herramientas se guardan al salir (como en Kaint);
+        // las últimas usadas que guardaban las versiones anteriores se descartan.
+        this.tools = toolDefaults();
+        try {
+            localStorage.removeItem("kaint.tools");
+        } catch {
+            // Sin almacenamiento.
+        }
         this.palette = remember("palette") || defaultPalette();
     }
 
@@ -161,7 +197,6 @@ class State extends EventTarget {
 
     updateTools(changes) {
         Object.assign(this.tools, changes);
-        remember("tools", this.tools);
         this.emit("tools");
     }
 

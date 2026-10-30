@@ -6,6 +6,8 @@ import { BlendModes, BlendNames, checkerPattern, thumbnail } from "../core/Raste
 import { delayFromName, MIN_DELAY, nameWithDelay } from "../core/Codecs.js";
 import { MAX_WORKERS } from "../core/EffectRunner.js";
 import { remember, Settings } from "../Settings.js";
+import { AppState, defaultTools, LocalToolSettings, setToolDefaults, toolDefaults } from "../AppState.js";
+import { ToolOptionsPanel } from "./ToolOptions.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
@@ -807,12 +809,22 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const tools = app ? app.tools.tools : [];
             const start = select([["", tr("La última que se usó")], ...tools.map((t) => [t.id, t.name])], Settings.get("startTool") || "");
             start.addEventListener("change", () => Settings.set("startTool", start.value));
+            // Opciones predeterminadas de la barra de herramientas (con ellas empieza cada sesión).
+            const defaults = new LocalToolSettings(toolDefaults());
+            defaults.addEventListener("tools", () => setToolDefaults(defaults.tools));
+            const load = button(tr("Cargar desde barra de htas."), tr("Usa como predeterminadas las opciones que tiene ahora la barra de herramientas."),
+                                () => defaults.set(AppState.tools));
+            const reset = button(tr("Restablecer"), tr("Vuelve a los valores de fábrica de todas las herramientas."), () => defaults.set(defaultTools()));
             return [
+                el("p", { textContent: tr("Puede elegir la herramienta que está activa cuando inicie Kaint, y qué configuración predeterminada se debe aplicar a los elementos de la barra de herramientas.") }),
+                el("div", { className: "row-buttons" }, [load, reset]),
                 el("label", {}, [tr("Herramienta predeterminada:"), start]),
                 heading(tr("Mover y pegar")),
-                check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), "hideMoveBox"),
+                check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), "hideMoveBox",
+                      tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.")),
                 check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
                       tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+                ...(app ? [new ToolOptionsPanel(app, defaults).element] : []),
             ];
         }],
         ["tablet", "settings-tablet", tr("Lápiz y tableta"), () => [

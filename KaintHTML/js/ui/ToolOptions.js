@@ -14,8 +14,7 @@ const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72,
 const fonts = ["Noto Sans, Segoe UI, sans-serif", "Arial", "Times New Roman", "Courier New", "Georgia", "Verdana", "Trebuchet MS",
                "Comic Sans MS", "Impact", "serif", "sans-serif", "monospace", "cursive"];
 
-const set = (changes) => AppState.updateTools(changes);
-const tools = () => AppState.tools;
+let lists = 0;
 
 function label(text) {
     return el("label", { className: "title", textContent: text });
@@ -27,66 +26,6 @@ function button(content, tip, onClick) {
     return b;
 }
 
-// Botón con menú de opciones (ChoiceButton de Kaint): choices = [[valor, icono, texto], ...].
-function choice(tip, key, choices, { showText = false } = {}) {
-    const b = el("button", { className: "tbutton choice", title: tip });
-    const refresh = () => {
-        const current = choices.find(([v]) => v === tools()[key]) || choices[0];
-        b.replaceChildren(...[current[1] ? icon(current[1], 16) : null, showText ? el("span", { textContent: current[2] }) : null,
-                               el("span", { className: "arrow", textContent: "▼" })].filter(Boolean));
-    };
-    b.addEventListener("click", () => {
-        const r = b.getBoundingClientRect();
-        popupMenu(choices.map(([v, iconName, text]) => ({ text, icon: iconName, checked: tools()[key] === v, run: () => set({ [key]: v }) })),
-                  r.left, r.bottom);
-    });
-    refresh();
-    b.refresh = refresh;
-    return b;
-}
-
-// Conjunto de botones de los que uno está marcado.
-function toggles(key, items) {
-    return items.map(([v, iconName, tip]) => {
-        const b = button([icon(iconName, 16)], tip, () => set({ [key]: v }));
-        b.refresh = () => b.classList.toggle("checked", tools()[key] === v);
-        b.refresh();
-        return b;
-    });
-}
-
-// Barra con el valor dentro (BarSlider de Kaint), de min a max, con el texto que devuelve format.
-function barSlider(key, min, max, format) {
-    const bar = el("div", { className: "barslider" });
-    const fill = el("div", { className: "fill" });
-    const text = el("div", { className: "label" });
-    bar.append(fill, text);
-    const update = () => {
-        const v = tools()[key], f = (v - min) / (max - min);
-        fill.style.width = `${f * 100}%`;
-        text.textContent = format(v);
-        text.classList.toggle("inside", f > 0.25);
-    };
-    const setFrom = (e) => {
-        const r = bar.getBoundingClientRect();
-        set({ [key]: Math.round(min + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (max - min)) });
-    };
-    bar.addEventListener("pointerdown", (e) => {
-        bar.setPointerCapture(e.pointerId);
-        setFrom(e);
-        const move = (ev) => setFrom(ev);
-        bar.addEventListener("pointermove", move);
-        bar.addEventListener("pointerup", () => bar.removeEventListener("pointermove", move), { once: true });
-    });
-    bar.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        set({ [key]: Math.min(max, Math.max(min, tools()[key] + (e.deltaY < 0 ? 1 : -1))) });
-    }, { passive: false });
-    bar.refresh = update;
-    update();
-    return bar;
-}
-
 function stepper(plus, onStep, tip) {
     const b = button([icon(`opt-stepper:${plus ? "plus" : "minus"}`, 12)], tip, () => onStep(plus ? 1 : -1));
     b.style.minWidth = b.style.minHeight = "18px";
@@ -94,32 +33,108 @@ function stepper(plus, onStep, tip) {
     return b;
 }
 
-function editableCombo(key, presets, width = 64) {
-    const input = el("input", { type: "number", min: 1, max: 2000, style: { width: `${width}px` } });
-    const list = el("datalist", { id: `list-${key}` }, presets.map((v) => el("option", { value: v })));
-    input.setAttribute("list", list.id);
-    input.addEventListener("change", () => set({ [key]: Math.max(1, Math.min(2000, Number(input.value) || 1)) }));
-    const box = el("span", {}, [input, list]);
-    box.refresh = () => { if (document.activeElement !== input) input.value = tools()[key]; };
-    box.refresh();
-    return box;
-}
+// Los controles de las opciones sobre un modelo con 'tools' y 'updateTools': AppState (la barra) o
+// las predeterminadas de Configuración > Herramientas (ToolSettingsModel de Kaint).
+function kit(model) {
+    const set = (changes) => model.updateTools(changes);
+    const tools = () => model.tools;
 
-// Paso al siguiente o anterior valor de la lista de tamaños.
-function stepPreset(key, presets, dir) {
-    const v = tools()[key];
-    const next = dir > 0 ? presets.find((p) => p > v) : [...presets].reverse().find((p) => p < v);
-    set({ [key]: next ?? v });
+    // Botón con menú de opciones (ChoiceButton de Kaint): choices = [[valor, icono, texto], ...].
+    function choice(tip, key, choices, { showText = false } = {}) {
+        const b = el("button", { className: "tbutton choice", title: tip });
+        const refresh = () => {
+            const current = choices.find(([v]) => v === tools()[key]) || choices[0];
+            b.replaceChildren(...[current[1] ? icon(current[1], 16) : null, showText ? el("span", { textContent: current[2] }) : null,
+                                   el("span", { className: "arrow", textContent: "▼" })].filter(Boolean));
+        };
+        b.addEventListener("click", () => {
+            const r = b.getBoundingClientRect();
+            popupMenu(choices.map(([v, iconName, text]) => ({ text, icon: iconName, checked: tools()[key] === v, run: () => set({ [key]: v }) })),
+                      r.left, r.bottom);
+        });
+        refresh();
+        b.refresh = refresh;
+        return b;
+    }
+
+    // Conjunto de botones de los que uno está marcado.
+    function toggles(key, items) {
+        return items.map(([v, iconName, tip]) => {
+            const b = button([icon(iconName, 16)], tip, () => set({ [key]: v }));
+            b.refresh = () => b.classList.toggle("checked", tools()[key] === v);
+            b.refresh();
+            return b;
+        });
+    }
+
+    // Barra con el valor dentro (BarSlider de Kaint), de min a max, con el texto que devuelve format.
+    function barSlider(key, min, max, format) {
+        const bar = el("div", { className: "barslider" });
+        const fill = el("div", { className: "fill" });
+        const text = el("div", { className: "label" });
+        bar.append(fill, text);
+        const update = () => {
+            const v = tools()[key], f = (v - min) / (max - min);
+            fill.style.width = `${f * 100}%`;
+            text.textContent = format(v);
+            text.classList.toggle("inside", f > 0.25);
+        };
+        const setFrom = (e) => {
+            const r = bar.getBoundingClientRect();
+            set({ [key]: Math.round(min + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (max - min)) });
+        };
+        bar.addEventListener("pointerdown", (e) => {
+            bar.setPointerCapture(e.pointerId);
+            setFrom(e);
+            const move = (ev) => setFrom(ev);
+            bar.addEventListener("pointermove", move);
+            bar.addEventListener("pointerup", () => bar.removeEventListener("pointermove", move), { once: true });
+        });
+        bar.addEventListener("wheel", (e) => {
+            e.preventDefault();
+            set({ [key]: Math.min(max, Math.max(min, tools()[key] + (e.deltaY < 0 ? 1 : -1))) });
+        }, { passive: false });
+        bar.refresh = update;
+        update();
+        return bar;
+    }
+
+
+    function editableCombo(key, presets, width = 64) {
+        const input = el("input", { type: "number", min: 1, max: 2000, style: { width: `${width}px` } });
+        const list = el("datalist", { id: `list-${key}-${++lists}` }, presets.map((v) => el("option", { value: v })));
+        input.setAttribute("list", list.id);
+        input.addEventListener("change", () => set({ [key]: Math.max(1, Math.min(2000, Number(input.value) || 1)) }));
+        const box = el("span", {}, [input, list]);
+        box.refresh = () => { if (document.activeElement !== input) input.value = tools()[key]; };
+        box.refresh();
+        return box;
+    }
+
+    // Paso al siguiente o anterior valor de la lista de tamaños.
+    function stepPreset(key, presets, dir) {
+        const v = tools()[key];
+        const next = dir > 0 ? presets.find((p) => p > v) : [...presets].reverse().find((p) => p < v);
+        set({ [key]: next ?? v });
+    }
+
+    return { set, tools, choice, toggles, barSlider, editableCombo, stepPreset };
 }
 
 export class ToolOptions {
-    constructor(element, app) {
+    constructor(element, app, model = AppState) {
         this.element = element;
         this.app = app;
+        this.model = model;
+        this.kit = kit(model);
         this.controls = [];
+        model.addEventListener("tools", () => this.refresh());
+        if (model !== AppState) {
+            this.rebuild();
+            return;
+        }
         app.tools.addEventListener("changed", () => this.rebuild());
         window.addEventListener("kaint-fonts", () => this.rebuild());
-        AppState.addEventListener("tools", () => this.refresh());
         // La rueda desplaza la barra cuando no cabe.
         element.addEventListener("wheel", (e) => {
             if (element.scrollWidth > element.clientWidth && !e.target.closest(".barslider")) {
@@ -160,6 +175,7 @@ export class ToolOptions {
     }
 
     addOption(option, tool) {
+        const { set, tools, choice, toggles, barSlider, editableCombo, stepPreset } = this.kit;
         switch (option) {
         case "brushSize":
             this.group(label(tr("Tamaño de pincel:")), stepper(false, (d) => stepPreset("brushSize", brushPresets, d), tr("Reducir")),
@@ -316,5 +332,48 @@ export class ToolOptions {
         }
         }
         void tool;
+    }
+}
+
+// Las secciones de Configuración > Herramientas de Paint.NET 5 (ToolOptionsEditor::sectionNames de
+// Kaint) con las opciones de cada una.
+const sections = () => [
+    [tr("Pincel y relleno"), ["brushSize", "hardness", "spacing"]],
+    [tr("Forma y estilo"), ["shape", "shapeStyle", "curve", "dash", "caps"]],
+    [tr("Selección"), ["selectionMode", "rectMode", "afterSelect"]],
+    [tr("Texto"), ["text"]],
+    [tr("Degradado"), ["gradient"]],
+    [tr("Varita mágica, cubo de pintura y volver a colorear"), ["flood", "tolerance", "recolor"]],
+    [tr("Selector de color"), ["picker"]],
+    [tr("Muestreo"), ["sampling"]],
+    [tr("Opciones"), ["smoothing", "pressure", "antialias", "blend", "selectionQuality"]],
+];
+
+// Todas las opciones, por secciones (ToolOptionsPanel de Kaint): las predeterminadas de
+// Configuración > Herramientas.
+export class ToolOptionsPanel extends ToolOptions {
+    constructor(app, model) {
+        super(el("div", { className: "tool-options-panel" }), app, model);
+    }
+
+    rebuild() {
+        this.element.replaceChildren();
+        this.controls = [];
+        const used = new Set(this.app.tools.tools.flatMap((t) => t.options));
+        for (const [name, options] of sections()) {
+            const shown = options.filter((o) => used.has(o));
+            if (!shown.length)
+                continue;
+            this.target = el("div", { className: "flow" });
+            this.element.append(el("h4", { className: "section", textContent: name }), this.target);
+            for (const option of shown)
+                this.addOption(option, null);
+        }
+    }
+
+    group(...children) {
+        const flat = children.flat().filter(Boolean);
+        this.controls.push(...flat);
+        this.target.appendChild(el("span", { className: "group" }, flat));
     }
 }

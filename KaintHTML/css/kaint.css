@@ -438,6 +438,34 @@ u {
     white-space: nowrap;
 }
 
+/* Configuración > Herramientas: todas las opciones por secciones, en filas que se reparten el
+   ancho (ToolOptionsPanel de Kaint). */
+.tool-options-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tool-options-panel .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    padding: 2px 0 0 8px;
+}
+
+.tool-options-panel .group {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.settings .page .tool-options-panel label.title {
+    display: inline;
+    margin: 0 2px 0 0;
+    white-space: nowrap;
+}
+
 /* --- Controles -------------------------------------------------------------------------- */
 
 .field, .combo, input[type="number"], input[type="text"], select {
@@ -539,6 +567,21 @@ input[type="checkbox"] {
     padding: 3px;
     box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.3);
     animation: kaint-fade-in 100ms ease-out;
+}
+
+.popup-menu .section {
+    padding: 4px 8px 2px;
+    font-weight: 600;
+    opacity: 0.75;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.popup-menu .section::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--line);
 }
 
 .popup-menu .item {
@@ -1135,6 +1178,13 @@ input[type="checkbox"] {
     min-width: 96px;
 }
 
+.status-bar .unit-button {
+    min-width: 28px;
+    height: 22px;
+    padding: 0 6px;
+    margin-right: 4px;
+}
+
 .status-bar .zoom-box {
     width: 82px;
 }
@@ -1332,31 +1382,780 @@ input[type="checkbox"] {
     background: var(--line);
 }
 
-/* Diálogo de efecto */
-.param {
-    display: grid;
-    grid-template-columns: 1fr 64px 26px;
-    gap: 2px 6px;
+/* Diálogo de efecto (EffectDialog de Kaint) */
+.backdrop.see-through {
+    background: transparent;
+}
+
+body.busy, body.busy * {
+    cursor: progress !important;
+}
+
+.effect-dialog > .body {
+    min-width: 356px;
+    display: flex;
+    flex-direction: column;
+}
+
+.effect-dialog .push-left {
+    margin-right: auto;
+}
+
+.fx-param.disabled, .fx-param .disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.fx-header {
+    display: flex;
     align-items: center;
-    margin-bottom: 8px;
+    gap: 6px;
+    margin: 6px 0 2px;
 }
 
-.param > .label {
-    grid-column: 1 / -1;
+.fx-header.line::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
 }
 
-.param input[type="range"] {
+.fx-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fx-row.fx-top {
+    align-items: flex-start;
+}
+
+.fx-row.fx-center {
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.fx-slider {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+}
+
+.fx-slider input[type="range"] {
     width: 100%;
+    margin: 0;
 }
 
-.param input[type="number"] {
+.fx-gradient {
+    height: 5px;
+    margin: 0 6px 2px;
+}
+
+.fx-row input[type="number"] {
+    width: 80px;
+}
+
+.fx-sliders {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fx-check {
+    display: inline-flex;
+    align-items: center;
+    margin: 6px 0 2px;
+}
+
+.fx-choice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.fx-choice select {
+    max-width: 230px;
+}
+
+.fx-param > .fx-row > .pushbutton {
+    margin-top: 6px;
+}
+
+.fx-description, .fx-note {
+    margin: 2px 0 4px;
+    max-width: 380px;
+    white-space: normal;
+}
+
+.fx-note {
+    margin-top: 10px;
+}
+
+.fx-param textarea, .fx-param input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.fx-param textarea {
+    background: var(--base);
+    color: var(--text);
+    border: 1px solid var(--field);
+    border-radius: var(--radius);
+    resize: vertical;
+}
+
+.fx-angle-chooser {
+    cursor: pointer;
+    flex: none;
+}
+
+.fx-pan, .fx-rollball {
+    flex: none;
+}
+
+/* Botón de color: la muestra sobre el damero */
+.fx-color {
+    width: 72px;
+    height: 26px;
+    padding: 2px;
+    margin-top: 2px;
+    background: var(--button);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.fx-color span, .color-dialog .compare span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(var(--c), var(--c)),
+                repeating-conic-gradient(#bfbfbf 0% 25%, #8f8f8f 0% 50%) 0 0 / 10px 10px;
+}
+
+/* Pestañas (QTabWidget) */
+.fx-tabs {
+    margin-top: 2px;
+}
+
+.fx-tabbar {
+    display: flex;
+    gap: 2px;
+    margin-bottom: -1px;
+}
+
+.fx-tab {
+    padding: 4px 10px;
+    background: var(--button);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.fx-tab.current {
+    background: var(--window);
+    border-bottom-color: var(--window);
+    position: relative;
+    z-index: 1;
+}
+
+.fx-pages {
+    border: 1px solid var(--border);
+    padding: 4px 10px 10px;
+}
+
+/* Curvas */
+.fx-curves-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fx-curves {
+    display: block;
+    width: 340px;
+    height: 340px;
+    align-self: center;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.fx-curves-editor .coords {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Niveles */
+.fx-levels {
+    display: grid;
+    grid-template-columns: 120px auto 26px 26px auto 120px;
+    grid-template-rows: auto 256px;
+    gap: 2px 6px;
+}
+
+.fx-levels .span2 {
+    grid-column: span 2;
+}
+
+.fx-levels .fx-header {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.fx-levels-column {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fx-levels-column input[type="number"] {
     width: 64px;
 }
 
-.curve-editor {
+.fx-histogram, .fx-levels-bar {
+    display: block;
+    width: 100%;
+    height: 256px;
+    min-width: 0;
+    touch-action: none;
+}
+
+.fx-swatch {
+    width: 44px;
+    height: 20px;
+    border: 1px solid var(--border);
+    box-sizing: border-box;
+}
+
+/* Progreso de los efectos */
+.status-bar .effect-progress {
+    width: 120px;
+    height: 12px;
+    margin: 0 6px;
+    accent-color: var(--accent);
+}
+
+.progress-text {
+    margin-bottom: 8px;
+    min-width: 300px;
+}
+
+.dialog progress {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+/* Selector de color con transparencia */
+.color-dialog {
+    display: flex;
+    gap: 14px;
+}
+
+.color-dialog .left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.color-dialog .wheel-row {
+    display: flex;
+    gap: 4px;
+}
+
+.color-dialog .wheel-box {
+    width: 168px;
+    height: 168px;
+}
+
+.color-dialog .wheel {
+    width: 100%;
+    height: 100%;
+}
+
+.color-dialog .channel-slider.vertical {
+    width: 18px;
+    height: 168px;
+}
+
+.color-dialog .compare {
+    display: flex;
+    height: 30px;
+    border: 1px solid var(--border);
+}
+
+.color-dialog .compare span {
+    flex: 1;
+}
+
+.color-dialog .compare .old {
+    cursor: pointer;
+}
+
+.color-dialog .channels {
+    display: grid;
+    grid-template-columns: auto 180px 64px;
+    gap: 3px 6px;
+    align-items: center;
+    align-content: start;
+}
+
+.color-dialog .channels .section {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.color-dialog .channels .section::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+.color-dialog .channel-slider:not(.vertical) {
+    width: 180px;
+    height: 16px;
+}
+
+.color-dialog .hex {
+    grid-column: span 2;
+    width: 100px;
+}
+
+/* Diálogos de tamaño (Imagen nueva, Cambiar el tamaño, Tamaño del lienzo) */
+.size-dialog, .size-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.size-dialog {
+    min-width: 360px;
+}
+
+.size-dialog .row, .size-editor .row, .layer-props .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.size-dialog .row.indent {
+    padding-left: 92px;
+}
+
+.size-dialog .row > label:first-child, .layer-props .row > label:first-child {
+    white-space: nowrap;
+}
+
+.size-dialog select {
+    flex: 1;
+}
+
+.size-editor .with-unit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.size-editor label.disabled {
+    opacity: 0.5;
+}
+
+fieldset.group {
+    margin: 0;
+    padding: 4px 10px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+fieldset.group > legend {
+    padding: 0 4px;
+}
+
+.size-grid {
+    display: grid;
+    grid-template-columns: 80px 96px auto;
+    gap: 4px 6px;
+    align-items: center;
+    justify-items: start;
+}
+
+.size-grid input[type="number"] {
+    width: 96px;
+    box-sizing: border-box;
+}
+
+.anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 44px);
+    gap: 2px;
+    justify-content: center;
+    padding: 6px 0;
+}
+
+.anchor-cell {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.layer-props {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 300px;
+}
+
+.layer-props > label:not(:first-child) {
+    margin-top: 6px;
+}
+
+.layer-props .row {
+    margin-top: 6px;
+}
+
+.layer-props .row select {
+    flex: 1;
+}
+
+/* Configuración de guardado (SaveConfigDialog) y vista previa del archivo */
+.save-columns {
+    display: flex;
+    gap: 14px;
+    min-height: 380px;
+}
+
+.save-side {
+    display: flex;
+    flex-direction: column;
+    width: 340px;
+}
+
+.save-form .with-unit {
+    white-space: nowrap;
+    flex-wrap: wrap;
+}
+
+.save-form {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 8px;
+    align-items: center;
+}
+
+.save-row {
+    display: contents;
+}
+
+.save-row > label:first-child {
+    white-space: nowrap;
+}
+
+.save-row.wide > * {
+    grid-column: 1 / -1;
+}
+
+.save-row.disabled > *, .save-config .disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.save-form .barslider {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.barslider.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.save-form .note, .gif-advanced .note {
+    opacity: 0.7;
+    white-space: normal;
+}
+
+.with-unit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.with-unit input[type="number"] {
+    width: 80px;
+}
+
+.ico-sizes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 10px;
+}
+
+.save-form .pushbutton {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.save-status {
+    margin-top: 8px;
+}
+
+.encoded-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 360px;
+    flex: 1;
+}
+
+.encoded-preview .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.encoded-scroll {
+    flex: 1;
+    min-height: 280px;
+    max-height: 60vh;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: var(--base);
     border: 1px solid var(--line);
-    cursor: crosshair;
+}
+
+.encoded-scroll canvas {
+    flex: none;
+    margin: auto;
+}
+
+.encoded-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+}
+
+/* Configuración avanzada del GIF (como ezgif) */
+.gif-columns {
+    display: flex;
+    gap: 14px;
+    width: min(1100px, calc(100vw - 80px));
+    height: min(640px, calc(100vh - 140px));
+}
+
+.gif-page {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gif-side {
+    display: flex;
+    flex-direction: column;
+    width: 380px;
+}
+
+.gif-frames {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex: none;
+    padding-bottom: 4px;
+}
+
+.gif-card {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 6px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.gif-card.skipped {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.gif-card .row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gif-card input[type="number"] {
+    width: 70px;
+}
+
+.gif-thumb {
+    width: 100px;
+    height: 76px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+}
+
+.gif-button {
+    border: none;
+    border-radius: 3px;
+    padding: 3px 10px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.gif-button.skip {
+    background: var(--panel-close, #c42b1c);
+}
+
+.gif-button.enable {
+    background: var(--accent);
+}
+
+.gif-button:hover {
+    filter: brightness(1.15);
+}
+
+.gif-ranges {
+    display: grid;
+    grid-template-columns: auto 70px auto 70px auto auto;
+    gap: 4px 6px;
+    align-items: center;
+    justify-content: start;
+}
+
+.gif-ranges input[type="number"] {
+    width: 64px;
+}
+
+.gif-options {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 8px;
+    align-items: center;
+}
+
+.gif-options .wide {
+    grid-column: 1 / -1;
+}
+
+.gif-indent {
+    margin: 2px 0 6px 24px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Imagen > Perfil de colores */
+.profile-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 10px;
+    align-items: center;
+    min-width: 360px;
+}
+
+.profile-grid .row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Imagen > Animación */
+.anim-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(600px, calc(100vw - 80px));
+}
+
+.anim-dialog .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.anim-top {
+    display: flex;
+    gap: 10px;
+}
+
+.anim-list {
+    flex: 1;
+    min-width: 0;
+    height: 260px;
+    overflow: auto;
+    background: var(--base);
+    border: 1px solid var(--line);
+}
+
+.anim-head, .anim-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 100px;
+    gap: 6px;
+    align-items: center;
+    padding: 2px 6px;
+}
+
+.anim-head {
+    position: sticky;
+    top: 0;
+    background: var(--window);
+    border-bottom: 1px solid var(--line);
+}
+
+.anim-row.current {
+    background: var(--selection);
+}
+
+.anim-row input[type="number"] {
+    width: 90px;
+}
+
+.anim-layer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.anim-side {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.anim-preview {
+    width: 216px;
+    height: 161px;
+    border: 1px solid var(--line);
+    background: var(--base);
+}
+
+.anim-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 /* Tareas (TaskDialog) */
@@ -1477,7 +2276,7 @@ input[type="checkbox"] {
     gap: 4px;
 }
 
-.settings .plugin-list, .settings .font-list {
+.settings .plugin-list, .settings .font-list, .settings .shape-list {
     flex: 1;
     min-height: 120px;
 }

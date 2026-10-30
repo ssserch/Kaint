@@ -8,8 +8,8 @@ export function threshold(tolerancePercent) {
 }
 
 // La diferencia de color pesa según la opacidad del candidato (Paint.NET/Pinta); con "straight"
-// se compara el RGBA tal cual.
-function similar(d, i, ref, limit, straight) {
+// se compara el RGBA tal cual. 'd' es RGBA (alfa directo) y 'ref', [r, g, b, a].
+export function similar(d, i, ref, limit, straight) {
     const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
     if (straight) {
         const dr = r - ref[0], dg = g - ref[1], db = b - ref[2], da = a - ref[3];

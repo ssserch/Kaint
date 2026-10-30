@@ -3,8 +3,8 @@
 import { Tool } from "./Tool.js";
 import { drawMoveHandle, nearPoint, StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
-import { floodMask } from "../core/FloodFill.js";
-import { blendPixels, cloneCanvas, context, unionRect } from "../core/Raster.js";
+import { paintBucket } from "../core/PaintBucket.js";
+import { blendPixels, cloneCanvas, context, lerpStraight, scaleAlpha, unionRect } from "../core/Raster.js";
 import { tr } from "../i18n.js";
 
 // Base de las dos: pasos editables como en Kaint (crear, "Editar…"/"Mover…" y "Finalizar…") y
@@ -133,7 +133,7 @@ export class PaintBucketTool extends EditableFill {
     get name() { return tr("Cubo de pintura"); }
     get icon() { return "paintbucket"; }
     get letter() { return "F"; }
-    get options() { return ["flood", "tolerance", "sampling", "antialias", "blend", "finish"]; }
+    get options() { return ["flood", "fill", "tolerance", "tolAlpha", "sampling", "antialias", "accumulate", "blend", "selectionQuality", "finish"]; }
     editName() { return tr("Editar cubo de pintura"); }
     finishName() { return tr("Finalizar cubo de pintura"); }
 
@@ -160,7 +160,8 @@ export class PaintBucketTool extends EditableFill {
         }
         this.finish();
         const x = Math.floor(e.x), y = Math.floor(e.y);
-        if (x < 0 || y < 0 || x >= doc.width || y >= doc.height || (doc.selection.mask && !doc.selection.mask[y * doc.width + x]))
+        const clip = doc.selection.clipMask(AppState.selectionAntialias());
+        if (x < 0 || y < 0 || x >= doc.width || y >= doc.height || (clip && !clip[y * doc.width + x]))
             return;
         const s = this.settings;
         this.sample = context(s.sampleImage ? doc.flattened() : doc.activeLayer.canvas).getImageData(0, 0, doc.width, doc.height);
@@ -185,7 +186,8 @@ export class PaintBucketTool extends EditableFill {
         const x = Math.floor(e.x + this.drag.grab.x), y = Math.floor(e.y + this.drag.grab.y);
         if ((x === this.seed.x && y === this.seed.y) || x < 0 || y < 0 || x >= doc.width || y >= doc.height)
             return;
-        if (doc.selection.mask && !doc.selection.mask[y * doc.width + x])
+        const clip = doc.selection.clipMask(AppState.selectionAntialias());
+        if (clip && !clip[y * doc.width + x])
             return;
         this.seed = { x, y };
         this.drag.moved = true;
@@ -204,7 +206,8 @@ export class PaintBucketTool extends EditableFill {
         const s = this.settings;
         return { seed: { ...this.seed }, useSecondary: this.useSecondary, shiftGlobal: this.shiftGlobal, sample: this.sample,
                  primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
-                 settings: { tolerance: s.tolerance, floodGlobal: s.floodGlobal, sampleImage: s.sampleImage, antialias: s.antialias, blend: s.blend } };
+                 settings: { tolerance: s.tolerance, floodGlobal: s.floodGlobal, sampleImage: s.sampleImage, antialias: s.antialias, blend: s.blend,
+                             toleranceStraight: !!s.toleranceStraight, fillAccumulate: s.fillAccumulate !== false, fill: s.fill || 0 } };
     }
 
     restoreState(st) {
@@ -217,61 +220,35 @@ export class PaintBucketTool extends EditableFill {
         AppState.setSecondary(st.secondary);
     }
 
-    // El relleno sobre la capa de antes de empezar, con las opciones y colores actuales.
+    // El relleno sobre la capa de antes de empezar, con las opciones y colores actuales
+    // (PaintBucketTool::render de Kaint).
     render() {
-        const doc = this.doc, s = this.settings, w = doc.width, h = doc.height, sel = doc.selection;
-        const mask = floodMask(this.sample, this.seed.x, this.seed.y, s.tolerance, s.floodGlobal !== this.shiftGlobal);
-        let x0 = w, y0 = h, x1 = -1, y1 = -1;
-        for (let yy = 0; yy < h; ++yy)
-            for (let xx = 0; xx < w; ++xx) {
-                const i = yy * w + xx;
-                if (sel.mask)
-                    mask[i] = (mask[i] * sel.mask[i]) / 255;
-                if (mask[i]) {
-                    if (xx < x0) x0 = xx;
-                    if (xx > x1) x1 = xx;
-                    if (yy < y0) y0 = yy;
-                    y1 = yy;
-                }
-            }
+        const doc = this.doc, s = this.settings, w = doc.width, h = doc.height;
+        const clip = doc.selection.clipMask(AppState.selectionAntialias());
         const pctx = context(this.preview);
         const old = this.rect;
         if (old) {
             pctx.clearRect(old.x, old.y, old.w, old.h);
             pctx.drawImage(this.start, old.x, old.y, old.w, old.h, old.x, old.y, old.w, old.h);
         }
-        if (x1 < 0) {
+        if (this.startFor !== this.start) {
+            this.startFor = this.start;
+            this.startData = context(this.start).getImageData(0, 0, w, h);
+        }
+        const r = paintBucket(this.startData, this.sample, this.seed, {
+            tolerance: s.tolerance, global: s.floodGlobal !== this.shiftGlobal, straight: !!s.toleranceStraight, antialias: s.antialias,
+            accumulate: s.fillAccumulate !== false, blend: s.blend, color: this.useSecondary ? AppState.secondary : AppState.primary,
+            background: this.useSecondary ? AppState.primary : AppState.secondary, pattern: s.fill || 0,
+            sampleIsLayer: !s.sampleImage,
+        }, clip);
+        if (!r) {
             if (old)
                 doc.pixelsChanged(this.layer, old);
             this.rect = old;
             return;
         }
-        // Borde suavizado: los píxeles del borde de la zona se cubren a medias.
-        const rect = { x: Math.max(0, x0 - 1), y: Math.max(0, y0 - 1) };
-        rect.w = Math.min(w, x1 + 2) - rect.x;
-        rect.h = Math.min(h, y1 + 2) - rect.y;
-        const out = context(this.start).getImageData(rect.x, rect.y, rect.w, rect.h);
-        const top = new ImageData(rect.w, rect.h), c = this.useSecondary ? AppState.secondary : AppState.primary;
-        for (let yy = 0; yy < rect.h; ++yy)
-            for (let xx = 0; xx < rect.w; ++xx) {
-                const i = (rect.y + yy) * w + rect.x + xx;
-                let m = mask[i];
-                if (!m && s.antialias) {
-                    let n = 0;
-                    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-                        const nx = rect.x + xx + dx, ny = rect.y + yy + dy;
-                        if (nx >= 0 && ny >= 0 && nx < w && ny < h && mask[ny * w + nx]) ++n;
-                    }
-                    m = n ? 64 * n : 0;
-                    if (sel.mask) m = (m * sel.mask[i]) / 255;
-                }
-                if (!m) continue;
-                const j = (yy * rect.w + xx) * 4;
-                top.data[j] = c.r; top.data[j + 1] = c.g; top.data[j + 2] = c.b; top.data[j + 3] = (Math.min(255, m) * (c.a ?? 255)) / 255;
-            }
-        blendPixels(out, top, s.blend);
-        pctx.putImageData(out, rect.x, rect.y);
-        this.rect = old ? unionRect(old, rect) : rect;
+        pctx.putImageData(r.data, r.rect.x, r.rect.y);
+        this.rect = old ? unionRect(old, r.rect) : r.rect;
         doc.pixelsChanged(this.layer, this.rect);
     }
 
@@ -292,7 +269,7 @@ export class GradientTool extends EditableFill {
     get name() { return tr("Degradado"); }
     get icon() { return "gradient"; }
     get letter() { return "G"; }
-    get options() { return ["gradient", "finish"]; }
+    get options() { return ["gradient", "antialias", "blend", "selectionQuality", "finish"]; }
     editName() { return tr("Mover degradado"); }
     finishName() { return tr("Finalizar degradado"); }
 
@@ -395,61 +372,80 @@ export class GradientTool extends EditableFill {
         AppState.setSecondary(st.secondary);
     }
 
-    // Valor del degradado (0..1) en un punto, según el tipo y la repetición.
-    value(x, y) {
-        const s = this.settings, a = this.a, b = this.b;
-        const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy || 1, len = Math.sqrt(len2);
-        let t;
+    // Parámetro del degradado (0..1) en el centro de un píxel, según el tipo y la repetición
+    // (GradientTool::render de Kaint).
+    value(px, py) {
+        const s = this.settings, a = this.a, dx = this.b.x - a.x, dy = this.b.y - a.y;
+        const len2 = dx * dx + dy * dy, len = Math.sqrt(len2), repeat = s.gradientRepeat;
+        const shape = (t) => {
+            if (repeat === "wrapped")
+                return t - Math.floor(t);
+            if (repeat === "reflected") {
+                const m = Math.abs(t) % 2;
+                return m <= 1 ? m : 2 - m;
+            }
+            return Math.min(1, Math.max(0, t));
+        };
+        const vx = px - a.x, vy = py - a.y;
+        const dot = (vx * dx + vy * dy) / len2, cross = (vx * dy - vy * dx) / len2;
         switch (s.gradient) {
-        case "reflected": t = Math.abs(((x - a.x) * dx + (y - a.y) * dy) / len2); break;
-        case "diamond": {
-            const u = ((x - a.x) * dx + (y - a.y) * dy) / len2, v = ((x - a.x) * -dy + (y - a.y) * dx) / len2;
-            t = Math.abs(u) + Math.abs(v);
-            break;
+        case "reflected": return shape(Math.abs(dot));
+        case "diamond": return shape(Math.abs(dot) + Math.abs(cross));
+        case "radial": return shape(Math.hypot(vx, vy) / len);
+        case "conical": return Math.abs(Math.atan2(vx * dy - vy * dx, vx * dx + vy * dy)) / Math.PI;
+        case "spiralcw":
+        case "spiralccw": {
+            const ang = Math.atan2(vx * dy - vy * dx, vx * dx + vy * dy) / (2 * Math.PI);
+            const t = Math.hypot(vx, vy) / len + (s.gradient === "spiralcw" ? -ang : ang);
+            return t - Math.floor(t);
         }
-        case "radial": t = Math.hypot(x - a.x, y - a.y) / len; break;
-        case "conical": {
-            const ang = Math.atan2(y - a.y, x - a.x) - Math.atan2(dy, dx);
-            t = Math.abs((((ang / Math.PI) % 2) + 3) % 2 - 1);
-            break;
+        default: return shape(dot);
         }
-        default: t = ((x - a.x) * dx + (y - a.y) * dy) / len2;
-        }
-        if (s.gradientRepeat === "wrapped") t = t - Math.floor(t);
-        else if (s.gradientRepeat === "reflected") { t = Math.abs(t) % 2; if (t > 1) t = 2 - t; }
-        return Math.min(1, Math.max(0, t));
     }
 
+    // Modo de color: del principal al secundario, compuesto con el modo de fusión; modo de
+    // transparencia: del alfa del principal al inverso del alfa del secundario.
     render() {
         const doc = this.doc, s = this.settings, w = doc.width, h = doc.height, sel = doc.selection;
+        const clip = sel.clipMask(AppState.selectionAntialias());
         const b = sel.bounds() || { x: 0, y: 0, w, h };
-        const startCtx = context(this.start), base = startCtx.getImageData(b.x, b.y, b.w, b.h);
-        let c1 = AppState.primary, c2 = AppState.secondary;
-        if (this.reversed) [c1, c2] = [c2, c1];
+        const startCtx = context(this.start), base = startCtx.getImageData(b.x, b.y, b.w, b.h), d = base.data;
+        const pctx = context(this.preview);
+        const ddx = this.b.x - this.a.x, ddy = this.b.y - this.a.y;
+        if (ddx * ddx + ddy * ddy < 1) {
+            pctx.putImageData(base, b.x, b.y);
+            doc.pixelsChanged(this.layer, b);
+            this.rect = b;
+            return;
+        }
+        let c0 = AppState.primary, c1 = AppState.secondary;
+        if (this.reversed) [c0, c1] = [c1, c0];
+        const weight = (x, y) => (clip ? clip[(b.y + y) * w + b.x + x] : 255);
         if (s.gradientTransparency) {
-            // Modo de transparencia: la opacidad de los píxeles va de entera a nada.
-            const d = base.data;
+            const a0 = (c0.a ?? 255) / 255, a1 = 1 - (c1.a ?? 255) / 255;
             for (let y = 0; y < b.h; ++y)
                 for (let x = 0; x < b.w; ++x) {
-                    const m = sel.mask ? sel.mask[(b.y + y) * w + b.x + x] / 255 : 1;
-                    if (!m) continue;
-                    const t = this.value(b.x + x + 0.5, b.y + y + 0.5);
-                    const keep = this.reversed ? t : 1 - t;
-                    d[(y * b.w + x) * 4 + 3] *= 1 - m + m * keep;
+                    const t = this.value(b.x + x + 0.5, b.y + y + 0.5), i = (y * b.w + x) * 4;
+                    const faded = scaleAlpha(d[i + 3], Math.trunc((a0 + (a1 - a0) * t) * 255 + 0.5));
+                    lerpStraight(d, i, d[i], d[i + 1], d[i + 2], faded, weight(x, y));
                 }
         } else {
-            const top = new ImageData(b.w, b.h), d = top.data;
+            const top = new ImageData(b.w, b.h), o = top.data, overwrite = s.blend === "overwrite";
+            const mix = (p, q, t) => Math.trunc(Math.fround(Math.fround(p + Math.fround((q - p) * t)) + 0.5));
+            const ca0 = c0.a ?? 255, ca1 = c1.a ?? 255;
             for (let y = 0; y < b.h; ++y)
                 for (let x = 0; x < b.w; ++x) {
-                    const m = sel.mask ? sel.mask[(b.y + y) * w + b.x + x] : 255;
-                    if (!m) continue;
-                    const t = this.value(b.x + x + 0.5, b.y + y + 0.5), i = (y * b.w + x) * 4;
-                    d[i] = c1.r + (c2.r - c1.r) * t; d[i + 1] = c1.g + (c2.g - c1.g) * t; d[i + 2] = c1.b + (c2.b - c1.b) * t;
-                    d[i + 3] = ((c1.a + (c2.a - c1.a) * t) * m) / 255;
+                    const t = Math.fround(this.value(b.x + x + 0.5, b.y + y + 0.5)), i = (y * b.w + x) * 4, m = weight(x, y);
+                    const r = mix(c0.r, c1.r, t), g = mix(c0.g, c1.g, t), bl = mix(c0.b, c1.b, t), al = mix(ca0, ca1, t);
+                    if (overwrite) {
+                        lerpStraight(d, i, r, g, bl, al, m);
+                        continue;
+                    }
+                    o[i] = r; o[i + 1] = g; o[i + 2] = bl; o[i + 3] = scaleAlpha(al, m);
                 }
-            blendPixels(base, top, "normal");
+            if (!overwrite)
+                blendPixels(base, top, s.blend);
         }
-        const pctx = context(this.preview);
         pctx.putImageData(base, b.x, b.y);
         doc.pixelsChanged(this.layer, b);
         this.rect = b;

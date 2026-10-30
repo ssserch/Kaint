@@ -570,7 +570,7 @@ class ColorSwatches {
 
 // Deslizador de un canal (ColorSlider de Kaint): la barra con el degradado del canal y un
 // triángulo a cada lado que marca el valor. Se arrastra o se mueve con la rueda.
-class ChannelSlider {
+export class ChannelSlider {
     constructor(channel, vertical, onChange) {
         this.channel = channel;
         this.vertical = vertical;
@@ -678,7 +678,7 @@ class ChannelSlider {
 
 // Rueda de color (ColorWheel de Kaint): el tono alrededor y la saturación hacia fuera, siempre
 // con el brillo máximo; ocupa el cuadrado más grande que cabe en su caja.
-class ColorWheel {
+export class ColorWheel {
     constructor(onPick) {
         this.onPick = onPick;
         this.hsv = { h: 0, s: 0, v: 0 };

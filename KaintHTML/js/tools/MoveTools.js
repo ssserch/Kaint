@@ -3,9 +3,11 @@
 // arrastrar fuera del borde gira. Como en Kaint, cada arrastre es un paso del historial y los
 // píxeles siguen "flotando" mientras ese paso sea el último (moverlos otra vez no los degrada).
 // Sin selección, un clic con Mover píxeles seleccionados selecciona todo el lienzo.
+import { AppState } from "../AppState.js";
 import { Tool } from "./Tool.js";
 import { Selection } from "../core/Selection.js";
 import { cloneCanvas, context, createCanvas } from "../core/Raster.js";
+import { drawTransformed, prefiltered } from "../core/Resample.js";
 import { iconCursor, rotateCursor } from "../ui/Icons.js";
 import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
@@ -199,7 +201,7 @@ class MoveToolBase extends Tool {
         }
         const p = { x: e.x, y: e.y }, d = this.drag, box = d.session.box;
         // Píxel a píxel (por defecto, como la selección): nada queda a medio píxel.
-        const snap = !this.settings.selectionAntialias;
+        const snap = !AppState.selectionAntialias();
         if (d.kind === "move") {
             box.tx = Math.round(d.start.tx + p.x - d.from.x);
             box.ty = Math.round(d.start.ty + p.y - d.from.y);
@@ -303,10 +305,11 @@ class MoveToolBase extends Tool {
         const box = this.drag ? this.drag.session.box : this.restBox();
         if (!box || (!s && this.doc.selection.isEmpty()))
             return;
-        // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint).
+        // La selección se ve donde quedará; los tiradores, solo en reposo (como Kaint), salvo que
+        // en Configuración no se oculten al arrastrar.
         if (s && this.drag)
             view.strokeSegments(ctx, s.selBase.outline(), box.matrix());
-        if (this.drag)
+        if (this.drag && Settings.get("hideMoveBox") !== false)
             return;
         const pts = box.handles().map((p) => view.imageToView(p.x, p.y));
         ctx.setLineDash([3, 3]);
@@ -326,11 +329,36 @@ class MoveToolBase extends Tool {
     }
 
     hidesSelectionOutline() {
-        return !!this.drag;
+        return !!this.drag && Settings.get("hideMoveBox") !== false;
     }
 }
 
 export class MoveSelectedTool extends MoveToolBase {
+    get options() { return ["interpolation", "gamma", "selectionQuality", "finish"]; }
+
+    activate() {
+        super.activate();
+        if (!this.watchingSampling) {
+            this.watchingSampling = true;
+            AppState.addEventListener("tools", () => this.applySampling());
+        }
+    }
+
+    // El muestreo y la corrección gamma de la barra se aplican al momento a lo que se mueve
+    // (MoveSelectedTool::applySampling de Kaint).
+    applySampling() {
+        const s = this.session();
+        if (!s?.step || this.drag || s.sampling === `${this.settings.moveInterpolation || "bicubic"}/${this.settings.moveGamma !== false}`)
+            return;
+        const doc = s.doc, layer = s.layer;
+        this.render(s, true);
+        doc.preview = null;
+        layer.ctx.clearRect(0, 0, doc.width, doc.height);
+        layer.ctx.drawImage(s.preview, 0, 0);
+        s.step.after = layer.ctx.getImageData(0, 0, doc.width, doc.height);
+        doc.pixelsChanged(layer, null);
+    }
+
     get id() { return "moveselectedpixels"; }
     get name() { return tr("Mover píxeles seleccionados"); }
     get icon() { return "moveselectedpixels"; }
@@ -364,19 +392,19 @@ export class MoveSelectedTool extends MoveToolBase {
         const f = context(floating);
         f.drawImage(layer.canvas, -b.x, -b.y);
         f.globalCompositeOperation = "destination-in";
-        f.drawImage(sel.maskCanvas(), -b.x, -b.y);
+        f.drawImage(sel.clipCanvas(AppState.selectionAntialias()), -b.x, -b.y);
         const base = cloneCanvas(layer.canvas);
         if (!keepCopy) {
             const h = context(base);
             h.globalCompositeOperation = "destination-out";
-            h.drawImage(sel.maskCanvas(), 0, 0);
+            h.drawImage(sel.clipCanvas(AppState.selectionAntialias()), 0, 0);
         }
         return { doc, layer, base, floating, selBase: sel, box: new TransformBox(b), preview: createCanvas(doc.width, doc.height), step: null };
     }
 
     // La capa con los píxeles en su sitio nuevo. Como en Paint.NET (Configuración), los movidos
     // reemplazan a los de debajo, también a los transparentes.
-    render(s) {
+    render(s, exact = false) {
         const doc = s.doc, p = context(s.preview), m = s.box.matrix();
         p.setTransform(1, 0, 0, 1, 0, 0);
         p.globalCompositeOperation = "source-over";
@@ -390,12 +418,60 @@ export class MoveSelectedTool extends MoveToolBase {
             p.drawImage(s.selBase.maskCanvas(), 0, 0);
             p.globalCompositeOperation = "source-over";
         }
-        p.setTransform(m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y)));
-        p.imageSmoothingEnabled = smooth;
-        p.imageSmoothingQuality = "high";
-        p.drawImage(s.floating, 0, 0);
+        this.drawFloating(s, p, m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y)), exact);
         p.setTransform(1, 0, 0, 1, 0, 0);
         doc.setPreview({ layer: s.layer, canvas: s.preview });
+    }
+
+    // Los píxeles levantados con la transformación, el muestreo y la gamma de la barra
+    // (FloatingPixels::render de Kaint): al reducir se promedian antes por áreas; el bicúbico y el
+    // bilineal con gamma se calculan aquí (mientras se arrastra, si la zona es grande, se ve antes
+    // con el del navegador; al soltar queda el exacto).
+    drawFloating(s, p, full, exact) {
+        const doc = s.doc, interp = this.settings.moveInterpolation || "bicubic", gamma = this.settings.moveGamma !== false;
+        s.sampling = `${interp}/${gamma}`;
+        if (full.a === 1 && full.b === 0 && full.c === 0 && full.d === 1 && Number.isInteger(full.e) && Number.isInteger(full.f)) {
+            p.setTransform(1, 0, 0, 1, 0, 0);
+            p.imageSmoothingEnabled = false;
+            p.drawImage(s.floating, full.e, full.f);
+            return;
+        }
+        if (s.floatingFor !== s.floating) {
+            s.floatingFor = s.floating;
+            s.floatingData = context(s.floating).getImageData(0, 0, s.floating.width, s.floating.height);
+            s.prefilter = {};
+        }
+        const pre = prefiltered(s.floatingData, full, gamma && interp !== "nearest", s.prefilter);
+        const m = pre.matrix, iw = pre.image.width, ih = pre.image.height;
+        const xs = [0, iw, 0, iw].map((x, i) => m.a * x + m.c * [0, 0, ih, ih][i] + m.e);
+        const ys = [0, iw, 0, iw].map((x, i) => m.b * x + m.d * [0, 0, ih, ih][i] + m.f);
+        const x0 = Math.max(0, Math.floor(Math.min(...xs)) - 2), y0 = Math.max(0, Math.floor(Math.min(...ys)) - 2);
+        const x1 = Math.min(doc.width, Math.ceil(Math.max(...xs)) + 2), y1 = Math.min(doc.height, Math.ceil(Math.max(...ys)) + 2);
+        if (x1 <= x0 || y1 <= y0)
+            return;
+        const ours = interp === "bicubic" || (gamma && interp === "bilinear");
+        if (ours && (exact || (x1 - x0) * (y1 - y0) <= 300000)) {
+            const tmp = new ImageData(x1 - x0, y1 - y0);
+            drawTransformed(tmp, pre.image, new DOMMatrix().translate(-x0, -y0).multiply(m), interp, gamma);
+            const c = createCanvas(tmp.width, tmp.height);
+            context(c).putImageData(tmp, 0, 0);
+            p.setTransform(1, 0, 0, 1, 0, 0);
+            p.drawImage(c, x0, y0);
+            return;
+        }
+        let source = s.floating;
+        if (pre.image !== s.floatingData) {
+            if (s.prefilter.canvasFor !== pre.image) {
+                s.prefilter.canvasFor = pre.image;
+                s.prefilter.canvas = createCanvas(iw, ih);
+                context(s.prefilter.canvas).putImageData(pre.image, 0, 0);
+            }
+            source = s.prefilter.canvas;
+        }
+        p.setTransform(m);
+        p.imageSmoothingEnabled = interp !== "nearest";
+        p.imageSmoothingQuality = interp === "bicubic" ? "high" : "low";
+        p.drawImage(source, 0, 0);
     }
 
     unmoved(s) {
@@ -409,6 +485,7 @@ export class MoveSelectedTool extends MoveToolBase {
     // Un paso del historial con la capa y la selección de antes y de después.
     commit(s, name, icon, selectionBefore = s.doc.selection) {
         const doc = s.doc, layer = s.layer;
+        this.render(s, true);
         const before = layer.ctx.getImageData(0, 0, doc.width, doc.height);
         doc.preview = null;
         layer.ctx.clearRect(0, 0, doc.width, doc.height);
@@ -420,7 +497,8 @@ export class MoveSelectedTool extends MoveToolBase {
             doc.setSelection(sel);
             doc.pixelsChanged(layer, null);
         };
-        s.step = { name, icon, undo: () => apply(before, selectionBefore), redo: () => apply(after, selAfter) };
+        s.step = { name, icon, bytes: before.data.length + after.data.length, after,
+                   undo: () => apply(before, selectionBefore), redo: () => apply(s.step.after, selAfter) };
         doc.selection = selAfter;
         doc.push(s.step);
         doc.pixelsChanged(layer, null);
@@ -447,6 +525,8 @@ export class MoveSelectedTool extends MoveToolBase {
 }
 
 export class MoveSelectionTool extends MoveToolBase {
+    get options() { return ["moveQuality", "finish"]; }
+
     get id() { return "moveselection"; }
     get name() { return tr("Mover selección"); }
     get icon() { return "moveselection"; }
@@ -476,7 +556,7 @@ export class MoveSelectionTool extends MoveToolBase {
 
     commit(s, name, icon) {
         const doc = s.doc, before = doc.selection;
-        const after = s.selBase.transformed(s.box.matrix(), this.settings.selectionAntialias);
+        const after = s.selBase.transformed(s.box.matrix(), AppState.selectionAntialias());
         s.step = { name, icon, undo: () => doc.setSelection(before), redo: () => doc.setSelection(after) };
         doc.setSelection(after);
         doc.push(s.step);

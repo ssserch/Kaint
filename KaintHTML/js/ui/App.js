@@ -2,27 +2,33 @@
 // barras, ventanas flotantes, barra de estado, teclado, portapapeles y archivos.
 import { AppState } from "../AppState.js";
 import { Document, Layer } from "../core/Document.js";
-import { Effects, Categories, defaultValues } from "../core/Effects.js";
-import { download, encode, formatFor, openFile, OpenAccept, SaveFormats, baseName } from "../core/ImageIO.js";
+import { Effects, Categories, defaultValues, findEffect } from "../core/Effects.js";
+import { animationFrames, baseName, download, embeddedProfile, encode, flattenedImage, formatFor, openFile, OpenAccept, OpenExtensions, SaveFormats } from "../core/ImageIO.js";
+import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
 import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
-import { Selection } from "../core/Selection.js";
+import { scaleImage } from "../core/Resample.js";
+import { transformPixels } from "../core/ColorProfiles.js";
+import { Selection, SelectionMode } from "../core/Selection.js";
+import { Recovery } from "../Recovery.js";
 import { Settings } from "../Settings.js";
 import { REPOSITORY, VERSION } from "../version.js";
-import { tr } from "../i18n.js";
+import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
 import { applyThemeColors } from "./Themes.js";
 import {
-    aboutDialog, canvasSizeDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, resizeDialog,
-    saveOptionsDialog, settingsDialog, TaskDialog,
+    aboutDialog, animationDialog, canvasSizeDialog, colorProfileDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber, resizeDialog,
+    saveAsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
-import { effectDialog, renderEffect } from "./EffectDialog.js";
+import { computeEffect, effectDialog, effectInput, renderEffect } from "./EffectDialog.js";
 import { icon, iconUrl, refreshIcons, setActiveColors, unsavedStar } from "./Icons.js";
 import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
 import { ToolOptions } from "./ToolOptions.js";
+import { saveConfigDialog } from "./SaveDialog.js";
+import { formatLength, pixelsPerUnit, unitSuffix } from "./Units.js";
 import { ToolManager } from "../tools/Tool.js";
 import { EllipseSelectTool, LassoSelectTool, MagicWandTool, RectSelectTool } from "../tools/SelectionTools.js";
 import { MoveSelectedTool, MoveSelectionTool } from "../tools/MoveTools.js";
@@ -111,7 +117,14 @@ export class App extends EventTarget {
         this.tools.select(Settings.get("startTool") || Settings.get("lastTool") || "paintbrush");
         if (!this.tools.current)
             this.tools.select("paintbrush");
-        this.tools.addEventListener("changed", () => Settings.set("lastTool", this.tools.current.id));
+        AppState.currentTool = this.tools.current.id;
+        this.tools.addEventListener("changed", () => {
+            AppState.currentTool = this.tools.current.id;
+            Settings.set("lastTool", this.tools.current.id);
+        });
+        // Copias de recuperación y archivos de la sesión (estos, después de restoreSession()).
+        Recovery.start();
+        this.sessionReady = false;
         this.addDocument(new Document(800, 600));
         updateActions();
     }
@@ -149,6 +162,18 @@ export class App extends EventTarget {
         this.updateToolIconColors();
         this.view.update();
         updateActions();
+        // Copias de recuperación cada tantos minutos y límite de memoria del historial.
+        const minutes = Math.max(0, Math.min(120, Number(Settings.get("autosaveMinutes")) || 0));
+        if (this.autosaveMinutes !== minutes) {
+            this.autosaveMinutes = minutes;
+            clearInterval(this.autosaveTimer);
+            this.autosaveTimer = minutes > 0 ? setInterval(() => this.autosave(), minutes * 60 * 1000) : null;
+        }
+        this.checkHistoryMemory();
+        if (this.reopenLast !== !!Settings.get("reopenLast")) {
+            this.reopenLast = !!Settings.get("reopenLast");
+            this.rememberSession();
+        }
     }
 
     updateToolIconColors() {
@@ -167,8 +192,11 @@ export class App extends EventTarget {
                 this.dispatchEvent(new CustomEvent(type, { detail: e.detail }));
             if (type === "pixels" || type === "modified")
                 this.updateTab(doc);
-            if (type === "history" && doc === this.doc)
+            if (type === "history" && doc === this.doc) {
                 this.syncToolWithHistory();
+                clearTimeout(this.historyTimer);
+                this.historyTimer = setTimeout(() => this.checkHistoryMemory(), 500);
+            }
             if (type === "history" || type === "selection" || type === "active" || type === "layers" || type === "size")
                 updateActions();
             if (type === "selection" || type === "size")
@@ -177,6 +205,7 @@ export class App extends EventTarget {
         ["history", "layers", "pixels", "active", "selection", "size", "modified"].forEach(forward);
         this.setCurrent(doc);
         this.rebuildTabs();
+        this.rememberSession();
     }
 
     setCurrent(doc) {
@@ -218,7 +247,128 @@ export class App extends EventTarget {
             this.setCurrent(this.docs[Math.min(i, this.docs.length - 1)] || null);
         }
         this.rebuildTabs();
+        this.rememberSession();
         return true;
+    }
+
+    // --- Sesión, recuperación e historial ---------------------------------------------------
+
+    // Los archivos abiertos, para volver a abrirlos la próxima vez (como session/files en Kaint).
+    rememberSession() {
+        if (this.sessionReady)
+            Recovery.rememberSession(Settings.get("reopenLast") ? this.docs : []);
+    }
+
+    // "Volver a abrir las imágenes de la última sesión" (MainWindow::restoreSessionOrNew): solo los
+    // archivos que el navegador deja volver a abrir; si pide permiso, se pregunta antes.
+    async restoreSession() {
+        try {
+            if (!Settings.get("reopenLast") || !window.showOpenFilePicker)
+                return;
+            const handles = await Recovery.lastSession();
+            if (!handles.length)
+                return;
+            const blank = this.doc, granted = new Set(), pending = [];
+            for (const h of handles) {
+                try {
+                    if ((await h.queryPermission({ mode: "read" })) === "granted")
+                        granted.add(h);
+                    else
+                        pending.push(h);
+                } catch {
+                    // El archivo ya no está.
+                }
+            }
+            if (pending.length) {
+                const dlg = new TaskDialog(tr("Volver a abrir las imágenes"), "document-open",
+                                           tr("El navegador pide permiso para volver a abrir las imágenes de la última sesión:\n%1",
+                                              pending.map((h) => `• ${h.name}`).join("\n")));
+                const reopen = dlg.addChoice("document-open", tr("Volver a abrir"), tr("Pide permiso al navegador para abrirlas."), true);
+                dlg.addChoice("dialog-cancel", tr("Ahora no"), tr("Empezar con una imagen nueva."));
+                if ((await dlg.exec()) === reopen) {
+                    for (const h of pending) {
+                        try {
+                            if ((await h.requestPermission({ mode: "read" })) === "granted")
+                                granted.add(h);
+                        } catch {
+                            // Sin permiso.
+                        }
+                    }
+                }
+            }
+            const before = this.docs.length;
+            for (const h of handles.filter((x) => granted.has(x))) {
+                try {
+                    await this.openFile(await h.getFile(), h);
+                } catch {
+                    // El archivo ya no está.
+                }
+            }
+            if (this.docs.length > before && blank && this.docs.includes(blank) && !blank.isModified() && blank.history.index === 0)
+                await this.closeDocument(blank, false);
+        } finally {
+            this.sessionReady = true;
+            this.rememberSession();
+        }
+    }
+
+    // Kaint se cerró de golpe: se ofrecen las copias de recuperación (MainWindow::offerRecovery).
+    async offerRecovery() {
+        const entries = await Recovery.orphaned();
+        if (!entries.length)
+            return;
+        const dlg = new TaskDialog(tr("Recuperar imágenes"), "edit-undo",
+                                   tr("Kaint no se cerró correctamente. Se pueden recuperar estas imágenes con cambios sin guardar:\n%1",
+                                      entries.map((e) => `• ${e.name}`).join("\n")));
+        const recover = dlg.addChoice("document-open", tr("Recuperar"), tr("Abre las imágenes tal como estaban en la última copia de recuperación."), true);
+        dlg.addChoice("edit-delete", tr("Descartar"), tr("Borra las copias de recuperación."));
+        if ((await dlg.exec()) === recover) {
+            const blank = this.doc;
+            for (const e of entries) {
+                try {
+                    this.addDocument(await Recovery.restore(e));
+                } catch {
+                    // Copia dañada.
+                }
+            }
+            if (this.docs.length > 1 && blank && !blank.isModified() && blank.history.index === 0 && !blank.fileName)
+                await this.closeDocument(blank, false);
+        }
+        await Recovery.discard(entries);
+        this.autosave();
+    }
+
+    autosave() {
+        return Recovery.save(this.docs);
+    }
+
+    // Si el historial de la imagen ocupa más de lo permitido, se descartan los pasos más antiguos
+    // (MainWindow::checkHistoryMemory).
+    checkHistoryMemory() {
+        const mb = Math.max(0, Number(Settings.get("historyLimitMB")) || 0);
+        if (!this.doc || mb <= 0)
+            return;
+        const dropped = this.doc.trimHistory(mb * 1024 * 1024);
+        if (dropped > 0)
+            this.showMessage(trn("El historial superaba %1 MB: se descartaron los %n pasos más antiguos.", dropped, mb), 8000);
+    }
+
+    // Un aviso en la barra de estado durante 'ms' milisegundos (QStatusBar::showMessage).
+    showMessage(text, ms = 5000) {
+        clearTimeout(this.messageTimer);
+        this.statusMessage = text;
+        this.refreshHint();
+        this.messageTimer = setTimeout(() => {
+            this.statusMessage = null;
+            this.refreshHint();
+        }, ms);
+    }
+
+    // Guarda todas las imágenes con cambios (las que no tienen archivo preguntan dónde).
+    async saveAll() {
+        for (const doc of [...this.docs])
+            if (doc.isModified() && !(await this.save(doc)))
+                return;
     }
 
     async closeAll() {
@@ -423,18 +573,27 @@ export class App extends EventTarget {
         A("open", tr("&Abrir..."), "document-open", "Ctrl+O", c(() => this.open()));
         A("save", tr("&Guardar"), "document-save", "Ctrl+S", c(() => this.save(this.doc)), has);
         A("saveAs", tr("Guardar &como..."), "document-save-as", "Ctrl+Shift+S", c(() => this.save(this.doc, true)), has);
+        A("saveAll", tr("Guardar &todo"), "document-save-all", "Ctrl+Alt+S", c(() => this.saveAll()), has);
         A("print", tr("&Imprimir..."), "document-print", "Ctrl+P", c(() => this.print()), has);
         A("close", tr("&Cerrar"), "document-close", "Ctrl+W", () => this.closeDocument(this.doc), has);
         A("closeAll", tr("Cerrar t&odas"), "document-close", "Ctrl+Shift+W", () => this.closeAll(), has);
         // Edición
         A("undo", tr("&Deshacer"), "edit-undo", "Ctrl+Z", () => this.undo(), () => this.doc?.history.canUndo() || this.tools.current?.isBusy());
-        A("redo", tr("&Rehacer"), "edit-redo", ["Ctrl+Y", "Ctrl+Shift+Z"], () => this.redo(), () => this.doc?.history.canRedo());
+        A("redo", tr("&Rehacer"), "edit-redo", "Ctrl+Y", () => this.redo(), () => this.doc?.history.canRedo());
         A("cut", tr("Cor&tar"), "edit-cut", "Ctrl+X", c(() => this.cut()), sel);
         A("copy", tr("&Copiar"), "edit-copy", "Ctrl+C", c(() => this.copy(false)), has);
         A("copyMerged", tr("Copiar co&mbinado"), "edit-copy-merged", "Ctrl+Shift+C", c(() => this.copy(true)), has);
         A("paste", tr("&Pegar"), "edit-paste", "Ctrl+V", c(() => this.pasteFromClipboard("layer")));
         A("pasteLayer", tr("Pegar en capa &nueva"), "edit-paste-new-layer", "Ctrl+Shift+V", c(() => this.pasteFromClipboard("newLayer")), has);
         A("pasteImage", tr("Pegar en una &imagen nueva"), "edit-paste-new-image", "Ctrl+Alt+V", c(() => this.pasteFromClipboard("newImage")));
+        A("copySelection", tr("Copiar &selección"), "edit-copy-selection", "Ctrl+Alt+Shift+C", c(() => this.copySelection()), sel);
+        for (const [mode, text, key] of [[SelectionMode.Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V"], [SelectionMode.Union, tr("&Sumar (unión)")],
+                                         [SelectionMode.Exclude, tr("&Excluir")], [SelectionMode.Intersect, tr("&Intersecar")],
+                                         [SelectionMode.Xor, tr("In&vertir («xor»)")]])
+            A(`pasteSelection-${mode}`, text, `selection-${mode}`, key || null, c(() => this.pasteSelection(mode)), has);
+        A("growSel", tr("A&mpliar la selección..."), "zoom-in", null, c(() => this.reshapeSelection("grow")), sel);
+        A("shrinkSel", tr("&Reducir la selección..."), "zoom-out", null, c(() => this.reshapeSelection("shrink")), sel);
+        A("featherSel", tr("&Difuminar la selección..."), "effect-gaussianblur", null, c(() => this.reshapeSelection("feather")), sel);
         A("eraseSel", tr("&Borrar la selección"), "edit-erase-selection", "Del", c(() => this.eraseSelection()), sel);
         A("fillSel", tr("&Rellenar la selección"), "edit-fill-selection", "Backspace", c(() => this.fillSelection()), sel);
         A("invertSel", tr("&Invertir la selección"), "edit-select-invert", "Ctrl+I", c(() => this.invertSelection()), has);
@@ -444,7 +603,7 @@ export class App extends EventTarget {
         A("zoomIn", tr("&Acercar"), "zoom-in", ["Ctrl++", "Ctrl+=", "Ctrl+Shift+="], () => this.view.zoomIn(), has);
         A("zoomOut", tr("A&lejar"), "zoom-out", ["Ctrl+-", "Ctrl+Shift+-"], () => this.view.zoomOut(), has);
         A("zoomFit", tr("&Zum a ventana"), "zoom-fit-best", "Ctrl+B", () => this.view.zoomToWindow(), has);
-        A("zoomSel", tr("Zum a &selección"), "zoom-select", "Ctrl+Shift+A", () => this.view.zoomToRect(this.doc.selection.bounds()), sel);
+        A("zoomSel", tr("Zum a &selección"), "zoom-select", "Ctrl+Shift+B", () => this.view.zoomToRect(this.doc.selection.bounds()), sel);
         A("actualSize", tr("&Tamaño real"), "zoom-original", "Ctrl+0", () => this.view.setZoom(1), has);
         A("pixelGrid", tr("Cuadrícula de &píxeles"), "view-grid", "Ctrl+'", () => {
             this.view.pixelGrid = !this.view.pixelGrid;
@@ -455,6 +614,9 @@ export class App extends EventTarget {
             this.view.setRulersVisible(!this.view.rulersVisible);
             updateActions();
         }, null, () => this.view.rulersVisible);
+        // Unidades de medida de las reglas y de la barra de estado.
+        [tr("&Píxeles"), tr("P&ulgadas"), tr("&Centímetros")].forEach((text, u) =>
+            A(`unit${u}`, text, null, null, () => this.setUnit(u), null, () => (Settings.get("unit") ?? 0) === u));
         A("fullscreen", tr("&Pantalla completa"), null, "F11", () => {
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
         }, null, () => !!document.fullscreenElement);
@@ -467,6 +629,8 @@ export class App extends EventTarget {
         A("rotCW", tr("Girar 90° en sentido &horario"), "object-rotate-right", "Ctrl+H", c(() => this.transformImage("cw")), has);
         A("rotCCW", tr("Girar 90° en sentido &antihorario"), "object-rotate-left", "Ctrl+G", c(() => this.transformImage("ccw")), has);
         A("rot180", tr("Girar &180°"), "image-rotate-180", "Ctrl+J", c(() => this.transformImage("180")), has);
+        A("colorProfile", tr("&Perfil de colores..."), "color-profile", null, c(() => this.colorProfile()), has);
+        A("animation", tr("A&nimación..."), "media-playback-start", null, c(() => this.editAnimation()), has);
         A("flatten", tr("&Acoplar"), "image-flatten", "Ctrl+Shift+F", c(() => this.flatten()), () => this.doc?.layers.length > 1);
         // Capas
         const many = () => this.doc?.layers.length > 1;
@@ -481,6 +645,7 @@ export class App extends EventTarget {
         A("flipLayerH", tr("Voltear &horizontalmente"), "layer-flip-horizontal", null, c(() => this.transformLayer("flipH")), has);
         A("flipLayerV", tr("Voltear &verticalmente"), "layer-flip-vertical", null, c(() => this.transformLayer("flipV")), has);
         A("rotateLayer180", tr("Girar &180°"), "layer-rotate-180", null, c(() => this.transformLayer("180")), has);
+        A("rotateZoom", tr("&Giro y zum..."), "layer-rotate-zoom", "Ctrl+Shift+Z", c(() => this.runEffect(findEffect("rotatezoom"), false)), has);
         A("layerTop", tr("Ir a capa &superior"), "layer-go-top", "Ctrl+Alt+PgUp", () => this.doc.setActiveIndex(this.doc.layers.length - 1), notTop);
         A("layerAbove", tr("Ir a capa de &encima"), "layer-go-up", "Alt+PgUp", () => this.doc.setActiveIndex(this.doc.active + 1), notTop);
         A("layerBelow", tr("Ir a capa de de&bajo"), "layer-go-down", "Alt+PgDown", () => this.doc.setActiveIndex(this.doc.active - 1), notBottom);
@@ -516,17 +681,22 @@ export class App extends EventTarget {
         });
         const sorted = (list) => [...list].sort((x, y) => tr(x.name).localeCompare(tr(y.name)));
         this.menuBar.setMenus([
-            { title: tr("&Archivo"), entries: () => [a("new"), a("open"), "-", a("save"), a("saveAs"), "-", a("print"), "-", a("close"), a("closeAll")] },
+            { title: tr("&Archivo"), entries: () => [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print"), "-", a("close"), a("closeAll")] },
             { title: tr("&Edición"), entries: () => [a("undo"), a("redo"), "-", a("cut"), a("copy"), a("copyMerged"), a("paste"), a("pasteLayer"),
-                                                      a("pasteImage"), "-", a("eraseSel"), a("fillSel"), a("invertSel"), a("selectAll"), a("deselect")] },
-            { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), a("rulers"), "-", a("fullscreen")] },
+                                                      a("pasteImage"), "-", a("copySelection"),
+                                                      { text: tr("Pegar s&elección"), icon: "edit-paste-selection", enabled: !!this.doc,
+                                                        submenu: () => Object.values(SelectionMode).map((m) => a(`pasteSelection-${m}`)) },
+                                                      "-", a("eraseSel"), a("fillSel"), a("invertSel"), a("selectAll"), a("deselect"), "-",
+                                                      a("growSel"), a("shrinkSel"), a("featherSel")] },
+            { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), a("rulers"), "-",
+                                                  a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
-                                                     a("rot180"), "-", a("flatten")] },
+                                                     a("rot180"), "-", a("colorProfile"), a("animation"), "-", a("flatten")] },
             { title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
-                                                    a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), "-", a("layerTop"),
+                                                    a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), a("rotateZoom"), "-", a("layerTop"),
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
                                                     a("layerDown"), a("layerToBottom"), "-", a("layerProps")] },
-            { title: tr("A&justes"), entries: () => sorted(Effects.filter((e) => !e.category && e.menu !== "effects")).map(effectEntry) },
+            { title: tr("A&justes"), entries: () => sorted(Effects.filter((e) => !e.category && !e.hidden && e.menu !== "effects")).map(effectEntry) },
             { title: tr("Efe&ctos"), entries: () => {
                 // Como en Kaint: "Repetir" solo después de usar un efecto y "Complementos..." solo con
                 // algún complemento activado.
@@ -544,7 +714,7 @@ export class App extends EventTarget {
                         cats.push([e.category, e.categoryName, e.categoryIcon]);
                 cats.sort((x, y) => x[1].localeCompare(y[1]));
                 for (const [key, name, catIcon] of cats) {
-                    const list = Effects.filter((e) => e.category === key);
+                    const list = Effects.filter((e) => e.category === key && !e.hidden);
                     if (list.length)
                         out.push({ text: name, icon: catIcon ? el("img", { src: catIcon, width: 16, height: 16, alt: "" }) : undefined,
                                    submenu: () => sorted(list).map(effectEntry) });
@@ -633,9 +803,45 @@ export class App extends EventTarget {
             const t = Number(this.zoomSlider.value) / 1000;
             this.view.setZoom(Math.exp(Math.log(0.01) + t * (Math.log(64) - Math.log(0.01))));
         });
-        bar.append(this.hintIcon, this.hintLabel, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
-                   item("status-cursor", this.posLabel, tr("Posición del cursor")), el("span", { textContent: "px", style: { padding: "0 6px" } }),
+        // Avance de la vista previa de un efecto (como la barra de Kaint): solo mientras calcula.
+        this.effectProgress = el("progress", { className: "effect-progress", max: 1, value: 0 });
+        this.effectProgress.hidden = true;
+        bar.append(this.hintIcon, this.hintLabel, this.effectProgress, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
+                   item("status-cursor", this.posLabel, tr("Posición del cursor")), this.createUnitButton(),
                    this.zoomBox, presets, this.actionButton("zoomFit"), this.actionButton("zoomOut"), this.zoomSlider, this.actionButton("zoomIn"));
+    }
+
+    // Unidades: botón compacto («px», «in», «cm») con menú, como en Kaint.
+    createUnitButton() {
+        this.unitButton = el("button", { className: "tbutton unit-button", type: "button", title: tr("Unidades de medida") });
+        this.unitButton.addEventListener("click", () => {
+            const r = this.unitButton.getBoundingClientRect(), a = (id) => this.actions.get(id);
+            popupMenu([a("unit0"), a("unit1"), a("unit2")], r.left, r.top, { above: true });
+        });
+        this.unitButton.textContent = unitSuffix(this.unit());
+        return this.unitButton;
+    }
+
+    unit() {
+        return Settings.get("unit") ?? 0;
+    }
+
+    setUnit(u) {
+        Settings.set("unit", u);
+        if (this.unitButton)
+            this.unitButton.textContent = unitSuffix(u);
+        this.view.renderRulers();
+        this.updateStatus();
+        updateActions();
+    }
+
+    // Fracción calculada de la vista previa (null la oculta).
+    setEffectProgress(fraction) {
+        if (!this.effectProgress)
+            return;
+        this.effectProgress.hidden = fraction === null;
+        if (fraction !== null)
+            this.effectProgress.value = fraction;
     }
 
     showHint(text) {
@@ -650,10 +856,17 @@ export class App extends EventTarget {
             return;
         const tool = this.tools.current, doc = this.doc;
         let iconName = tool?.icon, text = this.toolHint || "";
-        if (doc && tool?.highlightSelection && !tool.isBusy() && !doc.selection.isEmpty() && text === tool.hint()) {
-            const b = doc.selection.bounds(), px = (n) => `${n} ${tr("px")}`;
+        if (this.statusMessage) {
+            iconName = null;
+            text = this.statusMessage;
+        } else if (doc && tool?.highlightSelection && !tool.isBusy() && !doc.selection.isEmpty() && text === tool.hint()) {
+            const u = this.unit(), ppu = pixelsPerUnit(u, doc.dpi), b = doc.selection.bounds();
+            const len = (n) => `${formatLength(n, u, doc.dpi)} ${unitSuffix(u)}`;
+            const area = doc.selection.area() / (ppu * ppu);
+            const squares = u === 1 ? tr("pulgadas cuadradas") : u === 2 ? tr("centímetros cuadrados") : tr("píxeles cuadrados");
             text = tr("Esquina superior izquierda de la selección: %1, %2. Tamaño del rectángulo delimitador: %3 × %4. Área: %5 %6",
-                      px(b.x), px(b.y), px(b.w), px(b.h), doc.selection.area().toLocaleString(), tr("píxeles cuadrados"));
+                      len(b.x), len(b.y), len(b.w), len(b.h),
+                      area.toLocaleString(currentLanguage(), { minimumFractionDigits: u ? 2 : 0, maximumFractionDigits: u ? 2 : 0 }), squares);
             iconName = "status-selection";
         }
         if (this.hintIcon.dataset.name !== iconName) {
@@ -672,12 +885,17 @@ export class App extends EventTarget {
             this.selLabel.textContent = "";
             return;
         }
-        const b = doc.selection.bounds();
-        this.selLabel.textContent = b ? `${b.w} × ${b.h}` : `${doc.width} × ${doc.height}`;
+        const u = this.unit(), len = (n) => formatLength(n, u, doc.dpi), b = doc.selection.bounds();
+        const r = b || { x: 0, y: 0, w: doc.width, h: doc.height };
+        this.selLabel.textContent = `${len(r.w)} × ${len(r.h)}`;
+        this.selLabel.parentElement.title = b
+            ? tr("Tamaño de la selección: %1 × %2 %3 · esquina superior izquierda: %4, %5", len(b.w), len(b.h), unitSuffix(u), len(b.x), len(b.y))
+            : tr("Tamaño de la imagen: %1 × %2 %3 (no hay selección)", len(doc.width), len(doc.height), unitSuffix(u));
     }
 
     updateCursorPos(e) {
-        this.posLabel.textContent = e && this.doc ? `${Math.floor(e.x)}, ${Math.floor(e.y)}` : "";
+        const u = this.unit(), dpi = this.doc?.dpi;
+        this.posLabel.textContent = e && this.doc ? `${formatLength(Math.floor(e.x), u, dpi)}, ${formatLength(Math.floor(e.y), u, dpi)}` : "";
     }
 
     updateZoomBox() {
@@ -722,7 +940,7 @@ export class App extends EventTarget {
                     return;
                 }
             // Atajos de los ajustes y efectos (Ctrl+Mayús+I, Ctrl+L...).
-            const effect = Effects.find((fx) => fx.shortcut === combo);
+            const effect = Effects.find((fx) => fx.shortcut === combo && !fx.hidden);
             if (effect && this.doc) {
                 e.preventDefault();
                 this.command(() => this.runEffect(effect, false))();
@@ -810,12 +1028,12 @@ export class App extends EventTarget {
 
     async newImage() {
         const size = this.clipboard ? { w: this.clipboard.width, h: this.clipboard.height } : this.doc ? { w: this.doc.width, h: this.doc.height } : { w: 800, h: 600 };
-        const r = await newImageDialog(size.w, size.h);
+        const r = await newImageDialog(size.w, size.h, this.doc?.dpi ?? 96);
         if (!r)
             return;
         const s = AppState.secondary;
         const bg = r.background === "white" ? "#ffffff" : r.background === "secondary" ? `rgba(${s.r},${s.g},${s.b},${s.a / 255})` : null;
-        this.addDocument(new Document(r.width, r.height, { background: bg }));
+        this.addDocument(new Document(r.width, r.height, { background: bg, dpi: r.dpi }));
     }
 
     pickFiles(multiple = true) {
@@ -829,7 +1047,7 @@ export class App extends EventTarget {
     async open() {
         if (window.showOpenFilePicker) {
             try {
-                const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: "Images", accept: { "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".avif", ".ico", ".ora"] } }] });
+                const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: tr("Todos los tipos de imagen (%1)", OpenExtensions.map((e) => `*${e}`).join(" ")), accept: { "image/*": OpenExtensions } }] });
                 for (const h of handles)
                     await this.openFile(await h.getFile(), h);
                 return;
@@ -936,56 +1154,121 @@ export class App extends EventTarget {
                 doc.setPreview(null);
             }
         }
-        const values = await effectDialog(this, effect, this.effectValues[effect.id]);
-        return values && effect.pluginId ? pluginValues(effect.params, values) : values;
+        const chosen = await effectDialog(this, effect, this.effectValues[effect.id]);
+        this.doc?.setPreview(null);
+        if (!chosen)
+            return null;
+        return effect.pluginId ? pluginValues(effect.params, chosen.values) : chosen.values;
     }
 
-    // Guarda en el archivo abierto (si el navegador lo permite) o lo descarga.
+    // Guarda como Kaint (MainWindow::save, saveAs y writeFile): en el archivo abierto si el
+    // navegador deja escribir en él; si no, "Guardar como" con el diálogo del navegador (o el
+    // nombre y el tipo, y se descarga).
     async save(doc, saveAs = false) {
         if (!doc)
             return false;
         this.tools.finishCurrent();
-        let format = formatFor(doc.fileName || "imagen.png");
-        let quality = doc.saveQuality ?? 95;
-        if (doc.layers.length > 1 && !format.layered && !doc.fileHandle)
-            format = SaveFormats.find((f) => f.layered);
-        if (saveAs || !doc.fileHandle) {
-            if (window.showSaveFilePicker) {
-                try {
-                    const handle = await window.showSaveFilePicker({
-                        suggestedName: `${baseName(doc.displayName())}.${format.ext}`,
-                        types: SaveFormats.map((f) => ({ description: f.name, accept: { [f.mime]: [`.${f.ext}`] } })),
-                    });
-                    doc.fileHandle = handle;
-                    doc.fileName = handle.name;
-                    format = formatFor(handle.name);
-                } catch (e) {
-                    if (e.name === "AbortError")
-                        return false;
-                }
-            }
-            if (!doc.fileHandle) {
-                const r = await saveOptionsDialog(SaveFormats, format, quality);
-                if (!r)
+        if (!saveAs && doc.fileHandle && this.formatOf(doc.fileHandle.name))
+            return this.writeFile(doc, doc.fileHandle.name, doc.fileHandle);
+        // Sugerencia: el mismo nombre; si su formato no se puede escribir (o es nueva y tiene
+        // capas), OpenRaster.
+        let name = doc.fileName || `${tr("Sin título")}.${doc.layers.length > 1 ? "ora" : "png"}`;
+        if (!this.formatOf(name))
+            name = `${baseName(name)}.ora`;
+        if (window.showSaveFilePicker) {
+            const formats = this.saveFormats(), chosen = this.formatOf(name);
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: name,
+                    types: [chosen, ...formats.filter((f) => f !== chosen)].map((f) => ({
+                        description: tr(f.name), accept: { [f.mime]: [`.${f.ext}`, ...(f.aliases || []).map((x) => `.${x}`)] },
+                    })),
+                });
+                return this.writeFile(doc, handle.name, handle);
+            } catch (e) {
+                if (e.name === "AbortError")
                     return false;
-                format = r.format;
-                quality = r.quality;
-                doc.saveQuality = quality;
-                const blob = await encode(doc, format, quality);
-                doc.fileName = `${baseName(doc.displayName())}.${format.ext}`;
-                download(blob, doc.fileName);
-                doc.markSaved();
-                this.rebuildTabs();
-                return true;
             }
         }
-        format = formatFor(doc.fileHandle.name);
-        const blob = await encode(doc, format, quality);
-        const writable = await doc.fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
+        const r = await saveAsDialog(this.saveFormats(), name);
+        return r ? this.writeFile(doc, r, null) : false;
+    }
+
+    saveFormats() {
+        return SaveFormats;
+    }
+
+    formatOf(name) {
+        return formatFor(name);
+    }
+
+    async writeFile(doc, name, handle) {
+        let format = this.formatOf(name);
+        if (!format.layered && !format.animation && doc.layers.length > 1) {
+            // Como Paint.NET: el formato no admite capas, así que primero se acopla la imagen.
+            const ask = new TaskDialog(tr("Guardar"), "document-save",
+                                       tr("Para guardar en este formato de archivo primero tiene que acoplar la imagen, lo que la reducirá a una única capa."));
+            const flattenChoice = ask.addChoice("image-flatten", tr("Acoplar"),
+                                                tr("Se acoplará la imagen y, a continuación, se guardará. El acoplamiento queda en el historial, pero el archivo tendrá una sola capa."),
+                                                true);
+            const oraName = `${baseName(name)}.ora`;
+            const oraChoice = ask.addChoice("document-save-as", tr("No acoplar (guardar como .ora)"), tr("Se guarda con todas sus capas en «%1».", oraName));
+            ask.addChoice("dialog-cancel", tr("Cancelar"), tr("Cancelar la acción de guardado."));
+            const choice = await ask.exec();
+            if (choice === oraChoice) {
+                name = oraName;
+                format = this.formatOf(name);
+                if (handle && window.showSaveFilePicker) {
+                    try {
+                        handle = await window.showSaveFilePicker({ suggestedName: oraName, types: [{ description: tr(format.name), accept: { [format.mime]: [".ora"] } }] });
+                        name = handle.name;
+                    } catch {
+                        return false;
+                    }
+                } else {
+                    handle = null;
+                }
+            } else if (choice === flattenChoice) {
+                this.flatten(doc);
+            } else {
+                return false;
+            }
+        }
+        // Las opciones de cada formato se recuerdan; el GIF abierto conserva sus repeticiones.
+        let options = this.saveOptions?.[format.ext] ? structuredClone(this.saveOptions[format.ext]) : defaultSaveOptions();
+        if (format.animation && !this.saveOptions?.[format.ext])
+            options.loops = doc.gifLoops ?? 0;
+        let edited = null;
+        if (!format.plugin && hasSaveOptions(format.ext)) {
+            const frames = format.animation && doc.layers.length > 1 ? animationFrames(doc, 0, true) : [];
+            const r = await saveConfigDialog(format, flattenedImage(doc), options, frames, { dpi: doc.dpi, icc: embeddedProfile(doc) });
+            if (!r)
+                return false;
+            options = r.options;
+            edited = r.frames;
+            this.saveOptions = { ...(this.saveOptions || {}), [format.ext]: options };
+        }
+        document.body.classList.add("busy");
+        try {
+            const blob = await encode(doc, format, options, edited);
+            if (handle) {
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } else {
+                download(blob, name);
+            }
+        } catch (e) {
+            await message(tr("No se pudo guardar"), tr("No se pudo guardar «%1»:\n%2", name, String(e?.message || e)), "dialog-warning");
+            return false;
+        } finally {
+            document.body.classList.remove("busy");
+        }
+        doc.fileHandle = handle;
+        doc.fileName = name;
         doc.markSaved();
         this.rebuildTabs();
+        this.rememberSession();
         return true;
     }
 
@@ -1023,7 +1306,7 @@ export class App extends EventTarget {
         ctx.drawImage(source, -b.x, -b.y);
         if (!sel.isEmpty()) {
             ctx.globalCompositeOperation = "destination-in";
-            ctx.drawImage(sel.maskCanvas(), -b.x, -b.y);
+            ctx.drawImage(sel.clipCanvas(AppState.selectionAntialias()), -b.x, -b.y);
         }
         return out;
     }
@@ -1103,7 +1386,7 @@ export class App extends EventTarget {
         const selBefore = doc.selection;
         layer.ctx.save();
         layer.ctx.globalCompositeOperation = "destination-out";
-        layer.ctx.drawImage(sel.maskCanvas(), 0, 0);
+        layer.ctx.drawImage(sel.clipCanvas(AppState.selectionAntialias()), 0, 0);
         layer.ctx.restore();
         const after = layer.ctx.getImageData(r.x, r.y, r.w, r.h);
         const none = Selection.none(doc.width, doc.height);
@@ -1113,7 +1396,7 @@ export class App extends EventTarget {
             doc.pixelsChanged(layer, r);
         };
         apply(after, none);
-        doc.push({ name, icon: iconName, undo: () => apply(before, selBefore), redo: () => apply(after, none) });
+        doc.push({ name, icon: iconName, bytes: before.data.length + after.data.length, undo: () => apply(before, selBefore), redo: () => apply(after, none) });
     }
 
     fillSelection() {
@@ -1123,10 +1406,54 @@ export class App extends EventTarget {
         f.fillStyle = `rgba(${c.r},${c.g},${c.b},${c.a / 255})`;
         f.fillRect(r.x, r.y, r.w, r.h);
         f.globalCompositeOperation = "destination-in";
-        f.drawImage(sel.maskCanvas(), 0, 0);
+        f.drawImage(sel.clipCanvas(AppState.selectionAntialias()), 0, 0);
         layer.ctx.drawImage(fill, 0, 0);
         doc.pixelsChanged(layer, r);
         doc.pushPixels(layer, r, before, tr("Rellenar la selección"), "edit-fill-selection");
+    }
+
+    // Copiar y pegar la forma de la selección (como texto JSON, el formato de Paint.NET).
+    async copySelection() {
+        const json = this.doc.selection.toJson();
+        this.selectionClipboard = json;
+        try {
+            await navigator.clipboard.writeText(json);
+        } catch {
+            // Sin acceso al portapapeles del sistema: queda la copia de Kaint.
+        }
+    }
+
+    async pasteSelection(mode) {
+        const doc = this.doc;
+        let text = null;
+        try {
+            text = await navigator.clipboard.readText();
+        } catch {
+            // Sin permiso: la copia de Kaint.
+        }
+        const pasted = (text && Selection.fromJson(text, doc.width, doc.height))
+            || (this.selectionClipboard && Selection.fromJson(this.selectionClipboard, doc.width, doc.height));
+        if (!pasted) {
+            await message(tr("Pegar selección"), tr("El portapapeles no contiene una selección (copiada con «Copiar la selección»)."), "edit-paste-selection");
+            return;
+        }
+        const before = doc.selection;
+        doc.setSelection(mode === SelectionMode.Replace ? pasted : before.combined(pasted, mode));
+        doc.pushSelection(before, tr("Pegar selección"), "edit-paste");
+    }
+
+    // Ampliar, reducir o difuminar el borde de la selección tantos píxeles.
+    async reshapeSelection(kind) {
+        const doc = this.doc;
+        if (doc.selection.isEmpty())
+            return;
+        const text = kind === "grow" ? tr("Ampliar la selección") : kind === "shrink" ? tr("Reducir la selección") : tr("Difuminar la selección");
+        const radius = await promptNumber(text, tr("Radio (píxeles):"), 4, 1, 1000);
+        if (radius === null)
+            return;
+        const before = doc.selection;
+        doc.setSelection(kind === "grow" ? before.grown(radius) : kind === "shrink" ? before.grown(-radius) : before.feathered(radius));
+        doc.pushSelection(before, text, "edit-select");
     }
 
     invertSelection() {
@@ -1156,7 +1483,7 @@ export class App extends EventTarget {
             ctx.drawImage(layer.canvas, -b.x, -b.y);
             if (!doc.selection.rect) {
                 ctx.globalCompositeOperation = "destination-in";
-                ctx.drawImage(doc.selection.maskCanvas(), -b.x, -b.y);
+                ctx.drawImage(doc.selection.clipCanvas(AppState.selectionAntialias()), -b.x, -b.y);
             }
             layer.replaceCanvas(c);
         }
@@ -1171,17 +1498,22 @@ export class App extends EventTarget {
     }
 
     async resizeImage() {
-        const doc = this.doc, r = await resizeDialog(doc.width, doc.height);
-        if (!r || (r.width === doc.width && r.height === doc.height))
+        const doc = this.doc, r = await resizeDialog(doc.width, doc.height, doc.dpi);
+        if (!r || (r.width === doc.width && r.height === doc.height && Math.abs(r.dpi - doc.dpi) < 1e-9))
             return;
         const before = doc.snapshot();
-        for (const layer of doc.layers) {
-            const c = createCanvas(r.width, r.height), ctx = context(c);
-            ctx.imageSmoothingEnabled = r.method !== "nearest";
-            ctx.imageSmoothingQuality = r.method === "high" ? "high" : "low";
-            ctx.drawImage(layer.canvas, 0, 0, r.width, r.height);
-            layer.replaceCanvas(c);
+        // Con el mismo tamaño solo cambia la resolución (como Kaint).
+        if (r.width !== doc.width || r.height !== doc.height) {
+            document.body.classList.add("busy");
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            for (const layer of doc.layers) {
+                const c = createCanvas(r.width, r.height);
+                context(c).putImageData(scaleImage(layer.ctx.getImageData(0, 0, doc.width, doc.height), r.width, r.height, r.method, r.gamma), 0, 0);
+                layer.replaceCanvas(c);
+            }
+            document.body.classList.remove("busy");
         }
+        doc.dpi = r.dpi;
         doc.width = r.width;
         doc.height = r.height;
         doc.selection = Selection.none(r.width, r.height);
@@ -1193,15 +1525,17 @@ export class App extends EventTarget {
     }
 
     async canvasSize() {
-        const doc = this.doc, r = await canvasSizeDialog(doc.width, doc.height);
-        if (r)
-            this.resizeCanvas(r.width, r.height, r.anchor, tr("Tamaño del lienzo"));
+        const doc = this.doc, r = await canvasSizeDialog(doc.width, doc.height, doc.dpi);
+        if (r && (r.width !== doc.width || r.height !== doc.height || Math.abs(r.dpi - doc.dpi) > 1e-9))
+            this.resizeCanvas(r.width, r.height, r.anchor, tr("Tamaño del lienzo"), r.dpi);
     }
 
     // El lienzo de otro tamaño; anchor [0..2, 0..2] dice dónde queda la imagen.
-    resizeCanvas(width, height, anchor, name) {
+    resizeCanvas(width, height, anchor, name, dpi = this.doc.dpi) {
         const doc = this.doc, before = doc.snapshot();
-        const dx = Math.round(((width - doc.width) * anchor[0]) / 2), dy = Math.round(((height - doc.height) * anchor[1]) / 2);
+        const offset = (n, old, a) => (a === 0 ? 0 : a === 2 ? n - old : Math.trunc((n - old) / 2));
+        const dx = offset(width, doc.width, anchor[0]), dy = offset(height, doc.height, anchor[1]);
+        doc.dpi = dpi;
         doc.layers.forEach((layer, i) => {
             const c = createCanvas(width, height), ctx = context(c);
             // El fondo crece con el color secundario, como en Paint.NET.
@@ -1266,8 +1600,43 @@ export class App extends EventTarget {
         doc.pushPixels(layer, doc.rect, before, tr(names[kind][0]), names[kind][1]);
     }
 
-    flatten() {
-        const doc = this.doc, before = doc.snapshot(), flat = doc.flattened();
+    // Imagen > Perfil de colores: convertir los colores a otro perfil o asignarlo.
+    async colorProfile() {
+        const doc = this.doc, r = await colorProfileDialog(doc.colorProfile);
+        if (!r)
+            return;
+        const before = doc.snapshot();
+        if (r.result === "convert") {
+            document.body.classList.add("busy");
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            for (const layer of doc.layers) {
+                const data = layer.ctx.getImageData(0, 0, doc.width, doc.height);
+                transformPixels(data.data, doc.colorProfile, r.profile);
+                layer.ctx.putImageData(data, 0, 0);
+            }
+            document.body.classList.remove("busy");
+        }
+        doc.colorProfile = r.profile;
+        doc.emit("size");
+        doc.layersChanged();
+        doc.pushSnapshot(before, r.result === "convert" ? tr("Convertir perfil de colores") : tr("Asignar perfil de colores"), "color-profile");
+    }
+
+    // Duración de los fotogramas de un GIF (en el nombre de cada capa).
+    async editAnimation() {
+        const doc = this.doc;
+        const renamed = await animationDialog(doc.layers, this.saveOptions?.gif?.frameDelay ?? 100);
+        if (!renamed?.size)
+            return;
+        const before = doc.layerState();
+        for (const [index, name] of renamed)
+            doc.layers[index].name = name;
+        doc.layersChanged();
+        doc.pushLayers(before, tr("Duración de los fotogramas"), "media-playback-start");
+    }
+
+    flatten(doc = this.doc) {
+        const before = doc.snapshot(), flat = doc.flattened();
         const layer = doc.layers[0];
         layer.ctx.clearRect(0, 0, doc.width, doc.height);
         layer.ctx.drawImage(flat, 0, 0);
@@ -1400,27 +1769,66 @@ export class App extends EventTarget {
         const doc = this.doc;
         if (!effect || !doc)
             return;
-        let values = this.effectValues[effect.id];
+        let values = this.effectValues[effect.id], result = null, input = null;
         if (!repeat && effect.configure) {
             values = await this.configureEffect(effect);
             if (!values)
                 return;
         } else if (!repeat && effect.params.length) {
-            values = await effectDialog(this, effect, values);
-            if (!values)
+            const chosen = await effectDialog(this, effect, values);
+            if (!chosen)
                 return;
+            ({ values, result, input } = chosen);
         }
         values = values || {};
-        const full = effect.configure ? values : { ...Object.fromEntries(effect.params.map((p) => [p.key, p.def])), ...values };
-        const { rect, data } = renderEffect(doc, effect, full);
+        const full = effect.configure ? values : { ...defaultValues(effect), ...values };
+        // Como Kaint: si la vista previa ya está calculada con estos valores se usa tal cual; si
+        // no, se calcula con una ventana de progreso (si tarda más de medio segundo).
+        try {
+            result ||= await this.computeWithProgress(effect, full, input || effectInput(doc));
+        } catch (e) {
+            doc.setPreview(null);
+            message(tr(effect.name), tr("El efecto no se pudo aplicar:\n%1", String(e?.message || e)), "dialog-warning");
+            return;
+        }
+        if (!result) {
+            doc.setPreview(null);
+            return;
+        }
+        const { rect, data } = result;
         const layer = doc.activeLayer;
         const before = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
         layer.ctx.putImageData(data, rect.x, rect.y);
+        doc.setPreview(null);
         doc.pixelsChanged(layer, rect);
         doc.pushPixels(layer, rect, before, tr(effect.name), `effect-${effect.id}`);
         this.effectValues[effect.id] = full;
-        this.lastEffect = effect;
+        if (!effect.hidden)
+            this.lastEffect = effect;
         updateActions();
+    }
+
+    // Calcula un efecto en segundo plano; si tarda más de medio segundo aparece la ventana de
+    // progreso con Cancelar (applyEffectWithProgress de Kaint). null si se cancela.
+    async computeWithProgress(effect, values, input) {
+        let dlg = null, bar = null;
+        const job = computeEffect(input, effect, values, (f) => bar && (bar.value = f));
+        document.body.classList.add("busy");
+        const timer = setTimeout(() => {
+            document.body.classList.remove("busy");
+            dlg = new Dialog(tr(effect.name), { iconName: `effect-${effect.id}` });
+            bar = el("progress", { max: 1, value: 0 });
+            dlg.body.append(el("div", { className: "progress-text", textContent: tr("Aplicando «%1»…", tr(effect.name)) }), bar);
+            dlg.addButton(tr("Cancelar"), null, { isDefault: true });
+            dlg.exec().then((v) => v === null && job.cancel());
+        }, 500);
+        try {
+            return await job.promise;
+        } finally {
+            clearTimeout(timer);
+            document.body.classList.remove("busy");
+            dlg?.close("done");
+        }
     }
 
     // --- Soltar archivos -----------------------------------------------------------------------

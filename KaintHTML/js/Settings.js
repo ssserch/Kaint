@@ -26,8 +26,16 @@ const defaults = {
     dropShadow: true,
     checkerBrightness: 191,
     askOnceOnClose: true,
+    // Al iniciar, volver a abrir los archivos de la última sesión; copias de recuperación de las
+    // imágenes sin guardar cada tantos minutos (0: nunca); memoria máxima del historial de cada
+    // imagen en MB (0: sin límite).
+    reopenLast: false,
+    autosaveMinutes: 5,
+    historyLimitMB: 4096,
     // Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes.
     replacePixels: true,
+    // Herramientas Mover: ocultar el contorno y los tiradores mientras se arrastra.
+    hideMoveBox: true,
     // Ventanas flotantes y diálogos: 0, como los de paint.js (Windows 10); 1, compactos. Grosor
     // del borde en píxeles.
     panelStyle: 0,
@@ -35,6 +43,8 @@ const defaults = {
     // Ver > Reglas y su estilo: 0, oscura como la de paint.js; 1, del color de la barra.
     rulers: false,
     rulerStyle: 0,
+    // Unidades de medida (Ver): 0, píxeles; 1, pulgadas; 2, centímetros.
+    unit: 0,
     // Atajos cambiados en Configuración > Atajos de teclado (id de la acción → combinación).
     shortcuts: {},
     // Herramienta al abrir Kaint ("" = la última que se usó).

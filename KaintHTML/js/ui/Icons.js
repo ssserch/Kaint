@@ -3,6 +3,8 @@
 // los colores activos, la mano y las demás con sus dibujos de siempre) y las formas. Los dibujados
 // se vuelven a pintar al cambiar de tema o de colores.
 import { IconPacks } from "../IconPacks.js";
+import { patternBit } from "../core/FillPattern.js";
+import { CustomShapes, fittedPath, tracePath } from "../core/CustomShapes.js";
 import { Settings } from "../Settings.js";
 
 // Nombre de los PNG de las herramientas en los paquetes de iconos de paint.js: si el activo trae
@@ -54,7 +56,7 @@ const files = {
     "help-docs": "menu_help_help_topics_icon", "help-forum": "menu_help_forum_icon", "help-tutorials": "menu_help_tutorials_icon",
     "settings-interface": "settings_u_i_24", "settings-canvas": "settings_canvas_24", "settings-tools": "settings_tools_24",
     "settings-diagnostics": "settings_diagnostics_24", "settings-tablet": "settings_pen_and_tablet_24",
-    "settings-plugins": "settings_plugins_24", "settings-updates": "settings_updates_24",
+    "settings-plugins": "settings_plugins_24", "settings-performance": "settings_graphics_24", "settings-updates": "settings_updates_24",
     "status-selection": "selection_icon", "status-cursor": "cursor_x_y_icon", palette: "swatch_icon", "color-swap": "swap_icon",
     "dialog-warning": "warning_icon", "dialog-cancel": "cancel_icon", "dialog-ok-apply": "tool_strip_checked",
     "image-list-menu": "tool_bar_image_list_menu_open_button", "anchor": "anchor_chooser_control_anchor_image",
@@ -75,11 +77,12 @@ const files = {
     "effect-morphology": "morphology_effect_icon", "effect-motionblur": "motion_blur_effect",
     "effect-oilpainting": "oil_painting_effect", "effect-outline": "outline_effect_icon",
     "effect-pencilsketch": "pencil_sketch_effect_icon", "effect-pixelate": "pixelate_effect",
-    "effect-polarinversion": "polar_inversion_effect", "effect-posterize": "posterize_effect_icon",
+    "effect-polarinversion": "polar_inversion_effect", "effect-posterize": "posterize_effect_icon", "effect-quantize": "quantize_effect_icon",
     "effect-radialblur": "radial_blur_effect", "effect-redeye": "red_eye_remove_effect",
-    "effect-reducenoise": "reduce_noise_effect", "effect-relief": "relief_effect", "effect-sepia": "sepia_effect",
-    "effect-sharpen": "sharpen_effect", "effect-softenportrait": "soften_portrait_effect_icon",
-    "effect-squareblur": "square_blur_effect", "effect-surfaceblur": "surface_blur_effect_icon",
+    "effect-reducenoise": "reduce_noise_effect", "effect-relief": "relief_effect", "effect-rotatezoom": "menu_layers_rotate_zoom_icon",
+    "effect-sepia": "sepia_effect",
+    "effect-sharpen": "sharpen_effect", "effect-sketchblur": "sketch_blur_effect_icon", "effect-softenportrait": "soften_portrait_effect_icon",
+    "effect-squareblur": "square_blur_effect", "effect-straighten": "straighten_effect", "effect-surfaceblur": "surface_blur_effect_icon",
     "effect-temperature": "temperature_and_tint_effect", "effect-tilereflection": "tile_effect",
     "effect-turbulence": "turbulence_effect_icon", "effect-twist": "twist_effect", "effect-vignette": "vignette_effect_icon",
     "effect-zoomblur": "zoom_blur_effect",
@@ -90,7 +93,11 @@ const files = {
 const optionFiles = {
     "opt-gradient:linear": "enum_gradient_type_linear_clamped", "opt-gradient:reflected": "enum_gradient_type_linear_reflected",
     "opt-gradient:diamond": "enum_gradient_type_linear_diamond", "opt-gradient:radial": "enum_gradient_type_radial",
-    "opt-gradient:conical": "enum_gradient_type_conical",
+    "opt-gradient:conical": "enum_gradient_type_conical", "opt-gradient:spiralcw": "enum_gradient_type_spiral",
+    "opt-gradient:spiralccw": "enum_gradient_type_spiral_counter_clockwise",
+    "opt-tolalpha:0": "enum_tolerance_alpha_mode_premultiplied", "opt-tolalpha:1": "enum_tolerance_alpha_mode_straight",
+    "opt-gamma:1": "enum_tool_gamma_mode_linear", "opt-gamma:0": "enum_tool_gamma_mode_companded",
+    "opt-fontmetric:points": "enum_font_size_metric_points", "opt-fontmetric:fixed96": "enum_font_size_metric_fixed96_dpi",
     "opt-style:outline": "enum_shape_draw_type_outline_dark", "opt-style:fill": "enum_shape_draw_type_interior",
     "opt-style:both": "enum_shape_draw_type_both_dark",
     "opt-curve:straight": "enum_curve_type_straight", "opt-curve:spline": "enum_curve_type_spline",
@@ -556,9 +563,23 @@ function drawShapesTool(ctx) {
 // --- Opciones de herramienta (Icons.cpp: rejilla de 32 px con un margen de 3) -------------
 
 const options = {
-    shape(ctx, type) {
+    // Trama de relleno (Icons::fillPattern de Kaint): un píxel de la trama por píxel del icono de
+    // 16, con el color del texto sobre el de fondo y un borde.
+    fill(ctx, index) {
+        ctx.fillStyle = cssVar("--base");
+        ctx.fillRect(0, 0, 32, 32);
+        ctx.fillStyle = fg();
+        for (let y = 0; y < 16; ++y)
+            for (let x = 0; x < 16; ++x)
+                if (patternBit(Number(index), x, y))
+                    ctx.fillRect(x * 2, y * 2, 2, 2);
+        ctx.strokeStyle = fg();
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, 30, 30);
+    },
+    shape(ctx, ...type) {
         ctx.beginPath();
-        shapePath(ctx, type, 4, 5, 24, 22, 4);
+        shapePath(ctx, type.join(":"), 4, 5, 24, 22, 4);
         stroke(ctx, fg(), 1.6);
     },
     sample(ctx, n) {
@@ -585,6 +606,15 @@ export const ShapeTypes = [
 export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
     if (w < 0) { x += w; w = -w; }
     if (h < 0) { y += h; h = -h; }
+    // Formas personalizadas (.xaml), estiradas hasta llenar el rectángulo.
+    if (type.startsWith("custom:")) {
+        const custom = CustomShapes.find(type.slice(7));
+        if (custom) {
+            tracePath(ctx, fittedPath(custom.path, x, y, w, h));
+            return;
+        }
+        type = "rectangle";
+    }
     const at = (fx, fy) => [x + fx * w, y + fy * h];
     const polygon = (pts) => {
         pts.forEach(([fx, fy], i) => (i ? ctx.lineTo(...at(fx, fy)) : ctx.moveTo(...at(fx, fy))));
@@ -667,11 +697,106 @@ export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
     }
 }
 
-export const shapeFillRule = (type) => (type === "gear" ? "evenodd" : "nonzero");
+export const shapeFillRule = (type) => (type.startsWith("custom:") ? CustomShapes.find(type.slice(7))?.path.rule || "nonzero"
+    : type === "gear" ? "evenodd" : "nonzero");
+
+// Las secciones del desplegable de formas (shapeGroups de Kaint): [nombre, [id...]].
+export const ShapeGroups = [
+    ["Formas básicas", ["rectangle", "roundedrect", "ellipse", "diamond", "trapezoid", "parallelogram", "triangle", "righttriangle"]],
+    ["Polígonos y estrellas", ["pentagon", "hexagon", "heptagon", "octagon", "star3", "star4", "star5", "star6"]],
+    ["Flechas", ["arrow", "notchedarrow", "pentagonarrow", "chevronarrow"]],
+    ["Bocadillos", ["rectcallout", "roundedrectcallout", "ellipsecallout", "cloudcallout"]],
+    ["Símbolos", ["lightningbolt", "checkmark", "multiply", "gear", "heart"]],
+];
+
+// Nombre de una forma (integrada o personalizada).
+export function shapeName(type) {
+    if (type.startsWith("custom:"))
+        return CustomShapes.find(type.slice(7))?.name || "";
+    const t = ShapeTypes.find(([id]) => id === type);
+    return t ? t[1] : "";
+}
 
 // --- Creación ------------------------------------------------------------------------------
 
+// Ojo de visibilidad (Icons::eye de Kaint): abierto con la pupila; cerrado, el párpado con
+// pestañas. Y los botones de reproducir y pausa de las animaciones.
+const foreground = () => getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#000";
+function drawEye(ctx, open) {
+    const c = 8, w = 7, h = 16 * 0.32;
+    ctx.strokeStyle = ctx.fillStyle = foreground();
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(c - w, c);
+    ctx.quadraticCurveTo(c, c + 2 * h, c + w, c);
+    if (open) {
+        ctx.moveTo(c - w, c);
+        ctx.quadraticCurveTo(c, c - 2 * h, c + w, c);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(c, c, h * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+    }
+    for (const t of [-0.6, 0, 0.6]) {
+        const x = c + t * w, y = c + h * (1 - t * t) * 0.95;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + t * 2.5, y + 3.5);
+    }
+    ctx.stroke();
+}
+
+// Dos manchas translúcidas: con acumulación, donde se solapan el color se refuerza
+// (Icons::fillAccumulate de Kaint).
+function drawAccumulate(ctx, on) {
+    const d = 16 * 0.62, a = [1, 1], b = [15 - d, 15 - d];
+    ctx.save();
+    ctx.globalAlpha = 150 / 255;
+    ctx.fillStyle = accent();
+    if (on) {
+        for (const [x, y] of [a, b]) {
+            ctx.beginPath();
+            ctx.ellipse(x + d / 2, y + d / 2, d / 2, d / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else {
+        ctx.beginPath();
+        for (const [x, y] of [a, b]) {
+            ctx.moveTo(x + d, y + d / 2);
+            ctx.ellipse(x + d / 2, y + d / 2, d / 2, d / 2, 0, 0, Math.PI * 2);
+        }
+        ctx.fill("nonzero");
+    }
+    ctx.restore();
+    ctx.strokeStyle = fg();
+    ctx.lineWidth = 1;
+    for (const [x, y] of [a, b]) {
+        ctx.beginPath();
+        ctx.ellipse(x + d / 2, y + d / 2, d / 2, d / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+function drawPlay(ctx, pause) {
+    ctx.fillStyle = foreground();
+    ctx.beginPath();
+    if (pause) {
+        ctx.rect(4, 3, 3, 10);
+        ctx.rect(9, 3, 3, 10);
+    } else {
+        ctx.moveTo(4, 2.5);
+        ctx.lineTo(13, 8);
+        ctx.lineTo(4, 13.5);
+        ctx.closePath();
+    }
+    ctx.fill();
+}
+
 const drawn = {
+    "eye-open": [16, (ctx) => drawEye(ctx, true)], "eye-closed": [16, (ctx) => drawEye(ctx, false)],
+    "media-playback-start": [16, (ctx) => drawPlay(ctx, false)], "media-playback-pause": [16, (ctx) => drawPlay(ctx, true)],
+    "opt-accumulate:1": [16, (ctx) => drawAccumulate(ctx, true)], "opt-accumulate:0": [16, (ctx) => drawAccumulate(ctx, false)],
     rectangleselect: [20, drawRectSelect], ellipseselect: [20, drawEllipseSelect], lassoselect: [20, drawLasso],
     magicwand: [20, drawMagicWand], moveselectedpixels: [20, drawMove], moveselection: [20, drawMoveSelection],
     zoom: [20, drawZoom], eraser: [20, drawEraser], pencil: [20, drawPencil], colorpicker: [20, drawColorPicker],

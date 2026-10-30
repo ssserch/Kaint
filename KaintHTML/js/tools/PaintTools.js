@@ -7,7 +7,7 @@ import { tr } from "../i18n.js";
 
 class StrokeTool extends Tool {
     get options() {
-        return ["brushSize", "hardness", "spacing", "smoothing", "antialias", "pressure", "blend"];
+        return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "blend", "selectionQuality"];
     }
 
     brushDiameter() {
@@ -75,6 +75,11 @@ export class BrushTool extends StrokeTool {
     get icon() { return "paintbrush"; }
     get letter() { return "B"; }
     hint() { return tr("Clic izquierdo: pintar con el color principal · clic derecho: con el secundario."); }
+
+    // Con una trama, el otro color va donde la trama no tiene bit (BrushTool::params de Kaint).
+    strokeOptions(e) {
+        return { ...super.strokeOptions(e), fill: this.settings.fill || 0, background: this.colorFor(e.button === "right" ? "left" : "right") };
+    }
 }
 
 export class EraserTool extends StrokeTool {
@@ -82,7 +87,7 @@ export class EraserTool extends StrokeTool {
     get name() { return tr("Goma de borrar"); }
     get icon() { return "eraser"; }
     get letter() { return "E"; }
-    get options() { return ["brushSize", "hardness", "spacing", "smoothing", "antialias", "pressure"]; }
+    get options() { return ["brushSize", "hardness", "spacing", "smoothing", "pressure", "antialias", "selectionQuality"]; }
     hint() { return tr("Arrastra para borrar. La opacidad del color principal (clic derecho: secundario) regula la fuerza."); }
 
     strokeOptions(e) {
@@ -95,7 +100,7 @@ export class PencilTool extends Tool {
     get name() { return tr("Lápiz"); }
     get icon() { return "pencil"; }
     get letter() { return "P"; }
-    get options() { return ["blend"]; }
+    get options() { return ["blend", "selectionQuality"]; }
     hint() { return tr("Dibuja píxeles sueltos con el color principal (clic derecho: secundario), ideal para pixel art."); }
 
     onPointerDown(e) {
@@ -159,7 +164,7 @@ export class CloneStampTool extends StrokeTool {
             this.offset = { x: this.source.x - Math.floor(e.x), y: this.source.y - Math.floor(e.y) };
         const layer = this.doc.layers.includes(this.source.layer) ? this.source.layer : this.doc.activeLayer;
         this.stroke = new Stroke(this.doc, this.doc.activeLayer, {
-            mode: "clone", blend: this.settings.blend, antialias: this.settings.antialias, hardness: this.settings.hardness,
+            mode: "clone", color: AppState.primary, blend: this.settings.blend, antialias: this.settings.antialias, hardness: this.settings.hardness,
             spacing: this.settings.spacing, cloneOffset: this.offset, cloneSource: layer.canvas,
         });
         this.stroke.lineTo(e.x, e.y, this.size(e));
@@ -190,7 +195,9 @@ export class RecolorTool extends StrokeTool {
     get name() { return tr("Volver a colorear"); }
     get icon() { return "recolor"; }
     get letter() { return "R"; }
-    get options() { return ["brushSize", "hardness", "spacing", "smoothing", "antialias", "pressure", "tolerance", "recolor"]; }
+    get options() {
+        return ["brushSize", "hardness", "spacing", "tolerance", "tolAlpha", "recolor", "smoothing", "pressure", "antialias", "selectionQuality"];
+    }
 
     hint() {
         return this.settings.recolorSampling === "once"
@@ -202,11 +209,11 @@ export class RecolorTool extends StrokeTool {
         let from;
         if (this.settings.recolorSampling === "once") {
             const d = this.doc.activeLayer.ctx.getImageData(Math.floor(e.x), Math.floor(e.y), 1, 1).data;
-            from = { r: d[0], g: d[1], b: d[2] };
+            from = { r: d[0], g: d[1], b: d[2], a: d[3] };
         } else {
             from = e.button === "right" ? AppState.primary : AppState.secondary;
         }
         return { mode: "recolor", color: this.colorFor(e.button), antialias: this.settings.antialias, hardness: this.settings.hardness,
-                 recolorFrom: from, recolorTolerance: this.settings.tolerance };
+                 recolorFrom: from, recolorTolerance: this.settings.tolerance, recolorStraight: !!this.settings.toleranceStraight };
     }
 }

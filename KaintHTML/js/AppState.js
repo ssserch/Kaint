@@ -38,11 +38,54 @@ export const defaultTools = () => ({
     bold: false,
     italic: false,
     underline: false,
+    strikeout: false,
+    // Unidad del tamaño de letra ("points": según los PPP de la imagen; "fixed96") y modo de
+    // representación ("smooth", "sharpModern", "sharpClassic").
+    fontMetric: "points",
+    textRendering: "smooth",
     textAlign: "left",
     pickerSize: 1,
     pickerAfter: "stay",
     recolorSampling: "secondary",
+    // Mover selección: píxel a píxel por defecto. Mover píxeles seleccionados: muestreo y gamma.
+    moveSelectionAntialias: false,
+    moveInterpolation: "bicubic",
+    moveGamma: true,
+    // Modo alfa de la tolerancia (directo o premultiplicado) y acumular los rellenos del cubo.
+    toleranceStraight: false,
+    fillAccumulate: true,
+    // Trama de relleno del pincel, el cubo, la línea y las formas (0: color sólido).
+    fill: 0,
 });
+
+// Opciones predeterminadas de las herramientas (Configuración > Herramientas), como
+// AppState::toolDefaults de Kaint: con ellas empieza cada sesión; lo último usado no se guarda.
+export function toolDefaults() {
+    return { ...defaultTools(), ...(remember("toolDefaults") || {}) };
+}
+
+export function setToolDefaults(tools) {
+    remember("toolDefaults", { ...tools });
+}
+
+// Unas opciones de herramienta propias (LocalToolSettings de Kaint): las de Configuración >
+// Herramientas. Eventos: "tools".
+export class LocalToolSettings extends EventTarget {
+    constructor(initial) {
+        super();
+        this.tools = { ...initial };
+    }
+
+    updateTools(changes) {
+        Object.assign(this.tools, changes);
+        this.dispatchEvent(new Event("tools"));
+    }
+
+    set(tools) {
+        this.tools = { ...tools };
+        this.dispatchEvent(new Event("tools"));
+    }
+}
 
 // Paleta de Paint.NET (la de Kaint, src/core/Palette.cpp): 64 colores y los 32 primeros otra
 // vez con la mitad de opacidad.
@@ -117,7 +160,14 @@ class State extends EventTarget {
         this.primary = { r: 0, g: 0, b: 0, a: 255 };
         this.secondary = { r: 255, g: 255, b: 255, a: 255 };
         this.secondaryActive = false;
-        this.tools = { ...defaultTools(), ...(remember("tools") || {}) };
+        // Ni los colores ni las opciones de las herramientas se guardan al salir (como en Kaint);
+        // las últimas usadas que guardaban las versiones anteriores se descartan.
+        this.tools = toolDefaults();
+        try {
+            localStorage.removeItem("kaint.tools");
+        } catch {
+            // Sin almacenamiento.
+        }
         this.palette = remember("palette") || defaultPalette();
     }
 
@@ -161,8 +211,13 @@ class State extends EventTarget {
 
     updateTools(changes) {
         Object.assign(this.tools, changes);
-        remember("tools", this.tools);
         this.emit("tools");
+    }
+
+    // Calidad de selección con la que recorta la herramienta actual (Raster::selectionAntialias de
+    // Kaint): Mover selección tiene la suya.
+    selectionAntialias() {
+        return !!(this.currentTool === "moveselection" ? this.tools.moveSelectionAntialias : this.tools.selectionAntialias);
     }
 
     setPalette(colors) {

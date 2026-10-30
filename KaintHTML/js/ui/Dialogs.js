@@ -2,14 +2,20 @@
 // las tareas con opciones (TaskDialog) y los de Imagen y Capas, Configuración y Acerca de.
 import { icon } from "./Icons.js";
 import { shortcutLabel } from "./Actions.js";
-import { BlendModes, BlendNames } from "../core/Raster.js";
-import { Settings } from "../Settings.js";
+import { BlendModes, BlendNames, checkerPattern, thumbnail } from "../core/Raster.js";
+import { delayFromName, MIN_DELAY, nameWithDelay } from "../core/Codecs.js";
+import { MAX_WORKERS } from "../core/EffectRunner.js";
+import { remember, Settings } from "../Settings.js";
+import { AppState, defaultTools, LocalToolSettings, setToolDefaults, toolDefaults } from "../AppState.js";
+import { ToolOptionsPanel } from "./ToolOptions.js";
+import { CustomShapes } from "../core/CustomShapes.js";
 import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
 import { ColorRoles, Presets } from "./Themes.js";
-import { plain, tr } from "../i18n.js";
+import { currentLanguage, plain, tr } from "../i18n.js";
+import { ResampleMethods } from "../core/Resample.js";
 
 let openDialogs = 0;
 
@@ -118,6 +124,9 @@ export class Dialog {
 
     exec() {
         openDialogs++;
+        // Al cerrarse, el foco vuelve a donde estaba (por ejemplo, al diálogo de un efecto después
+        // de elegir un color).
+        this.returnFocus = document.activeElement;
         document.body.appendChild(this.backdrop);
         // El foco entra ya (si no, un Esc o un Intro pulsado justo al abrirse se perdía); se repite
         // tras el primer pintado por si el navegador aún no lo aceptaba.
@@ -133,6 +142,8 @@ export class Dialog {
             return;
         openDialogs--;
         this.backdrop.remove();
+        if (this.returnFocus?.isConnected)
+            this.returnFocus.focus({ preventScroll: true });
         const resolve = this.resolve;
         this.resolve = null;
         this.onClose?.(value);
@@ -231,102 +242,248 @@ export async function message(title, text, iconName = "dialog-warning") {
 
 // --- Imagen ------------------------------------------------------------------------------
 
-export async function newImageDialog(width, height) {
-    const dlg = new Dialog(tr("Imagen nueva"), { iconName: "document-new" });
-    const w = numberInput(width, 1, 16384), h = numberInput(height, 1, 16384);
-    const keep = checkbox(tr("Mantener la relación de aspecto"), false);
-    const bg = select([["white", tr("Blanco")], ["secondary", tr("Color secundario")], ["transparent", tr("Transparente")]], "white");
-    const ratio = width / height;
-    w.addEventListener("input", () => { if (keep.input.checked) h.value = Math.max(1, Math.round(w.read() / ratio)); });
-    h.addEventListener("input", () => { if (keep.input.checked) w.value = Math.max(1, Math.round(h.read() * ratio)); });
-    dlg.body.appendChild(el("div", { className: "form" }, [
-        el("label", { textContent: tr("Anchura:") }), w, el("label", { textContent: tr("Altura:") }), h,
-        el("div", { className: "wide" }, [keep]),
-        el("label", { textContent: tr("Fondo:") }), bg,
-    ]));
-    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
-    dlg.addButton(tr("Cancelar"), null);
-    const r = await dlg.exec();
-    return r ? { width: w.read(), height: h.read(), background: bg.value } : null;
+// Tamaño en memoria de una capa (o de varias), como en los diálogos de Kaint.
+function memoryText(w, h, layers = 1) {
+    const mb = (w * h * 4 * layers) / (1024 * 1024), lang = currentLanguage();
+    const n = (v, d) => v.toLocaleString(lang, { minimumFractionDigits: d, maximumFractionDigits: d });
+    return mb >= 1024 ? tr("%1 GB", n(mb / 1024, 2)) : tr("%1 MB", n(mb, 1));
 }
 
-export async function resizeDialog(width, height) {
-    const dlg = new Dialog(tr("Cambiar el tamaño"), { iconName: "transform-scale" });
-    const byPercent = el("input", { type: "radio", name: "mode", checked: false });
-    const byAbsolute = el("input", { type: "radio", name: "mode", checked: true });
-    const percent = numberInput(100, 1, 1000);
-    const w = numberInput(width, 1, 16384), h = numberInput(height, 1, 16384);
+const MAX_SIDE = 65535;
+
+// Recuadro con título (QGroupBox).
+function groupBox(title, children) {
+    return el("fieldset", { className: "group" }, [el("legend", { textContent: title }), ...children]);
+}
+
+// Tamaño como en los diálogos de Paint.NET (SizeEditor de Kaint): por porcentaje o absoluto,
+// "Mantener la relación de aspecto", tamaño en píxeles y tamaño de impresión (resolución en
+// píxeles/pulgada o píxeles/cm y ancho/alto en pulgadas o centímetros).
+function sizeEditor(original, dpi, allowPercent, onChange) {
+    const aspect = original.h > 0 ? original.w / original.h : 1;
+    let currentDpi = dpi, updating = false;
+    const element = el("div", { className: "size-editor" });
+    let byPercent = null, percent = null, percentRow = null;
+    if (allowPercent) {
+        const name = `size-${Math.random().toString(36).slice(2)}`;
+        byPercent = el("input", { type: "radio", name, checked: true });
+        const byAbsolute = el("input", { type: "radio", name });
+        percent = numberInput(100, 1, 10000);
+        percentRow = el("span", { className: "with-unit" }, [percent, el("span", { textContent: "%" })]);
+        element.append(el("div", { className: "row" }, [el("label", {}, [byPercent, tr("Por porcentaje:")]), percentRow]),
+                       el("label", { className: "row" }, [byAbsolute, tr("Por tamaño absoluto")]));
+        byPercent.addEventListener("change", () => updateMode());
+        byAbsolute.addEventListener("change", () => updateMode());
+        percent.addEventListener("input", () => onPercent());
+    }
     const keep = checkbox(tr("Mantener la relación de aspecto"), true);
-    const method = select([["high", tr("Bicúbico")], ["bilinear", tr("Bilineal")], ["nearest", tr("Vecino más cercano")]], "high");
-    const ratio = width / height;
-    const sync = () => {
-        percent.disabled = !byPercent.checked;
-        w.disabled = h.disabled = byPercent.checked;
+    element.appendChild(keep);
+
+    // Como en Paint.NET: cada número en su campo y la unidad a la derecha.
+    const width = numberInput(original.w, 1, MAX_SIDE), height = numberInput(original.h, 1, MAX_SIDE);
+    const resolution = numberInput(0, 0.01, 99999, 0.01, 2);
+    // Píxeles/centímetro por defecto; se recuerda la última unidad elegida.
+    const unit = remember("resolutionUnit") === 0 ? 0 : 1;
+    const resolutionUnit = select([["0", tr("píxeles/pulgada")], ["1", tr("píxeles/cm")]], String(unit));
+    const printWidth = numberInput(0, 0.01, 999999, 0.01, 2), printHeight = numberInput(0, 0.01, 999999, 0.01, 2);
+    const printUnit = select([["0", tr("pulgadas")], ["1", tr("centímetros")]], String(unit));
+    const printHeightUnit = el("span");
+    const label = (text) => el("label", { textContent: text });
+    element.append(
+        groupBox(tr("Tamaño en píxeles"), [el("div", { className: "size-grid" }, [
+            label(tr("Anchura:")), width, el("span", { textContent: tr("píxeles") }),
+            label(tr("Altura:")), height, el("span", { textContent: tr("píxeles") }),
+            label(tr("Resolución:")), resolution, resolutionUnit,
+        ])]),
+        groupBox(tr("Tamaño de la impresión"), [el("div", { className: "size-grid" }, [
+            label(tr("Anchura:")), printWidth, printUnit,
+            label(tr("Altura:")), printHeight, printHeightUnit,
+        ])]),
+    );
+    const fixed = (input, v) => (input.value = v.toFixed(2));
+    const unitPixels = () => (resolutionUnit.value === "1" ? currentDpi / 2.54 : currentDpi);
+    const clampSide = (v) => Math.min(MAX_SIDE, Math.max(1, Math.round(v)));
+    const changed = () => onChange?.({ w: width.read(), h: height.read() });
+    const syncPrint = () => {
+        printHeightUnit.textContent = printUnit.selectedOptions[0]?.textContent || "";
+        fixed(printWidth, width.read() / unitPixels());
+        fixed(printHeight, height.read() / unitPixels());
     };
-    byPercent.addEventListener("change", sync);
-    byAbsolute.addEventListener("change", sync);
-    percent.addEventListener("input", () => {
-        w.value = Math.max(1, Math.round((width * percent.read()) / 100));
-        h.value = Math.max(1, Math.round((height * percent.read()) / 100));
+    const onPixels = (widthChanged) => {
+        if (updating)
+            return;
+        if (keep.input.checked) {
+            if (widthChanged)
+                height.value = clampSide(width.read() / aspect);
+            else
+                width.value = clampSide(height.read() * aspect);
+        }
+        syncPrint();
+        changed();
+    };
+    const setValue = (w, h) => {
+        width.value = w;
+        height.value = h;
+        syncPrint();
+        changed();
+    };
+    function onPercent() {
+        if (!percent || !byPercent.checked)
+            return;
+        const f = percent.read() / 100;
+        setValue(clampSide(original.w * f), clampSide(original.h * f));
+    }
+    function updateMode() {
+        const p = byPercent?.checked ?? false;
+        if (percent)
+            percent.disabled = !p;
+        for (const w of [width, height, printWidth, printHeight, keep.input])
+            w.disabled = p;
+        keep.classList.toggle("disabled", p);
+        if (p)
+            onPercent();
+    }
+    const onPrint = (widthChanged) => {
+        if (widthChanged)
+            width.value = clampSide(printWidth.read() * unitPixels());
+        else
+            height.value = clampSide(printHeight.read() * unitPixels());
+        onPixels(widthChanged);
+    };
+    width.addEventListener("input", () => onPixels(true));
+    height.addEventListener("input", () => onPixels(false));
+    printWidth.addEventListener("input", () => onPrint(true));
+    printHeight.addEventListener("input", () => onPrint(false));
+    resolution.addEventListener("input", () => {
+        // La resolución exacta solo cambia cuando se escribe otra (el campo la muestra redondeada).
+        currentDpi = resolutionUnit.value === "1" ? resolution.read() * 2.54 : resolution.read();
+        if (keep.input.checked && !byPercent?.checked) {
+            width.value = clampSide(printWidth.read() * unitPixels());
+            onPixels(true);
+        } else {
+            syncPrint();
+            changed();
+        }
     });
-    w.addEventListener("input", () => { if (keep.input.checked) h.value = Math.max(1, Math.round(w.read() / ratio)); });
-    h.addEventListener("input", () => { if (keep.input.checked) w.value = Math.max(1, Math.round(h.read() * ratio)); });
-    dlg.body.appendChild(el("div", { className: "form" }, [
-        el("label", { textContent: tr("Remuestreo:") }), method,
-        el("label", { className: "wide" }, [byPercent, " ", tr("Por porcentaje:")]), el("span"), percent,
-        el("label", { className: "wide" }, [byAbsolute, " ", tr("Por tamaño absoluto")]),
-        el("div", { className: "wide" }, [keep]),
-        el("label", { textContent: tr("Anchura:") }), w, el("label", { textContent: tr("Altura:") }), h,
+    resolutionUnit.addEventListener("change", () => {
+        const u = Number(resolutionUnit.value);
+        fixed(resolution, u === 1 ? currentDpi / 2.54 : currentDpi);
+        remember("resolutionUnit", u);
+        printUnit.value = String(u);
+        syncPrint();
+    });
+    printUnit.addEventListener("change", () => {
+        resolutionUnit.value = printUnit.value;
+        resolutionUnit.dispatchEvent(new Event("change"));
+    });
+    keep.input.addEventListener("change", () => keep.input.checked && onPixels(true));
+    fixed(resolution, unit === 1 ? dpi / 2.54 : dpi);
+    syncPrint();
+    updateMode();
+    return {
+        element,
+        value: () => ({ w: width.read(), h: height.read() }),
+        dpi: () => currentDpi,
+        setKeepAspect(on) { keep.input.checked = on; },
+    };
+}
+
+export async function newImageDialog(width, height, dpi = 96) {
+    const dlg = new Dialog(tr("Imagen nueva"), { iconName: "document-new" });
+    const memory = el("div");
+    const size = sizeEditor({ w: width, h: height }, dpi, false, (s) => (memory.textContent = tr("Nuevo tamaño: %1", memoryText(s.w, s.h))));
+    size.setKeepAspect(false);
+    const bg = select([["white", tr("Blanco")], ["secondary", tr("Color secundario")], ["transparent", tr("Transparente")]], "white");
+    memory.textContent = tr("Nuevo tamaño: %1", memoryText(width, height));
+    // Como en Paint.NET: el tamaño en memoria arriba; el fondo, abajo.
+    dlg.body.appendChild(el("div", { className: "size-dialog" }, [
+        memory, size.element, el("div", { className: "row" }, [el("label", { textContent: tr("Fondo:") }), bg]),
     ]));
-    sync();
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
     const r = await dlg.exec();
-    return r ? { width: w.read(), height: h.read(), method: method.value } : null;
+    return r ? { width: size.value().w, height: size.value().h, background: bg.value, dpi: size.dpi() } : null;
 }
 
-export async function canvasSizeDialog(width, height) {
+export async function resizeDialog(width, height, dpi = 96) {
+    const dlg = new Dialog(tr("Cambiar el tamaño"), { iconName: "transform-scale" });
+    const method = select(ResampleMethods.map(([id, name]) => [id, tr(name)]), "adaptive");
+    const gamma = checkbox(tr("Corrección gamma (en luz lineal)"), false);
+    gamma.title = tr("Calcula el remuestreo en luz lineal: los detalles finos conservan su brillo");
+    const memory = el("span");
+    const update = (s) => (memory.textContent = tr("%1 × %2 (%3 por capa)", s.w, s.h, memoryText(s.w, s.h)));
+    const size = sizeEditor({ w: width, h: height }, dpi, true, update);
+    update(size.value());
+    dlg.body.appendChild(el("div", { className: "size-dialog" }, [
+        el("div", { className: "row" }, [el("label", { textContent: tr("Remuestreo:") }), method]),
+        el("div", { className: "row indent" }, [gamma]),
+        size.element,
+        el("div", { className: "row" }, [el("span", { textContent: tr("Tamaño actual: %1 × %2 · nuevo:", width, height) }), memory]),
+    ]));
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    const r = await dlg.exec();
+    return r ? { width: size.value().w, height: size.value().h, method: method.value, gamma: gamma.input.checked, dpi: size.dpi() } : null;
+}
+
+export async function canvasSizeDialog(width, height, dpi = 96) {
     const dlg = new Dialog(tr("Tamaño del lienzo"), { iconName: "transform-crop-and-resize" });
-    const w = numberInput(width, 1, 16384), h = numberInput(height, 1, 16384);
+    const memory = el("span", { textContent: memoryText(width, height) });
+    const size = sizeEditor({ w: width, h: height }, dpi, true, (s) => (memory.textContent = memoryText(s.w, s.h)));
+    size.setKeepAspect(false);
+    // Anclaje: el ancla en la casilla elegida y flechas desde ella hacia donde crece el lienzo.
     let anchor = [1, 1];
-    const grid = el("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 28px)", gap: "2px" } });
     const cells = [];
+    const arrows = [["↖", "↑", "↗"], ["←", "●", "→"], ["↙", "↓", "↘"]];
+    const updateArrows = () => cells.forEach((b, i) => {
+        const r = Math.floor(i / 3), c = i % 3, dr = r - anchor[1], dc = c - anchor[0];
+        b.classList.toggle("checked", dr === 0 && dc === 0);
+        b.replaceChildren();
+        if (dr === 0 && dc === 0)
+            b.appendChild(icon("anchor", 24));
+        else if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1)
+            b.textContent = arrows[dr + 1][dc + 1];
+    });
+    const grid = el("div", { className: "anchor-grid" });
     for (let y = 0; y < 3; ++y)
         for (let x = 0; x < 3; ++x) {
-            const b = el("button", { className: "tbutton", style: { width: "28px", height: "28px" } });
+            const b = el("button", { className: "tbutton anchor-cell", type: "button" });
             b.addEventListener("click", () => {
                 anchor = [x, y];
-                cells.forEach((c, i) => c.classList.toggle("checked", i === y * 3 + x));
+                updateArrows();
             });
             cells.push(b);
             grid.appendChild(b);
         }
-    cells[4].classList.add("checked");
-    dlg.body.appendChild(el("div", { className: "form" }, [
-        el("label", { textContent: tr("Anchura:") }), w, el("label", { textContent: tr("Altura:") }), h,
-        el("label", { textContent: tr("Anclaje") }), grid,
+    updateArrows();
+    dlg.body.appendChild(el("div", { className: "size-dialog" }, [
+        el("div", { textContent: tr("Tamaño actual: %1 × %2 píxeles", width, height) }),
+        size.element,
+        groupBox(tr("Anclaje"), [grid]),
+        el("div", { className: "row" }, [el("span", { textContent: tr("Memoria por capa:") }), memory]),
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
     const r = await dlg.exec();
-    return r ? { width: w.read(), height: h.read(), anchor } : null;
+    return r ? { width: size.value().w, height: size.value().h, anchor, dpi: size.dpi() } : null;
 }
 
-// Propiedades de la capa con vista previa al momento (onPreview recibe las propiedades).
+// Propiedades de la capa con vista previa al momento (onPreview recibe las propiedades). Como
+// en Paint.NET 5: Nombre, Opacidad, Modo de fusión y Visible.
 export async function layerPropertiesDialog(props, onPreview) {
     const dlg = new Dialog(tr("Propiedades de la capa"), { iconName: "layer-properties" });
     const name = el("input", { type: "text", value: props.name });
     const visible = checkbox(tr("Visible"), props.visible);
     const blend = select(BlendModes.map((m) => [m, tr(BlendNames[m][0])]), props.blend);
     const opacity = slider(props.opacity, 0, 255, 1);
-    const current = () => ({ name: name.value, visible: visible.input.checked, blend: blend.value, opacity: opacity.value() });
+    const current = () => ({ name: name.value || props.name, visible: visible.input.checked, blend: blend.value, opacity: opacity.value() });
     for (const c of [name, visible.input, blend, ...opacity.querySelectorAll("input")])
         c.addEventListener("input", () => onPreview(current()));
-    dlg.body.appendChild(el("div", { className: "form" }, [
+    dlg.body.appendChild(el("div", { className: "layer-props" }, [
         el("label", { textContent: tr("Nombre") }), name,
-        el("div", { className: "wide" }, [visible]),
-        el("label", { textContent: tr("Modo de fusión") }), blend,
         el("label", { textContent: tr("Opacidad") }), opacity,
+        el("div", { className: "row" }, [el("label", { textContent: tr("Modo de fusión:") }), blend]),
+        visible,
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
@@ -334,24 +491,189 @@ export async function layerPropertiesDialog(props, onPreview) {
     return r ? current() : null;
 }
 
-export async function saveOptionsDialog(formats, chosen, quality) {
-    const dlg = new Dialog(tr("Guardar"), { iconName: "document-save" });
-    const format = select(formats.map((f) => [f.ext, `${f.name} (.${f.ext})`]), chosen.ext);
-    const q = slider(quality, 1, 100, 1);
-    const qualityRow = [el("label", { textContent: tr("Calidad:") }), q];
-    const sync = () => {
-        const f = formats.find((x) => x.ext === format.value);
-        qualityRow.forEach((e) => (e.style.visibility = f.quality ? "visible" : "hidden"));
+// Imagen > Perfil de colores (ColorProfileDialog de Kaint, como Paint.NET 5): el perfil actual y
+// otro de la lista o de un archivo .icc para convertir los colores (los píxeles cambian y la
+// imagen se ve igual) o asignarlo (solo cambia cómo se interpretan). Devuelve null o
+// { result: "convert" | "assign", profile }.
+export async function colorProfileDialog(current) {
+    const { NamedProfiles, describe, readIcc, sameProfile, SRGB } = await import("../core/ColorProfiles.js");
+    current ||= SRGB;
+    const dlg = new Dialog(tr("Perfil de colores"), { iconName: "color-profile" });
+    const profiles = [];
+    const list = el("select", { style: { minWidth: "220px" } });
+    const add = (p, selectIt) => {
+        let index = profiles.findIndex((q) => sameProfile(q, p));
+        if (index < 0) {
+            profiles.push(p);
+            list.appendChild(el("option", { value: profiles.length - 1, textContent: describe(p) }));
+            index = profiles.length - 1;
+        }
+        if (selectIt)
+            list.value = index;
     };
-    format.addEventListener("change", sync);
-    dlg.body.appendChild(el("div", { className: "form", style: { minWidth: "320px" } }, [
-        el("label", { textContent: tr("Formato:") }), format, ...qualityRow,
+    // Los mismos perfiles que ofrece Paint.NET.
+    NamedProfiles.forEach((p) => add(p, false));
+    add(current, true);
+    const load = el("button", { className: "tbutton", type: "button", title: tr("Cargar un perfil de color (.icc, .icm)") }, [icon("document-open", 16)]);
+    const save = el("button", { className: "tbutton", type: "button", title: tr("Guardar el perfil elegido como archivo .icc") }, [icon("document-save", 16)]);
+    load.addEventListener("click", () => {
+        const input = el("input", { type: "file", accept: ".icc,.icm" });
+        input.addEventListener("change", async () => {
+            const f = input.files?.[0];
+            const p = f ? readIcc(new Uint8Array(await f.arrayBuffer())) : null;
+            if (!p) {
+                await message(tr("Perfil de colores"), tr("El archivo no contiene un perfil de color RGB válido."));
+                return;
+            }
+            add(p, true);
+            update();
+        });
+        input.click();
+    });
+    save.addEventListener("click", () => {
+        const p = profiles[Number(list.value)];
+        const a = el("a", { href: URL.createObjectURL(new Blob([p.icc], { type: "application/vnd.iccprofile" })), download: `${describe(p)}.icc` });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    dlg.body.appendChild(el("div", { className: "profile-grid" }, [
+        el("span", { textContent: tr("Actual:") }), el("b", { textContent: describe(current) }),
+        el("span", { textContent: tr("Nuevo:") }), el("span", { className: "row" }, [list, load, save]),
     ]));
-    sync();
+    const convert = dlg.addButton(tr("Convertir"), "convert");
+    const assign = dlg.addButton(tr("Asignar"), "assign");
+    dlg.addButton(tr("Cancelar"), null);
+    convert.title = tr("Convierte los colores al perfil nuevo: los píxeles cambian y la imagen se ve igual.");
+    assign.title = tr("Asigna el perfil nuevo sin tocar los píxeles: cambia cómo se interpretan sus colores.");
+    // Igual que Paint.NET: con el mismo perfil no hay nada que hacer.
+    const update = () => (convert.disabled = assign.disabled = sameProfile(profiles[Number(list.value)], current));
+    list.addEventListener("change", update);
+    update();
+    const r = await dlg.exec();
+    return r ? { result: r, profile: profiles[Number(list.value)] } : null;
+}
+
+// Imagen > Animación (AnimationDialog de Kaint): la duración de cada fotograma de un GIF (cada
+// capa visible, la de abajo primero) con una vista previa que se reproduce. Devuelve null o un
+// Map índice de capa → nombre nuevo (la duración va en el nombre: "Fotograma 1 (100ms)").
+export async function animationDialog(layers, defaultDelay) {
+    const dlg = new Dialog(tr("Animación"), { iconName: "media-playback-start" });
+    const frames = [];
+    const list = el("div", { className: "anim-list" }, [el("div", { className: "anim-head" }, [
+        el("span", { textContent: tr("Fotograma") }), el("span", { textContent: tr("Capa") }), el("span", { textContent: tr("Duración (ms)") }),
+    ])]);
+    const preview = el("canvas", { className: "anim-preview", width: 216, height: 161 });
+    let current = 0, timer = 0;
+    const showFrame = (i) => {
+        if (i < 0 || i >= frames.length)
+            return;
+        current = i;
+        frames.forEach((f, k) => f.row.classList.toggle("current", k === i));
+        const layer = frames[i].layer, p = preview.getContext("2d");
+        p.clearRect(0, 0, preview.width, preview.height);
+        const s = Math.min(preview.width / layer.canvas.width, preview.height / layer.canvas.height);
+        const w = layer.canvas.width * s, h = layer.canvas.height * s, x = (preview.width - w) / 2, y = (preview.height - h) / 2;
+        p.fillStyle = checkerPattern(p);
+        p.fillRect(x, y, w, h);
+        p.imageSmoothingQuality = "high";
+        p.drawImage(layer.canvas, x, y, w, h);
+    };
+    layers.forEach((layer, index) => {
+        if (!layer.visible)
+            return;
+        const delay = numberInput(delayFromName(layer.name, defaultDelay), MIN_DELAY, 60000, 10);
+        const thumb = thumbnail(layer.canvas, 48, 36);
+        const row = el("div", { className: "anim-row" }, [
+            el("span", { textContent: String(frames.length + 1) }),
+            el("span", { className: "anim-layer" }, [thumb, el("span", { textContent: nameWithDelay(layer.name, 0).replace(/ \(0ms\)$/, "") })]),
+            delay,
+        ]);
+        const frame = frames.length;
+        row.addEventListener("pointerdown", () => !timer && showFrame(frame));
+        frames.push({ index, layer, delay, row });
+        list.appendChild(row);
+    });
+    const play = el("button", { className: "pushbutton anim-play", type: "button" });
+    const setPlay = (on) => {
+        clearTimeout(timer);
+        timer = 0;
+        play.replaceChildren(icon(on ? "media-playback-pause" : "media-playback-start", 16), on ? tr("Pausa") : tr("Reproducir"));
+        if (on)
+            step();
+    };
+    const step = () => {
+        if (!frames.length)
+            return;
+        showFrame(current);
+        const delay = frames[current].delay.read();
+        current = (current + 1) % frames.length;
+        timer = setTimeout(step, delay);
+    };
+    play.addEventListener("click", () => setPlay(!timer));
+    // Misma duración para todos.
+    const all = numberInput(defaultDelay, MIN_DELAY, 60000, 10);
+    const apply = el("button", { className: "pushbutton", type: "button", textContent: tr("Aplicar a todos") });
+    apply.addEventListener("click", () => frames.forEach((f) => (f.delay.value = all.read())));
+    dlg.body.appendChild(el("div", { className: "anim-dialog" }, [
+        el("div", { className: "note", textContent: tr("Al guardar como GIF, cada capa visible es un fotograma (la de abajo es el primero). La duración se guarda en el nombre de la capa.") }),
+        el("div", { className: "anim-top" }, [list, el("div", { className: "anim-side" }, [preview, play])]),
+        el("div", { className: "row" }, [el("span", { textContent: tr("Duración de todos los fotogramas:") }), all, el("span", { textContent: tr("ms") }), apply]),
+    ]));
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    setPlay(false);
+    showFrame(0);
+    const r = await dlg.exec();
+    clearTimeout(timer);
+    if (!r)
+        return null;
+    const renamed = new Map();
+    for (const f of frames) {
+        const name = f.layer.name, updated = nameWithDelay(name, f.delay.read());
+        if (updated !== name && delayFromName(name, -1) !== f.delay.read())
+            renamed.set(f.index, updated);
+    }
+    return renamed;
+}
+
+// "Guardar como" sin el diálogo de archivos del navegador: el nombre y el tipo (el archivo se
+// descarga). Devuelve el nombre con su extensión o null.
+export async function saveAsDialog(formats, suggested) {
+    const dlg = new Dialog(tr("Guardar como"), { iconName: "document-save-as" });
+    const ext = (n) => (n.split(".").pop() || "").toLowerCase();
+    const base = (n) => n.replace(/\.[^.]+$/, "");
+    const find = (n) => formats.find((f) => f.ext === ext(n) || f.aliases?.includes(ext(n))) || formats.find((f) => f.ext === "png");
+    const name = el("input", { type: "text", value: suggested, style: { width: "260px" } });
+    const type = select(formats.map((f) => [f.ext, `${tr(f.name)} (*.${f.ext})`]), find(suggested).ext);
+    // Al cambiar el tipo cambia la extensión, como en el diálogo de Kaint.
+    type.addEventListener("change", () => (name.value = `${base(name.value)}.${type.value}`));
+    name.addEventListener("input", () => {
+        const f = formats.find((x) => x.ext === ext(name.value) || x.aliases?.includes(ext(name.value)));
+        if (f)
+            type.value = f.ext;
+    });
+    dlg.body.appendChild(el("div", { className: "form", style: { minWidth: "360px" } }, [
+        el("label", { textContent: tr("Nombre:") }), name, el("label", { textContent: tr("Tipo:") }), type,
+    ]));
     dlg.addButton(tr("Guardar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
-    const r = await dlg.exec();
-    return r ? { format: formats.find((x) => x.ext === format.value), quality: q.value() } : null;
+    setTimeout(() => name.setSelectionRange(0, base(name.value).length), 0);
+    if ((await dlg.exec()) !== "ok")
+        return null;
+    const chosen = formats.find((f) => f.ext === type.value);
+    const n = name.value.trim() || tr("Sin título");
+    return chosen.ext === ext(n) || chosen.aliases?.includes(ext(n)) ? n : `${base(n)}.${chosen.ext}`;
+}
+
+// Pide un número entero (QInputDialog::getInt): devuelve el número o null si se cancela.
+export async function promptNumber(title, label, value, min, max) {
+    const dlg = new Dialog(title);
+    const input = numberInput(value, min, max);
+    dlg.body.appendChild(el("label", { style: { display: "flex", gap: "8px", alignItems: "center" } }, [plain(label), input]));
+    dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    setTimeout(() => input.select(), 0);
+    return (await dlg.exec()) === "ok" ? input.read() : null;
 }
 
 // Pide un texto (nombre de una paleta...): devuelve el texto o null si se cancela.
@@ -414,6 +736,9 @@ export async function settingsDialog(app = null, startPage = "interface") {
             border.style.width = "60px";
             border.title = tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.");
             border.addEventListener("input", () => Settings.set("panelBorder", border.read()));
+            const autosave = numberInput(Settings.get("autosaveMinutes"), 0, 120);
+            autosave.style.width = "60px";
+            autosave.addEventListener("input", () => Settings.set("autosaveMinutes", autosave.read()));
             return [
                 check(tr("Animaciones"), "animations",
                       tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.")),
@@ -439,9 +764,15 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 heading(tr("Ventanas")),
                 el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
                 el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
+                heading(tr("Al iniciar")),
+                check(tr("Volver a abrir las imágenes de la última sesión"), "reopenLast",
+                      window.showOpenFilePicker ? "" : tr("Este navegador no deja volver a abrir los archivos: solo funciona en los que tienen acceso a los archivos del sistema.")),
                 heading(tr("Al cerrar")),
                 check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), "askOnceOnClose",
                       tr("Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.")),
+                // Copias de recuperación por si la página se cierra de golpe.
+                heading(tr("Recuperación")),
+                el("label", {}, [tr("Guardar una copia de recuperación de las imágenes sin guardar cada:"), autosave, tr("min"), note(tr("(0: nunca)"))]),
             ];
         }],
         ["canvas", "settings-canvas", tr("Lienzo"), () => {
@@ -479,11 +810,22 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const tools = app ? app.tools.tools : [];
             const start = select([["", tr("La última que se usó")], ...tools.map((t) => [t.id, t.name])], Settings.get("startTool") || "");
             start.addEventListener("change", () => Settings.set("startTool", start.value));
+            // Opciones predeterminadas de la barra de herramientas (con ellas empieza cada sesión).
+            const defaults = new LocalToolSettings(toolDefaults());
+            defaults.addEventListener("tools", () => setToolDefaults(defaults.tools));
+            const load = button(tr("Cargar desde barra de htas."), tr("Usa como predeterminadas las opciones que tiene ahora la barra de herramientas."),
+                                () => defaults.set(AppState.tools));
+            const reset = button(tr("Restablecer"), tr("Vuelve a los valores de fábrica de todas las herramientas."), () => defaults.set(defaultTools()));
             return [
+                el("p", { textContent: tr("Puede elegir la herramienta que está activa cuando inicie Kaint, y qué configuración predeterminada se debe aplicar a los elementos de la barra de herramientas.") }),
+                el("div", { className: "row-buttons" }, [load, reset]),
                 el("label", {}, [tr("Herramienta predeterminada:"), start]),
                 heading(tr("Mover y pegar")),
+                check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), "hideMoveBox",
+                      tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.")),
                 check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
                       tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+                ...(app ? [new ToolOptionsPanel(app, defaults).element] : []),
             ];
         }],
         ["tablet", "settings-tablet", tr("Lápiz y tableta"), () => [
@@ -492,6 +834,15 @@ export async function settingsDialog(app = null, startPage = "interface") {
             note(tr("Al dar la vuelta al lápiz se activa la herramienta Goma de borrar, y al volver a la punta, la herramienta de antes.")),
             note("PointerEvent" in window ? tr("El navegador admite lápices y tabletas.") : tr("No se detectó ningún lápiz ni tableta de dibujo.")),
         ]],
+        ["performance", "settings-performance", tr("Rendimiento"), () => {
+            const limit = numberInput(Settings.get("historyLimitMB"), 0, 1024 * 1024, 256);
+            limit.style.width = "90px";
+            limit.addEventListener("input", () => Settings.set("historyLimitMB", limit.read()));
+            return [el("p", { textContent: tr("Kaint dibuja y aplica los efectos con el procesador, repartiendo el trabajo entre %1 hilos.", MAX_WORKERS) }),
+                    heading(tr("Historial")),
+                    el("label", {}, [tr("Memoria máxima del historial de cada imagen:"), limit, tr("MB"), note(tr("(0: sin límite)"))]),
+                    note(tr("Si el historial de una imagen ocupa más, se descartan los pasos más antiguos (y se avisa en la barra de estado)."))];
+        }],
         ["plugins", "settings-plugins", tr("Complementos"), () => pluginsPage(() => show("plugins"))],
         ["updates", "settings-updates", tr("Actualizaciones"), () => {
             const status = el("p", { textContent: "" });
@@ -526,6 +877,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
         }],
         ["iconpacks", "document-open", tr("Paquetes de iconos"), () => iconPacksPage(() => show("iconpacks"))],
         ["fonts", "text", tr("Fuentes"), () => fontsPage(() => show("fonts"))],
+        ["shapes", "shapes", tr("Formas"), () => shapesPage(() => show("shapes"))],
         ["keyboard", "configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
     ];
     show = async (id) => {
@@ -542,6 +894,46 @@ export async function settingsDialog(app = null, startPage = "interface") {
     show(startPage);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
+}
+
+// Formas de Paint.NET (.xaml) para la herramienta Formas (SettingsDialog::createShapesPage).
+function shapesPage(refresh) {
+    const list = el("div", { className: "list shape-list" });
+    const selected = new Set();
+    for (const s of CustomShapes.all()) {
+        const row = el("div", { className: "row", dataset: { id: s.id } }, [icon(`opt-shape:custom:${s.id}`, 24), el("span", { textContent: s.name }),
+                                                                            el("small", { textContent: s.file, style: { opacity: 0.7, marginLeft: "auto" } })]);
+        row.addEventListener("click", (e) => {
+            if (!e.ctrlKey && !e.shiftKey)
+                selected.clear();
+            selected.has(s.id) ? selected.delete(s.id) : selected.add(s.id);
+            for (const r of list.children)
+                r.classList.toggle("selected", selected.has(r.dataset.id));
+            remove.disabled = !selected.size;
+        });
+        list.appendChild(row);
+    }
+    if (!list.children.length)
+        list.appendChild(el("p", { textContent: tr("No hay formas personalizadas."), style: { opacity: 0.7, margin: "6px" } }));
+    const status = el("p", { style: { whiteSpace: "pre-line" } });
+    const file = el("input", { type: "file", accept: ".xaml", multiple: true, hidden: true });
+    file.addEventListener("change", async () => {
+        const errors = await CustomShapes.add([...file.files]);
+        refresh();
+        if (errors.length)
+            await message(tr("Añadir formas"), tr("No se pudieron añadir:\n\n%1", errors.join("\n")));
+    });
+    const add = el("button", { className: "pushbutton", textContent: plain(tr("Añadir formas…")) });
+    add.addEventListener("click", () => file.click());
+    const remove = el("button", { className: "pushbutton", textContent: tr("Quitar"), disabled: true });
+    remove.addEventListener("click", () => {
+        CustomShapes.remove([...selected]);
+        refresh();
+    });
+    return [
+        el("p", { textContent: tr("Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se guardan en este navegador.") }),
+        list, el("div", { className: "row-buttons" }, [add, remove, file]), status,
+    ];
 }
 
 // Tema personalizado: parte de claro, oscuro o Windows 98 y cambia los colores que se quiera.

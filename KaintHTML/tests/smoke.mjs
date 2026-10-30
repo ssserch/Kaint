@@ -36,7 +36,8 @@ const check = (ok, what) => {
 };
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1400, height: 860 }, acceptDownloads: true });
+const context = await browser.newContext({ viewport: { width: 1400, height: 860 }, acceptDownloads: true });
+const page = await context.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(`${e.message}\n${e.stack}`));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -225,7 +226,9 @@ check(await page.evaluate(() => window.kaint.doc.width === 100 && window.kaint.d
 await page.keyboard.press("Control+z");
 const sizeDone = page.evaluate(() => window.kaint.canvasSize());
 await page.waitForSelector(".dialog");
-await page.fill(".dialog input[type=number] >> nth=0", "900");
+// Como en Kaint: empieza por porcentaje; por tamaño absoluto se escribe la anchura.
+await page.check(".dialog .size-editor input[type=radio] >> nth=1");
+await page.fill(".dialog .size-grid input[type=number] >> nth=0", "900");
 await page.click(".dialog .pushbutton.default");
 await sizeDone;
 check(await page.evaluate(() => window.kaint.doc.width === 900), "tamaño del lienzo");
@@ -243,6 +246,8 @@ for (const id of ["huesat", "curves", "dropshadow", "clouds"]) {
 }
 check(await lastStep() === "Nubes", "los efectos con diálogo se aplican");
 await page.keyboard.press("Control+Shift+i");
+// Los efectos se calculan en hilos de trabajo: el paso llega un poco después.
+await page.waitForFunction(() => { const h = window.kaint.doc.history; return h.steps[h.index].name === "Invertir colores"; }, null, { timeout: 5000 }).catch(() => {});
 check(await lastStep() === "Invertir colores", "el atajo de Invertir colores aplica el efecto");
 await shot("efectos.png");
 
@@ -722,8 +727,338 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `subrayado de las letras de acceso (${off}, ${alt}, ${released}, ${always})`);
 }
 
+// Efectos como los de Kaint: los mismos 55 (con Cuantizar, Boceto borroso, Enderezar y Giro y
+// zum), las mismas opciones (el desenfoque gaussiano con Potenciar Gamma y Calidad), el diálogo con
+// sus controles, Ctrl+Z dentro del diálogo y el cálculo en segundo plano igual al de aquí.
+{
+    const fx = await page.evaluate(async () => {
+        const { Effects, findEffect, defaultValues } = await import("./js/core/Effects.js");
+        const { startEffect } = await import("./js/core/EffectRunner.js");
+        const gauss = findEffect("gaussianblur");
+        const w = 64, h = 48, data = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = (i / 4) % 256; data[i + 1] = (i / 4 / w) * 5; data[i + 2] = (i * 3) % 256; data[i + 3] = 128 + ((i / 4) % 128);
+        }
+        const src = new ImageData(data, w, h), values = { ...defaultValues(gauss), radius: 6, gamma: 1.5, quality: 3 };
+        const rect = { x: 3, y: 5, w: 50, h: 37 };
+        const here = gauss.render(src, values, rect, {}).data;
+        const there = (await startEffect(gauss, src, values, rect, {}).promise).data;
+        return {
+            count: Effects.filter((e) => e.builtin).length, gaussian: gauss.params.map((p) => p.key).join(","),
+            extra: ["quantize", "sketchblur", "straighten", "rotatezoom"].every((id) => findEffect(id)),
+            same: here.every((v, i) => v === there[i]),
+        };
+    });
+    check(fx.count === 55 && fx.gaussian === "radius,gamma,quality" && fx.extra && fx.same, `efectos como los de Kaint (${JSON.stringify(fx)})`);
+    const done = page.evaluate(async () => {
+        const { findEffect } = await import("./js/core/Effects.js");
+        return window.kaint.runEffect(findEffect("gaussianblur"), false);
+    });
+    await page.waitForSelector(".effect-dialog");
+    const ui = await page.evaluate(() => ({ sliders: document.querySelectorAll(".effect-dialog input[type=range]").length,
+                                             resets: document.querySelectorAll(".effect-dialog .fx-reset").length }));
+    const radius = page.locator(".effect-dialog input[type=number] >> nth=0");
+    await radius.fill("12");
+    await radius.dispatchEvent("change");
+    await page.waitForTimeout(700);
+    await page.keyboard.press("Control+z");
+    const undone = await radius.inputValue();
+    await page.click(".effect-dialog .pushbutton.default");
+    await done;
+    check(ui.sliders === 3 && ui.resets === 3 && undone === "2.0" && await lastStep() === "Desenfoque gaussiano",
+          `diálogo del desenfoque gaussiano (${JSON.stringify(ui)}, deshacer: ${undone})`);
+    // Controles especiales: ángulo, centro con miniatura, globo, color, pestañas, curvas y niveles.
+    const special = {};
+    for (const [id, selector] of [["motionblur", ".fx-angle-chooser"], ["zoomblur", ".fx-pan"], ["rotatezoom", ".fx-rollball"],
+                                  ["dropshadow", ".fx-color"], ["clouds", ".fx-tab"], ["curves", ".fx-curves"], ["levels", ".fx-histogram"]]) {
+        const run = page.evaluate(async (id) => {
+            const { findEffect } = await import("./js/core/Effects.js");
+            return window.kaint.runEffect(findEffect(id), false);
+        }, id);
+        await page.waitForSelector(".effect-dialog");
+        special[id] = await page.evaluate((sel) => document.querySelectorAll(`.effect-dialog ${sel}`).length, selector);
+        await page.keyboard.press("Escape");
+        await run;
+    }
+    check(Object.values(special).every((n) => n > 0) && special.clouds === 2 && special.levels === 2, `controles de los efectos (${JSON.stringify(special)})`);
+    await page.click("#menubar >> text=Capas");
+    const layersMenu = await page.evaluate(() => [...document.querySelectorAll(".popup-menu .item")].map((i) => i.textContent));
+    await page.keyboard.press("Escape");
+    check(layersMenu.some((t) => t.startsWith("Giro y zum")), "el menú Capas tiene «Giro y zum...»");
+}
+
+// Cambiar el tamaño como en Kaint: remuestreo (con supermuestreo y Lanczos), por porcentaje y la
+// resolución, que se guarda en el archivo.
+{
+    const before = await page.evaluate(() => ({ w: window.kaint.doc.width, h: window.kaint.doc.height }));
+    const done = page.evaluate(() => window.kaint.resizeImage());
+    await page.waitForSelector(".dialog .size-editor");
+    const methods = await page.evaluate(() => [...document.querySelector(".dialog select").options].map((o) => o.value));
+    await page.fill(".dialog .size-editor input[type=number] >> nth=0", "50");
+    await page.click(".dialog .pushbutton.default");
+    await done;
+    const after = await page.evaluate(() => ({ w: window.kaint.doc.width, h: window.kaint.doc.height, step: window.kaint.doc.history.steps[window.kaint.doc.history.index].name }));
+    check(methods.length === 8 && methods.includes("supersampling") && methods.includes("lanczos")
+          && after.w === Math.round(before.w / 2) && after.h === Math.round(before.h / 2) && after.step === "Cambiar el tamaño",
+          `cambiar el tamaño al 50 % (${JSON.stringify(before)} → ${JSON.stringify(after)})`);
+    await page.keyboard.press("Control+z");
+    const dpi = await page.evaluate(async () => {
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const doc = window.kaint.doc, old = doc.dpi;
+        doc.dpi = 300;
+        const back = await openFile(new File([await encode(doc, SaveFormats.find((f) => f.ext === "png"))], "x.png"));
+        doc.dpi = old;
+        return back.dpi;
+    });
+    check(dpi === 300, `la resolución se guarda en el PNG (${dpi})`);
+}
+
+// Edición > Copiar selección, Pegar selección y Ampliar la selección; Ver > unidades.
+{
+    const r = await page.evaluate(async () => {
+        const app = window.kaint, doc = app.doc;
+        const { Selection, SelectionMode } = await import("./js/core/Selection.js");
+        doc.setSelection(Selection.rect(doc.width, doc.height, 10, 20, 30, 40));
+        await app.copySelection();
+        const json = app.selectionClipboard;
+        doc.setSelection(Selection.rect(doc.width, doc.height, 100, 100, 10, 10));
+        await app.pasteSelection(SelectionMode.Union);
+        const pasted = doc.selection.area();
+        const grown = doc.selection.grown(2).bounds();
+        const feathered = doc.selection.feathered(4).bounds();
+        app.setUnit(2);
+        const cm = app.unitButton.textContent;
+        app.setUnit(0);
+        app.deselect();
+        return { json: JSON.parse(json).polygonList[0], pasted, grown, feathered, cm };
+    });
+    check(r.json === "10,20,40,20,40,60,10,60,10,20" && r.pasted === 1300 && r.grown.x === 8 && r.grown.w === 104 && r.feathered.x < 10 && r.cm === "cm",
+          `copiar y pegar la selección, ampliar, difuminar y unidades (${JSON.stringify(r)})`);
+}
+
+// Formatos como los de Kaint: GIF animado (una capa por fotograma, la duración en el nombre),
+// TIFF, TGA, DDS, BMP e ICO de ida y vuelta, Paint.NET (.pdn) con sus capas y "Configuración de
+// guardado" con la vista previa del archivo.
+{
+    const pdn = [...(await readFile(join(root, "tests/fixtures/capas.pdn")))];
+    const formats = await page.evaluate(async (pdnBytes) => {
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const { Document } = await import("./js/core/Document.js");
+        const doc = new Document(40, 30, { background: "#336699" });
+        doc.layers[0].name = "Uno (120ms)";
+        const { Layer } = await import("./js/core/Document.js");
+        const second = new Layer(40, 30, "Dos (300ms)");
+        second.ctx.fillStyle = "#ff0000";
+        second.ctx.fillRect(5, 5, 10, 10);
+        doc.layers.push(second);
+        const out = {};
+        for (const ext of ["gif", "tiff", "tga", "dds", "bmp", "ico", "png"]) {
+            const f = SaveFormats.find((x) => x.ext === ext);
+            const back = await openFile(new File([await encode(doc, f)], `prueba.${ext}`));
+            out[ext] = { w: back.width, layers: back.layers.map((l) => l.name), px: [...back.layers.at(-1).ctx.getImageData(7, 7, 1, 1).data] };
+        }
+        const p = await openFile(new File([new Uint8Array(pdnBytes)], "capas.pdn"));
+        out.pdn = { w: p.width, h: p.height, layers: p.layers.map((l) => `${l.name}/${l.opacity}/${l.blend}/${l.visible ? 1 : 0}`) };
+        return out;
+    }, pdn);
+    check(formats.gif.layers.join() === "Fotograma 1 (120ms),Fotograma 2 (300ms)" && formats.gif.px[0] > 200 && formats.gif.px[1] < 40,
+          `GIF animado de ida y vuelta (${JSON.stringify(formats.gif)})`);
+    check(["tiff", "tga", "dds", "bmp", "png"].every((e) => formats[e].w === 40 && formats[e].px[0] > 200 && formats[e].px[1] < 40) && formats.ico.w === 256,
+          `TIFF, TGA, DDS, BMP, ICO y PNG (${JSON.stringify(formats)})`);
+    check(formats.pdn.w === 40 && formats.pdn.h === 30 && formats.pdn.layers.join() === "Fondo/255/normal/1,Capa 2/96/overlay/1,Capa 3/255/screen/0",
+          `abrir .pdn con sus capas (${JSON.stringify(formats.pdn)})`);
+    await page.evaluate(async () => {
+        window.showSaveFilePicker = undefined;
+        const { Document } = await import("./js/core/Document.js");
+        window.kaint.addDocument(new Document(64, 48));
+    });
+    const saving = page.evaluate(() => window.kaint.writeFile(window.kaint.doc, "prueba.webp", null));
+    await page.waitForSelector(".save-config .barslider");
+    await page.waitForFunction(() => /\d/.test(document.querySelector(".save-config .save-status")?.textContent || ""));
+    const status = await page.textContent(".save-config .save-status");
+    const download = page.waitForEvent("download");
+    await page.click(".save-config .pushbutton.default");
+    const file = await download;
+    check(await saving && file.suggestedFilename() === "prueba.webp" && /Tamaño del archivo: [\d,.]+ (bytes|KiB|MiB)/.test(status),
+          `configuración de guardado con la vista previa (${status})`);
+    await page.evaluate(() => window.kaint.closeDocument(window.kaint.doc, false));
+}
+
+// Perfil de colores como en Kaint: convertir de Adobe RGB a sRGB da los mismos números que Qt, y
+// el perfil se guarda dentro del PNG, el JPEG, el WebP y el TIFF y vuelve al abrirlos.
+{
+    const icc = await page.evaluate(async () => {
+        const P = await import("./js/core/ColorProfiles.js");
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const { Document } = await import("./js/core/Document.js");
+        const adobe = P.NamedProfiles.find((n) => n.name === "Adobe RGB");
+        const px = P.transformPixels(new Uint8ClampedArray([200, 100, 50, 255]), adobe, null);
+        const doc = new Document(16, 16, { background: "#c86432" });
+        doc.colorProfile = adobe;
+        const back = {};
+        for (const ext of ["png", "jpg", "webp", "tiff"]) {
+            const f = SaveFormats.find((x) => x.ext === ext);
+            const d = await openFile(new File([await encode(doc, f)], `perfil.${ext}`));
+            back[ext] = P.describe(d.colorProfile);
+        }
+        return { px: [...px].slice(0, 3), reread: P.describe(P.readIcc(adobe.icc)), back };
+    });
+    check(icc.px.join() === "227,100,42" && icc.reread === "Adobe RGB" && Object.values(icc.back).every((n) => n === "Adobe RGB"),
+          `perfil de colores (${JSON.stringify(icc)})`);
+}
+
+// Límite de memoria del historial (se descartan los pasos más antiguos y se avisa) y copias de
+// recuperación: una pestaña con cambios sin guardar se cuelga y Kaint ofrece recuperarlos.
+{
+    const trimmed = await page.evaluate(async () => {
+        const k = window.kaint, { Document } = await import("./js/core/Document.js");
+        const { Settings } = await import("./js/Settings.js");
+        const doc = new Document(800, 600);
+        k.addDocument(doc);
+        Settings.set("historyLimitMB", 10);
+        for (let i = 0; i < 5; ++i) {
+            const before = doc.snapshot();
+            doc.activeLayer.ctx.fillStyle = `rgb(${i * 50},0,0)`;
+            doc.activeLayer.ctx.fillRect(0, 0, 800, 600);
+            doc.pushSnapshot(before, `Paso ${i + 1}`, "edit-fill");
+        }
+        await new Promise((r) => setTimeout(r, 800));
+        const out = { steps: doc.history.steps.map((st) => st.name).join(), hint: document.querySelector("#status-bar .hint").textContent };
+        Settings.set("historyLimitMB", 4096);
+        await k.closeDocument(doc, false);
+        return out;
+    });
+    check(trimmed.steps === "Paso 3,Paso 4,Paso 5" && /3 pasos más antiguos/.test(trimmed.hint), `límite de memoria del historial (${JSON.stringify(trimmed)})`);
+
+    const other = await context.newPage();
+    await other.goto(url);
+    await other.waitForFunction(() => window.kaint?.doc);
+    await other.evaluate(async () => {
+        const doc = window.kaint.doc;
+        doc.name = "Recuperable";
+        const before = doc.snapshot();
+        doc.activeLayer.ctx.fillStyle = "#00ff00";
+        doc.activeLayer.ctx.fillRect(0, 0, 50, 50);
+        doc.pushSnapshot(before, "Relleno", "edit-fill");
+        await window.kaint.autosave();
+    });
+    const cdp = await context.newCDPSession(other);
+    cdp.send("Page.crash").catch(() => {});
+    await page.waitForTimeout(1000);
+    const offered = page.evaluate(() => window.kaint.offerRecovery());
+    await page.waitForSelector(".dialog .choice-button");
+    const text = await page.textContent(".dialog");
+    await page.click(".dialog .choice-button >> nth=0");
+    await offered;
+    const recovered = await page.evaluate(() => {
+        const d = window.kaint.doc;
+        return { name: d.displayName(), modified: d.isModified(), px: [...d.activeLayer.ctx.getImageData(10, 10, 1, 1).data].join() };
+    });
+    check(/Recuperable/.test(text) && recovered.name === "Recuperable" && recovered.modified && recovered.px === "0,255,0,255",
+          `copias de recuperación (${JSON.stringify(recovered)})`);
+    await page.evaluate(() => window.kaint.closeDocument(window.kaint.doc, false));
+    await other.close().catch(() => {});
+}
+
+// Configuración > Herramientas: las opciones predeterminadas (con ellas empieza cada sesión) se
+// cargan desde la barra y se restablecen, sin cambiar la barra.
+{
+    await page.evaluate(async () => {
+        (await import("./js/AppState.js")).AppState.updateTools({ hardness: 33 });
+        (await import("./js/ui/Dialogs.js")).settingsDialog(window.kaint, "tools");
+    });
+    await page.waitForSelector(".tool-options-panel .flow");
+    await page.click(".settings .page .row-buttons .pushbutton >> nth=0");
+    const loaded = await page.evaluate(() => JSON.parse(localStorage.getItem("kaint.toolDefaults")).hardness);
+    await page.click(".settings .page .row-buttons .pushbutton >> nth=1");
+    const reset = await page.evaluate(async () => [JSON.parse(localStorage.getItem("kaint.toolDefaults")).hardness,
+                                                   (await import("./js/AppState.js")).AppState.tools.hardness]);
+    await page.keyboard.press("Escape");
+    check(loaded === 33 && reset[0] === 75 && reset[1] === 33, `opciones predeterminadas de las herramientas (${loaded}, ${reset})`);
+}
+
+// Opciones de la barra como las de Kaint: "Sobrescribir" con un color transparente abre un hueco,
+// el cubo desmezcla el borde suavizado y Mover píxeles seleccionados gira con el muestreo bicúbico.
+{
+    const opts = await page.evaluate(async () => {
+        const k = window.kaint, { Document } = await import("./js/core/Document.js"), { AppState } = await import("./js/AppState.js");
+        const doc = new Document(300, 200);
+        k.addDocument(doc);
+        const px = (x, y) => [...doc.activeLayer.ctx.getImageData(x, y, 1, 1).data].join();
+        const out = {};
+        k.tools.select("paintbrush");
+        const saved = { ...AppState.tools }, primary = { ...AppState.primary };
+        AppState.updateTools({ blend: "overwrite", brushSize: 20, antialias: false });
+        AppState.setPrimary({ r: 0, g: 0, b: 0, a: 0 });
+        const brush = k.tools.current;
+        brush.onPointerDown({ x: 50, y: 50, button: "left" });
+        brush.onPointerUp({ x: 50, y: 50, button: "left" });
+        out.hole = px(50, 50);
+        AppState.updateTools({ blend: "normal", antialias: true });
+        const c = doc.activeLayer.ctx;
+        c.fillStyle = "#fff"; c.fillRect(0, 0, 300, 200); c.fillStyle = "#000";
+        c.beginPath(); c.arc(100, 100, 40, 0, Math.PI * 2); c.fill();
+        AppState.setPrimary({ r: 255, g: 0, b: 0, a: 255 });
+        k.tools.select("paintbucket");
+        const bucket = k.tools.current;
+        bucket.onPointerDown({ x: 100.5, y: 100.5, button: "left" });
+        bucket.onPointerUp({});
+        out.edge = px(140, 100);
+        out.inside = px(100, 100);
+        bucket.finish();
+        const { drawTransformed } = await import("./js/core/Resample.js");
+        const src = new ImageData(new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 255]), 2, 2);
+        const dst = new ImageData(4, 4);
+        drawTransformed(dst, src, new DOMMatrix().scale(2, 2), "bicubic", false);
+        out.bicubic = [...dst.data.slice(4, 8)].join();
+        AppState.updateTools(saved);
+        AppState.setPrimary(primary);
+        await k.closeDocument(doc, false);
+        return out;
+    });
+    check(opts.hole === "0,0,0,0" && opts.inside === "255,0,0,255" && /^255,\d+,\d+,255$/.test(opts.edge) && opts.edge !== "255,0,0,255" &&
+          opts.bicubic !== "0,0,0,255" && opts.bicubic !== "255,255,255,255",
+          `Sobrescribir, cubo de pintura y muestreo bicúbico (${JSON.stringify(opts)})`);
+}
+
+// Formas personalizadas de Paint.NET (.xaml) como las de Kaint: se añaden, aparecen en su grupo
+// del desplegable y se dibujan estiradas al rectángulo (la geometría combinada también).
+{
+    const xaml = `<ps:SimpleGeometryShape xmlns="clr-namespace:PaintDotNet.UI.Media;assembly=PaintDotNet.Framework"
+        xmlns:ps="clr-namespace:PaintDotNet.Shapes;assembly=PaintDotNet.Framework" DisplayName="Marco">
+      <CombinedGeometry GeometryCombineMode="Exclude" Geometry1="M 0,0 L 100,0 L 100,100 L 0,100 Z">
+        <CombinedGeometry.Geometry2><RectangleGeometry Rect="25,25,50,50" /></CombinedGeometry.Geometry2>
+      </CombinedGeometry></ps:SimpleGeometryShape>`;
+    const custom = await page.evaluate(async (xaml) => {
+        const k = window.kaint, { Document } = await import("./js/core/Document.js"), { AppState } = await import("./js/AppState.js");
+        const { CustomShapes } = await import("./js/core/CustomShapes.js");
+        const errors = await CustomShapes.add([new File([xaml], "marco.xaml"), new File(["<Nada/>"], "mala.xaml")]);
+        const shape = CustomShapes.all().find((c) => c.name === "Marco");
+        const doc = new Document(200, 200);
+        k.addDocument(doc);
+        k.tools.select("shapes");
+        const saved = { ...AppState.tools }, primary = { ...AppState.primary };
+        AppState.updateTools({ shape: `custom:${shape.id}`, shapeStyle: "fill", fill: 0, blend: "normal" });
+        AppState.setPrimary({ r: 0, g: 0, b: 255, a: 255 });
+        const t = k.tools.current;
+        t.onPointerDown({ x: 0, y: 0, button: "left" });
+        t.onPointerMove({ x: 200, y: 200, button: "left" });
+        t.onPointerUp({ x: 200, y: 200, button: "left" });
+        t.finish();
+        const px = (x, y) => [...doc.activeLayer.ctx.getImageData(x, y, 1, 1).data].join();
+        const out = { errors: errors.length, frame: px(20, 20), hole: px(100, 100), step: doc.history.steps[1]?.name };
+        AppState.updateTools(saved);
+        AppState.setPrimary(primary);
+        await k.closeDocument(doc, false);
+        CustomShapes.remove([shape.id]);
+        return out;
+    }, xaml);
+    check(custom.errors === 1 && custom.frame === "0,0,255,255" && custom.hole === "255,255,255,255" && custom.step === "Marco",
+          `formas personalizadas (${JSON.stringify(custom)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
-for (const id of ["interface", "canvas", "tools", "tablet", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "keyboard"]) {
+for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).
     await page.evaluate(async (id) => {
         (await import("./js/ui/Dialogs.js")).settingsDialog(window.kaint, id);

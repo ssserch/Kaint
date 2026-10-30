@@ -5,7 +5,7 @@
 import { Tool } from "./Tool.js";
 import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
-import { cloneCanvas, context, drawBlended, createCanvas, unionRect } from "../core/Raster.js";
+import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
 import { Settings } from "../Settings.js";
 import { miniCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
@@ -40,7 +40,7 @@ export class TextTool extends Tool {
     get name() { return tr("Texto"); }
     get icon() { return "text"; }
     get letter() { return "T"; }
-    get options() { return ["text", "antialias", "blend", "finish"]; }
+    get options() { return ["text", "antialias", "blend", "selectionQuality", "finish"]; }
 
     hint() {
         return this.editing
@@ -73,7 +73,8 @@ export class TextTool extends Tool {
     }
 
     font() {
-        const s = this.settings, px = (s.fontSize * 4) / 3;
+        // Puntos: según los PPP de la imagen; fijo: a 96 PPP (FontMetric de Kaint).
+        const s = this.settings, px = (s.fontSize * (s.fontMetric === "fixed96" ? 96 : this.doc?.dpi || 96)) / 72;
         return { css: `${s.italic ? "italic " : ""}${s.bold ? "bold " : ""}${px}px ${s.fontFamily}`, px, line: px * 1.25 };
     }
 
@@ -156,7 +157,8 @@ export class TextTool extends Tool {
         const s = this.settings;
         return { pos: { ...this.pos }, text: this.input.value, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { fontFamily: s.fontFamily, fontSize: s.fontSize, bold: s.bold, italic: s.italic, underline: s.underline,
-                             textAlign: s.textAlign, antialias: s.antialias, blend: s.blend } };
+                             textAlign: s.textAlign, antialias: s.antialias, blend: s.blend, strikeout: !!s.strikeout,
+                             fontMetric: s.fontMetric, textRendering: s.textRendering } };
     }
 
     historyChanged() {
@@ -209,37 +211,37 @@ export class TextTool extends Tool {
     }
 
     render() {
-        const doc = this.doc, s = this.settings, l = this.layout(), f = l.f;
-        const ctx = context(this.temp);
-        ctx.clearRect(0, 0, doc.width, doc.height);
-        ctx.font = f.css;
-        ctx.textBaseline = "top";
-        const c = AppState.primary;
-        ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${c.a / 255})`;
-        l.lines.forEach((line, i) => {
-            const x = s.textAlign === "center" ? this.pos.x + (l.w - l.widths[i]) / 2 : s.textAlign === "right" ? this.pos.x + l.w - l.widths[i] : this.pos.x;
-            const y = this.pos.y + i * f.line;
-            ctx.fillText(line, x, y);
-            if (s.underline && line)
-                ctx.fillRect(x, y + f.px * 1.05, l.widths[i], Math.max(1, f.px / 14));
-        });
+        const doc = this.doc, s = this.settings, l = this.layout(), f = l.f, c = AppState.primary;
+        // Dos pasadas, con el color opaco (la cobertura) y con el de verdad, compuestas como en
+        // Kaint (compositeTool): así funcionan "Sobrescribir" y los colores translúcidos sin suavizado.
+        if (this.real?.width !== doc.width || this.real?.height !== doc.height)
+            this.real = createCanvas(doc.width, doc.height);
+        for (const [canvas, alpha] of [[this.temp, 255], [this.real, c.a ?? 255]]) {
+            const ctx = context(canvas);
+            ctx.clearRect(0, 0, doc.width, doc.height);
+            ctx.font = f.css;
+            ctx.textBaseline = "top";
+            // Suave o nítido (lo más parecido del navegador al ajuste a la cuadrícula de Kaint).
+            ctx.textRendering = { sharpModern: "optimizeLegibility", sharpClassic: "optimizeSpeed" }[s.textRendering] || "geometricPrecision";
+            ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${alpha / 255})`;
+            l.lines.forEach((line, i) => {
+                const x = s.textAlign === "center" ? this.pos.x + (l.w - l.widths[i]) / 2 : s.textAlign === "right" ? this.pos.x + l.w - l.widths[i] : this.pos.x;
+                const y = this.pos.y + i * f.line;
+                ctx.fillText(line, x, y);
+                if (s.underline && line)
+                    ctx.fillRect(x, y + f.px * 1.05, l.widths[i], Math.max(1, f.px / 14));
+                if (s.strikeout && line)
+                    ctx.fillRect(x, y + f.px * 0.55, l.widths[i], Math.max(1, f.px / 14));
+            });
+        }
         const box = this.clampBox({ x: this.pos.x - 4, y: this.pos.y - 4, w: l.w + f.px + 8, h: l.h + 8 });
-        if (box && !s.antialias) {
-            const img = ctx.getImageData(box.x, box.y, box.w, box.h), d = img.data;
-            for (let i = 3; i < d.length; i += 4) d[i] = d[i] >= 128 ? 255 : 0;
-            ctx.putImageData(img, box.x, box.y);
-        }
-        if (!doc.selection.isEmpty()) {
-            ctx.globalCompositeOperation = "destination-in";
-            ctx.drawImage(doc.selection.maskCanvas(), 0, 0);
-            ctx.globalCompositeOperation = "source-over";
-        }
         const pctx = context(this.preview), dirty = unionRect(this.bounds, box);
         if (dirty) {
             pctx.clearRect(dirty.x, dirty.y, dirty.w, dirty.h);
             pctx.drawImage(this.start, dirty.x, dirty.y, dirty.w, dirty.h, dirty.x, dirty.y, dirty.w, dirty.h);
             if (box)
-                drawBlended(pctx, this.temp, s.blend, 255, box);
+                compositeTool(pctx, this.temp, this.real, box, { mode: s.blend, antialias: s.antialias, width: doc.width,
+                                                               clip: doc.selection.clipMask(AppState.selectionAntialias()) });
             doc.pixelsChanged(this.layer, dirty);
         }
         this.bounds = box;

@@ -1,13 +1,16 @@
 // Trazo de pincel: la cobertura se acumula en una máscara (máximo de cada sello, así el borde
 // suave no se oscurece donde se solapan) y la capa se compone a partir de la copia del principio
 // del trazo. Lo usan el pincel, la goma, el lápiz, el tampón de clonar y volver a colorear.
-import { blendPixels, clampRect, cloneCanvas, context, unionRect } from "../core/Raster.js";
-import { threshold } from "../core/FloodFill.js";
+import { AppState } from "../AppState.js";
+import { blendPixels, clampRect, cloneCanvas, context, lerpStraight, scaleAlpha, unionRect } from "../core/Raster.js";
+import { similar, threshold } from "../core/FloodFill.js";
+import { patternBit } from "../core/FillPattern.js";
 
 export class Stroke {
     // mode: "paint" | "erase" | "clone" | "recolor"
     constructor(doc, layer, { mode = "paint", color = null, blend = "normal", antialias = true, hardness = 100, spacing = 15,
-                             cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50 } = {}) {
+                             cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50, recolorStraight = false,
+                             fill = 0, background = null } = {}) {
         this.doc = doc;
         this.layer = layer;
         this.mode = mode;
@@ -19,6 +22,9 @@ export class Stroke {
         this.cloneOffset = cloneOffset;
         this.recolorFrom = recolorFrom;
         this.recolorLimit = threshold(recolorTolerance);
+        this.recolorStraight = recolorStraight;
+        this.fill = fill;
+        this.background = background;
         const w = doc.width, h = doc.height;
         this.width = w;
         this.height = h;
@@ -39,7 +45,7 @@ export class Stroke {
         const x0 = Math.floor(x - r - 1), y0 = Math.floor(y - r - 1), x1 = Math.ceil(x + r + 1), y1 = Math.ceil(y + r + 1);
         const rect = clampRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, this.width, this.height);
         const inner = (r * this.hardness) / 100;
-        const sel = this.doc.selection;
+        const clip = this.doc.selection.clipMask(AppState.selectionAntialias());
         for (let py = rect.y; py < rect.y + rect.h; ++py)
             for (let px = rect.x; px < rect.x + rect.w; ++px) {
                 const d = Math.hypot(px + 0.5 - x, py + 0.5 - y);
@@ -53,8 +59,8 @@ export class Stroke {
                 if (cov <= 0)
                     continue;
                 let v = Math.round(cov * 255);
-                if (sel.mask)
-                    v = Math.round((v * sel.mask[py * this.width + px]) / 255);
+                if (clip)
+                    v = Math.round((v * clip[py * this.width + px]) / 255);
                 const i = py * this.width + px;
                 if (v > this.mask[i])
                     this.mask[i] = v;
@@ -93,12 +99,12 @@ export class Stroke {
         x0 = Math.floor(x0); y0 = Math.floor(y0); x1 = Math.floor(x1); y1 = Math.floor(y1);
         const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
         let err = dx + dy;
-        const sel = this.doc.selection;
+        const clip = this.doc.selection.clipMask(AppState.selectionAntialias());
         let rect = null;
         for (;;) {
             if (x0 >= 0 && y0 >= 0 && x0 < this.width && y0 < this.height) {
                 const i = y0 * this.width + x0;
-                this.mask[i] = sel.mask ? sel.mask[i] : 255;
+                this.mask[i] = clip ? clip[i] : 255;
                 rect = unionRect(rect, { x: x0, y: y0, w: 1, h: 1 });
             }
             if (x0 === x1 && y0 === y1)
@@ -127,15 +133,24 @@ export class Stroke {
             }
         }
         if (this.mode === "paint") {
-            const top = new ImageData(rect.w, rect.h), t = top.data, c = this.color;
+            // Como compositeRegion de Kaint: el color con el alfa por la cobertura y el modo de
+            // fusión; "Sobrescribir" sustituye lo de debajo en la proporción de la cobertura.
+            const top = new ImageData(rect.w, rect.h), t = top.data, overwrite = this.blend === "overwrite";
             for (let y = 0; y < rect.h; ++y)
                 for (let x = 0; x < rect.w; ++x) {
                     const m = this.mask[(rect.y + y) * w + rect.x + x];
                     if (!m) continue;
                     const j = (y * rect.w + x) * 4;
-                    t[j] = c.r; t[j + 1] = c.g; t[j + 2] = c.b; t[j + 3] = (m * (c.a ?? 255)) / 255;
+                    // La trama de relleno: el color principal donde tiene bit y el otro donde no.
+                    const c = !this.fill || patternBit(this.fill, rect.x + x, rect.y + y) ? this.color : this.background, ca = c.a ?? 255;
+                    if (overwrite)
+                        lerpStraight(o, j, c.r, c.g, c.b, ca, m);
+                    else {
+                        t[j] = c.r; t[j + 1] = c.g; t[j + 2] = c.b; t[j + 3] = scaleAlpha(ca, m);
+                    }
                 }
-            blendPixels(out, top, this.blend);
+            if (!overwrite)
+                blendPixels(out, top, this.blend);
         } else if (this.mode === "erase") {
             // La opacidad del color regula la fuerza de la goma.
             const k = (this.color?.a ?? 255) / 255;
@@ -145,31 +160,36 @@ export class Stroke {
                     if (m) o[(y * rect.w + x) * 4 + 3] *= 1 - (m / 255) * k;
                 }
         } else if (this.mode === "clone") {
+            // Lo de origen con la opacidad del color (Stroke::render de Kaint).
             const top = new ImageData(rect.w, rect.h), t = top.data, s = this.cloneData.data, off = this.cloneOffset;
+            const opacity = this.color?.a ?? 255, overwrite = this.blend === "overwrite";
             for (let y = 0; y < rect.h; ++y)
                 for (let x = 0; x < rect.w; ++x) {
                     const m = this.mask[(rect.y + y) * w + rect.x + x];
                     if (!m) continue;
-                    const sx = rect.x + x + off.x, sy = rect.y + y + off.y;
-                    if (sx < 0 || sy < 0 || sx >= w || sy >= this.height) continue;
-                    const i = (sy * w + sx) * 4, j = (y * rect.w + x) * 4;
-                    t[j] = s[i]; t[j + 1] = s[i + 1]; t[j + 2] = s[i + 2]; t[j + 3] = (s[i + 3] * m) / 255;
+                    const sx = rect.x + x + off.x, sy = rect.y + y + off.y, j = (y * rect.w + x) * 4;
+                    const inside = sx >= 0 && sy >= 0 && sx < w && sy < this.height, i = (sy * w + sx) * 4;
+                    const r = inside ? s[i] : 0, g = inside ? s[i + 1] : 0, b = inside ? s[i + 2] : 0;
+                    const a = inside ? scaleAlpha(s[i + 3], opacity) : 0;
+                    if (overwrite)
+                        lerpStraight(o, j, r, g, b, a, m);
+                    else {
+                        t[j] = r; t[j + 1] = g; t[j + 2] = b; t[j + 3] = scaleAlpha(a, m);
+                    }
                 }
-            blendPixels(out, top, this.blend);
+            if (!overwrite)
+                blendPixels(out, top, this.blend);
         } else if (this.mode === "recolor") {
-            const from = this.recolorFrom, to = this.color;
+            // Como Stroke::render de Kaint: los píxeles parecidos al color de origen pasan al nuevo
+            // (con su alfa), en la proporción de la cobertura y de la opacidad del color.
+            const from = this.recolorFrom, c = this.color, ref = [from.r, from.g, from.b, from.a ?? 255], opacity = c.a ?? 255;
             for (let y = 0; y < rect.h; ++y)
                 for (let x = 0; x < rect.w; ++x) {
                     const m = this.mask[(rect.y + y) * w + rect.x + x];
-                    if (!m) continue;
                     const j = (y * rect.w + x) * 4;
-                    const dr = o[j] - from.r, dg = o[j + 1] - from.g, db = o[j + 2] - from.b;
-                    if (dr * dr + dg * dg + db * db > this.recolorLimit) continue;
-                    // Se conserva la diferencia con el color de origen (las sombras siguen ahí).
-                    const k = m / 255;
-                    o[j] += (Math.min(255, Math.max(0, to.r + dr)) - o[j]) * k;
-                    o[j + 1] += (Math.min(255, Math.max(0, to.g + dg)) - o[j + 1]) * k;
-                    o[j + 2] += (Math.min(255, Math.max(0, to.b + db)) - o[j + 2]) * k;
+                    if (!m || !similar(o, j, ref, this.recolorLimit, this.recolorStraight))
+                        continue;
+                    lerpStraight(o, j, c.r, c.g, c.b, o[j + 3], Math.trunc((m * opacity) / 255));
                 }
         }
         this.previewCtx.putImageData(out, rect.x, rect.y);

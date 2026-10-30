@@ -4,8 +4,10 @@
 import { Tool } from "./Tool.js";
 import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
-import { cloneCanvas, context, createCanvas, drawBlended, unionRect } from "../core/Raster.js";
-import { miniCursor, shapeFillRule, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
+import { miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { CustomShapes } from "../core/CustomShapes.js";
+import { patternTile } from "../core/FillPattern.js";
 import { tr } from "../i18n.js";
 
 const dashPatterns = { solid: [], dash: [3, 1], dot: [1, 1], dashdot: [3, 1, 1, 1], dashdotdot: [3, 1, 1, 1, 1, 1] };
@@ -53,34 +55,35 @@ class EditableTool extends Tool {
         this.setHint(this.hint());
     }
 
-    // Dibuja la figura (draw recibe el contexto) sobre la copia del principio.
+    // Dibuja la figura sobre la copia del principio: draw(ctx, paint) recibe el contexto y la
+    // función que da el estilo de cada color (con la trama de relleno, el otro color va donde la
+    // trama no tiene bit). Se dibuja dos veces, con los colores opacos (la cobertura) y con los de
+    // verdad, y se compone como en Kaint (compositeTool).
     renderWith(draw, margin) {
         const doc = this.doc, s = this.settings;
-        const tctx = context(this.temp);
-        tctx.clearRect(0, 0, doc.width, doc.height);
-        tctx.save();
-        draw(tctx);
-        tctx.restore();
+        this.real ||= createCanvas(doc.width, doc.height);
+        for (const [canvas, opaque] of [[this.temp, true], [this.real, false]]) {
+            const ctx = context(canvas);
+            ctx.clearRect(0, 0, doc.width, doc.height);
+            ctx.save();
+            draw(ctx, (c) => {
+                const main = opaque ? { ...c, a: 255 } : c;
+                if (!s.fill)
+                    return rgba(main);
+                const o = c === AppState.primary ? AppState.secondary : AppState.primary, other = opaque ? { ...o, a: 255 } : o;
+                return ctx.createPattern(patternTile(s.fill, main, other), "repeat");
+            });
+            ctx.restore();
+        }
         const box = this.shapeBounds(margin);
-        if (!s.antialias && box) {
-            // Sin suavizado: cada píxel, entero o nada.
-            const img = tctx.getImageData(box.x, box.y, box.w, box.h), d = img.data;
-            for (let i = 3; i < d.length; i += 4)
-                d[i] = d[i] >= 128 ? 255 : 0;
-            tctx.putImageData(img, box.x, box.y);
-        }
-        if (!doc.selection.isEmpty()) {
-            tctx.globalCompositeOperation = "destination-in";
-            tctx.drawImage(doc.selection.maskCanvas(), 0, 0);
-            tctx.globalCompositeOperation = "source-over";
-        }
         const pctx = context(this.preview);
         const dirty = unionRect(this.bounds, box);
         if (dirty) {
             pctx.clearRect(dirty.x, dirty.y, dirty.w, dirty.h);
             pctx.drawImage(this.start, dirty.x, dirty.y, dirty.w, dirty.h, dirty.x, dirty.y, dirty.w, dirty.h);
             if (box)
-                drawBlended(pctx, this.temp, s.blend, 255, box);
+                compositeTool(pctx, this.temp, this.real, box, { mode: s.blend, antialias: s.antialias, width: doc.width,
+                                                               clip: doc.selection.clipMask(AppState.selectionAntialias()) });
             doc.pixelsChanged(this.layer, dirty);
         }
         this.bounds = box;
@@ -211,8 +214,8 @@ class EditableTool extends Tool {
     }
 }
 
-function strokeStyle(ctx, s, color) {
-    ctx.strokeStyle = rgba(color);
+function strokeStyle(ctx, s, css) {
+    ctx.strokeStyle = css;
     ctx.lineWidth = s.brushSize;
     ctx.lineJoin = "round";
     ctx.setLineDash((dashPatterns[s.dash] || []).map((d) => d * s.brushSize));
@@ -223,7 +226,7 @@ export class LineTool extends EditableTool {
     get name() { return tr("Línea/Curva"); }
     get icon() { return "linecurve"; }
     get letter() { return "O"; }
-    get options() { return ["brushSize", "antialias", "blend", "dash", "caps", "curve", "finish"]; }
+    get options() { return ["curve", "brushSize", "dash", "caps", "fill", "antialias", "blend", "selectionQuality", "finish"]; }
 
     hint() {
         return this.editing
@@ -247,7 +250,7 @@ export class LineTool extends EditableTool {
         const s = this.settings;
         return { pts: this.pts.map((p) => ({ ...p })), useSecondary: this.useSecondary, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { brushSize: s.brushSize, antialias: s.antialias, blend: s.blend, dash: s.dash, startCap: s.startCap,
-                             endCap: s.endCap, curveType: s.curveType } };
+                             endCap: s.endCap, curveType: s.curveType, fill: s.fill || 0 } };
     }
 
     restoreState(st) {
@@ -344,15 +347,15 @@ export class LineTool extends EditableTool {
         const xs = this.pts.map((p) => p.x), ys = this.pts.map((p) => p.y), m = w * 3 + 4;
         this.box = { x: Math.min(...xs) - m, y: Math.min(...ys) - m, w: Math.max(...xs) - Math.min(...xs) + 2 * m,
                      h: Math.max(...ys) - Math.min(...ys) + 2 * m };
-        this.renderWith((ctx) => {
-            strokeStyle(ctx, s, this.color);
+        this.renderWith((ctx, paint) => {
+            strokeStyle(ctx, s, paint(this.color));
             ctx.lineCap = s.startCap === "round" && s.endCap === "round" ? "round" : "butt";
             this.path(ctx);
             ctx.stroke();
             ctx.setLineDash([]);
             for (const [cap, start] of [[s.startCap, true], [s.endCap, false]]) {
                 const p = start ? this.pts[0] : this.pts[3], d = this.direction(start);
-                ctx.fillStyle = rgba(this.color);
+                ctx.fillStyle = paint(this.color);
                 if (cap === "round") {
                     ctx.beginPath(); ctx.arc(p.x, p.y, w / 2, 0, Math.PI * 2); ctx.fill();
                 } else if (cap === "arrow" || cap === "filled") {
@@ -386,7 +389,7 @@ export class ShapesTool extends EditableTool {
     get name() { return tr("Formas"); }
     get icon() { return "shapes"; }
     get letter() { return "O"; }
-    get options() { return ["brushSize", "shape", "shapeStyle", "antialias", "blend", "dash", "finish"]; }
+    get options() { return ["shape", "shapeStyle", "cornerRadius", "brushSize", "dash", "fill", "antialias", "blend", "selectionQuality", "finish"]; }
 
     // Junto al puntero, la figura elegida.
     cursor() {
@@ -400,8 +403,8 @@ export class ShapesTool extends EditableTool {
     }
 
     historyName() {
-        const shape = ShapeTypes.find(([id]) => id === this.settings.shape);
-        return shape ? tr(shape[1]) : this.name;
+        const name = shapeName(this.settings.shape);
+        return name ? (this.settings.shape.startsWith("custom:") ? name : tr(name)) : this.name;
     }
 
     editName() {
@@ -416,7 +419,7 @@ export class ShapesTool extends EditableTool {
         const s = this.settings;
         return { r: { ...this.r }, reversed: this.reversed, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { brushSize: s.brushSize, shape: s.shape, shapeStyle: s.shapeStyle, antialias: s.antialias, blend: s.blend,
-                             dash: s.dash, cornerRadius: s.cornerRadius } };
+                             dash: s.dash, cornerRadius: s.cornerRadius, fill: s.fill || 0 } };
     }
 
     restoreState(st) {
@@ -502,15 +505,15 @@ export class ShapesTool extends EditableTool {
             line = AppState.secondary;
             fill = s.shapeStyle === "fill" ? AppState.secondary : AppState.primary;
         }
-        this.renderWith((ctx) => {
+        this.renderWith((ctx, paint) => {
             ctx.beginPath();
             shapePath(ctx, s.shape, n.x, n.y, n.w, n.h, s.cornerRadius);
             if (s.shapeStyle !== "outline") {
-                ctx.fillStyle = rgba(fill);
+                ctx.fillStyle = paint(fill);
                 ctx.fill(shapeFillRule(s.shape));
             }
             if (s.shapeStyle !== "fill") {
-                strokeStyle(ctx, s, line);
+                strokeStyle(ctx, s, paint(line));
                 ctx.stroke();
             }
         });
@@ -522,8 +525,10 @@ export class ShapesTool extends EditableTool {
 
     onKeyDown(e) {
         if (this.editing && e.key.toLowerCase() === "a" && !e.ctrlKey) {
-            const i = ShapeTypes.findIndex(([id]) => id === this.settings.shape);
-            AppState.updateTools({ shape: ShapeTypes[(i + (e.shiftKey ? -1 : 1) + ShapeTypes.length) % ShapeTypes.length][0] });
+            // Las integradas y, después, las personalizadas.
+            const all = [...ShapeTypes.map(([id]) => id), ...CustomShapes.all().map((c) => `custom:${c.id}`)];
+            const i = all.indexOf(this.settings.shape);
+            AppState.updateTools({ shape: all[(i + (e.shiftKey ? -1 : 1) + all.length) % all.length] });
             return true;
         }
         return super.onKeyDown(e);

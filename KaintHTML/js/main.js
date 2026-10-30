@@ -15,8 +15,13 @@ await UserFonts.load();
 const { Plugins } = await import("./plugins/Plugins.js");
 Plugins.installApi(window.kaint);
 await Plugins.load();
-// La primera vez, la bienvenida con lo básico de la configuración.
+// Los archivos de la última sesión, si se quiere.
+await window.kaint.restoreSession();
+// La primera vez, la bienvenida con lo básico de la configuración; si no, las copias de
+// recuperación si Kaint se cerró de golpe.
 if (!Settings.get("welcomed")) {
     const { welcomeDialog } = await import("./ui/Dialogs.js");
     welcomeDialog();
+} else {
+    await window.kaint.offerRecovery();
 }

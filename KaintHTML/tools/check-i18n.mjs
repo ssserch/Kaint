@@ -21,7 +21,7 @@ const texts = new Set();
 const str = String.raw`"((?:[^"\\]|\\.)*)"`;
 for (const file of files) {
     const src = readFileSync(file, "utf8");
-    for (const m of src.matchAll(new RegExp(String.raw`\btr\(\s*` + str, "g"))) texts.add(unquote(m[1]));
+    for (const m of src.matchAll(new RegExp(String.raw`\btrn?\(\s*` + str, "g"))) texts.add(unquote(m[1]));
     // Concatenaciones tr("a" + "b")
     for (const m of src.matchAll(new RegExp(String.raw`\btr\(\s*` + str + String.raw`\s*\+\s*` + str, "g"))) {
         texts.delete(unquote(m[1]));
@@ -36,9 +36,13 @@ for (const file of files) {
         for (const c of cats[1].matchAll(new RegExp(":\\s*" + str, "g"))) texts.add(unquote(c[1]));
     }
     if (file.endsWith("Icons.js")) {
+        const groups = src.match(/ShapeGroups = \[([\s\S]*?)\n\];/);
+        for (const c of groups[1].matchAll(new RegExp(String.raw`\[\s*` + str + String.raw`,\s*\[`, "g"))) texts.add(unquote(c[1]));
         const shapes = src.match(/ShapeTypes = \[([\s\S]*?)\];/);
         for (const c of shapes[1].matchAll(new RegExp(String.raw`\[\s*"[^"]*",\s*` + str, "g"))) texts.add(unquote(c[1]));
     }
+    if (file.endsWith("FillPattern.js"))
+        for (const m of src.matchAll(new RegExp(String.raw`\[\s*` + str + String.raw`,\s*\[`, "g"))) texts.add(unquote(m[1]));
     if (file.endsWith("Raster.js")) {
         const names = src.match(/BlendNames = \{([\s\S]*?)\};/);
         for (const c of names[1].matchAll(new RegExp(str, "g"))) texts.add(unquote(c[1]));

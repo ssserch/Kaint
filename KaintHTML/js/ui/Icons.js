@@ -3,6 +3,7 @@
 // los colores activos, la mano y las demás con sus dibujos de siempre) y las formas. Los dibujados
 // se vuelven a pintar al cambiar de tema o de colores.
 import { IconPacks } from "../IconPacks.js";
+import { patternBit } from "../core/FillPattern.js";
 import { Settings } from "../Settings.js";
 
 // Nombre de los PNG de las herramientas en los paquetes de iconos de paint.js: si el activo trae
@@ -560,6 +561,20 @@ function drawShapesTool(ctx) {
 // --- Opciones de herramienta (Icons.cpp: rejilla de 32 px con un margen de 3) -------------
 
 const options = {
+    // Trama de relleno (Icons::fillPattern de Kaint): un píxel de la trama por píxel del icono de
+    // 16, con el color del texto sobre el de fondo y un borde.
+    fill(ctx, index) {
+        ctx.fillStyle = cssVar("--base");
+        ctx.fillRect(0, 0, 32, 32);
+        ctx.fillStyle = fg();
+        for (let y = 0; y < 16; ++y)
+            for (let x = 0; x < 16; ++x)
+                if (patternBit(Number(index), x, y))
+                    ctx.fillRect(x * 2, y * 2, 2, 2);
+        ctx.strokeStyle = fg();
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, 30, 30);
+    },
     shape(ctx, type) {
         ctx.beginPath();
         shapePath(ctx, type, 4, 5, 24, 22, 4);

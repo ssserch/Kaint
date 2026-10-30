@@ -133,7 +133,7 @@ export class PaintBucketTool extends EditableFill {
     get name() { return tr("Cubo de pintura"); }
     get icon() { return "paintbucket"; }
     get letter() { return "F"; }
-    get options() { return ["flood", "tolerance", "tolAlpha", "sampling", "antialias", "accumulate", "blend", "selectionQuality", "finish"]; }
+    get options() { return ["flood", "fill", "tolerance", "tolAlpha", "sampling", "antialias", "accumulate", "blend", "selectionQuality", "finish"]; }
     editName() { return tr("Editar cubo de pintura"); }
     finishName() { return tr("Finalizar cubo de pintura"); }
 
@@ -207,7 +207,7 @@ export class PaintBucketTool extends EditableFill {
         return { seed: { ...this.seed }, useSecondary: this.useSecondary, shiftGlobal: this.shiftGlobal, sample: this.sample,
                  primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { tolerance: s.tolerance, floodGlobal: s.floodGlobal, sampleImage: s.sampleImage, antialias: s.antialias, blend: s.blend,
-                             toleranceStraight: !!s.toleranceStraight, fillAccumulate: s.fillAccumulate !== false } };
+                             toleranceStraight: !!s.toleranceStraight, fillAccumulate: s.fillAccumulate !== false, fill: s.fill || 0 } };
     }
 
     restoreState(st) {
@@ -238,6 +238,7 @@ export class PaintBucketTool extends EditableFill {
         const r = paintBucket(this.startData, this.sample, this.seed, {
             tolerance: s.tolerance, global: s.floodGlobal !== this.shiftGlobal, straight: !!s.toleranceStraight, antialias: s.antialias,
             accumulate: s.fillAccumulate !== false, blend: s.blend, color: this.useSecondary ? AppState.secondary : AppState.primary,
+            background: this.useSecondary ? AppState.primary : AppState.secondary, pattern: s.fill || 0,
             sampleIsLayer: !s.sampleImage,
         }, clip);
         if (!r) {

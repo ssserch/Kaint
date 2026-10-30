@@ -4,11 +4,13 @@
 import { AppState } from "../AppState.js";
 import { blendPixels, clampRect, cloneCanvas, context, lerpStraight, scaleAlpha, unionRect } from "../core/Raster.js";
 import { similar, threshold } from "../core/FloodFill.js";
+import { patternBit } from "../core/FillPattern.js";
 
 export class Stroke {
     // mode: "paint" | "erase" | "clone" | "recolor"
     constructor(doc, layer, { mode = "paint", color = null, blend = "normal", antialias = true, hardness = 100, spacing = 15,
-                             cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50, recolorStraight = false } = {}) {
+                             cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50, recolorStraight = false,
+                             fill = 0, background = null } = {}) {
         this.doc = doc;
         this.layer = layer;
         this.mode = mode;
@@ -21,6 +23,8 @@ export class Stroke {
         this.recolorFrom = recolorFrom;
         this.recolorLimit = threshold(recolorTolerance);
         this.recolorStraight = recolorStraight;
+        this.fill = fill;
+        this.background = background;
         const w = doc.width, h = doc.height;
         this.width = w;
         this.height = h;
@@ -131,13 +135,14 @@ export class Stroke {
         if (this.mode === "paint") {
             // Como compositeRegion de Kaint: el color con el alfa por la cobertura y el modo de
             // fusión; "Sobrescribir" sustituye lo de debajo en la proporción de la cobertura.
-            const top = new ImageData(rect.w, rect.h), t = top.data, c = this.color, ca = c.a ?? 255;
-            const overwrite = this.blend === "overwrite";
+            const top = new ImageData(rect.w, rect.h), t = top.data, overwrite = this.blend === "overwrite";
             for (let y = 0; y < rect.h; ++y)
                 for (let x = 0; x < rect.w; ++x) {
                     const m = this.mask[(rect.y + y) * w + rect.x + x];
                     if (!m) continue;
                     const j = (y * rect.w + x) * 4;
+                    // La trama de relleno: el color principal donde tiene bit y el otro donde no.
+                    const c = !this.fill || patternBit(this.fill, rect.x + x, rect.y + y) ? this.color : this.background, ca = c.a ?? 255;
                     if (overwrite)
                         lerpStraight(o, j, c.r, c.g, c.b, ca, m);
                     else {

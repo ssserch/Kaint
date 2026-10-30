@@ -6,6 +6,7 @@ import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
 import { miniCursor, shapeFillRule, shapePath, ShapeTypes } from "../ui/Icons.js";
+import { patternTile } from "../core/FillPattern.js";
 import { tr } from "../i18n.js";
 
 const dashPatterns = { solid: [], dash: [3, 1], dot: [1, 1], dashdot: [3, 1, 1, 1], dashdotdot: [3, 1, 1, 1, 1, 1] };
@@ -54,8 +55,9 @@ class EditableTool extends Tool {
     }
 
     // Dibuja la figura sobre la copia del principio: draw(ctx, paint) recibe el contexto y la
-    // función que da el CSS de cada color. Se dibuja dos veces, con los colores opacos (la
-    // cobertura) y con los de verdad, y se compone como en Kaint (compositeTool).
+    // función que da el estilo de cada color (con la trama de relleno, el otro color va donde la
+    // trama no tiene bit). Se dibuja dos veces, con los colores opacos (la cobertura) y con los de
+    // verdad, y se compone como en Kaint (compositeTool).
     renderWith(draw, margin) {
         const doc = this.doc, s = this.settings;
         this.real ||= createCanvas(doc.width, doc.height);
@@ -63,7 +65,13 @@ class EditableTool extends Tool {
             const ctx = context(canvas);
             ctx.clearRect(0, 0, doc.width, doc.height);
             ctx.save();
-            draw(ctx, (c) => rgba(opaque ? { ...c, a: 255 } : c));
+            draw(ctx, (c) => {
+                const main = opaque ? { ...c, a: 255 } : c;
+                if (!s.fill)
+                    return rgba(main);
+                const o = c === AppState.primary ? AppState.secondary : AppState.primary, other = opaque ? { ...o, a: 255 } : o;
+                return ctx.createPattern(patternTile(s.fill, main, other), "repeat");
+            });
             ctx.restore();
         }
         const box = this.shapeBounds(margin);
@@ -217,7 +225,7 @@ export class LineTool extends EditableTool {
     get name() { return tr("Línea/Curva"); }
     get icon() { return "linecurve"; }
     get letter() { return "O"; }
-    get options() { return ["curve", "brushSize", "dash", "caps", "antialias", "blend", "selectionQuality", "finish"]; }
+    get options() { return ["curve", "brushSize", "dash", "caps", "fill", "antialias", "blend", "selectionQuality", "finish"]; }
 
     hint() {
         return this.editing
@@ -241,7 +249,7 @@ export class LineTool extends EditableTool {
         const s = this.settings;
         return { pts: this.pts.map((p) => ({ ...p })), useSecondary: this.useSecondary, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { brushSize: s.brushSize, antialias: s.antialias, blend: s.blend, dash: s.dash, startCap: s.startCap,
-                             endCap: s.endCap, curveType: s.curveType } };
+                             endCap: s.endCap, curveType: s.curveType, fill: s.fill || 0 } };
     }
 
     restoreState(st) {
@@ -380,7 +388,7 @@ export class ShapesTool extends EditableTool {
     get name() { return tr("Formas"); }
     get icon() { return "shapes"; }
     get letter() { return "O"; }
-    get options() { return ["shape", "shapeStyle", "cornerRadius", "brushSize", "dash", "antialias", "blend", "selectionQuality", "finish"]; }
+    get options() { return ["shape", "shapeStyle", "cornerRadius", "brushSize", "dash", "fill", "antialias", "blend", "selectionQuality", "finish"]; }
 
     // Junto al puntero, la figura elegida.
     cursor() {
@@ -410,7 +418,7 @@ export class ShapesTool extends EditableTool {
         const s = this.settings;
         return { r: { ...this.r }, reversed: this.reversed, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { brushSize: s.brushSize, shape: s.shape, shapeStyle: s.shapeStyle, antialias: s.antialias, blend: s.blend,
-                             dash: s.dash, cornerRadius: s.cornerRadius } };
+                             dash: s.dash, cornerRadius: s.cornerRadius, fill: s.fill || 0 } };
     }
 
     restoreState(st) {

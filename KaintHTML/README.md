@@ -45,6 +45,10 @@ Safari download the saved file and paste with Ctrl+V instead.
   follows the tolerance until you press Enter. Like in Kaint, shapes, lines, text, gradients and
   paint bucket fills stay editable: every change is a history step, and going back to one of them
   lets you keep editing it. A click with Move Selected Pixels selects the whole layer.
+- **Toolbar options** like Kaint's: fill patterns, selection quality, tolerance alpha mode, fill
+  accumulation, rounded rectangle radius, spiral gradients, the Overwrite blend mode and the
+  sampling and gamma of Move Selected Pixels; the paint bucket, gradient and recolor tools use
+  Kaint's algorithms.
 - **Layers** with the 14 Paint.NET blend modes, opacity, visibility, drag to reorder (the layer
   follows the mouse, or a line marks where it will go) and their properties dialog; full
   **history** you can click through.
@@ -86,8 +90,7 @@ Safari download the saved file and paste with Ctrl+V instead.
   palette file to open or save, Rainbow and Small; **More** widens it with the RGB, HSV and
   opacity sliders, their number boxes and the hex code.
 
-Not available on the web: Paint.NET (.dll) and native plugins, custom shapes, brush fill patterns
-and scanning. Reopening the last session's files needs a browser with access to the system's
+Not available on the web: Paint.NET (.dll) and native plugins, custom shapes and scanning. Reopening the last session's files needs a browser with access to the system's
 files (Chrome, Edge...). Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use
 the menus for those.
 

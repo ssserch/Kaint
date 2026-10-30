@@ -3,6 +3,7 @@
 // la cobertura estimada por el color), la "desmezcla" del color de la zona y la opción de acumular
 // los rellenos.
 import { PixelOps } from "./Effects.js";
+import { patternBit } from "./FillPattern.js";
 import { floodMask } from "./FloodFill.js";
 import { blendPixels, context, createCanvas, lerpStraight, scaleAlpha } from "./Raster.js";
 
@@ -281,7 +282,7 @@ function overStraight(o, j, r, g, b, sa) {
 // Rellena desde 'seed' la zona de 'sample' (ImageData) sobre 'before' (ImageData de la capa, alfa
 // directo), recortada por 'clip' (cobertura de la selección o null). Devuelve { rect, data } con
 // los píxeles nuevos del rectángulo, o null si no hay zona. o: { tolerance (0..100), global,
-// straight, antialias, accumulate, blend, color: {r, g, b, a}, sampleIsLayer }.
+// straight, antialias, accumulate, blend, color: {r, g, b, a}, background, pattern, sampleIsLayer }.
 export function paintBucket(before, sample, seed, o, clip) {
     const w = before.width, h = before.height;
     const m = floodMask(sample, seed.x, seed.y, o.tolerance, o.global, o.straight);
@@ -302,8 +303,9 @@ export function paintBucket(before, sample, seed, o, clip) {
     }
     bounds = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
     const ring = accumulate ? halfPixelRing(m, w, h, bounds) : null;
-    const bw = bounds.w, bh = bounds.h, c = o.color, ca = c.a ?? 255;
-    const fill = qRgba(c.r, c.g, c.b, ca);
+    const bw = bounds.w, bh = bounds.h;
+    // El color de cada píxel: con una trama, el principal donde tiene bit y el otro donde no.
+    const colorAt = (x, y) => (!o.pattern || patternBit(o.pattern, x, y) ? o.color : o.background);
 
     // Cobertura de cada píxel.
     const coverage = new Uint8Array(bw * bh);
@@ -330,14 +332,16 @@ export function paintBucket(before, sample, seed, o, clip) {
     const weight = (x, y) => Math.trunc((coverage[(y - y0) * bw + x - x0] * clipAt(x, y)) / 255);
     if (o.blend === "overwrite") {
         for (let y = y0; y <= y1; ++y)
-            for (let x = x0; x <= x1; ++x)
-                lerpStraight(d, ((y - y0) * bw + x - x0) * 4, c.r, c.g, c.b, ca, weight(x, y));
+            for (let x = x0; x <= x1; ++x) {
+                const c = colorAt(x, y);
+                lerpStraight(d, ((y - y0) * bw + x - x0) * 4, c.r, c.g, c.b, c.a ?? 255, weight(x, y));
+            }
     } else {
         const top = new ImageData(bw, bh), t = top.data;
         for (let y = y0; y <= y1; ++y)
             for (let x = x0; x <= x1; ++x) {
-                const j = ((y - y0) * bw + x - x0) * 4;
-                t[j] = c.r; t[j + 1] = c.g; t[j + 2] = c.b; t[j + 3] = scaleAlpha(ca, weight(x, y));
+                const j = ((y - y0) * bw + x - x0) * 4, c = colorAt(x, y);
+                t[j] = c.r; t[j + 1] = c.g; t[j + 2] = c.b; t[j + 3] = scaleAlpha(c.a ?? 255, weight(x, y));
             }
         blendPixels(out, top, o.blend);
     }
@@ -348,8 +352,8 @@ export function paintBucket(before, sample, seed, o, clip) {
             // así el borde avanza parejo con cada clic.
             if (accumulate && m[e.y * w + e.x])
                 continue;
-            const k = (e.y * w + e.x) * 4, p = qRgba(bd[k], bd[k + 1], bd[k + 2], bd[k + 3]);
-            const u = replaceInterior(p, e.interior, fill, e.coverage);
+            const k = (e.y * w + e.x) * 4, p = qRgba(bd[k], bd[k + 1], bd[k + 2], bd[k + 3]), c = colorAt(e.x, e.y);
+            const u = replaceInterior(p, e.interior, qRgba(c.r, c.g, c.b, c.a ?? 255), e.coverage);
             const j = ((e.y - y0) * bw + e.x - x0) * 4;
             d[j] = bd[k]; d[j + 1] = bd[k + 1]; d[j + 2] = bd[k + 2]; d[j + 3] = bd[k + 3];
             lerpStraight(d, j, qRed(u), qGreen(u), qBlue(u), qAlpha(u), clipAt(e.x, e.y));
@@ -361,7 +365,8 @@ export function paintBucket(before, sample, seed, o, clip) {
                     const cov = ring[(y - y0) * bw + x - x0], wgt = clipAt(x, y);
                     if (!cov || !wgt)
                         continue;
-                    overStraight(d, ((y - y0) * bw + x - x0) * 4, c.r, c.g, c.b, scaleAlpha(ca, Math.trunc((cov * wgt) / 255)));
+                    const c = colorAt(x, y);
+                    overStraight(d, ((y - y0) * bw + x - x0) * 4, c.r, c.g, c.b, scaleAlpha(c.a ?? 255, Math.trunc((cov * wgt) / 255)));
                 }
     }
     return { rect: bounds, data: out };

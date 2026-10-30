@@ -2,6 +2,7 @@
 // y las opciones que use la herramienta actual. Los iconos son los dibujados por código de Kaint.
 import { AppState } from "../AppState.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
+import { FillPatterns } from "../core/FillPattern.js";
 import { el } from "./Dialogs.js";
 import { icon, ShapeTypes } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
@@ -209,6 +210,10 @@ export class ToolOptions {
         case "tolerance":
             this.group(label(tr("Tolerancia:")), barSlider("tolerance", 0, 100, (v) => `${v}%`));
             break;
+        case "fill":
+            this.group(label(tr("Relleno:")), choice(tr("Relleno"), "fill", FillPatterns.map(([name], i) => [i, `opt-fill:${i}`, tr(name)]),
+                                                     { showText: true }));
+            break;
         case "tolAlpha":
             this.group(choice(tr("Modo alfa de la tolerancia"), "toleranceStraight", [[false, "opt-tolalpha:0", tr("Premultiplicado")],
                                                                                     [true, "opt-tolalpha:1", tr("Directo")]]));
@@ -378,7 +383,7 @@ export class ToolOptions {
 // Las secciones de Configuración > Herramientas de Paint.NET 5 (ToolOptionsEditor::sectionNames de
 // Kaint) con las opciones de cada una.
 const sections = () => [
-    [tr("Pincel y relleno"), ["brushSize", "hardness", "spacing"]],
+    [tr("Pincel y relleno"), ["brushSize", "hardness", "spacing", "fill"]],
     [tr("Forma y estilo"), ["shape", "shapeStyle", "cornerRadius", "curve", "dash", "caps"]],
     [tr("Selección"), ["selectionMode", "rectMode", "afterSelect"]],
     [tr("Mover píxeles seleccionados"), ["interpolation", "gamma"]],

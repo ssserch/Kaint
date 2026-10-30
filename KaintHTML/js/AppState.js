@@ -49,6 +49,8 @@ export const defaultTools = () => ({
     // Modo alfa de la tolerancia (directo o premultiplicado) y acumular los rellenos del cubo.
     toleranceStraight: false,
     fillAccumulate: true,
+    // Trama de relleno del pincel, el cubo, la línea y las formas (0: color sólido).
+    fill: 0,
 });
 
 // Opciones predeterminadas de las herramientas (Configuración > Herramientas), como

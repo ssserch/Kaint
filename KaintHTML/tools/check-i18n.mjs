@@ -39,6 +39,8 @@ for (const file of files) {
         const shapes = src.match(/ShapeTypes = \[([\s\S]*?)\];/);
         for (const c of shapes[1].matchAll(new RegExp(String.raw`\[\s*"[^"]*",\s*` + str, "g"))) texts.add(unquote(c[1]));
     }
+    if (file.endsWith("FillPattern.js"))
+        for (const m of src.matchAll(new RegExp(String.raw`\[\s*` + str + String.raw`,\s*\[`, "g"))) texts.add(unquote(m[1]));
     if (file.endsWith("Raster.js")) {
         const names = src.match(/BlendNames = \{([\s\S]*?)\};/);
         for (const c of names[1].matchAll(new RegExp(str, "g"))) texts.add(unquote(c[1]));

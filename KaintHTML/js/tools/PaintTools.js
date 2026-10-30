@@ -7,7 +7,7 @@ import { tr } from "../i18n.js";
 
 class StrokeTool extends Tool {
     get options() {
-        return ["brushSize", "hardness", "spacing", "smoothing", "pressure", "antialias", "blend", "selectionQuality"];
+        return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "blend", "selectionQuality"];
     }
 
     brushDiameter() {
@@ -75,6 +75,11 @@ export class BrushTool extends StrokeTool {
     get icon() { return "paintbrush"; }
     get letter() { return "B"; }
     hint() { return tr("Clic izquierdo: pintar con el color principal · clic derecho: con el secundario."); }
+
+    // Con una trama, el otro color va donde la trama no tiene bit (BrushTool::params de Kaint).
+    strokeOptions(e) {
+        return { ...super.strokeOptions(e), fill: this.settings.fill || 0, background: this.colorFor(e.button === "right" ? "left" : "right") };
+    }
 }
 
 export class EraserTool extends StrokeTool {

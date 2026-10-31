@@ -115,10 +115,32 @@ and the close buttons of the image tabs animate, and a modal dialog blinks when 
 window behind it (on X11 and Windows). Turn it all off with **Settings → User interface →
 Animations**.
 
+#### Kaint style
+
+Kaint's own interface: floating windows with a border and slightly rounded corners, and a Colors
+window with a primary/secondary selector and a brightness slider.
+
 <table>
   <tr>
-    <td width="50%"><img src="img/other/screenshot-light.png" alt="Light theme"></td>
-    <td width="50%"><img src="img/other/screenshot.png" alt="Dark theme"></td>
+    <td width="50%"><img src="img/other/screenshot-light.png" alt="Kaint style, light theme"></td>
+    <td width="50%"><img src="img/other/screenshot.png" alt="Kaint style, dark theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Light</sub></td>
+    <td align="center"><sub>Dark</sub></td>
+  </tr>
+</table>
+
+#### Paint.NET 5 style
+
+A recreation of Paint.NET 5: more compact, with borderless windows, tighter menus and buttons and
+Paint.NET's Colors window. Pick it in **Settings → User interface → Interface style** (or in the
+welcome window).
+
+<table>
+  <tr>
+    <td width="50%"><img src="img/other/netscreenshot-light.png" alt="Paint.NET 5 style, light theme"></td>
+    <td width="50%"><img src="img/other/netscreenshot.png" alt="Paint.NET 5 style, dark theme"></td>
   </tr>
   <tr>
     <td align="center"><sub>Light</sub></td>

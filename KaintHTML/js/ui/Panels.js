@@ -230,7 +230,8 @@ export function toolsPanel(app) {
                 const rows = Math.min(count, Math.max(1, Math.floor((h + gap) / (cell() + gap))));
                 return Math.ceil(count / rows);
             }
-            return Math.floor((w + gap) / (cell() + gap));
+            // Al menos una columna (ToolsPanel::columnsFor): con 0, apply() volvía a las dos.
+            return Math.max(1, Math.floor((w + gap) / (cell() + gap)));
         },
     };
     return grid;

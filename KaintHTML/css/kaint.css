@@ -860,7 +860,12 @@ input[type="checkbox"] {
 .floating-panel .resize.ne { right: -4px; top: -4px; width: 10px; height: 10px; cursor: nesw-resize; }
 .floating-panel .resize.nw { left: -4px; top: -4px; width: 10px; height: 10px; cursor: nwse-resize; }
 
-/* Herramientas */
+/* Herramientas: la ventana mide lo que sus columnas, también con una sola (sin el ancho mínimo de
+   las demás, que la dejaba más ancha que su columna). */
+.floating-panel[data-panel="tools"] {
+    min-width: 0;
+}
+
 .tools-grid {
     display: grid;
     grid-template-columns: repeat(var(--columns, 2), 30px);
@@ -2748,8 +2753,27 @@ fieldset.group > legend {
 
 /* Azul (como el de Paint.NET): las dos barras de herramientas en un degradado de casi blanco a azul
    claro con una línea azul oscura debajo, los menús casi blancos con borde azul y la franja de
-   botones de las ventanas azulada (las reglas las dibuja el lienzo en degradado). */
+   botones de las ventanas azulada (las reglas las dibuja el lienzo en degradado).
+   Como TopRow en Kaint: el degradado empieza bajo los menús y sigue a lo ancho de toda la fila (si
+   no, se cortaba al final de la barra principal y quedaba blanco bajo la tira de imágenes); la
+   barra principal es transparente y sin bordes encima de él. */
+:root.blue #top-row {
+    isolation: isolate;
+    overflow: clip;
+}
+
 :root.blue #main-toolbar {
+    position: relative;
+    background: transparent;
+    border-left: none;
+    border-right: none;
+}
+
+:root.blue #main-toolbar::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 -100vw;
     background: linear-gradient(#fbfdff, #ebf1f9);
 }
 

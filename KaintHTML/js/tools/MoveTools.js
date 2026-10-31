@@ -533,11 +533,12 @@ class MoveToolBase extends Tool {
         if (!box || (!s && this.doc.selection.isEmpty()))
             return;
         // La selección se ve donde quedará; mientras se arrastra (salvo que en Configuración no se
-        // oculte nada), solo el icono de mover y, al girar, el punto de giro.
-        if (s && dragging)
+        // oculte nada), solo el icono de mover y, al girar, el punto de giro: sin el contorno
+        // tampoco (MoveSelectedTool::paintOverlay de Kaint).
+        const hide = dragging && Settings.get("hideMoveBox") !== false;
+        if (s && dragging && !hide)
             view.strokeSelection(ctx, s.selBase, box.matrix());
         const g = this.viewGeometry(box);
-        const hide = dragging && Settings.get("hideMoveBox") !== false;
         ctx.save();
         if (!hide)
             for (const v of g.handles)

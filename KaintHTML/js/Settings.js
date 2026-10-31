@@ -44,6 +44,7 @@ const defaults = {
     rulers: false,
     rulerStyle: 0,
     historyJumpButtons: true,
+    paletteTranslucent: true,
     cursorStyle: 0,
     // Unidades de medida (Ver): 0, píxeles; 1, pulgadas; 2, centímetros.
     unit: 0,

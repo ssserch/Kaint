@@ -1224,11 +1224,12 @@ QWidget#CornerButtons QToolButton:checked:hover { background: %3; }
                         QStringLiteral("rgba(%1, %2, %3, 96)").arg(s.accent.red()).arg(s.accent.green()).arg(s.accent.blue()));
     if (s.paintNet)
         qss += paintNetStyleSheet(s, line);
-    // Azul: las dos barras de herramientas forman un degradado de casi blanco a azul claro, con una
-    // línea azul oscura debajo; la franja de botones de las ventanas, azulada.
+    // Azul: las dos barras de herramientas forman un solo degradado de casi blanco a azul claro (la
+    // fila de arriba lo pinta bajo la barra principal y sigue en la de opciones), con una línea azul
+    // oscura debajo; la franja de botones de las ventanas, azulada.
     if (s.blue)
         qss += QStringLiteral(R"(
-QToolBar#MainToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fafdff, stop:1 #ecf2fa); }
+QToolBar#MainToolBar { background: transparent; }
 QToolBar#ToolOptionsBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ebf1f9, stop:0.65 #dce7f5, stop:1 #dce7f5);
                           border-bottom: 1px solid #365d90; }
 QStatusBar { border-top: 1px solid #a9bcd4; }

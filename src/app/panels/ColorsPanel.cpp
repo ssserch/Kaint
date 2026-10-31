@@ -228,7 +228,12 @@ ColorsPanel::ColorsPanel(QWidget* parent)
         setCurrent(c);
     });
     connect(app, &AppState::colorsChanged, this, &ColorsPanel::refresh);
-    connect(app, &AppState::paletteChanged, this, [this] { m_palette->setColors(AppState::instance()->palette()); });
+    connect(app, &AppState::paletteChanged, this, [this] {
+        m_palette->setColors(AppState::instance()->palette());
+        // Con otra paleta cambia cuántos colores propios hay que ver ampliado.
+        if (isExpanded() && expandedColorCount() != m_palette->visibleCount())
+            setExpanded(true);
+    });
     connect(Theme::notifier(), &Theme::Notifier::changed, this, &ColorsPanel::applyLook);
     applyLook();
     refresh();
@@ -307,10 +312,35 @@ void ColorsPanel::setExpanded(bool on)
     const double keep = scale();
     m_extended->setVisible(on);
     applyLook();
-    m_palette->setVisibleCount(on ? Palette::kColorCount : 32);
+    m_palette->setVisibleCount(on ? expandedColorCount() : 32);
     m_mainLayout->setStretch(0, on ? std::max(1, m_leftLayout->sizeHint().width()) : 0);
     m_mainLayout->setStretch(1, on ? std::max(1, m_extended->sizeHint().width()) : 1);
     emit layoutChanged(keep);
+}
+
+int ColorsPanel::expandedColorCount() const
+{
+    // Filas enteras hasta el último color propio: las paletas de menos de 96 colores (la pequeña,
+    // las de archivo) se rellenan con blanco y ese relleno no se muestra; los semitransparentes (las
+    // filas de abajo de la de fábrica), según la configuración.
+    const QList<QColor> colors = AppState::instance()->palette();
+    int last = -1;
+    for (int i = 0; i < int(colors.size()); ++i) {
+        const QColor& c = colors.at(i);
+        if (c.rgba() != qRgb(255, 255, 255) && (m_showTranslucent || c.alpha() == 255))
+            last = i;
+    }
+    constexpr int kRow = 16;
+    return std::clamp((last + kRow) / kRow * kRow, 32, Palette::kColorCount);
+}
+
+void ColorsPanel::setShowTranslucent(bool on)
+{
+    if (on == m_showTranslucent)
+        return;
+    m_showTranslucent = on;
+    if (isExpanded())
+        setExpanded(true);
 }
 
 bool ColorsPanel::isExpanded() const

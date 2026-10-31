@@ -2750,7 +2750,7 @@ fieldset.group > legend {
    claro con una línea azul oscura debajo, los menús casi blancos con borde azul y la franja de
    botones de las ventanas azulada (las reglas las dibuja el lienzo en degradado). */
 :root.blue #main-toolbar {
-    background: linear-gradient(#fafdff, #ecf2fa);
+    background: linear-gradient(#fbfdff, #ebf1f9);
 }
 
 :root.blue .tool-options {
@@ -2791,4 +2791,10 @@ fieldset.group > legend {
 
 :root.pdn.blue .menubar {
     border-color: #365d90;
+}
+
+/* Opciones de Configuración que no se usan con lo elegido (el borde de las ventanas con el estilo
+   de Paint.NET), atenuadas con su etiqueta. */
+.dialog label.disabled {
+    opacity: 0.5;
 }

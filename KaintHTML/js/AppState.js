@@ -169,6 +169,13 @@ class State extends EventTarget {
             // Sin almacenamiento.
         }
         this.palette = remember("palette") || defaultPalette();
+        // Una vez: la paleta guardada de 32 colores con relleno blanco (la de versiones anteriores)
+        // pasa a la de fábrica, con las filas semitransparentes de Paint.NET.
+        if (remember("paletteVersion") !== 2) {
+            if (samePalette(this.palette, smallPalette()))
+                this.palette = remember("palette", defaultPalette());
+            remember("paletteVersion", 2);
+        }
     }
 
     emit(type) {

@@ -294,6 +294,15 @@ void AppState::load()
     const QString palette = s.value(QStringLiteral("colors/palette")).toString();
     if (!palette.isEmpty())
         m_palette = Palette::parse(palette);
+    // Una vez: la paleta guardada de 32 colores con relleno blanco (la que quedaba de versiones
+    // anteriores) pasa a la de fábrica, con las filas semitransparentes de Paint.NET.
+    if (s.value(QStringLiteral("colors/paletteVersion")).toInt() < 2) {
+        if (m_palette == Palette::smallColors()) {
+            m_palette = Palette::defaultColors();
+            s.setValue(QStringLiteral("colors/palette"), Palette::serialize(m_palette));
+        }
+        s.setValue(QStringLiteral("colors/paletteVersion"), 2);
+    }
 
     m_tools = toolDefaults();
     emit colorsChanged();

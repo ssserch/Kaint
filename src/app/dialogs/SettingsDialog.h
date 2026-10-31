@@ -39,6 +39,9 @@ struct AppSettings {
     bool layerDropLine = false;
     // Botones de ir al principio y al final del historial, junto a deshacer y rehacer.
     bool historyJumpButtons = true;
+    // Colores ampliado: también los colores semitransparentes de la paleta (las filas de abajo de
+    // la de fábrica, como en Paint.NET). El blanco de relleno de las paletas cortas nunca se ve.
+    bool paletteTranslucent = true;
     // Ventanas flotantes: 0, como las de paint.js (Windows 10); 1, compactas. Grosor del borde
     // en píxeles.
     int panelStyle = 0;
@@ -79,6 +82,9 @@ struct AppSettings {
     int historyLimitMB = 4096;
     bool checkUpdates = true;
     bool updatesBeta = false;
+    // Avisar con una ventana cuando la búsqueda automática encuentra una versión nueva (se quita
+    // con "No volver a recordar" en el propio aviso).
+    bool updateReminder = true;
     QDateTime lastUpdateCheck;
     QString latestVersion;
     bool discordEnabled = true;

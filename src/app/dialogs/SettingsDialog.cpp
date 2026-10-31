@@ -83,6 +83,7 @@ AppSettings AppSettings::load()
     a.systemPointer = get("systemPointer", a.systemPointer);
     a.layerDropLine = get("layerDropLine", a.layerDropLine);
     a.historyJumpButtons = get("historyJumpButtons", a.historyJumpButtons);
+    a.paletteTranslucent = get("paletteTranslucent", a.paletteTranslucent);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
@@ -117,6 +118,7 @@ AppSettings AppSettings::load()
     a.historyLimitMB = std::max(0, get("historyLimitMB", a.historyLimitMB));
     a.checkUpdates = get("checkUpdates", a.checkUpdates);
     a.updatesBeta = get("updatesBeta", a.updatesBeta);
+    a.updateReminder = get("updateReminder", a.updateReminder);
     a.lastUpdateCheck = s.value(QStringLiteral("lastUpdateCheck")).toDateTime();
     a.latestVersion = get("latestVersion", a.latestVersion);
     a.discordEnabled = get("discordEnabled", a.discordEnabled);
@@ -142,6 +144,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("systemPointer"), systemPointer);
     s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
     s.setValue(QStringLiteral("historyJumpButtons"), historyJumpButtons);
+    s.setValue(QStringLiteral("paletteTranslucent"), paletteTranslucent);
+    s.remove(QStringLiteral("allPaletteColors"));
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
     s.setValue(QStringLiteral("panelBorder"), panelBorder);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
@@ -169,6 +173,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("historyLimitMB"), historyLimitMB);
     s.setValue(QStringLiteral("checkUpdates"), checkUpdates);
     s.setValue(QStringLiteral("updatesBeta"), updatesBeta);
+    s.setValue(QStringLiteral("updateReminder"), updateReminder);
     s.setValue(QStringLiteral("lastUpdateCheck"), lastUpdateCheck);
     s.setValue(QStringLiteral("latestVersion"), latestVersion);
     s.setValue(QStringLiteral("discordEnabled"), discordEnabled);
@@ -329,6 +334,9 @@ QWidget* SettingsDialog::createInterfacePage()
           tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra."));
     check(tr("Mostrar los botones de ir al principio y al final del historial"), &AppSettings::historyJumpButtons,
           tr("En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio."));
+    check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), &AppSettings::paletteTranslucent,
+          tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de "
+             "menos colores no se muestra nunca."));
 
     // Temas: los cuatro primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
     // tema nativo aparte: claro y oscuro ya son los de Windows, como en Paint.NET.
@@ -433,8 +441,26 @@ QWidget* SettingsDialog::createInterfacePage()
     panelBorder->setValue(m_settings.panelBorder);
     panelBorder->setToolTip(tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores."));
     panelForm->addRow(tr("Estilo de las ventanas:"), panelStyle);
-    panelForm->addRow(tr("Grosor del borde de las ventanas:"), withUnit(panelBorder, tr("px"), {}, page.widget));
+    QWidget* borderField = withUnit(panelBorder, tr("px"), {}, page.widget);
+    panelForm->addRow(tr("Grosor del borde de las ventanas:"), borderField);
     page.layout->addLayout(panelForm);
+    // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
+    // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
+    // interfaz, a su vez, no se aplica con el tema KDE.
+    auto updateCompatibility = [this, panelForm, panelStyle, borderField, look] {
+        const bool paintNet = m_settings.uiStyle == 1 && m_settings.colorScheme != int(Theme::Scheme::Kde);
+        const QString why = tr("No se usa con el estilo de interfaz Paint.NET: sus ventanas no tienen borde.");
+        for (QWidget* field : {static_cast<QWidget*>(panelStyle), borderField}) {
+            field->setEnabled(!paintNet);
+            field->setToolTip(paintNet ? why : QString());
+            if (QWidget* label = panelForm->labelForField(field))
+                label->setEnabled(!paintNet);
+        }
+        look->setEnabled(m_settings.colorScheme != int(Theme::Scheme::Kde));
+    };
+    updateCompatibility();
+    connect(look, &QComboBox::activated, this, updateCompatibility);
+    connect(this, &SettingsDialog::settingsChanged, this, updateCompatibility);
     connect(panelStyle, &QComboBox::activated, this, [this, panelStyle](int i) {
         m_settings.panelStyle = panelStyle->itemData(i).toInt();
         changed();
@@ -1085,6 +1111,17 @@ QWidget* SettingsDialog::createUpdatesPage()
         changed();
     });
     page.layout->addWidget(automatic);
+    auto* reminder = new QCheckBox(tr("Avisar cuando haya una versión nueva"), page.widget);
+    reminder->setToolTip(tr("Desactivado (o con «No volver a recordar» en el aviso), la versión nueva solo se ve "
+                            "aquí; «Buscar ahora» siempre avisa."));
+    reminder->setChecked(m_settings.updateReminder);
+    reminder->setEnabled(m_settings.checkUpdates);
+    connect(reminder, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.updateReminder = on;
+        changed();
+    });
+    connect(automatic, &QCheckBox::toggled, reminder, &QWidget::setEnabled);
+    page.layout->addWidget(reminder);
     auto* row = new QHBoxLayout;
     auto* now = new QPushButton(tr("Buscar ahora"), page.widget);
     connect(now, &QPushButton::clicked, this, &SettingsDialog::checkUpdatesRequested);

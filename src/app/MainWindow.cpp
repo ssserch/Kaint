@@ -42,6 +42,7 @@
 #include <QCollator>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
@@ -70,6 +71,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QPointer>
 #include <QPrintPreviewDialog>
@@ -416,7 +418,16 @@ protected:
     {
         QPainter p(this);
         const int split = m_menu ? m_menu->geometry().bottom() + 1 : height() / 2;
-        p.fillRect(rect(), Theme::active().toolBar);
+        // Azul: bajo los menús empieza el degradado de casi blanco a azul claro que sigue en la
+        // barra de opciones (la barra principal es transparente encima de él).
+        if (Theme::active().blue) {
+            QLinearGradient g(QPointF(0, split), QPointF(0, height()));
+            g.setColorAt(0, QColor(0xfb, 0xfd, 0xff));
+            g.setColorAt(1, QColor(0xeb, 0xf1, 0xf9));
+            p.fillRect(rect(), g);
+        } else {
+            p.fillRect(rect(), Theme::active().toolBar);
+        }
         p.fillRect(QRect(0, 0, width(), split), bandColor());
     }
 
@@ -3143,6 +3154,7 @@ void MainWindow::applySettings()
     Theme::setUnderlineShortcuts(m_settings.menuMnemonics);
     m_layers->setDropLineMode(m_settings.layerDropLine);
     m_history->setJumpButtonsVisible(m_settings.historyJumpButtons);
+    m_colors->setShowTranslucent(m_settings.paletteTranslucent);
     ToolPreferences preferences;
     preferences.hideBoxWhileDragging = m_settings.hideMoveBox;
     preferences.replacePixels = m_settings.replacePixels;
@@ -3287,6 +3299,10 @@ void MainWindow::checkForUpdates(bool interactive)
             return;
         }
         const bool newer = versionNewer(latest, QStringLiteral(KAINT_VERSION));
+        // Con "No volver a recordar", la búsqueda automática ya no avisa (Configuración >
+        // Actualizaciones lo vuelve a activar); "Buscar ahora" sí.
+        if (newer && !interactive && !m_settings.updateReminder)
+            return;
         if (!newer) {
             if (interactive)
                 QMessageBox::information(this, tr("Actualizaciones"),
@@ -3298,7 +3314,15 @@ void MainWindow::checkForUpdates(bool interactive)
                         QMessageBox::NoButton, this);
         QPushButton* open = box.addButton(tr("Ver la versión nueva"), QMessageBox::AcceptRole);
         box.addButton(tr("Cerrar"), QMessageBox::RejectRole);
+        auto* never = new QCheckBox(tr("No volver a recordar"), &box);
+        never->setToolTip(tr("Se puede volver a activar en Configuración > Actualizaciones."));
+        never->setChecked(!m_settings.updateReminder);
+        box.setCheckBox(never);
         box.exec();
+        if (never->isChecked() == m_settings.updateReminder) {
+            m_settings.updateReminder = !never->isChecked();
+            m_settings.save();
+        }
         if (box.clickedButton() == open)
             QDesktopServices::openUrl(QUrl(url.isEmpty() ? QStringLiteral(KAINT_REPOSITORY) : url));
     });

@@ -121,6 +121,7 @@ public:
     explicit PaletteWidget(QWidget* parent = nullptr);
     void setColors(const QList<QColor>& colors);
     void setVisibleCount(int count);
+    int visibleCount() const { return m_visible; }
     void setAddMode(bool on);
     bool addMode() const { return m_addMode; }
     QSize sizeHint() const override;

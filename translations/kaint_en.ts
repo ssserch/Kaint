@@ -1725,6 +1725,14 @@ What do you want to do?</translation>
         <source>Cerrar</source>
         <translation>Close</translation>
     </message>
+    <message>
+        <source>No volver a recordar</source>
+        <translation>Don’t remind me again</translation>
+    </message>
+    <message>
+        <source>Se puede volver a activar en Configuración &gt; Actualizaciones.</source>
+        <translation>It can be turned back on in Settings &gt; Updates.</translation>
+    </message>
 </context>
 <context>
     <name>MoveSelectedTool</name>
@@ -4776,6 +4784,26 @@ Do you want to replace them?</translation>
     <message>
         <source>Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.</source>
         <translation>The ones from Paint.NET, in pixel art: the crosshair with the drawing of the tool.</translation>
+    </message>
+    <message>
+        <source>Avisar cuando haya una versión nueva</source>
+        <translation>Notify me when there is a new version</translation>
+    </message>
+    <message>
+        <source>Desactivado (o con «No volver a recordar» en el aviso), la versión nueva solo se ve aquí; «Buscar ahora» siempre avisa.</source>
+        <translation>When off (or with “Don’t remind me again” in the notice), the new version is only shown here; “Check now” always notifies.</translation>
+    </message>
+    <message>
+        <source>No se usa con el estilo de interfaz Paint.NET: sus ventanas no tienen borde.</source>
+        <translation>Not used with the Paint.NET interface style: its windows have no border.</translation>
+    </message>
+    <message>
+        <source>Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores</source>
+        <translation>Show the semi-transparent palette colors in the expanded Colors view</translation>
+    </message>
+    <message>
+        <source>Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de menos colores no se muestra nunca.</source>
+        <translation>The bottom rows of the default palette, like in Paint.NET. The white that pads palettes with fewer colors is never shown.</translation>
     </message>
 </context>
 <context>

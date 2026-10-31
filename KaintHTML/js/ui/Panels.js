@@ -877,10 +877,22 @@ export function colorsPanel(app) {
         entries.push(entry(tr("Pequeña"), "palette", smallPalette(), () => AppState.setPalette(smallPalette())));
         popupMenu(entries, r.left, r.bottom);
     });
-    // Como en Kaint: dos filas y, con «Más», los 96 colores.
+    // Como en Kaint: dos filas y, con «Más», filas enteras hasta el último color propio (el blanco
+    // con que se rellenan las paletas de menos de 96 no se ve; los semitransparentes, según la
+    // configuración).
+    const expandedCount = () => {
+        const translucent = Settings.get("paletteTranslucent") !== false;
+        let last = -1;
+        AppState.palette.forEach((c, i) => {
+            const a = c.a ?? 255;
+            if (!(c.r === 255 && c.g === 255 && c.b === 255 && a === 255) && (translucent || a === 255))
+                last = i;
+        });
+        return Math.max(32, Math.min(96, Math.ceil((last + 1) / 16) * 16));
+    };
     const drawPalette = () => {
         palette.replaceChildren();
-        AppState.palette.slice(0, expanded ? 96 : 32).forEach((c, i) => {
+        AppState.palette.slice(0, expanded ? expandedCount() : 32).forEach((c, i) => {
             const sw = el("div", { className: "swatch", title: `#${hex(c, (c.a ?? 255) < 255)}\n${tr("Clic izquierdo: ranura activa · clic derecho: ranura inactiva")}` });
             sw.style.setProperty("--c", cssColor(c));
             sw.addEventListener("pointerdown", (e) => {
@@ -901,6 +913,7 @@ export function colorsPanel(app) {
         });
     };
     AppState.addEventListener("palette", drawPalette);
+    window.addEventListener("kaint-settings", () => expanded && drawPalette());
     drawPalette();
 
     // Vista ampliada: secciones de Paint.NET con un deslizador y una caja numérica por canal.

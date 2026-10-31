@@ -717,7 +717,10 @@ export async function settingsDialog(app = null, startPage = "interface") {
             cursors.addEventListener("change", () => Settings.set("cursorStyle", Number(cursors.value)));
             const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));
             look.title = tr("Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.");
-            look.addEventListener("change", () => Settings.set("uiStyle", Number(look.value)));
+            look.addEventListener("change", () => {
+                Settings.set("uiStyle", Number(look.value));
+                paintNetCompat();
+            });
             const customize = button(tr("Personalizar…"), tr("Editar el tema personalizado."), async () => {
                 Settings.set("colorScheme", 5);
                 scheme.value = "5";
@@ -734,6 +737,15 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const pack = select(packs.map((p) => [p.id, p.name]), IconPacks.activeId());
             pack.addEventListener("change", () => IconPacks.activate(pack.value));
             const panelStyle = select([[0, tr("Windows 10")], [1, tr("Compacto")]], Settings.get("panelStyle"));
+            // Con el estilo de Paint.NET las ventanas no tienen borde: estilo y borde se ven desactivados.
+            const paintNetCompat = () => {
+                const off = Settings.get("uiStyle") === 1;
+                for (const field of [panelStyle, border]) {
+                    field.disabled = off;
+                    field.title = off ? tr("No se usa con el estilo de interfaz Paint.NET: sus ventanas no tienen borde.") : "";
+                    field.closest("label")?.classList.toggle("disabled", off);
+                }
+            };
             panelStyle.addEventListener("change", () => Settings.set("panelStyle", Number(panelStyle.value)));
             const border = numberInput(Settings.get("panelBorder"), 1, 12);
             border.style.width = "60px";
@@ -742,6 +754,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const autosave = numberInput(Settings.get("autosaveMinutes"), 0, 120);
             autosave.style.width = "60px";
             autosave.addEventListener("input", () => Settings.set("autosaveMinutes", autosave.read()));
+            queueMicrotask(paintNetCompat);
             return [
                 check(tr("Animaciones"), "animations",
                       tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.")),
@@ -761,6 +774,8 @@ export async function settingsDialog(app = null, startPage = "interface") {
                       tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra.")),
                 check(tr("Mostrar los botones de ir al principio y al final del historial"), "historyJumpButtons",
                       tr("En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio.")),
+                check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), "paletteTranslucent",
+                      tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de menos colores no se muestra nunca.")),
                 el("label", {}, [tr("Tema:"), scheme, customize]),
                 el("label", {}, [tr("Estilo de la interfaz:"), look]),
                 el("label", {}, [tr("Cursores:"), cursors]),

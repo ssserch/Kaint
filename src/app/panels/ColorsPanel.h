@@ -22,6 +22,9 @@ public:
     explicit ColorsPanel(QWidget* parent = nullptr);
 
     bool isExpanded() const;
+    // Vista ampliada: también los colores semitransparentes de la paleta (si no, solo hasta el
+    // último opaco). El blanco con que se rellenan las paletas de menos de 96 no se ve nunca.
+    void setShowTranslucent(bool on);
     // Tamaño actual respecto al recomendado de la vista (compacta o ampliada).
     double scale() const;
     QSize sizeForScale(double scale) const;
@@ -44,6 +47,7 @@ private:
     void setExpanded(bool on);
     void applyLook();
     double minimumScale() const;
+    int expandedColorCount() const;
 
     QHBoxLayout* m_mainLayout;
     QVBoxLayout* m_leftLayout;
@@ -61,4 +65,5 @@ private:
     QToolButton* m_addColor;
     QToolButton* m_paletteMenu;
     PaletteWidget* m_palette;
+    bool m_showTranslucent = true;
 };

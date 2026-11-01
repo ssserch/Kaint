@@ -17,45 +17,35 @@ class StrokeTool extends Tool {
     size(e) {
         // Con lápiz, la presión ajusta el tamaño (si está activada en la barra y en Configuración).
         const pressure = e.pointerType === "pen" && this.settings.pressure !== false && Settings.get("penPressure") !== false;
-        return pressure ? Math.max(1, this.settings.brushSize * e.pressure) : this.settings.brushSize;
+        return pressure ? Math.max(0.1, this.settings.brushSize * Math.min(1, Math.max(0.05, e.pressure))) : this.settings.brushSize;
     }
 
+    // Con la trayectoria suavizada, el trazo pasa por los puntos del puntero con una curva (sin
+    // quedarse por detrás de él).
     strokeOptions(e) {
         return { mode: "paint", color: this.colorFor(e.button), blend: this.settings.blend, antialias: this.settings.antialias,
-                 hardness: this.settings.hardness, spacing: this.settings.spacing };
+                 hardness: this.settings.hardness, spacing: this.settings.spacing, smoothing: !!this.settings.smoothing };
     }
 
     onPointerDown(e) {
         if (!this.doc || (e.button !== "left" && e.button !== "right"))
             return;
         this.stroke = new Stroke(this.doc, this.doc.activeLayer, this.strokeOptions(e));
-        this.smooth = { x: e.x, y: e.y };
         this.stroke.lineTo(e.x, e.y, this.size(e));
-    }
-
-    // Con el suavizado, el trazo sigue al puntero con algo de retraso y sale más redondo.
-    smoothed(e) {
-        if (!this.settings.smoothing || !this.smooth)
-            return e;
-        const k = 0.5;
-        this.smooth = { x: this.smooth.x + (e.x - this.smooth.x) * k, y: this.smooth.y + (e.y - this.smooth.y) * k };
-        return { ...e, ...this.smooth };
     }
 
     onPointerMove(e) {
         if (!this.stroke)
             return;
-        const p = this.smoothed(e);
-        this.stroke.lineTo(p.x, p.y, this.size(e));
+        this.stroke.lineTo(e.x, e.y, this.size(e));
     }
 
     onPointerUp(e) {
         if (!this.stroke)
             return;
-        // El suavizado no deja el final del trazo por detrás del puntero.
         const stroke = this.stroke;
         this.stroke = null;
-        if (e && this.settings.smoothing)
+        if (e)
             stroke.lineTo(e.x, e.y, this.size(e));
         stroke.commit(this.name, this.icon);
     }
@@ -165,7 +155,7 @@ export class CloneStampTool extends StrokeTool {
         const layer = this.doc.layers.includes(this.source.layer) ? this.source.layer : this.doc.activeLayer;
         this.stroke = new Stroke(this.doc, this.doc.activeLayer, {
             mode: "clone", color: AppState.primary, blend: this.settings.blend, antialias: this.settings.antialias, hardness: this.settings.hardness,
-            spacing: this.settings.spacing, cloneOffset: this.offset, cloneSource: layer.canvas,
+            spacing: this.settings.spacing, smoothing: !!this.settings.smoothing, cloneOffset: this.offset, cloneSource: layer.canvas,
         });
         this.stroke.lineTo(e.x, e.y, this.size(e));
     }
@@ -213,7 +203,7 @@ export class RecolorTool extends StrokeTool {
         } else {
             from = e.button === "right" ? AppState.primary : AppState.secondary;
         }
-        return { mode: "recolor", color: this.colorFor(e.button), antialias: this.settings.antialias, hardness: this.settings.hardness,
+        return { mode: "recolor", color: this.colorFor(e.button), antialias: this.settings.antialias, hardness: this.settings.hardness, smoothing: !!this.settings.smoothing,
                  recolorFrom: from, recolorTolerance: this.settings.tolerance, recolorStraight: !!this.settings.toleranceStraight };
     }
 }

@@ -531,6 +531,11 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
         root->addWidget(label);
     }
     root->addSpacing(8);
+    // Como en paint.js: una casilla para ver la imagen sin el efecto (o con él) mientras se ajusta.
+    m_preview = new QCheckBox(tr("Vista previa"), this);
+    m_preview->setChecked(true);
+    m_preview->setToolTip(tr("Ver en la imagen cómo queda el efecto mientras se cambian sus opciones."));
+    connect(m_preview, &QCheckBox::toggled, this, &EffectDialog::previewToggled);
     auto* box = okCancelButtons(this);
     for (QPushButton* b : std::as_const(m_extraButtons))
         box->addButton(b, QDialogButtonBox::ResetRole);
@@ -543,7 +548,11 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             m.exec();
         });
     }
-    root->addWidget(box);
+    auto* footer = new QHBoxLayout;
+    footer->addWidget(m_preview);
+    footer->addSpacing(12);
+    footer->addWidget(box, 1);
+    root->addLayout(footer);
     setMinimumWidth(380);
 
     // Ctrl+Z / Ctrl+Y deshacen y rehacen los cambios del diálogo. Las cajas numéricas usan esas
@@ -746,7 +755,8 @@ void EffectPreview::onFinished(const QImage& result, const ParamValues& values, 
     if (!cancelled && !result.isNull()) {
         m_lastResult = result;
         m_lastValues = values;
-        m_doc->setPreview(m_layer.get(), result);
+        if (m_shown)
+            m_doc->setPreview(m_layer.get(), result);
     }
     if (m_hasPending && !m_debounce.isActive())
         start();
@@ -754,6 +764,17 @@ void EffectPreview::onFinished(const QImage& result, const ParamValues& values, 
         m_progressTimer.stop();
         emit progress(-1);
     }
+}
+
+void EffectPreview::setShown(bool shown)
+{
+    // Sin la vista previa se ve la imagen tal cual; se sigue calculando, así al volver a marcarla
+    // (o al aceptar) ya está el último resultado.
+    m_shown = shown;
+    if (!shown)
+        m_doc->clearPreview();
+    else if (!m_lastResult.isNull())
+        m_doc->setPreview(m_layer.get(), m_lastResult);
 }
 
 QImage EffectPreview::finalResult(const ParamValues& values, QWidget* parent)

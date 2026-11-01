@@ -247,6 +247,8 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
 
     // --- Forma y estilo ---------------------------------------------------
     m_shape = new ChoiceButton(tr("Forma (A / Mayús+A)"), parent);
+    // Como en Paint.NET: una cuadrícula de figuras por secciones.
+    m_shape->setGrid(8);
     for (const auto& [group, shapes] : shapeGroups()) {
         m_shape->addSection(group);
         for (ShapeType t : shapes)
@@ -321,6 +323,9 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_startCap->onChosen = [update](int v) { update([v](ToolSettings& s) { s.startCap = LineCap(v); }); };
     m_endCap->onChosen = [update](int v) { update([v](ToolSettings& s) { s.endCap = LineCap(v); }); };
     m_dash = new ChoiceButton(tr("Estilo de guion ( . )"), parent);
+    // Los dibujos de los guiones, anchos para que se vean (en el botón y en la lista).
+    m_dash->setIconSize(QSize(28, 16));
+    m_dash->setMenuIconSize(QSize(28, 16));
     const QList<std::pair<Qt::PenStyle, QString>> dashes{{Qt::SolidLine, tr("Sólido")},
                                                          {Qt::DashLine, tr("Guiones")},
                                                          {Qt::DotLine, tr("Punteado")},

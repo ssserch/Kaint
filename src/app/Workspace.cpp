@@ -22,6 +22,7 @@ namespace {
 
 FloatingPanel::Style g_chromeStyle = FloatingPanel::Style::Windows10;
 int g_chromeBorder = 1;
+bool g_snapping = true;
 
 bool windows10Chrome()
 {
@@ -173,6 +174,52 @@ void FloatingPanel::setChrome(Style style, int border)
 {
     g_chromeStyle = style;
     g_chromeBorder = std::clamp(border, 1, 12);
+}
+
+void FloatingPanel::setSnapping(bool on)
+{
+    g_snapping = on;
+}
+
+QPoint FloatingPanel::snapped(QPoint pos) const
+{
+    // Como en Paint.NET: cerca de un borde del área de trabajo, la ventana se pega a él (con el
+    // margen de las colocadas de fábrica); cerca de otra ventana, junto a ella con una pequeña
+    // separación o alineada con su borde. Gana el borde más cercano de cada eje.
+    constexpr int kReach = 14;
+    constexpr int kInset = 8;
+    constexpr int kGap = 6;
+    const QRect r(pos, size());
+    int dx = kReach + 1, dy = kReach + 1;
+    auto nearer = [](int& best, int delta) {
+        if (std::abs(delta) < std::abs(best))
+            best = delta;
+    };
+    if (parentWidget()) {
+        for (const FloatingPanel* o : parentWidget()->findChildren<FloatingPanel*>(Qt::FindDirectChildrenOnly)) {
+            if (o == this || o->isHidden())
+                continue;
+            const QRect g = o->geometry();
+            if (r.top() <= g.bottom() + kReach && g.top() <= r.bottom() + kReach) {
+                nearer(dx, g.right() + 1 + kGap - r.left());
+                nearer(dx, g.left() - kGap - (r.right() + 1));
+                nearer(dx, g.left() - r.left());
+                nearer(dx, g.right() - r.right());
+            }
+            if (r.left() <= g.right() + kReach && g.left() <= r.right() + kReach) {
+                nearer(dy, g.bottom() + 1 + kGap - r.top());
+                nearer(dy, g.top() - kGap - (r.bottom() + 1));
+                nearer(dy, g.top() - r.top());
+                nearer(dy, g.bottom() - r.bottom());
+            }
+        }
+    }
+    const QRect a = area();
+    nearer(dx, a.left() + kInset - r.left());
+    nearer(dx, a.right() + 1 - kInset - (r.right() + 1));
+    nearer(dy, a.top() + kInset - r.top());
+    nearer(dy, a.bottom() + 1 - kInset - (r.bottom() + 1));
+    return pos + QPoint(std::abs(dx) <= kReach ? dx : 0, std::abs(dy) <= kReach ? dy : 0);
 }
 
 FloatingPanel::Style FloatingPanel::chromeStyle()
@@ -581,6 +628,9 @@ bool FloatingPanel::eventFilter(QObject* obj, QEvent* e)
         }
         if (m_dragging) {
             QPoint p = me->globalPosition().toPoint() - m_dragOffset;
+            // Mayús suelta la ventana donde esté, sin acoplarla.
+            if (g_snapping && !(me->modifiers() & Qt::ShiftModifier))
+                p = snapped(p);
             const QRect a = area();
             p.setX(std::clamp(p.x(), a.left(), std::max(a.left(), a.right() + 1 - width())));
             p.setY(std::clamp(p.y(), a.top(), std::max(a.top(), a.bottom() + 1 - height())));

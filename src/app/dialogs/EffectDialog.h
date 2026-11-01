@@ -25,6 +25,8 @@ public:
 
 signals:
     void valuesChanged(const ParamValues& values);
+    // La casilla Vista previa: si la imagen muestra el efecto mientras se ajusta.
+    void previewToggled(bool shown);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -43,6 +45,7 @@ private:
     QHash<QString, QWidget*> m_containers;
     QHash<QString, QWidget*> m_bodies;
     QList<class QPushButton*> m_extraButtons;
+    class QCheckBox* m_preview = nullptr;
     QList<ParamValues> m_undo;
     QList<ParamValues> m_redo;
     ParamValues m_committed;
@@ -60,6 +63,8 @@ public:
     ~EffectPreview() override;
 
     void request(const ParamValues& values);
+    // Ver el efecto en la imagen o la imagen sin él (la casilla Vista previa del diálogo).
+    void setShown(bool shown);
     QImage finalResult(const ParamValues& values, QWidget* parent);
 
 signals:
@@ -88,6 +93,7 @@ private:
     int m_generation = 0;
     QImage m_lastResult;
     ParamValues m_lastValues;
+    bool m_shown = true;
 };
 
 // Aplica un efecto en otro hilo con una ventana de progreso cancelable (Repetir efecto,

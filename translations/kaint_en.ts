@@ -500,6 +500,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <source>Y</source>
         <translation>Y</translation>
     </message>
+    <message>
+        <source>Vista previa</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>Ver en la imagen cómo queda el efecto mientras se cambian sus opciones.</source>
+        <translation>See how the effect looks on the image while you change its options.</translation>
+    </message>
 </context>
 <context>
     <name>EllipseSelectTool</name>
@@ -819,10 +827,6 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>&amp;Imprimir...</source>
         <translation>&amp;Print...</translation>
-    </message>
-    <message>
-        <source>Configurar pá&amp;gina...</source>
-        <translation>Page Set&amp;up...</translation>
     </message>
     <message>
         <source>&amp;Cerrar</source>
@@ -1445,6 +1449,34 @@ What do you want to do?</translation>
     <message>
         <source>Tamaño real (%1 ppp)</source>
         <translation>Actual size (%1 dpi)</translation>
+    </message>
+    <message>
+        <source>Añadir complementos</source>
+        <translation>Add plugins</translation>
+    </message>
+    <message>
+        <source>Ya hay complementos con estos nombres:
+
+%1
+
+¿Quieres sustituirlos?</source>
+        <translation>There are already plugins with these names:
+
+%1
+
+Do you want to replace them?</translation>
+    </message>
+    <message>
+        <source>No se pudieron añadir:
+
+%1</source>
+        <translation>These could not be added:
+
+%1</translation>
+    </message>
+    <message>
+        <source>Complementos añadidos en Efectos &gt; Complementos: %1</source>
+        <translation>Plugins added to Effects &gt; Plugins: %1</translation>
     </message>
     <message>
         <source>Cortar</source>
@@ -2131,6 +2163,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Ventanas translúcidas en la captura (yes o no).</source>
         <translation>Translucent windows in the screenshot (yes or no).</translation>
+    </message>
+    <message>
+        <source>Barra de título de Windows 10 dibujada por Kaint en la captura (yes o no).</source>
+        <translation>Windows 10 title bar drawn by Kaint in the screenshot (yes or no).</translation>
     </message>
     <message>
         <source>px</source>
@@ -3532,6 +3568,200 @@ Left click: active slot · right click: inactive slot</translation>
         <source>Vecino más cercano</source>
         <translation>Nearest neighbor</translation>
     </message>
+    <message>
+        <source>Complementos</source>
+        <translation>Plugins</translation>
+    </message>
+    <message>
+        <source>El manifiesto del complemento es demasiado grande.</source>
+        <translation>The plugin manifest is too large.</translation>
+    </message>
+    <message>
+        <source>El manifiesto del complemento no es JSON válido: %1</source>
+        <translation>The plugin manifest is not valid JSON: %1</translation>
+    </message>
+    <message>
+        <source>El identificador «%1» del complemento no vale: usa de 1 a 64 letras, números, puntos, guiones o guiones bajos.</source>
+        <translation>The plugin ID “%1” is not valid: use 1 to 64 letters, digits, dots, hyphens or underscores.</translation>
+    </message>
+    <message>
+        <source>El nombre del complemento debe tener de 1 a 64 caracteres.</source>
+        <translation>The plugin name must be 1 to 64 characters long.</translation>
+    </message>
+    <message>
+        <source>Solo se admiten complementos de tipo «filter».</source>
+        <translation>Only plugins of kind “filter” are supported.</translation>
+    </message>
+    <message>
+        <source>El margen («overlap») del complemento pasa de %1 píxeles.</source>
+        <translation>The plugin’s margin (“overlap”) exceeds %1 pixels.</translation>
+    </message>
+    <message>
+        <source>El complemento declara demasiados parámetros.</source>
+        <translation>The plugin declares too many parameters.</translation>
+    </message>
+    <message>
+        <source>El parámetro «%1» del complemento tiene un rango que no vale.</source>
+        <translation>The plugin parameter “%1” has an invalid range.</translation>
+    </message>
+    <message>
+        <source>El parámetro «%1» del complemento no tiene opciones válidas.</source>
+        <translation>The plugin parameter “%1” has no valid options.</translation>
+    </message>
+    <message>
+        <source>El parámetro «%1» del complemento es de un tipo desconocido.</source>
+        <translation>The plugin parameter “%1” is of an unknown type.</translation>
+    </message>
+    <message>
+        <source>La imagen no cabe en la memoria del complemento.</source>
+        <translation>The image does not fit in the plugin’s memory.</translation>
+    </message>
+    <message>
+        <source>El complemento se quedó sin memoria (pc_alloc devolvió 0).</source>
+        <translation>The plugin ran out of memory (pc_alloc returned 0).</translation>
+    </message>
+    <message>
+        <source>pc_alloc devolvió un bloque fuera de la memoria del complemento.</source>
+        <translation>pc_alloc returned a block outside the plugin’s memory.</translation>
+    </message>
+    <message>
+        <source>El complemento devolvió el código de error %1.</source>
+        <translation>The plugin returned error code %1.</translation>
+    </message>
+    <message>
+        <source>Los píxeles ya no están en la memoria del complemento.</source>
+        <translation>The pixels are no longer in the plugin’s memory.</translation>
+    </message>
+    <message>
+        <source>El módulo pasa de 32 MB.</source>
+        <translation>The module is larger than 32 MB.</translation>
+    </message>
+    <message>
+        <source>El módulo importa %1, pero los complementos no tienen acceso a nada de fuera (ni archivos, ni red, ni reloj).</source>
+        <translation>The module imports %1, but plugins get no access to anything outside (no files, network or clock).</translation>
+    </message>
+    <message>
+        <source>No es un complemento de filtros de PhotoCraft: falta la función %1.</source>
+        <translation>This is not a PhotoCraft filter plugin: the function %1 is missing.</translation>
+    </message>
+    <message>
+        <source>Usa la versión %1 de la interfaz de complementos; Kaint admite la %2.</source>
+        <translation>It uses version %1 of the plugin interface; Kaint supports version %2.</translation>
+    </message>
+    <message>
+        <source>pc_manifest señala fuera de la memoria del complemento.</source>
+        <translation>pc_manifest points outside the plugin’s memory.</translation>
+    </message>
+    <message>
+        <source>Línea de la tabla que no se entiende: %1</source>
+        <translation>Table line that cannot be read: %1</translation>
+    </message>
+    <message>
+        <source>La tabla de color no tiene el tamaño que dice (%1).</source>
+        <translation>The color table does not have the size it declares (%1).</translation>
+    </message>
+    <message>
+        <source>La tabla .3dl no tiene el tamaño de su malla.</source>
+        <translation>The .3dl table does not match the size of its mesh.</translation>
+    </message>
+    <message>
+        <source>No se pudo leer la tabla de color.</source>
+        <translation>The color table could not be read.</translation>
+    </message>
+    <message>
+        <source>Tabla de color %1 de %2 puntos por canal.</source>
+        <translation>%1 color table with %2 points per channel.</translation>
+    </message>
+    <message>
+        <source>El archivo .xmp no es XML válido: %1</source>
+        <translation>The .xmp file is not valid XML: %1</translation>
+    </message>
+    <message>
+        <source>El archivo .xmp no tiene ajustes de revelado (crs:).</source>
+        <translation>The .xmp file has no develop settings (crs:).</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el ajuste de revelado.</source>
+        <translation>The develop preset could not be read.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Ajuste de revelado con %n valor(es).</source>
+        <translation>
+            <numerusform>Develop preset with %n setting.</numerusform>
+            <numerusform>Develop preset with %n settings.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>El módulo WebAssembly no es válido (%1).</source>
+        <translation>The WebAssembly module is not valid (%1).</translation>
+    </message>
+    <message>
+        <source>El complemento se detuvo con un error: %1.</source>
+        <translation>The plugin stopped with an error: %1.</translation>
+    </message>
+    <message>
+        <source>El complemento usa SIMD de WebAssembly, que Kaint no admite.</source>
+        <translation>The plugin uses WebAssembly SIMD, which Kaint does not support.</translation>
+    </message>
+    <message>
+        <source>El complemento usa memoria compartida o de 64 bits, que Kaint no admite.</source>
+        <translation>The plugin uses shared or 64-bit memory, which Kaint does not support.</translation>
+    </message>
+    <message>
+        <source>El complemento usa varias memorias, que Kaint no admite.</source>
+        <translation>The plugin uses several memories, which Kaint does not support.</translation>
+    </message>
+    <message>
+        <source>No es un módulo WebAssembly (.wasm).</source>
+        <translation>This is not a WebAssembly module (.wasm).</translation>
+    </message>
+    <message>
+        <source>Versión de WebAssembly no admitida.</source>
+        <translation>Unsupported WebAssembly version.</translation>
+    </message>
+    <message>
+        <source>El complemento usa una parte de WebAssembly que Kaint no admite (sección %1).</source>
+        <translation>The plugin uses a part of WebAssembly that Kaint does not support (section %1).</translation>
+    </message>
+    <message>
+        <source>El complemento superó su presupuesto de instrucciones.</source>
+        <translation>The plugin exceeded its instruction budget.</translation>
+    </message>
+    <message>
+        <source>Cancelado.</source>
+        <translation>Cancelled.</translation>
+    </message>
+    <message>
+        <source>El complemento tardó demasiado.</source>
+        <translation>The plugin took too long.</translation>
+    </message>
+    <message>
+        <source>El complemento importa %1, pero los complementos no tienen acceso a nada de fuera.</source>
+        <translation>The plugin imports %1, but plugins get no access to anything outside.</translation>
+    </message>
+    <message>
+        <source>El complemento necesita más memoria de la permitida.</source>
+        <translation>The plugin needs more memory than allowed.</translation>
+    </message>
+    <message>
+        <source>El complemento no exporta la función %1.</source>
+        <translation>The plugin does not export the function %1.</translation>
+    </message>
+    <message>
+        <source>La función %1 del complemento no tiene los parámetros esperados.</source>
+        <translation>The plugin function %1 does not have the expected parameters.</translation>
+    </message>
+    <message>
+        <source>El complemento se quedó sin memoria.</source>
+        <translation>The plugin ran out of memory.</translation>
+    </message>
+</context>
+<context>
+    <name>QPrintPreviewDialog</name>
+    <message>
+        <source>Page setup</source>
+        <translation>Page setup</translation>
+    </message>
 </context>
 <context>
     <name>RecolorTool</name>
@@ -4118,6 +4348,50 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Interface style:</translation>
     </message>
     <message>
+        <source>La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?</source>
+        <translation>The window title bar changes when Kaint starts. Do you want to restart it now?</translation>
+    </message>
+    <message>
+        <source>Kaint se cerrará y se abrirá de nuevo con el estilo elegido. Si hay cambios sin guardar, te lo preguntará antes.</source>
+        <translation>Kaint will close and open again with the chosen style. If there are unsaved changes, it will ask you first.</translation>
+    </message>
+    <message>
+        <source>Cambiar el estilo ahora y la barra de título la próxima vez que se abra Kaint.</source>
+        <translation>Change the style now and the title bar the next time Kaint starts.</translation>
+    </message>
+    <message>
+        <source>La del sistema</source>
+        <translation>System font</translation>
+    </message>
+    <message>
+        <source>Letra de los menús, las ventanas y los diálogos. «La del sistema» usa la del escritorio (o la del tema personalizado).</source>
+        <translation>Font of the menus, windows and dialogs. “System font” uses the desktop’s (or the custom theme’s).</translation>
+    </message>
+    <message>
+        <source>Automático</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>Tamaño de la letra en puntos (Automático: el del sistema o del tema).</source>
+        <translation>Font size in points (Auto: the system’s or the theme’s).</translation>
+    </message>
+    <message>
+        <source>Fuente de la interfaz:</source>
+        <translation>Interface font:</translation>
+    </message>
+    <message>
+        <source>pt</source>
+        <translation>pt</translation>
+    </message>
+    <message>
+        <source>Color propio en la barra superior:</source>
+        <translation>Custom color for the top bar:</translation>
+    </message>
+    <message>
+        <source>Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color.</source>
+        <translation>Like Windows’ “Show accent color on title bars”: the menu row and the window headers take this color.</translation>
+    </message>
+    <message>
         <source>Administrar…</source>
         <translation>Manage…</translation>
     </message>
@@ -4222,6 +4496,30 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Reset</translation>
     </message>
     <message>
+        <source>Acoplar las ventanas a los bordes y a las demás ventanas al moverlas</source>
+        <translation>Snap windows to the edges and to other windows when moving them</translation>
+    </message>
+    <message>
+        <source>Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él.</source>
+        <translation>Dropping a window near an edge of the workspace or near another window places it right next to it.</translation>
+    </message>
+    <message>
+        <source>Barra de título como la de Windows 10 con el estilo Paint.NET</source>
+        <translation>Windows 10 style title bar with the Paint.NET style</translation>
+    </message>
+    <message>
+        <source>La ventana principal y los diálogos dibujan su propia barra de título negra, con sombra, en vez de la del escritorio. Se aplica al abrir Kaint.</source>
+        <translation>The main window and the dialogs draw their own black title bar, with a shadow, instead of the desktop’s. Applied when Kaint starts.</translation>
+    </message>
+    <message>
+        <source>Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin guardar, te lo preguntará antes.</source>
+        <translation>Kaint will close and open again with the chosen title bar. If there are unsaved changes, it will ask you first.</translation>
+    </message>
+    <message>
+        <source>Seguir así hasta la próxima vez que se abra Kaint.</source>
+        <translation>Keep it as it is until the next time Kaint starts.</translation>
+    </message>
+    <message>
         <source>Del color de la barra de herramientas</source>
         <translation>Same color as the toolbar</translation>
     </message>
@@ -4320,8 +4618,32 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>If an image&apos;s history takes more, the oldest steps are discarded (and the status bar says so).</translation>
     </message>
     <message>
-        <source>Complementos de efectos instalados (.so de Kaint o .dll de Paint.NET). Se guardan en %1; si un complemento trae varios archivos, añádelos todos o copia su carpeta ahí.</source>
-        <translation>Installed effect plugins (Kaint .so or Paint.NET .dll). They are stored in %1; if a plugin comes with several files, add them all or copy its folder there.</translation>
+        <source>De Kaint</source>
+        <translation>From Kaint</translation>
+    </message>
+    <message>
+        <source>De Paint.NET</source>
+        <translation>From Paint.NET</translation>
+    </message>
+    <message>
+        <source>Filtros de PhotoCraft</source>
+        <translation>PhotoCraft filters</translation>
+    </message>
+    <message>
+        <source>Looks de LightCraft</source>
+        <translation>LightCraft looks</translation>
+    </message>
+    <message>
+        <source>Ajustes de LightCraft</source>
+        <translation>LightCraft presets</translation>
+    </message>
+    <message>
+        <source>Complementos de efectos instalados (%1). Se guardan en %2; si un complemento trae varios archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos &gt; Complementos.</source>
+        <translation>Installed effect plugins (%1). They are kept in %2; if a plugin comes with several files, add them all or copy its folder there. They appear in Effects &gt; Plugins.</translation>
+    </message>
+    <message>
+        <source>%1, %2, %3, %4, %5 y %6</source>
+        <translation>%1, %2, %3, %4, %5 and %6</translation>
     </message>
     <message>
         <source>Complemento</source>
@@ -4342,10 +4664,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Añadir…</source>
         <translation>Add…</translation>
-    </message>
-    <message>
-        <source>Copiar complementos (.so o .dll) a la carpeta de complementos</source>
-        <translation>Copy plugins (.so or .dll) to the plugins folder</translation>
     </message>
     <message>
         <source>Abrir la carpeta</source>
@@ -4397,10 +4715,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Añadir complementos</source>
         <translation>Add plugins</translation>
-    </message>
-    <message>
-        <source>Complementos (*.dll *.so);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so)</source>
-        <translation>Plugins (*.dll *.so);;Paint.NET plugins (*.dll);;Kaint plugins (*.so)</translation>
     </message>
     <message>
         <source>Ya hay complementos con estos nombres:
@@ -4686,16 +5000,16 @@ Do you want to replace them?</translation>
         <translation>Taller title bar, square close button and slightly rounded corners.</translation>
     </message>
     <message>
-        <source>Usar un color personalizado para el fondo del lienzo con los temas claros</source>
-        <translation>Use a custom canvas background color with light themes</translation>
-    </message>
-    <message>
-        <source>Usar un color personalizado para el fondo del lienzo con los temas oscuros</source>
-        <translation>Use a custom canvas background color with dark themes</translation>
-    </message>
-    <message>
         <source>Oscura</source>
         <translation>Dark</translation>
+    </message>
+    <message>
+        <source>Copiar complementos (.so, .dll, .wasm, .cube, .3dl o .xmp) a la carpeta de complementos</source>
+        <translation>Copy plugins (.so, .dll, .wasm, .cube, .3dl or .xmp) to the plugins folder</translation>
+    </message>
+    <message>
+        <source>Complementos (*.dll *.so *.wasm *.cube *.3dl *.xmp);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so);;Filtros de PhotoCraft (*.wasm);;Looks y ajustes de LightCraft (*.cube *.3dl *.xmp)</source>
+        <translation>Plugins (*.dll *.so *.wasm *.cube *.3dl *.xmp);;Paint.NET plugins (*.dll);;Kaint plugins (*.so);;PhotoCraft filters (*.wasm);;LightCraft looks and presets (*.cube *.3dl *.xmp)</translation>
     </message>
     <message>
         <source>Las versiones nuevas se publican en %1</source>
@@ -5908,10 +6222,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Tu perfil de Discord muestra Kaint con la imagen y la herramienta; en Configuración eliges qué se ve.</source>
         <translation>Your Discord profile shows Kaint with the image and the tool; choose what is shown in Settings.</translation>
-    </message>
-    <message>
-        <source>El idioma se aplica al reiniciar Kaint.</source>
-        <translation>The language is applied when Kaint restarts.</translation>
     </message>
     <message>
         <source>Tema:</source>

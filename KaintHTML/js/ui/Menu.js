@@ -47,19 +47,55 @@ function normalize(entry) {
 }
 
 // Abre un menú en (x, y) de la pantalla; 'level' es la profundidad (submenús).
-export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false } = {}) {
+// Con 'grid', las opciones van en una cuadrícula de iconos de esas columnas con un título por
+// sección (el menú de formas de Paint.NET); su nombre sale al dejar el puntero encima.
+export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false, grid = 0 } = {}) {
     while (openMenus.length > level)
         openMenus.pop().remove();
     const menu = document.createElement("div");
-    menu.className = "popup-menu";
+    menu.className = "popup-menu" + (grid ? " grid-menu" : "");
     if (minWidth)
         menu.style.minWidth = `${minWidth}px`;
     const items = [];
     let submenuTimer = 0;
+    let cells = null;
     for (const raw of entries) {
         const entry = normalize(raw);
         if (!entry)
             continue;
+        if (grid) {
+            if (entry === "-")
+                continue;
+            if (entry.section !== undefined) {
+                menu.appendChild(Object.assign(document.createElement("div"), { className: "grid-heading", textContent: plain(entry.section) }));
+                cells = null;
+                continue;
+            }
+            if (!cells) {
+                cells = Object.assign(document.createElement("div"), { className: "grid" });
+                cells.style.gridTemplateColumns = `repeat(${grid}, 30px)`;
+                menu.appendChild(cells);
+            }
+            const cell = document.createElement("div");
+            cell.className = "item cell" + (entry.checked ? " checked" : "");
+            cell.title = plain(entry.text);
+            if (entry.icon)
+                cell.appendChild(typeof entry.icon === "string" ? icon(entry.icon, 24) : entry.icon);
+            cell.addEventListener("pointerenter", () => {
+                items.forEach((i) => i.classList.remove("active"));
+                cell.classList.add("active");
+            });
+            cell.addEventListener("click", (e) => {
+                e.stopPropagation();
+                closeMenus();
+                onClose?.();
+                entry.run?.();
+            });
+            cell.entry = entry;
+            items.push(cell);
+            cells.appendChild(cell);
+            continue;
+        }
         if (entry === "-") {
             if (menu.lastChild && !menu.lastChild.classList.contains("separator"))
                 menu.appendChild(Object.assign(document.createElement("div"), { className: "separator" }));

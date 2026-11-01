@@ -95,6 +95,24 @@ export class StepRecorder {
     }
 }
 
+// Paint.NET 5 (con su estilo): tiradores huecos, una línea negra fina sobre un halo blanco, así
+// se ve la imagen dentro y se distinguen en cualquier fondo.
+export function hollowHandles() {
+    return document.documentElement.classList.contains("pdn");
+}
+
+export function ringHandle(ctx, c, round) {
+    ctx.save();
+    for (const [color, width] of [["rgba(255,255,255,0.92)", 2.6], ["#000", 1]]) {
+        ctx.beginPath();
+        round ? ctx.arc(c.x, c.y, 3.5, 0, Math.PI * 2) : ctx.rect(c.x - 3.5, c.y - 3.5, 7, 7);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
 // Icono de mover de los tiradores (Handles::Shape::Move de Kaint): un cuadrado blanco con la cruz
 // de cuatro flechas, en el punto de la vista 'v'.
 export function drawMoveHandle(ctx, v) {

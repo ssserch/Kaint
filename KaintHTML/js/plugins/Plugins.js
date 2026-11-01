@@ -8,6 +8,7 @@ import { SaveFormats } from "../core/ImageIO.js";
 import { unzip } from "../core/Zip.js";
 import { setCustomIcon } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
+import { isCraftFile, loadCraft } from "./Craft.js";
 
 export const API_VERSION = 1;
 const DB = "kaint-plugins", STORE = "plugins";
@@ -358,6 +359,12 @@ export const Plugins = {
         return plugin;
     },
 
+    // El complemento de un registro guardado: un paquete .paintjs, o un filtro de PhotoCraft, un look
+    // o un ajuste de LightCraft (Craft.js).
+    instantiate(record) {
+        return record.kind === "craft" ? loadCraft(record) : this.evaluate(record.source, record.fileName, record.manifest);
+    },
+
     activate(plugin) {
         this.deactivate(plugin.id);
         Effects.push(...plugin.effects);
@@ -400,7 +407,7 @@ export const Plugins = {
             if (!record.enabled)
                 continue;
             try {
-                this.activate(await this.evaluate(record.source, record.fileName, record.manifest));
+                this.activate(await this.instantiate(record));
             } catch (e) {
                 this.errors.push({ id: record.id, name: record.name, message: e.message });
             }
@@ -408,7 +415,27 @@ export const Plugins = {
         this.changed();
     },
 
+    // Un filtro .wasm de PhotoCraft o un look (.cube, .3dl) o ajuste (.xmp) de LightCraft: se
+    // guardan sus bytes y se leen al cargar.
+    async installCraft(file) {
+        if (file.size > 32 * 1024 * 1024)
+            throw new Error(tr("El archivo pasa de 32 MB."));
+        const record = { kind: "craft", fileName: file.name, data: new Uint8Array(await file.arrayBuffer()) };
+        const plugin = await loadCraft(record);
+        Object.assign(record, { id: plugin.id, name: plugin.name, author: plugin.author || plugin.kind, version: plugin.version || "",
+                                description: plugin.description || "", craftKind: plugin.kind, enabled: true,
+                                effectCount: plugin.effects.length, fileTypeCount: 0, updatedAt: new Date().toISOString() });
+        await request("readwrite", (s) => s.put(record));
+        this.records = [...this.records.filter((r) => r.id !== record.id), record].sort((a, b) => a.name.localeCompare(b.name));
+        this.errors = this.errors.filter((e) => e.id !== record.id);
+        this.activate(plugin);
+        this.changed();
+        return record;
+    },
+
     async install(file, expected = null) {
+        if (isCraftFile(file.name))
+            return this.installCraft(file);
         const { source, manifest } = await this.readPackage(file);
         const plugin = await this.evaluate(source, file.name, manifest);
         if (expected && (plugin.id !== expected.id || plugin.version !== expected.version))
@@ -433,7 +460,7 @@ export const Plugins = {
         if (!record || record.enabled === enabled)
             return;
         if (enabled)
-            this.activate(await this.evaluate(record.source, record.fileName, record.manifest));
+            this.activate(await this.instantiate(record));
         else
             this.deactivate(id);
         record.enabled = enabled;

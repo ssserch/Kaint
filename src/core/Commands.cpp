@@ -470,16 +470,18 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
         return;
     }
     QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
-    // Al reducir, antes se promedia por áreas (si no, sale pixelado); al ampliar, el vecino más
-    // cercano (por defecto) deja los píxeles nítidos.
-    const QImage source = Resample::prefiltered(pixels, &toTmp, gammaCorrect && interpolation != Resample::Interpolation::NearestNeighbor);
-    // Bilineal sin gamma y vecino más próximo, con QPainter (más rápido); lo demás, con lo de Kaint.
-    if (interpolation != Resample::Interpolation::NearestNeighbor
-        && (interpolation != Resample::Interpolation::Bilinear || gammaCorrect)) {
+    // Al reducir con bilineal o bicúbica, antes se promedia por áreas (si no, sale pixelado). El
+    // vecino más próximo no: como en Paint.NET, cada píxel es uno de la imagen, sin mezclar (con el
+    // promedio se veía suavizado, casi como el bicúbico).
+    const bool nearest = interpolation == Resample::Interpolation::NearestNeighbor;
+    const QImage source = nearest ? pixels : Resample::prefiltered(pixels, &toTmp, gammaCorrect);
+    // Bilineal sin gamma, con QPainter (más rápido); lo demás, con lo de Kaint (el vecino más
+    // próximo toma el píxel bajo el centro de cada uno, también al girar).
+    if (interpolation != Resample::Interpolation::Bilinear || gammaCorrect) {
         Resample::drawTransformed(tmp, source, toTmp, interpolation, tmp.rect(), gammaCorrect);
     } else {
         QPainter p(&tmp);
-        p.setRenderHint(QPainter::SmoothPixmapTransform, interpolation != Resample::Interpolation::NearestNeighbor);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
         p.setTransform(toTmp);
         p.drawImage(0, 0, source);
     }

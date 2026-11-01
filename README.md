@@ -57,7 +57,10 @@ runs on Windows 10 and 11.
     <td valign="top">
       <h4>Plugins</h4>
       Paint.NET effect plugins (.dll), through mono on Linux and the .NET Framework built into
-      Windows, plus native plugins with a stable C API.
+      Windows, plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
+      sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
+      develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
+      them.
     </td>
     <td valign="top">
       <h4>Formats</h4>
@@ -97,23 +100,32 @@ runs on Windows 10 and 11.
   </tr>
 </table>
 
-## Themes
+## 🎨 Make it yours
 
-Light and dark (or follow the system), the real KDE theme on Linux, and your own **custom theme**:
-colors, toolbar layout and a canvas background image with placement, scale, blur and tint. The
-floating windows have a Windows 10 inspired style with slightly rounded corners (or Kaint's
-compact one), with the border width you choose in **Settings → User interface**. The **interface
-style** can be Kaint's own or a recreation of **Paint.NET 5**: more compact, with borderless
-windows, tighter menus and buttons and Paint.NET's Colors window. The first start shows a
-welcome window to pick the theme, style, language and Discord Rich Presence. Unsaved images
-carry Paint.NET's orange star, and the Colors window has gap-free swatches and a palette menu with
-your saved palettes, Rainbow and Small.
+Kaint looks the way you want. Almost everything about its appearance can be changed from
+**Settings → User interface**, and every change shows at once:
 
-Menus and windows fade in, a layer follows the mouse while you drag it in the Layers window (or a
-line marks where it will go, in **Settings**) and the others slide out of its way, the active color slot
-and the close buttons of the image tabs animate, and a modal dialog blinks when you click the
-window behind it (on X11 and Windows). Turn it all off with **Settings → User interface →
-Animations**.
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, the classic gray
+  **Windows 98**, the real **KDE** theme on Linux, and a **custom theme** editor with every color,
+  the toolbar layout and a canvas background image (placement, scale, blur and tint), which you can
+  export and share.
+- **Interface style**: Kaint's own or a recreation of **Paint.NET 5** (the default): more compact,
+  with borderless windows, tighter menus and buttons, gray and blue bar sliders, hollow ring handles,
+  a grid of shapes and Paint.NET's Colors window.
+- **Title bar**: on Linux, with the Paint.NET style, Kaint draws a Windows 10 title bar of its own
+  (or a Windows 98 one with that theme), with its shadow from KWin; drag it from anywhere. The top
+  bar and the window headers can take **a color of your own**, like Windows' accent color.
+- **Cursors**: Kaint's tool icons or Paint.NET's pixel-art cursors (the default), with the system
+  pointer or Kaint's own beside the small tool icon.
+- **Icons and fonts**: install **icon packs** (.zip files with a preview), pick the **interface
+  font** and its size, and add fonts for the Text tool without installing them system-wide.
+- **Floating windows**: a Windows 10 inspired frame or Kaint's compact one, the border width,
+  translucency when the pointer leaves them, and **snapping** to the edges and to each other.
+- **Canvas**: your own background color around the image (one for light themes and one for dark
+  ones), the checkerboard brightness, the drop shadow and dark or toolbar-colored rulers.
+- **Little touches**: tool icons in the active colors, Paint.NET's orange star on unsaved images,
+  animations everywhere (fades, sliding layers, the active color slot) that you can turn off, and a
+  welcome window on the first start to pick the theme, style, cursors and language.
 
 #### Kaint style
 
@@ -134,8 +146,15 @@ window with a primary/secondary selector and a brightness slider.
 #### Paint.NET 5 style
 
 A recreation of Paint.NET 5: more compact, with borderless windows, tighter menus and buttons and
-Paint.NET's Colors window. Pick it in **Settings → User interface → Interface style** (or in the
+Paint.NET's Colors window, gray and blue bar sliders and hollow ring handles. On Linux the window
+and its dialogs draw a Windows 10 title bar of their own (black, with a shadow; it can be turned
+off in **Settings**). Pick it in **Settings → User interface → Interface style** (or in the
 welcome window).
+
+The floating windows snap to the edges of the workspace and to each other (hold Shift to place
+one freely, or turn it off in **Settings**), the interface font can be changed, and on Linux the
+top bar and the window headers can take a color of your own, like Windows' accent color on title
+bars. Effect dialogs have a **Preview** box to compare with the original image.
 
 <table>
   <tr>

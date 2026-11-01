@@ -1,6 +1,7 @@
 #include "core/plugins/PluginManager.h"
 
 #include "core/effects/Effect.h"
+#include "core/plugins/CraftPlugins.h"
 #include "core/plugins/KaintPlugin.h"
 #include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginEffects.h"
@@ -70,7 +71,8 @@ constexpr int kCacheVersion = 1;
 
 QStringList pluginFiles(const QString& dir)
 {
-    return QDir(dir).entryList({QStringLiteral("*.so"), QStringLiteral("*.dll")}, QDir::Files, QDir::Name);
+    return QDir(dir).entryList(QStringList{QStringLiteral("*.so"), QStringLiteral("*.dll")} + CraftPlugins::fileFilters(), QDir::Files,
+                               QDir::Name);
 }
 
 // Firma del archivo para saber si la caché sigue valiendo.
@@ -275,7 +277,11 @@ void PluginManager::scan()
         info.file = QFileInfo(c.path).fileName();
         m_roots.insert(info.id, c.root);
         info.enabled = QSettings().value(settingsKey(info), true).toBool();
-        if (isNativePlugin(c.path)) {
+        if (CraftPlugins::isCraftFile(c.path)) {
+            // Filtros de PhotoCraft, looks y ajustes de LightCraft: se leen aquí mismo (si están
+            // activados, ya cargados).
+            readCraft(info, info.enabled);
+        } else if (isNativePlugin(c.path)) {
             info.kind = QStringLiteral("Kaint");
             readNative(info, false);
         } else {
@@ -349,6 +355,31 @@ void PluginManager::readNative(PluginInfo& info, bool keepLoaded)
     delete library;
 }
 
+void PluginManager::readCraft(PluginInfo& info, bool keepLoaded)
+{
+    CraftPlugins::Info craft = CraftPlugins::load(info.id);
+    info.kind = craft.kind;
+    info.name = craft.name;
+    info.version = craft.version;
+    info.author = craft.author;
+    info.description = craft.description;
+    info.errors = craft.errors;
+    info.effects.clear();
+    for (const Effect* e : std::as_const(craft.effects))
+        info.effects << e->name();
+    if (!keepLoaded || craft.effects.isEmpty()) {
+        qDeleteAll(craft.effects);
+        return;
+    }
+    auto* loaded = new Loaded;
+    loaded->id = info.id;
+    loaded->effects = craft.effects;
+    for (Effect* e : std::as_const(loaded->effects))
+        Effects::addExternal(e);
+    m_loaded << loaded;
+    info.loaded = true;
+}
+
 void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& reply)
 {
     auto str = [&](const char* key) { return reply.value(QLatin1String(key)).toString(); };
@@ -375,6 +406,10 @@ void PluginManager::load(PluginInfo& info)
     if (info.kind == QLatin1String("Kaint")) {
         info.errors.clear();
         readNative(info, true);
+        return;
+    }
+    if (CraftPlugins::isCraftFile(info.id)) {
+        readCraft(info, true);
         return;
     }
     const QJsonObject reply = cachedReply(info.id);

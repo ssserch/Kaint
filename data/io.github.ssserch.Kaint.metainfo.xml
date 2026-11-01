@@ -109,6 +109,22 @@
   </keywords>
 
   <releases>
+    <release version="1.1.4" date="2026-11-01">
+      <description>
+        <p>Plugins from PhotoCraft and LightCraft, a sharper brush and a closer Paint.NET look.</p>
+        <ul>
+          <li>PhotoCraft filter plugins (.wasm) run sandboxed in Kaint's own WebAssembly interpreter</li>
+          <li>LightCraft looks (.cube, .3dl) and develop presets (.xmp), with an Amount slider</li>
+          <li>A crisper paintbrush, with Paint.NET's soft edge and smoothing that does not lag behind</li>
+          <li>Paint.NET style: gray and blue bar sliders, hollow handles, a shape grid and wider dash styles</li>
+          <li>On Linux, a Windows 10 (or Windows 98) title bar drawn by Kaint, with its shadow from KWin</li>
+          <li>Floating windows snap to the edges and to each other; interface font and top bar color in Settings</li>
+          <li>A Preview box in effect dialogs and a negative Gamma Boost in the blurs</li>
+          <li>Nearest Neighbor sampling stays sharp when shrinking with Move Selected Pixels</li>
+          <li>The Paint.NET style and cursors are now the defaults</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.3" date="2026-10-30">
       <description>
         <p>Paint.NET-style cursors, the Blue theme and closer Paint.NET behavior.</p>

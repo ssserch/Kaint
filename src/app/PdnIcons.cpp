@@ -1109,10 +1109,10 @@ QCursor pixelCursor(const QString& name)
         {QStringLiteral("clonestamp"), {8, 14}},    {QStringLiteral("recolor"), {8, 14}},
         {QStringLiteral("hand-open"), {9, 9}},      {QStringLiteral("hand-closed"), {9, 9}},
     };
-    // Pixel art: se amplía a un múltiplo entero (2× desde un 175 % de escala) y se usa tal cual, sin
-    // que el sistema lo vuelva a escalar suavizándolo.
+    // Pixel art, algo más grande que el original (un 25 %) para que se vea bien, ampliado sin
+    // suavizar (cada píxel sigue nítido) y usado tal cual, sin que el sistema lo vuelva a escalar.
     const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
-    const int k = std::max(1, int(std::floor(dpr + 0.25)));
+    const qreal k = std::round(dpr * 1.25 * 4) / 4;
     const QString key = QStringLiteral("%1/%2").arg(name).arg(dpr);
     static QHash<QString, QCursor> cache;
     if (const auto it = cache.constFind(key); it != cache.cend())
@@ -1120,7 +1120,8 @@ QCursor pixelCursor(const QString& name)
     const QImage image(QStringLiteral(":/kaint/cursors/%1.png").arg(name));
     if (image.isNull())
         return QCursor(Qt::CrossCursor);
-    QPixmap pm = QPixmap::fromImage(image.scaled(image.size() * k, Qt::IgnoreAspectRatio, Qt::FastTransformation));
+    QPixmap pm = QPixmap::fromImage(image.scaled(QSize(int(std::lround(image.width() * k)), int(std::lround(image.height() * k))),
+                                                 Qt::IgnoreAspectRatio, Qt::FastTransformation));
     pm.setDevicePixelRatio(dpr);
     const QPoint hot = hotSpots.value(name, QPoint(image.width() / 2, image.height() / 2));
     const QCursor cursor(pm, int(std::lround(hot.x() * k / dpr)), int(std::lround(hot.y() * k / dpr)));

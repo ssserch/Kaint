@@ -43,7 +43,16 @@ page.on("pageerror", (e) => errors.push(`${e.message}\n${e.stack}`));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 await page.goto(url);
 // La primera vez sale la bienvenida (logo, versión, autor y lo básico de la configuración).
-await page.evaluate(() => localStorage.setItem("kaint.settings", JSON.stringify({ language: "es", colorScheme: 1 })));
+// De fábrica van el estilo y los cursores de Paint.NET, sin los botones de ir al principio y al
+// final del historial; la prueba recorre el estilo de Kaint (el de Paint.NET se elige más adelante).
+const factory = await page.evaluate(async () => {
+    localStorage.removeItem("kaint.settings");
+    const { Settings } = await import(`./js/Settings.js?fresh=${Date.now()}`);
+    return [Settings.get("uiStyle"), Settings.get("cursorStyle"), Settings.get("historyJumpButtons"), Settings.get("language")];
+});
+check(JSON.stringify(factory) === JSON.stringify([1, 1, false, "en"]), `valores de fábrica (${JSON.stringify(factory)})`);
+await page.evaluate(() => localStorage.setItem("kaint.settings", JSON.stringify({ language: "es", colorScheme: 1, uiStyle: 0, cursorStyle: 0,
+                                                                               historyJumpButtons: true })));
 await page.reload();
 await page.waitForSelector(".welcome");
 const welcome = await page.evaluate(() => ({ logo: document.querySelector(".welcome .kaint-logo")?.textContent,
@@ -951,8 +960,11 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
         await window.kaint.autosave();
     });
     const cdp = await context.newCDPSession(other);
+    // La pestaña tarda en caerse (más de un segundo en algunos Chromium): se espera a que lo haga.
+    const crashed = new Promise((r) => other.once("crash", r));
     cdp.send("Page.crash").catch(() => {});
-    await page.waitForTimeout(1000);
+    await crashed;
+    await page.waitForTimeout(300);
     const offered = page.evaluate(() => window.kaint.offerRecovery());
     await page.waitForSelector(".dialog .choice-button");
     const text = await page.textContent(".dialog");

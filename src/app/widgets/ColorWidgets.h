@@ -99,11 +99,18 @@ signals:
 protected:
     void paintEvent(QPaintEvent* e) override;
     void mousePressEvent(QMouseEvent* e) override;
+    void mouseReleaseEvent(QMouseEvent* e) override;
+    void mouseMoveEvent(QMouseEvent* e) override;
     void mouseDoubleClickEvent(QMouseEvent* e) override;
+    void leaveEvent(QEvent* e) override;
 
 private:
     QRectF swapRect() const;
     QRectF resetRect() const;
+    // La ranura bajo el puntero (la principal va encima): 0 ninguna, 1 principal, 2 secundaria.
+    int slotAt(const QPointF& pos) const;
+    void setHot(int slot, bool pressed);
+    void animateHot(qreal& level, QPointer<QVariantAnimation>& anim, qreal target);
 
     QColor m_primary;
     QColor m_secondary;
@@ -111,6 +118,14 @@ private:
     // Cuánto está activa la ranura principal (1) o la secundaria (0); intermedio mientras se anima.
     qreal m_primaryLevel = 1.0;
     QPointer<QVariantAnimation> m_switch;
+    // Como en paint.js: la ranura sin activar bajo el puntero muestra el marco de dentro y asoma el
+    // pico (más pequeño al pulsarla). 0 nada, 1 bajo el puntero; se anima.
+    int m_hotSlot = 0;
+    bool m_hotPressed = false;
+    qreal m_primaryHot = 0;
+    qreal m_secondaryHot = 0;
+    QPointer<QVariantAnimation> m_primaryHotAnim;
+    QPointer<QVariantAnimation> m_secondaryHotAnim;
 };
 
 // Paleta de 96 colores (32 con la ventana reducida): clic izquierdo = ranura activa, derecho =

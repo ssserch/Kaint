@@ -38,7 +38,7 @@ struct AppSettings {
     // y una línea marca dónde quedará.
     bool layerDropLine = false;
     // Botones de ir al principio y al final del historial, junto a deshacer y rehacer.
-    bool historyJumpButtons = true;
+    bool historyJumpButtons = false;
     // Colores ampliado: también los colores semitransparentes de la paleta (las filas de abajo de
     // la de fábrica, como en Paint.NET). El blanco de relleno de las paletas cortas nunca se ve.
     bool paletteTranslucent = true;
@@ -46,11 +46,23 @@ struct AppSettings {
     // en píxeles.
     int panelStyle = 0;
     int panelBorder = 1;
+    // Las ventanas flotantes se acoplan a los bordes del área de trabajo y a las demás ventanas al
+    // arrastrarlas cerca.
+    bool snapPanels = true;
+    // Fuente de la interfaz (familia vacía o tamaño 0: los del sistema o del tema).
+    QString uiFontFamily;
+    int uiFontSize = 0;
+    // Linux: color de la barra superior y de las cabeceras de las ventanas, como el de énfasis de
+    // Windows (no válido: el del tema).
+    QColor titleBarColor;
+    // Linux, con el estilo de Paint.NET: la ventana principal y los diálogos con su propia barra de
+    // título, como las de Windows 10, en vez de la del escritorio.
+    bool windows10Frame = true;
     // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (Theme::Look).
-    int uiStyle = 0;
+    int uiStyle = 1;
     // Cursores de las herramientas: 0, los de Kaint; 1, los de Paint.NET en pixel art
     // (Icons::CursorStyle).
-    int cursorStyle = 0;
+    int cursorStyle = 1;
     // Se mostró la bienvenida del primer inicio.
     bool welcomed = false;
     // Subrayar siempre las letras de acceso de los menús (si no, solo con Alt).

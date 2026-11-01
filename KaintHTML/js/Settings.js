@@ -16,13 +16,14 @@ const defaults = {
     // Cursores con la herramienta en miniatura al lado: el puntero del sistema o el de Kaint.
     systemPointer: true,
     // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (solo lo visual).
-    uiStyle: 0,
+    uiStyle: 1,
     // Se mostró la bienvenida de la primera vez.
     welcomed: false,
     // Subrayar siempre las letras de acceso de los menús (si no, como en Windows, solo con Alt).
     menuMnemonics: false,
     colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul
-    language: navigator.language?.toLowerCase().startsWith("es") ? "es" : "en",
+    // Inglés por defecto (como Kaint); el español se elige en la bienvenida o en Configuración.
+    language: "en",
     dropShadow: true,
     checkerBrightness: 191,
     askOnceOnClose: true,
@@ -40,12 +41,20 @@ const defaults = {
     // del borde en píxeles.
     panelStyle: 0,
     panelBorder: 1,
+    // Las ventanas flotantes se acoplan a los bordes del área de trabajo y a las demás ventanas
+    // al arrastrarlas cerca.
+    snapPanels: true,
+    // Fuente de la interfaz ("" o 0: la del navegador / del tema) y color propio de la barra
+    // superior y de las cabeceras de las ventanas (null: el del tema), como el de Kaint en Linux.
+    uiFontFamily: "",
+    uiFontSize: 0,
+    titleBarColor: null,
     // Ver > Reglas y su estilo: 0, oscura como la de paint.js; 1, del color de la barra.
     rulers: false,
     rulerStyle: 0,
-    historyJumpButtons: true,
+    historyJumpButtons: false,
     paletteTranslucent: true,
-    cursorStyle: 0,
+    cursorStyle: 1,
     // Unidades de medida (Ver): 0, píxeles; 1, pulgadas; 2, centímetros.
     unit: 0,
     // Atajos cambiados en Configuración > Atajos de teclado (id de la acción → combinación).

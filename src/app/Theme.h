@@ -139,8 +139,19 @@ bool isDark();
 bool systemPrefersDark();
 
 // Color de la barra de título del sistema cuando no es la del tema (Windows con el color de
-// énfasis en las barras de título), o no válido.
+// énfasis en las barras de título; en Linux, el que se elige en Configuración), o no válido.
 QColor titleBarColor();
+// El de la barra de título inactiva (al pasar a otro programa) cuando titleBarColor() es válido:
+// como en Windows, sin el color de énfasis.
+QColor inactiveTitleBarColor();
+// Linux: color propio de la barra superior y de las cabeceras de las ventanas, como el de énfasis
+// de Windows (no válido: el del tema). Se ve al volver a aplicar el tema.
+void setCustomTitleBarColor(const QColor& color);
+// Fuente de la interfaz elegida en Configuración (familia vacía o tamaño 0: los del sistema o del
+// tema). Se ve al volver a aplicar el tema.
+void setUiFont(const QString& family, int pointSize);
+QString uiFontFamily();
+int uiFontSize();
 // 'spec' con las cabeceras de las ventanas flotantes del color 'titleBar' (si es válido).
 Spec withTitleBarColor(Spec spec, const QColor& titleBar);
 // Barra de título nativa a juego con el tema: en Windows, modo oscuro y el color 'band' (no

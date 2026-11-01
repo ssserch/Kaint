@@ -23,6 +23,7 @@
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
+#include <QCursor>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -61,6 +62,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QToolButton>
+#include <QToolTip>
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -86,6 +88,11 @@ AppSettings AppSettings::load()
     a.paletteTranslucent = get("paletteTranslucent", a.paletteTranslucent);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
+    a.snapPanels = get("snapPanels", a.snapPanels);
+    a.uiFontFamily = get("uiFontFamily", a.uiFontFamily);
+    a.uiFontSize = std::clamp(get("uiFontSize", a.uiFontSize), 0, 24);
+    a.titleBarColor = s.value(QStringLiteral("titleBarColor"), QColor()).value<QColor>();
+    a.windows10Frame = get("windows10Frame", a.windows10Frame);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
@@ -148,6 +155,11 @@ void AppSettings::save() const
     s.remove(QStringLiteral("allPaletteColors"));
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
     s.setValue(QStringLiteral("panelBorder"), panelBorder);
+    s.setValue(QStringLiteral("snapPanels"), snapPanels);
+    s.setValue(QStringLiteral("uiFontFamily"), uiFontFamily);
+    s.setValue(QStringLiteral("uiFontSize"), uiFontSize);
+    s.setValue(QStringLiteral("titleBarColor"), titleBarColor);
+    s.setValue(QStringLiteral("windows10Frame"), windows10Frame);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
     s.setValue(QStringLiteral("cursorStyle"), cursorStyle);
     s.setValue(QStringLiteral("welcomed"), welcomed);
@@ -379,7 +391,23 @@ QWidget* SettingsDialog::createInterfacePage()
     lookRow->addStretch();
     page.layout->addLayout(lookRow);
     connect(look, &QComboBox::activated, this, [this, look](int i) {
-        m_settings.uiStyle = look->itemData(i).toInt();
+        const int chosen = look->itemData(i).toInt();
+        if (chosen == m_settings.uiStyle)
+            return;
+        m_settings.uiStyle = chosen;
+#ifndef Q_OS_WIN
+        // La barra de título de Windows 10 dibujada por Kaint (Linux, estilo Paint.NET) se pone o se
+        // quita al abrir Kaint: se ofrece reiniciar.
+        if (m_settings.windows10Frame && m_settings.colorScheme != int(Theme::Scheme::Kde)
+            && askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
+                          tr("Kaint se cerrará y se abrirá de nuevo con el estilo elegido. Si hay cambios sin guardar, te lo "
+                             "preguntará antes."),
+                          tr("Cambiar el estilo ahora y la barra de título la próxima vez que se abra Kaint."))) {
+            m_restartRequested = true;
+            accept();
+            return;
+        }
+#endif
         changed();
     });
 
@@ -409,6 +437,60 @@ QWidget* SettingsDialog::createInterfacePage()
     languageRow->addWidget(language);
     languageRow->addStretch();
     page.layout->addLayout(languageRow);
+
+    // Fuente de la interfaz: la del sistema (o la del tema) o cualquiera instalada, y su tamaño.
+    auto* fontRow = new QHBoxLayout;
+    auto* uiFont = new QComboBox(page.widget);
+    uiFont->addItem(tr("La del sistema"), QString());
+    for (const QString& family : QFontDatabase::families())
+        if (!QFontDatabase::isPrivateFamily(family))
+            uiFont->addItem(family, family);
+    uiFont->setCurrentIndex(std::max(0, uiFont->findData(m_settings.uiFontFamily)));
+    uiFont->setMaxVisibleItems(16);
+    uiFont->setToolTip(tr("Letra de los menús, las ventanas y los diálogos. «La del sistema» usa la del escritorio "
+                          "(o la del tema personalizado)."));
+    auto* uiFontSize = new QSpinBox(page.widget);
+    uiFontSize->setRange(0, 24);
+    uiFontSize->setSpecialValueText(tr("Automático"));
+    uiFontSize->setValue(m_settings.uiFontSize);
+    uiFontSize->setToolTip(tr("Tamaño de la letra en puntos (Automático: el del sistema o del tema)."));
+    fontRow->addWidget(new QLabel(tr("Fuente de la interfaz:"), page.widget));
+    fontRow->addWidget(uiFont);
+    fontRow->addWidget(withUnit(uiFontSize, tr("pt"), {}, page.widget));
+    fontRow->addStretch();
+    page.layout->addLayout(fontRow);
+    connect(uiFont, &QComboBox::activated, this, [this, uiFont](int i) {
+        m_settings.uiFontFamily = uiFont->itemData(i).toString();
+        changed();
+    });
+    connect(uiFontSize, &QSpinBox::valueChanged, this, [this](int v) {
+        m_settings.uiFontSize = v;
+        changed();
+    });
+
+#ifndef Q_OS_WIN
+    // Linux: el color de la barra superior (y de las cabeceras de las ventanas), como el color de
+    // énfasis en las barras de título de Windows.
+    auto* titleRow = new QHBoxLayout;
+    auto* ownTitle = new QCheckBox(tr("Color propio en la barra superior:"), page.widget);
+    ownTitle->setToolTip(tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los "
+                            "menús y las cabeceras de las ventanas llevan este color."));
+    auto* titleColor = new ColorButton(page.widget);
+    titleColor->setColor(m_settings.titleBarColor.isValid() ? m_settings.titleBarColor : QColor(0x74, 0x4d, 0xa9));
+    ownTitle->setChecked(m_settings.titleBarColor.isValid());
+    titleColor->setEnabled(ownTitle->isChecked());
+    titleRow->addWidget(ownTitle);
+    titleRow->addWidget(titleColor);
+    titleRow->addStretch();
+    page.layout->addLayout(titleRow);
+    auto applyTitle = [this, ownTitle, titleColor] {
+        titleColor->setEnabled(ownTitle->isChecked());
+        m_settings.titleBarColor = ownTitle->isChecked() ? titleColor->color() : QColor();
+        changed();
+    };
+    connect(ownTitle, &QCheckBox::toggled, this, applyTitle);
+    connect(titleColor, &ColorButton::colorChanged, this, applyTitle);
+#endif
 
     // Paquete de iconos (como en paint.js; se administran en su página).
     auto* packRow = new QHBoxLayout;
@@ -444,6 +526,27 @@ QWidget* SettingsDialog::createInterfacePage()
     QWidget* borderField = withUnit(panelBorder, tr("px"), {}, page.widget);
     panelForm->addRow(tr("Grosor del borde de las ventanas:"), borderField);
     page.layout->addLayout(panelForm);
+    check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), &AppSettings::snapPanels,
+          tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él."));
+#ifndef Q_OS_WIN
+    auto* frame = new QCheckBox(tr("Barra de título como la de Windows 10 con el estilo Paint.NET"), page.widget);
+    frame->setToolTip(tr("La ventana principal y los diálogos dibujan su propia barra de título negra, con sombra, en vez de "
+                         "la del escritorio. Se aplica al abrir Kaint."));
+    frame->setChecked(m_settings.windows10Frame);
+    page.layout->addWidget(frame);
+    connect(frame, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.windows10Frame = on;
+        changed();
+        if (m_settings.uiStyle == 1 && m_settings.colorScheme != int(Theme::Scheme::Kde)
+            && askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
+                          tr("Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin "
+                             "guardar, te lo preguntará antes."),
+                          tr("Seguir así hasta la próxima vez que se abra Kaint."))) {
+            m_restartRequested = true;
+            accept();
+        }
+    });
+#endif
     // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
     // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
     // interfaz, a su vez, no se aplica con el tema KDE.
@@ -845,11 +948,41 @@ QWidget* SettingsDialog::createPerformancePage()
 QWidget* SettingsDialog::createPluginsPage()
 {
     PageBox page = makePage(this);
-    page.layout->addWidget(wrapped(tr("Complementos de efectos instalados (.so de Kaint o .dll de Paint.NET). Se guardan "
-                                      "en %1; si un complemento trae varios archivos, añádelos todos o copia su carpeta "
-                                      "ahí.")
-                                       .arg(QDir::toNativeSeparators(PluginManager::instance()->userPath())),
-                                   page.widget));
+    // Cada formato resaltado y, al dejar el puntero encima, de dónde viene (en vez de decirlo en el
+    // texto, que ocupaba mucho).
+    const QColor strong = palette().color(QPalette::Window).lightness() < 128 ? QColor(Qt::white) : QColor(Qt::black);
+    const struct { const char* ext; QString tip; } formats[] = {
+        {".so", tr("De Kaint")},
+        {".dll", tr("De Paint.NET")},
+        {".wasm", tr("Filtros de PhotoCraft")},
+        {".cube", tr("Looks de LightCraft")},
+        {".3dl", tr("Looks de LightCraft")},
+        {".xmp", tr("Ajustes de LightCraft")},
+    };
+    QStringList names;
+    for (const auto& f : formats)
+        names << QStringLiteral("<a href=\"%1\" style=\"color:%2; font-weight:600; text-decoration:none\">%1</a>")
+                     .arg(QString::fromLatin1(f.ext), strong.name());
+    auto* intro = new QLabel(tr("Complementos de efectos instalados (%1). Se guardan en %2; si un complemento trae varios "
+                                "archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos > Complementos.")
+                                 .arg(tr("%1, %2, %3, %4, %5 y %6")
+                                          .arg(names[0], names[1], names[2], names[3], names[4], names[5]),
+                                      QDir::toNativeSeparators(PluginManager::instance()->userPath()).toHtmlEscaped()),
+                             page.widget);
+    intro->setWordWrap(true);
+    intro->setTextFormat(Qt::RichText);
+    intro->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
+    connect(intro, &QLabel::linkHovered, intro, [intro, formats](const QString& link) {
+        // Sin la mano de los enlaces: no se pulsan, solo explican.
+        intro->setCursor(Qt::ArrowCursor);
+        for (const auto& f : formats)
+            if (link == QLatin1String(f.ext)) {
+                QToolTip::showText(QCursor::pos(), f.tip, intro);
+                return;
+            }
+        QToolTip::hideText();
+    });
+    page.layout->addWidget(intro);
     m_pluginList = new QTreeWidget(page.widget);
     m_pluginList->setHeaderLabels({tr("Complemento"), tr("Tipo"), tr("Estado")});
     m_pluginList->setRootIsDecorated(false);
@@ -867,7 +1000,7 @@ QWidget* SettingsDialog::createPluginsPage()
 
     auto* row = new QHBoxLayout;
     auto* add = new QPushButton(Icons::theme({"list-add", "document-import"}), tr("Añadir…"), page.widget);
-    add->setToolTip(tr("Copiar complementos (.so o .dll) a la carpeta de complementos"));
+    add->setToolTip(tr("Copiar complementos (.so, .dll, .wasm, .cube, .3dl o .xmp) a la carpeta de complementos"));
     connect(add, &QPushButton::clicked, this, &SettingsDialog::addPlugins);
     auto* openFolder = new QPushButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), page.widget);
     openFolder->setToolTip(tr("Abre la carpeta de complementos"));
@@ -966,7 +1099,8 @@ void SettingsDialog::addPlugins()
 {
     const QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Añadir complementos"), QDir::homePath(),
-        tr("Complementos (*.dll *.so);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so)"));
+        tr("Complementos (*.dll *.so *.wasm *.cube *.3dl *.xmp);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so);;"
+           "Filtros de PhotoCraft (*.wasm);;Looks y ajustes de LightCraft (*.cube *.3dl *.xmp)"));
     if (files.isEmpty())
         return;
     PluginManager* pm = PluginManager::instance();

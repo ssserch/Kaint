@@ -461,7 +461,14 @@ int main(int argc, char** argv)
     QApplication::setOrganizationName(QStringLiteral("KaintSmokeTest"));
     QApplication::setApplicationName(QStringLiteral("KaintSmokeTest"));
     QSettings().clear();
+    // De fábrica: el estilo y los cursores de Paint.NET, sin los botones de ir al principio y al
+    // final del historial. La prueba recorre el estilo de Kaint (el de Paint.NET se elige más
+    // adelante).
+    CHECK(AppSettings().uiStyle == 1 && AppSettings().cursorStyle == 1 && !AppSettings().historyJumpButtons);
     QSettings().setValue(QStringLiteral("settings/colorScheme"), int(Theme::Scheme::Light));
+    QSettings().setValue(QStringLiteral("settings/uiStyle"), 0);
+    QSettings().setValue(QStringLiteral("settings/cursorStyle"), 0);
+    QSettings().setValue(QStringLiteral("settings/historyJumpButtons"), true);
     Icons::setupTheme();
     QTemporaryDir shapesDir;
     {
@@ -2896,6 +2903,8 @@ int main(int argc, char** argv)
     {
         AppSettings start;
         start.language = QStringLiteral("es");
+        start.uiStyle = 0;
+        start.cursorStyle = 0;
         WelcomeDialog welcome(start);
         welcome.show();
         settle();

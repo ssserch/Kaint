@@ -191,6 +191,10 @@ private:
     void checkHistoryMemory();
     // Windows: la barra de título se ve activa mientras la ventana activa sea de Kaint.
     void syncTitleBarActivation();
+    // Copia a la carpeta de complementos los filtros, looks y ajustes soltados en la ventana.
+    void installDroppedPlugins(const QStringList& files);
+    // Con el estilo de Paint.NET, la barra principal tan ancha como la fila de menús.
+    void alignMainToolBar();
     PresenceInfo presenceInfo() const;
     void updatePresence();
 
@@ -222,6 +226,10 @@ private:
     class QHBoxLayout* m_cornerLayout = nullptr;
     QHash<const QUndoStack*, int> m_historyIndex;
     class QGridLayout* m_topLayout = nullptr;
+    // Fila de los menús en la de arriba: 1 con la barra de título simulada (Linux, Paint.NET).
+    int m_menuRow = 0;
+    class CaptionTitle* m_captionTitle = nullptr;
+    class CaptionButtons* m_captionButtons = nullptr;
 
     QLabel* m_hintIcon = nullptr;
     // Iconos de la barra de estado (se vuelven a pintar al cambiar de paquete de iconos).

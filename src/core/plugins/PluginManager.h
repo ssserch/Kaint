@@ -30,7 +30,8 @@ struct PluginInfo {
 };
 
 // Busca, carga y descarga los complementos de efectos: · Bibliotecas .so con la API C de Kaint
-// (KaintPlugin.h).
+// (KaintPlugin.h). · Filtros .wasm de PhotoCraft y looks (.cube, .3dl) y ajustes de revelado
+// (.xmp) de LightCraft (CraftPlugins).
 class PluginManager : public QObject {
     Q_OBJECT
 public:
@@ -67,6 +68,7 @@ private:
     QList<Candidate> findCandidates() const;
     QString settingsKey(const PluginInfo& info) const;
     void readNative(PluginInfo& info, bool keepLoaded);
+    void readCraft(PluginInfo& info, bool keepLoaded);
     void fillFromInspection(PluginInfo& info, const QJsonObject& reply);
     void load(PluginInfo& info);
     void unload(PluginInfo& info);

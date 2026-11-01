@@ -23,6 +23,9 @@ function release(worker) {
 // { promise, cancel() }: la promesa da el ImageData resultante (o null si se canceló).
 // onProgress(fracción) avisa del avance.
 export function startEffect(effect, src, values, rect, info, onProgress = null) {
+    // Los que se calculan a su manera (los filtros de PhotoCraft, en su propio Worker).
+    if (effect.start && rect.w > 0 && rect.h > 0)
+        return effect.start(src, values, rect, info, onProgress);
     let cancelled = false;
     if (!effect.builtin || !supported || rect.w <= 0 || rect.h <= 0) {
         const promise = new Promise((resolve, reject) => setTimeout(() => {

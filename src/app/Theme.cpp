@@ -76,6 +76,10 @@ bool g_customLoaded = false;
 Spec g_active = preset(false);
 QFont g_baseFont;
 bool g_baseFontSet = false;
+// Fuente de la interfaz de Configuración y color propio de la barra superior (Linux).
+QString g_uiFontFamily;
+int g_uiFontSize = 0;
+QColor g_customTitleBar;
 bool g_fusion = false;
 Look g_look = Look::Kaint;
 // Letras de acceso: siempre subrayadas o solo con Alt (mientras se pulsa o se navega por los
@@ -604,8 +608,58 @@ public:
         QProxyStyle::drawPrimitive(element, option, p, widget);
     }
 
+    void drawControl(ControlElement element, const QStyleOption* option, QPainter* p, const QWidget* widget) const override
+    {
+        // La esquina para cambiar el tamaño de la ventana (solo se ve en modo ventana): seis
+        // puntitos en escalera, como en Windows 10 y paint.js, en vez de las rayas de Fusion.
+        if (element == CE_SizeGrip) {
+            const auto* grip = qstyleoption_cast<const QStyleOptionSizeGrip*>(option);
+            const Qt::Corner corner = grip ? grip->corner : Qt::BottomRightCorner;
+            QColor dot = option->palette.color(QPalette::WindowText);
+            dot.setAlphaF(0.55);
+            p->save();
+            p->setRenderHint(QPainter::Antialiasing, false);
+            const QRect r = option->rect;
+            constexpr int kDot = 2, kStep = 4;
+            for (int row = 0; row < 3; ++row)
+                for (int col = 0; col <= row; ++col) {
+                    // Desde la esquina: la fila de abajo tiene tres, la de arriba uno.
+                    int x = r.right() - 2 - (col * kStep) - kDot + 1;
+                    int y = r.bottom() - 2 - ((2 - row) * kStep) - kDot + 1;
+                    if (corner == Qt::BottomLeftCorner || corner == Qt::TopLeftCorner)
+                        x = r.left() + 2 + col * kStep;
+                    if (corner == Qt::TopLeftCorner || corner == Qt::TopRightCorner)
+                        y = r.top() + 2 + (2 - row) * kStep;
+                    p->fillRect(QRect(x, y, kDot, kDot), dot);
+                }
+            p->restore();
+            return;
+        }
+        QProxyStyle::drawControl(element, option, p, widget);
+    }
+
+    // Paint.NET: los deslizadores con su tirador azul con punta (hacia abajo, o a la derecha en los
+    // verticales) sobre un riel fino.
+    void drawComplexControl(ComplexControl control, const QStyleOptionComplex* option, QPainter* p,
+                            const QWidget* widget) const override
+    {
+        if (control == CC_Slider && paintNetSliders()) {
+            if (const auto* slider = qstyleoption_cast<const QStyleOptionSlider*>(option)) {
+                paintSlider(slider, p, widget);
+                return;
+            }
+        }
+        QProxyStyle::drawComplexControl(control, option, p, widget);
+    }
+
     int pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const override
     {
+        if (paintNetSliders()) {
+            if (metric == PM_SliderLength)
+                return 11;
+            if (metric == PM_SliderThickness || metric == PM_SliderControlThickness)
+                return 20;
+        }
         if (classicButtons() && (metric == PM_ButtonShiftHorizontal || metric == PM_ButtonShiftVertical))
             return 1;
         return QProxyStyle::pixelMetric(metric, option, widget);
@@ -624,6 +678,52 @@ public:
     }
 
 private:
+    static bool paintNetSliders() { return paintNetLook() && !g_active.classic; }
+
+    void paintSlider(const QStyleOptionSlider* opt, QPainter* p, const QWidget* widget) const
+    {
+        const bool horizontal = opt->orientation == Qt::Horizontal;
+        const QRect groove = subControlRect(CC_Slider, opt, SC_SliderGroove, widget);
+        QRect handle = subControlRect(CC_Slider, opt, SC_SliderHandle, widget);
+        const bool dark = isDark();
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing);
+        // El riel, a la altura de la parte cuadrada del tirador.
+        const QColor track = dark ? QColor(0x7a, 0x7a, 0x7a) : QColor(0xc4, 0xc4, 0xc4);
+        if (horizontal) {
+            const int y = handle.top() + handle.height() * 2 / 5;
+            p->fillRect(QRect(groove.left() + 2, y - 1, groove.width() - 4, 2), track);
+        } else {
+            const int x = handle.left() + handle.width() * 2 / 5;
+            p->fillRect(QRect(x - 1, groove.top() + 2, 2, groove.height() - 4), track);
+        }
+        const bool enabled = opt->state & State_Enabled;
+        const bool active = opt->activeSubControls & SC_SliderHandle;
+        QColor fill = g_active.accent.isValid() ? g_active.accent : QColor(0x00, 0x78, 0xd7);
+        if (!enabled)
+            fill = dark ? QColor(0x5a, 0x5a, 0x5a) : QColor(0xcc, 0xcc, 0xcc);
+        else if (active && (opt->state & State_Sunken))
+            fill = dark ? fill.lighter(125) : QColor(0xcc, 0xcc, 0xcc);
+        else if (active && (opt->state & State_MouseOver))
+            fill = dark ? fill.lighter(140) : QColor(0x17, 0x17, 0x17);
+        // Rectángulo con la punta en medio del lado de abajo (o del derecho).
+        const QRectF r = QRectF(handle).adjusted(0.5, 0.5, -0.5, -0.5);
+        QPolygonF shape;
+        if (horizontal) {
+            const qreal tip = r.width() / 2;
+            shape << r.topLeft() << r.topRight() << QPointF(r.right(), r.bottom() - tip) << QPointF(r.center().x(), r.bottom())
+                  << QPointF(r.left(), r.bottom() - tip);
+        } else {
+            const qreal tip = r.height() / 2;
+            shape << r.topLeft() << QPointF(r.right() - tip, r.top()) << QPointF(r.right(), r.center().y())
+                  << QPointF(r.right() - tip, r.bottom()) << r.bottomLeft();
+        }
+        p->setPen(Qt::NoPen);
+        p->setBrush(fill);
+        p->drawPolygon(shape);
+        p->restore();
+    }
+
     static void drawClassicButton(const QStyleOption* option, QPainter* p)
     {
         const auto* button = qstyleoption_cast<const QStyleOptionButton*>(option);
@@ -1012,7 +1112,8 @@ QString styleSheet(const Spec& s)
     const int pushH = std::array{8, 12, 16}[d];
     const QColor line = mix(s.toolBar, s.text, s.dark ? 0.18 : 0.14);
     const QColor field = s.dark ? s.border.lighter(125) : s.border.darker(125);
-    const QColor buttonHover = s.dark ? s.button.lighter(122) : mix(s.button, s.accent, 0.10);
+    // Paint.NET en claro: los botones bajo el puntero, celestes como las filas de las listas.
+    const QColor buttonHover = s.paintNet ? s.hover : s.dark ? s.button.lighter(122) : mix(s.button, s.accent, 0.10);
     const QColor buttonPressed = mix(s.button, s.accent, s.dark ? 0.35 : 0.22);
     const QColor hoverBorder = mix(s.hover, s.selectionBorder, 0.45);
     const QColor disabled = mix(s.text, s.window, 0.55);
@@ -1235,6 +1336,9 @@ QToolBar#ToolOptionsBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, st
 QStatusBar { border-top: 1px solid #a9bcd4; }
 QWidget#PanelButtons { background: #d5dde7; border-top: 1px solid #58769c; }
 )");
+    // Paint.NET: los deslizadores los dibuja KaintStyle (el tirador azul con punta), no la hoja.
+    if (s.paintNet && !s.classic)
+        qss.remove(QRegularExpression(QStringLiteral("^QSlider[^\n]*\n"), QRegularExpression::MultilineOption));
     return qss;
 }
 
@@ -1289,6 +1393,15 @@ void apply(Scheme scheme)
         QApplication::setPalette(QPalette());
         if (!g_systemIconTheme.isEmpty())
             QIcon::setThemeName(g_systemIconTheme);
+        if (g_baseFontSet) {
+            QFont font = g_baseFont;
+            if (!g_uiFontFamily.isEmpty())
+                font.setFamilies({g_uiFontFamily, g_baseFont.family()});
+            if (g_uiFontSize > 0)
+                font.setPointSize(g_uiFontSize);
+            if (font != QApplication::font())
+                QApplication::setFont(font);
+        }
         g_active = fromPalette(QApplication::palette());
         emit notifier()->changed();
         return;
@@ -1317,6 +1430,10 @@ void apply(Scheme scheme)
         if (scheme != Scheme::Custom && scheme != Scheme::Windows98) {
             g_active.selection = g_active.dark ? QColor(0x19, 0x5b, 0xa0) : QColor(0xcc, 0xe8, 0xff);
             g_active.selectionBorder = g_active.dark ? QColor(0x00, 0x78, 0xd7) : QColor(0x99, 0xd1, 0xff);
+            // Bajo el puntero (herramientas, capas, listas), el celeste de Paint.NET en vez de casi
+            // blanco; con el oscuro, su contraparte: el mismo tono, apagado y oscuro (más que el azul
+            // de la selección, para que no se confundan).
+            g_active.hover = g_active.dark ? QColor(0x28, 0x45, 0x5d) : QColor(0xd4, 0xe5, 0xf3);
         }
     }
 
@@ -1332,6 +1449,11 @@ void apply(Scheme scheme)
             font.setPointSize(g_active.fontSize);
         font.setStyleStrategy(ownFont && g_active.pixelFont ? QFont::NoAntialias : QFont::PreferDefault);
         font.setHintingPreference(ownFont && g_active.pixelFont ? QFont::PreferFullHinting : g_baseFont.hintingPreference());
+        // La de Configuración manda sobre la del sistema y la del tema.
+        if (!g_uiFontFamily.isEmpty())
+            font.setFamilies({g_uiFontFamily, g_baseFont.family()});
+        if (g_uiFontSize > 0)
+            font.setPointSize(g_uiFontSize);
         if (font != QApplication::font())
             QApplication::setFont(font);
     }
@@ -1415,8 +1537,46 @@ QColor titleBarColor()
         if (abgr != 0)
             return QColor(int(abgr & 0xff), int(abgr >> 8 & 0xff), int(abgr >> 16 & 0xff));
     }
-#endif
     return {};
+#else
+    return g_customTitleBar;
+#endif
+}
+
+QColor inactiveTitleBarColor()
+{
+#ifdef Q_OS_WIN
+    // Si se eligió uno en el registro (AccentColorInactive, ABGR), ese.
+    const QSettings dwm(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\DWM"), QSettings::NativeFormat);
+    const QVariant inactive = dwm.value(QStringLiteral("AccentColorInactive"));
+    if (inactive.isValid()) {
+        const auto abgr = quint32(inactive.toLongLong());
+        return QColor(int(abgr & 0xff), int(abgr >> 8 & 0xff), int(abgr >> 16 & 0xff));
+    }
+#endif
+    // Lo que pone Windows a una ventana inactiva: gris oscuro en el modo oscuro, blanco en el claro.
+    return isDark() ? QColor(0x2b, 0x2b, 0x2b) : QColor(0xff, 0xff, 0xff);
+}
+
+void setCustomTitleBarColor(const QColor& color)
+{
+    g_customTitleBar = color.isValid() ? QColor(color.rgb()) : QColor();
+}
+
+void setUiFont(const QString& family, int pointSize)
+{
+    g_uiFontFamily = family.trimmed();
+    g_uiFontSize = std::clamp(pointSize, 0, 24);
+}
+
+QString uiFontFamily()
+{
+    return g_uiFontFamily;
+}
+
+int uiFontSize()
+{
+    return g_uiFontSize;
 }
 
 Spec withTitleBarColor(Spec spec, const QColor& titleBar)

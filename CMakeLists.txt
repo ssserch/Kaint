@@ -104,7 +104,9 @@ add_library(kaintcore STATIC
     src/core/effects/Artistic.cpp
     src/core/plugins/PdnBridge.cpp
     src/core/plugins/PluginEffects.cpp
+    src/core/plugins/CraftPlugins.cpp
     src/core/plugins/PluginManager.cpp
+    src/core/plugins/Wasm.cpp
 )
 target_include_directories(kaintcore PUBLIC src)
 target_link_libraries(kaintcore PUBLIC Qt6::Gui ZLIB::ZLIB Threads::Threads)
@@ -129,6 +131,7 @@ add_library(kaintui STATIC
     src/app/Ruler.cpp
     src/app/Theme.cpp
     src/app/ToolOptionsBar.cpp
+    src/app/WindowFrame.cpp
     src/app/Workspace.cpp
     src/app/widgets/BarSlider.cpp
     src/app/widgets/ChoiceButton.cpp
@@ -172,6 +175,15 @@ find_package(Qt6 QUIET COMPONENTS DBus)
 if(TARGET Qt6::DBus)
     target_link_libraries(kaintui PUBLIC Qt6::DBus)
     target_compile_definitions(kaintui PRIVATE KAINT_HAVE_DBUS)
+endif()
+# Sombra de la barra de título simulada (Linux, estilo Paint.NET): la pide a KWin, como Breeze
+# (opcional; sin KWindowSystem, las ventanas quedan sin sombra).
+if(NOT WIN32 AND NOT APPLE)
+    find_package(KF6WindowSystem QUIET)
+    if(TARGET KF6::WindowSystem)
+        target_link_libraries(kaintui PRIVATE KF6::WindowSystem)
+        target_compile_definitions(kaintui PRIVATE KAINT_HAVE_KWINDOWSHADOW)
+    endif()
 endif()
 target_compile_definitions(kaintui PUBLIC KAINT_VERSION="${PROJECT_VERSION}" KAINT_APP_ID="${KAINT_APP_ID}"
                            KAINT_REPOSITORY="${KAINT_REPOSITORY}" KAINT_GITHUB="${KAINT_GITHUB}"

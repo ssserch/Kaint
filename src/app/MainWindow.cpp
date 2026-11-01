@@ -10,6 +10,7 @@
 #include "app/Shortcuts.h"
 #include "app/UserFonts.h"
 #include "app/ToolOptionsBar.h"
+#include "app/WindowFrame.h"
 #include "app/Workspace.h"
 #include "app/DiscordPresence.h"
 #include "app/IconPacks.h"
@@ -33,6 +34,7 @@
 #include "core/ImageIO.h"
 #include "core/Ora.h"
 #include "core/Raster.h"
+#include "core/plugins/CraftPlugins.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QActionGroup>
@@ -68,6 +70,7 @@
 #include <QColorTransform>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -87,6 +90,7 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QScrollBar>
+#include <QWindow>
 #include <QSettings>
 #include <QSlider>
 #include <QStandardPaths>
@@ -410,7 +414,11 @@ public:
     static QColor bandColor()
     {
         const QColor title = Theme::titleBarColor();
-        return title.isValid() ? title : Theme::active().menuBar;
+        if (!title.isValid())
+            return Theme::active().menuBar;
+        // Con el color de énfasis, Windows pinta la barra de título inactiva sin él al pasar a otro
+        // programa: la franja se apaga con ella (con una ventana de Kaint delante sigue activa).
+        return qApp->applicationState() == Qt::ApplicationActive ? title : Theme::inactiveTitleBarColor();
     }
 
 protected:
@@ -429,10 +437,58 @@ protected:
             p.fillRect(rect(), Theme::active().toolBar);
         }
         p.fillRect(QRect(0, 0, width(), split), bandColor());
+        // Con el tema Windows 98 y la barra de título simulada, su fila es la de Windows 98
+        // (degradado azul) y debajo sigue la franja gris de los menús.
+        if (m_caption && WindowFrame::classicTitle())
+            WindowFrame::paintClassicTitle(p, QRect(0, 0, width(), m_caption->geometry().bottom() + 1), window()->isActiveWindow());
+    }
+
+public:
+    void setCaption(QWidget* caption) { m_caption = caption; }
+
+protected:
+    // Como en Windows, la ventana se mueve arrastrando cualquier hueco de la barra de título
+    // simulada y de la franja de los menús, y un doble clic la maximiza o la restaura.
+    void mousePressEvent(QMouseEvent* e) override
+    {
+        if (m_caption && e->button() == Qt::LeftButton && window()->windowHandle()) {
+            window()->windowHandle()->startSystemMove();
+            return;
+        }
+        QWidget::mousePressEvent(e);
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent* e) override
+    {
+        if (m_caption && e->button() == Qt::LeftButton) {
+            QWidget* w = window();
+            w->isMaximized() ? w->showNormal() : w->showMaximized();
+            return;
+        }
+        QWidget::mouseDoubleClickEvent(e);
+    }
+
+    bool event(QEvent* e) override
+    {
+        // La fila del título se apaga con la ventana inactiva.
+        if (e->type() == QEvent::Polish && m_caption && !m_watching) {
+            window()->installEventFilter(this);
+            m_watching = true;
+        }
+        return QWidget::event(e);
+    }
+
+    bool eventFilter(QObject* watched, QEvent* e) override
+    {
+        if (watched == window() && e->type() == QEvent::ActivationChange)
+            update();
+        return false;
     }
 
 private:
     QWidget* m_menu = nullptr;
+    QWidget* m_caption = nullptr;
+    bool m_watching = false;
 };
 
 // Flecha de la lista de imágenes: una franja de la altura de la tira con el chevrón arriba,
@@ -491,6 +547,8 @@ MainWindow::MainWindow()
     m_tools = new ToolManager(m_canvas, this);
     m_workspace = new Workspace(m_canvas, this);
     setCentralWidget(m_workspace);
+    // Linux con el estilo de Paint.NET: sin la barra de título del escritorio, con la de Windows 10.
+    WindowFrame::decorate(this, false);
 
     createTopRow();
     createActions();
@@ -1058,7 +1116,7 @@ void MainWindow::createToolBars()
     main->addActions({A["undo"], A["redo"]});
     main->addSeparator();
     main->addActions({A["pixelGrid"], A["rulers"]});
-    m_topLayout->addWidget(main, 1, 0, Qt::AlignLeft | Qt::AlignTop);
+    m_topLayout->addWidget(main, m_menuRow + 1, 0, Qt::AlignLeft | Qt::AlignTop);
 
     m_options = new ToolOptionsBar(m_tools, this);
     addToolBar(m_options);
@@ -1082,8 +1140,18 @@ void MainWindow::createTopRow()
     m_menuBar->setNativeMenuBar(false);
     m_menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     top->setMenuBar(m_menuBar);
-    m_topLayout->addWidget(m_menuBar, 0, 0, Qt::AlignLeft | Qt::AlignBottom);
-    m_topLayout->setRowStretch(0, 1);
+    // Linux con el estilo de Paint.NET: arriba, la barra de título simulada de Windows 10 (icono,
+    // título y botones de la ventana); los menús y la barra principal bajan una fila.
+    if (WindowFrame::isDecorated(this)) {
+        m_menuRow = 1;
+        m_captionTitle = new CaptionTitle(top);
+        m_topLayout->addWidget(m_captionTitle, 0, 0);
+        m_captionButtons = new CaptionButtons(top);
+        m_topLayout->addWidget(m_captionButtons, 0, 4, Qt::AlignRight | Qt::AlignVCenter);
+        top->setCaption(m_captionTitle);
+    }
+    m_topLayout->addWidget(m_menuBar, m_menuRow, 0, Qt::AlignLeft | Qt::AlignBottom);
+    m_topLayout->setRowStretch(m_menuRow, 1);
 
     // Tira de imágenes abiertas con miniaturas.
     m_tabs = new ImageStrip(top);
@@ -1098,7 +1166,7 @@ void MainWindow::createTopRow()
     // Solo lo que ocupan las miniaturas: la flecha de la lista va justo después de la última y
     // llega a la derecha cuando la tira se llena.
     m_tabs->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-    m_topLayout->addWidget(m_tabs, 0, 1, 2, 1, Qt::AlignBottom);
+    m_topLayout->addWidget(m_tabs, 0, 1, m_menuRow + 2, 1, Qt::AlignBottom);
     connect(m_tabs, &QTabBar::currentChanged, this, [this](int i) { setCurrentDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabCloseRequested, this, [this](int i) { closeDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabMoved, this, [this](int from, int to) { m_docs.move(from, to); });
@@ -1113,15 +1181,15 @@ void MainWindow::createTopRow()
     m_listButton->setToolTip(tr("Imágenes abiertas"));
     m_listButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     connect(m_listButton, &QToolButton::clicked, this, &MainWindow::showImageList);
-    m_topLayout->addWidget(m_listButton, 0, 2, 2, 1);
+    m_topLayout->addWidget(m_listButton, m_menuRow, 2, 2, 1);
     m_topLayout->setColumnStretch(3, 1);
 
     m_cornerButtons = new QWidget(top);
     m_cornerButtons->setObjectName(QStringLiteral("CornerButtons"));
     m_cornerLayout = new QHBoxLayout(m_cornerButtons);
-    m_cornerLayout->setContentsMargins(0, 0, 0, 0);
+    m_cornerLayout->setContentsMargins(0, 0, m_captionButtons ? 4 : 0, 0);
     m_cornerLayout->setSpacing(0);
-    m_topLayout->addWidget(m_cornerButtons, 0, 4, Qt::AlignRight | Qt::AlignVCenter);
+    m_topLayout->addWidget(m_cornerButtons, m_menuRow, 4, Qt::AlignRight | Qt::AlignVCenter);
     m_cornerButtons->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_cornerButtons, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         QMenu menu(this);
@@ -2184,6 +2252,16 @@ void MainWindow::dropEvent(QDropEvent* e)
     for (const QUrl& url : e->mimeData()->urls())
         if (url.isLocalFile())
             files << url.toLocalFile();
+    // Los filtros de PhotoCraft y los looks y ajustes de LightCraft que se sueltan se instalan.
+    QStringList plugins;
+    for (const QString& f : std::as_const(files))
+        if (CraftPlugins::isCraftFile(f))
+            plugins << f;
+    if (!plugins.isEmpty()) {
+        for (const QString& f : std::as_const(plugins))
+            files.removeAll(f);
+        installDroppedPlugins(plugins);
+    }
     if (!files.isEmpty()) {
         openFiles(files);
     } else if (e->mimeData()->hasImage()) {
@@ -2192,6 +2270,41 @@ void MainWindow::dropEvent(QDropEvent* e)
             addDocument(Document::createFromImage(img, tr("Fondo")));
     }
     e->acceptProposedAction();
+}
+
+void MainWindow::installDroppedPlugins(const QStringList& files)
+{
+    PluginManager* pm = PluginManager::instance();
+    bool replace = false;
+    const QStringList existing = pm->installedAlready(files);
+    if (!existing.isEmpty()) {
+        QStringList names;
+        for (const QString& f : existing)
+            names << QFileInfo(f).fileName();
+        const auto answer = QMessageBox::question(
+            this, tr("Añadir complementos"),
+            tr("Ya hay complementos con estos nombres:\n\n%1\n\n¿Quieres sustituirlos?").arg(names.join(QLatin1Char('\n'))),
+            QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::No);
+        if (answer == QMessageBox::Cancel)
+            return;
+        replace = answer == QMessageBox::Yes;
+    }
+    QStringList errors;
+    const QStringList copied = pm->install(files, replace, &errors);
+    pm->scan();
+    QStringList problems = errors;
+    QStringList added;
+    for (const PluginInfo& p : pm->plugins())
+        if (copied.contains(p.id)) {
+            if (p.effects.isEmpty())
+                problems << QStringLiteral("%1: %2").arg(p.file, p.errors.join(QLatin1Char(' ')));
+            else
+                added << p.effects;
+        }
+    if (!problems.isEmpty())
+        QMessageBox::warning(this, tr("Añadir complementos"), tr("No se pudieron añadir:\n\n%1").arg(problems.join(QLatin1Char('\n'))));
+    else if (!added.isEmpty())
+        showToolHint(tr("Complementos añadidos en Efectos > Complementos: %1").arg(added.join(QStringLiteral(", "))));
 }
 
 // ---------------------------------------------------------------------------
@@ -2960,6 +3073,7 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
         EffectDialog dlg(*effect, values, layer->image, roi, this);
         EffectPreview preview(m_doc, layer, *effect, ctx);
         connect(&dlg, &EffectDialog::valuesChanged, &preview, &EffectPreview::request);
+        connect(&dlg, &EffectDialog::previewToggled, &preview, &EffectPreview::setShown);
         connect(&preview, &EffectPreview::progress, this, [this](int permille) {
             m_progress->setVisible(permille >= 0);
             if (permille >= 0)
@@ -3065,6 +3179,9 @@ void MainWindow::restartWith(const AppSettings& settings)
     const AppSettings previous = m_settings;
     m_settings.colorScheme = settings.colorScheme;
     m_settings.language = settings.language;
+    // El estilo de la interfaz y la barra de título simulada (Linux) también reinician.
+    m_settings.uiStyle = settings.uiStyle;
+    m_settings.windows10Frame = settings.windows10Frame;
     m_settings.save();
     m_restartRequested = true;
     if (!close()) {
@@ -3096,6 +3213,11 @@ bool MainWindow::nativeEvent(const QByteArray& type, void* message, qintptr* res
 void MainWindow::syncTitleBarActivation()
 {
     Theme::syncTitleBarActivation(this);
+    // La franja de los menús sigue a la barra de título (activa o inactiva).
+    if (QWidget* top = menuWidget()) {
+        top->update();
+        m_listButton->update();
+    }
 }
 
 void MainWindow::changeEvent(QEvent* e)
@@ -3120,7 +3242,8 @@ void MainWindow::applyThemeLayout()
     // Paint.NET: los menús pegados arriba (sin franja encima aunque la tira de imágenes sea más
     // alta) y con un margen de la franja a su izquierda, antes de «Archivo».
     const bool paintNet = Theme::paintNetLook();
-    m_topLayout->setContentsMargins(paintNet ? 4 : 0, 0, 4, 0);
+    // Con la barra de título simulada, sus botones llegan al borde derecho.
+    m_topLayout->setContentsMargins(paintNet ? 4 : 0, 0, m_captionButtons ? 0 : 4, 0);
     m_topLayout->setAlignment(m_menuBar, Qt::AlignLeft | (paintNet ? Qt::AlignTop : Qt::AlignBottom));
     if (QWidget* top = menuWidget())
         top->update();
@@ -3133,6 +3256,34 @@ void MainWindow::applyThemeLayout()
         tools->setIconSize(spec.toolIconSize);
     if (m_tabs)
         m_tabs->update();
+    // Tras aplicar la hoja de estilo (con otra fuente o idioma, los menús miden otra cosa).
+    QTimer::singleShot(0, this, &MainWindow::alignMainToolBar);
+}
+
+void MainWindow::alignMainToolBar()
+{
+    // Paint.NET: la barra principal mide lo mismo que la fila de menús, con su último botón (la
+    // regla) debajo de «Efectos»; el sobrante se reparte entre los botones. Con el aspecto de
+    // Kaint, cada botón con su tamaño.
+    auto* main = findChild<QToolBar*>(QStringLiteral("MainToolBar"));
+    if (!main || !m_menuBar)
+        return;
+    QList<QToolButton*> buttons;
+    for (QAction* a : main->actions())
+        if (auto* b = qobject_cast<QToolButton*>(main->widgetForAction(a)); b && a->isVisible())
+            buttons << b;
+    for (QToolButton* b : std::as_const(buttons))
+        b->setMinimumWidth(0);
+    if (Theme::paintNetLook() && !buttons.isEmpty()) {
+        const int extra = m_menuBar->sizeHint().width() - main->sizeHint().width();
+        if (extra > 0) {
+            const int each = extra / int(buttons.size());
+            int rest = extra % int(buttons.size());
+            for (QToolButton* b : std::as_const(buttons))
+                b->setMinimumWidth(b->sizeHint().width() + each + (rest-- > 0 ? 1 : 0));
+        }
+    }
+    main->updateGeometry();
 }
 
 void MainWindow::applySettings()
@@ -3160,7 +3311,19 @@ void MainWindow::applySettings()
     preferences.replacePixels = m_settings.replacePixels;
     AppState::instance()->setPreferences(preferences);
     m_canvas->viewport()->update();
-    if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)) {
+    FloatingPanel::setSnapping(m_settings.snapPanels);
+    // La fuente de la interfaz y (Linux) el color de la barra superior se ven al volver a aplicar
+    // el tema.
+    const bool fontChanged = Theme::uiFontFamily() != m_settings.uiFontFamily || Theme::uiFontSize() != m_settings.uiFontSize;
+#ifdef Q_OS_WIN
+    const bool titleChanged = false;
+#else
+    const bool titleChanged = Theme::titleBarColor() != (m_settings.titleBarColor.isValid() ? QColor(m_settings.titleBarColor.rgb()) : QColor());
+#endif
+    Theme::setUiFont(m_settings.uiFontFamily, m_settings.uiFontSize);
+    Theme::setCustomTitleBarColor(m_settings.titleBarColor);
+    if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)
+        || fontChanged || titleChanged) {
         Theme::setLook(Theme::Look(m_settings.uiStyle));
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     }

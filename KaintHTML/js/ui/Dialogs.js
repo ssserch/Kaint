@@ -754,6 +754,29 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const autosave = numberInput(Settings.get("autosaveMinutes"), 0, 120);
             autosave.style.width = "60px";
             autosave.addEventListener("input", () => Settings.set("autosaveMinutes", autosave.read()));
+            // Fuente de la interfaz: la del tema (vacía) o la que se escriba o elija, y su tamaño.
+            const fontList = el("datalist", { id: "kaint-ui-fonts" },
+                                [...new Set(["Segoe UI", "Noto Sans", "Arial", "Tahoma", "Verdana", "Trebuchet MS", "Georgia", "Times New Roman",
+                                             "Courier New", "Comic Sans MS", "DejaVu Sans", "Liberation Sans", "Ubuntu", "Cantarell", "Inter",
+                                             ...UserFonts.families()])].map((f) => el("option", { value: f })));
+            const uiFont = el("input", { type: "text", value: Settings.get("uiFontFamily") || "", placeholder: tr("La del sistema"),
+                                         style: { width: "180px" }, title: tr("Letra de los menús, las ventanas y los diálogos. «La del sistema» usa la del escritorio (o la del tema personalizado).") });
+            uiFont.setAttribute("list", "kaint-ui-fonts");
+            uiFont.addEventListener("change", () => Settings.set("uiFontFamily", uiFont.value.trim()));
+            const uiFontSize = numberInput(Settings.get("uiFontSize") || 0, 0, 24);
+            uiFontSize.style.width = "60px";
+            uiFontSize.title = tr("Tamaño de la letra en puntos (Automático: el del sistema o del tema).");
+            uiFontSize.addEventListener("input", () => Settings.set("uiFontSize", uiFontSize.read()));
+            // Como el color propio de la barra superior de Kaint en Linux (el de énfasis de Windows).
+            const titleOn = checkbox(tr("Color propio en la barra superior:"), !!Settings.get("titleBarColor"));
+            titleOn.title = tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color.");
+            const titleColor = el("input", { type: "color", value: Settings.get("titleBarColor") || "#744da9", disabled: !Settings.get("titleBarColor") });
+            const applyTitle = () => {
+                titleColor.disabled = !titleOn.input.checked;
+                Settings.set("titleBarColor", titleOn.input.checked ? titleColor.value : null);
+            };
+            titleOn.input.addEventListener("change", applyTitle);
+            titleColor.addEventListener("input", applyTitle);
             queueMicrotask(paintNetCompat);
             return [
                 check(tr("Animaciones"), "animations",
@@ -781,10 +804,14 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 el("label", {}, [tr("Cursores:"), cursors]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
                 note(tr("Los cambios de idioma se aplican al recargar la página.")),
+                el("label", {}, [tr("Fuente de la interfaz:"), uiFont, fontList, uiFontSize, tr("pt")]),
+                el("div", { className: "row" }, [titleOn, titleColor]),
                 el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
                 heading(tr("Ventanas")),
                 el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
                 el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
+                check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), "snapPanels",
+                      tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él.")),
                 heading(tr("Al iniciar")),
                 check(tr("Volver a abrir las imágenes de la última sesión"), "reopenLast",
                       window.showOpenFilePicker ? "" : tr("Este navegador no deja volver a abrir los archivos: solo funciona en los que tienen acceso a los archivos del sistema.")),
@@ -1004,7 +1031,8 @@ function pluginsPage(refresh) {
             row.classList.toggle("selected", row.dataset.id === selected);
         const r = Plugins.records.find((x) => x.id === selected);
         const error = Plugins.errors.find((e) => e.id === selected);
-        details.textContent = r ? [r.description, `${tr("Versión")}: ${r.version}`, `${tr("Autor")}: ${r.author}`,
+        details.textContent = r ? [r.description, r.craftKind ? `${tr("Tipo")}: ${r.craftKind}` : "", r.version ? `${tr("Versión")}: ${r.version}` : "",
+                                   `${tr("Autor")}: ${r.author}`,
                                    tr("%1 efectos · %2 formatos", r.effectCount, r.fileTypeCount), error ? `${tr("Problemas:")} ${error.message}` : ""]
             .filter(Boolean).join("\n") : tr("No hay complementos instalados.");
         remove.disabled = !r;
@@ -1029,7 +1057,7 @@ function pluginsPage(refresh) {
         list.appendChild(row);
     }
     const status = el("p", { className: "plugin-status", style: { minHeight: "1.2em" } });
-    const file = el("input", { type: "file", accept: ".paintjs", hidden: true });
+    const file = el("input", { type: "file", accept: ".paintjs,.wasm,.cube,.3dl,.xmp", hidden: true });
     file.addEventListener("change", async () => {
         const f = file.files?.[0];
         if (!f)
@@ -1042,7 +1070,8 @@ function pluginsPage(refresh) {
             status.textContent = e.message;
         }
     });
-    const install = el("button", { className: "pushbutton", textContent: plain(tr("Instalar complemento…")), title: tr("Instalar un complemento (.paintjs)") });
+    const install = el("button", { className: "pushbutton", textContent: plain(tr("Instalar complemento…")),
+                                   title: tr("Instalar un complemento (.paintjs, .wasm, .cube, .3dl o .xmp)") });
     install.addEventListener("click", () => file.click());
     const browse = el("button", { className: "pushbutton", textContent: plain(tr("Explorar complementos…")), title: tr("El catálogo de complementos") });
     browse.addEventListener("click", async () => {
@@ -1058,9 +1087,30 @@ function pluginsPage(refresh) {
     });
     sync();
     return [
-        el("p", { textContent: tr("Complementos de efectos y formatos de archivo (.paintjs). Se guardan en este navegador. Tienen el mismo acceso que Kaint: instala solo los que sean de confianza.") }),
+        withFormats(tr("Complementos de efectos y formatos de archivo (%1). Se guardan en este navegador. Los .paintjs tienen el mismo acceso que Kaint: instala solo los que sean de confianza. Aparecen en Efectos > Complementos."), [
+            [".paintjs", tr("De paint.js")],
+            [".wasm", tr("Filtros de PhotoCraft (sin acceso a nada de fuera)")],
+            [".cube", tr("Looks de LightCraft")],
+            [".3dl", tr("Looks de LightCraft")],
+            [".xmp", tr("Ajustes de LightCraft")],
+        ]),
         list, details, el("div", { className: "row-buttons" }, [install, browse, remove, file]), status,
     ];
+}
+
+// Un párrafo con la lista de formatos (%1) resaltada y, al dejar el puntero sobre cada uno, de
+// dónde viene (en vez de decirlo en el texto, que ocupaba mucho).
+function withFormats(text, formats) {
+    const marks = formats.map((_, i) => `\u0001${i}\u0001`);
+    const list = tr("%1, %2, %3, %4 y %5", ...marks);
+    const p = el("p");
+    text.replace("%1", list).split("\u0001").forEach((part, i) => {
+        if (i % 2 === 0)
+            p.append(part);
+        else
+            p.append(el("span", { className: "format-tip", textContent: formats[part][0], title: formats[part][1] }));
+    });
+    return p;
 }
 
 // El catálogo de complementos: cada uno con su botón de instalar.
@@ -1340,6 +1390,10 @@ export async function aboutDialog(version) {
         el("div", { textContent: tr("Bibliotecas de software y contribuciones:"), style: { marginTop: "6px" } }),
         list,
         el("small", { textContent: "Paint.NET is a trademark of dotPDN LLC.", style: { opacity: 0.7 } }),
+        // El sistema de complementos de la web sale del de paint.js: el crédito, discreto, al final.
+        el("small", { className: "plugin-credit" }, [tr("Sistema de complementos basado en el de "),
+            el("a", { href: "https://github.com/LabyStudio/paintdotjs", target: "_blank", rel: "noopener", textContent: "paint.js" }),
+            " (LabyStudio)"]),
     ]));
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
@@ -1361,9 +1415,12 @@ export async function welcomeDialog() {
     cursors.title = tr("Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.");
     cursors.addEventListener("change", () => Settings.set("cursorStyle", Number(cursors.value)));
     const language = select([["en", "English"], ["es", "Español"]], startLanguage);
-    const note = el("small", { textContent: tr("El idioma se aplica al recargar la página."), style: { opacity: 0.7, display: "none" } });
+    // El aviso va en el idioma elegido, no en el actual: es el que entiende quien lo cambia.
+    const notes = { en: "The language is applied when the page reloads.", es: "El idioma se aplica al recargar la página." };
+    const note = el("small", { style: { opacity: 0.7, display: "none" } });
     language.addEventListener("change", () => {
         Settings.set("language", language.value);
+        note.textContent = notes[language.value];
         note.style.display = language.value !== startLanguage ? "" : "none";
     });
     const donate = el("a", { className: "donate", href: "https://ko-fi.com/opposition", target: "_blank", rel: "noopener",

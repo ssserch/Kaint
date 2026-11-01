@@ -10,6 +10,7 @@ import { Selection } from "../core/Selection.js";
 import { clampRect, cloneCanvas, context, createCanvas, unionRect } from "../core/Raster.js";
 import { drawTransformed, prefiltered } from "../core/Resample.js";
 import { handCursor, iconCursor, rotateCursor, toolPixelCursor } from "../ui/Icons.js";
+import { hollowHandles, ringHandle } from "./EditableSteps.js";
 import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
 
@@ -186,7 +187,9 @@ function drawHandle(ctx, c, shape) {
     const dark = "rgba(30,30,30,0.9)", light = "rgba(255,255,255,0.94)";
     ctx.save();
     ctx.lineWidth = 1;
-    if (shape === "circle") {
+    if (shape === "circle" && hollowHandles()) {
+        ringHandle(ctx, c, true);
+    } else if (shape === "circle") {
         ctx.beginPath();
         ctx.arc(c.x, c.y, 4.5, 0, Math.PI * 2);
         ctx.fillStyle = light;
@@ -687,7 +690,9 @@ export class MoveSelectedTool extends MoveToolBase {
             s.floatingData = context(s.floating).getImageData(0, 0, s.floating.width, s.floating.height);
             s.prefilter = {};
         }
-        const pre = prefiltered(s.floatingData, full, gamma && interp !== "nearest", s.prefilter);
+        // El vecino más próximo no se promedia al reducir: como en Paint.NET, cada píxel es uno de la
+        // imagen (promediado se veía suavizado, casi como el bicúbico).
+        const pre = interp === "nearest" ? { image: s.floatingData, matrix: full } : prefiltered(s.floatingData, full, gamma, s.prefilter);
         const m = pre.matrix, iw = pre.image.width, ih = pre.image.height;
         const xs = [0, iw, 0, iw].map((x, i) => m.a * x + m.c * [0, 0, ih, ih][i] + m.e);
         const ys = [0, iw, 0, iw].map((x, i) => m.b * x + m.d * [0, 0, ih, ih][i] + m.f);
@@ -695,7 +700,9 @@ export class MoveSelectedTool extends MoveToolBase {
         const x1 = Math.min(doc.width, Math.ceil(Math.max(...xs)) + 2), y1 = Math.min(doc.height, Math.ceil(Math.max(...ys)) + 2);
         if (x1 <= x0 || y1 <= y0)
             return;
-        const ours = interp !== "nearest" && (interp !== "bilinear" || gamma);
+        // El vecino más próximo exacto (el píxel bajo el centro de cada uno) al soltar; mientras se
+        // arrastra, el del navegador, que da lo mismo.
+        const ours = interp === "nearest" ? exact : interp !== "bilinear" || gamma;
         // Mientras se arrastra, el remuestreo exacto (en JavaScript) solo en zonas pequeñas: en las
         // grandes cada movimiento tardaba demasiado. Al soltar queda el exacto.
         if (ours && (exact || (x1 - x0) * (y1 - y0) <= 40000)) {

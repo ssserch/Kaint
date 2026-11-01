@@ -1,5 +1,7 @@
 #include "app/tools/Handles.h"
 
+#include "app/Theme.h"
+
 #include <QPainter>
 #include <QPainterPath>
 
@@ -11,6 +13,20 @@ void draw(QPainter& p, const QPointF& c, Shape shape)
     p.setRenderHint(QPainter::Antialiasing);
     const QColor dark(30, 30, 30, 230);
     const QColor light(255, 255, 255, 240);
+    // Paint.NET 5: los tiradores son anillos huecos (se ve la imagen dentro), una línea negra fina
+    // sobre un halo blanco para que se vean en cualquier fondo.
+    if (Theme::paintNetLook() && (shape == Shape::Circle || shape == Shape::Square)) {
+        p.setBrush(Qt::NoBrush);
+        for (const auto& [color, width] : {std::pair{QColor(255, 255, 255, 235), 2.6}, std::pair{QColor(0, 0, 0), 1.0}}) {
+            p.setPen(QPen(color, width));
+            if (shape == Shape::Circle)
+                p.drawEllipse(c, 3.5, 3.5);
+            else
+                p.drawRect(QRectF(c - QPointF(3.5, 3.5), QSizeF(7, 7)));
+        }
+        p.restore();
+        return;
+    }
     switch (shape) {
     case Shape::Square:
         p.setPen(QPen(dark, 1));

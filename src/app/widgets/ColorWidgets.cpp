@@ -329,8 +329,64 @@ ColorSwatches::ColorSwatches(QWidget* parent)
     : QWidget(parent)
 {
     setFixedSize(64, 64);
+    setMouseTracking(true);
     setToolTip(tr("Color principal (arriba) y secundario (abajo). La muesca marca la ranura activa (C).\n"
                   "Doble clic para editarlos. X intercambia."));
+}
+
+int ColorSwatches::slotAt(const QPointF& pos) const
+{
+    if (swapRect().contains(pos) || resetRect().contains(pos))
+        return 0;
+    if (primaryRect().contains(pos))
+        return 1;
+    return secondaryRect().contains(pos) ? 2 : 0;
+}
+
+void ColorSwatches::animateHot(qreal& level, QPointer<QVariantAnimation>& anim, qreal target)
+{
+    if (anim)
+        anim->stop();
+    if (qFuzzyCompare(level + 1, target + 1))
+        return;
+    // 100 ms con la curva de paint.js (sale rápido y frena al final).
+    anim = Animations::run(this, level, target, 100, QEasingCurve::OutCubic, [this, &level](qreal v) {
+        level = v;
+        update();
+    });
+}
+
+void ColorSwatches::setHot(int slot, bool pressed)
+{
+    // Solo la que no está activa reacciona al puntero.
+    const int active = m_editingSecondary ? 2 : 1;
+    if (slot == active)
+        slot = 0;
+    if (slot == m_hotSlot && pressed == m_hotPressed)
+        return;
+    m_hotSlot = slot;
+    m_hotPressed = pressed;
+    const qreal on = pressed ? 0.7 : 1.0;
+    animateHot(m_primaryHot, m_primaryHotAnim, slot == 1 ? on : 0.0);
+    animateHot(m_secondaryHot, m_secondaryHotAnim, slot == 2 ? on : 0.0);
+}
+
+void ColorSwatches::mouseMoveEvent(QMouseEvent* e)
+{
+    setHot(slotAt(e->position()), m_hotPressed && (e->buttons() & Qt::LeftButton));
+    QWidget::mouseMoveEvent(e);
+}
+
+void ColorSwatches::mouseReleaseEvent(QMouseEvent* e)
+{
+    setHot(slotAt(e->position()), false);
+    QWidget::mouseReleaseEvent(e);
+}
+
+void ColorSwatches::leaveEvent(QEvent* e)
+{
+    setHot(0, false);
+    QWidget::leaveEvent(e);
 }
 
 void ColorSwatches::setColors(const QColor& primary, const QColor& secondary)
@@ -345,6 +401,10 @@ void ColorSwatches::setEditingSecondary(bool secondary)
     if (secondary == m_editingSecondary)
         return;
     m_editingSecondary = secondary;
+    // La que pasa a estar activa deja de reaccionar al puntero.
+    const int hot = m_hotSlot;
+    m_hotSlot = -1;
+    setHot(hot, false);
     // Las dos ranuras cambian a la vez (como el indicador de paint.js): la que deja de estar
     // activa pierde el pico y su marco adelgaza; la otra gana el pico y su marco crece.
     if (m_switch)
@@ -369,9 +429,12 @@ void ColorSwatches::paintEvent(QPaintEvent*)
     // recortado abajo en el centro. El principal sin activar conserva el marco blanco, más fino
     // y sin pico; el secundario sin activar, solo un marco negro fino. level va de 0 (sin
     // activar) a 1 (activa) y pasa por los valores intermedios mientras se anima el cambio.
-    auto swatch = [&](const QRectF& r, const QColor& c, qreal level, bool framed) {
-        const qreal ring = framed ? 1 + level : 2 * level;  // anillo blanco
-        const qreal line = framed ? 1 : level;              // marco negro de dentro
+    // 'hot' (0 a 1): la ranura sin activar bajo el puntero, como en paint.js, gana el marco negro de
+    // dentro y asoma el pico a tres cuartos de su tamaño.
+    auto swatch = [&](const QRectF& r, const QColor& c, qreal activeLevel, qreal hot, bool framed) {
+        const qreal level = std::max(activeLevel, 0.75 * hot);       // tamaño del pico
+        const qreal ring = framed ? 1 + activeLevel : std::max(2 * activeLevel, hot);  // anillo blanco
+        const qreal line = framed ? 1 : std::max(activeLevel, hot);  // marco negro de dentro
         p.setRenderHint(QPainter::Antialiasing, level > 0);
         p.fillRect(r, Qt::black);
         const QRectF white = r.adjusted(1, 1, -1, -1);
@@ -400,8 +463,8 @@ void ColorSwatches::paintEvent(QPaintEvent*)
         p.fillRect(inner, c);
         p.restore();
     };
-    swatch(secondaryRect(), m_secondary, 1 - m_primaryLevel, false);
-    swatch(primaryRect(), m_primary, m_primaryLevel, true);
+    swatch(secondaryRect(), m_secondary, 1 - m_primaryLevel, m_secondaryHot, false);
+    swatch(primaryRect(), m_primary, m_primaryLevel, m_primaryHot, true);
 
     // Flecha doble para intercambiar (el icono de paint.js).
     p.setRenderHint(QPainter::Antialiasing);
@@ -420,6 +483,8 @@ void ColorSwatches::paintEvent(QPaintEvent*)
 void ColorSwatches::mousePressEvent(QMouseEvent* e)
 {
     const QPointF pos = e->position();
+    if (e->button() == Qt::LeftButton)
+        setHot(slotAt(pos), true);
     if (swapRect().contains(pos))
         emit swapClicked();
     else if (resetRect().contains(pos))

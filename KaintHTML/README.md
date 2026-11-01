@@ -77,8 +77,10 @@ Safari download the saved file and paste with Ctrl+V instead.
   images onto the window to open them.
 - **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
   editable colors, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
-  compact, borderless windows); **English and Spanish** (Kaint's own translations) and Kaint's
-  **animations**. The first visit shows a welcome window with the theme, style and language, and
+  compact, borderless windows, Windows 10 dialogs, gray and blue bar sliders and hollow handles);
+  a top bar color of your own (like Windows' accent color on title bars), the interface font, and
+  floating windows that snap to the edges and to each other; **English and Spanish** (Kaint's own
+  translations) and Kaint's **animations**. The first visit shows a welcome window with the theme, style and language, and
   About looks like Kaint's, with its animated logo.
 - **Settings** like Kaint's: interface (reopen the last session's files, recovery copies), canvas
   (custom background, checkerboard brightness, rulers), tools (the default toolbar options every
@@ -90,6 +92,10 @@ Safari download the saved file and paste with Ctrl+V instead.
 - **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
   palette file to open or save, Rainbow and Small; **More** widens it with the RGB, HSV and
   opacity sliders, their number boxes and the hex code.
+
+- **Plugins**: .paintjs packages, PhotoCraft filters (.wasm, run in a Web Worker with no access
+  to anything outside) and LightCraft looks (.cube, .3dl) and develop presets (.xmp), installed
+  from **Settings → Plugins** or by dropping them on the window.
 
 Not available on the web: Paint.NET (.dll) and native plugins and scanning. Reopening the last session's files needs a browser with access to the system's
 files (Chrome, Edge...). Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use
@@ -116,3 +122,8 @@ Breeze icons (LGPL-3.0-or-later), and the interface
 Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
 LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the
 software Kaint is inspired by.
+
+---
+
+<sub>The plugin system of the web version is based on the one of
+[paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio.</sub>

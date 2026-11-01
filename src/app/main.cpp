@@ -3,6 +3,7 @@
 #include "app/Icons.h"
 #include "app/MainWindow.h"
 #include "app/Theme.h"
+#include "app/WindowFrame.h"
 #include "app/dialogs/SettingsDialog.h"
 #include "core/plugins/PluginManager.h"
 
@@ -177,13 +178,24 @@ int main(int argc, char** argv)
                                         QStringLiteral("yes|no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-translucent"),
                                         QObject::tr("Ventanas translúcidas en la captura (yes o no)."), QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-frame"),
+                                        QObject::tr("Barra de título de Windows 10 dibujada por Kaint en la captura (yes o no)."),
+                                        QStringLiteral("yes|no")));
     parser.process(app);
 
     AppState::instance()->load();
     Theme::captureSystemDefaults();
     Theme::initStyle(scheme);
-    Theme::setLook(Theme::Look(AppSettings::load().uiStyle));
+    const AppSettings startup = AppSettings::load();
+    Theme::setLook(Theme::Look(startup.uiStyle));
+    Theme::setUiFont(startup.uiFontFamily, startup.uiFontSize);
+    Theme::setCustomTitleBarColor(startup.titleBarColor);
     Theme::apply(scheme);
+    // Linux con el estilo de Paint.NET: la barra de título de Windows 10 dibujada por Kaint (en las
+    // capturas de muestra, solo si se pide).
+    const QString previewFrame = parser.value(QStringLiteral("preview-frame")).toLower();
+    WindowFrame::setEnabled(Theme::paintNetLook() && startup.windows10Frame
+                            && (!preview || previewFrame == QLatin1String("yes") || previewFrame == QLatin1String("true")));
 
     if (preview) {
         const QStringList size = parser.value(QStringLiteral("preview-size")).toLower().split(QLatin1Char('x'));

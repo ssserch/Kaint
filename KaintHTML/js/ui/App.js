@@ -6,6 +6,7 @@ import { Effects, Categories, defaultValues, findEffect } from "../core/Effects.
 import { animationFrames, baseName, download, embeddedProfile, encode, flattenedImage, formatFor, openFile, OpenAccept, OpenExtensions, SaveFormats } from "../core/ImageIO.js";
 import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
+import { isCraftFile } from "../plugins/Craft.js";
 import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
 import { scaleImage } from "../core/Resample.js";
 import { transformPixels } from "../core/ColorProfiles.js";
@@ -134,7 +135,8 @@ export class App extends EventTarget {
     applyTheme() {
         const root = document.documentElement;
         const key = JSON.stringify([Settings.get("colorScheme"), Settings.get("customTheme"), Settings.get("canvasBorderLight"),
-                                    Settings.get("canvasBorderDark"), matchMedia("(prefers-color-scheme: dark)").matches]);
+                                    Settings.get("canvasBorderDark"), Settings.get("titleBarColor"),
+                                    matchMedia("(prefers-color-scheme: dark)").matches]);
         if (this.themeKey !== key) {
             this.themeKey = key;
             applyThemeColors(root, Settings.get("colorScheme"), matchMedia("(prefers-color-scheme: dark)").matches);
@@ -160,6 +162,17 @@ export class App extends EventTarget {
         root.classList.toggle("mnemonics", !!Settings.get("menuMnemonics"));
         root.classList.toggle("no-history-jumps", Settings.get("historyJumpButtons") === false);
         root.style.setProperty("--window-border", `${Math.max(1, Math.min(12, Number(Settings.get("panelBorder")) || 1))}px`);
+        // Fuente de la interfaz elegida en Configuración (si no, la del tema) y su tamaño en puntos.
+        const family = String(Settings.get("uiFontFamily") || "").replace(/["\\]/g, "").trim();
+        if (family)
+            root.style.setProperty("--ui-font", `"${family}"`);
+        else
+            root.style.removeProperty("--ui-font");
+        const points = Math.max(0, Math.min(24, Number(Settings.get("uiFontSize")) || 0));
+        if (points)
+            root.style.setProperty("--ui-font-size", `${Math.round((points * 96) / 72)}px`);
+        else
+            root.style.removeProperty("--ui-font-size");
         this.updateToolIconColors();
         this.view.update();
         updateActions();
@@ -1071,7 +1084,7 @@ export class App extends EventTarget {
     }
 
     async openFile(file, handle = null) {
-        if (/\.paintjs$/i.test(file.name)) {
+        if (/\.paintjs$/i.test(file.name) || isCraftFile(file.name)) {
             await this.installPlugin(file);
             return;
         }

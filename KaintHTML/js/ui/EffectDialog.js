@@ -1133,10 +1133,23 @@ export async function effectDialog(app, effect, initial) {
     if (effect.note)
         root.appendChild(el("div", { className: "fx-note", textContent: tr(effect.note) }));
 
+    // Como en paint.js: una casilla para ver la imagen sin el efecto (o con él) mientras se ajusta.
+    let shown = true;
+    const previewBox = el("input", { type: "checkbox", checked: true });
+    previewBox.addEventListener("change", () => {
+        shown = previewBox.checked;
+        // Se sigue calculando: al volver a marcarla (o al aceptar) ya está el último resultado.
+        if (!shown)
+            doc.setPreview(null);
+        else if (last)
+            doc.setPreview({ layer, canvas: preview }, last.rect);
+    });
+    dlg.buttons.appendChild(el("label", { className: "fx-preview", title: tr("Ver en la imagen cómo queda el efecto mientras se cambian sus opciones.") },
+                               [previewBox, tr("Vista previa")]));
     // Botones: los propios del editor (Restablecer, Automático) a la izquierda.
     for (const b of extraButtons)
         dlg.buttons.appendChild(b);
-    extraButtons.at(-1)?.classList.add("push-left");
+    (extraButtons.at(-1) || dlg.buttons.lastElementChild).classList.add("push-left");
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
 
@@ -1176,7 +1189,8 @@ export async function effectDialog(app, effect, initial) {
                 return;
             last = { key, rect: res.rect, data: res.data };
             context(preview).putImageData(res.data, res.rect.x, res.rect.y);
-            doc.setPreview({ layer, canvas: preview }, res.rect);
+            if (shown)
+                doc.setPreview({ layer, canvas: preview }, res.rect);
         }, (err) => {
             if (job === current) {
                 job = null;

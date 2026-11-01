@@ -49,37 +49,114 @@ QImage multiBox(const QImage& src, const QRect& area, double radius, int passes,
     return work.copy(area.translated(-big.topLeft()));
 }
 
-// Aplica 'blur' con realce de gamma ("Potenciar Gamma" de Paint.NET 5: 0 = sin realce).
-void blurWithGamma(const RenderArgs& a, double boost, int margin,
-                   const std::function<QImage(const QImage&, const QRect&)>& blur)
+// Pasadas de caja (desde, hasta) que hace un desenfoque en cada eje: las mismas que tentBlur,
+// boxBlur y multiBox, para repetirlas en coma flotante.
+using BoxPlan = std::vector<std::pair<int, int>>;
+
+BoxPlan tentPlan(int r)
 {
-    if (boost <= 0.0001) {
+    if (r <= 0)
+        return {};
+    return {{-(r / 2), (r + 1) / 2}, {-((r + 1) / 2), r / 2}};
+}
+
+BoxPlan multiBoxPlan(double radius, int passes)
+{
+    const int r = std::max(0, int(std::lround(radius)));
+    if (passes == 2 || r == 0)
+        return tentPlan(r);
+    const double variance = 2.0 * ((r + 1.0) * (r + 1.0) - 1.0) / 12.0;
+    const int box = std::max(1, int(std::lround((std::sqrt(12.0 * variance / passes + 1.0) - 1.0) / 2.0)));
+    return BoxPlan(size_t(passes), {-box, box});
+}
+
+// Una pasada de caja sobre 4 canales en coma flotante (alfa y color premultiplicado): cada valor
+// es la media de [i + lo, i + hi] dentro de la imagen, como boxPass.
+void floatBoxPass(const std::vector<float>& in, std::vector<float>& out, int w, int h, int lo, int hi, bool horizontal,
+                  const std::atomic_bool& cancel)
+{
+    const int n = horizontal ? w : h;
+    const int lines = horizontal ? h : w;
+    const size_t step = horizontal ? 4 : size_t(w) * 4;
+    parallelRows(0, lines, [&](int l0, int l1) {
+        for (int line = l0; line < l1 && !cancel; ++line) {
+            const size_t base = horizontal ? size_t(line) * size_t(w) * 4 : size_t(line) * 4;
+            double sum[4] = {0, 0, 0, 0};
+            int count = 0;
+            auto add = [&](int i, double sign) {
+                const float* p = &in[base + size_t(i) * step];
+                for (int c = 0; c < 4; ++c)
+                    sum[c] += sign * p[c];
+            };
+            for (int i = std::max(0, lo); i <= std::min(n - 1, hi); ++i, ++count)
+                add(i, 1);
+            for (int i = 0; i < n; ++i) {
+                float* d = &out[base + size_t(i) * step];
+                const double k = 1.0 / std::max(1, count);
+                for (int c = 0; c < 4; ++c)
+                    d[c] = float(sum[c] * k);
+                const int leave = i + lo, enter = i + hi + 1;
+                if (leave >= 0 && leave < n) {
+                    add(leave, -1);
+                    --count;
+                }
+                if (enter >= 0 && enter < n) {
+                    add(enter, 1);
+                    ++count;
+                }
+            }
+        }
+    });
+}
+
+// Aplica 'blur' con realce de gamma ("Potenciar Gamma" de Paint.NET 5: 0 = sin realce; negativo,
+// dominan las sombras). Con realce, las mismas pasadas ('plan') se hacen en coma flotante, como
+// Paint.NET: en 8 bits, elevar los colores a una gamma lejos de 1 dejaba pocos tonos.
+void blurWithGamma(const RenderArgs& a, double boost, int margin,
+                   const std::function<QImage(const QImage&, const QRect&)>& blur, const BoxPlan& plan)
+{
+    if (std::abs(boost) <= 0.0001 || plan.empty()) {
         copyBlurred(a, blur(a.src, a.roi));
         return;
     }
     const GammaTables gt(1.0 + boost);
     const QRect big = a.roi.adjusted(-margin, -margin, margin, margin).intersected(a.src.rect());
-    QImage boosted = a.src.copy(big);
-    for (int y = 0; y < boosted.height(); ++y) {
-        QRgb* row = reinterpret_cast<QRgb*>(boosted.scanLine(y));
-        for (int x = 0; x < boosted.width(); ++x) {
-            const QRgb u = qUnpremultiply(row[x]);
-            auto f = [&](int c) { return clamp255f(gt.forward[size_t(c)] * 255.f); };
-            row[x] = qPremultiply(qRgba(f(qRed(u)), f(qGreen(u)), f(qBlue(u)), qAlpha(u)));
+    const int w = big.width(), h = big.height();
+    std::vector<float> buf(size_t(w) * size_t(h) * 4), tmp(buf.size());
+    const ConstPixels in(a.src);
+    parallelRows(0, h, [&](int y0, int y1) {
+        for (int y = y0; y < y1; ++y) {
+            const QRgb* s = in.row(big.top() + y) + big.left();
+            float* d = &buf[size_t(y) * size_t(w) * 4];
+            for (int x = 0; x < w; ++x, d += 4) {
+                const QRgb u = qUnpremultiply(s[x]);
+                const float al = qAlpha(u) / 255.f;
+                d[0] = al;
+                d[1] = al * gt.forward[size_t(qRed(u))];
+                d[2] = al * gt.forward[size_t(qGreen(u))];
+                d[3] = al * gt.forward[size_t(qBlue(u))];
+            }
         }
-    }
-    const QImage blurred = blur(boosted, QRect(a.roi.topLeft() - big.topLeft(), a.roi.size()));
-    if (blurred.isNull())
+    });
+    for (const bool horizontal : {true, false})
+        for (const auto& [lo, hi] : plan) {
+            floatBoxPass(buf, tmp, w, h, lo, hi, horizontal, a.cancel);
+            std::swap(buf, tmp);
+        }
+    if (a.cancel)
         return;
     const Pixels out(a.dst);
-    const ConstPixels bl(blurred);
     forRows(a, [&](int y) {
-        const QRgb* b = bl.row(y - a.roi.top());
+        const float* b = &buf[(size_t(y - big.top()) * size_t(w) + size_t(a.roi.left() - big.left())) * 4];
         QRgb* d = out.row(y);
-        for (int x = a.roi.left(); x <= a.roi.right(); ++x) {
-            const QRgb u = qUnpremultiply(b[x - a.roi.left()]);
-            auto back = [&](int c) { return gt.back(c / 255.f); };
-            d[x] = qPremultiply(qRgba(back(qRed(u)), back(qGreen(u)), back(qBlue(u)), qAlpha(u)));
+        for (int x = a.roi.left(); x <= a.roi.right(); ++x, b += 4) {
+            const float al = b[0];
+            if (al <= 0.5f / 255.f) {
+                d[x] = 0;
+                continue;
+            }
+            auto back = [&](float v) { return gt.back(v / al); };
+            d[x] = qPremultiply(qRgba(back(b[1]), back(b[2]), back(b[3]), clamp255f(al * 255.f)));
         }
     });
 }
@@ -89,7 +166,8 @@ void renderGaussian(const RenderArgs& a)
     const double radius = dval(a.values, "radius");
     const int passes = std::clamp(ival(a.values, "quality"), 1, 4);
     blurWithGamma(a, dval(a.values, "gamma"), tentMargin(int(std::ceil(radius))) + 4,
-                  [&](const QImage& img, const QRect& area) { return multiBox(img, area, radius, passes, a.cancel); });
+                  [&](const QImage& img, const QRect& area) { return multiBox(img, area, radius, passes, a.cancel); },
+                  multiBoxPlan(radius, passes));
 }
 
 void renderBokeh(const RenderArgs& a)
@@ -326,7 +404,8 @@ void renderSquare(const RenderArgs& a)
 {
     const int radius = std::max(0, int(std::lround(dval(a.values, "radius"))));
     blurWithGamma(a, dval(a.values, "gamma"), radius + 2,
-                  [&](const QImage& img, const QRect& area) { return boxBlur(img, area, radius, a.cancel); });
+                  [&](const QImage& img, const QRect& area) { return boxBlur(img, area, radius, a.cancel); },
+                  radius > 0 ? BoxPlan{{-radius, radius}} : BoxPlan{});
 }
 
 void renderSurface(const RenderArgs& a)
@@ -395,7 +474,7 @@ void registerBlurs(QList<const Effect*>& list)
     using P = EffectParam;
     auto add = [&](SimpleEffect::Def def) { list.append(new SimpleEffect(std::move(def))); };
     add({"bokeh", QObject::tr("Bokeh"), catBlurs(), "blurfx", {},
-         {P::real("radius", QObject::tr("Radio"), 1, 200, 25, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), 0, 7, 0, 2),
+         {P::real("radius", QObject::tr("Radio"), 1, 200, 25, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), -0.99, 7, 0, 2),
           P::integer("quality", QObject::tr("Calidad"), 1, 8, 3)},
          renderBokeh});
     add({"fragment", QObject::tr("Fragmento"), catBlurs(), "blurfx", {},
@@ -404,7 +483,7 @@ void registerBlurs(QList<const Effect*>& list)
           P::angle("rotation", QObject::tr("Rotación"), 0, 360, 0)},
          renderFragment});
     add({"gaussianblur", QObject::tr("Desenfoque gaussiano"), catBlurs(), "blurimage", {},
-         {P::real("radius", QObject::tr("Radio"), 0, 200, 2, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), 0, 7, 0, 2),
+         {P::real("radius", QObject::tr("Radio"), 0, 200, 2, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), -0.99, 7, 0, 2),
           P::integer("quality", QObject::tr("Calidad"), 1, 4, 3)},
          renderGaussian});
     add({"median", QObject::tr("Desenfoque por mediana"), catBlurs(), "blurfx", {},
@@ -427,7 +506,7 @@ void registerBlurs(QList<const Effect*>& list)
           P::integer("smoothness", QObject::tr("Suavizado"), 1, 10, 3)},
          renderSketchBlur});
     add({"squareblur", QObject::tr("Desenfoque cuadrado"), catBlurs(), "blurfx", {},
-         {P::real("radius", QObject::tr("Radio"), 1, 200, 6, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), 0, 7, 0, 2)},
+         {P::real("radius", QObject::tr("Radio"), 1, 200, 6, 1), P::real("gamma", QObject::tr("Potenciar Gamma"), -0.99, 7, 0, 2)},
          renderSquare});
     add({"surfaceblur", QObject::tr("Desenfoque de superficie"), catBlurs(), "blurfx", {},
          {P::integer("radius", QObject::tr("Radio"), 1, 100, 6),

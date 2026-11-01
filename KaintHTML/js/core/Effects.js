@@ -1404,26 +1404,81 @@ function multiBox(src, area, radius, passes) {
     return crop(work, translated(area, -big.left, -big.top));
 }
 
-// Aplica 'blur' con realce de gamma ("Potenciar Gamma" de Paint.NET 5: 0 = sin realce).
-function blurWithGamma(a, boost, margin, blur) {
-    if (boost <= 0.0001) {
+// Pasadas de caja [desde, hasta] que hace un desenfoque en cada eje: las mismas que tentBlur,
+// boxBlur y multiBox, para repetirlas en coma flotante.
+function tentPlan(r) {
+    return r <= 0 ? [] : [[-Math.floor(r / 2), Math.floor((r + 1) / 2)], [-Math.floor((r + 1) / 2), Math.floor(r / 2)]];
+}
+
+function multiBoxPlan(radius, passes) {
+    const r = Math.max(0, lround(radius));
+    if (passes === 2 || r === 0)
+        return tentPlan(r);
+    const variance = (2 * ((r + 1) * (r + 1) - 1)) / 12;
+    const box = Math.max(1, lround((Math.sqrt((12 * variance) / passes + 1) - 1) / 2));
+    return Array.from({ length: passes }, () => [-box, box]);
+}
+
+// Una pasada de caja sobre 4 canales en coma flotante (alfa y color premultiplicado): cada valor
+// es la media de [i + lo, i + hi] dentro de la imagen, como boxPass.
+function floatBoxPass(src, dst, w, h, lo, hi, horizontal) {
+    const n = horizontal ? w : h, lines = horizontal ? h : w, step = horizontal ? 4 : w * 4;
+    for (let line = 0; line < lines; ++line) {
+        const base = horizontal ? line * w * 4 : line * 4;
+        let s0 = 0, s1 = 0, s2 = 0, s3 = 0, count = 0;
+        for (let i = Math.max(0, lo); i <= Math.min(n - 1, hi); ++i, ++count) {
+            const o = base + i * step;
+            s0 += src[o]; s1 += src[o + 1]; s2 += src[o + 2]; s3 += src[o + 3];
+        }
+        for (let i = 0; i < n; ++i) {
+            const o = base + i * step, k = 1 / Math.max(1, count);
+            dst[o] = s0 * k; dst[o + 1] = s1 * k; dst[o + 2] = s2 * k; dst[o + 3] = s3 * k;
+            const leave = i + lo, enter = i + hi + 1;
+            if (leave >= 0 && leave < n) {
+                const q = base + leave * step;
+                s0 -= src[q]; s1 -= src[q + 1]; s2 -= src[q + 2]; s3 -= src[q + 3];
+                --count;
+            }
+            if (enter >= 0 && enter < n) {
+                const q = base + enter * step;
+                s0 += src[q]; s1 += src[q + 1]; s2 += src[q + 2]; s3 += src[q + 3];
+                ++count;
+            }
+        }
+    }
+}
+
+// Aplica 'blur' con realce de gamma ("Potenciar Gamma" de Paint.NET 5: 0 = sin realce; negativo,
+// dominan las sombras). Con realce, las mismas pasadas ('plan') se hacen en coma flotante, como
+// Paint.NET: en 8 bits, elevar los colores a una gamma lejos de 1 dejaba pocos tonos.
+function blurWithGamma(a, boost, margin, blur, plan) {
+    if (Math.abs(boost) <= 0.0001 || !plan.length) {
         blit(a.dst, blur(a.src, band(a)), a.roi.left, a.y0);
         return;
     }
     const gt = new GammaTables(1 + boost);
     const area = band(a), big = intersected(adjusted(area, margin), imageRect(a.src));
-    const boosted = crop(a.src, big);
-    const f = (c) => clamp255f(gt.forward[c] * 255);
-    for (let i = 0; i < boosted.px.length; ++i) {
-        const u = qUnpremultiply(boosted.px[i]);
-        boosted.px[i] = qPremultiply(qRgba(f(qRed(u)), f(qGreen(u)), f(qBlue(u)), qAlpha(u)));
-    }
-    const bl = blur(boosted, translated(area, -big.left, -big.top));
-    const d = a.dst.px, w = a.dst.w, back = (c) => gt.back(c / 255);
+    const w = big.width, h = big.height, sw = a.src.w, px = a.src.px, pm = a.src.premul;
+    let buf = new Float32Array(w * h * 4), tmp = new Float32Array(w * h * 4);
+    for (let y = 0; y < h; ++y)
+        for (let x = 0; x < w; ++x) {
+            const p = px[(big.top + y) * sw + big.left + x], u = pm ? qUnpremultiply(p) : p, al = qAlpha(u) / 255, o = (y * w + x) * 4;
+            buf[o] = al;
+            buf[o + 1] = al * gt.forward[qRed(u)];
+            buf[o + 2] = al * gt.forward[qGreen(u)];
+            buf[o + 3] = al * gt.forward[qBlue(u)];
+        }
+    for (const horizontal of [true, false])
+        for (const [lo, hi] of plan) {
+            floatBoxPass(buf, tmp, w, h, lo, hi, horizontal);
+            [buf, tmp] = [tmp, buf];
+        }
+    const d = a.dst.px, dw = a.dst.w, back = (v, al) => gt.back(v / al);
     for (let y = a.y0; y <= a.y1; ++y)
         for (let x = a.roi.left; x <= a.roi.right; ++x) {
-            const u = qUnpremultiply(bl.px[(y - a.y0) * bl.w + x - a.roi.left]);
-            d[y * w + x] = qPremultiply(qRgba(back(qRed(u)), back(qGreen(u)), back(qBlue(u)), qAlpha(u)));
+            const o = ((y - big.top) * w + x - big.left) * 4, al = buf[o];
+            d[y * dw + x] = al <= 0.5 / 255 ? 0
+                : qPremultiply(qRgba(back(buf[o + 1], al), back(buf[o + 2], al), back(buf[o + 3], al), clamp255f(al * 255)));
         }
 }
 
@@ -1523,7 +1578,7 @@ function renderZoomBlur(a) {
 const blurs = [
     {
         id: "bokeh", name: "Bokeh", category: "blurs",
-        params: [P.real("radius", "Radio", 1, 200, 25, 1), P.real("gamma", "Potenciar Gamma", 0, 7, 0, 2), P.int("quality", "Calidad", 1, 8, 3)],
+        params: [P.real("radius", "Radio", 1, 200, 25, 1), P.real("gamma", "Potenciar Gamma", -0.99, 7, 0, 2), P.int("quality", "Calidad", 1, 8, 3)],
         run: renderBokeh,
     },
     {
@@ -1553,10 +1608,11 @@ const blurs = [
     },
     {
         id: "gaussianblur", name: "Desenfoque gaussiano", category: "blurs",
-        params: [P.real("radius", "Radio", 0, 200, 2, 1), P.real("gamma", "Potenciar Gamma", 0, 7, 0, 2), P.int("quality", "Calidad", 1, 4, 3)],
+        params: [P.real("radius", "Radio", 0, 200, 2, 1), P.real("gamma", "Potenciar Gamma", -0.99, 7, 0, 2), P.int("quality", "Calidad", 1, 4, 3)],
         run(a) {
             const radius = a.values.radius, passes = clamp(Math.round(a.values.quality), 1, 4);
-            blurWithGamma(a, a.values.gamma, tentMargin(Math.ceil(radius)) + 4, (img, area) => multiBox(img, area, radius, passes));
+            blurWithGamma(a, a.values.gamma, tentMargin(Math.ceil(radius)) + 4, (img, area) => multiBox(img, area, radius, passes),
+                          multiBoxPlan(radius, passes));
         },
     },
     {
@@ -1653,10 +1709,10 @@ const blurs = [
     },
     {
         id: "squareblur", name: "Desenfoque cuadrado", category: "blurs",
-        params: [P.real("radius", "Radio", 1, 200, 6, 1), P.real("gamma", "Potenciar Gamma", 0, 7, 0, 2)],
+        params: [P.real("radius", "Radio", 1, 200, 6, 1), P.real("gamma", "Potenciar Gamma", -0.99, 7, 0, 2)],
         run(a) {
             const radius = Math.max(0, lround(a.values.radius));
-            blurWithGamma(a, a.values.gamma, radius + 2, (img, area) => boxBlur(img, area, radius));
+            blurWithGamma(a, a.values.gamma, radius + 2, (img, area) => boxBlur(img, area, radius), radius > 0 ? [[-radius, radius]] : []);
         },
     },
     {

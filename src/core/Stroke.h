@@ -5,6 +5,8 @@
 #include <QImage>
 #include <QPointF>
 
+#include <vector>
+
 enum class StrokeKind { Paint, Erase, Clone, Recolor };
 
 struct StrokeParams {
@@ -27,8 +29,12 @@ struct StrokeParams {
     bool recolorSampleOnce = false;
 };
 
-// Trazo con máscara de cobertura: cada "toque" del pincel guarda el máximo en una máscara
-// Alpha8 y la capa se recalcula como original + color * máscara.
+// Trazo con máscara de cobertura, como el pincel de Paint.NET: cada toque del pincel se acumula
+// en una máscara Alpha8 ("encima": donde se solapan, el borde suave se va llenando) y la capa se
+// recalcula como original + color * máscara, así un color translúcido no se oscurece dentro del
+// mismo trazo. El borde del toque es un disco desenfocado en luz lineal según la dureza; con la
+// trayectoria suavizada, el recorrido pasa por los puntos del ratón con una curva (Catmull-Rom
+// centrípeta) y el último tramo se vuelve a dibujar hasta que llega el siguiente punto.
 class StrokeEngine {
 public:
     void begin(Document* doc, LayerPtr layer, const StrokeParams& params);
@@ -39,11 +45,29 @@ public:
     QPointF lastPoint() const { return m_last; }
 
 private:
-    void segmentTo(QPointF pos, qreal pressure);
-    QRect dab(QPointF center, qreal radius);
+    struct Point {
+        QPointF pos;
+        qreal pressure = 1;
+    };
+    // Dónde va el siguiente toque a lo largo del recorrido.
+    struct Walker {
+        bool started = false;
+        Point last;
+        qreal next = 0;
+    };
+    void buildProfile();
+    float profile(qreal u) const;
+    qreal diameterFor(qreal pressure) const;
+    qreal spacingFor(qreal diameter) const;
+    // Puntos del tramo de m_points[i] a m_points[i + 1] (con la curva, si está suavizado).
+    void segment(int i, QList<Point>& out) const;
+    QRect walk(Walker& walker, const QList<Point>& path);
+    QRect reach(const QList<Point>& path) const;
+    QRect restoreWet();
+    QRect drawWet();
+    QRect dab(QPointF center, qreal diameter);
     QRect pixelLine(QPoint a, QPoint b);
     void composite(const QRect& r);
-    qreal radiusFor(qreal pressure) const;
 
     Document* m_doc = nullptr;
     LayerPtr m_layer;
@@ -52,9 +76,16 @@ private:
     QImage m_mask;
     QRect m_total;
     QPointF m_last;
-    QPointF m_target;
-    QPointF m_raw;
-    qreal m_lastPressure = 1.0;
-    qreal m_carry = 0;
+    QList<Point> m_points;
+    int m_drySegments = 0;
+    Walker m_walker;
+    // El tramo provisional (el último): su zona de la máscara antes de dibujarlo.
+    QRect m_wetRect;
+    QImage m_wetBackup;
+    // Perfil del toque en radios del pincel: cobertura de 0 a m_extent, el disco y su desenfoque.
+    std::vector<float> m_profile;
+    qreal m_extent = 1;
+    qreal m_edge = 1;
+    qreal m_sigma = 0;
     QRgb m_recolorTarget = 0;
 };

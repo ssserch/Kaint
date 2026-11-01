@@ -4,7 +4,7 @@ import { AppState } from "../AppState.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
 import { FillPatterns } from "../core/FillPattern.js";
 import { el } from "./Dialogs.js";
-import { icon, ShapeGroups, shapeName } from "./Icons.js";
+import { dashIcon, icon, ShapeGroups, shapeName } from "./Icons.js";
 import { CustomShapes } from "../core/CustomShapes.js";
 import { popupMenu } from "./Menu.js";
 import { tr } from "../i18n.js";
@@ -42,18 +42,22 @@ function kit(model) {
     const tools = () => model.tools;
 
     // Botón con menú de opciones (ChoiceButton de Kaint): choices = [[valor, icono, texto], ...].
-    function choice(tip, key, choices, { showText = false } = {}) {
+    // El icono puede ser un nombre o una función que devuelve el elemento (los guiones, anchos).
+    // Con 'grid', el menú es una cuadrícula de iconos de esas columnas (el de formas de Paint.NET).
+    function choice(tip, key, choices, { showText = false, grid = 0 } = {}) {
         const b = el("button", { className: "tbutton choice", title: tip });
         const real = () => choices.filter((c) => Array.isArray(c));
+        const iconOf = (spec) => (typeof spec === "function" ? spec() : spec ? icon(spec, 16) : null);
         const refresh = () => {
             const current = real().find(([v]) => v === tools()[key]) || real()[0];
-            b.replaceChildren(...[current[1] ? icon(current[1], 16) : null, showText ? el("span", { textContent: current[2] }) : null,
+            b.replaceChildren(...[iconOf(current[1]), showText ? el("span", { textContent: current[2] }) : null,
                                    el("span", { className: "arrow", textContent: "▼" })].filter(Boolean));
         };
         b.addEventListener("click", () => {
             const r = b.getBoundingClientRect();
             popupMenu(choices.map((c) => (Array.isArray(c)
-                ? { text: c[2], icon: c[1], checked: tools()[key] === c[0], run: () => set({ [key]: c[0] }) } : c)), r.left, r.bottom);
+                ? { text: c[2], icon: typeof c[1] === "function" ? c[1]() : c[1], checked: tools()[key] === c[0], run: () => set({ [key]: c[0] }) }
+                : c)), r.left, r.bottom, { grid });
         });
         refresh();
         b.refresh = refresh;
@@ -73,13 +77,17 @@ function kit(model) {
     // Barra con el valor dentro (BarSlider de Kaint), de min a max, con el texto que devuelve format.
     function barSlider(key, min, max, format) {
         const bar = el("div", { className: "barslider" });
-        const fill = el("div", { className: "fill" });
+        // Con el estilo de Paint.NET el valor va en negro sobre el gris y en blanco sobre lo lleno:
+        // una copia del texto dentro de la parte llena, recortada por ella.
+        const onFill = el("div", { className: "label on-fill" });
+        const fill = el("div", { className: "fill" }, [onFill]);
         const text = el("div", { className: "label" });
         bar.append(fill, text);
         const update = () => {
             const v = tools()[key], f = (v - min) / (max - min);
             fill.style.width = `${f * 100}%`;
-            text.textContent = format(v);
+            text.textContent = onFill.textContent = format(v);
+            onFill.style.width = `${bar.clientWidth || 130}px`;
             text.classList.toggle("inside", f > 0.25);
         };
         const setFrom = (e) => {
@@ -325,7 +333,7 @@ export class ToolOptions {
             this.group(choice(tr("Forma (A / Mayús+A)"), "shape", [
                 ...ShapeGroups.flatMap(([group, ids]) => [{ section: tr(group) }, ...ids.map((id) => [id, `opt-shape:${id}`, tr(shapeName(id))])]),
                 ...(CustomShapes.all().length ? [{ section: tr("Formas personalizadas") }] : []),
-                ...CustomShapes.all().map((c) => [`custom:${c.id}`, `opt-shape:custom:${c.id}`, c.name])]));
+                ...CustomShapes.all().map((c) => [`custom:${c.id}`, `opt-shape:custom:${c.id}`, c.name])], { grid: 8, showText: true }));
             break;
         case "shapeStyle":
             this.group(choice(tr("Tipo de dibujo"), "shapeStyle", [
@@ -335,8 +343,9 @@ export class ToolOptions {
             break;
         case "dash":
             this.group(label(tr("Estilo:")), choice(tr("Estilo de guion ( . )"), "dash", [
-                ["solid", "opt-dash:solid", tr("Sólido")], ["dash", "opt-dash:dash", tr("Guiones")], ["dot", "opt-dash:dot", tr("Punteado")],
-                ["dashdot", "opt-dash:dashdot", tr("Guion, punto")], ["dashdotdot", "opt-dash:dashdotdot", tr("Guion, punto, punto")]]));
+                ["solid", () => dashIcon("solid"), tr("Sólido")], ["dash", () => dashIcon("dash"), tr("Guiones")],
+                ["dot", () => dashIcon("dot"), tr("Punteado")], ["dashdot", () => dashIcon("dashdot"), tr("Guion, punto")],
+                ["dashdotdot", () => dashIcon("dashdotdot"), tr("Guion, punto, punto")]]));
             break;
         case "caps": {
             const caps = (end) => [["flat", `opt-cap:flat:${end}`, tr("Línea")], ["round", `opt-cap:round:${end}`, tr("Redondeado")],

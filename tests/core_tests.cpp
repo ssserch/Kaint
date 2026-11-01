@@ -15,9 +15,11 @@
 #include "core/Stroke.h"
 #include "core/effects/Effect.h"
 #include "core/effects/EffectUtils.h"
+#include "core/plugins/CraftPlugins.h"
 #include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginEffects.h"
 #include "core/plugins/PluginManager.h"
+#include "core/plugins/Wasm.h"
 
 #include <QBuffer>
 #include <QElapsedTimer>
@@ -1307,6 +1309,77 @@ static void testPackaging()
     CHECK(batch.contains(QStringLiteral("--setup")) && batch.contains(QStringLiteral("packaging\\windows\\kaint.nsi")));
 }
 
+// Intérprete de WebAssembly y complementos de PhotoCraft y LightCraft (CraftPlugins).
+static void testCraftPlugins()
+{
+    auto module = [](std::initializer_list<int> bytes) {
+        QByteArray b;
+        for (const int v : bytes)
+            b += char(v);
+        return b;
+    };
+    const QByteArray header = module({0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00});
+    QString error;
+    // Un bucle infinito se detiene por su presupuesto, sin colgar.
+    const auto spin = Wasm::parse(header + module({0x01, 0x04, 0x01, 0x60, 0x00, 0x00, 0x03, 0x02, 0x01, 0x00, 0x07, 0x08, 0x01, 0x04, 's',
+                                                   'p', 'i', 'n', 0x00, 0x00, 0x0a, 0x09, 0x01, 0x07, 0x00, 0x03, 0x40, 0x0c, 0x00,
+                                                   0x0b, 0x0b}),
+                                  &error);
+    CHECK(spin != nullptr);
+    Wasm::Limits limits;
+    limits.fuel = 2'000'000;
+    auto instance = Wasm::Instance::create(spin, limits, &error);
+    CHECK(instance != nullptr);
+    CHECK(instance && !instance->call("spin", {}, nullptr, &error) && !error.isEmpty());
+    // Dividir por cero es una trampa (un error), no un cuelgue.
+    const auto div = Wasm::parse(header + module({0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01, 0x03,
+                                                  'd', 'i', 'v', 0x00, 0x00, 0x0a, 0x09, 0x01, 0x07, 0x00, 0x41, 0x01, 0x41, 0x00,
+                                                  0x6d, 0x0b}),
+                                 &error);
+    CHECK(div != nullptr);
+    auto divInstance = Wasm::Instance::create(div, Wasm::Limits(), &error);
+    error.clear();
+    CHECK(divInstance && !divInstance->call("div", {}, nullptr, &error) && !error.isEmpty());
+    // Lo que importa algo de fuera se rechaza.
+    const auto imports = Wasm::parse(header + module({0x01, 0x04, 0x01, 0x60, 0x00, 0x00, 0x02, 0x0b, 0x01, 0x03, 'e', 'n', 'v', 0x03, 'l',
+                                                      'o', 'g', 0x00, 0x00}),
+                                     &error);
+    CHECK(imports && Wasm::imports(*imports) == QStringList{QStringLiteral("env.log")});
+    CHECK(!Wasm::Instance::create(imports, Wasm::Limits(), &error));
+    CHECK(!Wasm::parse(QByteArray("no es wasm"), &error));
+
+    // Un filtro de verdad (compilado de tests/craftplugin/tint.c): sus parámetros en el orden en
+    // que los declara y el resultado esperado.
+    CraftPlugins::Info tint = CraftPlugins::load(QStringLiteral(KAINT_SOURCE_DIR "/tests/craftplugin/tint.wasm"));
+    CHECK(tint.errors.isEmpty() && tint.effects.size() == 1 && tint.name == QLatin1String("Test Tint"));
+    if (tint.effects.size() == 1) {
+        const Effect* e = tint.effects.first();
+        QStringList keys;
+        for (const EffectParam& p : e->params())
+            keys << p.key;
+        CHECK(keys == (QStringList{QStringLiteral("strength"), QStringLiteral("amount"), QStringLiteral("keepLight"), QStringLiteral("mode")}));
+        QImage img(16, 8, kLayerFormat);
+        img.fill(qRgba(160, 150, 176, 255));
+        std::atomic_bool cancel{false};
+        const QImage out = Effects::apply(*e, img, Selection(), Effects::defaults(*e), EffectContext(), cancel);
+        const QRgb p = out.pixel(5, 5);
+        CHECK(std::abs(qRed(p) - 198) <= 1 && std::abs(qGreen(p) - 166) <= 1 && std::abs(qBlue(p) - 146) <= 1);
+        CHECK(e->takeError().isEmpty());
+    }
+    qDeleteAll(tint.effects);
+
+    // Tablas de color .cube y .3dl.
+    QByteArray cube = "TITLE \"Swap\"\nLUT_3D_SIZE 2\n";
+    for (int b = 0; b < 2; ++b)
+        for (int g = 0; g < 2; ++g)
+            for (int r = 0; r < 2; ++r)
+                cube += QByteArray::number(b) + " " + QByteArray::number(g) + " " + QByteArray::number(r) + "\n";
+    int size = 0;
+    CHECK(CraftPlugins::parseLut(cube, false, &error, &size) && size == 2);
+    CHECK(!CraftPlugins::parseLut("LUT_3D_SIZE 3\n0 0 0\n", false, &error));
+    CHECK(CraftPlugins::parseLut("0 341 682 1023\n" + QByteArray("0 0 4095\n").repeated(64), true, &error, &size) && size == 4);
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1334,6 +1407,7 @@ int main(int argc, char** argv)
     testGifAndIco();
     testPdn();
     testPlugins();
+    testCraftPlugins();
     testPngWriter();
     testSelectionReshape();
     testColorBalance();

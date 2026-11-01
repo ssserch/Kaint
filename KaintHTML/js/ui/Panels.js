@@ -88,6 +88,32 @@ export class FloatingPanel {
         this.save();
     }
 
+    // Como en Paint.NET (FloatingPanel::snapped de Kaint): cerca de un borde del área de trabajo,
+    // la ventana se pega a él con el margen de las colocadas de fábrica; cerca de otra ventana,
+    // junto a ella con una pequeña separación o alineada con su borde. Gana el más cercano de cada eje.
+    snapped(x, y) {
+        const reach = 14, inset = 8, gap = 6, w = this.element.offsetWidth, h = this.element.offsetHeight;
+        let dx = reach + 1, dy = reach + 1;
+        const nearer = (best, d) => (Math.abs(d) < Math.abs(best) ? d : best);
+        for (const o of this.workspace.querySelectorAll(":scope > .floating-panel")) {
+            if (o === this.element || o.style.display === "none")
+                continue;
+            const l = o.offsetLeft, t = o.offsetTop, r = l + o.offsetWidth, b = t + o.offsetHeight;
+            if (y <= b + reach && t <= y + h + reach)
+                for (const d of [r + gap - x, l - gap - (x + w), l - x, r - (x + w)])
+                    dx = nearer(dx, d);
+            if (x <= r + reach && l <= x + w + reach)
+                for (const d of [b + gap - y, t - gap - (y + h), t - y, b - (y + h)])
+                    dy = nearer(dy, d);
+        }
+        const a = this.area();
+        for (const d of [a.x + inset - x, a.x + a.w - inset - (x + w)])
+            dx = nearer(dx, d);
+        for (const d of [a.y + inset - y, a.y + a.h - inset - (y + h)])
+            dy = nearer(dy, d);
+        return { x: x + (Math.abs(dx) <= reach ? dx : 0), y: y + (Math.abs(dy) <= reach ? dy : 0) };
+    }
+
     installDrag(head) {
         let start = null;
         head.addEventListener("pointerdown", (e) => {
@@ -102,8 +128,12 @@ export class FloatingPanel {
             if (!start)
                 return;
             const a = this.area();
-            this.element.style.left = `${Math.max(a.x, Math.min(a.x + a.w - this.element.offsetWidth, start.left + e.clientX - start.x))}px`;
-            this.element.style.top = `${Math.max(a.y, Math.min(a.y + a.h - this.element.offsetHeight, start.top + e.clientY - start.y))}px`;
+            let x = start.left + e.clientX - start.x, y = start.top + e.clientY - start.y;
+            // Mayús suelta la ventana donde esté, sin acoplarla.
+            if (Settings.get("snapPanels") !== false && !e.shiftKey)
+                ({ x, y } = this.snapped(x, y));
+            this.element.style.left = `${Math.max(a.x, Math.min(a.x + a.w - this.element.offsetWidth, x))}px`;
+            this.element.style.top = `${Math.max(a.y, Math.min(a.y + a.h - this.element.offsetHeight, y))}px`;
         });
         head.addEventListener("pointerup", () => {
             if (!start)
@@ -480,8 +510,25 @@ class ColorSwatches {
                                      title: tr("Color principal (arriba) y secundario (abajo). La muesca marca la ranura activa (C).\nDoble clic para editarlos. X intercambia.") });
         this.level = AppState.secondaryActive ? 0 : 1;
         this.anim = null;
+        // Como en paint.js: la ranura sin activar bajo el puntero gana el marco negro de dentro y
+        // asoma el pico (más pequeño al pulsarla), en 100 ms.
+        this.hot = { 1: 0, 2: 0 };
+        this.hotAnim = {};
+        this.hotSlot = 0;
+        this.hotPressed = false;
+        const slotAt = (e) => {
+            const r = this.canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+            if ((x >= 40 && x <= 54 && y >= 3 && y <= 16) || (x <= 17 && y >= 39))
+                return 0;
+            return x >= 1 && x <= 36 && y >= 1 && y <= 36 ? 1 : x >= 19 && x <= 54 && y >= 19 && y <= 54 ? 2 : 0;
+        };
+        this.canvas.addEventListener("pointermove", (e) => this.setHot(slotAt(e), this.hotPressed && e.buttons === 1));
+        this.canvas.addEventListener("pointerleave", () => this.setHot(0, false));
+        this.canvas.addEventListener("pointerup", (e) => this.setHot(slotAt(e), false));
         this.canvas.addEventListener("pointerdown", (e) => {
             const r = this.canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+            if (e.button === 0)
+                this.setHot(slotAt(e), true);
             if (x >= 40 && x <= 54 && y >= 3 && y <= 16) AppState.swapColors();
             else if (x <= 17 && y >= 39) AppState.resetColors();
             else if (x >= 1 && x <= 36 && y >= 1 && y <= 36) AppState.setSecondaryActive(false);
@@ -494,10 +541,33 @@ class ColorSwatches {
         this.sync();
     }
 
+    setHot(slot, pressed) {
+        // Solo la que no está activa reacciona al puntero.
+        if (slot === (AppState.secondaryActive ? 2 : 1))
+            slot = 0;
+        if (slot === this.hotSlot && pressed === this.hotPressed)
+            return;
+        this.hotSlot = slot;
+        this.hotPressed = pressed;
+        for (const k of [1, 2]) {
+            const to = slot === k ? (pressed ? 0.7 : 1) : 0;
+            this.hotAnim[k]?.stop();
+            if (this.hot[k] !== to)
+                this.hotAnim[k] = run(this.hot[k], to, 100, outCubic, (v) => {
+                    this.hot[k] = v;
+                    this.paint();
+                });
+        }
+    }
+
     sync() {
         const target = AppState.secondaryActive ? 0 : 1;
         if (target !== this.target) {
             this.target = target;
+            // La que pasa a estar activa deja de reaccionar al puntero.
+            const hot = this.hotSlot;
+            this.hotSlot = -1;
+            this.setHot(hot, false);
             this.anim?.stop();
             this.anim = run(this.level, target, kIndicator, outCubic, (v) => {
                 this.level = v;
@@ -513,8 +583,10 @@ class ColorSwatches {
         const p = c.getContext("2d");
         p.setTransform(dpr, 0, 0, dpr, 0, 0);
         p.clearRect(0, 0, 64, 64);
-        const swatch = (x, y, color, level, framed) => {
-            const s = 35, ring = framed ? 1 + level : 2 * level, line = framed ? 1 : level;
+        // 'hot' (0 a 1): bajo el puntero sin estar activa, el marco de dentro y el pico a tres cuartos.
+        const swatch = (x, y, color, active, hot, framed) => {
+            const level = Math.max(active, 0.75 * hot);
+            const s = 35, ring = framed ? 1 + active : Math.max(2 * active, hot), line = framed ? 1 : Math.max(active, hot);
             p.fillStyle = "#000";
             p.fillRect(x, y, s, s);
             if (ring > 0) {
@@ -552,8 +624,8 @@ class ColorSwatches {
             p.fillRect(ix, iy, iw, iw);
             p.restore();
         };
-        swatch(19, 19, AppState.secondary, 1 - this.level, false);
-        swatch(1, 1, AppState.primary, this.level, true);
+        swatch(19, 19, AppState.secondary, 1 - this.level, this.hot[2], false);
+        swatch(1, 1, AppState.primary, this.level, this.hot[1], true);
         if (this.swap.complete && this.swap.naturalWidth) {
             p.imageSmoothingQuality = "high";
             p.drawImage(this.swap, 40, 3, 14, 13);
@@ -784,8 +856,8 @@ export class ColorWheel {
     }
 }
 
-// Ventana Colores (ColorsPanel de Kaint). Con «Más» crece a lo ancho como la de Paint.NET: las
-// ranuras suben junto al botón y a la derecha van RGB, MSV, la opacidad y el código hexadecimal.
+// Ventana Colores (ColorsPanel de Kaint). Con «Más» crece a lo ancho como la de Paint.NET: a la
+// derecha van RGB, MSV, la opacidad y el código hexadecimal.
 // Al cambiar el tamaño de la ventana todo se escala a la vez (fit).
 export function colorsPanel(app) {
     const panel = el("div", { className: "colors-panel" });
@@ -986,14 +1058,11 @@ export function colorsPanel(app) {
     };
     applyScale(1);
 
+    // Como en Kaint (y Paint.NET), «Más» no cambia lo que ya se ve: las muestras, la rueda (con su
+    // tamaño) y la paleta se quedan como estaban; solo se añaden los deslizadores a la derecha y
+    // más colores a la paleta.
     const setExpanded = (on) => {
         expanded = on;
-        target.style.display = on ? "none" : "";
-        value.canvas.style.display = on ? "none" : "";
-        if (on)
-            topRow.prepend(swatches.canvas);
-        else
-            swatchColumn.prepend(swatches.canvas);
         extended.style.display = on ? "" : "none";
         panel.classList.toggle("expanded", on);
         moreText();
@@ -1007,8 +1076,8 @@ export function colorsPanel(app) {
     const moreText = () => {
         const pdn = Settings.get("uiStyle") === 1;
         more.textContent = pdn ? (expanded ? tr("<< Menos") : tr("Más >>")) : expanded ? tr("« Menos") : tr("Más »");
-        // Paint.NET compacto: «Más >>» a la derecha de las muestras, encima de la rueda.
-        if (pdn && !expanded)
+        // Paint.NET: «Más >>» (y «<< Menos») a la derecha de las muestras, encima de la rueda.
+        if (pdn)
             wheelColumn.prepend(more);
         else if (more.parentElement !== topRow)
             topRow.appendChild(more);

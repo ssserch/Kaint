@@ -2,7 +2,7 @@
 // con sus tiradores hasta pulsar Intro, cambiar de herramienta o empezar otra. Como en Kaint, cada
 // cambio es un paso del historial y al volver a uno se sigue editando desde él.
 import { Tool } from "./Tool.js";
-import { StepRecorder } from "./EditableSteps.js";
+import { StepRecorder, hollowHandles, ringHandle } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
 import { miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes, toolPixelCursor } from "../ui/Icons.js";
@@ -195,6 +195,8 @@ class EditableTool extends Tool {
 
     drawHandle(ctx, view, p, round = false) {
         const v = view.imageToView(p.x, p.y);
+        if (hollowHandles())
+            return ringHandle(ctx, v, round);
         ctx.beginPath();
         round ? ctx.arc(v.x, v.y, 4.5, 0, Math.PI * 2) : ctx.rect(v.x - 4, v.y - 4, 8, 8);
         ctx.fillStyle = "#fff";

@@ -79,7 +79,8 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     auto* discord = new QCheckBox(tr("Mostrar en Discord que usas Kaint (Rich Presence)"), this);
     discord->setChecked(m_settings.discordEnabled);
     discord->setToolTip(tr("Tu perfil de Discord muestra Kaint con la imagen y la herramienta; en Configuración eliges qué se ve."));
-    auto* restartNote = new QLabel(tr("El idioma se aplica al reiniciar Kaint."), this);
+    // El aviso va en el idioma elegido, no en el actual: es el que entiende quien lo cambia.
+    auto* restartNote = new QLabel(this);
     restartNote->setEnabled(false);
     restartNote->setVisible(false);
 
@@ -124,6 +125,8 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     });
     connect(language, &QComboBox::activated, this, [this, language, restartNote, startLanguage](int i) {
         m_settings.language = language->itemData(i).toString();
+        restartNote->setText(m_settings.language == QLatin1String("es") ? QStringLiteral("El idioma se aplica al reiniciar Kaint.")
+                                                                         : QStringLiteral("The language is applied when Kaint restarts."));
         restartNote->setVisible(m_settings.language != startLanguage);
     });
     connect(discord, &QCheckBox::toggled, this, [this](bool on) { m_settings.discordEnabled = on; });

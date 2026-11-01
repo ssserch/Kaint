@@ -65,6 +65,19 @@ export function applyThemeColors(root, scheme, systemDark) {
         else
             root.style.removeProperty(cssVar);
     }
+    // Como el color de énfasis en las barras de título de Windows (y el color propio de Kaint en
+    // Linux): con los temas de Paint.NET, la barra superior y las cabeceras de las ventanas lo llevan.
+    const title = Settings.get("titleBarColor");
+    if (title && /^#[0-9a-f]{6}$/i.test(title) && (scheme === 0 || scheme === 1 || scheme === 2 || scheme === 6)) {
+        const n = parseInt(title.slice(1), 16), light = Math.max(n >> 16, (n >> 8) & 255, n & 255) + Math.min(n >> 16, (n >> 8) & 255, n & 255);
+        for (const cssVar of ["--menubar", "--panel-title", "--panel-title-end", "--win-title"])
+            root.style.setProperty(cssVar, title);
+        for (const cssVar of ["--panel-title-text", "--win-title-text"])
+            root.style.setProperty(cssVar, light / 2 < 128 ? "#ffffff" : "#000000");
+    } else {
+        root.style.removeProperty("--win-title");
+        root.style.removeProperty("--win-title-text");
+    }
     // Como en Kaint (Configuración > Lienzo): el fondo alrededor de la imagen puede tener su color.
     const border = Settings.get(base === "dark" ? "canvasBorderDark" : "canvasBorderLight");
     if (border)

@@ -183,10 +183,22 @@ QIcon fillPattern(int pattern)
 
 QIcon shape(ShapeType type)
 {
+    // Como las figuras del menú de Paint.NET: rellenas de azul con el contorno azul claro, y los
+    // polígonos con su número de lados.
     return drawn([type](QPainter& p, QRectF r) {
-        p.setPen(QPen(fg(), 1.6));
-        p.setBrush(Qt::NoBrush);
-        p.drawPath(shapePath(type, r.adjusted(1, 2, -1, -2), 4));
+        p.setPen(QPen(QColor(0xb9, 0xdc, 0xff), 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(QColor(0x4f, 0x86, 0xb8));
+        p.drawPath(shapePath(type, r.adjusted(-1, 0, 1, 0), 5));
+        const int sides = type == ShapeType::Pentagon ? 5 : type == ShapeType::Hexagon ? 6 : type == ShapeType::Heptagon ? 7
+                          : type == ShapeType::Octagon ? 8 : 0;
+        if (sides) {
+            QFont f = p.font();
+            f.setBold(true);
+            f.setPixelSize(11);
+            p.setFont(f);
+            p.setPen(Qt::white);
+            p.drawText(r.adjusted(0, 1, 0, 1), Qt::AlignCenter, QString::number(sides));
+        }
     });
 }
 
@@ -358,15 +370,66 @@ QIcon selectionMode(SelectionMode mode)
     return {};
 }
 
+namespace {
+
+// Estilo de guion: una raya de 2 px a lo ancho del icono (más ancho que alto, como los de paint.js,
+// así se distingue el dibujo), del color del texto del tema.
+class DashIconEngine : public QIconEngine {
+public:
+    explicit DashIconEngine(Qt::PenStyle style) : m_style(style) {}
+
+    void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State) override
+    {
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, false);
+        QColor c = fg();
+        if (mode == QIcon::Disabled)
+            c.setAlphaF(0.4);
+        // Largo de cada trazo y de cada hueco, en píxeles.
+        QList<int> pattern;
+        switch (m_style) {
+        case Qt::DashLine: pattern = {6, 3}; break;
+        case Qt::DotLine: pattern = {2, 2}; break;
+        case Qt::DashDotLine: pattern = {6, 2, 2, 2}; break;
+        case Qt::DashDotDotLine: pattern = {6, 2, 2, 2, 2, 2}; break;
+        default: break;
+        }
+        const int y = rect.center().y();
+        const int x0 = rect.left() + 1, x1 = rect.right() - 1;
+        if (pattern.isEmpty()) {
+            painter->fillRect(QRect(x0, y, x1 - x0 + 1, 2), c);
+        } else {
+            int x = x0;
+            for (int i = 0; x <= x1; i = (i + 1) % int(pattern.size())) {
+                const int len = pattern[i];
+                if (i % 2 == 0)
+                    painter->fillRect(QRect(x, y, std::min(len, x1 - x + 1), 2), c);
+                x += len;
+            }
+        }
+        painter->restore();
+    }
+
+    QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override
+    {
+        QPixmap pm(size);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        paint(&p, QRect(QPoint(), size), mode, state);
+        return pm;
+    }
+
+    QIconEngine* clone() const override { return new DashIconEngine(m_style); }
+
+private:
+    Qt::PenStyle m_style;
+};
+
+} // namespace
+
 QIcon dash(Qt::PenStyle style)
 {
-    switch (style) {
-    case Qt::DashLine: return png(QStringLiteral("enum_dash_style_dash"));
-    case Qt::DotLine: return png(QStringLiteral("enum_dash_style_dot"));
-    case Qt::DashDotLine: return png(QStringLiteral("enum_dash_style_dash_dot"));
-    case Qt::DashDotDotLine: return png(QStringLiteral("enum_dash_style_dash_dot_dot"));
-    default: return png(QStringLiteral("enum_dash_style_solid"));
-    }
+    return QIcon(new DashIconEngine(style));
 }
 
 QIcon floodMode(bool global)

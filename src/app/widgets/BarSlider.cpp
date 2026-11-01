@@ -1,5 +1,7 @@
 #include "app/widgets/BarSlider.h"
 
+#include "app/Theme.h"
+
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -32,20 +34,40 @@ void BarSlider::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     const QPalette& pal = palette();
+    const qreal t = m_max > m_min ? qreal(m_value - m_min) / (m_max - m_min) : 0;
+    const QString text = QString::number(m_value) + m_suffix;
+    if (Theme::paintNetLook()) {
+        // Paint.NET 5: una barra lisa y recta, gris claro, con la parte llena en azul y el valor
+        // encima (blanco sobre el azul, negro sobre el gris), igual en el tema claro y el oscuro.
+        const QRect r = rect().adjusted(0, 1, 0, -2);
+        p.fillRect(r, QColor(0xcf, 0xcf, 0xcf));
+        QRect filled = r;
+        filled.setWidth(int(std::lround(r.width() * t)));
+        p.fillRect(filled, QColor(0x00, 0x78, 0xd7));
+        if (hasFocus()) {
+            p.setPen(QColor(0x00, 0x5a, 0xa3));
+            p.drawRect(r.adjusted(0, 0, -1, -1));
+        }
+        const QRect textRect = r.adjusted(8, 0, -6, 0);
+        p.setPen(Qt::black);
+        p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+        p.setClipRect(filled);
+        p.setPen(Qt::white);
+        p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+        return;
+    }
     const QRectF r = QRectF(rect()).adjusted(0.5, 2.5, -0.5, -2.5);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(pal.color(QPalette::Mid));
     p.setBrush(pal.color(QPalette::Base));
     p.drawRoundedRect(r, 3, 3);
 
-    const qreal t = m_max > m_min ? qreal(m_value - m_min) / (m_max - m_min) : 0;
     QRectF filled = r.adjusted(1, 1, -1, -1);
     filled.setWidth(filled.width() * t);
     p.setPen(Qt::NoPen);
     p.setBrush(pal.color(hasFocus() ? QPalette::Highlight : QPalette::Highlight).lighter(hasFocus() ? 100 : 115));
     p.drawRoundedRect(filled, 2, 2);
 
-    const QString text = QString::number(m_value) + m_suffix;
     p.setPen(pal.color(QPalette::Text));
     p.drawText(r.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
     p.save();

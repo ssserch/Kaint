@@ -53,6 +53,8 @@ public:
     static Style chromeStyle();
     static int chromeBorder();
     void applyChrome();
+    // Acoplar las ventanas a los bordes del área de trabajo y a las demás al arrastrarlas.
+    static void setSnapping(bool on);
 
 signals:
     void closed();
@@ -74,6 +76,8 @@ private:
     Qt::Edges edgesAt(const QPoint& pos) const;
     void updateEdgeCursor(Qt::Edges edges);
     QRect constrained(const QRect& proposed, Qt::Edges edges) const;
+    // Posición de arriba a la izquierda acoplada a un borde o a otra ventana cercanos.
+    QPoint snapped(QPoint pos) const;
     QSize chromeSize() const;
     int titleInset() const;
     // Zona del área de trabajo donde puede estar la ventana (sin tapar las reglas).

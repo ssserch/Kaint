@@ -667,10 +667,29 @@ const options = {
         ctx.lineWidth = 2;
         ctx.strokeRect(1, 1, 30, 30);
     },
+    // Como las figuras del menú de Paint.NET (Icons::shape de Kaint): rellenas de azul con el
+    // contorno azul claro y los polígonos con su número de lados; las personalizadas, en línea.
     shape(ctx, ...type) {
+        const id = type.join(":");
         ctx.beginPath();
-        shapePath(ctx, type.join(":"), 4, 5, 24, 22, 4);
-        stroke(ctx, fg(), 1.6);
+        if (id.startsWith("custom:")) {
+            shapePath(ctx, id, 4, 5, 24, 22, 4);
+            stroke(ctx, fg(), 1.6);
+            return;
+        }
+        shapePath(ctx, id, 2, 3, 28, 26, 5);
+        ctx.fillStyle = "#4f86b8";
+        ctx.fill();
+        ctx.lineJoin = "round";
+        stroke(ctx, "#b9dcff", 1.7);
+        const sides = { pentagon: 5, hexagon: 6, heptagon: 7, octagon: 8 }[id];
+        if (sides) {
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 11px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(sides), 16, 17);
+        }
     },
     sample(ctx, n) {
         ctx.strokeStyle = fg(); ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, 23, 23);
@@ -679,6 +698,30 @@ const options = {
         ctx.fillRect(16 - side / 2, 16 - side / 2, side, side);
     },
 };
+
+// Estilo de guion (Icons::dash de Kaint): una raya de 2 px a lo ancho de un icono de 28 × 16, así
+// se distingue el dibujo, del color del texto.
+export function dashIcon(style) {
+    const patterns = { solid: [], dash: [6, 3], dot: [2, 2], dashdot: [6, 2, 2, 2], dashdotdot: [6, 2, 2, 2, 2, 2] };
+    const dpr = window.devicePixelRatio || 1, canvas = document.createElement("canvas");
+    canvas.className = "kicon dash-icon";
+    canvas.width = Math.round(28 * dpr);
+    canvas.height = Math.round(16 * dpr);
+    canvas.style.width = "28px";
+    canvas.style.height = "16px";
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = fg();
+    const pattern = patterns[style] || [];
+    if (!pattern.length) {
+        ctx.fillRect(1, 7, 26, 2);
+    } else {
+        for (let x = 1, i = 0; x <= 26; x += pattern[i], i = (i + 1) % pattern.length)
+            if (i % 2 === 0)
+                ctx.fillRect(x, 7, Math.min(pattern[i], 27 - x), 2);
+    }
+    return canvas;
+}
 
 // Formas de la herramienta Formas (AppState.cpp de Kaint), en el rectángulo x, y, w, h.
 export const ShapeTypes = [
@@ -1019,8 +1062,31 @@ export function pdnCursors() {
     return Settings.get("cursorStyle") === 1;
 }
 
+// Como en Kaint, los de Paint.NET algo más grandes que el original (un 25 %), ampliados sin
+// suavizar para que cada píxel siga nítido. Las imágenes se cargan al empezar; hasta entonces, las
+// originales.
+const pixelImages = {}, scaledPixelCursors = {};
+for (const name of Object.keys(pixelHotSpots)) {
+    pixelImages[name] = new Image();
+    pixelImages[name].src = `assets/cursors/${name}.png`;
+}
+
 export function pixelCursor(name, fallback = "crosshair") {
     const [x, y] = pixelHotSpots[name] || [8, 8];
+    const dpr = window.devicePixelRatio || 1, scale = Math.round(dpr * 1.25 * 4) / 4, img = pixelImages[name];
+    if (img?.complete && img.naturalWidth) {
+        const key = `${name}/${scale}`;
+        if (!scaledPixelCursors[key]) {
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(img.naturalWidth * scale);
+            canvas.height = Math.round(img.naturalHeight * scale);
+            const ctx = canvas.getContext("2d");
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            scaledPixelCursors[key] = canvas.toDataURL();
+        }
+        return `-webkit-image-set(url(${scaledPixelCursors[key]}) ${dpr}x) ${Math.round((x * scale) / dpr)} ${Math.round((y * scale) / dpr)}, ${fallback}`;
+    }
     return `-webkit-image-set(url(assets/cursors/${name}.png) 1x, url(assets/cursors/${name}@2x.png) 2x) ${x} ${y}, ${fallback}`;
 }
 

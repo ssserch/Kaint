@@ -100,13 +100,13 @@ runs on Windows 10 and 11.
   </tr>
 </table>
 
-## 🎨 Make it yours
+## Make it yours
 
 Kaint looks the way you want. Almost everything about its appearance can be changed from
 **Settings → User interface**, and every change shows at once:
 
-- **Themes**: light and dark (or follow the system), Paint.NET's Blue, the classic gray
-  **Windows 98**, the real **KDE** theme on Linux, and a **custom theme** editor with every color,
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, the classic gray,
+  the real **KDE** theme on Linux, and a **custom theme** editor with every color,
   the toolbar layout and a canvas background image (placement, scale, blur and tint), which you can
   export and share.
 - **Interface style**: Kaint's own or a recreation of **Paint.NET 5** (the default): more compact,
@@ -167,7 +167,7 @@ bars. Effect dialogs have a **Preview** box to compare with the original image.
   </tr>
 </table>
 
-## 🌐 Web version
+## Web version
 
 [**KaintHTML**](KaintHTML/README.md) is Kaint ported to the web: the same interface, tools,
 windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
@@ -230,7 +230,7 @@ sudo pacman -U build-pkg/kaint-*.pkg.tar.zst
 </details>
 
 <details open>
-<summary><b>🍥 Debian / Ubuntu</b></summary>
+<summary><b>🍥 Debian / Ubuntu / Mint</b></summary>
 
 ```bash
 sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev \

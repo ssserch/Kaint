@@ -100,7 +100,7 @@ export const Recovery = {
     async save(docs) {
         try {
             const kept = new Set();
-            const ora = SaveFormats.find((f) => f.layered);
+            const ora = SaveFormats.find((f) => f.ext === "ora");
             for (const doc of docs) {
                 if (!doc.isModified())
                     continue;

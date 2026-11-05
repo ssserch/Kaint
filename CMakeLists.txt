@@ -118,6 +118,7 @@ add_library(kaintui STATIC
     src/app/Animations.cpp
     src/app/AppState.cpp
     src/app/Canvas.cpp
+    src/app/Customization.cpp
     src/app/DiscordPresence.cpp
     src/app/IconPacks.cpp
     src/app/Shortcuts.cpp

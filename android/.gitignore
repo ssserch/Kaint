@@ -1,0 +1,11 @@
+# Lo que crean Android Studio y Gradle al abrir o compilar esta carpeta (build-apk.sh trabaja en una
+# copia, en build-apk/ o build-aab/).
+.gradle/
+.idea/
+build/
+app/build/
+local.properties
+app/src/main/assets/www/
+app/src/main/res/mipmap-*/
+*.jks
+*.keystore

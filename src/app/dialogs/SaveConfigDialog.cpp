@@ -39,12 +39,18 @@ bool SaveConfigDialog::hasOptions(const QString& path)
 }
 
 SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path, const ImageIO::SaveOptions& initial,
-                                   QWidget* parent, const QList<Gif::Frame>& frames)
+                                   QWidget* parent, const QList<Gif::Frame>& frames, const QList<ImageSource>& sources)
     : QDialog(parent)
     , m_image(flattened)
     , m_path(path)
     , m_frames(frames)
+    , m_layerFrames(frames)
+    , m_sources(sources.size() > 1 ? sources : QList<ImageSource>())
 {
+    for (int i = 0; i < m_sources.size(); ++i) {
+        m_sourceOrder << i;
+        m_sourceOn << true;
+    }
     setWindowTitle(tr("Configuración de guardado: %1").arg(QFileInfo(path).suffix().toUpper()));
     setWindowIcon(Icons::theme({"document-save"}));
 
@@ -99,7 +105,37 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
     }
 
     if (ImageIO::isAnimation(path)) {
-        if (m_frames.size() > 1) {
+        if (m_frames.size() > 1 || !m_sources.isEmpty()) {
+            // Con varias imágenes abiertas, los fotogramas pueden ser las capas (lo de siempre) o
+            // las imágenes que se elijan.
+            if (!m_sources.isEmpty()) {
+                m_frameSource = new QComboBox(this);
+                m_frameSource->addItem(tr("Las capas de esta imagen"), 0);
+                m_frameSource->setItemData(0, tr("Cada capa visible es un fotograma (la de abajo, el primero)."), Qt::ToolTipRole);
+                m_frameSource->addItem(tr("Imágenes abiertas"), 1);
+                m_frameSource->setItemData(1, tr("Cada imagen abierta que elijas es un fotograma, en el orden que quieras."),
+                                           Qt::ToolTipRole);
+                m_chooseImages = new QPushButton(Icons::theme({"view-list-icons", "image-x-generic"}), tr("Elegir imágenes…"), this);
+                m_chooseImages->setToolTip(tr("Qué imágenes abiertas van en el GIF y en qué orden"));
+                auto* sourceRow = new QWidget(this);
+                auto* sourceLayout = new QHBoxLayout(sourceRow);
+                sourceLayout->setContentsMargins(0, 0, 0, 0);
+                sourceLayout->addWidget(m_frameSource, 1);
+                sourceLayout->addWidget(m_chooseImages);
+                form->addRow(tr("Fotogramas:"), sourceRow);
+                connect(m_frameSource, &QComboBox::activated, this, [this](int i) {
+                    const bool images = m_frameSource->itemData(i).toInt() == 1;
+                    if (images && !m_fromImages && !chooseImages()) {
+                        m_frameSource->setCurrentIndex(0);
+                        return;
+                    }
+                    setFromImages(images);
+                });
+                connect(m_chooseImages, &QPushButton::clicked, this, [this] {
+                    if (chooseImages())
+                        setFromImages(true);
+                });
+            }
             m_animation = new QCheckBox(tr("Animación: cada capa visible es un fotograma"), this);
             m_animation->setToolTip(tr("La capa de abajo es el primer fotograma. La duración de cada uno va en el "
                                        "nombre de la capa, p. ej. «Fotograma 1 (100ms)» (Imagen > Animación)."));
@@ -254,8 +290,9 @@ ImageIO::SaveOptions SaveConfigDialog::options() const
         o.quantization = m_quantization->currentData().toInt();
     if (m_interlaced)
         o.interlaced = m_interlaced->isChecked();
+    // Sin animación posible (una sola capa) no se guarda "sin animación" para la próxima vez.
     if (m_animation)
-        o.animation = m_animation->isChecked();
+        o.animation = m_animation->isEnabled() ? m_animation->isChecked() : true;
     if (m_delay)
         o.frameDelay = m_delay->value();
     if (m_loopForever)
@@ -375,6 +412,15 @@ void SaveConfigDialog::updateControls()
         m_thresholdNote->setEnabled(eight);
     if (m_quantization)
         m_quantization->setEnabled(eight);
+    // Con las capas, solo hay animación con dos o más; con las imágenes, siempre.
+    if (m_animation) {
+        const bool possible = m_fromImages || m_layerFrames.size() > 1;
+        if (!possible)
+            m_animation->setChecked(false);
+        m_animation->setEnabled(possible);
+    }
+    if (m_chooseImages)
+        m_chooseImages->setEnabled(m_fromImages);
     const bool animated = m_animation && m_animation->isChecked();
     // Con su unidad al lado: se activa la fila entera.
     if (m_delay)
@@ -386,6 +432,195 @@ void SaveConfigDialog::updateControls()
     if (m_advancedButton)
         m_advancedButton->setEnabled(animated);
     updateHiddenButton();
+}
+
+void SaveConfigDialog::setFromImages(bool on)
+{
+    m_fromImages = on;
+    m_frames = on ? framesFromImages() : m_layerFrames;
+    if (m_frameSource)
+        m_frameSource->setCurrentIndex(on ? 1 : 0);
+    if (m_animation) {
+        m_animation->setText(on ? tr("Animación: cada imagen elegida es un fotograma") : tr("Animación: cada capa visible es un fotograma"));
+        m_animation->setToolTip(on ? tr("La primera imagen de la lista es el primer fotograma. La duración de cada una va en el "
+                                        "nombre de su capa o se cambia en la configuración avanzada.")
+                                   : tr("La capa de abajo es el primer fotograma. La duración de cada uno va en el "
+                                        "nombre de la capa, p. ej. «Fotograma 1 (100ms)» (Imagen > Animación)."));
+        if (on)
+            m_animation->setChecked(true);
+    }
+    // Los fotogramas de la configuración avanzada vuelven a ser los de la lista nueva.
+    m_hiddenLocked = false;
+    if (on)
+        m_showHidden = false;
+    const Advanced previous = m_advanced;
+    m_advanced = defaultAdvanced();
+    m_advanced.quantization = previous.quantization;
+    m_advanced.globalPalette = previous.globalPalette;
+    m_advanced.stack = previous.stack;
+    m_advanced.effects = previous.effects;
+    updateControls();
+    schedule();
+}
+
+QList<Gif::Frame> SaveConfigDialog::framesFromImages() const
+{
+    // Las de otro tamaño se centran en un lienzo del tamaño de la más grande.
+    QSize canvas(1, 1);
+    for (int i : m_sourceOrder)
+        if (m_sourceOn.value(i))
+            canvas = canvas.expandedTo(m_sources[i].image.size());
+    QList<Gif::Frame> frames;
+    for (int i : m_sourceOrder) {
+        if (!m_sourceOn.value(i))
+            continue;
+        const QImage& image = m_sources[i].image;
+        QImage frame = image.convertToFormat(QImage::Format_ARGB32);
+        if (image.size() != canvas) {
+            frame = QImage(canvas, QImage::Format_ARGB32);
+            frame.fill(Qt::transparent);
+            QPainter p(&frame);
+            p.setCompositionMode(QPainter::CompositionMode_Source);
+            p.drawImage(QPoint((canvas.width() - image.width()) / 2, (canvas.height() - image.height()) / 2), image);
+        }
+        frames << Gif::Frame{frame, m_sources[i].delayMs};
+    }
+    return frames;
+}
+
+bool SaveConfigDialog::chooseImages()
+{
+    // Como la configuración avanzada: las imágenes una al lado de otra, con su miniatura, para
+    // elegir cuáles van y su orden. Se edita una copia; Aceptar la aplica.
+    m_previewPane->setPlaying(false);
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Imágenes del GIF"));
+    dlg.setWindowIcon(Icons::theme({"view-list-icons", "image-x-generic"}));
+    QList<int> order = m_sourceOrder;
+    QList<bool> on = m_sourceOn;
+    QList<QPixmap> thumbs;
+    for (const ImageSource& src : std::as_const(m_sources)) {
+        QPixmap pm(src.image.size().scaled(QSize(96, 72), Qt::KeepAspectRatio).expandedTo(QSize(1, 1)));
+        QPainter p(&pm);
+        p.fillRect(pm.rect(), QBrush(Raster::checkerboard(6)));
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.drawImage(pm.rect(), src.image);
+        thumbs << pm;
+    }
+    auto* intro = new QLabel(tr("Marca las imágenes abiertas que forman el GIF y ordénalas con las flechas: cada una es un "
+                                "fotograma, de izquierda a derecha. Después puedes ajustar cada fotograma en la "
+                                "configuración avanzada."),
+                             &dlg);
+    intro->setWordWrap(true);
+    auto* box = new QWidget;
+    auto* row = new QHBoxLayout(box);
+    row->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(&dlg);
+    scroll->setWidget(box);
+    scroll->setWidgetResizable(true);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setFixedHeight(200);
+    auto* count = new QLabel(&dlg);
+    auto* note = new QLabel(tr("Las imágenes de otro tamaño se centran en un lienzo del tamaño de la más grande."), &dlg);
+    note->setEnabled(false);
+    note->setWordWrap(true);
+    auto* buttons = okCancelButtons(&dlg);
+    auto* all = buttons->addButton(tr("Todas"), QDialogButtonBox::ResetRole);
+    auto* none = buttons->addButton(tr("Ninguna"), QDialogButtonBox::ResetRole);
+    QPushButton* ok = nullptr;
+    for (QAbstractButton* b : buttons->buttons())
+        if (buttons->buttonRole(b) == QDialogButtonBox::AcceptRole)
+            ok = qobject_cast<QPushButton*>(b);
+    std::function<void()> rebuild;
+    auto sync = [&] {
+        const int n = int(std::count(on.cbegin(), on.cend(), true));
+        count->setText(tr("%n imagen(es) en el GIF", nullptr, n));
+        if (ok)
+            ok->setEnabled(n > 0);
+    };
+    rebuild = [&] {
+        while (QLayoutItem* item = row->takeAt(0)) {
+            if (QWidget* w = item->widget())
+                w->deleteLater();
+            delete item;
+        }
+        for (int k = 0; k < order.size(); ++k) {
+            const int i = order[k];
+            auto* card = new QFrame(box);
+            card->setFrameShape(QFrame::StyledPanel);
+            auto* v = new QVBoxLayout(card);
+            v->setContentsMargins(6, 6, 6, 6);
+            v->setSpacing(3);
+            auto* number = new QLabel(tr("N.º %1").arg(k + 1), card);
+            number->setAlignment(Qt::AlignCenter);
+            auto* thumb = new QLabel(card);
+            thumb->setPixmap(thumbs[i]);
+            thumb->setAlignment(Qt::AlignCenter);
+            thumb->setFixedSize(100, 76);
+            thumb->setEnabled(on[i]);
+            auto* name = new QLabel(card);
+            name->setText(name->fontMetrics().elidedText(m_sources[i].name, Qt::ElideMiddle, 100));
+            name->setToolTip(m_sources[i].name);
+            name->setAlignment(Qt::AlignCenter);
+            auto* include = new QCheckBox(tr("Incluir"), card);
+            include->setChecked(on[i]);
+            QObject::connect(include, &QCheckBox::toggled, card, [&, i, thumb](bool checked) {
+                on[i] = checked;
+                thumb->setEnabled(checked);
+                sync();
+            });
+            auto* arrows = new QHBoxLayout;
+            auto* left = new QToolButton(card);
+            left->setIcon(Icons::theme({"go-previous", "arrow-left"}));
+            left->setToolTip(tr("Antes"));
+            left->setEnabled(k > 0);
+            auto* right = new QToolButton(card);
+            right->setIcon(Icons::theme({"go-next", "arrow-right"}));
+            right->setToolTip(tr("Después"));
+            right->setEnabled(k + 1 < order.size());
+            QObject::connect(left, &QToolButton::clicked, card, [&, k] {
+                order.swapItemsAt(k, k - 1);
+                QMetaObject::invokeMethod(&dlg, [&] { rebuild(); }, Qt::QueuedConnection);
+            });
+            QObject::connect(right, &QToolButton::clicked, card, [&, k] {
+                order.swapItemsAt(k, k + 1);
+                QMetaObject::invokeMethod(&dlg, [&] { rebuild(); }, Qt::QueuedConnection);
+            });
+            arrows->addWidget(left);
+            arrows->addStretch();
+            arrows->addWidget(include);
+            arrows->addStretch();
+            arrows->addWidget(right);
+            v->addWidget(number);
+            v->addWidget(thumb);
+            v->addWidget(name);
+            v->addLayout(arrows);
+            row->addWidget(card);
+        }
+        row->addStretch();
+        sync();
+    };
+    QObject::connect(all, &QPushButton::clicked, &dlg, [&] {
+        on.fill(true);
+        rebuild();
+    });
+    QObject::connect(none, &QPushButton::clicked, &dlg, [&] {
+        on.fill(false);
+        rebuild();
+    });
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->addWidget(intro);
+    layout->addWidget(scroll);
+    layout->addWidget(count);
+    layout->addWidget(note);
+    layout->addWidget(buttons);
+    rebuild();
+    dlg.resize(640, 360);
+    if (dlg.exec() != QDialog::Accepted)
+        return false;
+    m_sourceOrder = order;
+    m_sourceOn = on;
+    return true;
 }
 
 void SaveConfigDialog::schedule()

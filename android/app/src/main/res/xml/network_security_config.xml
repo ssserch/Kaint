@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo HTTPS: la web se sirve desde la propia aplicación (appassets.androidplatform.net) y lo de
+     fuera (catálogo de complementos, actualizaciones) es HTTPS. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

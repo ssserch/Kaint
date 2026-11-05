@@ -11,6 +11,7 @@
 #include "app/UserFonts.h"
 #include "app/ToolOptionsBar.h"
 #include "app/WindowFrame.h"
+#include "app/Customization.h"
 #include "app/Workspace.h"
 #include "app/DiscordPresence.h"
 #include "app/IconPacks.h"
@@ -1042,9 +1043,11 @@ void MainWindow::rebuildEffectMenus()
         anyPlugin = anyPlugin || !e->pluginName().isEmpty();
     m_act["plugins"]->setVisible(anyPlugin);
 
+    // Configuración > Personalización: efectos ocultos y movidos a otro menú o submenú.
+    const Customization* custom = Customization::instance();
     QList<const Effect*> effects;
     for (const Effect* e : Effects::all())
-        if (!e->hidden())
+        if (!e->hidden() && !custom->isHidden(e->id()))
             effects.append(e);
     const QCollator collator = [] {
         QCollator c;
@@ -1054,9 +1057,11 @@ void MainWindow::rebuildEffectMenus()
     std::stable_sort(effects.begin(), effects.end(),
                      [&](const Effect* a, const Effect* b) { return collator.compare(a->name(), b->name()) < 0; });
     QStringList categories;
-    for (const Effect* e : std::as_const(effects))
-        if (!e->isAdjustment() && !e->category().isEmpty() && !categories.contains(e->category()))
-            categories.append(e->category());
+    for (const Effect* e : std::as_const(effects)) {
+        const Customization::Placement place = custom->placement(e);
+        if (!place.adjustment && !place.submenu.isEmpty() && !categories.contains(place.submenu))
+            categories.append(place.submenu);
+    }
     std::sort(categories.begin(), categories.end(), [&](const QString& a, const QString& b) { return collator.compare(a, b) < 0; });
     QHash<QString, QMenu*> submenus;
     for (const QString& cat : std::as_const(categories)) {
@@ -1065,7 +1070,8 @@ void MainWindow::rebuildEffectMenus()
         m_effectSubmenus.append(sub);
     }
     for (const Effect* e : std::as_const(effects)) {
-        QMenu* menu = e->isAdjustment() ? m_adjustmentsMenu : submenus.value(e->category(), m_effectsMenu);
+        const Customization::Placement place = custom->placement(e);
+        QMenu* menu = place.adjustment ? m_adjustmentsMenu : submenus.value(place.submenu, m_effectsMenu);
         QIcon icon = Icons::theme(Icons::effectIcon(e->id(), e->iconName()));
         if (icon.isNull() && !e->iconImage().isNull())
             icon = QIcon(QPixmap::fromImage(e->iconImage()));
@@ -1147,8 +1153,8 @@ void MainWindow::createTopRow()
         m_captionTitle = new CaptionTitle(top);
         m_topLayout->addWidget(m_captionTitle, 0, 0);
         m_captionButtons = new CaptionButtons(top);
-        m_topLayout->addWidget(m_captionButtons, 0, 4, Qt::AlignRight | Qt::AlignVCenter);
         top->setCaption(m_captionTitle);
+        placeCaptionButtons();
     }
     m_topLayout->addWidget(m_menuBar, m_menuRow, 0, Qt::AlignLeft | Qt::AlignBottom);
     m_topLayout->setRowStretch(m_menuRow, 1);
@@ -1200,6 +1206,23 @@ void MainWindow::createTopRow()
     // vacía (se perdían los menús y la barra principal con el tema de KDE): se pule antes.
     ensurePolished();
     setMenuWidget(top);
+}
+
+void MainWindow::placeCaptionButtons()
+{
+    // A la derecha de la fila de la barra de título o, a la izquierda, encima del principio del
+    // título (que deja su sitio).
+    if (!m_captionButtons)
+        return;
+    m_topLayout->removeWidget(m_captionButtons);
+    if (WindowFrame::buttonsOnLeft())
+        m_topLayout->addWidget(m_captionButtons, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    else
+        m_topLayout->addWidget(m_captionButtons, 0, 4, Qt::AlignRight | Qt::AlignVCenter);
+    m_captionButtons->raise();
+    m_captionButtons->updateGeometry();
+    if (m_captionTitle)
+        m_captionTitle->update();
 }
 
 void MainWindow::createPanels()
@@ -1285,6 +1308,7 @@ void MainWindow::createPanels()
     connect(m_layers, &LayersPanel::soloRequested, this, &MainWindow::soloLayer);
     connect(m_layers, &LayersPanel::moveRequested, this, &MainWindow::moveLayerTo);
     connect(PluginManager::instance(), &PluginManager::changed, this, &MainWindow::rebuildEffectMenus);
+    connect(Customization::instance(), &Customization::effectMenusChanged, this, &MainWindow::rebuildEffectMenus);
 }
 
 void MainWindow::createStatusBar()
@@ -1910,10 +1934,63 @@ void MainWindow::openFiles(const QStringList& paths)
             QMessageBox::critical(this, tr("No se pudo abrir"), tr("No se pudo abrir «%1»:\n%2").arg(abs, error));
             continue;
         }
+        // GIF animado: como capas (un fotograma por capa, como hasta ahora) o cada fotograma como
+        // una imagen aparte.
+        bool asImages = false;
+        if (ImageIO::isAnimation(abs) && doc->layerCount() > 1) {
+            int mode = m_settings.gifOpenMode;
+            if (mode == 0) {
+                TaskDialog ask(tr("Abrir un GIF animado"), Icons::theme({"document-open"}), doc->layer(0)->image,
+                               tr("«%1» tiene %n fotograma(s). ¿Cómo quieres abrirlo?", nullptr, doc->layerCount())
+                                   .arg(QFileInfo(abs).fileName()),
+                               this);
+                auto* remember = new QCheckBox(tr("Recordar mi elección (se cambia en Configuración > Interfaz de usuario)"));
+                ask.addContent(remember);
+                const int layers = ask.addChoice(Icons::theme({"layer-visible-on", "window-layers"}), tr("Como capas"),
+                                                 tr("Una sola imagen con un fotograma en cada capa, una encima de otra. Se "
+                                                    "vuelve a guardar como GIF animado."),
+                                                 true);
+                const int images = ask.addChoice(Icons::theme({"image-x-generic", "folder-images"}), tr("Como imágenes"),
+                                                 tr("Cada fotograma se abre como una imagen aparte. Al guardar como GIF se "
+                                                    "pueden elegir las imágenes que forman la animación."));
+                const int choice = ask.choose();
+                if (choice != layers && choice != images) {
+                    delete doc;
+                    continue;
+                }
+                mode = choice == images ? 2 : 1;
+                if (remember->isChecked()) {
+                    m_settings.gifOpenMode = mode;
+                    m_settings.save();
+                }
+            }
+            asImages = mode == 2;
+        }
         if (m_docs.size() == 1 && m_docs.first()->filePath().isEmpty() && !m_docs.first()->isModified()
             && m_docs.first()->undoStack()->count() == 0)
             closeDocument(m_docs.first());
-        addDocument(doc);
+        if (asImages) {
+            // Cada fotograma, una imagen sin archivo ("animación (3)"); el nombre de su capa conserva
+            // la duración, para volver a guardarlas como GIF eligiendo las imágenes.
+            const QString base = QFileInfo(abs).completeBaseName();
+            Document* first = nullptr;
+            for (int i = 0; i < doc->layerCount(); ++i) {
+                const Layer* frame = doc->layer(i);
+                Document* d = Document::createFromImage(frame->image, frame->props.name);
+                d->setDpi(doc->dpi());
+                d->setGifLoops(doc->gifLoops());
+                d->setUntitledName(tr("%1 (%2)").arg(base).arg(i + 1));
+                d->setHistoryRootLabel(tr("Abrir imagen"));
+                addDocument(d);
+                if (!first)
+                    first = d;
+            }
+            delete doc;
+            if (first)
+                setCurrentDocument(first);
+        } else {
+            addDocument(doc);
+        }
         AppState::instance()->addRecentFile(abs, m_canvas->composite());
         m_lastDir = QFileInfo(abs).absolutePath();
     }
@@ -1972,7 +2049,7 @@ bool MainWindow::saveAs(Document* doc)
                 selected = f;
     }
     if (suggestion.isEmpty()) {
-        const QString base = tr("Sin título");
+        const QString base = doc->untitledName().isEmpty() ? tr("Sin título") : doc->untitledName();
         suggestion = m_lastDir + QLatin1Char('/') + base + (doc->layerCount() > 1 ? QStringLiteral(".ora") : QStringLiteral(".png"));
         if (doc->layerCount() > 1)
             for (const QString& f : filters.split(QStringLiteral(";;")))
@@ -2116,10 +2193,18 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
     // Fotogramas del GIF tal como quedaron en la configuración avanzada (omitidos, copias...).
     QList<Gif::Frame> edited;
     if (SaveConfigDialog::hasOptions(path)) {
-        const QList<Gif::Frame> frames = ImageIO::isAnimation(path) && doc->layerCount() > 1
-                                             ? ImageIO::animationFrames(doc, 0, true)
-                                             : QList<Gif::Frame>();
-        SaveConfigDialog dlg(doc->flattened(), path, options, this, frames);
+        // GIF: los fotogramas son las capas o, con varias imágenes abiertas, las que se elijan.
+        QList<SaveConfigDialog::ImageSource> sources;
+        if (ImageIO::isAnimation(path) && m_docs.size() > 1)
+            for (const Document* d : std::as_const(m_docs))
+                sources << SaveConfigDialog::ImageSource{
+                    d->displayName(), d->flattened(), d->layerCount() == 1 ? Gif::delayFromName(d->layer(0)->props.name, 0) : 0};
+        QList<Gif::Frame> frames;
+        if (ImageIO::isAnimation(path) && doc->layerCount() > 1)
+            frames = ImageIO::animationFrames(doc, 0, true);
+        else if (!sources.isEmpty())
+            frames << Gif::Frame{doc->flattened(), 0};
+        SaveConfigDialog dlg(doc->flattened(), path, options, this, frames, sources);
         if (dlg.exec() != QDialog::Accepted)
             return false;
         options = dlg.options();
@@ -3160,6 +3245,10 @@ void MainWindow::showWelcome()
     dlg.exec();
     const AppSettings chosen = dlg.settings();
     m_settings.uiStyle = chosen.uiStyle;
+    // Con el estilo de Kaint, la barra de título del escritorio (si no se eligió otra): la de Kaint
+    // con los botones de Windows 10 es la predeterminada del estilo Paint.NET.
+    if (chosen.uiStyle == 0 && !QSettings().contains(QStringLiteral("settings/titleButtons")))
+        m_settings.titleButtons = -1;
     m_settings.cursorStyle = chosen.cursorStyle;
     m_settings.discordEnabled = chosen.discordEnabled;
     m_settings.welcomed = true;
@@ -3182,6 +3271,9 @@ void MainWindow::restartWith(const AppSettings& settings)
     // El estilo de la interfaz y la barra de título simulada (Linux) también reinician.
     m_settings.uiStyle = settings.uiStyle;
     m_settings.windows10Frame = settings.windows10Frame;
+    m_settings.titleButtons = settings.titleButtons;
+    m_settings.titleButtonsLeft = settings.titleButtonsLeft;
+    m_settings.windowsVersion = settings.windowsVersion;
     m_settings.save();
     m_restartRequested = true;
     if (!close()) {
@@ -3194,8 +3286,10 @@ void MainWindow::restartWith(const AppSettings& settings)
 void MainWindow::keepOpaque()
 {
     // Algunos estilos del escritorio (tema de KDE) vuelven translúcida la ventana; Kaint la
-    // pinta opaca y con translucidez quedaban rastros.
-    setAttribute(Qt::WA_TranslucentBackground, false);
+    // pinta opaca y con translucidez quedaban rastros. Con las esquinas redondeadas de Windows 11,
+    // translúcida (el marco pinta todo menos las esquinas).
+    const bool rounded = WindowFrame::isDecorated(this) && WindowFrame::roundedCorners();
+    setAttribute(Qt::WA_TranslucentBackground, rounded);
     setAttribute(Qt::WA_NoSystemBackground, false);
 }
 
@@ -3250,6 +3344,9 @@ void MainWindow::applyThemeLayout()
     const QSize icon(spec.iconSize, spec.iconSize);
     if (auto* main = findChild<QToolBar*>(QStringLiteral("MainToolBar")))
         main->setIconSize(icon);
+    // Paint.NET: la regla girada, como una «Γ» (como la suya); con el de Kaint, la de siempre.
+    const QIcon ruler = Icons::theme({"measure", "kruler"});
+    m_act["rulers"]->setIcon(paintNet ? Icons::rotated(ruler) : ruler);
     for (QToolButton* b : m_cornerButtons->findChildren<QToolButton*>())
         b->setIconSize(icon);
     if (auto* tools = findChild<ToolsPanel*>())
@@ -3293,6 +3390,7 @@ void MainWindow::applySettings()
         m_act["translucent"]->setChecked(m_settings.translucentPanels);
         m_act["rulers"]->setChecked(m_settings.rulers);
     }
+    m_workspace->setTranslucentOverImageOnly(m_settings.translucentOverImage);
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
     m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder);
     m_canvas->setRulerStyle(Ruler::Style(m_settings.rulerStyle));
@@ -3312,6 +3410,12 @@ void MainWindow::applySettings()
     AppState::instance()->setPreferences(preferences);
     m_canvas->viewport()->update();
     FloatingPanel::setSnapping(m_settings.snapPanels);
+    // Botones de la barra de título: el estilo y el lado cambian al momento.
+    if (m_settings.titleButtons >= 0)
+        WindowFrame::setButtons(WindowFrame::Buttons(m_settings.titleButtons));
+    WindowFrame::setButtonsOnLeft(m_settings.titleButtonsLeft);
+    placeCaptionButtons();
+    WindowFrame::refreshAll();
     // La fuente de la interfaz y (Linux) el color de la barra superior se ven al volver a aplicar
     // el tema.
     const bool fontChanged = Theme::uiFontFamily() != m_settings.uiFontFamily || Theme::uiFontSize() != m_settings.uiFontSize;

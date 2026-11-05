@@ -73,6 +73,7 @@ const FormatInfo kOpenFormats[] = {
 };
 
 const FormatInfo kSaveFormats[] = {
+    {"pdn", QT_TRANSLATE_NOOP("QObject", "Paint.NET con capas"), "*.pdn"},
     {"ora", QT_TRANSLATE_NOOP("QObject", "OpenRaster con capas"), "*.ora"},
     {"png", QT_TRANSLATE_NOOP("QObject", "PNG"), "*.png"},
     {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif"},
@@ -91,7 +92,7 @@ const FormatInfo kSaveFormats[] = {
 // Formatos que escribe Kaint sin depender de los complementos de Qt.
 bool ownWriter(const QByteArray& suffix)
 {
-    return suffix == "ora" || suffix == "gif" || suffix == "ico";
+    return suffix == "ora" || suffix == "pdn" || suffix == "gif" || suffix == "ico";
 }
 
 // Se escribe a un archivo temporal y se renombra: un error no destruye el original.
@@ -160,7 +161,8 @@ QString saveFilter(QString* defaultFilter)
 
 bool isLayered(const QString& path)
 {
-    return suffixOf(path) == QLatin1String("ora");
+    const QString suffix = suffixOf(path);
+    return suffix == QLatin1String("ora") || suffix == QLatin1String("pdn");
 }
 
 bool isWritable(const QString& path)
@@ -198,7 +200,7 @@ bool supportsAlpha(const QString& path)
 Document* load(const QString& path, QString* error)
 {
     Document* doc = nullptr;
-    if (isLayered(path)) {
+    if (suffixOf(path) == QLatin1String("ora")) {
         doc = Ora::load(path, error);
     } else if (suffixOf(path) == QLatin1String("pdn")) {
         doc = Pdn::load(path, error);
@@ -366,6 +368,8 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
 
 bool save(const Document* doc, const QString& path, const SaveOptions& options, QString* error)
 {
+    if (suffixOf(path) == QLatin1String("pdn"))
+        return Pdn::save(doc, path, error);
     if (isLayered(path))
         return Ora::save(doc, path, error);
 

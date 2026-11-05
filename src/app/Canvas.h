@@ -80,6 +80,9 @@ public:
 
 signals:
     void zoomChanged(qreal zoom);
+    // La imagen se movió en la vista (zum, desplazamiento, tamaño o documento): las ventanas
+    // flotantes miran si la tapan.
+    void viewChanged();
     void rulersVisibilityChanged(bool visible);
     void cursorMoved(QPoint imagePos, bool inside);
     void deselectRequested();

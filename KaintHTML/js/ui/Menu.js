@@ -230,6 +230,8 @@ export class MenuBar {
         for (const m of menus) {
             const title = document.createElement("div");
             title.className = "menu-title";
+            if (m.id)
+                title.dataset.menu = m.id;
             title.innerHTML = mnemonicHtml(m.title);
             title.title = "";
             title.addEventListener("pointerdown", (e) => {

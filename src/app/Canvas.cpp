@@ -304,6 +304,7 @@ void Canvas::updateScrollBars()
     if (!m_doc) {
         horizontalScrollBar()->setRange(0, 0);
         verticalScrollBar()->setRange(0, 0);
+        emit viewChanged();
         return;
     }
     const QSizeF content = QSizeF(m_doc->size()) * scale();
@@ -318,6 +319,7 @@ void Canvas::updateScrollBars()
     };
     sync(horizontalScrollBar(), content.width(), vp.width(), m_origin.x());
     sync(verticalScrollBar(), content.height(), vp.height(), m_origin.y());
+    emit viewChanged();
 }
 
 void Canvas::setOverscroll(bool on)
@@ -796,6 +798,7 @@ void Canvas::scrollContentsBy(int, int)
     }
     viewport()->update();
     updateRulers();
+    emit viewChanged();
 }
 
 // ---------------------------------------------------------------------------

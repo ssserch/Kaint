@@ -4,6 +4,23 @@
 import en from "./i18n/en.js";
 
 const extra = {
+    "sistema de complementos": "plugin system",
+    "Archivo": "File",
+    "Botones de las ventanas:": "Window buttons:",
+    "El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, Windows XP y Windows 98, «Windows 10» usa el del tema.":
+        "The close button of the windows and dialogs. With the Windows 7, Windows XP and Windows 98 themes, “Windows 10” uses the theme's own.",
+    "Windows 11": "Windows 11",
+    "%1 de %2 efectos": "%1 of %2 effects",
+    "%1 efectos": "%1 effects",
+    "%1 imágenes en el GIF": "%1 images in the GIF",
+    "Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte.": "As layers: each frame is a layer of a single image. As images: each frame opens as a separate image.",
+    "Mostrar u ocultar sus efectos": "Show or hide its effects",
+    "Ocultarse en las esquinas": "Hide in the corners",
+    "Ocultarse en las esquinas: cada ventana se esconde en su esquina con un asa; al tocarla sale y se vuelve a esconder al tocar el lienzo o elegir una herramienta. Ventanas: las flotantes de siempre, con el tamaño que elijas.": "Hide in the corners: each window hides in its corner behind a handle; tap it to slide the window out, and it hides again when you tap the canvas or pick a tool. Windows: the usual floating windows, at the size you choose.",
+    "Tamaño de cada ventana en el modo Ventanas:": "Size of each window in Windows mode:",
+    "Teléfono": "Phone",
+    "Ventanas en el teléfono:": "Windows on the phone:",
+    "«%1» tiene %2 fotogramas. ¿Cómo quieres abrirlo?": "“%1” has %2 frames. How do you want to open it?",
     "Arrastra aquí una imagen o ábrela desde Archivo.": "Drop an image here or open it from File.",
     "Descargar": "Download",
     "Sistema de complementos basado en el de ": "Plugin system based on the one of ",

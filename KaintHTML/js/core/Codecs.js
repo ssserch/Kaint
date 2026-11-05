@@ -49,6 +49,7 @@ async function streamThrough(bytes, transform) {
 export const zlibCompress = (bytes) => streamThrough(bytes, new CompressionStream("deflate"));
 export const zlibDecompress = (bytes) => streamThrough(bytes, new DecompressionStream("deflate"));
 export const gunzip = (bytes) => streamThrough(bytes, new DecompressionStream("gzip"));
+export const gzip = (bytes) => streamThrough(bytes, new CompressionStream("gzip"));
 
 export function newImage(width, height) {
     return { width, height, data: new Uint8ClampedArray(width * height * 4) };
@@ -1422,10 +1423,241 @@ export async function decodePdn(bytes) {
         }
         if (!layers.length)
             throw new NrbfError("La imagen no tiene capas.");
-        return { width, height, layers };
+        return { width, height, layers, dpi: pdnDpi(n, doc) };
     } catch (e) {
         if (e instanceof NrbfError)
             throw e;
         throw new NrbfError(String(e?.message || e));
     }
+}
+
+// Resolución que Paint.NET guarda en los metadatos EXIF del documento (puntos por pulgada).
+function pdnDpi(n, doc) {
+    const items = n.member(doc, "userMetadataItems");
+    if (!Array.isArray(items))
+        return 0;
+    let dpi = 0, unit = 2;
+    for (const item of items) {
+        const kv = n.deref(item), value = n.member(kv, "value");
+        const m = typeof value === "string" && /<exif id="(\d+)"[^>]*value="([^"]*)"/.exec(value);
+        if (!m)
+            continue;
+        const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+        if (m[1] === "282" && bytes.length >= 8) {
+            const num = u32le(bytes, 0), den = u32le(bytes, 4);
+            if (den)
+                dpi = num / den;
+        } else if (m[1] === "296" && bytes.length >= 2) {
+            unit = u16le(bytes, 0);
+        }
+    }
+    return unit === 3 ? dpi * 2.54 : dpi;
+}
+
+// --- Escritura de .pdn (Pdn::encode de Kaint) ---------------------------------------------
+// La misma estructura que Paint.NET 5.1: el documento, la lista de capas, cada capa con sus
+// propiedades y sus píxeles BGRA en bloques de 256 KB comprimidos con gzip al final.
+
+const PDN_VERSION = "5.112.9563.32325";
+const KEY_VALUE = "System.Collections.Generic.KeyValuePair`2[[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, " +
+                  "PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]]";
+const PDN_CHUNK = 256 * 1024;
+const PDN_OP_NAMES = { multiply: "Multiply", additive: "Additive", colorburn: "ColorBurn", colordodge: "ColorDodge", reflect: "Reflect",
+                       glow: "Glow", overlay: "Overlay", difference: "Difference", negation: "Negation", lighten: "Lighten",
+                       darken: "Darken", screen: "Screen", xor: "Xor" };
+
+class NrbfWriter extends Writer {
+    string(s) {
+        const utf8 = new TextEncoder().encode(s);
+        let n = utf8.length;
+        do {
+            let b = n & 0x7f;
+            n >>>= 7;
+            if (n)
+                b |= 0x80;
+            this.u8(b);
+        } while (n);
+        this.bytes(utf8);
+    }
+    i32(v) { this.u32(v >>> 0); }
+    // Valores enteros de 64 bits (hasta 2^53).
+    i64(v) { this.u32(v % 0x100000000); this.u32(Math.floor(v / 0x100000000)); }
+    library(id, name) { this.u8(12); this.i32(id); this.string(name); }
+    // members: [nombre, tipo binario, primitivo | [clase, librería] | clase del sistema]
+    classDefinition(id, name, members, library) {
+        this.u8(library ? 5 : 4);
+        this.i32(id);
+        this.string(name);
+        this.i32(members.length);
+        members.forEach((m) => this.string(m[0]));
+        members.forEach((m) => this.u8(m[1]));
+        for (const [, binary, extra] of members) {
+            if (binary === 0)
+                this.u8(extra);
+            else if (binary === 3)
+                this.string(extra);
+            else if (binary === 4) {
+                this.string(extra[0]);
+                this.i32(extra[1]);
+            }
+        }
+        if (library)
+            this.i32(library);
+    }
+    classWithId(id, meta) { this.u8(1); this.i32(id); this.i32(meta); }
+    objectString(id, s) { this.u8(6); this.i32(id); this.string(s); }
+    reference(id) { this.u8(9); this.i32(id); }
+    emptyKeyValueArray(id, count = 0) {
+        this.u8(7); this.i32(id); this.u8(0); this.i32(1); this.i32(count); this.u8(3); this.string(KEY_VALUE);
+    }
+}
+
+// doc: { width, height, dpi, layers: [{ name, visible, opacity, blend, data (RGBA) }] } (la de abajo
+// primero); thumbnail: los bytes de un PNG de hasta 256 px.
+export async function encodePdn(doc, thumbnail) {
+    const { width, height, layers } = doc, count = layers.length;
+    const BOOL = 1, BYTE = 2, INT32 = 8, INT64 = 9;
+    const w = new NrbfWriter();
+    let next = 1, nextStruct = -1;
+    const id = () => next++, structId = () => nextStruct--;
+    const docId = id(), dataId = id(), listId = id(), versionId = id(), metaId = id(), itemsId = id(), coreId = id();
+    const ids = layers.map(() => ({ layer: id(), bitmapProps: id(), surface: id(), props: id(), blendOp: id(), block: id() }));
+    const emptyMetaId = id();
+    const dataLib = `PaintDotNet.Data, Version=${PDN_VERSION}, Culture=neutral, PublicKeyToken=null`;
+    const coreLib = `PaintDotNet.Core, Version=${PDN_VERSION}, Culture=neutral, PublicKeyToken=null`;
+    const opClass = (blend) => `PaintDotNet.UserBlendOps+${PDN_OP_NAMES[blend] || "Normal"}BlendOp`;
+    // Cabecera de la serialización (la raíz es el documento).
+    w.u8(0); w.i32(docId); w.i32(-1); w.i32(1); w.i32(0);
+    w.library(dataId, dataLib);
+    w.classDefinition(docId, "PaintDotNet.Document", [["isDisposed", 0, BOOL], ["layers", 4, ["PaintDotNet.LayerList", dataId]],
+                                                     ["width", 0, INT32], ["height", 0, INT32], ["savedWith", 3, "System.Version"],
+                                                     ["userMetadataItems", 3, `${KEY_VALUE}[]`]], dataId);
+    w.u8(0); w.reference(listId); w.i32(width); w.i32(height); w.reference(versionId); w.reference(metaId);
+    w.classDefinition(listId, "PaintDotNet.LayerList", [["parent", 4, ["PaintDotNet.Document", dataId]], ["ArrayList+_items", 5],
+                                                       ["ArrayList+_size", 0, INT32], ["ArrayList+_version", 0, INT32]], dataId);
+    w.reference(docId); w.reference(itemsId); w.i32(count); w.i32(count);
+    w.classDefinition(versionId, "System.Version", [["_Major", 0, INT32], ["_Minor", 0, INT32], ["_Build", 0, INT32], ["_Revision", 0, INT32]], 0);
+    PDN_VERSION.split(".").forEach((v) => w.i32(Number(v)));
+    // Metadatos: la resolución (EXIF, como Paint.NET).
+    const dpi = doc.dpi || 96;
+    const rational = (v) => {
+        const exact = Math.abs(v - Math.round(v)) < 1e-6, num = exact ? Math.round(v) : Math.round(v * 100), den = exact ? 1 : 100;
+        return btoa(String.fromCharCode(num & 255, (num >> 8) & 255, (num >> 16) & 255, (num >>> 24) & 255, den & 255, 0, 0, 0));
+    };
+    const metadata = [["$exif.tag0[0]", `<exif id="296" len="2" type="3" value="${btoa("\x02\x00")}" />`],
+                      ["$exif.tag1[0]", `<exif id="282" len="8" type="5" value="${rational(dpi)}" />`],
+                      ["$exif.tag2[0]", `<exif id="283" len="8" type="5" value="${rational(dpi)}" />`]];
+    w.emptyKeyValueArray(metaId, metadata.length);
+    let keyValueMeta = 0;
+    for (const [key, value] of metadata) {
+        const sid = structId();
+        if (!keyValueMeta) {
+            w.classDefinition(sid, KEY_VALUE, [["key", 1], ["value", 1]], 0);
+            keyValueMeta = sid;
+        } else {
+            w.classWithId(sid, keyValueMeta);
+        }
+        w.objectString(id(), key);
+        w.objectString(id(), value);
+    }
+    w.u8(16); w.i32(itemsId); w.i32(count);
+    ids.forEach((l) => w.reference(l.layer));
+    w.library(coreId, coreLib);
+    ids.forEach((l, i) => {
+        if (i === 0)
+            w.classDefinition(l.layer, "PaintDotNet.BitmapLayer",
+                              [["properties", 4, ["PaintDotNet.BitmapLayer+BitmapLayerProperties", dataId]], ["surface", 4, ["PaintDotNet.Surface", coreId]],
+                               ["Layer+isDisposed", 0, BOOL], ["Layer+width", 0, INT32], ["Layer+height", 0, INT32],
+                               ["Layer+properties", 4, ["PaintDotNet.Layer+LayerProperties", dataId]]], dataId);
+        else
+            w.classWithId(l.layer, ids[0].layer);
+        w.reference(l.bitmapProps); w.reference(l.surface); w.u8(0); w.i32(width); w.i32(height); w.reference(l.props);
+    });
+    const bitmapMeta = new Map();
+    let layerBlendMeta = 0;
+    layers.forEach((layer, i) => {
+        const l = ids[i], op = opClass(layer.blend);
+        if (bitmapMeta.has(op)) {
+            w.classWithId(l.bitmapProps, bitmapMeta.get(op));
+        } else {
+            w.classDefinition(l.bitmapProps, "PaintDotNet.BitmapLayer+BitmapLayerProperties", [["blendOp", 4, [op, dataId]]], dataId);
+            bitmapMeta.set(op, l.bitmapProps);
+        }
+        w.reference(l.blendOp);
+        if (i === 0)
+            w.classDefinition(l.surface, "PaintDotNet.Surface", [["width", 0, INT32], ["height", 0, INT32], ["stride", 0, INT32],
+                                                                  ["scan0", 4, ["PaintDotNet.MemoryBlock", coreId]]], coreId);
+        else
+            w.classWithId(l.surface, ids[0].surface);
+        w.i32(width); w.i32(height); w.i32(width * 4); w.reference(l.block);
+        if (i === 0)
+            w.classDefinition(l.props, "PaintDotNet.Layer+LayerProperties",
+                              [["name", 1], ["userMetadataItems", 3, `${KEY_VALUE}[]`], ["visible", 0, BOOL], ["isBackground", 0, BOOL],
+                               ["opacity", 0, BYTE], ["blendMode", 4, ["PaintDotNet.LayerBlendMode", dataId]]], dataId);
+        else
+            w.classWithId(l.props, ids[0].props);
+        w.objectString(id(), layer.name || "");
+        w.reference(emptyMetaId);
+        w.u8(layer.visible === false ? 0 : 1);
+        w.u8(i === 0 ? 1 : 0);
+        w.u8(Math.max(0, Math.min(255, Math.round(layer.opacity ?? 255))));
+        const blendId = structId();
+        if (!layerBlendMeta) {
+            w.classDefinition(blendId, "PaintDotNet.LayerBlendMode", [["value__", 0, INT32]], dataId);
+            layerBlendMeta = blendId;
+        } else {
+            w.classWithId(blendId, layerBlendMeta);
+        }
+        w.i32(Math.max(0, PDN_BLENDS.indexOf(layer.blend)));
+    });
+    const opMeta = new Map();
+    let memoryMeta = 0;
+    layers.forEach((layer, i) => {
+        const l = ids[i], op = opClass(layer.blend);
+        if (opMeta.has(op)) {
+            w.classWithId(l.blendOp, opMeta.get(op));
+        } else {
+            w.classDefinition(l.blendOp, op, [], dataId);
+            opMeta.set(op, l.blendOp);
+        }
+        if (!memoryMeta) {
+            w.classDefinition(l.block, "PaintDotNet.MemoryBlock", [["length64", 0, INT64], ["hasParent", 0, BOOL], ["deferred", 0, BOOL]], coreId);
+            memoryMeta = l.block;
+        } else {
+            w.classWithId(l.block, memoryMeta);
+        }
+        w.i64(width * 4 * height); w.u8(0); w.u8(1);
+        if (i === 0)
+            w.emptyKeyValueArray(emptyMetaId);
+    });
+    w.u8(11);
+    // Píxeles diferidos: RGBA → BGRA, en bloques numerados comprimidos con gzip.
+    const length = width * height * 4, chunks = Math.ceil(length / PDN_CHUNK);
+    for (const layer of layers) {
+        const bgra = new Uint8Array(length), src = layer.data;
+        for (let o = 0; o < length; o += 4) {
+            bgra[o] = src[o + 2]; bgra[o + 1] = src[o + 1]; bgra[o + 2] = src[o]; bgra[o + 3] = src[o + 3];
+        }
+        const packed = await Promise.all(Array.from({ length: chunks }, (_, c) => gzip(bgra.subarray(c * PDN_CHUNK, Math.min(length, (c + 1) * PDN_CHUNK)))));
+        w.u8(0);
+        w.u32be(PDN_CHUNK);
+        packed.forEach((data, c) => {
+            w.u32be(c);
+            w.u32be(data.length);
+            w.bytes(data);
+        });
+    }
+    // Cabecera: "PDN3", el largo del XML (24 bits) y el XML con la miniatura.
+    let binary = "";
+    for (let o = 0; o < thumbnail.length; o += 0x8000)
+        binary += String.fromCharCode(...thumbnail.subarray(o, o + 0x8000));
+    const xml = new TextEncoder().encode(`<pdnImage width="${width}" height="${height}" layers="${count}" savedWithVersion="${PDN_VERSION}">` +
+                                         `<custom><thumb png="${btoa(binary)}" /></custom></pdnImage>`);
+    const body = w.result();
+    const out = new Uint8Array(7 + xml.length + 2 + body.length);
+    out.set([0x50, 0x44, 0x4e, 0x33, xml.length & 255, (xml.length >> 8) & 255, (xml.length >> 16) & 255]);
+    out.set(xml, 7);
+    out.set([0x00, 0x01], 7 + xml.length);
+    out.set(body, 9 + xml.length);
+    return out;
 }

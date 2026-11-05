@@ -17,3 +17,9 @@ paintnetrecreationattempt/
 kaintold/
 evidencias/
 plugintestsourcecode/
+node_modules/
+build-apk/
+build-aab/
+/package.json
+/package-lock.json
+build-apk.sh

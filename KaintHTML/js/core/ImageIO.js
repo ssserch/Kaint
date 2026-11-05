@@ -10,6 +10,7 @@ import { tr } from "../i18n.js";
 
 // Tipos de "Guardar como", en el orden de Kaint (ImageIO.cpp).
 export const SaveFormats = [
+    { ext: "pdn", mime: "application/octet-stream", name: "Paint.NET con capas", layered: true },
     { ext: "ora", mime: "image/openraster", name: "OpenRaster con capas", layered: true },
     { ext: "png", mime: "image/png", name: "PNG" },
     { ext: "jpg", mime: "image/jpeg", name: "JPEG", quality: true, aliases: ["jpeg", "jpe", "jfif"] },
@@ -83,6 +84,8 @@ export async function openFile(file) {
         const pdn = await Codecs.decodePdn(new Uint8Array(await file.arrayBuffer()));
         doc = documentFrom(pdn.width, pdn.height, name, pdn.layers.map((l, i) => ({ ...l, name: l.name || tr("Capa %1", i + 1) })));
         doc.active = doc.layers.length - 1;
+        if (pdn.dpi >= 1 && pdn.dpi <= 100000)
+            doc.dpi = pdn.dpi;
     } else if (magic.startsWith("GIF")) {
         const anim = Codecs.decodeGif(new Uint8Array(await file.arrayBuffer()));
         const { width, height } = anim.frames[0];
@@ -205,6 +208,8 @@ export function animationFrames(doc, defaultDelay, withHidden = false) {
 export async function encode(doc, format, options = defaultSaveOptions(), frames = null) {
     if (typeof options === "number")
         options = { ...defaultSaveOptions(), quality: options };
+    if (format.ext === "pdn")
+        return encodePdnFile(doc);
     if (format.layered)
         return encodeOra(doc);
     if (format.plugin)
@@ -234,6 +239,21 @@ async function encodePlugin(doc, format) {
     throw new Error(format.name);
 }
 
+// Paint.NET con todas las capas (Codecs.encodePdn) y la miniatura de la cabecera.
+async function encodePdnFile(doc) {
+    const flat = doc.flattened();
+    const thumb = document.createElement("canvas");
+    const k = Math.min(1, 256 / Math.max(doc.width, doc.height));
+    thumb.width = Math.max(1, Math.round(doc.width * k));
+    thumb.height = Math.max(1, Math.round(doc.height * k));
+    thumb.getContext("2d").drawImage(flat, 0, 0, thumb.width, thumb.height);
+    const png = new Uint8Array(await (await canvasBlob(thumb)).arrayBuffer());
+    const layers = doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend,
+                                            data: l.ctx.getImageData(0, 0, doc.width, doc.height).data }));
+    const bytes = await Codecs.encodePdn({ width: doc.width, height: doc.height, dpi: doc.dpi, layers }, png);
+    return new Blob([bytes], { type: "application/octet-stream" });
+}
+
 async function encodeOra(doc) {
     const enc = new TextEncoder();
     const bytes = async (blob) => new Uint8Array(await blob.arrayBuffer());
@@ -260,8 +280,15 @@ async function encodeOra(doc) {
     return zip(entries);
 }
 
-// Descarga (o, con la API de archivos del navegador, el archivo elegido).
+// Descarga (o, con la API de archivos del navegador, el archivo elegido). Dentro de Kaint.APK (la
+// versión para Android), Android pregunta dónde guardarlo.
 export function download(blob, name) {
+    if (window.KaintAndroid?.saveFile) {
+        const reader = new FileReader();
+        reader.onload = () => window.KaintAndroid.saveFile(name, blob.type || "application/octet-stream", String(reader.result).split(",")[1] || "");
+        reader.readAsDataURL(blob);
+        return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

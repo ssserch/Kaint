@@ -39,8 +39,8 @@ QString rawOption(int argc, char** argv, const QString& name)
     return {};
 }
 
-// Tema guardado o el de --color-scheme (system, light, dark, kde o custom), que también se
-// guarda: así se puede recuperar el tema sin abrir la configuración.
+// Tema guardado o el de --color-scheme (system, light, dark, kde, custom, windows98, blue, windows7,
+// windowsxp o windows98alt), que también se guarda: así se puede recuperar el tema sin abrir la configuración.
 Theme::Scheme startupScheme(int argc, char** argv)
 {
     QSettings settings(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"));
@@ -54,10 +54,11 @@ Theme::Scheme startupScheme(int argc, char** argv)
         const QString value = arg.section(QLatin1Char('='), 1).toLower();
         const QStringList names{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark"),
                                 QStringLiteral("kde"), QStringLiteral("custom"), QStringLiteral("windows98"),
-                                QStringLiteral("blue")};
+                                QStringLiteral("blue"), QStringLiteral("windows7"), QStringLiteral("windowsxp"),
+                                QStringLiteral("windows98alt")};
         settings.setValue(QStringLiteral("colorScheme"), std::max(0, int(names.indexOf(value))));
     }
-    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 6));
+    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 9));
 #ifdef Q_OS_WIN
     // En Windows no hay tema nativo aparte (versiones anteriores lo tenían).
     if (scheme == Theme::Scheme::Kde)
@@ -101,6 +102,16 @@ int main(int argc, char** argv)
         const QString style = rawOption(argc, argv, QStringLiteral("--preview-style")).toLower();
         if (!style.isEmpty())
             preset.setValue(QStringLiteral("settings/uiStyle"), style.contains(QLatin1String("paint")) || style == QLatin1String("pdn") ? 1 : 0);
+        // Botones de la barra de título (win11, win10, macos, win7, xp, win98) y su lado.
+        const QString buttons = rawOption(argc, argv, QStringLiteral("--preview-title-buttons")).toLower();
+        const QStringList buttonNames{QStringLiteral("win10"), QStringLiteral("win11"), QStringLiteral("macos"),
+                                      QStringLiteral("win7"), QStringLiteral("xp"), QStringLiteral("win98")};
+        if (buttonNames.contains(buttons))
+            preset.setValue(QStringLiteral("settings/titleButtons"), int(buttonNames.indexOf(buttons)));
+        yesNo("--preview-title-left", "settings/titleButtonsLeft");
+        const QString windows = rawOption(argc, argv, QStringLiteral("--preview-windows")).toLower();
+        if (windows == QLatin1String("11") || windows == QLatin1String("10"))
+            preset.setValue(QStringLiteral("settings/windowsVersion"), windows.toInt());
         const QString language = rawOption(argc, argv, QStringLiteral("--preview-language")).toLower();
         if (language == QLatin1String("en") || language == QLatin1String("es"))
             preset.setValue(QStringLiteral("settings/language"), language);
@@ -156,7 +167,8 @@ int main(int argc, char** argv)
     parser.addPositionalArgument(QStringLiteral("archivos"), QObject::tr("Imágenes que abrir."),
                                  QStringLiteral("[archivos...]"));
     parser.addOption(QCommandLineOption(QStringLiteral("color-scheme"),
-                                        QObject::tr("Tema: system, light, dark, kde o custom (se guarda)."),
+                                        QObject::tr("Tema: system, light, dark, blue, kde, custom, windows7, windowsxp, windows98 "
+                                                    "o windows98alt (se guarda)."),
                                         QStringLiteral("scheme")));
     parser.addOption(QCommandLineOption(QStringLiteral("screenpreview"),
                                         QObject::tr("Guarda una captura de la ventana con la configuración de fábrica "
@@ -178,6 +190,14 @@ int main(int argc, char** argv)
                                         QStringLiteral("yes|no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-translucent"),
                                         QObject::tr("Ventanas translúcidas en la captura (yes o no)."), QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-title-buttons"),
+                                        QObject::tr("Botones de la barra de título en la captura (win11, win10, macos, win7, xp o win98)."),
+                                        QStringLiteral("estilo")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-title-left"),
+                                        QObject::tr("Botones de la barra de título a la izquierda en la captura (yes o no)."),
+                                        QStringLiteral("sí/no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-windows"),
+                                        QObject::tr("Recreación de Windows en la captura (10 u 11)."), QStringLiteral("versión")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-frame"),
                                         QObject::tr("Barra de título de Windows 10 dibujada por Kaint en la captura (yes o no)."),
                                         QStringLiteral("yes|no")));
@@ -191,11 +211,16 @@ int main(int argc, char** argv)
     Theme::setUiFont(startup.uiFontFamily, startup.uiFontSize);
     Theme::setCustomTitleBarColor(startup.titleBarColor);
     Theme::apply(scheme);
-    // Linux con el estilo de Paint.NET: la barra de título de Windows 10 dibujada por Kaint (en las
-    // capturas de muestra, solo si se pide).
+    // Linux: la barra de título dibujada por Kaint con los botones elegidos (en las capturas de
+    // muestra, solo si se pide).
     const QString previewFrame = parser.value(QStringLiteral("preview-frame")).toLower();
-    WindowFrame::setEnabled(Theme::paintNetLook() && startup.windows10Frame
-                            && (!preview || previewFrame == QLatin1String("yes") || previewFrame == QLatin1String("true")));
+    const bool frame = startup.titleButtons >= 0 && Theme::current() != Theme::Scheme::Kde
+                       && (!preview || previewFrame == QLatin1String("yes") || previewFrame == QLatin1String("true"));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::max(0, startup.titleButtons)));
+    WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
+    // Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana.
+    WindowFrame::setRoundedCorners(frame && Theme::paintNetLook() && startup.windowsVersion == 11);
+    WindowFrame::setEnabled(frame);
 
     if (preview) {
         const QStringList size = parser.value(QStringLiteral("preview-size")).toLower().split(QLatin1Char('x'));

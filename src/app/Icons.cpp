@@ -522,4 +522,49 @@ QIcon app()
     return QIcon::fromTheme(QStringLiteral(KAINT_APP_ID), theme({"applications-graphics", "kolourpaint"}));
 }
 
+namespace {
+
+class RotatedIconEngine : public QIconEngine {
+public:
+    explicit RotatedIconEngine(QIcon source)
+        : m_source(std::move(source))
+    {
+    }
+
+    void paint(QPainter* p, const QRect& rect, QIcon::Mode mode, QIcon::State state) override
+    {
+        p->save();
+        p->translate(QRectF(rect).center());
+        p->rotate(90);
+        p->translate(-QRectF(rect).center());
+        m_source.paint(p, rect, Qt::AlignCenter, mode, state);
+        p->restore();
+    }
+
+    QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override
+    {
+        const QPixmap pm = m_source.pixmap(size, mode, state);
+        QPixmap out = pm.transformed(QTransform().rotate(90));
+        out.setDevicePixelRatio(pm.devicePixelRatio());
+        return out;
+    }
+
+    QSize actualSize(const QSize& size, QIcon::Mode mode, QIcon::State state) override
+    {
+        return m_source.actualSize(size, mode, state);
+    }
+
+    QIconEngine* clone() const override { return new RotatedIconEngine(m_source); }
+
+private:
+    QIcon m_source;
+};
+
+} // namespace
+
+QIcon rotated(const QIcon& icon)
+{
+    return QIcon(new RotatedIconEngine(icon));
+}
+
 } // namespace Icons

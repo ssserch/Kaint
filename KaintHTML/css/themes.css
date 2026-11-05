@@ -1,0 +1,733 @@
+/* Temas de época de Kaint para la web: Windows 98 y Windows 98 ALT (clásico de 2000/XP), Windows XP
+   y los marcos de Windows 7, y los botones de cerrar de las ventanas al estilo elegido.
+   Los relieves, colores, degradados y dibujos vienen de:
+     · 98.css (https://jdan.github.io/98.css/), © 2020 Jordan Scales, licencia MIT.
+     · XP.css (https://botoxparty.github.io/XP.css/), © 2020 Adam Hammad y Jordan Scales, licencia MIT.
+     · 7.css (https://khang-nd.github.io/7.css/), © 2021 Khang Nguyen Duy, licencia MIT.
+   Sus licencias, en licenses/. Las reglas llevan :not(#k) delante para mandar sobre las del estilo
+   Paint.NET (que son más específicas). */
+
+/* --- Windows 98 y 98 ALT ----------------------------------------------------------------------- */
+
+:root.classic.alt {
+    --font: Tahoma, "DejaVu Sans", sans-serif;
+}
+
+:root.classic.alt body {
+    -webkit-font-smoothing: auto;
+}
+
+:root.classic:not(#k) .list .row.selected,
+:root.classic:not(#k) .settings .sections .row.selected,
+:root.classic:not(#k) .popup-menu .item.active:not(.disabled),
+:root.classic:not(#k) .menubar > .menu-title:hover,
+:root.classic:not(#k) .menubar.active > .menu-title.open {
+    background: var(--selection);
+    border-color: var(--selection);
+    color: #ffffff;
+}
+
+:root.classic:not(#k) .popup-menu .item.active:not(.disabled) .shortcut {
+    color: #ffffff;
+}
+
+/* Casillas, botones de opción y listas desplegables de 98.css. */
+:root.classic:not(#k) input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 13px;
+    height: 13px;
+    margin: 0 6px 0 0;
+    background: #ffffff;
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+    vertical-align: -2px;
+}
+
+:root.classic:not(#k) input[type="checkbox"]:active {
+    background-color: var(--window);
+}
+
+:root.classic:not(#k) input[type="checkbox"]:checked {
+    background: #ffffff 3px 3px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg width='7' height='7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M7 0H6v1H5v1H4v1H3v1H2V3H1V2H0v3h1v1h1v1h1V6h1V5h1V4h1V3h1V0z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+:root.classic:not(#k) input[type="checkbox"]:disabled {
+    background-color: var(--window);
+}
+
+:root.classic:not(#k) input[type="checkbox"]:disabled:checked {
+    background: var(--window) 3px 3px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg width='7' height='7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M7 0H6v1H5v1H4v1H3v1H2V3H1V2H0v3h1v1h1v1h1V6h1V5h1V4h1V3h1V0z' fill='gray'/%3E%3C/svg%3E");
+}
+
+:root.classic:not(#k) input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    margin: 0 6px 0 0;
+    background: url("data:image/svg+xml;charset=utf-8,%3Csvg width='12' height='12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 0H4v1H2v1H1v2H0v4h1v2h1V8H1V4h1V2h2V1h4v1h2V1H8V0z' fill='gray'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 1H4v1H2v2H1v4h1v1h1V8H2V4h1V3h1V2h4v1h2V2H8V1z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 3h1v1H9V3zm1 5V4h1v4h-1zm-2 2V9h1V8h1v2H8zm-4 0v1h4v-1H4zm0 0V9H2v1h2z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 2h-1v2h1v4h-1v2H8v1H4v-1H2v1h2v1h4v-1h2v-1h1V8h1V4h-1V2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M4 2h4v1h1v1h1v4H9v1H8v1H4V9H3V8H2V4h1V3h1V2z' fill='%23fff'/%3E%3C/svg%3E");
+    vertical-align: -2px;
+}
+
+:root.classic:not(#k) input[type="radio"]:checked {
+    background: 4px 4px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg width='4' height='4' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M3 0H1v1H0v2h1v1h2V3h1V1H3V0z' fill='%23000'/%3E%3C/svg%3E"), url("data:image/svg+xml;charset=utf-8,%3Csvg width='12' height='12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 0H4v1H2v1H1v2H0v4h1v2h1V8H1V4h1V2h2V1h4v1h2V1H8V0z' fill='gray'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 1H4v1H2v2H1v4h1v1h1V8H2V4h1V3h1V2h4v1h2V2H8V1z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 3h1v1H9V3zm1 5V4h1v4h-1zm-2 2V9h1V8h1v2H8zm-4 0v1h4v-1H4zm0 0V9H2v1h2z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 2h-1v2h1v4h-1v2H8v1H4v-1H2v1h2v1h4v-1h2v-1h1V8h1V4h-1V2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M4 2h4v1h1v1h1v4H9v1H8v1H4V9H3V8H2V4h1V3h1V2z' fill='%23fff'/%3E%3C/svg%3E");
+}
+
+:root.classic:not(#k) select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    border-radius: 0;
+    padding: 2px 22px 2px 4px;
+    min-height: 21px;
+    background: #ffffff top 2px right 2px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 6H4v1h1v1h1v1h1v1h1V9h1V8h1V7h1V6z' fill='%23000'/%3E%3C/svg%3E");
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+    color: #000000;
+}
+
+:root.classic:not(#k) select:active {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0h16v17H0V0zm1 16h14V1H1v15z' fill='gray'/%3E%3Cpath fill='silver' d='M1 1h14v15H1z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M12 7H5v1h1v1h1v1h1v1h1v-1h1V9h1V8h1V7z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+:root.classic:not(#k) select:focus {
+    outline: 1px dotted #000000;
+    outline-offset: -4px;
+}
+
+:root.classic:not(#k) .pushbutton {
+    background: var(--window);
+    color: #000000;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+    min-height: 23px;
+}
+
+:root.classic:not(#k) .pushbutton.default {
+    box-shadow: inset -2px -2px #0a0a0a, inset 1px 1px #0a0a0a, inset 2px 2px #ffffff, inset -3px -3px #808080, inset 3px 3px #dfdfdf;
+}
+
+:root.classic:not(#k) .pushbutton:active:not(:disabled) {
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+
+:root.classic:not(#k) .pushbutton:focus-visible {
+    outline: 1px dotted #000000;
+    outline-offset: -4px;
+}
+
+:root.classic:not(#k) .pushbutton:disabled {
+    color: #808080;
+    text-shadow: 1px 1px #ffffff;
+}
+
+:root.classic:not(#k) .tbutton {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+:root.classic:not(#k) .tbutton:hover:not(:disabled) {
+    box-shadow: inset -1px -1px #808080, inset 1px 1px #ffffff;
+}
+
+:root.classic:not(#k) .tbutton:active:not(:disabled),
+:root.classic:not(#k) .tbutton.checked {
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080;
+    background: color-mix(in srgb, var(--window) 70%, #ffffff);
+}
+
+:root.classic:not(#k) fieldset.group {
+    border: 2px groove #ffffff;
+}
+
+:root.classic:not(#k) .status-bar > * {
+    box-shadow: inset -1px -1px #dfdfdf, inset 1px 1px #808080;
+}
+
+/* Barras de desplazamiento de 98.css (Chrome, Edge, Safari). */
+:root.classic *::-webkit-scrollbar {
+    width: 16px;
+    height: 16px;
+}
+
+:root.classic *::-webkit-scrollbar-corner {
+    background: #dfdfdf;
+}
+
+:root.classic *::-webkit-scrollbar-track {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='2' height='2' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M1 0H0v1h1v1h1V1H1V0z' fill='silver'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 0H1v1H0v1h1V1h1V0z' fill='%23fff'/%3E%3C/svg%3E");
+}
+
+:root.classic *::-webkit-scrollbar-thumb {
+    background-color: #dfdfdf;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+}
+
+:root.classic *::-webkit-scrollbar-button:vertical:start:decrement,
+:root.classic *::-webkit-scrollbar-button:vertical:end:increment,
+:root.classic *::-webkit-scrollbar-button:horizontal:start:decrement,
+:root.classic *::-webkit-scrollbar-button:horizontal:end:increment {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
+:root.classic *::-webkit-scrollbar-button:vertical:start { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 6H7v1H6v1H5v1H4v1h7V9h-1V8H9V7H8V6z' fill='%23000'/%3E%3C/svg%3E"); }
+:root.classic *::-webkit-scrollbar-button:vertical:end { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 6H4v1h1v1h1v1h1v1h1V9h1V8h1V7h1V6z' fill='%23000'/%3E%3C/svg%3E"); }
+:root.classic *::-webkit-scrollbar-button:horizontal:start { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 4H8v1H7v1H6v1H5v1h1v1h1v1h1v1h1V4z' fill='%23000'/%3E%3C/svg%3E"); }
+:root.classic *::-webkit-scrollbar-button:horizontal:end { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M7 4H6v7h1v-1h1V9h1V8h1V7H9V6H8V5H7V4z' fill='%23000'/%3E%3C/svg%3E"); }
+
+/* Ventanas y diálogos: el marco en relieve y la cabecera azul en degradado (siempre activa: el gris
+   es el de una ventana sin el foco). */
+:root.classic:not(#k) .floating-panel,
+:root.classic:not(#k) .dialog {
+    border: none;
+    border-radius: 0;
+    padding: 3px;
+    background: var(--window);
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #ffffff;
+}
+
+:root.classic:not(#k) .floating-panel > .title,
+:root.classic:not(#k) .dialog > .title {
+    background: linear-gradient(90deg, var(--panel-title), var(--panel-title-end));
+    color: #ffffff;
+    font-weight: bold;
+    padding: 2px 2px 2px 3px;
+    border: none;
+    min-height: 18px;
+}
+
+
+/* --- Windows XP ---------------------------------------------------------------------------------- */
+
+:root.xp {
+    --radius: 3px;
+    --font: Tahoma, "DejaVu Sans", sans-serif;
+    --line: #aca899;
+}
+
+:root.xp body {
+    font-size: 11px;
+}
+
+:root.xp:not(#k) .pushbutton,
+:root.xp:not(#k) .dialog select {
+    border: 1px solid #003c74;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #ffffff, #ecebe5 86%, #d8d0c4);
+    color: #000000;
+    box-shadow: none;
+}
+
+:root.xp:not(#k) .pushbutton:hover:not(:disabled) {
+    box-shadow: inset -1px 1px #fff0cf, inset 1px 2px #fdd889, inset -2px 2px #fbc761, inset 2px -2px #e5a01a;
+}
+
+:root.xp:not(#k) .pushbutton:active:not(:disabled) {
+    background: linear-gradient(180deg, #cdcac3, #e3e3db 8%, #e5e5de 94%, #f2f2f1);
+    box-shadow: none;
+}
+
+:root.xp:not(#k) .pushbutton.default,
+:root.xp:not(#k) .pushbutton:focus-visible {
+    box-shadow: inset -1px 1px #cee7ff, inset 1px 2px #98b8ea, inset -2px 2px #bcd4f6, inset 1px -1px #89ade4, inset 2px -2px #89ade4;
+}
+
+:root.xp:not(#k) .pushbutton:disabled {
+    border-color: #c9c7ba;
+    color: #a19f94;
+    background: #f5f4ea;
+}
+
+:root.xp:not(#k) input[type="text"],
+:root.xp:not(#k) input[type="number"],
+:root.xp:not(#k) textarea,
+:root.xp:not(#k) .list {
+    border: 1px solid #7f9db9;
+    border-radius: 0;
+    background-color: #ffffff;
+}
+
+:root.xp:not(#k) .dialog select,
+:root.xp:not(#k) select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid #7f9db9;
+    border-radius: 0;
+    padding: 2px 22px 2px 4px;
+    background: #ffffff top 2px right 2px / 15px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 15 17' shape-rendering='crispEdges'%3E%3Cpath stroke='%23e6eefc' d='M0 0h1'/%3E%3Cpath stroke='%23d1e0fd' d='M1 0h1M0 1h1m3 0h2M2 3h1M2 4h1'/%3E%3Cpath stroke='%23cad8f9' d='M2 0h1M0 2h1'/%3E%3Cpath stroke='%23c4d3f7' d='M3 0h1M0 3h1M0 4h1'/%3E%3Cpath stroke='%23bfd0f8' d='M4 0h2M0 5h1'/%3E%3Cpath stroke='%23bdcef7' d='M6 0h1M0 6h1'/%3E%3Cpath stroke='%23baccf4' d='M7 0h1m6 2h1m-1 5h1m-1 1h1'/%3E%3Cpath stroke='%23b8cbf6' d='M8 0h1M0 7h1M0 8h1'/%3E%3Cpath stroke='%23b7caf5' d='M9 0h2M0 9h1'/%3E%3Cpath stroke='%23b5c8f7' d='M11 0h1'/%3E%3Cpath stroke='%23b3c7f5' d='M12 0h1'/%3E%3Cpath stroke='%23afc5f4' d='M13 0h1'/%3E%3Cpath stroke='%23dce6f9' d='M14 0h1'/%3E%3Cpath stroke='%23e1eafe' d='M1 1h1'/%3E%3Cpath stroke='%23dae6fe' d='M2 1h1M1 2h1'/%3E%3Cpath stroke='%23d4e1fc' d='M3 1h1M1 3h1M1 4h1'/%3E%3Cpath stroke='%23d0ddfc' d='M6 1h1M1 5h1'/%3E%3Cpath stroke='%23cedbfd' d='M7 1h1M4 2h2'/%3E%3Cpath stroke='%23cad9fd' d='M8 1h1M6 2h1M3 5h1'/%3E%3Cpath stroke='%23c8d8fb' d='M9 1h2'/%3E%3Cpath stroke='%23c5d6fc' d='M11 1h1M2 11h4'/%3E%3Cpath stroke='%23c2d3fc' d='M12 1h1m-2 1h1M1 11h1m0 1h2m-2 1h2'/%3E%3Cpath stroke='%23bccefa' d='M13 1h1m-1 1h1m-1 1h1m-1 1h1M3 15h4'/%3E%3Cpath stroke='%23b9c9f3' d='M14 1h1M3 16h4'/%3E%3Cpath stroke='%23d8e3fc' d='M2 2h1'/%3E%3Cpath stroke='%23d1defd' d='M3 2h1'/%3E%3Cpath stroke='%23c9d8fc' d='M7 2h1M4 3h3M4 4h3M3 6h1m1 0h2M1 7h1M1 8h1'/%3E%3Cpath stroke='%23c5d5fc' d='M8 2h1m-8 8h5'/%3E%3Cpath stroke='%23c5d3fc' d='M9 2h2'/%3E%3Cpath stroke='%23bed0fc' d='M12 2h1M8 3h1M8 4h1m-8 8h1m-1 1h1m0 1h1m1 0h3'/%3E%3Cpath stroke='%23cddbfc' d='M3 3h1M3 4h1M1 6h2'/%3E%3Cpath stroke='%23c8d5fb' d='M7 3h1M7 4h1'/%3E%3Cpath stroke='%23bbcefd' d='M9 3h4M9 4h4M8 5h1M7 6h1'/%3E%3Cpath stroke='%23bcccf3' d='M14 3h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23ceddfd' d='M2 5h1'/%3E%3Cpath stroke='%23c8d6fb' d='M4 5h4M1 9h3'/%3E%3Cpath stroke='%23bacdfc' d='M9 5h2m1 0h2M1 14h1'/%3E%3Cpath stroke='%23b9cdfb' d='M11 5h1M8 6h2m2 0h2m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%234d6185' d='M4 6h1m5 0h1M3 7h3m3 0h3M4 8h3m1 0h3M5 9h5m-4 1h3m-2 1h1'/%3E%3Cpath stroke='%23b7cdfc' d='M11 6h1m0 1h1m-1 1h1'/%3E%3Cpath stroke='%23cad8fd' d='M2 7h1M2 8h2'/%3E%3Cpath stroke='%23c1d3fb' d='M6 7h2M7 8h1M4 9h1'/%3E%3Cpath stroke='%23b6cefb' d='M8 7h1m2 1h1m-2 1h3m-2 1h2'/%3E%3Cpath stroke='%23b6cdfb' d='M13 9h1m-6 6h1'/%3E%3Cpath stroke='%23b9cbf3' d='M14 9h1'/%3E%3Cpath stroke='%23b4c8f6' d='M0 10h1'/%3E%3Cpath stroke='%23bdd3fb' d='M9 10h2m-4 4h1'/%3E%3Cpath stroke='%23b5cdfa' d='M13 10h1'/%3E%3Cpath stroke='%23b5c9f3' d='M14 10h1'/%3E%3Cpath stroke='%23b1c7f6' d='M0 11h1'/%3E%3Cpath stroke='%23c3d5fd' d='M6 11h1'/%3E%3Cpath stroke='%23bad4fc' d='M8 11h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23b2cffb' d='M9 11h4m-2 3h1'/%3E%3Cpath stroke='%23b1cbfa' d='M13 11h1m-3 4h1'/%3E%3Cpath stroke='%23b3c8f5' d='M14 11h1m-7 5h3'/%3E%3Cpath stroke='%23adc3f6' d='M0 12h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23c2d5fc' d='M4 12h4m-4 1h4'/%3E%3Cpath stroke='%23b7d3fc' d='M9 12h2m-2 1h2m-3 1h1'/%3E%3Cpath stroke='%23b3d1fc' d='M11 12h1m-1 1h1'/%3E%3Cpath stroke='%23afcdfb' d='M12 12h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23afcbfa' d='M13 12h1m-1 1h1'/%3E%3Cpath stroke='%23b2c8f4' d='M14 12h1m-1 1h1m-4 3h1'/%3E%3Cpath stroke='%23c1d2fb' d='M3 14h1'/%3E%3Cpath stroke='%23b6d1fb' d='M9 14h2'/%3E%3Cpath stroke='%23adc9f9' d='M13 14h1m-2 1h1'/%3E%3Cpath stroke='%23b1c6f3' d='M14 14h1m-3 2h1'/%3E%3Cpath stroke='%23abc1f4' d='M0 15h1'/%3E%3Cpath stroke='%23b7cbf9' d='M1 15h1'/%3E%3Cpath stroke='%23b9cefb' d='M2 15h1'/%3E%3Cpath stroke='%23b9cffb' d='M7 15h1'/%3E%3Cpath stroke='%23b2cdfb' d='M9 15h2'/%3E%3Cpath stroke='%23aec8f7' d='M13 15h1'/%3E%3Cpath stroke='%23b0c5f2' d='M14 15h1m-2 1h1'/%3E%3Cpath stroke='%23dbe3f8' d='M0 16h1'/%3E%3Cpath stroke='%23b7c6f1' d='M1 16h1'/%3E%3Cpath stroke='%23b8c9f2' d='M2 16h1m4 0h1'/%3E%3Cpath stroke='%23d9e3f6' d='M14 16h1'/%3E%3C/svg%3E");
+    color: #000000;
+}
+
+:root.xp:not(#k) select:hover {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 15 17' shape-rendering='crispEdges'%3E%3Cpath stroke='%23cfdbec' d='M0 0h1'/%3E%3Cpath stroke='%23b4c7eb' d='M1 0h1M0 1h1'/%3E%3Cpath stroke='%23abbee9' d='M2 0h1M0 2h1'/%3E%3Cpath stroke='%23a5b9e7' d='M3 0h1M0 3h1M0 4h1'/%3E%3Cpath stroke='%23a0b4e5' d='M4 0h2'/%3E%3Cpath stroke='%239cb2e5' d='M6 0h1M0 6h1'/%3E%3Cpath stroke='%2398b1e4' d='M7 0h1'/%3E%3Cpath stroke='%2397aee2' d='M8 0h1M0 7h1M0 8h1'/%3E%3Cpath stroke='%2395ade5' d='M9 0h2M0 9h1'/%3E%3Cpath stroke='%2394abe4' d='M11 0h1'/%3E%3Cpath stroke='%2390aae4' d='M12 0h1M0 10h1'/%3E%3Cpath stroke='%238aa6e3' d='M13 0h1M0 12h1m-1 1h1'/%3E%3Cpath stroke='%23c2cfea' d='M14 0h1'/%3E%3Cpath stroke='%23fdffff' d='M1 1h1'/%3E%3Cpath stroke='%23f6ffff' d='M2 1h1M1 2h1'/%3E%3Cpath stroke='%23eefcff' d='M3 1h1M1 3h1M1 4h1'/%3E%3Cpath stroke='%23e9faff' d='M4 1h2M3 2h1M2 3h1M2 4h1'/%3E%3Cpath stroke='%23e5f6ff' d='M6 1h1M1 5h2'/%3E%3Cpath stroke='%23e3f4ff' d='M7 1h1M4 2h2'/%3E%3Cpath stroke='%23dff2fe' d='M8 1h1M6 2h1M3 5h1'/%3E%3Cpath stroke='%23dbf1ff' d='M9 1h2'/%3E%3Cpath stroke='%23d8edfc' d='M11 1h1M2 11h4'/%3E%3Cpath stroke='%23d4e9fc' d='M12 1h1m-2 1h1M1 11h1m0 1h1m-1 1h1'/%3E%3Cpath stroke='%23cde2fc' d='M13 1h1m-1 1h1m-1 1h1m-1 1h1M3 15h3'/%3E%3Cpath stroke='%2397ace0' d='M14 1h1M3 16h4'/%3E%3Cpath stroke='%23f2feff' d='M2 2h1'/%3E%3Cpath stroke='%23ddf0fe' d='M7 2h1M4 3h3M4 4h3M3 6h1m1 0h2M1 7h1M1 8h1'/%3E%3Cpath stroke='%23d8ebfc' d='M8 2h1m-8 8h5'/%3E%3Cpath stroke='%23d8eafc' d='M9 2h2'/%3E%3Cpath stroke='%23d0e5fc' d='M12 2h1M8 3h1M8 4h1m-8 8h1m-1 1h1m0 1h1'/%3E%3Cpath stroke='%2398aee1' d='M14 2h1m-1 5h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23e2f3fd' d='M3 3h1M3 4h1M1 6h1'/%3E%3Cpath stroke='%23dcecfd' d='M7 3h1M7 4h1'/%3E%3Cpath stroke='%23cde4fc' d='M9 3h4M9 4h4M8 5h1'/%3E%3Cpath stroke='%239bafe0' d='M14 3h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%239db3e6' d='M0 5h1'/%3E%3Cpath stroke='%23dcedfd' d='M4 5h4M1 9h3'/%3E%3Cpath stroke='%23cae2fd' d='M9 5h2m1 0h2M1 14h1m4 1h1'/%3E%3Cpath stroke='%23c8e1fb' d='M11 5h1M8 6h2m2 0h2m-1 1h1m-1 1h1M2 15h1'/%3E%3Cpath stroke='%23e1f2fe' d='M2 6h1'/%3E%3Cpath stroke='%234d6185' d='M4 6h1m5 0h1M3 7h3m3 0h3M4 8h3m1 0h3M5 9h5m-4 1h3m-2 1h1'/%3E%3Cpath stroke='%23d2eafe' d='M7 6h1M6 7h2M7 8h1M4 9h1'/%3E%3Cpath stroke='%23c6e2fd' d='M11 6h1m0 1h1m-1 1h1'/%3E%3Cpath stroke='%23dff0fc' d='M2 7h1M2 8h2'/%3E%3Cpath stroke='%23c5e3fc' d='M8 7h1m2 1h1m-2 1h4m-3 1h2m-5 5h1'/%3E%3Cpath stroke='%23ceeafd' d='M9 10h2m-4 4h1'/%3E%3Cpath stroke='%23c2e2fc' d='M13 10h1m-5 5h2'/%3E%3Cpath stroke='%2392ade2' d='M14 10h1'/%3E%3Cpath stroke='%238da9e4' d='M0 11h1'/%3E%3Cpath stroke='%23d5ebfd' d='M6 11h1'/%3E%3Cpath stroke='%23cbedff' d='M8 11h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23c0e4fc' d='M9 11h4m-2 3h1'/%3E%3Cpath stroke='%23bee0fc' d='M13 11h1'/%3E%3Cpath stroke='%2391abe1' d='M14 11h1m-7 5h3'/%3E%3Cpath stroke='%23d5eafd' d='M3 12h1m-1 1h1'/%3E%3Cpath stroke='%23d4ebfc' d='M4 12h3m-3 1h3'/%3E%3Cpath stroke='%23d2ecfe' d='M7 12h1m-1 1h1'/%3E%3Cpath stroke='%23c6ebff' d='M9 12h2m-2 1h2m-3 1h1'/%3E%3Cpath stroke='%23c2eaff' d='M11 12h1m-1 1h1'/%3E%3Cpath stroke='%23bde3fd' d='M12 12h1m-1 1h1'/%3E%3Cpath stroke='%23b9ddfb' d='M13 12h1m-1 1h1m-1 1h1m-2 1h1'/%3E%3Cpath stroke='%238da9e1' d='M14 12h1m-1 1h1m-3 3h1'/%3E%3Cpath stroke='%2388a3e3' d='M0 14h1'/%3E%3Cpath stroke='%23d2e9fe' d='M3 14h1'/%3E%3Cpath stroke='%23d0e8fc' d='M4 14h3'/%3E%3Cpath stroke='%23c4e8fe' d='M9 14h2'/%3E%3Cpath stroke='%23bde0fb' d='M12 14h1m-2 1h1'/%3E%3Cpath stroke='%238fa7df' d='M14 14h1'/%3E%3Cpath stroke='%2387a0de' d='M0 15h1'/%3E%3Cpath stroke='%23c5ddfc' d='M1 15h1'/%3E%3Cpath stroke='%23c8e3fb' d='M7 15h1'/%3E%3Cpath stroke='%23b9dafb' d='M13 15h1'/%3E%3Cpath stroke='%238ca7de' d='M14 15h1m-2 1h1'/%3E%3Cpath stroke='%23c3cde7' d='M0 16h1'/%3E%3Cpath stroke='%2393a7df' d='M1 16h1'/%3E%3Cpath stroke='%2396acdf' d='M2 16h1m4 0h1'/%3E%3Cpath stroke='%2390abe0' d='M11 16h1'/%3E%3Cpath stroke='%23becbe6' d='M14 16h1'/%3E%3C/svg%3E");
+}
+
+:root.xp:not(#k) select:active {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0h16v17H0V0zm1 16h14V1H1v15z' fill='gray'/%3E%3Cpath fill='silver' d='M1 1h14v15H1z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M12 7H5v1h1v1h1v1h1v1h1v-1h1V9h1V8h1V7z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+:root.xp:not(#k) input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 13px;
+    height: 13px;
+    margin: 0 6px 0 0;
+    border: 1px solid #1d5281;
+    background: linear-gradient(135deg, #dcdcd7, #ffffff);
+    vertical-align: -2px;
+}
+
+:root.xp:not(#k) input[type="checkbox"]:hover:not(:disabled):not(:active) {
+    box-shadow: inset -2px -2px #f8b636, inset 2px 2px #fedf9c;
+}
+
+:root.xp:not(#k) input[type="checkbox"]:active {
+    background: linear-gradient(135deg, #b0b0a7, #e3e1d2);
+}
+
+:root.xp:not(#k) input[type="checkbox"]:checked {
+    background: 0 0 / 11px 11px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 11 11' shape-rendering='crispEdges'%3E%3Cpath stroke='%2322a122' d='M8 2h1M7 3h2M2 4h1m3 0h3M2 5h2m1 0h3M2 6h5M3 7h3M4 8h1'/%3E%3C/svg%3E"), linear-gradient(135deg, #dcdcd7, #ffffff);
+}
+
+:root.xp:not(#k) input[type="checkbox"]:disabled {
+    border-color: #cac8bb;
+    background: #ffffff;
+}
+
+:root.xp:not(#k) input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 13px;
+    height: 13px;
+    margin: 0 6px 0 0;
+    border: 1px solid #1d5281;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #dcdcd7, #ffffff);
+    vertical-align: -2px;
+}
+
+:root.xp:not(#k) input[type="radio"]:hover:not(:disabled) {
+    box-shadow: inset -2px -2px #f8b636, inset 2px 2px #fedf9c;
+}
+
+:root.xp:not(#k) input[type="radio"]:checked {
+    background: 3px 3px / 5px 5px no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 5 5' shape-rendering='crispEdges'%3E%3Cpath stroke='%23a9dca6' d='M1 0h1M0 1h1'/%3E%3Cpath stroke='%234dbf4a' d='M2 0h1M0 2h1'/%3E%3Cpath stroke='%23a0d29e' d='M3 0h1M0 3h1'/%3E%3Cpath stroke='%2355d551' d='M1 1h1'/%3E%3Cpath stroke='%2343c33f' d='M2 1h1'/%3E%3Cpath stroke='%2329a826' d='M3 1h1'/%3E%3Cpath stroke='%239acc98' d='M4 1h1M1 4h1'/%3E%3Cpath stroke='%2342c33f' d='M1 2h1'/%3E%3Cpath stroke='%2338b935' d='M2 2h1'/%3E%3Cpath stroke='%2321a121' d='M3 2h1'/%3E%3Cpath stroke='%23269623' d='M4 2h1'/%3E%3Cpath stroke='%232aa827' d='M1 3h1'/%3E%3Cpath stroke='%2322a220' d='M2 3h1'/%3E%3Cpath stroke='%23139210' d='M3 3h1'/%3E%3Cpath stroke='%2398c897' d='M4 3h1'/%3E%3Cpath stroke='%23249624' d='M2 4h1'/%3E%3Cpath stroke='%2398c997' d='M3 4h1'/%3E%3C/svg%3E"), linear-gradient(135deg, #dcdcd7, #ffffff);
+}
+
+:root.xp:not(#k) .menubar {
+    background: var(--window);
+    border-color: #aca899;
+}
+
+:root.xp:not(#k) .menubar > .menu-title:hover,
+:root.xp:not(#k) .menubar.active > .menu-title.open,
+:root.xp:not(#k) .list .row.selected,
+:root.xp:not(#k) .settings .sections .row.selected,
+:root.xp:not(#k) .popup-menu .item.active:not(.disabled) {
+    background: #316ac5;
+    border-color: #316ac5;
+    color: #ffffff;
+    border-radius: 0;
+}
+
+:root.xp:not(#k) .popup-menu {
+    background: #ffffff;
+    border: 1px solid #aca899;
+    border-radius: 0;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+:root.xp:not(#k) #main-toolbar,
+:root.xp:not(#k) .tool-options {
+    background: linear-gradient(#fefefe, #ece9d8 85%, #d8d2bd);
+}
+
+:root.xp:not(#k) .tbutton:hover:not(:disabled) {
+    border-color: #cecec3;
+    border-radius: 3px;
+    background: linear-gradient(#ffffff, #f0f0ea);
+}
+
+:root.xp:not(#k) .tbutton.checked {
+    border-color: #a5a593;
+    border-radius: 3px;
+    background: linear-gradient(#dfded6, #ebeae3);
+}
+
+/* Ventanas y diálogos con el marco de Luna: la cabecera azul en degradado con las esquinas de arriba
+   redondeadas, el borde azul de tres píxeles y el cuerpo beige. */
+:root.xp:not(#k) .floating-panel,
+:root.xp:not(#k) .dialog {
+    border: none;
+    border-radius: 8px 8px 0 0;
+    padding: 0 3px 3px;
+    background: var(--window);
+    box-shadow: inset -1px -1px #00138c, inset 1px 1px #0831d9, inset -2px -2px #001ea0, inset 2px 2px #166aee,
+                inset -3px -3px #003bda, inset 3px 3px #0855dd, 2px 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+:root.xp:not(#k) .floating-panel > .title,
+:root.xp:not(#k) .dialog > .title {
+    margin: 0 -3px;
+    padding: 3px 5px 3px 6px;
+    min-height: 21px;
+    border: none;
+    border-top: 1px solid #0831d9;
+    border-left: 1px solid #0831d9;
+    border-right: 1px solid #001ea0;
+    border-radius: 8px 7px 0 0;
+    background: linear-gradient(180deg, #0997ff, #0053ee 8%, #0050ee 40%, #06f 88%, #06f 93%, #005bff 95%, #003dd7 96%, #003dd7);
+    color: #ffffff;
+    font: bold 13px "Trebuchet MS", Tahoma, sans-serif;
+    text-shadow: 1px 1px #0f1089;
+}
+
+:root.xp:not(#k) .floating-panel > .content {
+    padding-top: 3px;
+}
+
+/* --- Windows 7: el marco de cristal de 7.css ----------------------------------------------------- */
+
+:root.win7:not(#k) .floating-panel,
+:root.win7:not(#k) .dialog {
+    border: 1px solid rgba(0, 0, 0, 0.7);
+    border-radius: 6px;
+    padding: 0 6px 6px;
+    background: linear-gradient(transparent 20%, rgba(255, 255, 255, 0.7) 40%, transparent 41%),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.2)), rgba(69, 128, 196, 0.62);
+    box-shadow: 2px 2px 10px 1px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.67);
+    backdrop-filter: blur(4px);
+}
+
+:root.win7:not(#k) .floating-panel > .title,
+:root.win7:not(#k) .dialog > .title {
+    margin: 0 -6px;
+    padding: 4px 6px 4px 8px;
+    border: none;
+    background: transparent;
+    color: #000000;
+    text-shadow: 0 0 10px #ffffff, 0 0 10px #ffffff, 0 0 6px #ffffff;
+}
+
+:root.win7:not(#k) .floating-panel > .content,
+:root.win7:not(#k) .dialog > .body {
+    background: #f0f0f0;
+    border: 1px solid rgba(0, 0, 0, 0.7);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+:root.win7:not(#k) .dialog > .body {
+    border-bottom: none;
+}
+
+:root.win7:not(#k) .dialog > .buttons {
+    background: #f0f0f0;
+    border: 1px solid rgba(0, 0, 0, 0.7);
+    border-top: none;
+    box-shadow: 0 1px 0 1px rgba(255, 255, 255, 0.6);
+}
+
+/* --- Botones de cerrar de las ventanas y los diálogos, con el estilo elegido -------------------- */
+
+/* Windows 7: el rojo de cristal de 7.css con su dibujo. */
+:root.btn-win7:not(#k) .floating-panel > .title .close,
+:root.btn-win7:not(#k) .dialog > .title .close {
+    width: 28px;
+    height: 17px;
+    margin: 0;
+    align-self: center;
+    border: 1px solid rgba(0, 0, 0, 0.7);
+    border-radius: 3px;
+    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAKCAYAAABi8KSDAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAACUSURBVHgBlZFNCoQwDIVbmRvOMHOAAd0K/uDGlYKiCG4VPICi9yu0oCSQoFUXFtKEl6+voZXvr7sKay1TL690FOexY+Hz87i2decOuDKQsNGVe8AGYTRJIh0Y+orBvxszCPllOymlxN06jNE26Qnwg4zdHQLrMhFaawwAqAadDPE1ijwUxhiMKCmxCZk06OMYTz5lAx3xWDeXkLNAAAAAAElFTkSuQmCC") no-repeat 50%,
+                linear-gradient(#ffffff80, #ffffff4d 45%, #0000001a 50%, #0000001a 75%, #ffffff80),
+                radial-gradient(circle at -60% 50%, #0007 5% 10%, #0000 50%), radial-gradient(circle at 160% 50%, #0007 5% 10%, #0000 50%),
+                linear-gradient(#e0a197e5, #cf796a 25% 50%, #d54f36 50%);
+    box-shadow: inset 0 0 0 1px #fffa;
+}
+
+:root.btn-win7:not(#k) .floating-panel > .title .close:hover,
+:root.btn-win7:not(#k) .dialog > .title .close:hover {
+    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAKCAYAAABi8KSDAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAACUSURBVHgBlZFNCoQwDIVbmRvOMHOAAd0K/uDGlYKiCG4VPICi9yu0oCSQoFUXFtKEl6+voZXvr7sKay1TL690FOexY+Hz87i2decOuDKQsNGVe8AGYTRJIh0Y+orBvxszCPllOymlxN06jNE26Qnwg4zdHQLrMhFaawwAqAadDPE1ijwUxhiMKCmxCZk06OMYTz5lAx3xWDeXkLNAAAAAAElFTkSuQmCC") no-repeat 50%,
+                linear-gradient(#ffffff80, #ffffff4d 45%, #0000001a 50%, #0000001a 75%, #ffffff80),
+                radial-gradient(circle at 50% 170%, #f4e676 10% 20%, #0000 60%),
+                radial-gradient(circle at -60% 50%, #000a 5% 10%, #0000 50%), radial-gradient(circle at 160% 50%, #000a 5% 10%, #0000 50%),
+                linear-gradient(#fb9d8b, #ee6d56 25% 50%, #d42809 50%);
+    box-shadow: 0 0 6px 2px #e68e75, inset 0 0 0 1px #fffa;
+}
+
+/* Windows XP: el botón rojo de Luna de XP.css. */
+:root.btn-xp:not(#k) .floating-panel > .title .close,
+:root.btn-xp:not(#k) .dialog > .title .close {
+    width: 21px;
+    height: 21px;
+    margin: 0;
+    border: none;
+    border-radius: 3px;
+    background: center / 100% 100% no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 21 21' shape-rendering='crispEdges'%3E%3Cpath stroke='%23b3c4ef' d='M1 0h1m17 0h1M0 1h1m19 0h1M0 19h1m19 0h1M1 20h1m17 0h1'/%3E%3Cpath stroke='%23f4f6fd' d='M2 0h1m17 2h1M0 18h1m17 2h1'/%3E%3Cpath stroke='%23fff' d='M3 0h16M0 2h1M0 3h1m19 0h1M0 4h1m19 0h1M0 5h1m5 0h1m7 0h1m5 0h1M0 6h1m4 0h3m5 0h3m4 0h1M0 7h1m5 0h3m3 0h3m5 0h1M0 8h1m6 0h3m1 0h3m6 0h1M0 9h1m7 0h5m7 0h1M0 10h1m8 0h3m8 0h1M0 11h1m7 0h5m7 0h1M0 12h1m6 0h3m1 0h2m7 0h1M0 13h1m5 0h3m3 0h3m5 0h1M0 14h1m4 0h3m5 0h3m4 0h1M0 15h1m5 0h1m7 0h1m5 0h1M0 16h1m19 0h1M0 17h1m19 0h1m-1 1h1M2 20h16'/%3E%3Cpath stroke='%23fae1dc' d='M1 1h1'/%3E%3Cpath stroke='%23eb8b73' d='M2 1h1'/%3E%3Cpath stroke='%23e97b60' d='M3 1h1'/%3E%3Cpath stroke='%23e77155' d='M4 1h1'/%3E%3Cpath stroke='%23e66a4d' d='M5 1h1M1 6h1m5 4h1'/%3E%3Cpath stroke='%23e56648' d='M6 1h1'/%3E%3Cpath stroke='%23e46142' d='M7 1h1'/%3E%3Cpath stroke='%23e46344' d='M8 1h1m5 3h1M2 12h1'/%3E%3Cpath stroke='%23e45f3e' d='M9 1h2'/%3E%3Cpath stroke='%23e35c3b' d='M11 1h2'/%3E%3Cpath stroke='%23e25633' d='M13 1h2'/%3E%3Cpath stroke='%23e25330' d='M15 1h1'/%3E%3Cpath stroke='%23e04d28' d='M16 1h1'/%3E%3Cpath stroke='%23dc451f' d='M17 1h1'/%3E%3Cpath stroke='%23d05334' d='M18 1h1'/%3E%3Cpath stroke='%23efd8d2' d='M19 1h1'/%3E%3Cpath stroke='%23ec8d76' d='M1 2h1'/%3E%3Cpath stroke='%23efa390' d='M2 2h1'/%3E%3Cpath stroke='%23f0a694' d='M3 2h1'/%3E%3Cpath stroke='%23ee9a85' d='M4 2h1'/%3E%3Cpath stroke='%23eb8d75' d='M5 2h1'/%3E%3Cpath stroke='%23ea876e' d='M6 2h1'/%3E%3Cpath stroke='%23ea8168' d='M7 2h1'/%3E%3Cpath stroke='%23e97f66' d='M8 2h1'/%3E%3Cpath stroke='%23e97c62' d='M9 2h1m0 1h1'/%3E%3Cpath stroke='%23e8795f' d='M10 2h1'/%3E%3Cpath stroke='%23e8795e' d='M11 2h1'/%3E%3Cpath stroke='%23e87559' d='M12 2h1'/%3E%3Cpath stroke='%23e77256' d='M13 2h1'/%3E%3Cpath stroke='%23e66e50' d='M14 2h1'/%3E%3Cpath stroke='%23e56849' d='M15 2h1'/%3E%3Cpath stroke='%23e4603f' d='M16 2h1m-2 2h1'/%3E%3Cpath stroke='%23e05532' d='M17 2h1'/%3E%3Cpath stroke='%23d04623' d='M18 2h1'/%3E%3Cpath stroke='%23b64b30' d='M19 2h1'/%3E%3Cpath stroke='%23e97f65' d='M1 3h1'/%3E%3Cpath stroke='%23f0a997' d='M2 3h1'/%3E%3Cpath stroke='%23f1ac9a' d='M3 3h1'/%3E%3Cpath stroke='%23ee9d89' d='M4 3h1M2 4h1'/%3E%3Cpath stroke='%23ec917a' d='M5 3h1'/%3E%3Cpath stroke='%23eb8b72' d='M6 3h1'/%3E%3Cpath stroke='%23ea856d' d='M7 3h1'/%3E%3Cpath stroke='%23e98168' d='M8 3h1M2 7h1'/%3E%3Cpath stroke='%23e87e65' d='M9 3h1'/%3E%3Cpath stroke='%23e97b61' d='M11 3h1'/%3E%3Cpath stroke='%23e8775d' d='M12 3h1M3 9h1'/%3E%3Cpath stroke='%23e87459' d='M13 3h1M2 9h1'/%3E%3Cpath stroke='%23e66f52' d='M14 3h1'/%3E%3Cpath stroke='%23e56a4c' d='M15 3h1'/%3E%3Cpath stroke='%23e46343' d='M16 3h1'/%3E%3Cpath stroke='%23e15937' d='M17 3h1'/%3E%3Cpath stroke='%23d24a28' d='M18 3h1'/%3E%3Cpath stroke='%23aa3315' d='M19 3h1'/%3E%3Cpath stroke='%23e87458' d='M1 4h1'/%3E%3Cpath stroke='%23efa18d' d='M3 4h1'/%3E%3Cpath stroke='%23ed957f' d='M4 4h1'/%3E%3Cpath stroke='%23eb8a71' d='M5 4h1M4 5h1'/%3E%3Cpath stroke='%23ea836a' d='M6 4h1M4 6h1M3 7h1'/%3E%3Cpath stroke='%23e97d64' d='M7 4h1'/%3E%3Cpath stroke='%23e8785e' d='M8 4h1'/%3E%3Cpath stroke='%23e77359' d='M9 4h1'/%3E%3Cpath stroke='%23e76f54' d='M10 4h1'/%3E%3Cpath stroke='%23e66d51' d='M11 4h1'/%3E%3Cpath stroke='%23e5684b' d='M12 4h1'/%3E%3Cpath stroke='%23e5684a' d='M13 4h1'/%3E%3Cpath stroke='%23e35c3a' d='M16 4h1m-7 4h1m-8 7h1'/%3E%3Cpath stroke='%23e05634' d='M17 4h1'/%3E%3Cpath stroke='%23d24c2a' d='M18 4h1'/%3E%3Cpath stroke='%23ac3618' d='M19 4h1'/%3E%3Cpath stroke='%23e76f52' d='M1 5h1m4 6h1m-3 1h1'/%3E%3Cpath stroke='%23ec9179' d='M2 5h1'/%3E%3Cpath stroke='%23ec937c' d='M3 5h1'/%3E%3Cpath stroke='%23f7ccc2' d='M5 5h1'/%3E%3Cpath stroke='%23e77259' d='M7 5h1M5 9h1'/%3E%3Cpath stroke='%23e76d53' d='M8 5h1'/%3E%3Cpath stroke='%23e5684d' d='M9 5h1M8 6h1'/%3E%3Cpath stroke='%23e46446' d='M10 5h1'/%3E%3Cpath stroke='%23e45f41' d='M11 5h1'/%3E%3Cpath stroke='%23e35b3a' d='M12 5h1m-2 1h1'/%3E%3Cpath stroke='%23e35938' d='M13 5h1'/%3E%3Cpath stroke='%23f3bbad' d='M15 5h1'/%3E%3Cpath stroke='%23e25531' d='M16 5h1'/%3E%3Cpath stroke='%23df5330' d='M17 5h1'/%3E%3Cpath stroke='%23d34e2c' d='M18 5h1'/%3E%3Cpath stroke='%23ad3a1d' d='M19 5h1m-1 1h1'/%3E%3Cpath stroke='%23eb876e' d='M2 6h1'/%3E%3Cpath stroke='%23eb8a70' d='M3 6h1'/%3E%3Cpath stroke='%23e46447' d='M9 6h1'/%3E%3Cpath stroke='%23e45f40' d='M10 6h1'/%3E%3Cpath stroke='%23e25634' d='M12 6h1'/%3E%3Cpath stroke='%23e2522d' d='M16 6h1'/%3E%3Cpath stroke='%23df522e' d='M17 6h1'/%3E%3Cpath stroke='%23d34d2c' d='M18 6h1'/%3E%3Cpath stroke='%23e56546' d='M1 7h1M1 8h1'/%3E%3Cpath stroke='%23e97e65' d='M4 7h1'/%3E%3Cpath stroke='%23e8775e' d='M5 7h1'/%3E%3Cpath stroke='%23e46143' d='M9 7h1'/%3E%3Cpath stroke='%23e45d3d' d='M10 7h1'/%3E%3Cpath stroke='%23e35836' d='M11 7h1'/%3E%3Cpath stroke='%23e24e27' d='M15 7h1'/%3E%3Cpath stroke='%23e2502a' d='M16 7h1'/%3E%3Cpath stroke='%23e0512c' d='M17 7h1'/%3E%3Cpath stroke='%23d34d2a' d='M18 7h1'/%3E%3Cpath stroke='%23ad391c' d='M19 7h1'/%3E%3Cpath stroke='%23e87a60' d='M2 8h1m1 0h1'/%3E%3Cpath stroke='%23e87c62' d='M3 8h1'/%3E%3Cpath stroke='%23e8745b' d='M5 8h1'/%3E%3Cpath stroke='%23e76e54' d='M6 8h1'/%3E%3Cpath stroke='%23e24d24' d='M14 8h1'/%3E%3Cpath stroke='%23e24b22' d='M15 8h1'/%3E%3Cpath stroke='%23e24d25' d='M16 8h1'/%3E%3Cpath stroke='%23e05029' d='M17 8h1'/%3E%3Cpath stroke='%23d44c29' d='M18 8h1'/%3E%3Cpath stroke='%23ae391b' d='M19 8h1'/%3E%3Cpath stroke='%23e35d3c' d='M1 9h1'/%3E%3Cpath stroke='%23e8765d' d='M4 9h1'/%3E%3Cpath stroke='%23e66f53' d='M6 9h1'/%3E%3Cpath stroke='%23e56b4e' d='M7 9h1'/%3E%3Cpath stroke='%23e45127' d='M13 9h1'/%3E%3Cpath stroke='%23e44f23' d='M14 9h1'/%3E%3Cpath stroke='%23e34c20' d='M15 9h1'/%3E%3Cpath stroke='%23e34d22' d='M16 9h1'/%3E%3Cpath stroke='%23e14f25' d='M17 9h1'/%3E%3Cpath stroke='%23d54a25' d='M18 9h1'/%3E%3Cpath stroke='%23af3719' d='M19 9h1'/%3E%3Cpath stroke='%23e35937' d='M1 10h1'/%3E%3Cpath stroke='%23e76d51' d='M2 10h1'/%3E%3Cpath stroke='%23e87257' d='M3 10h1'/%3E%3Cpath stroke='%23e87359' d='M4 10h1'/%3E%3Cpath stroke='%23e77157' d='M5 10h1'/%3E%3Cpath stroke='%23e66e52' d='M6 10h1'/%3E%3Cpath stroke='%23e56747' d='M8 10h1'/%3E%3Cpath stroke='%23e5572c' d='M12 10h1'/%3E%3Cpath stroke='%23e55326' d='M13 10h1'/%3E%3Cpath stroke='%23e55022' d='M14 10h1'/%3E%3Cpath stroke='%23e54d1e' d='M15 10h1'/%3E%3Cpath stroke='%23e54d1f' d='M16 10h1'/%3E%3Cpath stroke='%23e24e21' d='M17 10h1'/%3E%3Cpath stroke='%23d64921' d='M18 10h1'/%3E%3Cpath stroke='%23af3516' d='M19 10h1'/%3E%3Cpath stroke='%23e25432' d='M1 11h1'/%3E%3Cpath stroke='%23e5694b' d='M2 11h1'/%3E%3Cpath stroke='%23e77054' d='M3 11h1'/%3E%3Cpath stroke='%23e77156' d='M4 11h1'/%3E%3Cpath stroke='%23e87055' d='M5 11h1'/%3E%3Cpath stroke='%23e66c4d' d='M7 11h1'/%3E%3Cpath stroke='%23e75526' d='M13 11h1'/%3E%3Cpath stroke='%23e75221' d='M14 11h1'/%3E%3Cpath stroke='%23e64e1c' d='M15 11h1'/%3E%3Cpath stroke='%23e64d1c' d='M16 11h1'/%3E%3Cpath stroke='%23e34c1c' d='M17 11h1'/%3E%3Cpath stroke='%23d6461c' d='M18 11h1'/%3E%3Cpath stroke='%23b03312' d='M19 11h1'/%3E%3Cpath stroke='%23e14f2b' d='M1 12h1'/%3E%3Cpath stroke='%23e66b4e' d='M3 12h1'/%3E%3Cpath stroke='%23e76f53' d='M5 12h1'/%3E%3Cpath stroke='%23e66e51' d='M6 12h1'/%3E%3Cpath stroke='%23e7653d' d='M10 12h1'/%3E%3Cpath stroke='%23fef5f1' d='M13 12h1'/%3E%3Cpath stroke='%23e85421' d='M14 12h1'/%3E%3Cpath stroke='%23e8501b' d='M15 12h1'/%3E%3Cpath stroke='%23e74d18' d='M16 12h1'/%3E%3Cpath stroke='%23e44a18' d='M17 12h1'/%3E%3Cpath stroke='%23d74216' d='M18 12h1'/%3E%3Cpath stroke='%23b2310f' d='M19 12h1'/%3E%3Cpath stroke='%23e04b25' d='M1 13h1m0 3h1'/%3E%3Cpath stroke='%23e35e3d' d='M2 13h1'/%3E%3Cpath stroke='%23e56748' d='M3 13h1'/%3E%3Cpath stroke='%23e66c4e' d='M4 13h1'/%3E%3Cpath stroke='%23e66d50' d='M5 13h1'/%3E%3Cpath stroke='%23e76842' d='M9 13h1'/%3E%3Cpath stroke='%23e7653c' d='M10 13h1'/%3E%3Cpath stroke='%23e86236' d='M11 13h1'/%3E%3Cpath stroke='%23e95019' d='M15 13h1m-2 3h1'/%3E%3Cpath stroke='%23e84c16' d='M16 13h1'/%3E%3Cpath stroke='%23e44713' d='M17 13h1'/%3E%3Cpath stroke='%23d83f10' d='M18 13h1'/%3E%3Cpath stroke='%23b12d0a' d='M19 13h1'/%3E%3Cpath stroke='%23df451e' d='M1 14h1'/%3E%3Cpath stroke='%23e25836' d='M2 14h1'/%3E%3Cpath stroke='%23e46242' d='M3 14h1m0 1h1'/%3E%3Cpath stroke='%23e56749' d='M4 14h1'/%3E%3Cpath stroke='%23e66845' d='M8 14h1'/%3E%3Cpath stroke='%23e76741' d='M9 14h1'/%3E%3Cpath stroke='%23e7643b' d='M10 14h1'/%3E%3Cpath stroke='%23e86235' d='M11 14h1'/%3E%3Cpath stroke='%23ea5e2d' d='M12 14h1'/%3E%3Cpath stroke='%23e94a11' d='M16 14h1m-2 2h1'/%3E%3Cpath stroke='%23e6440d' d='M17 14h1'/%3E%3Cpath stroke='%23d73b0b' d='M18 14h1'/%3E%3Cpath stroke='%23b12b06' d='M19 14h1'/%3E%3Cpath stroke='%23de4018' d='M1 15h1'/%3E%3Cpath stroke='%23e1512e' d='M2 15h1'/%3E%3Cpath stroke='%23f5c1b5' d='M5 15h1'/%3E%3Cpath stroke='%23e66543' d='M7 15h1'/%3E%3Cpath stroke='%23e66541' d='M8 15h1'/%3E%3Cpath stroke='%23e6643d' d='M9 15h1'/%3E%3Cpath stroke='%23e76238' d='M10 15h1'/%3E%3Cpath stroke='%23e86032' d='M11 15h1'/%3E%3Cpath stroke='%23e95c2a' d='M12 15h1'/%3E%3Cpath stroke='%23ea5924' d='M13 15h1'/%3E%3Cpath stroke='%23f7b8a1' d='M15 15h1'/%3E%3Cpath stroke='%23e9480e' d='M16 15h1'/%3E%3Cpath stroke='%23e54009' d='M17 15h1'/%3E%3Cpath stroke='%23d73605' d='M18 15h1'/%3E%3Cpath stroke='%23b02702' d='M19 15h1'/%3E%3Cpath stroke='%23dd3c14' d='M1 16h1'/%3E%3Cpath stroke='%23e15431' d='M3 16h1'/%3E%3Cpath stroke='%23e35b39' d='M4 16h1'/%3E%3Cpath stroke='%23e45e3d' d='M5 16h1'/%3E%3Cpath stroke='%23e45f3d' d='M6 16h1'/%3E%3Cpath stroke='%23e45e3b' d='M7 16h1'/%3E%3Cpath stroke='%23e55e39' d='M8 16h1'/%3E%3Cpath stroke='%23e55e37' d='M9 16h1'/%3E%3Cpath stroke='%23e65d32' d='M10 16h1'/%3E%3Cpath stroke='%23e75b2c' d='M11 16h1'/%3E%3Cpath stroke='%23e85725' d='M12 16h1'/%3E%3Cpath stroke='%23e9541f' d='M13 16h1'/%3E%3Cpath stroke='%23e8440b' d='M16 16h1'/%3E%3Cpath stroke='%23e43d05' d='M17 16h1'/%3E%3Cpath stroke='%23d63302' d='M18 16h1'/%3E%3Cpath stroke='%23af2601' d='M19 16h1'/%3E%3Cpath stroke='%23d8370e' d='M1 17h1'/%3E%3Cpath stroke='%23db431c' d='M2 17h1'/%3E%3Cpath stroke='%23dd4c28' d='M3 17h1'/%3E%3Cpath stroke='%23de522f' d='M4 17h1'/%3E%3Cpath stroke='%23df5533' d='M5 17h1'/%3E%3Cpath stroke='%23e05734' d='M6 17h1'/%3E%3Cpath stroke='%23e05531' d='M7 17h1'/%3E%3Cpath stroke='%23e05631' d='M8 17h1'/%3E%3Cpath stroke='%23e1562e' d='M9 17h1'/%3E%3Cpath stroke='%23e2552a' d='M10 17h1'/%3E%3Cpath stroke='%23e45325' d='M11 17h1'/%3E%3Cpath stroke='%23e4501f' d='M12 17h1'/%3E%3Cpath stroke='%23e54c19' d='M13 17h1'/%3E%3Cpath stroke='%23e54813' d='M14 17h1'/%3E%3Cpath stroke='%23e5430d' d='M15 17h1'/%3E%3Cpath stroke='%23e43e07' d='M16 17h1'/%3E%3Cpath stroke='%23e03802' d='M17 17h1'/%3E%3Cpath stroke='%23d12f00' d='M18 17h1'/%3E%3Cpath stroke='%23aa2300' d='M19 17h1'/%3E%3Cpath stroke='%23cd4928' d='M1 18h1'/%3E%3Cpath stroke='%23cc3813' d='M2 18h1'/%3E%3Cpath stroke='%23cc3e1b' d='M3 18h1'/%3E%3Cpath stroke='%23cf4421' d='M4 18h1'/%3E%3Cpath stroke='%23cf4725' d='M5 18h1'/%3E%3Cpath stroke='%23cf4726' d='M6 18h1'/%3E%3Cpath stroke='%23cf4624' d='M7 18h1'/%3E%3Cpath stroke='%23d04723' d='M8 18h1'/%3E%3Cpath stroke='%23d14621' d='M9 18h1'/%3E%3Cpath stroke='%23d2451e' d='M10 18h1'/%3E%3Cpath stroke='%23d5451b' d='M11 18h1'/%3E%3Cpath stroke='%23d54216' d='M12 18h1'/%3E%3Cpath stroke='%23d64013' d='M13 18h1'/%3E%3Cpath stroke='%23d53d0e' d='M14 18h1'/%3E%3Cpath stroke='%23d63909' d='M15 18h1'/%3E%3Cpath stroke='%23d53504' d='M16 18h1'/%3E%3Cpath stroke='%23d13001' d='M17 18h1'/%3E%3Cpath stroke='%23c22a00' d='M18 18h1'/%3E%3Cpath stroke='%23ab3c1f' d='M19 18h1'/%3E%3Cpath stroke='%23eed6d0' d='M1 19h1'/%3E%3Cpath stroke='%23b54428' d='M2 19h1'/%3E%3Cpath stroke='%23a62b0d' d='M3 19h1'/%3E%3Cpath stroke='%23ac3011' d='M4 19h1'/%3E%3Cpath stroke='%23ab3112' d='M5 19h1'/%3E%3Cpath stroke='%23a93214' d='M6 19h1'/%3E%3Cpath stroke='%23a93012' d='M7 19h1'/%3E%3Cpath stroke='%23ac3213' d='M8 19h1'/%3E%3Cpath stroke='%23ad3213' d='M9 19h1'/%3E%3Cpath stroke='%23ae3110' d='M10 19h1'/%3E%3Cpath stroke='%23b1300d' d='M11 19h1'/%3E%3Cpath stroke='%23b22e0a' d='M12 19h1'/%3E%3Cpath stroke='%23b42d08' d='M13 19h1'/%3E%3Cpath stroke='%23b12a06' d='M14 19h1'/%3E%3Cpath stroke='%23b12803' d='M15 19h1'/%3E%3Cpath stroke='%23b42701' d='M16 19h1'/%3E%3Cpath stroke='%23ae2400' d='M17 19h1'/%3E%3Cpath stroke='%23ac3c1f' d='M18 19h1'/%3E%3Cpath stroke='%23ead4cf' d='M19 19h1'/%3E%3C/svg%3E");
+    box-shadow: none;
+}
+
+:root.btn-xp:not(#k) .floating-panel > .title .close {
+    width: 18px;
+    height: 18px;
+}
+
+:root.btn-xp:not(#k) .floating-panel > .title .close:hover,
+:root.btn-xp:not(#k) .dialog > .title .close:hover {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 21 21' shape-rendering='crispEdges'%3E%3Cpath stroke='%23b5c6ef' d='M1 0h1m17 0h1M0 1h1m19 0h1M0 19h1m19 0h1M1 20h1m17 0h1'/%3E%3Cpath stroke='%23f4f6fd' d='M2 0h1m17 2h1M0 18h1m17 2h1'/%3E%3Cpath stroke='%23fff' d='M3 0h15M0 3h1m19 0h1M0 4h1m19 0h1M0 5h1m5 0h1m7 0h1m5 0h1M0 6h1m4 0h3m5 0h3m4 0h1M0 7h1m5 0h3m3 0h3m5 0h1M0 8h1m6 0h3m1 0h3m6 0h1M0 9h1m7 0h5m7 0h1M0 10h1m8 0h3m8 0h1M0 11h1m7 0h5m7 0h1M0 12h1m6 0h3m1 0h2m7 0h1M0 13h1m5 0h3m3 0h3m5 0h1M0 14h1m4 0h3m5 0h3m4 0h1M0 15h1m5 0h1m7 0h1m5 0h1M0 16h1m19 0h1M0 17h1m19 0h1M3 20h3m5 0h7'/%3E%3Cpath stroke='%23f5f7fd' d='M18 0h1M0 2h1m19 16h1M2 20h1'/%3E%3Cpath stroke='%23ffe4e1' d='M1 1h1'/%3E%3Cpath stroke='%23ff9285' d='M2 1h1m4 3h1M2 7h1'/%3E%3Cpath stroke='%23ff8c7f' d='M3 1h1'/%3E%3Cpath stroke='%23ff8375' d='M4 1h1m5 3h1'/%3E%3Cpath stroke='%23ff7b6c' d='M5 1h1M3 12h1'/%3E%3Cpath stroke='%23ff7868' d='M6 1h1m3 4h1'/%3E%3Cpath stroke='%23ff7362' d='M7 1h1'/%3E%3Cpath stroke='%23ff7363' d='M8 1h1m2 4h1M2 12h1'/%3E%3Cpath stroke='%23ff705f' d='M9 1h1M6 16h1'/%3E%3Cpath stroke='%23ff6f5f' d='M10 1h1'/%3E%3Cpath stroke='%23ff6e5d' d='M11 1h1m4 1h1m-5 3h1M2 13h1'/%3E%3Cpath stroke='%23ff6b5a' d='M12 1h1M3 15h1'/%3E%3Cpath stroke='%23f65' d='M13 1h2'/%3E%3Cpath stroke='%23ff6250' d='M15 1h1M2 15h1'/%3E%3Cpath stroke='%23ff5d4a' d='M16 1h1'/%3E%3Cpath stroke='%23fa5643' d='M17 1h1'/%3E%3Cpath stroke='%23eb6151' d='M18 1h1'/%3E%3Cpath stroke='%23f5dad7' d='M19 1h1'/%3E%3Cpath stroke='%23ff9386' d='M1 2h1'/%3E%3Cpath stroke='%23ffaea5' d='M2 2h1'/%3E%3Cpath stroke='%23ffb2a9' d='M3 2h1'/%3E%3Cpath stroke='%23ffa99f' d='M4 2h1'/%3E%3Cpath stroke='%23ff9e93' d='M5 2h1m0 1h1M5 4h1'/%3E%3Cpath stroke='%23ff998d' d='M6 2h1M4 6h1'/%3E%3Cpath stroke='%23ff9488' d='M7 2h1m0 1h1'/%3E%3Cpath stroke='%23ff9083' d='M8 2h1M3 8h1'/%3E%3Cpath stroke='%23ff8e80' d='M9 2h1'/%3E%3Cpath stroke='%23ff8b7d' d='M10 2h1M5 8h1M3 9h1'/%3E%3Cpath stroke='%23ff887a' d='M11 2h1m0 1h1M5 9h1'/%3E%3Cpath stroke='%23ff8475' d='M12 2h1M8 5h1'/%3E%3Cpath stroke='%23ff8172' d='M13 2h1M7 9h1m-3 3h1'/%3E%3Cpath stroke='%23ff7c6d' d='M14 2h1'/%3E%3Cpath stroke='%23ff7666' d='M15 2h1M1 7h1m1 6h1m0 1h1'/%3E%3Cpath stroke='%23fc6352' d='M17 2h1'/%3E%3Cpath stroke='%23e54' d='M18 2h1'/%3E%3Cpath stroke='%23d3594b' d='M19 2h1'/%3E%3Cpath stroke='%23ff8d80' d='M1 3h1'/%3E%3Cpath stroke='%23ffb3ab' d='M2 3h1'/%3E%3Cpath stroke='%23ffb8b0' d='M3 3h1'/%3E%3Cpath stroke='%23ffb0a6' d='M4 3h1M3 4h1'/%3E%3Cpath stroke='%23ffa49a' d='M5 3h1'/%3E%3Cpath stroke='%23ff988d' d='M7 3h1M6 4h1'/%3E%3Cpath stroke='%23ff9184' d='M9 3h1'/%3E%3Cpath stroke='%23ff8e81' d='M10 3h1M4 8h1'/%3E%3Cpath stroke='%23ff8c7e' d='M11 3h1M2 8h1'/%3E%3Cpath stroke='%23ff8576' d='M13 3h1M6 9h1m-4 1h1'/%3E%3Cpath stroke='%23ff7f70' d='M14 3h1M1 5h1m0 5h1m1 2h1'/%3E%3Cpath stroke='%23ff796a' d='M15 3h1M2 11h1'/%3E%3Cpath stroke='%23ff7161' d='M16 3h1M3 14h1'/%3E%3Cpath stroke='%23fc6857' d='M17 3h1'/%3E%3Cpath stroke='%23ed5948' d='M18 3h1M6 18h1'/%3E%3Cpath stroke='%23cb4233' d='M19 3h1'/%3E%3Cpath stroke='%23ff8577' d='M1 4h1m0 5h1'/%3E%3Cpath stroke='%23ffaaa0' d='M2 4h1'/%3E%3Cpath stroke='%23ffa89e' d='M4 4h1'/%3E%3Cpath stroke='%23ff8d7f' d='M8 4h1'/%3E%3Cpath stroke='%23ff8879' d='M9 4h1'/%3E%3Cpath stroke='%23ff8071' d='M11 4h1M8 6h1'/%3E%3Cpath stroke='%23ff7a6b' d='M12 4h1M1 6h1m7 0h1m-6 7h1'/%3E%3Cpath stroke='%23ff7969' d='M13 4h1'/%3E%3Cpath stroke='%23ff7464' d='M14 4h1m-5 2h1'/%3E%3Cpath stroke='%23ff7060' d='M15 4h1'/%3E%3Cpath stroke='%23ff6c5b' d='M16 4h1m-4 1h1'/%3E%3Cpath stroke='%23fc6655' d='M17 4h1'/%3E%3Cpath stroke='%23ef5c4b' d='M18 4h1'/%3E%3Cpath stroke='%23cc4636' d='M19 4h1'/%3E%3Cpath stroke='%23ffa095' d='M2 5h1'/%3E%3Cpath stroke='%23ffa59b' d='M3 5h1'/%3E%3Cpath stroke='%23ff9f94' d='M4 5h1'/%3E%3Cpath stroke='%23ffd5d1' d='M5 5h1'/%3E%3Cpath stroke='%23ff8a7c' d='M7 5h1'/%3E%3Cpath stroke='%23ff7e6f' d='M9 5h1'/%3E%3Cpath stroke='%23ffc2bb' d='M15 5h1'/%3E%3Cpath stroke='%23ff6554' d='M16 5h1'/%3E%3Cpath stroke='%23fc6453' d='M17 5h1'/%3E%3Cpath stroke='%23ee5d4d' d='M18 5h1'/%3E%3Cpath stroke='%23cd4939' d='M19 5h1'/%3E%3Cpath stroke='%23ff998e' d='M2 6h1'/%3E%3Cpath stroke='%23ff9d92' d='M3 6h1'/%3E%3Cpath stroke='%23ff6f5e' d='M11 6h1'/%3E%3Cpath stroke='%23ff6a58' d='M12 6h1'/%3E%3Cpath stroke='%23ff6451' d='M16 6h1'/%3E%3Cpath stroke='%23fd6451' d='M17 6h1'/%3E%3Cpath stroke='%23ee5e4d' d='M18 6h1'/%3E%3Cpath stroke='%23ce4a3a' d='M19 6h1'/%3E%3Cpath stroke='%23ff968a' d='M3 7h1'/%3E%3Cpath stroke='%23ff9487' d='M4 7h1'/%3E%3Cpath stroke='%23ff8f82' d='M5 7h1'/%3E%3Cpath stroke='%23ff7968' d='M9 7h1m-3 8h1'/%3E%3Cpath stroke='%23ff7463' d='M10 7h1'/%3E%3Cpath stroke='%23ff6f5d' d='M11 7h1'/%3E%3Cpath stroke='%23ff6450' d='M15 7h1'/%3E%3Cpath stroke='%23ff6552' d='M16 7h1'/%3E%3Cpath stroke='%23fd6653' d='M17 7h1'/%3E%3Cpath stroke='%23f0604e' d='M18 7h1'/%3E%3Cpath stroke='%23ce4a3b' d='M19 7h1'/%3E%3Cpath stroke='%23ff7565' d='M1 8h1'/%3E%3Cpath stroke='%23ff8677' d='M6 8h1m-2 2h1'/%3E%3Cpath stroke='%23ff7664' d='M10 8h1'/%3E%3Cpath stroke='%23ff6a53' d='M14 8h1'/%3E%3Cpath stroke='%23ff6953' d='M15 8h1'/%3E%3Cpath stroke='%23ff6b55' d='M16 8h1'/%3E%3Cpath stroke='%23fd6b56' d='M17 8h1'/%3E%3Cpath stroke='%23f06350' d='M18 8h1'/%3E%3Cpath stroke='%23cf4c3b' d='M19 8h1'/%3E%3Cpath stroke='%23ff6d5d' d='M1 9h1'/%3E%3Cpath stroke='%23ff8b7c' d='M4 9h1'/%3E%3Cpath stroke='%23ff775d' d='M13 9h1'/%3E%3Cpath stroke='%23ff745a' d='M14 9h1'/%3E%3Cpath stroke='%23ff7359' d='M15 9h1'/%3E%3Cpath stroke='%23ff735a' d='M16 9h1'/%3E%3Cpath stroke='%23fd715a' d='M17 9h1'/%3E%3Cpath stroke='%23f16752' d='M18 9h1'/%3E%3Cpath stroke='%23d24e3c' d='M19 9h1'/%3E%3Cpath stroke='%23ff6a59' d='M1 10h1m2 6h1'/%3E%3Cpath stroke='%23ff8778' d='M4 10h1'/%3E%3Cpath stroke='%23ff8374' d='M6 10h1m-3 1h2'/%3E%3Cpath stroke='%23ff8171' d='M7 10h1m-5 1h1'/%3E%3Cpath stroke='%23ff8271' d='M8 10h1m-2 1h1'/%3E%3Cpath stroke='%23ff8369' d='M12 10h1'/%3E%3Cpath stroke='%23ff8165' d='M13 10h1'/%3E%3Cpath stroke='%23ff7e61' d='M14 10h1'/%3E%3Cpath stroke='%23ff7d5f' d='M15 10h1'/%3E%3Cpath stroke='%23ff7b5f' d='M16 10h1'/%3E%3Cpath stroke='%23fd775d' d='M17 10h1'/%3E%3Cpath stroke='%23f36a53' d='M18 10h1'/%3E%3Cpath stroke='%23d34e3c' d='M19 10h1'/%3E%3Cpath stroke='%23ff6553' d='M1 11h1'/%3E%3Cpath stroke='%23ff8273' d='M6 11h1'/%3E%3Cpath stroke='%23ff8c6c' d='M13 11h1'/%3E%3Cpath stroke='%23ff8969' d='M14 11h1'/%3E%3Cpath stroke='%23ff8665' d='M15 11h1'/%3E%3Cpath stroke='%23ff8262' d='M16 11h1'/%3E%3Cpath stroke='%23fd7c5e' d='M17 11h1'/%3E%3Cpath stroke='%23f46d54' d='M18 11h1'/%3E%3Cpath stroke='%23d64f3b' d='M19 11h1'/%3E%3Cpath stroke='%23ff5f4d' d='M1 12h1'/%3E%3Cpath stroke='%23ff8070' d='M6 12h1'/%3E%3Cpath stroke='%23ff9279' d='M10 12h1'/%3E%3Cpath stroke='%23fff8f6' d='M13 12h1'/%3E%3Cpath stroke='%23ff936f' d='M14 12h1'/%3E%3Cpath stroke='%23ff906c' d='M15 12h1'/%3E%3Cpath stroke='%23ff8967' d='M16 12h1'/%3E%3Cpath stroke='%23fe7f5f' d='M17 12h1'/%3E%3Cpath stroke='%23f56e52' d='M18 12h1'/%3E%3Cpath stroke='%23d84f39' d='M19 12h1'/%3E%3Cpath stroke='%23ff5c4a' d='M1 13h1'/%3E%3Cpath stroke='%23ff7d6e' d='M5 13h1'/%3E%3Cpath stroke='%23ff907a' d='M9 13h1'/%3E%3Cpath stroke='%23ff957c' d='M10 13h1'/%3E%3Cpath stroke='%23ff9a7e' d='M11 13h1'/%3E%3Cpath stroke='%23ff9670' d='M15 13h1'/%3E%3Cpath stroke='%23ff8e68' d='M16 13h1'/%3E%3Cpath stroke='%23fe815e' d='M17 13h1'/%3E%3Cpath stroke='%23f66c4f' d='M18 13h1'/%3E%3Cpath stroke='%23da4d36' d='M19 13h1'/%3E%3Cpath stroke='%23ff5744' d='M1 14h1'/%3E%3Cpath stroke='%23ff6857' d='M2 14h1'/%3E%3Cpath stroke='%23ff8672' d='M8 14h1'/%3E%3Cpath stroke='%23ff8f78' d='M9 14h1'/%3E%3Cpath stroke='%23ff967c' d='M10 14h1'/%3E%3Cpath stroke='%23ff9c7e' d='M11 14h1'/%3E%3Cpath stroke='%23ffa07e' d='M12 14h1'/%3E%3Cpath stroke='%23ff8e66' d='M16 14h1'/%3E%3Cpath stroke='%23fe7f5a' d='M17 14h1m-3 3h1'/%3E%3Cpath stroke='%23f76a4b' d='M18 14h1'/%3E%3Cpath stroke='%23da4a33' d='M19 14h1'/%3E%3Cpath stroke='%23ff523f' d='M1 15h1'/%3E%3Cpath stroke='%23ff7160' d='M4 15h1'/%3E%3Cpath stroke='%23ffc7c1' d='M5 15h1'/%3E%3Cpath stroke='%23ff836f' d='M8 15h1'/%3E%3Cpath stroke='%23ff8b74' d='M9 15h1'/%3E%3Cpath stroke='%23ff9379' d='M10 15h1'/%3E%3Cpath stroke='%23ff9a7c' d='M11 15h1'/%3E%3Cpath stroke='%23ff9e7c' d='M12 15h1'/%3E%3Cpath stroke='%23ffa07a' d='M13 15h1'/%3E%3Cpath stroke='%23ffd5c5' d='M15 15h1'/%3E%3Cpath stroke='%23ff8b62' d='M16 15h1'/%3E%3Cpath stroke='%23fe7c56' d='M17 15h1'/%3E%3Cpath stroke='%23f76545' d='M18 15h1'/%3E%3Cpath stroke='%23db4931' d='M19 15h1'/%3E%3Cpath stroke='%23ff4f3a' d='M1 16h1'/%3E%3Cpath stroke='%23ff5c49' d='M2 16h1'/%3E%3Cpath stroke='%23ff6452' d='M3 16h1'/%3E%3Cpath stroke='%23ff6e5e' d='M5 16h1'/%3E%3Cpath stroke='%23ff7462' d='M7 16h1'/%3E%3Cpath stroke='%23ff7c68' d='M8 16h1'/%3E%3Cpath stroke='%23ff846d' d='M9 16h1'/%3E%3Cpath stroke='%23ff8b71' d='M10 16h1'/%3E%3Cpath stroke='%23ff9174' d='M11 16h1'/%3E%3Cpath stroke='%23ff9674' d='M12 16h1'/%3E%3Cpath stroke='%23ff9571' d='M13 16h1'/%3E%3Cpath stroke='%23ff946d' d='M14 16h1'/%3E%3Cpath stroke='%23ff8d66' d='M15 16h1'/%3E%3Cpath stroke='%23ff855c' d='M16 16h1'/%3E%3Cpath stroke='%23fe7650' d='M17 16h1'/%3E%3Cpath stroke='%23f66141' d='M18 16h1'/%3E%3Cpath stroke='%23da462f' d='M19 16h1'/%3E%3Cpath stroke='%23fa4935' d='M1 17h1'/%3E%3Cpath stroke='%23fb5441' d='M2 17h1'/%3E%3Cpath stroke='%23fc5c4a' d='M3 17h1'/%3E%3Cpath stroke='%23fb6150' d='M4 17h1'/%3E%3Cpath stroke='%23fc6554' d='M5 17h1'/%3E%3Cpath stroke='%23fc6756' d='M6 17h1'/%3E%3Cpath stroke='%23fc6a58' d='M7 17h1'/%3E%3Cpath stroke='%23fc715c' d='M8 17h1'/%3E%3Cpath stroke='%23fc7761' d='M9 17h1'/%3E%3Cpath stroke='%23fd7e64' d='M10 17h1'/%3E%3Cpath stroke='%23fd8367' d='M11 17h1'/%3E%3Cpath stroke='%23fe8566' d='M12 17h1'/%3E%3Cpath stroke='%23fe8664' d='M13 17h1'/%3E%3Cpath stroke='%23fe8460' d='M14 17h1'/%3E%3Cpath stroke='%23fe7651' d='M16 17h1'/%3E%3Cpath stroke='%23fc6b47' d='M17 17h1'/%3E%3Cpath stroke='%23f2573a' d='M18 17h1'/%3E%3Cpath stroke='%23d4402a' d='M19 17h1'/%3E%3Cpath stroke='%23e85848' d='M1 18h1'/%3E%3Cpath stroke='%23ed4a37' d='M2 18h1'/%3E%3Cpath stroke='%23ec4f3d' d='M3 18h1'/%3E%3Cpath stroke='%23ee5443' d='M4 18h1'/%3E%3Cpath stroke='%23ed5746' d='M5 18h1'/%3E%3Cpath stroke='%23ee5a48' d='M7 18h1'/%3E%3Cpath stroke='%23ef5e4b' d='M8 18h1'/%3E%3Cpath stroke='%23f0644e' d='M9 18h1'/%3E%3Cpath stroke='%23f16750' d='M10 18h1'/%3E%3Cpath stroke='%23f46c52' d='M11 18h1'/%3E%3Cpath stroke='%23f66d51' d='M12 18h1'/%3E%3Cpath stroke='%23f66e51' d='M13 18h1'/%3E%3Cpath stroke='%23f66c4e' d='M14 18h1'/%3E%3Cpath stroke='%23f86a4a' d='M15 18h1'/%3E%3Cpath stroke='%23f76343' d='M16 18h1'/%3E%3Cpath stroke='%23f3583a' d='M17 18h1'/%3E%3Cpath stroke='%23e54930' d='M18 18h1'/%3E%3Cpath stroke='%23cd5140' d='M19 18h1'/%3E%3Cpath stroke='%23f6d9d6' d='M1 19h1'/%3E%3Cpath stroke='%23d25344' d='M2 19h1'/%3E%3Cpath stroke='%23c93c2b' d='M3 19h1'/%3E%3Cpath stroke='%23ca3f2f' d='M4 19h1'/%3E%3Cpath stroke='%23ca4131' d='M5 19h1'/%3E%3Cpath stroke='%23ca4333' d='M6 19h1'/%3E%3Cpath stroke='%23cc4332' d='M7 19h1'/%3E%3Cpath stroke='%23cf4434' d='M8 19h1'/%3E%3Cpath stroke='%23d24936' d='M9 19h1'/%3E%3Cpath stroke='%23d34936' d='M10 19h1'/%3E%3Cpath stroke='%23d84b37' d='M11 19h1'/%3E%3Cpath stroke='%23da4c36' d='M12 19h1'/%3E%3Cpath stroke='%23dc4d36' d='M13 19h1'/%3E%3Cpath stroke='%23d94933' d='M14 19h1'/%3E%3Cpath stroke='%23de4a32' d='M15 19h1'/%3E%3Cpath stroke='%23dd482f' d='M16 19h1'/%3E%3Cpath stroke='%23d6402a' d='M17 19h1'/%3E%3Cpath stroke='%23cf5140' d='M18 19h1'/%3E%3Cpath stroke='%23f1d8d5' d='M19 19h1'/%3E%3Cpath stroke='%23fefefe' d='M6 20h1m3 0h1'/%3E%3Cpath stroke='%23fdfdfd' d='M7 20h1m1 0h1'/%3E%3Cpath stroke='%23fcfcfc' d='M8 20h1'/%3E%3C/svg%3E");
+}
+
+:root.btn-xp:not(#k) .floating-panel > .title .close:active,
+:root.btn-xp:not(#k) .dialog > .title .close:active {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 21 21' shape-rendering='crispEdges'%3E%3Cpath stroke='%23a7bced' d='M1 0h1M0 1h1'/%3E%3Cpath stroke='%23f4f6fd' d='M2 0h1m15 0h1M0 2h1m19 0h1M0 18h1m19 0h1M2 20h1m15 0h1'/%3E%3Cpath stroke='%23fff' d='M3 0h15M0 3h1m19 0h1M0 4h1m19 0h1M0 5h1m19 0h1M0 6h1m19 0h1M0 7h1m19 0h1M0 8h1m19 0h1M0 9h1m19 0h1M0 10h1m19 0h1M0 11h1m19 0h1M0 12h1m19 0h1M0 13h1m19 0h1M0 14h1m19 0h1M0 15h1m19 0h1M0 16h1m19 0h1M0 17h1m19 0h1M3 20h15'/%3E%3Cpath stroke='%23a7baec' d='M19 0h1m0 1h1'/%3E%3Cpath stroke='%23dad2d0' d='M1 1h1'/%3E%3Cpath stroke='%23643529' d='M2 1h1M1 2h1'/%3E%3Cpath stroke='%235a1d0d' d='M3 1h1'/%3E%3Cpath stroke='%235d1e0d' d='M4 1h1'/%3E%3Cpath stroke='%235f1e0e' d='M5 1h1'/%3E%3Cpath stroke='%2363200e' d='M6 1h1'/%3E%3Cpath stroke='%2368210f' d='M7 1h1'/%3E%3Cpath stroke='%236f2310' d='M8 1h1'/%3E%3Cpath stroke='%23732511' d='M9 1h1'/%3E%3Cpath stroke='%23752511' d='M10 1h1M1 10h1'/%3E%3Cpath stroke='%237c2712' d='M11 1h1'/%3E%3Cpath stroke='%23822912' d='M12 1h1M5 2h1'/%3E%3Cpath stroke='%23852a13' d='M13 1h1M2 5h1m-2 8h1'/%3E%3Cpath stroke='%23892b13' d='M14 1h1'/%3E%3Cpath stroke='%238a2b14' d='M15 1h1M6 2h1'/%3E%3Cpath stroke='%238e2d14' d='M16 1h1M7 2h1'/%3E%3Cpath stroke='%238c2c14' d='M17 1h1M2 6h1'/%3E%3Cpath stroke='%239d4732' d='M18 1h1M1 18h1'/%3E%3Cpath stroke='%23ebd8d3' d='M19 1h1'/%3E%3Cpath stroke='%2369220f' d='M2 2h1'/%3E%3Cpath stroke='%23782611' d='M3 2h1'/%3E%3Cpath stroke='%237e2812' d='M4 2h1'/%3E%3Cpath stroke='%23932e15' d='M8 2h1'/%3E%3Cpath stroke='%239a3016' d='M9 2h1'/%3E%3Cpath stroke='%239c3116' d='M10 2h1'/%3E%3Cpath stroke='%23a03217' d='M11 2h1'/%3E%3Cpath stroke='%23a43418' d='M12 2h1'/%3E%3Cpath stroke='%23a73518' d='M13 2h1'/%3E%3Cpath stroke='%23aa3618' d='M14 2h1M2 14h1'/%3E%3Cpath stroke='%23ab3618' d='M15 2h1'/%3E%3Cpath stroke='%23ad3719' d='M16 2h1m1 0h1M2 16h1m-1 1h1'/%3E%3Cpath stroke='%23ac3618' d='M17 2h1'/%3E%3Cpath stroke='%23b24e35' d='M19 2h1'/%3E%3Cpath stroke='%23591c0d' d='M1 3h1M1 4h1'/%3E%3Cpath stroke='%23792711' d='M2 3h1'/%3E%3Cpath stroke='%238d2c14' d='M3 3h1'/%3E%3Cpath stroke='%23962e15' d='M4 3h1'/%3E%3Cpath stroke='%239a2f16' d='M5 3h1'/%3E%3Cpath stroke='%23a13117' d='M6 3h1'/%3E%3Cpath stroke='%23a63317' d='M7 3h1'/%3E%3Cpath stroke='%23aa3418' d='M8 3h1'/%3E%3Cpath stroke='%23af3619' d='M9 3h1'/%3E%3Cpath stroke='%23b23719' d='M10 3h1M8 4h1M4 8h1'/%3E%3Cpath stroke='%23b5391a' d='M11 3h1'/%3E%3Cpath stroke='%23b73a1b' d='M12 3h1'/%3E%3Cpath stroke='%23b93b1b' d='M13 3h1'/%3E%3Cpath stroke='%23ba3b1b' d='M14 3h2m3 0h1M3 13h1m-1 1h1m-1 5h1'/%3E%3Cpath stroke='%23bb3b1b' d='M16 3h3M3 15h1'/%3E%3Cpath stroke='%23802812' d='M2 4h1m-2 8h1'/%3E%3Cpath stroke='%23962f15' d='M3 4h1'/%3E%3Cpath stroke='%239e3016' d='M4 4h1'/%3E%3Cpath stroke='%23a43216' d='M5 4h1'/%3E%3Cpath stroke='%23aa3317' d='M6 4h1M4 6h1'/%3E%3Cpath stroke='%23ae3518' d='M7 4h1'/%3E%3Cpath stroke='%23b5381a' d='M9 4h1M4 9h1'/%3E%3Cpath stroke='%23b8391a' d='M10 4h1m-7 6h1'/%3E%3Cpath stroke='%23ba3a1b' d='M11 4h1m-8 7h2'/%3E%3Cpath stroke='%23bc3b1c' d='M12 4h1m-9 8h1'/%3E%3Cpath stroke='%23bd3c1c' d='M13 4h1m-1 1h1m-2 1h1m-7 6h1m-3 1h2'/%3E%3Cpath stroke='%23be3d1c' d='M14 4h3m-1 1h1m-1 1h1M4 14h1m-1 1h1m-1 1h2'/%3E%3Cpath stroke='%23bf3d1c' d='M17 4h3m-3 1h3m-2 1h2m-1 1h1M4 17h2m-2 1h4m-4 1h4'/%3E%3Cpath stroke='%235b1d0d' d='M1 5h1'/%3E%3Cpath stroke='%239c3016' d='M3 5h1'/%3E%3Cpath stroke='%23a43217' d='M4 5h1'/%3E%3Cpath stroke='%23b8553e' d='M5 5h1'/%3E%3Cpath stroke='%23d59485' d='M6 5h1M5 6h1'/%3E%3Cpath stroke='%23b33619' d='M7 5h1'/%3E%3Cpath stroke='%23b53719' d='M8 5h1'/%3E%3Cpath stroke='%23b8381a' d='M9 5h1M6 8h1'/%3E%3Cpath stroke='%23b9391b' d='M10 5h1'/%3E%3Cpath stroke='%23ba391b' d='M11 5h1M6 9h1m-2 1h1'/%3E%3Cpath stroke='%23bc3b1b' d='M12 5h1m-2 1h1m-6 5h1m-2 1h1'/%3E%3Cpath stroke='%23dc9887' d='M14 5h1'/%3E%3Cpath stroke='%23c85d42' d='M15 5h1M5 15h1'/%3E%3Cpath stroke='%23611f0e' d='M1 6h1'/%3E%3Cpath stroke='%23a23217' d='M3 6h1'/%3E%3Cpath stroke='%23d79585' d='M6 6h1'/%3E%3Cpath stroke='%23d89585' d='M7 6h1'/%3E%3Cpath stroke='%23b8371a' d='M8 6h1'/%3E%3Cpath stroke='%23ba391a' d='M9 6h1'/%3E%3Cpath stroke='%23bb3a1b' d='M10 6h1m-5 4h1'/%3E%3Cpath stroke='%23dd9887' d='M13 6h3m-4 1h1m-2 1h1M9 9h1m-2 2h1m-2 1h1m-2 1h1m-2 1h2'/%3E%3Cpath stroke='%23c03e1d' d='M17 6h1m-2 1h3m0 1h1m-1 1h1M7 16h1m-2 1h2m0 1h1'/%3E%3Cpath stroke='%2365200e' d='M1 7h1'/%3E%3Cpath stroke='%23902d15' d='M2 7h1'/%3E%3Cpath stroke='%23a73418' d='M3 7h1'/%3E%3Cpath stroke='%23af3518' d='M4 7h1'/%3E%3Cpath stroke='%23b43619' d='M5 7h1'/%3E%3Cpath stroke='%23d99585' d='M6 7h1'/%3E%3Cpath stroke='%23da9686' d='M7 7h1'/%3E%3Cpath stroke='%23db9686' d='M8 7h1M7 8h1'/%3E%3Cpath stroke='%23bc3a1b' d='M9 7h1M7 9h1'/%3E%3Cpath stroke='%23bd3b1b' d='M10 7h1m-4 3h1'/%3E%3Cpath stroke='%23be3c1c' d='M11 7h1m-2 1h1m-3 2h1m-2 1h1'/%3E%3Cpath stroke='%23de9987' d='M13 7h2m-3 1h2m-4 1h2m-3 1h1m-2 2h1m-2 2h1'/%3E%3Cpath stroke='%23c03f1d' d='M15 7h1m-9 8h1'/%3E%3Cpath stroke='%236a220f' d='M1 8h1'/%3E%3Cpath stroke='%23952f15' d='M2 8h1'/%3E%3Cpath stroke='%23ac3518' d='M3 8h1'/%3E%3Cpath stroke='%23b63719' d='M5 8h1'/%3E%3Cpath stroke='%23dc9786' d='M8 8h2M8 9h1'/%3E%3Cpath stroke='%23c2401d' d='M14 8h1m2 0h1m1 3h1M8 14h1m-1 2h1m-1 1h1m0 1h1m1 1h1'/%3E%3Cpath stroke='%23c2401e' d='M15 8h2m1 1h1M8 15h1'/%3E%3Cpath stroke='%23c13f1d' d='M18 8h1m0 2h1M9 19h2'/%3E%3Cpath stroke='%23702410' d='M1 9h1'/%3E%3Cpath stroke='%239b3016' d='M2 9h1'/%3E%3Cpath stroke='%23b03619' d='M3 9h1'/%3E%3Cpath stroke='%23b9381a' d='M5 9h1'/%3E%3Cpath stroke='%23df9a88' d='M12 9h1m-2 1h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%23c4421e' d='M13 9h1m2 0h2m0 1h1M9 13h1m9 1h1m-1 1h1M9 16h1m9 0h1M9 17h1m0 1h1m3 1h3'/%3E%3Cpath stroke='%23c5431e' d='M14 9h1'/%3E%3Cpath stroke='%23c5431f' d='M15 9h1m-4 1h1m5 1h1m-9 1h1m-2 2h1m-1 1h1m0 2h1m0 1h1m6 0h1'/%3E%3Cpath stroke='%239e3217' d='M2 10h1'/%3E%3Cpath stroke='%23b4381a' d='M3 10h1'/%3E%3Cpath stroke='%23df9a87' d='M10 10h1m-2 1h1m-2 2h1'/%3E%3Cpath stroke='%23c6441f' d='M13 10h1m3 0h1m-8 3h1m-1 3h1'/%3E%3Cpath stroke='%23c74520' d='M14 10h2m-6 4h1m-1 1h1m7 2h1m-7 1h1m4 0h1'/%3E%3Cpath stroke='%23c7451f' d='M16 10h1m1 2h1'/%3E%3Cpath stroke='%237b2711' d='M1 11h1'/%3E%3Cpath stroke='%23a13217' d='M2 11h1'/%3E%3Cpath stroke='%23b7391a' d='M3 11h1'/%3E%3Cpath stroke='%23e09b88' d='M11 11h1'/%3E%3Cpath stroke='%23e29d89' d='M12 11h1'/%3E%3Cpath stroke='%23c94621' d='M13 11h1m-3 2h1'/%3E%3Cpath stroke='%23ca4721' d='M14 11h1m2 1h1m-7 2h1m-1 1h1m0 2h1m2 1h1'/%3E%3Cpath stroke='%23ca4821' d='M15 11h1m1 6h1'/%3E%3Cpath stroke='%23c94620' d='M16 11h1m1 3h1m-8 2h1m6 0h1'/%3E%3Cpath stroke='%23c84620' d='M17 11h1m0 2h1'/%3E%3Cpath stroke='%23a53418' d='M2 12h1'/%3E%3Cpath stroke='%23b83a1b' d='M3 12h1'/%3E%3Cpath stroke='%23e19d89' d='M11 12h1'/%3E%3Cpath stroke='%23e39e89' d='M12 12h1'/%3E%3Cpath stroke='%23e0947c' d='M13 12h1'/%3E%3Cpath stroke='%23cc4a22' d='M14 12h1m-3 2h1m4 0h1m-6 1h1'/%3E%3Cpath stroke='%23cd4a22' d='M15 12h1m0 1h1m0 2h1m-5 1h1m1 1h1'/%3E%3Cpath stroke='%23cb4922' d='M16 12h1m0 1h1m-5 4h1'/%3E%3Cpath stroke='%23c3411e' d='M19 12h1m-1 1h1m-1 4h1m-8 2h2m3 0h1'/%3E%3Cpath stroke='%23a93618' d='M2 13h1'/%3E%3Cpath stroke='%23dd9987' d='M7 13h1m-2 2h1'/%3E%3Cpath stroke='%23e39f8a' d='M12 13h1'/%3E%3Cpath stroke='%23e59f8b' d='M13 13h1'/%3E%3Cpath stroke='%23e5a08b' d='M14 13h1m-2 1h1'/%3E%3Cpath stroke='%23ce4c23' d='M15 13h1m0 3h1'/%3E%3Cpath stroke='%23882b13' d='M1 14h1'/%3E%3Cpath stroke='%23e6a08b' d='M14 14h1'/%3E%3Cpath stroke='%23e6a18b' d='M15 14h1m-2 1h1'/%3E%3Cpath stroke='%23ce4b23' d='M16 14h1m-4 1h1'/%3E%3Cpath stroke='%238b2c14' d='M1 15h1m-1 1h1'/%3E%3Cpath stroke='%23ac3619' d='M2 15h1'/%3E%3Cpath stroke='%23d76b48' d='M15 15h1'/%3E%3Cpath stroke='%23cf4c23' d='M16 15h1m-2 1h1'/%3E%3Cpath stroke='%23c94721' d='M18 15h1m-3 3h1'/%3E%3Cpath stroke='%23bb3c1b' d='M3 16h1'/%3E%3Cpath stroke='%23bf3e1d' d='M6 16h1'/%3E%3Cpath stroke='%23cb4821' d='M12 16h1'/%3E%3Cpath stroke='%23cd4b23' d='M14 16h1'/%3E%3Cpath stroke='%23cc4922' d='M17 16h1m-4 1h1m1 0h1'/%3E%3Cpath stroke='%238d2d14' d='M1 17h1'/%3E%3Cpath stroke='%23bc3c1b' d='M3 17h1m-1 1h1'/%3E%3Cpath stroke='%23c84520' d='M11 17h1m1 1h1'/%3E%3Cpath stroke='%23ae3719' d='M2 18h1'/%3E%3Cpath stroke='%23c94720' d='M14 18h1'/%3E%3Cpath stroke='%23c95839' d='M19 18h1'/%3E%3Cpath stroke='%23a7bdf0' d='M0 19h1m0 1h1'/%3E%3Cpath stroke='%23ead7d3' d='M1 19h1'/%3E%3Cpath stroke='%23b34e35' d='M2 19h1'/%3E%3Cpath stroke='%23c03e1c' d='M8 19h1'/%3E%3Cpath stroke='%23c9583a' d='M18 19h1'/%3E%3Cpath stroke='%23f3dbd4' d='M19 19h1'/%3E%3Cpath stroke='%23a7bcef' d='M20 19h1m-2 1h1'/%3E%3C/svg%3E");
+}
+
+/* Windows 98: gris en relieve con la cruz de 98.css. */
+:root.btn-win98:not(#k) .floating-panel > .title .close,
+:root.btn-win98:not(#k) .dialog > .title .close {
+    width: 16px;
+    height: 14px;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: #c0c0c0 center no-repeat url("data:image/svg+xml;charset=utf-8,%3Csvg width='8' height='7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0h2v1h1v1h2V1h1V0h2v1H7v1H6v1H5v1h1v1h1v1h1v1H6V6H5V5H3v1H2v1H0V6h1V5h1V4h1V3H2V2H1V1H0V0z' fill='%23000'/%3E%3C/svg%3E");
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #ffffff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+}
+
+:root.btn-win98:not(#k) .floating-panel > .title .close:active,
+:root.btn-win98:not(#k) .dialog > .title .close:active {
+    background-position: calc(50% + 1px) calc(50% + 1px);
+    box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+
+/* macOS: el círculo rojo; la cruz, solo bajo el puntero. */
+:root.btn-macos:not(#k) .floating-panel > .title .close,
+:root.btn-macos:not(#k) .dialog > .title .close {
+    width: 12px;
+    height: 12px;
+    margin: 0 4px;
+    border: 0.5px solid #e0443e;
+    border-radius: 50%;
+    background: #ff5f57;
+    box-shadow: none;
+}
+
+:root.btn-macos:not(#k) .floating-panel > .title .close:hover,
+:root.btn-macos:not(#k) .dialog > .title .close:hover {
+    background: #ff5f57 center / 8px 8px no-repeat
+                url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 1.5l5 5m0-5l-5 5' stroke='%234d0000' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* Windows 11: cuadrado de esquinas redondeadas, con la cruz fina; rojo bajo el puntero. */
+:root.btn-win11:not(#k) .floating-panel > .title .close,
+:root.btn-win11:not(#k) .dialog > .title .close {
+    width: 24px;
+    height: 20px;
+    border: none;
+    border-radius: 4px;
+    background: transparent center / 10px 10px no-repeat
+                url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M.5.5l9 9m0-9l-9 9' stroke='%23808080' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E");
+    box-shadow: none;
+}
+
+:root.btn-win11:not(#k) .floating-panel > .title .close:hover,
+:root.btn-win11:not(#k) .dialog > .title .close:hover {
+    background: #c42b1c center / 10px 10px no-repeat
+                url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M.5.5l9 9m0-9l-9 9' stroke='%23ffffff' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* Con un dibujo propio, sin la cruz hecha con ::before/::after ni la «x» del estilo Paint.NET. */
+:root:is(.btn-win7, .btn-xp, .btn-win98, .btn-macos, .btn-win11):not(#k) .floating-panel > .title .close::before,
+:root:is(.btn-win7, .btn-xp, .btn-win98, .btn-macos, .btn-win11):not(#k) .floating-panel > .title .close::after,
+:root:is(.btn-win7, .btn-xp, .btn-win98, .btn-macos, .btn-win11):not(#k) .dialog > .title .close::before,
+:root:is(.btn-win7, .btn-xp, .btn-win98, .btn-macos, .btn-win11):not(#k) .dialog > .title .close::after {
+    content: none;
+}
+
+/* A la izquierda: el botón delante del título. */
+:root.btn-left .floating-panel > .title .close,
+:root.btn-left .dialog > .title .close {
+    order: -1;
+}
+
+:root.btn-left .floating-panel > .title > span,
+:root.btn-left .dialog > .title > span {
+    order: 0;
+}
+
+/* --- Deslizadores de 98.css, XP.css y 7.css (los de los efectos y el de la barra de estado) ------ */
+
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 24px;
+    padding: 0 1px;
+    background: transparent;
+}
+
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    box-sizing: border-box;
+    background: #000000;
+    border-bottom: 1px solid #808080;
+    border-right: 1px solid #808080;
+    box-shadow: 1px 0 0 #ffffff, 1px 1px 0 #ffffff, 0 1px 0 #ffffff, -1px 0 0 #a9a9a9, -1px -1px 0 #a9a9a9, 0 -1px 0 #a9a9a9, -1px 1px 0 #ffffff, 1px -1px #a9a9a9;
+}
+
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-track {
+    height: 2px;
+    box-sizing: border-box;
+    background: #000000;
+    border-bottom: 1px solid #808080;
+    border-right: 1px solid #808080;
+    box-shadow: 1px 0 0 #ffffff, 1px 1px 0 #ffffff, 0 1px 0 #ffffff, -1px 0 0 #a9a9a9, -1px -1px 0 #a9a9a9, 0 -1px 0 #a9a9a9, -1px 1px 0 #ffffff, 1px -1px #a9a9a9;
+}
+
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-thumb,
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-webkit-slider-thumb,
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px;
+    height: 21px;
+    border: none;
+    border-radius: 0;
+    background: url("data:image/svg+xml;charset=utf-8,%3Csvg width='11' height='21' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0v16h2v2h2v2h1v-1H3v-2H1V1h9V0z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M1 1v15h1v1h1v1h1v1h2v-1h1v-1h1v-1h1V1z' fill='%23C0C7C8'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 1h1v15H8v2H6v2H5v-1h2v-2h2z' fill='%2387888F'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M10 0h1v16H9v2H7v2H5v1h1v-2h2v-2h2z' fill='%23000'/%3E%3C/svg%3E");
+    clip-path: none;
+    transform: translateY(-8px);
+}
+
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-thumb,
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-moz-range-thumb,
+:root.classic:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-moz-range-thumb {
+    width: 11px;
+    height: 21px;
+    border: none;
+    border-radius: 0;
+    background: url("data:image/svg+xml;charset=utf-8,%3Csvg width='11' height='21' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0v16h2v2h2v2h1v-1H3v-2H1V1h9V0z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M1 1v15h1v1h1v1h1v1h2v-1h1v-1h1v-1h1V1z' fill='%23C0C7C8'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 1h1v15H8v2H6v2H5v-1h2v-2h2z' fill='%2387888F'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M10 0h1v16H9v2H7v2H5v1h1v-2h2v-2h2z' fill='%23000'/%3E%3C/svg%3E");
+    clip-path: none;
+    transform: translateY(2px);
+}
+
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 24px;
+    padding: 0 1px;
+    background: transparent;
+}
+
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    box-sizing: border-box;
+    background: #ecebe4;
+    border-right: 1px solid #f3f2ea;
+    border-bottom: 1px solid #f3f2ea;
+    border-radius: 2px;
+    box-shadow: 1px 0 0 #ffffff, 1px 1px 0 #ffffff, 0 1px 0 #ffffff, -1px 0 0 #9d9c99, -1px -1px 0 #9d9c99, 0 -1px 0 #9d9c99, -1px 1px 0 #ffffff, 1px -1px #9d9c99;
+}
+
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-track {
+    height: 2px;
+    box-sizing: border-box;
+    background: #ecebe4;
+    border-right: 1px solid #f3f2ea;
+    border-bottom: 1px solid #f3f2ea;
+    border-radius: 2px;
+    box-shadow: 1px 0 0 #ffffff, 1px 1px 0 #ffffff, 0 1px 0 #ffffff, -1px 0 0 #9d9c99, -1px -1px 0 #9d9c99, 0 -1px 0 #9d9c99, -1px 1px 0 #ffffff, 1px -1px #9d9c99;
+}
+
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-thumb,
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-webkit-slider-thumb,
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px;
+    height: 21px;
+    border: none;
+    border-radius: 0;
+    background: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 11 21' shape-rendering='crispEdges'%3E%3Cpath stroke='%23becbd3' d='M1 0h1M0 1h1'/%3E%3Cpath stroke='%23b6c5cd' d='M2 0h1M0 2h1'/%3E%3Cpath stroke='%23b5c4cd' d='M3 0h5M0 3h1M0 4h1M0 5h1M0 6h1M0 7h1M0 8h1M0 9h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23afbfc8' d='M8 0h1M0 14h1'/%3E%3Cpath stroke='%239fb2be' d='M9 0h1M0 15h1'/%3E%3Cpath stroke='%23a6d1b1' d='M1 1h1'/%3E%3Cpath stroke='%236fd16e' d='M2 1h1M1 2h1'/%3E%3Cpath stroke='%2367ce65' d='M3 1h1M1 3h1'/%3E%3Cpath stroke='%2366ce64' d='M4 1h3'/%3E%3Cpath stroke='%2362cd61' d='M7 1h1'/%3E%3Cpath stroke='%2345c343' d='M8 1h1M7 2h1'/%3E%3Cpath stroke='%2363ac76' d='M9 1h1M2 16h1m0 1h1m0 1h1'/%3E%3Cpath stroke='%23879aa6' d='M10 1h1'/%3E%3Cpath stroke='%2363cd62' d='M2 2h1'/%3E%3Cpath stroke='%2349c547' d='M3 2h1M2 3h1'/%3E%3Cpath stroke='%2347c446' d='M4 2h3'/%3E%3Cpath stroke='%2321b71f' d='M8 2h1'/%3E%3Cpath stroke='%231da41c' d='M9 2h1'/%3E%3Cpath stroke='%237d8e99' d='M10 2h1'/%3E%3Cpath stroke='%2325b923' d='M3 3h1'/%3E%3Cpath stroke='%2321b81f' d='M4 3h4M2 15h1'/%3E%3Cpath stroke='%231ea71c' d='M8 3h1'/%3E%3Cpath stroke='%231b9619' d='M9 3h1'/%3E%3Cpath stroke='%23778892' d='M10 3h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f7f7f4' d='M1 4h1M1 5h1M1 6h1M1 7h1M1 8h1M1 9h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f5f5f2' d='M2 4h1M2 5h1M2 6h1M2 7h1M2 8h1M2 9h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f3f3ef' d='M3 4h5M3 5h5M3 6h5M3 7h5M3 8h5M3 9h5m-5 1h5m-5 1h5m-5 1h5m-5 1h4m-4 1h3m-2 1h1'/%3E%3Cpath stroke='%23dcdcd9' d='M8 4h1M8 5h1M8 6h1M8 7h1M8 8h1M8 9h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23c3c3c0' d='M9 4h1M9 5h1M9 6h1M9 7h1M9 8h1M9 9h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f1f1ed' d='M7 13h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%23dbdbd8' d='M8 13h1'/%3E%3Cpath stroke='%23c4c4c1' d='M9 13h1'/%3E%3Cpath stroke='%234bc549' d='M1 14h1'/%3E%3Cpath stroke='%23f4f4f1' d='M2 14h1'/%3E%3Cpath stroke='%23e6e6e2' d='M7 14h1m-2 1h1'/%3E%3Cpath stroke='%23cececa' d='M8 14h1'/%3E%3Cpath stroke='%231a9319' d='M9 14h1'/%3E%3Cpath stroke='%23788993' d='M10 14h1'/%3E%3Cpath stroke='%2369b17b' d='M1 15h1'/%3E%3Cpath stroke='%23f2f2ee' d='M3 15h1m0 1h1'/%3E%3Cpath stroke='%23d0d0cc' d='M7 15h1m-2 1h1'/%3E%3Cpath stroke='%231a9118' d='M8 15h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%234c845a' d='M9 15h1'/%3E%3Cpath stroke='%2372838d' d='M10 15h1'/%3E%3Cpath stroke='%2391a6b2' d='M1 16h1m0 1h1m0 1h1m0 1h1'/%3E%3Cpath stroke='%2321b61f' d='M3 16h1m0 1h1'/%3E%3Cpath stroke='%23e7e7e3' d='M5 16h1'/%3E%3Cpath stroke='%234b8259' d='M8 16h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%236e7e88' d='M9 16h1m-2 1h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%23d7d7d4' d='M5 17h1'/%3E%3Cpath stroke='%231da21b' d='M5 18h1'/%3E%3Cpath stroke='%23589868' d='M5 19h1'/%3E%3Cpath stroke='%2380929e' d='M5 20h1'/%3E%3C/svg%3E");
+    clip-path: none;
+    transform: translateY(-8px);
+}
+
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-thumb,
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-moz-range-thumb,
+:root.xp:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-moz-range-thumb {
+    width: 11px;
+    height: 21px;
+    border: none;
+    border-radius: 0;
+    background: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -0.5 11 21' shape-rendering='crispEdges'%3E%3Cpath stroke='%23becbd3' d='M1 0h1M0 1h1'/%3E%3Cpath stroke='%23b6c5cd' d='M2 0h1M0 2h1'/%3E%3Cpath stroke='%23b5c4cd' d='M3 0h5M0 3h1M0 4h1M0 5h1M0 6h1M0 7h1M0 8h1M0 9h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23afbfc8' d='M8 0h1M0 14h1'/%3E%3Cpath stroke='%239fb2be' d='M9 0h1M0 15h1'/%3E%3Cpath stroke='%23a6d1b1' d='M1 1h1'/%3E%3Cpath stroke='%236fd16e' d='M2 1h1M1 2h1'/%3E%3Cpath stroke='%2367ce65' d='M3 1h1M1 3h1'/%3E%3Cpath stroke='%2366ce64' d='M4 1h3'/%3E%3Cpath stroke='%2362cd61' d='M7 1h1'/%3E%3Cpath stroke='%2345c343' d='M8 1h1M7 2h1'/%3E%3Cpath stroke='%2363ac76' d='M9 1h1M2 16h1m0 1h1m0 1h1'/%3E%3Cpath stroke='%23879aa6' d='M10 1h1'/%3E%3Cpath stroke='%2363cd62' d='M2 2h1'/%3E%3Cpath stroke='%2349c547' d='M3 2h1M2 3h1'/%3E%3Cpath stroke='%2347c446' d='M4 2h3'/%3E%3Cpath stroke='%2321b71f' d='M8 2h1'/%3E%3Cpath stroke='%231da41c' d='M9 2h1'/%3E%3Cpath stroke='%237d8e99' d='M10 2h1'/%3E%3Cpath stroke='%2325b923' d='M3 3h1'/%3E%3Cpath stroke='%2321b81f' d='M4 3h4M2 15h1'/%3E%3Cpath stroke='%231ea71c' d='M8 3h1'/%3E%3Cpath stroke='%231b9619' d='M9 3h1'/%3E%3Cpath stroke='%23778892' d='M10 3h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f7f7f4' d='M1 4h1M1 5h1M1 6h1M1 7h1M1 8h1M1 9h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f5f5f2' d='M2 4h1M2 5h1M2 6h1M2 7h1M2 8h1M2 9h1m-1 1h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f3f3ef' d='M3 4h5M3 5h5M3 6h5M3 7h5M3 8h5M3 9h5m-5 1h5m-5 1h5m-5 1h5m-5 1h4m-4 1h3m-2 1h1'/%3E%3Cpath stroke='%23dcdcd9' d='M8 4h1M8 5h1M8 6h1M8 7h1M8 8h1M8 9h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23c3c3c0' d='M9 4h1M9 5h1M9 6h1M9 7h1M9 8h1M9 9h1m-1 1h1m-1 1h1m-1 1h1'/%3E%3Cpath stroke='%23f1f1ed' d='M7 13h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%23dbdbd8' d='M8 13h1'/%3E%3Cpath stroke='%23c4c4c1' d='M9 13h1'/%3E%3Cpath stroke='%234bc549' d='M1 14h1'/%3E%3Cpath stroke='%23f4f4f1' d='M2 14h1'/%3E%3Cpath stroke='%23e6e6e2' d='M7 14h1m-2 1h1'/%3E%3Cpath stroke='%23cececa' d='M8 14h1'/%3E%3Cpath stroke='%231a9319' d='M9 14h1'/%3E%3Cpath stroke='%23788993' d='M10 14h1'/%3E%3Cpath stroke='%2369b17b' d='M1 15h1'/%3E%3Cpath stroke='%23f2f2ee' d='M3 15h1m0 1h1'/%3E%3Cpath stroke='%23d0d0cc' d='M7 15h1m-2 1h1'/%3E%3Cpath stroke='%231a9118' d='M8 15h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%234c845a' d='M9 15h1'/%3E%3Cpath stroke='%2372838d' d='M10 15h1'/%3E%3Cpath stroke='%2391a6b2' d='M1 16h1m0 1h1m0 1h1m0 1h1'/%3E%3Cpath stroke='%2321b61f' d='M3 16h1m0 1h1'/%3E%3Cpath stroke='%23e7e7e3' d='M5 16h1'/%3E%3Cpath stroke='%234b8259' d='M8 16h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%236e7e88' d='M9 16h1m-2 1h1m-2 1h1m-2 1h1'/%3E%3Cpath stroke='%23d7d7d4' d='M5 17h1'/%3E%3Cpath stroke='%231da21b' d='M5 18h1'/%3E%3Cpath stroke='%23589868' d='M5 19h1'/%3E%3Cpath stroke='%2380929e' d='M5 20h1'/%3E%3C/svg%3E");
+    clip-path: none;
+    transform: translateY(2px);
+}
+
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 24px;
+    padding: 0 1px;
+    background: transparent;
+}
+
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px;
+    box-sizing: border-box;
+    background: #e7eaea;
+    border: none;
+    box-shadow: inset 1px 1px 1px #999999, inset -1px 0 #999999, 0 1px #ffffff;
+}
+
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-track {
+    height: 3px;
+    box-sizing: border-box;
+    background: #e7eaea;
+    border: none;
+    box-shadow: inset 1px 1px 1px #999999, inset -1px 0 #999999, 0 1px #ffffff;
+}
+
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-thumb,
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-webkit-slider-thumb,
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 18px;
+    border: none;
+    border-radius: 0;
+    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASCAYAAABit09LAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAC7SURBVHgBlZLBCYQwEEVj9CDYgRfbswF7sRAbsArPdhBICDmEzPoDE9CdXeKH0eHP48fINOrSPM+k/mhd16YDtCyLmqZJhM7zxIs6PAF570WQAzJIRLkksd89DUl939eB1Ym3b0wpiQBmIYSXiTFGZYwRgWEY6o8uIPQLZGlu2rYtP54L3g3c912N45gHSEahh4dZERZj2zZyztFxHLnQw/vaLIattbmeULkMdg6XxLFaa3WB7MlCirTIHxVUkxicbwSEAAAAAElFTkSuQmCC");
+    clip-path: none;
+    transform: translateY(-7px);
+}
+
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-thumb,
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-moz-range-thumb,
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-moz-range-thumb {
+    width: 10px;
+    height: 18px;
+    border: none;
+    border-radius: 0;
+    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASCAYAAABit09LAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAC7SURBVHgBlZLBCYQwEEVj9CDYgRfbswF7sRAbsArPdhBICDmEzPoDE9CdXeKH0eHP48fINOrSPM+k/mhd16YDtCyLmqZJhM7zxIs6PAF570WQAzJIRLkksd89DUl939eB1Ym3b0wpiQBmIYSXiTFGZYwRgWEY6o8uIPQLZGlu2rYtP54L3g3c912N45gHSEahh4dZERZj2zZyztFxHLnQw/vaLIattbmeULkMdg6XxLFaa3WB7MlCirTIHxVUkxicbwSEAAAAAElFTkSuQmCC");
+    clip-path: none;
+    transform: translateY(0px);
+}
+
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-webkit-slider-thumb { background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASCAMAAABVab95AAAAWlBMVEUAAAAAjf8AVpo8f7G44/v5/f7l9P3g8/za8Pzp9v32+/7u+f695v2z4PmWvdjr9/1onMKu3vjQ4e2Zv9l+pcJLc5GTu9eMtNGCqseLrcVhlbt0l7BWfptOdpOMIi2BAAAAA3RSTlMADUenYG6gAAAAWklEQVQI113GRwKAIAwEwCBBRaUo9vL/b0qWG3MaaqKG2FBcDCw3aWPB6NwW6nYgHUoHaQ9VxwlGKUPVwC7joOlIgeeZQ3pJnd46Z/2miNTqbZl8918efj2yH/8dBY1fB+zGAAAAAElFTkSuQmCC"); }
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-webkit-slider-thumb { background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASCAYAAABit09LAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAACsSURBVHgB3ZKxCoMwEIYvJWOn0r10LHTuVDp1KIU+RN+gT9FZ6AP0LYqDY+nQWXAScXMQdRYh+ouRqEF0cPGHHJfcl7sbfkaFroYlqEefx5lxQK/blu6rjRZ6R34RLcFxAWSkmRZEbUkeLWigZgVymZhuoid264lGjwMvTkhmtYsqvKEGMQQY43jYNwoy//7t0j31b8DPXyBOcVYe5Kr9mDpKdoY6ndoCrDNyDnRZRNbxQWFyAAAAAElFTkSuQmCC"); }
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:hover::-moz-range-thumb { background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASCAMAAABVab95AAAAWlBMVEUAAAAAjf8AVpo8f7G44/v5/f7l9P3g8/za8Pzp9v32+/7u+f695v2z4PmWvdjr9/1onMKu3vjQ4e2Zv9l+pcJLc5GTu9eMtNGCqseLrcVhlbt0l7BWfptOdpOMIi2BAAAAA3RSTlMADUenYG6gAAAAWklEQVQI113GRwKAIAwEwCBBRaUo9vL/b0qWG3MaaqKG2FBcDCw3aWPB6NwW6nYgHUoHaQ9VxwlGKUPVwC7joOlIgeeZQ3pJnd46Z/2miNTqbZl8918efj2yH/8dBY1fB+zGAAAAAElFTkSuQmCC"); }
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:active::-moz-range-thumb { background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASCAYAAABit09LAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAACsSURBVHgB3ZKxCoMwEIYvJWOn0r10LHTuVDp1KIU+RN+gT9FZ6AP0LYqDY+nQWXAScXMQdRYh+ouRqEF0cPGHHJfcl7sbfkaFroYlqEefx5lxQK/blu6rjRZ6R34RLcFxAWSkmRZEbUkeLWigZgVymZhuoid264lGjwMvTkhmtYsqvKEGMQQY43jYNwoy//7t0j31b8DPXyBOcVYe5Kr9mDpKdoY6ndoCrDNyDnRZRNbxQWFyAAAAAElFTkSuQmCC"); }
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:disabled::-webkit-slider-thumb { background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASBAMAAACQmVJ4AAAAJFBMVEUAAAAAERr19fX8/PytsrXW2NrKzc66vb+/w8bq6+zQ0tS8wMJ24HiUAAAAAnRSTlMAHoyc8FsAAAA4SURBVAjXY5BwcXFpZOg0NjaezeCspKRkQhG51EhJOZyBLVjJtICBIdU4nIGBgS20gAEIljEwAADrIhGV6oosPgAAAABJRU5ErkJggg=="); }
+:root.win7:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:disabled::-moz-range-thumb { background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAASBAMAAACQmVJ4AAAAJFBMVEUAAAAAERr19fX8/PytsrXW2NrKzc66vb+/w8bq6+zQ0tS8wMJ24HiUAAAAAnRSTlMAHoyc8FsAAAA4SURBVAjXY5BwcXFpZOg0NjaezeCspKRkQhG51EhJOZyBLVjJtICBIdU4nIGBgS20gAEIljEwAADrIhGV6oosPgAAAABJRU5ErkJggg=="); }
+
+:root:is(.classic, .xp, .win7):not(#k) :is(.fx-slider, .status-bar) input[type="range"]:focus-visible {
+    outline: 1px dotted #000000;
+    outline-offset: 0;
+}
+
+:root.btn-left .floating-panel > .title,
+:root.btn-left .dialog > .title {
+    gap: 6px;
+}

@@ -15,6 +15,7 @@
 #include "app/SystemCursors.h"
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
+#include "app/WindowFrame.h"
 #include "app/Workspace.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/EffectDialog.h"
@@ -396,7 +397,18 @@ static void testTheme()
     CHECK(Theme::workspaceColor() == QColor(0x00, 0x80, 0x80) && Theme::active().panelTitleEnd != Theme::active().panelTitle);
     CHECK(qApp->styleSheet().contains(QStringLiteral("border-width: 2px")));
     CHECK(!Theme::needsRestart(Theme::Scheme::Windows98));
+    // Windows 98 ALT: el clásico de Windows 2000 y XP (gris #d4d0c8 y lienzo sobre gris).
+    Theme::apply(Theme::Scheme::Windows98Alt);
+    CHECK(Theme::active().classic && QApplication::palette().color(QPalette::Window) == QColor(0xd4, 0xd0, 0xc8));
+    CHECK(Theme::workspaceColor() == QColor(0x80, 0x80, 0x80) && Theme::active().panelTitle == QColor(0x0a, 0x24, 0x6a));
+    // Windows XP: Luna, con su hoja de estilo y los botones de XP en la barra de título.
+    Theme::apply(Theme::Scheme::WindowsXP);
+    CHECK(Theme::active().xp && !Theme::active().classic && !Theme::needsRestart(Theme::Scheme::WindowsXP));
+    CHECK(QApplication::palette().color(QPalette::Window) == QColor(0xec, 0xe9, 0xd8));
+    CHECK(qApp->styleSheet().contains(QStringLiteral("#003c74")));
+    CHECK(WindowFrame::lunaTitle() && WindowFrame::classicTitle());
     Theme::apply(Theme::Scheme::Light);
+    CHECK(!Theme::active().xp && !WindowFrame::classicTitle());
 
     // "Seguir al sistema" con Plasma: kdeglobals dice si el esquema es oscuro.
     QTemporaryDir config;
@@ -1546,6 +1558,19 @@ int main(int argc, char** argv)
         CHECK(back.animation && back.loops == 2 && back.frameDelay == 250);
         CHECK(!back.gifStack && !back.gifGlobalPalette && back.gifEffects == Gif::Effects());
 
+        // GIF con varias imágenes abiertas: los fotogramas pueden ser las capas o las imágenes. Con
+        // una sola capa y las capas elegidas no hay animación posible (y no se recuerda "sin
+        // animación" para la próxima vez).
+        const QList<SaveConfigDialog::ImageSource> sources{{QStringLiteral("a"), doc->flattened(), 0},
+                                                            {QStringLiteral("b"), doc->flattened(), 70}};
+        SaveConfigDialog fromImages(doc->flattened(), QStringLiteral("anim.gif"), ImageIO::SaveOptions(), &w,
+                                    {Gif::Frame{doc->flattened(), 0}}, sources);
+        bool frameSource = false;
+        for (const QComboBox* c : fromImages.findChildren<QComboBox*>())
+            frameSource = frameSource || (c->count() == 2 && c->itemData(1).toInt() == 1);
+        CHECK(frameSource);
+        CHECK(fromImages.animationFrames().isEmpty() && fromImages.options().animation);
+
         // Vista previa del GIF: el botón la reproduce con sus duraciones.
         QImage dot(60, 40, kLayerFormat);
         dot.fill(kTransparent);
@@ -1970,6 +1995,60 @@ int main(int argc, char** argv)
                       && std::abs(panel->height() - compact.height()) <= 2);
             }
             panel->resize(colors->sizeForScale(1.0) + (panel->size() - colors->size()));
+            settle();
+            // Aplicar un ajuste visual (el tipo de cursor, por ejemplo) vuelve a poner el marco de las
+            // ventanas y el tema: Colores no puede crecer cada vez (ampliada o no).
+            auto* workspace = w.findChild<Workspace*>();
+            // Más pequeña que la de fábrica (como la deja quien la encoge).
+            panel->resize(colors->sizeForScale(0.876) + (panel->size() - colors->size()));
+            settle();
+            for (bool expanded : {false, true}) {
+                if (more && more->isChecked() != expanded) {
+                    more->click();
+                    settle();
+                }
+                const QSize before = panel->size();
+                for (int i = 0; i < 4 && workspace; ++i) {
+                    workspace->setPanelChrome(FloatingPanel::chromeStyle(), FloatingPanel::chromeBorder());
+                    Theme::apply(Theme::current());
+                    settle();
+                }
+                if (panel->size() != before)
+                    std::fprintf(stderr, "  Colores pasó de %dx%d a %dx%d\n", before.width(), before.height(), panel->width(),
+                                 panel->height());
+                CHECK(panel->size() == before);
+            }
+            // Lo mismo por el camino de verdad: Configuración, cambiar los cursores (dos veces).
+            if (QAction* settingsAction = findAction(&w, QStringLiteral("Configuración..."))) {
+                const QSize before = panel->size();
+                for (int round = 0; round < 2; ++round) {
+                    QTimer::singleShot(0, &w, [] {
+                        for (QWidget* top : QApplication::topLevelWidgets()) {
+                            auto* dlg = qobject_cast<SettingsDialog*>(top);
+                            if (!dlg)
+                                continue;
+                            for (QComboBox* c : dlg->findChildren<QComboBox*>())
+                                if (c->count() == 2 && c->itemText(0) == QLatin1String("Kaint") && c->itemData(1).toInt() == 1
+                                    && c->itemData(0, Qt::ToolTipRole).toString().contains(QStringLiteral("puntero"))) {
+                                    const int next = 1 - c->currentIndex();
+                                    c->setCurrentIndex(next);
+                                    QMetaObject::invokeMethod(c, "activated", Q_ARG(int, next));
+                                }
+                            QTimer::singleShot(50, dlg, &QDialog::accept);
+                        }
+                    });
+                    settingsAction->trigger();
+                    settle();
+                }
+                if (panel->size() != before)
+                    std::fprintf(stderr, "  Colores (Configuración) pasó de %dx%d a %dx%d\n", before.width(), before.height(),
+                                 panel->width(), panel->height());
+                CHECK(panel->size() == before);
+            }
+            if (more && more->isChecked()) {
+                more->click();
+                settle();
+            }
         }
         // Herramientas: dos columnas por defecto y Formas ocupa lo que queda de la última fila.
         auto* toolsGrid = w.findChild<ToolsPanel*>();

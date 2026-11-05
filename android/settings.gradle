@@ -1,0 +1,18 @@
+// Kaint.APK: la versión web de Kaint (KaintHTML) como aplicación de Android. La compila
+// ../build-apk.sh, que copia KaintHTML en app/src/main/assets/www.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "Kaint"
+include(":app")

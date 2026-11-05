@@ -421,6 +421,17 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>Customization</name>
+    <message>
+        <source>Efectos</source>
+        <translation>Effects</translation>
+    </message>
+    <message>
+        <source>Ajustes</source>
+        <translation>Adjustments</translation>
+    </message>
+</context>
+<context>
     <name>DiscordPresence</name>
     <message>
         <source>Desactivado</source>
@@ -1393,6 +1404,45 @@ What do you want to do?</translation>
 %2</translation>
     </message>
     <message>
+        <source>Abrir un GIF animado</source>
+        <translation>Open an Animated GIF</translation>
+    </message>
+    <message numerus="yes">
+        <source>«%1» tiene %n fotograma(s). ¿Cómo quieres abrirlo?</source>
+        <translation>
+            <numerusform>“%1” has %n frame. How do you want to open it?</numerusform>
+            <numerusform>“%1” has %n frames. How do you want to open it?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Recordar mi elección (se cambia en Configuración &gt; Interfaz de usuario)</source>
+        <translation>Remember my choice (change it in Settings &gt; User Interface)</translation>
+    </message>
+    <message>
+        <source>Como capas</source>
+        <translation>As layers</translation>
+    </message>
+    <message>
+        <source>Una sola imagen con un fotograma en cada capa, una encima de otra. Se vuelve a guardar como GIF animado.</source>
+        <translation>A single image with one frame on each layer, stacked. It saves back as an animated GIF.</translation>
+    </message>
+    <message>
+        <source>Como imágenes</source>
+        <translation>As images</translation>
+    </message>
+    <message>
+        <source>Cada fotograma se abre como una imagen aparte. Al guardar como GIF se pueden elegir las imágenes que forman la animación.</source>
+        <translation>Each frame opens as a separate image. When saving as GIF you can choose the images that make up the animation.</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <source>Abrir imagen</source>
+        <translation>Open Image</translation>
+    </message>
+    <message>
         <source>No se pudo abrir «%1»: %2</source>
         <translation>Could not open “%1”: %2</translation>
     </message>
@@ -1919,8 +1969,8 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>It does not export the %1 function: it is not a Kaint plugin.</translation>
     </message>
     <message>
-        <source>Usa la versión %1 de la API de complementos; Kaint admite la %2.</source>
-        <translation>It uses version %1 of the plugin API; Kaint supports %2.</translation>
+        <source>Usa la versión %1 de la API de complementos; Kaint admite de la 1 a la %2.</source>
+        <translation>It uses version %1 of the plugin API; Kaint supports versions 1 to %2.</translation>
     </message>
 </context>
 <context>
@@ -2129,8 +2179,8 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Images to open.</translation>
     </message>
     <message>
-        <source>Tema: system, light, dark, kde o custom (se guarda).</source>
-        <translation>Theme: system, light, dark, kde or custom (saved).</translation>
+        <source>Tema: system, light, dark, blue, kde, custom, windows7, windowsxp, windows98 o windows98alt (se guarda).</source>
+        <translation>Theme: system, light, dark, blue, kde, custom, windows7, windowsxp, windows98 or windows98alt (saved).</translation>
     </message>
     <message>
         <source>Guarda una captura de la ventana con la configuración de fábrica (la primera imagen es la actual) y sale.</source>
@@ -2163,6 +2213,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Ventanas translúcidas en la captura (yes o no).</source>
         <translation>Translucent windows in the screenshot (yes or no).</translation>
+    </message>
+    <message>
+        <source>Botones de la barra de título en la captura (win11, win10, macos, win7, xp o win98).</source>
+        <translation>Title bar buttons in the screenshot (win11, win10, macos, win7, xp or win98).</translation>
+    </message>
+    <message>
+        <source>Botones de la barra de título a la izquierda en la captura (yes o no).</source>
+        <translation>Title bar buttons on the left in the screenshot (yes or no).</translation>
+    </message>
+    <message>
+        <source>Recreación de Windows en la captura (10 u 11).</source>
+        <translation>Windows recreation in the screenshot (10 or 11).</translation>
     </message>
     <message>
         <source>Barra de título de Windows 10 dibujada por Kaint en la captura (yes o no).</source>
@@ -3445,6 +3507,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Windows Icon</translation>
     </message>
     <message>
+        <source>Paint.NET con capas</source>
+        <translation>Paint.NET with layers</translation>
+    </message>
+    <message>
         <source>OpenRaster con capas</source>
         <translation>OpenRaster with layers</translation>
     </message>
@@ -3543,6 +3609,14 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Las dimensiones de una capa no coinciden con las de la imagen.</source>
         <translation>The size of a layer does not match the image.</translation>
+    </message>
+    <message>
+        <source>No se pudieron comprimir los píxeles.</source>
+        <translation>Could not compress the pixels.</translation>
+    </message>
+    <message>
+        <source>La cabecera del archivo es demasiado grande.</source>
+        <translation>The file header is too large.</translation>
     </message>
     <message>
         <source>Bicúbico (suave)</source>
@@ -3890,6 +3964,34 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Other options:</translation>
     </message>
     <message>
+        <source>Las capas de esta imagen</source>
+        <translation>The layers of this image</translation>
+    </message>
+    <message>
+        <source>Cada capa visible es un fotograma (la de abajo, el primero).</source>
+        <translation>Each visible layer is a frame (the bottom one is the first).</translation>
+    </message>
+    <message>
+        <source>Imágenes abiertas</source>
+        <translation>Open images</translation>
+    </message>
+    <message>
+        <source>Cada imagen abierta que elijas es un fotograma, en el orden que quieras.</source>
+        <translation>Each open image you choose is a frame, in the order you want.</translation>
+    </message>
+    <message>
+        <source>Elegir imágenes…</source>
+        <translation>Choose Images…</translation>
+    </message>
+    <message>
+        <source>Qué imágenes abiertas van en el GIF y en qué orden</source>
+        <translation>Which open images go into the GIF and in what order</translation>
+    </message>
+    <message>
+        <source>Fotogramas:</source>
+        <translation>Frames:</translation>
+    </message>
+    <message>
         <source>Animación: cada capa visible es un fotograma</source>
         <translation>Animation: each visible layer is a frame</translation>
     </message>
@@ -3960,6 +4062,57 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Las capas ocultas también son fotogramas del GIF.</source>
         <translation>Hidden layers are GIF frames too.</translation>
+    </message>
+    <message>
+        <source>Animación: cada imagen elegida es un fotograma</source>
+        <translation>Animation: each chosen image is a frame</translation>
+    </message>
+    <message>
+        <source>La primera imagen de la lista es el primer fotograma. La duración de cada una va en el nombre de su capa o se cambia en la configuración avanzada.</source>
+        <translation>The first image in the list is the first frame. The duration of each one comes from its layer name or is changed in the advanced settings.</translation>
+    </message>
+    <message>
+        <source>Imágenes del GIF</source>
+        <translation>GIF Images</translation>
+    </message>
+    <message>
+        <source>Marca las imágenes abiertas que forman el GIF y ordénalas con las flechas: cada una es un fotograma, de izquierda a derecha. Después puedes ajustar cada fotograma en la configuración avanzada.</source>
+        <translation>Check the open images that make up the GIF and order them with the arrows: each one is a frame, from left to right. Afterwards you can adjust each frame in the advanced settings.</translation>
+    </message>
+    <message>
+        <source>Las imágenes de otro tamaño se centran en un lienzo del tamaño de la más grande.</source>
+        <translation>Images of a different size are centered on a canvas the size of the largest one.</translation>
+    </message>
+    <message>
+        <source>Todas</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Ninguna</source>
+        <translation>None</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n imagen(es) en el GIF</source>
+        <translation>
+            <numerusform>%n image in the GIF</numerusform>
+            <numerusform>%n images in the GIF</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>N.º %1</source>
+        <translation>No. %1</translation>
+    </message>
+    <message>
+        <source>Incluir</source>
+        <translation>Include</translation>
+    </message>
+    <message>
+        <source>Antes</source>
+        <translation>Earlier</translation>
+    </message>
+    <message>
+        <source>Después</source>
+        <translation>Later</translation>
     </message>
     <message>
         <source>Configuración avanzada del GIF</source>
@@ -4276,12 +4429,24 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Shapes</translation>
     </message>
     <message>
+        <source>Personalización</source>
+        <translation>Customization</translation>
+    </message>
+    <message>
         <source>Atajos de teclado</source>
         <translation>Keyboard Shortcuts</translation>
     </message>
     <message>
         <source>Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.</source>
         <translation>Menus and windows that fade in, layers that slide when you reorder them and other transitions.</translation>
+    </message>
+    <message>
+        <source>Solo mientras tapan la imagen</source>
+        <translation>Only while they cover the image</translation>
+    </message>
+    <message>
+        <source>Como en Paint.NET: una ventana se vuelve translúcida mientras el borde de la imagen la cruza o la imagen queda debajo, y vuelve a ser opaca cuando se aparta de la imagen.</source>
+        <translation>Like Paint.NET: a window becomes translucent while the image edge crosses it or the image is underneath it, and turns solid again once it is clear of the image.</translation>
     </message>
     <message>
         <source>Iconos de herramientas con los colores activos</source>
@@ -4324,12 +4489,28 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>When off, the layer moves along the list with the mouse while you drag it.</translation>
     </message>
     <message>
+        <source>Windows XP</source>
+        <translation>Windows XP</translation>
+    </message>
+    <message>
+        <source>El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css.</source>
+        <translation>Luna's beige with the blue windows and the XP buttons, with XP.css's colors.</translation>
+    </message>
+    <message>
         <source>Windows 98</source>
         <translation>Windows 98</translation>
     </message>
     <message>
         <source>El clásico gris con relieve. También es una plantilla del personalizado.</source>
         <translation>The classic gray 3D look. It is also a template for the custom theme.</translation>
+    </message>
+    <message>
+        <source>Windows 98 ALT</source>
+        <translation>Windows 98 ALT</translation>
+    </message>
+    <message>
+        <source>El clásico de Windows 2000 y XP, como Paint.NET en Windows XP: gris claro, cabeceras de azul oscuro a celeste y Tahoma.</source>
+        <translation>The classic look of Windows 2000 and XP, like Paint.NET on Windows XP: light gray, dark blue to light blue headers and Tahoma.</translation>
     </message>
     <message>
         <source>El aspecto propio de Kaint.</source>
@@ -4432,6 +4613,78 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>px</translation>
     </message>
     <message>
+        <source>Barra de título</source>
+        <translation>Title Bar</translation>
+    </message>
+    <message>
+        <source>Finos, con el cuadrado de maximizar redondeado.</source>
+        <translation>Thin, with a rounded maximize square.</translation>
+    </message>
+    <message>
+        <source>Los de siempre de Paint.NET: 46 píxeles de ancho y cerrar en rojo.</source>
+        <translation>The usual Paint.NET ones: 46 pixels wide with a red close button.</translation>
+    </message>
+    <message>
+        <source>Los tres círculos de colores (cerrar, minimizar y zoom).</source>
+        <translation>The three colored circles (close, minimize and zoom).</translation>
+    </message>
+    <message>
+        <source>De cristal, colgando del borde de arriba, con cerrar en rojo.</source>
+        <translation>Glass buttons hanging from the top edge, with a red close button.</translation>
+    </message>
+    <message>
+        <source>Los azules de Luna con las esquinas redondeadas y cerrar en naranja.</source>
+        <translation>The blue Luna ones with rounded corners and an orange close button.</translation>
+    </message>
+    <message>
+        <source>Grises en relieve.</source>
+        <translation>Raised gray buttons.</translation>
+    </message>
+    <message>
+        <source>Los del escritorio</source>
+        <translation>The desktop&apos;s</translation>
+    </message>
+    <message>
+        <source>Sin la barra de título de Kaint: la del gestor de ventanas.</source>
+        <translation>Without Kaint&apos;s title bar: the window manager&apos;s.</translation>
+    </message>
+    <message>
+        <source>Los botones de cerrar, maximizar o restaurar y minimizar. Con el tema Windows 98, «Windows 10» usa los de Windows 98.</source>
+        <translation>The close, maximize or restore and minimize buttons. With the Windows 98 theme, “Windows 10” uses the Windows 98 ones.</translation>
+    </message>
+    <message>
+        <source>A la derecha</source>
+        <translation>On the right</translation>
+    </message>
+    <message>
+        <source>A la izquierda</source>
+        <translation>On the left</translation>
+    </message>
+    <message>
+        <source>Ventanas con las esquinas rectas.</source>
+        <translation>Windows with square corners.</translation>
+    </message>
+    <message>
+        <source>Ventanas con las esquinas algo redondeadas en modo ventana y, por defecto, los botones de Windows 11.</source>
+        <translation>Windows with slightly rounded corners when not maximized and, by default, the Windows 11 buttons.</translation>
+    </message>
+    <message>
+        <source>Botones de la barra de título:</source>
+        <translation>Title bar buttons:</translation>
+    </message>
+    <message>
+        <source>Posición de los botones:</source>
+        <translation>Button position:</translation>
+    </message>
+    <message>
+        <source>Recreación de Windows:</source>
+        <translation>Windows recreation:</translation>
+    </message>
+    <message>
+        <source>Dejar los botones como estaban.</source>
+        <translation>Keep the buttons as they were.</translation>
+    </message>
+    <message>
         <source>Seguir con el tema actual.</source>
         <translation>Keep the current theme.</translation>
     </message>
@@ -4496,6 +4749,14 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Reset</translation>
     </message>
     <message>
+        <source>Windows 7</source>
+        <translation>Windows 7</translation>
+    </message>
+    <message>
+        <source>Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css.</source>
+        <translation>Light gray with glass buttons and the Aero blue, with the colors of 7.css.</translation>
+    </message>
+    <message>
         <source>Acoplar las ventanas a los bordes y a las demás ventanas al moverlas</source>
         <translation>Snap windows to the edges and to other windows when moving them</translation>
     </message>
@@ -4504,20 +4765,36 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Dropping a window near an edge of the workspace or near another window places it right next to it.</translation>
     </message>
     <message>
-        <source>Barra de título como la de Windows 10 con el estilo Paint.NET</source>
-        <translation>Windows 10 style title bar with the Paint.NET style</translation>
-    </message>
-    <message>
-        <source>La ventana principal y los diálogos dibujan su propia barra de título negra, con sombra, en vez de la del escritorio. Se aplica al abrir Kaint.</source>
-        <translation>The main window and the dialogs draw their own black title bar, with a shadow, instead of the desktop’s. Applied when Kaint starts.</translation>
-    </message>
-    <message>
         <source>Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin guardar, te lo preguntará antes.</source>
         <translation>Kaint will close and open again with the chosen title bar. If there are unsaved changes, it will ask you first.</translation>
     </message>
     <message>
-        <source>Seguir así hasta la próxima vez que se abra Kaint.</source>
-        <translation>Keep it as it is until the next time Kaint starts.</translation>
+        <source>Se desbloquea con el estilo de interfaz Paint.NET.</source>
+        <translation>Unlocked with the Paint.NET interface style.</translation>
+    </message>
+    <message>
+        <source>Preguntar</source>
+        <translation>Ask</translation>
+    </message>
+    <message>
+        <source>Como capas</source>
+        <translation>As layers</translation>
+    </message>
+    <message>
+        <source>Cada fotograma es una capa de una sola imagen (se vuelve a guardar como GIF tal cual).</source>
+        <translation>Each frame is a layer of a single image (it saves back as the same GIF).</translation>
+    </message>
+    <message>
+        <source>Como imágenes</source>
+        <translation>As images</translation>
+    </message>
+    <message>
+        <source>Cada fotograma se abre como una imagen aparte.</source>
+        <translation>Each frame opens as a separate image.</translation>
+    </message>
+    <message>
+        <source>Al abrir un GIF animado:</source>
+        <translation>When opening an animated GIF:</translation>
     </message>
     <message>
         <source>Del color de la barra de herramientas</source>
@@ -4706,11 +4983,26 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Loaded with warnings</translation>
     </message>
     <message numerus="yes">
+        <source>%1 de %n efecto(s)</source>
+        <translation>
+            <numerusform>%1 of %n effect</numerusform>
+            <numerusform>%1 of %n effects</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>%n efecto(s)</source>
         <translation>
             <numerusform>%n effect</numerusform>
             <numerusform>%n effects</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Efecto</source>
+        <translation>Effect</translation>
+    </message>
+    <message>
+        <source>Activado</source>
+        <translation>Enabled</translation>
     </message>
     <message>
         <source>Añadir complementos</source>
@@ -4777,6 +5069,10 @@ Do you want to replace them?</translation>
         <translation>Effects:</translation>
     </message>
     <message>
+        <source> (desactivado)</source>
+        <translation> (disabled)</translation>
+    </message>
+    <message>
         <source>Problemas:</source>
         <translation>Problems:</translation>
     </message>
@@ -4787,6 +5083,74 @@ Do you want to replace them?</translation>
     <message>
         <source>Este complemento está desactivado. Marca la casilla para cargarlo.</source>
         <translation>This plugin is disabled. Check the box to load it.</translation>
+    </message>
+    <message>
+        <source>Ordena los menús a tu gusto: mueve cualquier efecto (también los de los complementos) a Ajustes, a Efectos o a otro submenú, por ejemplo a Efectos &gt; Desenfoques, u ocúltalo quitando su casilla. Debajo, las herramientas de la ventana Herramientas.</source>
+        <translation>Arrange the menus your way: move any effect (plugin effects too) to Adjustments, to Effects or to another submenu, for example to Effects &gt; Blurs, or hide it by unchecking it. Below, the tools of the Tools window.</translation>
+    </message>
+    <message>
+        <source>Menús de efectos</source>
+        <translation>Effect Menus</translation>
+    </message>
+    <message>
+        <source>Mover a</source>
+        <translation>Move To</translation>
+    </message>
+    <message>
+        <source>Pasa los efectos elegidos a otro menú o submenú</source>
+        <translation>Moves the selected effects to another menu or submenu</translation>
+    </message>
+    <message>
+        <source>Devuelve los efectos elegidos a su sitio de siempre y los muestra</source>
+        <translation>Puts the selected effects back in their usual place and shows them</translation>
+    </message>
+    <message>
+        <source>Restablecer todo</source>
+        <translation>Reset All</translation>
+    </message>
+    <message>
+        <source>Todos los efectos en su sitio de siempre, sin ninguno oculto</source>
+        <translation>All effects in their usual place, none hidden</translation>
+    </message>
+    <message>
+        <source>Nuevo submenú de Efectos…</source>
+        <translation>New Effects Submenu…</translation>
+    </message>
+    <message>
+        <source>Nuevo submenú</source>
+        <translation>New Submenu</translation>
+    </message>
+    <message>
+        <source>Nombre del submenú de Efectos:</source>
+        <translation>Name of the Effects submenu:</translation>
+    </message>
+    <message>
+        <source>Ventana Herramientas</source>
+        <translation>Tools Window</translation>
+    </message>
+    <message>
+        <source>Quita la casilla de las herramientas que no uses y cambia su orden. Sus atajos de teclado siguen funcionando aunque estén ocultas.</source>
+        <translation>Uncheck the tools you don&apos;t use and change their order. Their keyboard shortcuts keep working even when hidden.</translation>
+    </message>
+    <message>
+        <source>Subir</source>
+        <translation>Move Up</translation>
+    </message>
+    <message>
+        <source>Bajar</source>
+        <translation>Move Down</translation>
+    </message>
+    <message>
+        <source>Todas las herramientas, en el orden de Paint.NET</source>
+        <translation>All tools, in the Paint.NET order</translation>
+    </message>
+    <message>
+        <source>  (antes en %1)</source>
+        <translation>  (formerly in %1)</translation>
+    </message>
+    <message>
+        <source>Quita la casilla para que no salga en los menús</source>
+        <translation>Uncheck it to remove it from the menus</translation>
     </message>
     <message>
         <source>Muestra en tu perfil de Discord en qué estás trabajando con Kaint (Rich Presence). Funciona con la aplicación de Discord abierta en este equipo, también la versión Flatpak o Snap.</source>
@@ -6204,8 +6568,20 @@ Do you want to replace them?</translation>
         <translation>KDE</translation>
     </message>
     <message>
+        <source>Windows 7</source>
+        <translation>Windows 7</translation>
+    </message>
+    <message>
+        <source>Windows XP</source>
+        <translation>Windows XP</translation>
+    </message>
+    <message>
         <source>Windows 98</source>
         <translation>Windows 98</translation>
+    </message>
+    <message>
+        <source>Windows 98 ALT</source>
+        <translation>Windows 98 ALT</translation>
     </message>
     <message>
         <source>Personalizado</source>

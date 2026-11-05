@@ -17,12 +17,15 @@ class QWidget;
 // elige claro u oscuro según el escritorio). "KDE" usa el estilo y los colores reales de Plasma.
 // "Personalizado" parte de claro u oscuro y deja cambiar colores, fondo del lienzo y diseño.
 // "Windows 98" es el clásico gris con relieve (basado en 98.css); también es una plantilla del
-// personalizado. Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y
-// una hoja de estilo. Eso se decide antes de crear la aplicación, así que pasar al tema KDE o
-// salir de él reinicia Kaint.
+// personalizado. "Windows 98 ALT" es el clásico de Windows 2000 y XP (Paint.NET en Windows XP con
+// el estilo clásico), "Windows XP" el de Luna (basado en XP.css) y "Windows 7" el de Aero (7.css).
+// Todos menos KDE ignoran la configuración del escritorio y dibujan con Fusion y una hoja de
+// estilo. Eso se decide antes de crear la aplicación, así que pasar al tema KDE o salir de él
+// reinicia Kaint.
 namespace Theme {
 
-enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5, Blue = 6 };
+enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5, Blue = 6, Windows7 = 7, WindowsXP = 8,
+                    Windows98Alt = 9 };
 enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
 enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
 enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
@@ -84,6 +87,10 @@ struct Spec {
     bool paintNet = false;
     // Tema Azul de Paint.NET: barras, reglas y menús en degradado azulado (no se guarda).
     bool blue = false;
+    // Tema Windows 7 (7.css): botones, menús y barras con los degradados de Aero (no se guarda).
+    bool win7 = false;
+    // Tema Windows XP (XP.css): botones, campos, menús y ventanas de Luna (no se guarda).
+    bool xp = false;
 
     bool operator==(const Spec&) const = default;
 };
@@ -99,6 +106,12 @@ extern const std::array<ColorRole, 19> kColorRoles;
 // Temas de Paint.NET, Windows 98 y el personalizado con sus huecos rellenos.
 Spec preset(bool dark);
 Spec windows98();
+// Windows 7, con los colores y degradados de 7.css.
+Spec windows7();
+// Windows XP (Luna), con los colores y degradados de XP.css.
+Spec windowsXP();
+// Windows 98 ALT: el clásico de Windows 2000 y XP (gris #d4d0c8, cabeceras de azul oscuro a celeste).
+Spec windows98Alt();
 // El tema Azul de Paint.NET 5: el claro con las barras en degradado azulado.
 Spec blue();
 Spec resolved(const Spec& custom);

@@ -32,6 +32,8 @@ public:
     // Valores para el proceso auxiliar (nombres y tipos de Paint.NET).
     QJsonObject toHostValues(const ParamValues& values) const;
     static QString kaintCategory(const QString& subMenu);
+    // Identificador de un efecto de un ensamblado (también sin cargarlo).
+    static QString makeId(const QString& assembly, const QString& typeId);
 
 private:
     QString m_assembly;
@@ -51,10 +53,15 @@ private:
     mutable QString m_error;
 };
 
-// Efecto de un complemento nativo (.so con la API de KaintPlugin.h).
+// Efecto 'index' de un complemento nativo: con la versión 1 de la API la tabla tiene la
+// estructura antigua (sin icono) y se lee con su tamaño; los campos nuevos quedan a cero.
+KaintEffectInfo nativeEffectAt(const KaintPluginInfo* plugin, int index);
+
+// Efecto de un complemento nativo (.so con la API de KaintPlugin.h). 'folder' es la carpeta del
+// complemento (para su icono en un archivo).
 class NativeEffect : public Effect {
 public:
-    NativeEffect(const KaintEffectInfo& info, const QString& pluginName);
+    NativeEffect(const KaintEffectInfo& info, const QString& folder, const QString& pluginName);
 
     QString id() const override { return m_id; }
     QString name() const override { return m_name; }
@@ -63,6 +70,7 @@ public:
     QList<EffectParam> params() const override { return m_params; }
     bool straightAlpha() const override { return true; }
     QString pluginName() const override { return m_pluginName; }
+    QImage iconImage() const override { return m_icon; }
     void render(const RenderArgs& args) const override;
 
 private:
@@ -70,6 +78,7 @@ private:
     QString m_name;
     QString m_category;
     QString m_pluginName;
+    QImage m_icon;
     QList<EffectParam> m_params;
     void (*m_render)(const KaintRenderArgs*) = nullptr;
 };

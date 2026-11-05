@@ -1,6 +1,7 @@
 #include "app/dialogs/SettingsDialog.h"
 
 #include "app/AppState.h"
+#include "app/Customization.h"
 #include "app/DiscordPresence.h"
 #include "app/IconPacks.h"
 #include "app/Icons.h"
@@ -9,10 +10,12 @@
 #include "app/Theme.h"
 #include "app/ToolOptionsBar.h"
 #include "app/UserFonts.h"
+#include "app/WindowFrame.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/ThemeDialog.h"
 #include "app/tools/ToolManager.h"
+#include "core/effects/Effect.h"
 #include "app/widgets/ColorWidgets.h"
 #include "app/widgets/EffectControls.h"
 #include "app/widgets/UnitField.h"
@@ -36,6 +39,8 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QMenu>
 #include <QImageReader>
 #include <QImageWriter>
 #include <QInputDevice>
@@ -43,6 +48,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMap>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPainter>
@@ -77,6 +83,7 @@ AppSettings AppSettings::load()
     auto get = [&](const char* key, auto def) { return s.value(QLatin1String(key), def).template value<decltype(def)>(); };
     a.animations = get("animations", a.animations);
     a.translucentPanels = get("translucentPanels", a.translucentPanels);
+    a.translucentOverImage = get("translucentOverImage", a.translucentOverImage);
     a.overscroll = get("overscroll", a.overscroll);
     a.autoScroll = get("autoScroll", a.autoScroll);
     a.autoSelectVisibleLayer = get("autoSelectVisibleLayer", a.autoSelectVisibleLayer);
@@ -94,10 +101,19 @@ AppSettings AppSettings::load()
     a.titleBarColor = s.value(QStringLiteral("titleBarColor"), QColor()).value<QColor>();
     a.windows10Frame = get("windows10Frame", a.windows10Frame);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
+    // Antes solo había la barra de Windows 10 con el estilo Paint.NET: sin elección guardada, la de
+    // Windows 10 si estaba activada con ese estilo; con el de Kaint, la del escritorio.
+    if (s.contains(QStringLiteral("titleButtons")))
+        a.titleButtons = std::clamp(get("titleButtons", a.titleButtons), -1, 5);
+    else
+        a.titleButtons = a.uiStyle == 1 && a.windows10Frame ? 0 : -1;
+    a.titleButtonsLeft = get("titleButtonsLeft", a.titleButtonsLeft);
+    a.windowsVersion = get("windowsVersion", a.windowsVersion) == 11 ? 11 : 10;
+    a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
     a.menuMnemonics = get("menuMnemonics", a.menuMnemonics);
-    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 6);
+    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 9);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
         a.colorScheme = int(Theme::Scheme::System);
@@ -121,6 +137,7 @@ AppSettings AppSettings::load()
     a.hideMoveBox = get("hideMoveBox", a.hideMoveBox);
     a.replacePixels = get("replacePixels", a.replacePixels);
     a.askOnceOnClose = get("askOnceOnClose", a.askOnceOnClose);
+    a.gifOpenMode = std::clamp(get("gifOpenMode", a.gifOpenMode), 0, 2);
     a.tabletEraser = get("tabletEraser", a.tabletEraser);
     a.historyLimitMB = std::max(0, get("historyLimitMB", a.historyLimitMB));
     a.checkUpdates = get("checkUpdates", a.checkUpdates);
@@ -143,6 +160,7 @@ void AppSettings::save() const
     s.beginGroup(QStringLiteral("settings"));
     s.setValue(QStringLiteral("animations"), animations);
     s.setValue(QStringLiteral("translucentPanels"), translucentPanels);
+    s.setValue(QStringLiteral("translucentOverImage"), translucentOverImage);
     s.setValue(QStringLiteral("overscroll"), overscroll);
     s.setValue(QStringLiteral("autoScroll"), autoScroll);
     s.setValue(QStringLiteral("autoSelectVisibleLayer"), autoSelectVisibleLayer);
@@ -159,7 +177,10 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("uiFontFamily"), uiFontFamily);
     s.setValue(QStringLiteral("uiFontSize"), uiFontSize);
     s.setValue(QStringLiteral("titleBarColor"), titleBarColor);
-    s.setValue(QStringLiteral("windows10Frame"), windows10Frame);
+    s.setValue(QStringLiteral("windows10Frame"), titleButtons >= 0);
+    s.setValue(QStringLiteral("titleButtons"), titleButtons);
+    s.setValue(QStringLiteral("titleButtonsLeft"), titleButtonsLeft);
+    s.setValue(QStringLiteral("windowsVersion"), windowsVersion);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
     s.setValue(QStringLiteral("cursorStyle"), cursorStyle);
     s.setValue(QStringLiteral("welcomed"), welcomed);
@@ -181,6 +202,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("hideMoveBox"), hideMoveBox);
     s.setValue(QStringLiteral("replacePixels"), replacePixels);
     s.setValue(QStringLiteral("askOnceOnClose"), askOnceOnClose);
+    s.setValue(QStringLiteral("gifOpenMode"), gifOpenMode);
     s.setValue(QStringLiteral("tabletEraser"), tabletEraser);
     s.setValue(QStringLiteral("historyLimitMB"), historyLimitMB);
     s.setValue(QStringLiteral("checkUpdates"), checkUpdates);
@@ -271,6 +293,8 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
     addPage(tr("Paquetes de iconos"), {"settings-icon-packs", "preferences-desktop-icons", "folder-open"}, createIconPacksPage());
     addPage(tr("Fuentes"), {"settings-fonts", "preferences-desktop-font", "draw-text"}, createFontsPage());
     addPage(tr("Formas"), {"settings-shapes", "draw-rectangle", "shapes"}, createShapesPage());
+    addPage(tr("Personalización"), {"settings-customize", "configure-toolbars", "preferences-desktop-theme-global", "configure"},
+            createCustomizePage(tools));
     addPage(tr("Atajos de teclado"), {"settings-keyboard", "preferences-desktop-keyboard-shortcut", "input-keyboard"},
             createKeyboardPage());
 
@@ -326,8 +350,21 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     check(tr("Animaciones"), &AppSettings::animations,
           tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones."));
-    check(tr("Ventanas translúcidas"), &AppSettings::translucentPanels,
-          tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
+    QCheckBox* translucent = check(tr("Ventanas translúcidas"), &AppSettings::translucentPanels,
+                                   tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
+    {
+        // Debajo, con sangría: solo mientras tapan la imagen (como Paint.NET).
+        QCheckBox* overImage = check(tr("Solo mientras tapan la imagen"), &AppSettings::translucentOverImage,
+                                     tr("Como en Paint.NET: una ventana se vuelve translúcida mientras el borde de la imagen la "
+                                        "cruza o la imagen queda debajo, y vuelve a ser opaca cuando se aparta de la imagen."));
+        page.layout->removeWidget(overImage);
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(overImage);
+        page.layout->addLayout(indent);
+        overImage->setEnabled(translucent->isChecked());
+        connect(translucent, &QCheckBox::toggled, overImage, &QWidget::setEnabled);
+    }
     check(tr("Desplazamiento más allá del borde de la imagen (overscroll)"), &AppSettings::overscroll,
           tr("Permite ver un margen alrededor de la imagen; así el zum hacia el cursor funciona también en las esquinas."));
     check(tr("Desplazamiento automático al dibujar en el borde de la ventana"), &AppSettings::autoScroll);
@@ -365,7 +402,11 @@ QWidget* SettingsDialog::createInterfacePage()
 #ifndef Q_OS_WIN
     addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
+    addScheme(tr("Windows 7"), Theme::Scheme::Windows7, tr("Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css."));
+    addScheme(tr("Windows XP"), Theme::Scheme::WindowsXP, tr("El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css."));
     addScheme(tr("Windows 98"), Theme::Scheme::Windows98, tr("El clásico gris con relieve. También es una plantilla del personalizado."));
+    addScheme(tr("Windows 98 ALT"), Theme::Scheme::Windows98Alt,
+              tr("El clásico de Windows 2000 y XP, como Paint.NET en Windows XP: gris claro, cabeceras de azul oscuro a celeste y Tahoma."));
     addScheme(tr("Personalizado"), Theme::Scheme::Custom, tr("Colores, fondo del lienzo y diseño a tu gusto."));
     scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
     auto* customize = new QPushButton(tr("Personalizar…"), page.widget);
@@ -396,9 +437,16 @@ QWidget* SettingsDialog::createInterfacePage()
             return;
         m_settings.uiStyle = chosen;
 #ifndef Q_OS_WIN
-        // La barra de título de Windows 10 dibujada por Kaint (Linux, estilo Paint.NET) se pone o se
-        // quita al abrir Kaint: se ofrece reiniciar.
-        if (m_settings.windows10Frame && m_settings.colorScheme != int(Theme::Scheme::Kde)
+        // Con el estilo Paint.NET, por defecto la barra de Kaint con los botones de Windows 10 (o los
+        // de la recreación de Windows elegida).
+        if (chosen == 1 && m_settings.titleButtons < 0)
+            m_settings.titleButtons = m_settings.windowsVersion == 11 ? 1 : 0;
+        m_settings.windows10Frame = m_settings.titleButtons >= 0;
+        // La barra de título dibujada por Kaint (Linux) y sus esquinas se ponen o se quitan al abrir
+        // Kaint: se ofrece reiniciar si cambian.
+        const bool frame = m_settings.titleButtons >= 0 && m_settings.colorScheme != int(Theme::Scheme::Kde);
+        const bool rounded = frame && m_settings.uiStyle == 1 && m_settings.windowsVersion == 11;
+        if ((frame != WindowFrame::enabled() || rounded != WindowFrame::roundedCorners())
             && askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
                           tr("Kaint se cerrará y se abrirá de nuevo con el estilo elegido. Si hay cambios sin guardar, te lo "
                              "preguntará antes."),
@@ -529,23 +577,115 @@ QWidget* SettingsDialog::createInterfacePage()
     check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), &AppSettings::snapPanels,
           tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él."));
 #ifndef Q_OS_WIN
-    auto* frame = new QCheckBox(tr("Barra de título como la de Windows 10 con el estilo Paint.NET"), page.widget);
-    frame->setToolTip(tr("La ventana principal y los diálogos dibujan su propia barra de título negra, con sombra, en vez de "
-                         "la del escritorio. Se aplica al abrir Kaint."));
-    frame->setChecked(m_settings.windows10Frame);
-    page.layout->addWidget(frame);
-    connect(frame, &QCheckBox::toggled, this, [this](bool on) {
-        m_settings.windows10Frame = on;
-        changed();
-        if (m_settings.uiStyle == 1 && m_settings.colorScheme != int(Theme::Scheme::Kde)
-            && askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
-                          tr("Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin "
-                             "guardar, te lo preguntará antes."),
-                          tr("Seguir así hasta la próxima vez que se abra Kaint."))) {
+    // Barra de título dibujada por Kaint (Linux): los botones como los de Windows 11, 10, 7, XP o 98
+    // o los de macOS, a la derecha o a la izquierda; o la barra del escritorio. Con el estilo
+    // Paint.NET, además, la recreación de Windows 10 u 11 (esquinas redondeadas en modo ventana).
+    page.layout->addWidget(sectionHeader(tr("Barra de título"), page.widget));
+    auto* titleForm = new QFormLayout;
+    titleForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+    auto* buttonsStyle = new QComboBox(page.widget);
+    const struct { int id; QString name; QString tip; } styles[] = {
+        {1, QStringLiteral("Windows 11"), tr("Finos, con el cuadrado de maximizar redondeado.")},
+        {0, QStringLiteral("Windows 10"), tr("Los de siempre de Paint.NET: 46 píxeles de ancho y cerrar en rojo.")},
+        {2, QStringLiteral("macOS"), tr("Los tres círculos de colores (cerrar, minimizar y zoom).")},
+        {3, QStringLiteral("Windows 7"), tr("De cristal, colgando del borde de arriba, con cerrar en rojo.")},
+        {4, QStringLiteral("Windows XP"), tr("Los azules de Luna con las esquinas redondeadas y cerrar en naranja.")},
+        {5, QStringLiteral("Windows 98"), tr("Grises en relieve.")},
+        {-1, tr("Los del escritorio"), tr("Sin la barra de título de Kaint: la del gestor de ventanas.")},
+    };
+    for (const auto& st : styles) {
+        buttonsStyle->addItem(st.name, st.id);
+        buttonsStyle->setItemData(buttonsStyle->count() - 1, st.tip, Qt::ToolTipRole);
+    }
+    buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
+    buttonsStyle->setToolTip(tr("Los botones de cerrar, maximizar o restaurar y minimizar. Con el tema Windows 98, «Windows 10» "
+                                "usa los de Windows 98."));
+    auto* buttonsSide = new QComboBox(page.widget);
+    buttonsSide->addItem(tr("A la derecha"), false);
+    buttonsSide->addItem(tr("A la izquierda"), true);
+    buttonsSide->setCurrentIndex(m_settings.titleButtonsLeft ? 1 : 0);
+    auto* recreation = new QComboBox(page.widget);
+    recreation->addItem(QStringLiteral("Windows 10"), 10);
+    recreation->setItemData(0, tr("Ventanas con las esquinas rectas."), Qt::ToolTipRole);
+    recreation->addItem(QStringLiteral("Windows 11"), 11);
+    recreation->setItemData(1, tr("Ventanas con las esquinas algo redondeadas en modo ventana y, por defecto, los botones de "
+                                  "Windows 11."),
+                            Qt::ToolTipRole);
+    recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
+    titleForm->addRow(tr("Botones de la barra de título:"), buttonsStyle);
+    titleForm->addRow(tr("Posición de los botones:"), buttonsSide);
+    titleForm->addRow(tr("Recreación de Windows:"), recreation);
+    page.layout->addLayout(titleForm);
+    // Poner o quitar la barra de Kaint o las esquinas redondeadas se aplica al abrir Kaint.
+    // Poner o quitar la barra de Kaint o las esquinas redondeadas pide reiniciar. Si se dice que no,
+    // todo vuelve a como estaba (los botones de antes y su recreación de Windows).
+    auto applyTitleChange = [this, buttonsStyle, recreation](const AppSettings& before) {
+        const bool frame = m_settings.titleButtons >= 0 && m_settings.colorScheme != int(Theme::Scheme::Kde);
+        const bool rounded = frame && m_settings.uiStyle == 1 && m_settings.windowsVersion == 11;
+        if (frame != WindowFrame::enabled() || rounded != WindowFrame::roundedCorners()) {
+            if (!askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
+                            tr("Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin "
+                               "guardar, te lo preguntará antes."),
+                            tr("Dejar los botones como estaban."))) {
+                m_settings.titleButtons = before.titleButtons;
+                m_settings.windowsVersion = before.windowsVersion;
+                m_settings.windows10Frame = before.windows10Frame;
+                buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
+                recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
+                return;
+            }
             m_restartRequested = true;
+            changed();
             accept();
+            return;
         }
+        changed();
+    };
+    connect(buttonsStyle, &QComboBox::activated, this, [this, buttonsStyle, recreation, applyTitleChange](int i) {
+        const AppSettings before = m_settings;
+        m_settings.titleButtons = buttonsStyle->itemData(i).toInt();
+        m_settings.windows10Frame = m_settings.titleButtons >= 0;
+        // Con el estilo Paint.NET, los botones de Windows 11 traen su recreación (ventanas con las
+        // esquinas redondeadas) y los de Windows 10, la suya.
+        if (m_settings.uiStyle == 1 && (m_settings.titleButtons == 0 || m_settings.titleButtons == 1)) {
+            m_settings.windowsVersion = m_settings.titleButtons == 1 ? 11 : 10;
+            recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
+        }
+        applyTitleChange(before);
     });
+    connect(buttonsSide, &QComboBox::activated, this, [this, buttonsSide](int i) {
+        m_settings.titleButtonsLeft = buttonsSide->itemData(i).toBool();
+        changed();
+    });
+    connect(recreation, &QComboBox::activated, this, [this, recreation, buttonsStyle, applyTitleChange](int i) {
+        const int version = recreation->itemData(i).toInt();
+        if (version == m_settings.windowsVersion)
+            return;
+        const AppSettings before = m_settings;
+        m_settings.windowsVersion = version;
+        // Cada recreación con sus botones (si no se eligieron otros).
+        if (version == 11 && m_settings.titleButtons == 0)
+            m_settings.titleButtons = 1;
+        else if (version == 10 && m_settings.titleButtons == 1)
+            m_settings.titleButtons = 0;
+        buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
+        applyTitleChange(before);
+    });
+    // La recreación de Windows solo con el estilo Paint.NET; la posición, solo con la barra de Kaint.
+    auto syncTitle = [this, titleForm, recreation, buttonsSide, buttonsStyle] {
+        const bool paintNet = m_settings.uiStyle == 1 && m_settings.colorScheme != int(Theme::Scheme::Kde);
+        const bool kde = m_settings.colorScheme == int(Theme::Scheme::Kde);
+        recreation->setEnabled(paintNet);
+        recreation->setToolTip(paintNet ? QString() : tr("Se desbloquea con el estilo de interfaz Paint.NET."));
+        buttonsSide->setEnabled(m_settings.titleButtons >= 0 && !kde);
+        buttonsStyle->setEnabled(!kde);
+        buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
+        for (QWidget* field : {static_cast<QWidget*>(recreation), static_cast<QWidget*>(buttonsSide), static_cast<QWidget*>(buttonsStyle)})
+            if (QWidget* label = titleForm->labelForField(field))
+                label->setEnabled(field->isEnabled());
+    };
+    syncTitle();
+    connect(this, &SettingsDialog::settingsChanged, this, syncTitle);
 #endif
     // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
     // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
@@ -625,6 +765,25 @@ QWidget* SettingsDialog::createInterfacePage()
 
     page.layout->addWidget(sectionHeader(tr("Al iniciar"), page.widget));
     check(tr("Volver a abrir las imágenes de la última sesión"), &AppSettings::reopenLast);
+
+    // GIF animados: como capas de una imagen (se vuelve a guardar como GIF) o un fotograma por imagen.
+    auto* gifRow = new QHBoxLayout;
+    auto* gifOpen = new QComboBox(page.widget);
+    gifOpen->addItem(tr("Preguntar"), 0);
+    gifOpen->addItem(tr("Como capas"), 1);
+    gifOpen->setItemData(1, tr("Cada fotograma es una capa de una sola imagen (se vuelve a guardar como GIF tal cual)."),
+                         Qt::ToolTipRole);
+    gifOpen->addItem(tr("Como imágenes"), 2);
+    gifOpen->setItemData(2, tr("Cada fotograma se abre como una imagen aparte."), Qt::ToolTipRole);
+    gifOpen->setCurrentIndex(std::max(0, gifOpen->findData(m_settings.gifOpenMode)));
+    gifRow->addWidget(new QLabel(tr("Al abrir un GIF animado:"), page.widget));
+    gifRow->addWidget(gifOpen);
+    gifRow->addStretch();
+    page.layout->addLayout(gifRow);
+    connect(gifOpen, &QComboBox::activated, this, [this, gifOpen](int i) {
+        m_settings.gifOpenMode = gifOpen->itemData(i).toInt();
+        changed();
+    });
 
     page.layout->addWidget(sectionHeader(tr("Al cerrar"), page.widget));
     check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), &AppSettings::askOnceOnClose,
@@ -985,7 +1144,8 @@ QWidget* SettingsDialog::createPluginsPage()
     page.layout->addWidget(intro);
     m_pluginList = new QTreeWidget(page.widget);
     m_pluginList->setHeaderLabels({tr("Complemento"), tr("Tipo"), tr("Estado")});
-    m_pluginList->setRootIsDecorated(false);
+    // Cada complemento con sus efectos debajo, cada uno con su casilla.
+    m_pluginList->setRootIsDecorated(true);
     m_pluginList->setMinimumHeight(160);
     m_pluginList->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     page.layout->addWidget(m_pluginList, 2);
@@ -1036,9 +1196,20 @@ QWidget* SettingsDialog::createPluginsPage()
         const QString id = item->data(0, Qt::UserRole).toString();
         const bool on = item->checkState(0) == Qt::Checked;
         QApplication::setOverrideCursor(Qt::WaitCursor);
-        PluginManager::instance()->setEnabled(id, on);
+        if (item->parent())
+            PluginManager::instance()->setEffectEnabled(id, item->data(0, Qt::UserRole + 1).toString(), on);
+        else
+            PluginManager::instance()->setEnabled(id, on);
         QApplication::restoreOverrideCursor();
         QTimer::singleShot(0, this, &SettingsDialog::refreshPlugins);
+    });
+    // Lo plegado se recuerda mientras el diálogo está abierto (al marcar una casilla la lista se
+    // vuelve a llenar).
+    connect(m_pluginList, &QTreeWidget::itemCollapsed, this, [this](QTreeWidgetItem* item) {
+        m_collapsedPlugins.insert(item->data(0, Qt::UserRole).toString());
+    });
+    connect(m_pluginList, &QTreeWidget::itemExpanded, this, [this](QTreeWidgetItem* item) {
+        m_collapsedPlugins.remove(item->data(0, Qt::UserRole).toString());
     });
     connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::refreshPlugins);
     refreshPlugins();
@@ -1047,8 +1218,9 @@ QWidget* SettingsDialog::createPluginsPage()
 
 void SettingsDialog::refreshPlugins()
 {
-    const QString selected = m_pluginList->currentItem() ? m_pluginList->currentItem()->data(0, Qt::UserRole).toString()
-                                                         : QString();
+    const QTreeWidgetItem* current = m_pluginList->currentItem();
+    const QString selected = current ? current->data(0, Qt::UserRole).toString() : QString();
+    const QString selectedEffect = current && current->parent() ? current->data(0, Qt::UserRole + 1).toString() : QString();
     // Se conserva el desplazamiento: marcar o desmarcar una casilla no salta a la seleccionada.
     const QSignalBlocker block(m_pluginList);
     const int scroll = m_pluginList->verticalScrollBar()->value();
@@ -1071,7 +1243,12 @@ void SettingsDialog::refreshPlugins()
             state = tr("Error");
         else if (!p.errors.isEmpty())
             state = tr("Cargado con avisos");
-        else
+        else if (!p.disabledEffects.isEmpty() && p.effectIds.size() == p.effects.size()) {
+            int on = 0;
+            for (const QString& e : p.effectIds)
+                on += p.effectEnabled(e) ? 1 : 0;
+            state = tr("%1 de %n efecto(s)", nullptr, int(p.effects.size())).arg(on);
+        } else
             state = tr("%n efecto(s)", nullptr, int(p.effects.size()));
         item->setText(2, state);
         item->setIcon(0, Icons::theme(p.errors.isEmpty() ? std::initializer_list<const char*>{"plugins", "application-x-addon"}
@@ -1082,11 +1259,39 @@ void SettingsDialog::refreshPlugins()
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(0, p.enabled ? Qt::Checked : Qt::Unchecked);
         item->setData(0, Qt::UserRole, p.id);
-        if (p.id == selected)
+        if (p.id == selected && selectedEffect.isEmpty())
             m_pluginList->setCurrentItem(item);
+        // Sus efectos, cada uno con su casilla (como en Paint.NET). Con el complemento
+        // desactivado se ven en gris, con lo que tenían marcado.
+        for (int i = 0; i < p.effects.size() && i < p.effectIds.size(); ++i) {
+            const QString& effectId = p.effectIds[i];
+            auto* child = new QTreeWidgetItem(item);
+            child->setText(0, p.effects[i]);
+            child->setText(1, tr("Efecto"));
+            const bool on = p.effectEnabled(effectId);
+            child->setText(2, on ? tr("Activado") : tr("Desactivado"));
+            const QImage icon = p.effectIcons.value(i);
+            if (!icon.isNull())
+                child->setIcon(0, QIcon(QPixmap::fromImage(icon)));
+            child->setFlags((child->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsAutoTristate);
+            if (!p.enabled || incompatible)
+                child->setFlags(child->flags() & ~Qt::ItemIsEnabled);
+            child->setCheckState(0, on ? Qt::Checked : Qt::Unchecked);
+            child->setData(0, Qt::UserRole, p.id);
+            child->setData(0, Qt::UserRole + 1, effectId);
+            if (p.id == selected && effectId == selectedEffect)
+                m_pluginList->setCurrentItem(child);
+        }
+        item->setExpanded(!m_collapsedPlugins.contains(p.id));
     }
-    if (!m_pluginList->currentItem() && m_pluginList->topLevelItemCount() > 0)
-        m_pluginList->setCurrentItem(m_pluginList->topLevelItem(0));
+    if (!m_pluginList->currentItem() && m_pluginList->topLevelItemCount() > 0) {
+        // Si se desmarcó el último efecto de la lista u otro que ya no está, el complemento.
+        QTreeWidgetItem* fallback = m_pluginList->topLevelItem(0);
+        for (int i = 0; i < m_pluginList->topLevelItemCount(); ++i)
+            if (m_pluginList->topLevelItem(i)->data(0, Qt::UserRole).toString() == selected)
+                fallback = m_pluginList->topLevelItem(i);
+        m_pluginList->setCurrentItem(fallback);
+    }
     showPluginDetails();
     m_openPluginFolder->setEnabled(m_pluginList->currentItem() != nullptr);
     m_pluginList->resizeColumnToContents(1);
@@ -1167,8 +1372,13 @@ void SettingsDialog::showPluginDetails()
             lines << QString()
                   << tr("Complemento de terceros para Paint.NET, sin modificar: Kaint lo ejecuta con su capa de "
                         "compatibilidad. Su autor no participa en Kaint ni da soporte a este uso.");
-        if (!p.effects.isEmpty())
-            lines << QString() << tr("Efectos:") << QStringLiteral("  ") + p.effects.join(QStringLiteral("\n  "));
+        if (!p.effects.isEmpty()) {
+            lines << QString() << tr("Efectos:");
+            for (int i = 0; i < p.effects.size(); ++i) {
+                const bool off = i < p.effectIds.size() && !p.effectEnabled(p.effectIds[i]);
+                lines << QStringLiteral("  ") + p.effects[i] + (off ? tr(" (desactivado)") : QString());
+            }
+        }
         if (!p.errors.isEmpty())
             lines << QString() << tr("Problemas:") << QStringLiteral("  ") + p.errors.join(QStringLiteral("\n  "));
         if (p.pending)
@@ -1177,6 +1387,250 @@ void SettingsDialog::showPluginDetails()
             lines << QString() << tr("Este complemento está desactivado. Marca la casilla para cargarlo.");
         m_pluginDetails->setPlainText(lines.join(QLatin1Char('\n')));
         return;
+    }
+}
+
+// Personalización: en qué menú sale cada efecto (también los de los complementos), qué efectos se
+// ocultan y qué herramientas hay en la ventana Herramientas y en qué orden.
+QWidget* SettingsDialog::createCustomizePage(ToolManager* tools)
+{
+    m_toolManager = tools;
+    PageBox page = makePage(this);
+    Customization* custom = Customization::instance();
+    page.layout->addWidget(wrapped(tr("Ordena los menús a tu gusto: mueve cualquier efecto (también los de los complementos) "
+                                      "a Ajustes, a Efectos o a otro submenú, por ejemplo a Efectos > Desenfoques, u ocúltalo "
+                                      "quitando su casilla. Debajo, las herramientas de la ventana Herramientas."),
+                                   page.widget));
+
+    page.layout->addWidget(sectionHeader(tr("Menús de efectos"), page.widget));
+    m_effectMenus = new QTreeWidget(page.widget);
+    m_effectMenus->setHeaderLabels({tr("Efecto"), tr("Complemento")});
+    m_effectMenus->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_effectMenus->setMinimumHeight(240);
+    m_effectMenus->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    page.layout->addWidget(m_effectMenus, 2);
+
+    auto* effectButtons = new QHBoxLayout;
+    auto* moveTo = new QPushButton(Icons::theme({"go-jump", "transform-move", "edit-move"}), tr("Mover a"), page.widget);
+    moveTo->setToolTip(tr("Pasa los efectos elegidos a otro menú o submenú"));
+    auto* moveMenu = new QMenu(moveTo);
+    moveTo->setMenu(moveMenu);
+    auto* resetSelected = new QPushButton(tr("Restablecer"), page.widget);
+    resetSelected->setToolTip(tr("Devuelve los efectos elegidos a su sitio de siempre y los muestra"));
+    auto* resetAll = new QPushButton(tr("Restablecer todo"), page.widget);
+    resetAll->setToolTip(tr("Todos los efectos en su sitio de siempre, sin ninguno oculto"));
+    effectButtons->addWidget(moveTo);
+    effectButtons->addWidget(resetSelected);
+    effectButtons->addStretch();
+    effectButtons->addWidget(resetAll);
+    page.layout->addLayout(effectButtons);
+
+    auto selectedEffects = [this] {
+        QStringList ids;
+        for (QTreeWidgetItem* item : m_effectMenus->selectedItems())
+            if (item->parent())
+                ids << item->data(0, Qt::UserRole).toString();
+        return ids;
+    };
+    auto syncButtons = [this, moveTo, resetSelected, resetAll, selectedEffects] {
+        const QStringList ids = selectedEffects();
+        moveTo->setEnabled(!ids.isEmpty());
+        bool changed = false;
+        for (const QString& id : ids)
+            changed = changed || Customization::instance()->isMoved(id) || Customization::instance()->isHidden(id);
+        resetSelected->setEnabled(changed);
+        resetAll->setEnabled(Customization::instance()->hasEffectChanges());
+    };
+    connect(m_effectMenus, &QTreeWidget::itemSelectionChanged, this, syncButtons);
+    connect(m_effectMenus, &QTreeWidget::itemChanged, this, [](QTreeWidgetItem* item, int column) {
+        if (column != 0 || !item->parent())
+            return;
+        Customization::instance()->setHidden({item->data(0, Qt::UserRole).toString()}, item->checkState(0) != Qt::Checked);
+    });
+    connect(moveMenu, &QMenu::aboutToShow, this, [this, moveMenu, selectedEffects] {
+        // Ajustes, Efectos y cada submenú que hay (los de Kaint, los de los complementos y los
+        // nuevos), y uno nuevo.
+        moveMenu->clear();
+        QStringList locations{QStringLiteral("adjustments"), QStringLiteral("effects")};
+        QStringList submenus;
+        for (const Effect* e : Effects::all()) {
+            if (e->hidden())
+                continue;
+            for (const QString& loc : {Customization::defaultLocation(e), Customization::instance()->location(e)})
+                if (loc.startsWith(QLatin1String("effects/")) && !submenus.contains(loc))
+                    submenus << loc;
+        }
+        std::sort(submenus.begin(), submenus.end(), [](const QString& a, const QString& b) {
+            return Customization::locationName(a).localeAwareCompare(Customization::locationName(b)) < 0;
+        });
+        auto addTarget = [this, moveMenu, selectedEffects](const QString& loc) {
+            moveMenu->addAction(Customization::locationName(loc), this, [this, loc, selectedEffects] {
+                Customization::instance()->setLocation(selectedEffects(), loc);
+                refreshEffectMenus();
+            });
+        };
+        for (const QString& loc : std::as_const(locations))
+            addTarget(loc);
+        moveMenu->addSeparator();
+        for (const QString& loc : std::as_const(submenus))
+            addTarget(loc);
+        moveMenu->addSeparator();
+        moveMenu->addAction(tr("Nuevo submenú de Efectos…"), this, [this, selectedEffects] {
+            bool ok = false;
+            const QString name = QInputDialog::getText(this, tr("Nuevo submenú"), tr("Nombre del submenú de Efectos:"),
+                                                       QLineEdit::Normal, QString(), &ok)
+                                     .simplified()
+                                     .remove(QLatin1Char('/'));
+            if (!ok || name.isEmpty())
+                return;
+            Customization::instance()->setLocation(selectedEffects(),
+                                                   QStringLiteral("effects/") + Customization::submenuKey(name));
+            refreshEffectMenus();
+        });
+    });
+    connect(resetSelected, &QPushButton::clicked, this, [this, selectedEffects] {
+        Customization::instance()->resetEffects(selectedEffects());
+        refreshEffectMenus();
+    });
+    connect(resetAll, &QPushButton::clicked, this, [this] {
+        Customization::instance()->resetEffects();
+        refreshEffectMenus();
+    });
+    connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::refreshEffectMenus);
+    connect(custom, &Customization::effectMenusChanged, this, syncButtons);
+
+    page.layout->addWidget(sectionHeader(tr("Ventana Herramientas"), page.widget));
+    page.layout->addWidget(wrapped(tr("Quita la casilla de las herramientas que no uses y cambia su orden. Sus atajos de "
+                                      "teclado siguen funcionando aunque estén ocultas."),
+                                   page.widget));
+    auto* toolsRow = new QHBoxLayout;
+    m_toolOrder = new QListWidget(page.widget);
+    m_toolOrder->setIconSize(QSize(20, 20));
+    m_toolOrder->setMinimumHeight(220);
+    m_toolOrder->setDragDropMode(QAbstractItemView::InternalMove);
+    toolsRow->addWidget(m_toolOrder, 1);
+    auto* toolButtons = new QVBoxLayout;
+    auto* up = new QPushButton(Icons::theme({"go-up", "arrow-up"}), tr("Subir"), page.widget);
+    auto* down = new QPushButton(Icons::theme({"go-down", "arrow-down"}), tr("Bajar"), page.widget);
+    auto* resetTools = new QPushButton(tr("Restablecer"), page.widget);
+    resetTools->setToolTip(tr("Todas las herramientas, en el orden de Paint.NET"));
+    toolButtons->addWidget(up);
+    toolButtons->addWidget(down);
+    toolButtons->addStretch();
+    toolButtons->addWidget(resetTools);
+    toolsRow->addLayout(toolButtons);
+    page.layout->addLayout(toolsRow);
+    auto saveOrder = [this] {
+        QList<int> order;
+        for (int i = 0; i < m_toolOrder->count(); ++i)
+            order << m_toolOrder->item(i)->data(Qt::UserRole).toInt();
+        Customization::instance()->setToolOrder(order);
+    };
+    auto move = [this, saveOrder](int delta) {
+        const int row = m_toolOrder->currentRow();
+        if (row < 0 || row + delta < 0 || row + delta >= m_toolOrder->count())
+            return;
+        const QSignalBlocker block(m_toolOrder);
+        QListWidgetItem* item = m_toolOrder->takeItem(row);
+        m_toolOrder->insertItem(row + delta, item);
+        m_toolOrder->setCurrentRow(row + delta);
+        saveOrder();
+    };
+    connect(up, &QPushButton::clicked, this, [move] { move(-1); });
+    connect(down, &QPushButton::clicked, this, [move] { move(+1); });
+    connect(resetTools, &QPushButton::clicked, this, [this] {
+        Customization::instance()->resetTools();
+        refreshToolOrder();
+    });
+    connect(m_toolOrder->model(), &QAbstractItemModel::rowsMoved, this, [saveOrder] { saveOrder(); });
+    connect(m_toolOrder, &QListWidget::itemChanged, this, [](QListWidgetItem* item) {
+        Customization::instance()->setToolHidden(item->data(Qt::UserRole).toInt(), item->checkState() != Qt::Checked);
+    });
+    refreshEffectMenus();
+    refreshToolOrder();
+    syncButtons();
+    return page.widget;
+}
+
+void SettingsDialog::refreshEffectMenus()
+{
+    if (!m_effectMenus)
+        return;
+    QSet<QString> selected;
+    for (QTreeWidgetItem* item : m_effectMenus->selectedItems())
+        selected.insert(item->data(0, Qt::UserRole).toString());
+    const int scroll = m_effectMenus->verticalScrollBar()->value();
+    const QSignalBlocker block(m_effectMenus);
+    m_effectMenus->clear();
+    const Customization* custom = Customization::instance();
+    // Agrupados como en los menús: Ajustes, Efectos y sus submenús, en orden alfabético.
+    QMap<QString, QList<const Effect*>> groups;
+    for (const Effect* e : Effects::all())
+        if (!e->hidden())
+            groups[custom->location(e)].append(e);
+    QStringList order = groups.keys();
+    std::sort(order.begin(), order.end(), [](const QString& a, const QString& b) {
+        auto rank = [](const QString& l) { return l == QLatin1String("adjustments") ? 0 : l == QLatin1String("effects") ? 1 : 2; };
+        if (rank(a) != rank(b))
+            return rank(a) < rank(b);
+        return Customization::locationName(a).localeAwareCompare(Customization::locationName(b)) < 0;
+    });
+    for (const QString& loc : std::as_const(order)) {
+        auto* group = new QTreeWidgetItem(m_effectMenus);
+        group->setText(0, Customization::locationName(loc));
+        group->setData(0, Qt::UserRole, QStringLiteral("group:") + loc);
+        group->setFlags(Qt::ItemIsEnabled);
+        QFont bold = group->font(0);
+        bold.setBold(true);
+        group->setFont(0, bold);
+        QList<const Effect*> effects = groups.value(loc);
+        std::sort(effects.begin(), effects.end(), [](const Effect* a, const Effect* b) {
+            return a->name().localeAwareCompare(b->name()) < 0;
+        });
+        for (const Effect* e : std::as_const(effects)) {
+            auto* item = new QTreeWidgetItem(group);
+            QString name = e->name();
+            if (custom->isMoved(e->id()))
+                name += tr("  (antes en %1)").arg(Customization::locationName(Customization::defaultLocation(e)));
+            item->setText(0, name);
+            item->setText(1, e->pluginName());
+            QIcon icon = Icons::theme(Icons::effectIcon(e->id(), e->iconName()));
+            if (icon.isNull() && !e->iconImage().isNull())
+                icon = QIcon(QPixmap::fromImage(e->iconImage()));
+            item->setIcon(0, icon);
+            item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+            item->setCheckState(0, custom->isHidden(e->id()) ? Qt::Unchecked : Qt::Checked);
+            item->setToolTip(0, tr("Quita la casilla para que no salga en los menús"));
+            item->setData(0, Qt::UserRole, e->id());
+            if (selected.contains(e->id()))
+                item->setSelected(true);
+        }
+        group->setExpanded(true);
+    }
+    m_effectMenus->resizeColumnToContents(1);
+    m_effectMenus->verticalScrollBar()->setValue(scroll);
+}
+
+void SettingsDialog::refreshToolOrder()
+{
+    if (!m_toolOrder || !m_toolManager)
+        return;
+    const QSignalBlocker block(m_toolOrder);
+    const int current = m_toolOrder->currentItem() ? m_toolOrder->currentItem()->data(Qt::UserRole).toInt() : -1;
+    m_toolOrder->clear();
+    QList<int> defaults;
+    for (Tool* t : m_toolManager->tools())
+        defaults << int(t->id());
+    for (int id : Customization::instance()->toolOrder(defaults)) {
+        Tool* t = m_toolManager->tool(ToolId(id));
+        if (!t)
+            continue;
+        auto* item = new QListWidgetItem(t->icon(), t->name(), m_toolOrder);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsDragEnabled);
+        item->setCheckState(Customization::instance()->isToolHidden(id) ? Qt::Unchecked : Qt::Checked);
+        item->setData(Qt::UserRole, id);
+        if (id == current)
+            m_toolOrder->setCurrentItem(item);
     }
 }
 

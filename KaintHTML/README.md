@@ -21,6 +21,10 @@ cd KaintHTML
 python3 -m http.server 8000      # then open http://localhost:8000
 ```
 
+When you change the files, reload with **Ctrl+Shift+R** (or tick *Disable cache* in the browser's
+developer tools): browsers keep the JavaScript modules cached and may show the old version. To try
+the phone layout, use the developer tools' device mode (or make the window phone-sized).
+
 It can also be published as-is on any static hosting (GitHub Pages, Netlify, your own server).
 Chromium-based browsers get the most out of it: saving straight back to the opened file and
 reading the clipboard from the menus use their File System Access and Clipboard APIs. Firefox and
@@ -69,24 +73,32 @@ Safari download the saved file and paste with Ctrl+V instead.
   rulers and the status bar.
 - **Files** like Kaint's: opens PNG, JPEG, WebP, GIF (animated GIFs as one layer per frame), BMP,
   AVIF, ICO, TGA, TIFF and DDS images, **OpenRaster (.ora)** and **Paint.NET (.pdn)** with their
-  layers; saves OpenRaster, PNG, JPEG, WebP, DDS, TIFF, GIF (animated, with Kaint's advanced
-  options), BMP, TGA and ICO. **Save Configuration** shows the encoded file and its size, with the
+  layers; saves **Paint.NET (.pdn)** and OpenRaster with their layers, PNG, JPEG, WebP, DDS, TIFF,
+  GIF (animated, with Kaint's advanced options), BMP, TGA and ICO. Animated GIFs open as layers or
+  as separate images, and save from the layers or from the open images you pick. **Save Configuration** shows the encoded file and its size, with the
   quality, bit depth, dithering and transparency threshold. **Image > Animation** edits the frame
   durations and **Image > Color Profile** converts or assigns sRGB, Adobe RGB, Display P3 or
   ProPhoto RGB (the profile is read from and embedded in PNG, JPEG, WebP and TIFF files). Drop
   images onto the window to open them.
-- **Themes**: light and dark (or follow the system), Windows 98 and a custom theme with Kaint's
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, Windows 7 (with 7.css's glass windows), Windows XP
+  (Luna, with XP.css's), Windows 98 and Windows 98 ALT (with 98.css's) and a custom theme with Kaint's
   editable colors, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
   compact, borderless windows, Windows 10 dialogs, gray and blue bar sliders and hollow handles);
   a top bar color of your own (like Windows' accent color on title bars), the interface font, and
-  floating windows that snap to the edges and to each other; **English and Spanish** (Kaint's own
+  floating windows that snap to the edges and to each other (translucent only while they cover the
+  image, like Paint.NET, or always); **English and Spanish** (Kaint's own
   translations) and Kaint's **animations**. The first visit shows a welcome window with the theme, style and language, and
   About looks like Kaint's, with its animated logo.
 - **Settings** like Kaint's: interface (reopen the last session's files, recovery copies), canvas
   (custom background, checkerboard brightness, rulers), tools (the default toolbar options every
   session starts with), pen and tablet, performance (history memory limit), plugins, updates,
   diagnostics, icon packs (.zip files with an `asset-pack.json`, with a preview), fonts for the
-  Text tool, custom shapes and editable keyboard shortcuts.
+  Text tool, custom shapes, **customization** (move any effect, plugin ones too, to another menu or
+  submenu, hide effects, and choose and order the tools of the Tools window) and editable keyboard
+  shortcuts.
+- **Phones**: the floating windows hide in their corners behind a handle with their icon; tap it
+  to slide the window out, and it hides again when you tap the canvas or pick a tool. Or keep them
+  as windows and pick the size of each one (**Settings → User interface → Phone**).
 - **Recovery copies**: every few minutes, images with unsaved changes are copied into the browser
   (IndexedDB); if the page closes abruptly, Kaint offers them the next time it opens.
 - **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
@@ -95,11 +107,19 @@ Safari download the saved file and paste with Ctrl+V instead.
 
 - **Plugins**: .paintjs packages, PhotoCraft filters (.wasm, run in a Web Worker with no access
   to anything outside) and LightCraft looks (.cube, .3dl) and develop presets (.xmp), installed
-  from **Settings → Plugins** or by dropping them on the window.
+  from **Settings → Plugins** or by dropping them on the window. Each effect of a plugin can be
+  turned on or off on its own.
 
 Not available on the web: Paint.NET (.dll) and native plugins and scanning. Reopening the last session's files needs a browser with access to the system's
 files (Chrome, Edge...). Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use
 the menus for those.
+
+## Android
+
+`../build-apk.sh` turns this folder into **Kaint.APK**, an Android app (the source is in
+`../android`): it asks whether you want an APK or an App Bundle for Google Play and leaves it in
+`build-apk/` or `build-aab/`. Inside the app, Open uses Android's file picker and saving asks where
+to put the file.
 
 ## Development
 
@@ -115,7 +135,10 @@ the menus for those.
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
 `src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, `data/icons/` bundles KDE's
-Breeze icons (LGPL-3.0-or-later), and the interface
+Breeze icons (LGPL-3.0-or-later), and the Windows 7, Windows XP and Windows 98 themes use colors,
+gradients and drawings from [7.css](https://khang-nd.github.io/7.css/) by Khang Nguyen Duy,
+[XP.css](https://botoxparty.github.io/XP.css/) by Adam Hammad and Jordan Scales and
+[98.css](https://jdan.github.io/98.css/) by Jordan Scales (all MIT, see `licenses/`).
 
 ## Disclaimer
 

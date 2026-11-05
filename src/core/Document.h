@@ -74,6 +74,10 @@ public:
     void setGifLoops(int loops) { m_gifLoops = loops; }
     void setFilePath(const QString& path);
     QString displayName() const;
+    // Nombre que se muestra mientras no tiene archivo (los fotogramas de un GIF abiertos como
+    // imágenes); vacío: "Sin título".
+    void setUntitledName(const QString& name) { m_untitledName = name; }
+    QString untitledName() const { return m_untitledName; }
     bool isModified() const { return !m_undo->isClean(); }
     void markSaved() { m_undo->setClean(); }
 
@@ -106,6 +110,7 @@ private:
     QUndoStack* m_undo;
     QString m_filePath;
     int m_gifLoops = 0;
+    QString m_untitledName;
     QString m_historyRoot;
     const Layer* m_previewLayer = nullptr;
     QImage m_previewImage;

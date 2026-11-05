@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "description": "Kaint para la web: sus archivos .js son módulos (las herramientas de tools/ y tests/ los importan con Node).",
+  "type": "module"
+}

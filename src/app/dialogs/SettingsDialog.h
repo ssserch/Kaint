@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QDateTime>
 #include <QDialog>
+#include <QSet>
 
 class ColorButton;
 class QCheckBox;
@@ -24,6 +25,9 @@ struct AppSettings {
     // Interfaz de usuario
     bool animations = true;
     bool translucentPanels = true;
+    // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar
+    // su borde o encima de ella); fuera de la imagen, opacas.
+    bool translucentOverImage = true;
     bool overscroll = true;
     bool autoScroll = true;
     bool autoSelectVisibleLayer = false;
@@ -58,6 +62,15 @@ struct AppSettings {
     // Linux, con el estilo de Paint.NET: la ventana principal y los diálogos con su propia barra de
     // título, como las de Windows 10, en vez de la del escritorio.
     bool windows10Frame = true;
+    // Botones de la barra de título (WindowFrame::Buttons): -1, la barra del escritorio (sin la de
+    // Kaint); 0 Windows 10, 1 Windows 11, 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98. Con
+    // el estilo Paint.NET, por defecto los de Windows 10.
+    int titleButtons = 0;
+    // Los botones a la izquierda de la barra de título.
+    bool titleButtonsLeft = false;
+    // Recreación de Windows (solo con el estilo Paint.NET): 10 u 11 (esquinas redondeadas en modo
+    // ventana y, por defecto, los botones de Windows 11).
+    int windowsVersion = 10;
     // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (Theme::Look).
     int uiStyle = 1;
     // Cursores de las herramientas: 0, los de Kaint; 1, los de Paint.NET en pixel art
@@ -90,6 +103,9 @@ struct AppSettings {
     // Al cerrar con varias imágenes sin guardar: una sola pregunta para todas (como Paint.NET)
     // o una por imagen.
     bool askOnceOnClose = true;
+    // Al abrir un GIF animado: 0, preguntar; 1, como capas (un fotograma por capa); 2, como
+    // imágenes (cada fotograma, una imagen aparte).
+    int gifOpenMode = 0;
     bool tabletEraser = true;
     int historyLimitMB = 4096;
     bool checkUpdates = true;
@@ -128,6 +144,7 @@ public:
         IconPacks,
         Fonts,
         Shapes,
+        Customize,
         Keyboard
     };
 
@@ -160,7 +177,10 @@ private:
     QWidget* createIconPacksPage();
     QWidget* createFontsPage();
     QWidget* createShapesPage();
+    QWidget* createCustomizePage(ToolManager* tools);
     QWidget* createKeyboardPage();
+    void refreshEffectMenus();
+    void refreshToolOrder();
     void refreshIconPacks();
     void refreshFonts();
     void refreshShapes();
@@ -178,6 +198,7 @@ private:
     QPlainTextEdit* m_pluginDetails = nullptr;
     QCheckBox* m_showIncompatible = nullptr;
     QPushButton* m_openPluginFolder = nullptr;
+    QSet<QString> m_collapsedPlugins;
     QLabel* m_updateStatus = nullptr;
     QLabel* m_discordStatus = nullptr;
     ToolOptionsPanel* m_toolDefaults = nullptr;
@@ -186,6 +207,9 @@ private:
     QLabel* m_iconPackDetails = nullptr;
     QListWidget* m_fonts = nullptr;
     QListWidget* m_shapes = nullptr;
+    QTreeWidget* m_effectMenus = nullptr;
+    QListWidget* m_toolOrder = nullptr;
+    ToolManager* m_toolManager = nullptr;
     class QLineEdit* m_shortcutSearch = nullptr;
     QTreeWidget* m_shortcuts = nullptr;
     QLabel* m_shortcutStatus = nullptr;

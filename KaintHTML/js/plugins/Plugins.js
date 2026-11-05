@@ -365,11 +365,47 @@ export const Plugins = {
         return record.kind === "craft" ? loadCraft(record) : this.evaluate(record.source, record.fileName, record.manifest);
     },
 
+    // Los efectos que el usuario desactivó de un complemento (el resto sigue en los menús).
+    disabledEffects(id) {
+        return new Set(this.records.find((r) => r.id === id)?.disabledEffects || []);
+    },
+
     activate(plugin) {
         this.deactivate(plugin.id);
-        Effects.push(...plugin.effects);
+        const off = this.disabledEffects(plugin.id);
+        Effects.push(...plugin.effects.filter((e) => !off.has(e.id)));
         SaveFormats.push(...plugin.fileTypes.filter((t) => t.encode));
         this.active.set(plugin.id, plugin);
+        // La lista de sus efectos se guarda con el registro: así se ve también con el complemento
+        // desactivado (Configuración > Complementos).
+        const record = this.records.find((r) => r.id === plugin.id);
+        const effects = plugin.effects.map((e) => ({ id: e.id, name: e.name }));
+        if (record && JSON.stringify(record.effects || []) !== JSON.stringify(effects)) {
+            record.effects = effects;
+            request("readwrite", (s) => s.put(record)).catch(() => {});
+        }
+    },
+
+    async setEffectEnabled(id, effectId, enabled) {
+        const record = this.records.find((r) => r.id === id);
+        if (!record)
+            return;
+        const off = new Set(record.disabledEffects || []);
+        if (off.has(effectId) === !enabled)
+            return;
+        enabled ? off.delete(effectId) : off.add(effectId);
+        record.disabledEffects = [...off];
+        const plugin = this.active.get(id);
+        const effect = plugin?.effects.find((e) => e.id === effectId);
+        if (effect) {
+            const i = Effects.indexOf(effect);
+            if (enabled && i < 0)
+                Effects.push(effect);
+            else if (!enabled && i >= 0)
+                Effects.splice(i, 1);
+        }
+        await request("readwrite", (s) => s.put(record));
+        this.changed();
     },
 
     deactivate(id) {
@@ -424,7 +460,9 @@ export const Plugins = {
         const plugin = await loadCraft(record);
         Object.assign(record, { id: plugin.id, name: plugin.name, author: plugin.author || plugin.kind, version: plugin.version || "",
                                 description: plugin.description || "", craftKind: plugin.kind, enabled: true,
-                                effectCount: plugin.effects.length, fileTypeCount: 0, updatedAt: new Date().toISOString() });
+                                effectCount: plugin.effects.length, fileTypeCount: 0, updatedAt: new Date().toISOString(),
+                                effects: plugin.effects.map((e) => ({ id: e.id, name: e.name })),
+                                disabledEffects: this.records.find((r) => r.id === plugin.id)?.disabledEffects || [] });
         await request("readwrite", (s) => s.put(record));
         this.records = [...this.records.filter((r) => r.id !== record.id), record].sort((a, b) => a.name.localeCompare(b.name));
         this.errors = this.errors.filter((e) => e.id !== record.id);
@@ -446,7 +484,9 @@ export const Plugins = {
                     throw new Error(tr("Otro complemento ya abre los archivos %1.", t.extensions.join(", ")));
         const record = { id: plugin.id, name: plugin.name, author: plugin.author, version: plugin.version, description: plugin.description,
                          fileName: file.name, source, manifest, enabled: true, effectCount: plugin.effects.length,
-                         fileTypeCount: plugin.fileTypes.length, updatedAt: new Date().toISOString() };
+                         fileTypeCount: plugin.fileTypes.length, updatedAt: new Date().toISOString(),
+                         effects: plugin.effects.map((e) => ({ id: e.id, name: e.name })),
+                         disabledEffects: this.records.find((r) => r.id === plugin.id)?.disabledEffects || [] };
         await request("readwrite", (s) => s.put(record));
         this.records = [...this.records.filter((r) => r.id !== record.id), record].sort((a, b) => a.name.localeCompare(b.name));
         this.errors = this.errors.filter((e) => e.id !== record.id);

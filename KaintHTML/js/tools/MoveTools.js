@@ -268,10 +268,6 @@ class MoveToolBase extends Tool {
         return ["finish"];
     }
 
-    get highlightSelection() {
-        return true;
-    }
-
     hint() {
         return tr("Arrastra la selección para moverla. Arrastre los controles para cambiar el tamaño. Arrastra con el botón derecho del ratón, o justo fuera del borde, para rotar.");
     }
@@ -650,14 +646,40 @@ export class MoveSelectedTool extends MoveToolBase {
         p.clearRect(area.x, area.y, area.w, area.h);
         p.drawImage(s.base, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
         const smooth = s.box.sx !== 1 || s.box.sy !== 1 || !!s.box.angle;
+        const full = m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y));
         if (Settings.get("replacePixels")) {
+            // La máscara de la selección colocada tal como quedará (pixelada o suavizada, según la
+            // calidad de la selección): con la escalada suavizada se salía medio píxel.
+            const maskSmooth = smooth && AppState.selectionAntialias();
             p.setTransform(m);
             p.globalCompositeOperation = "destination-out";
-            p.imageSmoothingEnabled = smooth;
+            p.imageSmoothingEnabled = maskSmooth;
             p.drawImage(s.selBase.maskCanvas(), 0, 0);
             p.globalCompositeOperation = "source-over";
+            // Como FloatingPixels::render de Kaint: lo remuestreado, recortado a la selección en su
+            // sitio nuevo. Si no, al estirar el remuestreo dejaba un halo fuera de ella que se quedaba
+            // en la capa (y, con Ctrl, que deja una copia, se iba acumulando).
+            if (!s.clipCanvas || s.clipCanvas.width !== doc.width || s.clipCanvas.height !== doc.height)
+                s.clipCanvas = createCanvas(doc.width, doc.height);
+            const t = context(s.clipCanvas);
+            t.save();
+            t.setTransform(1, 0, 0, 1, 0, 0);
+            t.globalCompositeOperation = "source-over";
+            t.clearRect(area.x, area.y, area.w, area.h);
+            t.beginPath();
+            t.rect(area.x, area.y, area.w, area.h);
+            t.clip();
+            this.drawFloating(s, t, full, exact);
+            t.setTransform(m);
+            t.globalCompositeOperation = "destination-in";
+            t.imageSmoothingEnabled = maskSmooth;
+            t.drawImage(s.selBase.maskCanvas(), 0, 0);
+            t.restore();
+            p.setTransform(1, 0, 0, 1, 0, 0);
+            p.drawImage(s.clipCanvas, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
+        } else {
+            this.drawFloating(s, p, full, exact);
         }
-        this.drawFloating(s, p, m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y)), exact);
         p.restore();
         doc.setPreview({ layer: s.layer, canvas: s.preview }, area);
     }
@@ -780,6 +802,12 @@ export class MoveSelectedTool extends MoveToolBase {
 }
 
 export class MoveSelectionTool extends MoveToolBase {
+    // Como en Kaint, solo Mover selección tiñe de azul el interior; Mover píxeles seleccionados
+    // deja ver los píxeles tal cual.
+    get highlightSelection() {
+        return true;
+    }
+
     get options() { return ["moveQuality", "finish"]; }
 
     get id() { return "moveselection"; }

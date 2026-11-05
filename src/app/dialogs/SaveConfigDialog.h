@@ -19,8 +19,19 @@ class QSpinBox;
 class SaveConfigDialog : public QDialog {
     Q_OBJECT
 public:
+    // Una imagen abierta que puede ser un fotograma del GIF (al hacerlo "por imágenes").
+    struct ImageSource {
+        QString name;
+        QImage image;
+        // Duración en el nombre de su capa (0: la predeterminada).
+        int delayMs = 0;
+    };
+
+    // 'sources': las imágenes abiertas; con dos o más, el GIF se puede hacer con ellas en vez de con
+    // las capas.
     SaveConfigDialog(const QImage& flattened, const QString& path, const ImageIO::SaveOptions& initial,
-                     QWidget* parent = nullptr, const QList<Gif::Frame>& frames = {});
+                     QWidget* parent = nullptr, const QList<Gif::Frame>& frames = {},
+                     const QList<ImageSource>& sources = {});
     ~SaveConfigDialog() override;
     ImageIO::SaveOptions options() const;
     // Fotogramas del GIF animado tal como quedaron en la configuración avanzada (sin los omitidos,
@@ -56,6 +67,11 @@ private:
     void showAdvanced();
     // "Mostrar capas ocultas": añade o quita sus fotogramas de la lista.
     void setShowHidden(bool on);
+    // Fotogramas de las capas de la imagen o de las imágenes abiertas elegidas.
+    void setFromImages(bool on);
+    // Elegir qué imágenes abiertas van en el GIF y en qué orden (como la configuración avanzada).
+    bool chooseImages();
+    QList<Gif::Frame> framesFromImages() const;
     void updateHiddenButton();
     // Los fotogramas que quedan con 'a' (sin omitidos, con copias y duraciones).
     QList<Gif::Frame> framesOf(const Advanced& a) const;
@@ -80,6 +96,14 @@ private:
     QSpinBox* m_loops = nullptr;
     QList<QCheckBox*> m_icoSizes;
     QList<Gif::Frame> m_frames;
+    QList<Gif::Frame> m_layerFrames;
+    QList<ImageSource> m_sources;
+    // Orden de las imágenes y cuáles van en el GIF.
+    QList<int> m_sourceOrder;
+    QList<bool> m_sourceOn;
+    bool m_fromImages = false;
+    QComboBox* m_frameSource = nullptr;
+    QPushButton* m_chooseImages = nullptr;
     Advanced m_advanced;
     QPushButton* m_advancedButton = nullptr;
     QPushButton* m_hiddenButton = nullptr;

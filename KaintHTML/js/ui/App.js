@@ -3,6 +3,7 @@
 import { AppState } from "../AppState.js";
 import { Document, Layer } from "../core/Document.js";
 import { Effects, Categories, defaultValues, findEffect } from "../core/Effects.js";
+import { Customization } from "../Customization.js";
 import { animationFrames, baseName, download, embeddedProfile, encode, flattenedImage, formatFor, openFile, OpenAccept, OpenExtensions, SaveFormats } from "../core/ImageIO.js";
 import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
@@ -18,15 +19,17 @@ import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
-import { applyThemeColors } from "./Themes.js";
+import { applyThemeColors, applyWindowButtons } from "./Themes.js";
 import {
-    aboutDialog, animationDialog, canvasSizeDialog, colorProfileDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber, resizeDialog,
-    saveAsDialog, settingsDialog, TaskDialog,
+    aboutDialog, animationDialog, canvasSizeDialog, checkbox, colorProfileDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber,
+    resizeDialog, saveAsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
+import { delayFromName } from "../core/Codecs.js";
 import { computeEffect, effectDialog, effectInput, renderEffect } from "./EffectDialog.js";
 import { icon, iconUrl, refreshIcons, setActiveColors, unsavedStar } from "./Icons.js";
 import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
+import { isPhone, MobilePanels } from "./Mobile.js";
 import { ToolOptions } from "./ToolOptions.js";
 import { saveConfigDialog } from "./SaveDialog.js";
 import { formatLength, pixelsPerUnit, unitSuffix } from "./Units.js";
@@ -40,6 +43,21 @@ import { TextTool } from "../tools/TextTool.js";
 import { LineTool, ShapesTool } from "../tools/ShapeTools.js";
 
 const openUrl = (url) => () => window.open(url, "_blank", "noopener,noreferrer");
+
+// Firma de una imagen (tamaño y un resumen de sus píxeles) para reconocer al pegar una copia hecha en
+// Kaint, como imageSignature de Kaint. Los semitransparentes solo cuentan por su alfa: al pasar por el
+// portapapeles (PNG) su color puede cambiar un poco.
+function imageSignature(image) {
+    const c = createCanvas(image.width, image.height), g = context(c);
+    g.drawImage(image, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let h = 2166136261;
+    for (let i = 0; i < d.length; i += 4 * 7) {
+        const v = d[i + 3] === 255 ? d[i] | (d[i + 1] << 8) | (d[i + 2] << 16) : d[i + 3] << 24;
+        h = Math.imul(h ^ v, 16777619);
+    }
+    return `${c.width}x${c.height}:${h >>> 0}`;
+}
 
 export class App extends EventTarget {
     constructor() {
@@ -153,6 +171,8 @@ export class App extends EventTarget {
         this.applyTheme();
         applyAnimations();
         document.getElementById("workspace").classList.toggle("translucent", !!Settings.get("translucentPanels"));
+        applyWindowButtons(document.documentElement);
+        Object.values(this.panels || {}).forEach((p) => p.updateOverImage());
         // Ventanas como las de paint.js (Windows 10) o compactas, con el borde elegido.
         const root = document.documentElement;
         root.classList.toggle("win10", Settings.get("panelStyle") === 0);
@@ -437,6 +457,19 @@ export class App extends EventTarget {
                 close();
                 return;
             }
+            // En el teléfono, el menú Capas (que no cabe en la fila de los menús) va primero y debajo,
+            // las imágenes abiertas.
+            if (isPhone()) {
+                const r = button.getBoundingClientRect();
+                const layers = this.menuBar.menus.find((m) => m.id === "layers");
+                const images = this.docs.map((doc) => ({
+                    text: (doc.isModified() ? "*" : "") + doc.displayName(), icon: thumbnail(doc.flattened(), 24, 18), checked: doc === this.doc,
+                    run: () => this.setCurrent(doc),
+                }));
+                popupMenu([{ section: tr("Capas") }, ...(layers ? layers.entries() : []), "-", { section: tr("Imágenes abiertas") }, ...images],
+                          Math.max(0, r.right - 240), r.bottom + 1, { minWidth: 220 });
+                return;
+            }
             popup = el("div", { className: "image-list-popup" });
             for (const doc of this.docs) {
                 const row = el("div", { className: "row" + (doc === this.doc ? " selected" : "") },
@@ -693,6 +726,7 @@ export class App extends EventTarget {
             text: tr(e.name) + (e.params.length || e.configure ? "..." : ""), icon: `effect-${e.id}`, shortcut: e.shortcut || "",
             enabled: !!this.doc, run: this.command(() => this.runEffect(e, false)),
         });
+        const menuEffects = () => Effects.filter((e) => !e.hidden && !Customization.isHidden(e.id));
         const sorted = (list) => [...list].sort((x, y) => tr(x.name).localeCompare(tr(y.name)));
         this.menuBar.setMenus([
             { title: tr("&Archivo"), entries: () => [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print"), "-", a("close"), a("closeAll")] },
@@ -706,11 +740,12 @@ export class App extends EventTarget {
                                                   a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
                                                      a("rot180"), "-", a("colorProfile"), a("animation"), "-", a("flatten")] },
-            { title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
+            { id: "layers", title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
                                                     a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), a("rotateZoom"), "-", a("layerTop"),
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
                                                     a("layerDown"), a("layerToBottom"), "-", a("layerProps")] },
-            { title: tr("A&justes"), entries: () => sorted(Effects.filter((e) => !e.category && !e.hidden && e.menu !== "effects")).map(effectEntry) },
+            // Configuración > Personalización: efectos ocultos y movidos a otro menú o submenú.
+            { title: tr("A&justes"), entries: () => sorted(menuEffects().filter((e) => Customization.placement(e).adjustment)).map(effectEntry) },
             { title: tr("Efe&ctos"), entries: () => {
                 // Como en Kaint: "Repetir" solo después de usar un efecto y "Complementos..." solo con
                 // algún complemento activado.
@@ -722,18 +757,23 @@ export class App extends EventTarget {
                     out.push({ text: tr("&Complementos..."), icon: "plugins", run: () => settingsDialog(this, "plugins") });
                 if (out.length)
                     out.push("-");
-                const cats = Object.entries(Categories).map(([key, name]) => [key, tr(name), null]);
-                for (const e of Effects)
-                    if (e.category?.startsWith("plugin:") && !cats.some(([key]) => key === e.category))
-                        cats.push([e.category, e.categoryName, e.categoryIcon]);
-                cats.sort((x, y) => x[1].localeCompare(y[1]));
-                for (const [key, name, catIcon] of cats) {
-                    const list = Effects.filter((e) => e.category === key && !e.hidden);
-                    if (list.length)
-                        out.push({ text: name, icon: catIcon ? el("img", { src: catIcon, width: 16, height: 16, alt: "" }) : undefined,
-                                   submenu: () => sorted(list).map(effectEntry) });
+                const visible = menuEffects();
+                const cats = new Map();
+                for (const e of visible) {
+                    const place = Customization.placement(e);
+                    if (!place.adjustment && place.submenu && !cats.has(place.submenu))
+                        cats.set(place.submenu, [Customization.submenuName(place.submenu), null]);
                 }
-                const root = Effects.filter((e) => !e.category && e.menu === "effects");
+                // El icono de los submenús de los complementos.
+                for (const e of Effects)
+                    if (e.categoryIcon && cats.has(e.categoryName) && !cats.get(e.categoryName)[1])
+                        cats.get(e.categoryName)[1] = e.categoryIcon;
+                for (const [key, [name, catIcon]] of [...cats].sort((x, y) => x[1][0].localeCompare(y[1][0]))) {
+                    const list = visible.filter((e) => Customization.placement(e).submenu === key && !Customization.placement(e).adjustment);
+                    out.push({ text: name, icon: catIcon ? el("img", { src: catIcon, width: 16, height: 16, alt: "" }) : undefined,
+                               submenu: () => sorted(list).map(effectEntry) });
+                }
+                const root = visible.filter((e) => { const p = Customization.placement(e); return !p.adjustment && !p.submenu; });
                 if (root.length)
                     out.push("-", ...sorted(root).map(effectEntry));
                 return out;
@@ -747,21 +787,38 @@ export class App extends EventTarget {
         const bar = document.getElementById("main-toolbar");
         const groups = [["new", "open", "save"], ["print"], ["cut", "copy", "paste"], ["crop", "deselect"], ["undo", "redo"], ["pixelGrid", "rulers"]];
         const barIcons = { cut: "toolbar-cut", copy: "toolbar-copy", paste: "toolbar-paste", crop: "toolbar-crop", deselect: "toolbar-deselect" };
+        // En el teléfono, Nuevo, Abrir, Guardar e Imprimir van juntos en un botón con menú (como el de
+        // guardar con flecha), para que la barra quepa.
+        const file = el("button", { className: "tbutton phone-file", type: "button", title: tr("Archivo") }, [icon("document-save", 16),
+                                                                                                      el("span", { className: "arrow", textContent: "▾" })]);
+        file.addEventListener("click", () => {
+            const r = file.getBoundingClientRect(), a = (id) => this.actions.get(id);
+            popupMenu([a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print")], r.left, r.bottom + 1);
+        });
+        bar.appendChild(file);
         groups.forEach((group, i) => {
             if (i)
-                bar.appendChild(el("span", { className: "sep" }));
-            for (const id of group)
-                bar.appendChild(toolButton(this.actions.get(id), barIcons[id] || this.actions.get(id).icon, 16));
+                bar.appendChild(el("span", { className: "sep" + (i === 1 ? " desktop-only" : "") }));
+            for (const id of group) {
+                const b = toolButton(this.actions.get(id), barIcons[id] || this.actions.get(id).icon, 16);
+                b.dataset.action = id;
+                bar.appendChild(b);
+            }
         });
     }
 
     createPanels() {
         const ws = document.getElementById("workspace");
+        // En el teléfono, con las ventanas en las esquinas, sacan o esconden la ventana.
         const panelAction = (id, text, iconName, key) => this.action(id, text, iconName, key, () => {
+            if (this.mobile?.active) {
+                this.mobile.toggle(id);
+                return;
+            }
             const p = this.panels[id];
             p.setVisible(!p.visible, true);
             updateActions();
-        }, null, () => this.panels[id]?.visible);
+        }, null, () => (this.mobile?.active ? this.mobile.isOpen(id) : this.panels[id]?.visible));
         panelAction("tools", tr("Herramientas"), "window-tools", "F5");
         panelAction("history", tr("Historial"), "window-history", "F6");
         panelAction("layers", tr("Capas"), "window-layers", "F7");
@@ -776,13 +833,27 @@ export class App extends EventTarget {
             colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", onClose: closed }),
         };
         new ResizeObserver(() => Object.values(this.panels).forEach((p) => p.reposition())).observe(ws);
+        // Translucidez solo sobre la imagen: las ventanas miran si la tapan cada vez que se mueve.
+        this.view.onImageRect = (rect) => {
+            FloatingPanel.imageRect = rect;
+            Object.values(this.panels).forEach((p) => p.updateOverImage());
+        };
         this.view.addEventListener("rulers", () => Object.values(this.panels).forEach((p) => p.reposition()));
+        // Teléfono: las ventanas escondidas en las esquinas o con el tamaño elegido.
+        this.mobile = new MobilePanels(this, ws);
+    }
+
+    updateActionStates() {
+        updateActions();
     }
 
     createCornerButtons() {
         const box = document.getElementById("corner-buttons");
-        for (const id of ["tools", "history", "layers", "colors"])
-            box.appendChild(this.actionButton(id));
+        for (const id of ["tools", "history", "layers", "colors"]) {
+            const b = this.actionButton(id);
+            b.dataset.action = id;
+            box.appendChild(b);
+        }
         box.appendChild(el("span", { className: "gap" }));
         box.appendChild(this.actionButton("settings"));
         // Ayuda, como la de paint.js: documentación y web; donar, foro, tutoriales, complementos y
@@ -804,7 +875,7 @@ export class App extends EventTarget {
         this.hintLabel = el("span", { className: "hint" });
         this.selLabel = el("span");
         this.posLabel = el("span");
-        const item = (iconName, label, tip) => el("span", { className: "item", title: tip }, [icon(iconName, 16), label]);
+        const item = (iconName, label, tip, cls = "") => el("span", { className: `item ${cls}`, title: tip }, [icon(iconName, 16), label]);
         this.zoomBox = el("input", { className: "zoom-box", type: "text", list: "zoom-presets" });
         const presets = el("datalist", { id: "zoom-presets" }, [el("option", { value: tr("Ventana") }),
                            ...[...ZoomPresets].reverse().map((z) => el("option", { value: `${Math.round(z * 100)} %` }))]);
@@ -823,7 +894,7 @@ export class App extends EventTarget {
         this.effectProgress = el("progress", { className: "effect-progress", max: 1, value: 0 });
         this.effectProgress.hidden = true;
         bar.append(this.hintIcon, this.hintLabel, this.effectProgress, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
-                   item("status-cursor", this.posLabel, tr("Posición del cursor")), this.createUnitButton(),
+                   item("status-cursor", this.posLabel, tr("Posición del cursor"), "cursor-position"), this.createUnitButton(),
                    this.zoomBox, presets, this.actionButton("zoomFit"), this.actionButton("zoomOut"), this.zoomSlider, this.actionButton("zoomIn"));
     }
 
@@ -1050,7 +1121,11 @@ export class App extends EventTarget {
     // --- Archivo ---------------------------------------------------------------------------
 
     async newImage() {
-        const size = this.clipboard ? { w: this.clipboard.width, h: this.clipboard.height } : this.doc ? { w: this.doc.width, h: this.doc.height } : { w: 800, h: 600 };
+        // Como Kaint y Paint.NET: con una imagen en el portapapeles, su tamaño (la del sistema si el
+        // navegador deja verla; si no, lo último que se copió o pegó en Kaint).
+        const peek = await this.peekClipboardImage();
+        const clip = peek ? { w: peek.width, h: peek.height } : this.lastClipboardSize || (this.clipboard ? { w: this.clipboard.width, h: this.clipboard.height } : null);
+        const size = clip || (this.doc ? { w: this.doc.width, h: this.doc.height } : { w: 800, h: 600 });
         const r = await newImageDialog(size.w, size.h, this.doc?.dpi ?? 96);
         if (!r)
             return;
@@ -1088,15 +1163,57 @@ export class App extends EventTarget {
             await this.installPlugin(file);
             return;
         }
+        let doc;
         try {
             const type = Plugins.fileTypeFor(file.name);
-            const doc = type ? await this.decodeWithPlugin(type, file) : await openFile(file);
-            doc.fileHandle = handle;
-            doc.markSaved();
-            this.addDocument(doc);
+            doc = type ? await this.decodeWithPlugin(type, file) : await openFile(file);
         } catch {
             await message(tr("Abrir"), tr("No se pudo abrir «%1».", file.name));
+            return;
         }
+        // GIF animado: como capas (un fotograma por capa, como hasta ahora) o cada fotograma como
+        // una imagen aparte.
+        if (/\.gif$/i.test(file.name) && doc.layers.length > 1) {
+            let mode = Settings.get("gifOpenMode") || 0;
+            if (mode === 0) {
+                const ask = new TaskDialog(tr("Abrir un GIF animado"), "document-open",
+                                           tr("«%1» tiene %2 fotogramas. ¿Cómo quieres abrirlo?", file.name, doc.layers.length));
+                const remember = checkbox(tr("Recordar mi elección (se cambia en Configuración > Interfaz de usuario)"), false);
+                ask.task.appendChild(remember);
+                const layers = ask.addChoice("window-layers", tr("Como capas"),
+                                             tr("Una sola imagen con un fotograma en cada capa, una encima de otra. Se vuelve a guardar como GIF animado."), true);
+                const images = ask.addChoice("image-list-menu", tr("Como imágenes"),
+                                             tr("Cada fotograma se abre como una imagen aparte. Al guardar como GIF se pueden elegir las imágenes que forman la animación."));
+                const choice = await ask.exec();
+                if (choice !== layers && choice !== images)
+                    return;
+                mode = choice === images ? 2 : 1;
+                if (remember.input.checked)
+                    Settings.set("gifOpenMode", mode);
+            }
+            if (mode === 2) {
+                // Cada fotograma, una imagen sin archivo ("animación (3)"); el nombre de su capa
+                // conserva la duración, para volver a guardarlas como GIF eligiendo las imágenes.
+                const base = baseName(file.name);
+                let first = null;
+                doc.layers.forEach((layer, i) => {
+                    const d = new Document(doc.width, doc.height, { name: tr("%1 (%2)", base, i + 1), background: null, historyName: tr("Abrir imagen"),
+                                                                    historyIcon: "document-open", dpi: doc.dpi });
+                    d.layers[0].name = layer.name;
+                    d.layers[0].ctx.drawImage(layer.canvas, 0, 0);
+                    d.gifLoops = doc.gifLoops;
+                    d.markSaved();
+                    this.addDocument(d);
+                    first ??= d;
+                });
+                if (first)
+                    this.setCurrent(first);
+                return;
+            }
+        }
+        doc.fileHandle = handle;
+        doc.markSaved();
+        this.addDocument(doc);
     }
 
     // Archivo de un formato de complemento: una capa o varias, en RGBA.
@@ -1263,8 +1380,15 @@ export class App extends EventTarget {
             options.loops = doc.gifLoops ?? 0;
         let edited = null;
         if (!format.plugin && hasSaveOptions(format.ext)) {
-            const frames = format.animation && doc.layers.length > 1 ? animationFrames(doc, 0, true) : [];
-            const r = await saveConfigDialog(format, flattenedImage(doc), options, frames, { dpi: doc.dpi, icc: embeddedProfile(doc) });
+            // GIF: los fotogramas son las capas o, con varias imágenes abiertas, las que se elijan.
+            const sources = format.animation && this.docs.length > 1
+                ? this.docs.map((d) => ({ name: d.displayName(), image: flattenedImage(d),
+                                          delay: d.layers.length === 1 ? delayFromName(d.layers[0].name, 0) : 0 }))
+                : [];
+            let frames = format.animation && doc.layers.length > 1 ? animationFrames(doc, 0, true) : [];
+            if (!frames.length && sources.length)
+                frames = [{ ...flattenedImage(doc), delay: 0 }];
+            const r = await saveConfigDialog(format, flattenedImage(doc), options, frames, { dpi: doc.dpi, icc: embeddedProfile(doc), sources });
             if (!r)
                 return false;
             options = r.options;
@@ -1316,6 +1440,7 @@ export class App extends EventTarget {
                 return;
             e.preventDefault();
             const bitmap = await createImageBitmap(item.getAsFile());
+            this.lastClipboardSize = { w: bitmap.width, h: bitmap.height };
             this.paste(bitmap, this.pendingPasteMode || "layer");
             this.pendingPasteMode = null;
         });
@@ -1337,6 +1462,12 @@ export class App extends EventTarget {
     async copy(merged) {
         const canvas = this.selectedPixels(merged);
         this.clipboard = canvas;
+        // Como Kaint: se recuerda dónde estaba lo copiado (para pegarlo en el mismo sitio) y una
+        // firma de la imagen (para saber si lo que se pega es esta copia).
+        const b = this.doc.selection.isEmpty() ? null : this.doc.selection.bounds();
+        this.copyOrigin = b ? { x: b.x, y: b.y } : { x: 0, y: 0 };
+        this.copySignature = imageSignature(canvas);
+        this.lastClipboardSize = { w: canvas.width, h: canvas.height };
         try {
             const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
             await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
@@ -1392,12 +1523,45 @@ export class App extends EventTarget {
         }
         if (mode === "newLayer")
             this.addLayer();
-        // Como Paint.NET: arriba a la izquierda de lo que se ve y con Mover píxeles seleccionados.
-        const tl = this.view.viewToImage(0, 0);
-        const x = Math.max(0, Math.min(doc.width - image.width, Math.round(tl.x)));
-        const y = Math.max(0, Math.min(doc.height - image.height, Math.round(tl.y)));
+        const { x, y } = this.pastePosition(image);
         this.tools.select("moveselectedpixels");
-        this.tools.current.startFloating(image, Math.max(0, x), Math.max(0, y), tr("Pegar"));
+        this.tools.current.startFloating(image, x, y, tr("Pegar"));
+    }
+
+    // Como MainWindow::pastePosition de Kaint: donde se copió, si lo que se pega es esa copia y ese
+    // sitio se ve entero; si no, el sitio visible más cercano (o la esquina de lo visible para lo que
+    // viene de fuera), con Mover píxeles seleccionados.
+    pastePosition(image) {
+        const doc = this.doc, v = this.view.viewSize();
+        const a = this.view.viewToImage(0, 0), b = this.view.viewToImage(v.w, v.h);
+        const vis = { x: Math.max(0, Math.ceil(a.x)), y: Math.max(0, Math.ceil(a.y)) };
+        vis.w = Math.max(0, Math.min(doc.width, Math.floor(b.x)) - vis.x);
+        vis.h = Math.max(0, Math.min(doc.height, Math.floor(b.y)) - vis.y);
+        const ours = this.copySignature && this.copyOrigin && imageSignature(image) === this.copySignature;
+        let x = ours ? this.copyOrigin.x : vis.x, y = ours ? this.copyOrigin.y : vis.y;
+        const fit = (p, size, lo, length) => (size >= length ? lo : Math.max(lo, Math.min(lo + length - size, p)));
+        if (vis.w > 0 && vis.h > 0 && !(x >= vis.x && y >= vis.y && x + image.width <= vis.x + vis.w && y + image.height <= vis.y + vis.h)) {
+            x = fit(x, image.width, vis.x, vis.w);
+            y = fit(y, image.height, vis.y, vis.h);
+        }
+        return { x: Math.max(0, Math.min(doc.width - image.width, x)), y: Math.max(0, Math.min(doc.height - image.height, y)) };
+    }
+
+    // La imagen del portapapeles del sistema, si el navegador ya deja leerlo sin preguntar.
+    async peekClipboardImage() {
+        try {
+            const permission = await navigator.permissions?.query({ name: "clipboard-read" });
+            if (permission?.state !== "granted")
+                return null;
+            for (const item of await navigator.clipboard.read()) {
+                const type = item.types.find((t) => t.startsWith("image/"));
+                if (type)
+                    return await createImageBitmap(await item.getType(type));
+            }
+        } catch {
+            // Sin acceso: se usa lo último que se copió o pegó en Kaint.
+        }
+        return null;
     }
 
     // --- Selección ---------------------------------------------------------------------------

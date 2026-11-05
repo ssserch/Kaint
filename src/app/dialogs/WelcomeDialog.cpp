@@ -58,7 +58,10 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
 #ifndef Q_OS_WIN
     scheme->addItem(tr("KDE"), int(Theme::Scheme::Kde));
 #endif
+    scheme->addItem(tr("Windows 7"), int(Theme::Scheme::Windows7));
+    scheme->addItem(tr("Windows XP"), int(Theme::Scheme::WindowsXP));
     scheme->addItem(tr("Windows 98"), int(Theme::Scheme::Windows98));
+    scheme->addItem(tr("Windows 98 ALT"), int(Theme::Scheme::Windows98Alt));
     scheme->addItem(tr("Personalizado"), int(Theme::Scheme::Custom));
     scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
     auto* look = new QComboBox(this);

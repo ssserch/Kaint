@@ -1,5 +1,6 @@
 #include "app/panels/ToolsPanel.h"
 
+#include "app/Customization.h"
 #include "app/tools/ToolManager.h"
 
 #include <QButtonGroup>
@@ -25,9 +26,21 @@ ToolsPanel::ToolsPanel(ToolManager* manager, QWidget* parent)
         if (t->icon().isNull())
             b->setText(t->name().left(2));
         m_group->addButton(b, int(t->id()));
-        m_buttons.append(b);
+        m_all.append(b);
     }
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    applyCustomization();
+    connect(Customization::instance(), &Customization::toolsChanged, this, [this] {
+        // Conserva las columnas; la ventana crece o encoge con las filas.
+        const int columns = m_columns;
+        applyCustomization();
+        updateGeometry();
+        if (auto* panel = qobject_cast<FloatingPanel*>(parentWidget())) {
+            panel->resize(panel->size() - size() + sizeFor(columns));
+            panel->reposition();
+        }
+        layoutButtons();
+    });
 
     connect(m_group, &QButtonGroup::idClicked, this, [this](int id) { m_manager->select(ToolId(id)); });
     connect(manager, &ToolManager::toolChanged, this, &ToolsPanel::onToolChanged);
@@ -35,11 +48,34 @@ ToolsPanel::ToolsPanel(ToolManager* manager, QWidget* parent)
         onToolChanged(manager->current());
 }
 
+void ToolsPanel::applyCustomization()
+{
+    const Customization* custom = Customization::instance();
+    QList<int> defaults;
+    for (Tool* t : m_manager->tools())
+        defaults << int(t->id());
+    m_buttons.clear();
+    for (int id : custom->toolOrder(defaults)) {
+        auto* b = qobject_cast<QToolButton*>(m_group->button(id));
+        if (!b)
+            continue;
+        const bool hidden = custom->isToolHidden(id);
+        b->setVisible(!hidden);
+        if (!hidden)
+            m_buttons.append(b);
+    }
+    // Sin ninguna, al menos la primera (la ventana no se queda vacía).
+    if (m_buttons.isEmpty() && !m_all.isEmpty()) {
+        m_all.first()->setVisible(true);
+        m_buttons.append(m_all.first());
+    }
+}
+
 void ToolsPanel::setIconSize(int side)
 {
     // Conserva las columnas: el tamaño de los botones ya puede haber cambiado con el tema.
     const int columns = m_columns;
-    for (QToolButton* b : std::as_const(m_buttons))
+    for (QToolButton* b : std::as_const(m_all))
         b->setIconSize(QSize(side, side));
     updateGeometry();
     if (auto* panel = qobject_cast<FloatingPanel*>(parentWidget())) {
@@ -53,7 +89,7 @@ void ToolsPanel::setIconSize(int side)
 QSize ToolsPanel::cell() const
 {
     QSize s(1, 1);
-    for (const QToolButton* b : m_buttons)
+    for (const QToolButton* b : m_all)
         s = s.expandedTo(b->sizeHint());
     return s;
 }

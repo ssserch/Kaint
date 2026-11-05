@@ -5,6 +5,11 @@
  *   · Ajustes > Intercambiar canales: reordena los canales R, G y B.
  *   · Efectos > Color > Tinte de color: mezcla la imagen con un color.
  *
+ * El tinte lleva su propio icono (API 2): un cuadrado de 16x16 dibujado en
+ * píxeles. También se puede dar una imagen codificada (icon_data e
+ * icon_data_size, p. ej. un PNG incrustado con xxd -i) o un archivo junto al
+ * complemento (icon_file = "tinte.png").
+ *
  * Compilar e instalar a mano:
  *   cc -shared -fPIC -O2 -I../../src/core/plugins -o kaint-ejemplo.so ejemplo.c
  *   cp kaint-ejemplo.so ~/.local/share/Kaint/Effects/
@@ -62,9 +67,31 @@ static void tint_render(const KaintRenderArgs* a)
     }
 }
 
+/* Icono del tinte: un degradado de naranja a transparente con borde oscuro
+   (BGRA, alfa directo), dibujado la primera vez que Kaint lo pide. */
+static uint8_t tint_icon_pixels[16 * 16 * 4];
+static const KaintImage tint_icon = {16, 16, 16 * 4, tint_icon_pixels};
+
+static void draw_tint_icon(void)
+{
+    for (int y = 0; y < 16; ++y)
+        for (int x = 0; x < 16; ++x) {
+            uint8_t* p = tint_icon_pixels + (y * 16 + x) * 4;
+            const int border = x == 1 || x == 14 || y == 1 || y == 14;
+            const int inside = x > 1 && x < 14 && y > 1 && y < 14;
+            if (border && x >= 1 && x <= 14 && y >= 1 && y <= 14) {
+                p[0] = 0x30; p[1] = 0x30; p[2] = 0x30; p[3] = 0xff;
+            } else if (inside) {
+                p[0] = 0x00; p[1] = (uint8_t)(0x80 + y * 4); p[2] = 0xff; p[3] = (uint8_t)(255 - x * 12);
+            } else {
+                p[0] = p[1] = p[2] = p[3] = 0;
+            }
+        }
+}
+
 static const KaintEffectInfo effects[] = {
-    {"kaint.ejemplo.intercambiar", "Intercambiar canales", NULL, swap_params, 1, swap_render},
-    {"kaint.ejemplo.tinte", "Tinte de color", "Color", tint_params, 2, tint_render},
+    {"kaint.ejemplo.intercambiar", "Intercambiar canales", NULL, swap_params, 1, swap_render, NULL, NULL, 0, NULL},
+    {"kaint.ejemplo.tinte", "Tinte de color", "Color", tint_params, 2, tint_render, &tint_icon, NULL, 0, NULL},
 };
 
 static const KaintPluginInfo info = {
@@ -80,5 +107,6 @@ static const KaintPluginInfo info = {
 
 KAINT_PLUGIN_EXPORT const KaintPluginInfo* kaint_plugin_info(void)
 {
+    draw_tint_icon();
     return &info;
 }

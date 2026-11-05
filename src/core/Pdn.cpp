@@ -5,8 +5,10 @@
 #include "core/Layer.h"
 #include "core/Parallel.h"
 
+#include <QBuffer>
 #include <QFile>
 #include <QHash>
+#include <QSaveFile>
 #include <QObject>
 #include <QRegularExpression>
 #include <QVariant>
@@ -470,6 +472,230 @@ BlendMode blendFromPdn(const Nrbf& n, const std::shared_ptr<Object>& layer, cons
     return BlendMode::Normal;
 }
 
+
+// --- Escritura (MS-NRBF, como Paint.NET 5) --------------------------------------
+
+// Versión de Paint.NET con la que se escriben los nombres de los ensamblados y la cabecera: la
+// del formato que Kaint reproduce (Paint.NET 5.1).
+constexpr const char* kPdnVersion = "5.112.9563.32325";
+constexpr int kVersion[4] = {5, 112, 9563, 32325};
+const char* const kKeyValue = "System.Collections.Generic.KeyValuePair`2[[System.String, mscorlib, Version=4.0.0.0, "
+                              "Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, "
+                              "Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]]";
+// Tamaño de los bloques comprimidos de píxeles (el de Paint.NET).
+constexpr quint32 kChunkSize = 256 * 1024;
+
+class NrbfWriter {
+public:
+    // Tipos binarios y primitivos de MS-NRBF.
+    enum Binary : quint8 { Primitive = 0, String = 1, SystemClass = 3, Class = 4, ObjectArray = 5 };
+    enum Prim : quint8 { Boolean = 1, Byte = 2, Int32 = 8, Int64 = 9 };
+    struct Member {
+        const char* name;
+        quint8 binary;
+        quint8 prim = 0;
+        QByteArray className = {};
+        int library = 0;
+    };
+
+    QByteArray data;
+
+    void u8(quint8 v) { data.append(char(v)); }
+    void i32(qint32 v) { data.append(reinterpret_cast<const char*>(&v), 4); }
+    void i64(qint64 v) { data.append(reinterpret_cast<const char*>(&v), 8); }
+    void string(const QByteArray& utf8)
+    {
+        quint32 n = quint32(utf8.size());
+        do {
+            quint8 b = n & 0x7f;
+            n >>= 7;
+            if (n)
+                b |= 0x80;
+            u8(b);
+        } while (n);
+        data.append(utf8);
+    }
+
+    void header(int root)
+    {
+        u8(0);
+        i32(root);
+        i32(-1);
+        i32(1);
+        i32(0);
+    }
+    void library(int id, const QByteArray& name)
+    {
+        u8(12);
+        i32(id);
+        string(name);
+    }
+    // Definición de una clase (con sus miembros y tipos); 'library' 0: una clase del sistema.
+    void classDefinition(int id, const QByteArray& name, const std::vector<Member>& members, int library)
+    {
+        u8(library ? 5 : 4);
+        i32(id);
+        string(name);
+        i32(qint32(members.size()));
+        for (const Member& m : members)
+            string(m.name);
+        for (const Member& m : members)
+            u8(m.binary);
+        for (const Member& m : members) {
+            if (m.binary == Primitive)
+                u8(m.prim);
+            else if (m.binary == SystemClass)
+                string(m.className);
+            else if (m.binary == Class) {
+                string(m.className);
+                i32(m.library);
+            }
+        }
+        if (library)
+            i32(library);
+    }
+    void classWithId(int id, int metadata)
+    {
+        u8(1);
+        i32(id);
+        i32(metadata);
+    }
+    void objectString(int id, const QString& s)
+    {
+        u8(6);
+        i32(id);
+        string(s.toUtf8());
+    }
+    void reference(int id)
+    {
+        u8(9);
+        i32(id);
+    }
+    void end() { u8(11); }
+};
+
+QByteArray gzip(const char* data, qsizetype size)
+{
+    z_stream zs{};
+    if (deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 16 + MAX_WBITS, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+        return {};
+    QByteArray out;
+    out.resize(qsizetype(deflateBound(&zs, uLong(size))) + 32);
+    zs.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(data));
+    zs.avail_in = uInt(size);
+    zs.next_out = reinterpret_cast<Bytef*>(out.data());
+    zs.avail_out = uInt(out.size());
+    const int rc = deflate(&zs, Z_FINISH);
+    const qsizetype produced = out.size() - zs.avail_out;
+    deflateEnd(&zs);
+    if (rc != Z_STREAM_END)
+        return {};
+    out.resize(produced);
+    return out;
+}
+
+void bigEndian32(QByteArray& d, quint32 v)
+{
+    const char b[4] = {char(v >> 24), char(v >> 16), char(v >> 8), char(v)};
+    d.append(b, 4);
+}
+
+// Metadatos EXIF de la resolución, como los guarda Paint.NET ($exif.tagN[0]).
+QList<std::pair<QString, QString>> resolutionMetadata(double dpi)
+{
+    auto rational = [](double v) {
+        quint32 num = quint32(std::lround(v)), den = 1;
+        if (std::abs(v - std::round(v)) > 1e-6) {
+            num = quint32(std::lround(v * 100));
+            den = 100;
+        }
+        QByteArray b;
+        b.append(reinterpret_cast<const char*>(&num), 4);
+        b.append(reinterpret_cast<const char*>(&den), 4);
+        return QString::fromLatin1(b.toBase64());
+    };
+    const QString unit = QString::fromLatin1(QByteArray("\x02\x00", 2).toBase64());
+    return {
+        {QStringLiteral("$exif.tag0[0]"), QStringLiteral("<exif id=\"296\" len=\"2\" type=\"3\" value=\"%1\" />").arg(unit)},
+        {QStringLiteral("$exif.tag1[0]"), QStringLiteral("<exif id=\"282\" len=\"8\" type=\"5\" value=\"%1\" />").arg(rational(dpi))},
+        {QStringLiteral("$exif.tag2[0]"), QStringLiteral("<exif id=\"283\" len=\"8\" type=\"5\" value=\"%1\" />").arg(rational(dpi))},
+    };
+}
+
+const char* blendOpName(BlendMode mode)
+{
+    switch (mode) {
+    case BlendMode::Multiply: return "Multiply";
+    case BlendMode::Additive: return "Additive";
+    case BlendMode::ColorBurn: return "ColorBurn";
+    case BlendMode::ColorDodge: return "ColorDodge";
+    case BlendMode::Reflect: return "Reflect";
+    case BlendMode::Glow: return "Glow";
+    case BlendMode::Overlay: return "Overlay";
+    case BlendMode::Difference: return "Difference";
+    case BlendMode::Negation: return "Negation";
+    case BlendMode::Lighten: return "Lighten";
+    case BlendMode::Darken: return "Darken";
+    case BlendMode::Screen: return "Screen";
+    case BlendMode::Xor: return "Xor";
+    default: return "Normal";
+    }
+}
+
+// LayerBlendMode de Paint.NET 4/5 (mismo orden que BlendMode; Sobrescribir no existe allí).
+int pdnBlendMode(BlendMode mode)
+{
+    return mode == BlendMode::Overwrite ? 0 : int(mode);
+}
+
+// Miniatura de la cabecera (como la de Paint.NET: hasta 256 px de lado).
+QString thumbnailBase64(const QImage& flattened)
+{
+    QImage thumb = flattened;
+    if (thumb.width() > 256 || thumb.height() > 256)
+        thumb = thumb.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    thumb.convertToFormat(QImage::Format_ARGB32).save(&buffer, "PNG");
+    return QString::fromLatin1(png.toBase64());
+}
+
+// Resolución guardada por Paint.NET en los metadatos EXIF del documento (puntos por pulgada).
+double dpiFromMetadata(const Nrbf& n, const std::shared_ptr<Object>& doc)
+{
+    const Value items = member(n, doc, "userMetadataItems");
+    const auto* arr = std::get_if<std::shared_ptr<Array>>(&items.v);
+    if (!arr)
+        return 0;
+    static const QRegularExpression re(QStringLiteral("<exif id=\"(\\d+)\"[^>]*value=\"([^\"]*)\""));
+    double dpi = 0;
+    int unit = 2;
+    for (const Value& item : **arr) {
+        const auto kv = asObject(n, item);
+        const auto m = re.match(text(member(n, kv, "value")));
+        if (!m.hasMatch())
+            continue;
+        const QByteArray bytes = QByteArray::fromBase64(m.captured(2).toLatin1());
+        const int tag = m.captured(1).toInt();
+        if (tag == 282 && bytes.size() >= 8) {
+            auto u32 = [&bytes](int at) {
+                quint32 v = 0;
+                for (int k = 3; k >= 0; --k)
+                    v = (v << 8) | uchar(bytes.at(at + k));
+                return v;
+            };
+            const quint32 num = u32(0);
+            const quint32 den = u32(4);
+            if (den)
+                dpi = double(num) / den;
+        } else if (tag == 296 && bytes.size() >= 2) {
+            unit = uchar(bytes[0]) | (uchar(bytes[1]) << 8);
+        }
+    }
+    return unit == 3 ? dpi * 2.54 : dpi;
+}
+
 } // namespace
 
 namespace Pdn {
@@ -588,6 +814,9 @@ Document* load(const QString& path, QString* error)
         }
         if (!result)
             throw ParseError(QObject::tr("La imagen no tiene capas."));
+        const double dpi = dpiFromMetadata(nrbf, doc);
+        if (dpi >= 1 && dpi <= 100000)
+            result->setDpi(dpi);
         result->setActiveIndex(result->layerCount() - 1);
         return result;
     } catch (const ParseError& e) {
@@ -595,6 +824,285 @@ Document* load(const QString& path, QString* error)
             *error = e.message;
         return nullptr;
     }
+}
+
+QByteArray encode(const Document* doc, QString* error)
+{
+    const int count = doc->layerCount();
+    const QSize size = doc->size();
+    if (count <= 0 || size.isEmpty()) {
+        if (error)
+            *error = QObject::tr("La imagen no tiene capas.");
+        return {};
+    }
+    using W = NrbfWriter;
+    W w;
+    const QByteArray version(kPdnVersion);
+    const QByteArray dataLib = "PaintDotNet.Data, Version=" + version + ", Culture=neutral, PublicKeyToken=null";
+    const QByteArray coreLib = "PaintDotNet.Core, Version=" + version + ", Culture=neutral, PublicKeyToken=null";
+    const QByteArray keyValueArray = QByteArray(kKeyValue) + "[]";
+    int next = 1;
+    auto id = [&next] { return next++; };
+    int nextStruct = -1;
+    auto structId = [&nextStruct] { return nextStruct--; };
+
+    // Identificadores: el documento es la raíz (1).
+    const int docId = id(), dataId = id(), listId = id(), versionId = id(), metaId = id(), itemsId = id(), coreId = id();
+    struct LayerIds {
+        int layer, bitmapProps, surface, props, blendOp, block;
+    };
+    std::vector<LayerIds> ids(static_cast<size_t>(count));
+    for (LayerIds& l : ids)
+        l = {id(), id(), id(), id(), id(), id()};
+    const int emptyMetaId = id();
+
+    w.header(docId);
+    w.library(dataId, dataLib);
+    // Documento
+    w.classDefinition(docId, "PaintDotNet.Document",
+                      {{"isDisposed", W::Primitive, W::Boolean},
+                       {"layers", W::Class, 0, "PaintDotNet.LayerList", dataId},
+                       {"width", W::Primitive, W::Int32},
+                       {"height", W::Primitive, W::Int32},
+                       {"savedWith", W::SystemClass, 0, "System.Version"},
+                       {"userMetadataItems", W::SystemClass, 0, keyValueArray}},
+                      dataId);
+    w.u8(0);
+    w.reference(listId);
+    w.i32(size.width());
+    w.i32(size.height());
+    w.reference(versionId);
+    w.reference(metaId);
+    // Lista de capas (un ArrayList)
+    w.classDefinition(listId, "PaintDotNet.LayerList",
+                      {{"parent", W::Class, 0, "PaintDotNet.Document", dataId},
+                       {"ArrayList+_items", W::ObjectArray},
+                       {"ArrayList+_size", W::Primitive, W::Int32},
+                       {"ArrayList+_version", W::Primitive, W::Int32}},
+                      dataId);
+    w.reference(docId);
+    w.reference(itemsId);
+    w.i32(count);
+    w.i32(count);
+    // Versión
+    w.classDefinition(versionId, "System.Version",
+                      {{"_Major", W::Primitive, W::Int32},
+                       {"_Minor", W::Primitive, W::Int32},
+                       {"_Build", W::Primitive, W::Int32},
+                       {"_Revision", W::Primitive, W::Int32}},
+                      0);
+    for (int v : kVersion)
+        w.i32(v);
+    // Metadatos del documento: la resolución.
+    const auto metadata = resolutionMetadata(doc->dpi());
+    w.u8(7);
+    w.i32(metaId);
+    w.u8(0);
+    w.i32(1);
+    w.i32(qint32(metadata.size()));
+    w.u8(W::SystemClass);
+    w.string(kKeyValue);
+    int keyValueMeta = 0;
+    for (const auto& [key, value] : metadata) {
+        const int sid = structId();
+        if (!keyValueMeta) {
+            w.classDefinition(sid, kKeyValue, {{"key", W::String}, {"value", W::String}}, 0);
+            keyValueMeta = sid;
+        } else {
+            w.classWithId(sid, keyValueMeta);
+        }
+        w.objectString(id(), key);
+        w.objectString(id(), value);
+    }
+    // Capas, de abajo arriba.
+    w.u8(16);
+    w.i32(itemsId);
+    w.i32(count);
+    for (const LayerIds& l : ids)
+        w.reference(l.layer);
+    w.library(coreId, coreLib);
+    for (int i = 0; i < count; ++i) {
+        if (i == 0)
+            w.classDefinition(ids[0].layer, "PaintDotNet.BitmapLayer",
+                              {{"properties", W::Class, 0, "PaintDotNet.BitmapLayer+BitmapLayerProperties", dataId},
+                               {"surface", W::Class, 0, "PaintDotNet.Surface", coreId},
+                               {"Layer+isDisposed", W::Primitive, W::Boolean},
+                               {"Layer+width", W::Primitive, W::Int32},
+                               {"Layer+height", W::Primitive, W::Int32},
+                               {"Layer+properties", W::Class, 0, "PaintDotNet.Layer+LayerProperties", dataId}},
+                              dataId);
+        else
+            w.classWithId(ids[size_t(i)].layer, ids[0].layer);
+        w.reference(ids[size_t(i)].bitmapProps);
+        w.reference(ids[size_t(i)].surface);
+        w.u8(0);
+        w.i32(size.width());
+        w.i32(size.height());
+        w.reference(ids[size_t(i)].props);
+    }
+    // Propiedades de cada capa: la operación de fusión (antigua), la superficie y las propiedades.
+    QHash<QByteArray, int> blendOpMeta, bitmapPropsMeta;
+    int layerBlendMeta = 0;
+    for (int i = 0; i < count; ++i) {
+        const Layer* layer = doc->layer(i);
+        const LayerIds& l = ids[size_t(i)];
+        const QByteArray blendClass = QByteArray("PaintDotNet.UserBlendOps+") + blendOpName(layer->props.blend) + "BlendOp";
+        // Una definición por cada clase de fusión distinta (el tipo del miembro va en ella).
+        if (const int meta = bitmapPropsMeta.value(blendClass)) {
+            w.classWithId(l.bitmapProps, meta);
+        } else {
+            w.classDefinition(l.bitmapProps, "PaintDotNet.BitmapLayer+BitmapLayerProperties",
+                              {{"blendOp", W::Class, 0, blendClass, dataId}}, dataId);
+            bitmapPropsMeta.insert(blendClass, l.bitmapProps);
+        }
+        w.reference(l.blendOp);
+        if (i == 0)
+            w.classDefinition(l.surface, "PaintDotNet.Surface",
+                              {{"width", W::Primitive, W::Int32},
+                               {"height", W::Primitive, W::Int32},
+                               {"stride", W::Primitive, W::Int32},
+                               {"scan0", W::Class, 0, "PaintDotNet.MemoryBlock", coreId}},
+                              coreId);
+        else
+            w.classWithId(l.surface, ids[0].surface);
+        w.i32(size.width());
+        w.i32(size.height());
+        w.i32(size.width() * 4);
+        w.reference(l.block);
+        if (i == 0)
+            w.classDefinition(l.props, "PaintDotNet.Layer+LayerProperties",
+                              {{"name", W::String},
+                               {"userMetadataItems", W::SystemClass, 0, keyValueArray},
+                               {"visible", W::Primitive, W::Boolean},
+                               {"isBackground", W::Primitive, W::Boolean},
+                               {"opacity", W::Primitive, W::Byte},
+                               {"blendMode", W::Class, 0, "PaintDotNet.LayerBlendMode", dataId}},
+                              dataId);
+        else
+            w.classWithId(l.props, ids[0].props);
+        w.objectString(id(), layer->props.name);
+        w.reference(emptyMetaId);
+        w.u8(layer->props.visible ? 1 : 0);
+        w.u8(i == 0 ? 1 : 0);
+        w.u8(quint8(std::clamp(layer->props.opacity, 0, 255)));
+        const int blendId = structId();
+        if (!layerBlendMeta) {
+            w.classDefinition(blendId, "PaintDotNet.LayerBlendMode", {{"value__", W::Primitive, W::Int32}}, dataId);
+            layerBlendMeta = blendId;
+        } else {
+            w.classWithId(blendId, layerBlendMeta);
+        }
+        w.i32(pdnBlendMode(layer->props.blend));
+    }
+    // Las operaciones de fusión, los bloques de memoria (con los píxeles al final, diferidos) y la
+    // lista vacía de metadatos de las capas.
+    int memoryMeta = 0;
+    for (int i = 0; i < count; ++i) {
+        const LayerIds& l = ids[size_t(i)];
+        const QByteArray blendClass = QByteArray("PaintDotNet.UserBlendOps+") + blendOpName(doc->layer(i)->props.blend) + "BlendOp";
+        if (const int meta = blendOpMeta.value(blendClass)) {
+            w.classWithId(l.blendOp, meta);
+        } else {
+            w.classDefinition(l.blendOp, blendClass, {}, dataId);
+            blendOpMeta.insert(blendClass, l.blendOp);
+        }
+        if (!memoryMeta) {
+            w.classDefinition(l.block, "PaintDotNet.MemoryBlock",
+                              {{"length64", W::Primitive, W::Int64},
+                               {"hasParent", W::Primitive, W::Boolean},
+                               {"deferred", W::Primitive, W::Boolean}},
+                              coreId);
+            memoryMeta = l.block;
+        } else {
+            w.classWithId(l.block, memoryMeta);
+        }
+        w.i64(qint64(size.width()) * 4 * size.height());
+        w.u8(0);
+        w.u8(1);
+        if (i == 0) {
+            w.u8(7);
+            w.i32(emptyMetaId);
+            w.u8(0);
+            w.i32(1);
+            w.i32(0);
+            w.u8(W::SystemClass);
+            w.string(kKeyValue);
+        }
+    }
+    w.end();
+
+    // Píxeles de cada capa (BGRA con alfa directo, como las de Kaint): bloques de 256 KB
+    // comprimidos con gzip, numerados.
+    QByteArray body = std::move(w.data);
+    const qint64 length = qint64(size.width()) * 4 * size.height();
+    const int chunks = int((length + kChunkSize - 1) / kChunkSize);
+    for (int i = 0; i < count; ++i) {
+        const QImage image = doc->layer(i)->image.convertToFormat(kLayerFormat);
+        QByteArray raw(length, Qt::Uninitialized);
+        for (int y = 0; y < size.height(); ++y)
+            std::memcpy(raw.data() + qsizetype(y) * size.width() * 4, image.constScanLine(y), size_t(size.width()) * 4);
+        std::vector<QByteArray> packed(static_cast<size_t>(chunks));
+        std::atomic_bool failed{false};
+        parallelRows(0, chunks, [&](int c0, int c1) {
+            for (int c = c0; c < c1; ++c) {
+                const qint64 offset = qint64(c) * kChunkSize;
+                packed[size_t(c)] = gzip(raw.constData() + offset, qsizetype(std::min<qint64>(kChunkSize, length - offset)));
+                if (packed[size_t(c)].isEmpty())
+                    failed = true;
+            }
+        }, 1);
+        if (failed) {
+            if (error)
+                *error = QObject::tr("No se pudieron comprimir los píxeles.");
+            return {};
+        }
+        body.append(char(0));
+        bigEndian32(body, kChunkSize);
+        for (int c = 0; c < chunks; ++c) {
+            bigEndian32(body, quint32(c));
+            bigEndian32(body, quint32(packed[size_t(c)].size()));
+            body.append(packed[size_t(c)]);
+        }
+    }
+
+    // Cabecera: "PDN3", el largo del XML (24 bits) y el XML con la miniatura.
+    const QByteArray xml = QStringLiteral("<pdnImage width=\"%1\" height=\"%2\" layers=\"%3\" savedWithVersion=\"%4\">"
+                                          "<custom><thumb png=\"%5\" /></custom></pdnImage>")
+                               .arg(size.width())
+                               .arg(size.height())
+                               .arg(count)
+                               .arg(QLatin1String(kPdnVersion), thumbnailBase64(doc->flattened()))
+                               .toUtf8();
+    if (xml.size() >= (1 << 24)) {
+        if (error)
+            *error = QObject::tr("La cabecera del archivo es demasiado grande.");
+        return {};
+    }
+    QByteArray out;
+    out.reserve(7 + xml.size() + 2 + body.size());
+    out.append("PDN3", 4);
+    out.append(char(xml.size() & 0xff));
+    out.append(char((xml.size() >> 8) & 0xff));
+    out.append(char((xml.size() >> 16) & 0xff));
+    out.append(xml);
+    out.append(char(0x00));
+    out.append(char(0x01));
+    out.append(body);
+    return out;
+}
+
+bool save(const Document* doc, const QString& path, QString* error)
+{
+    const QByteArray data = encode(doc, error);
+    if (data.isEmpty())
+        return false;
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit()) {
+        if (error)
+            *error = file.errorString();
+        return false;
+    }
+    return true;
 }
 
 } // namespace Pdn

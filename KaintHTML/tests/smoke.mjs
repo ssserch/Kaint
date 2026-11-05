@@ -876,6 +876,13 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
         }
         const p = await openFile(new File([new Uint8Array(pdnBytes)], "capas.pdn"));
         out.pdn = { w: p.width, h: p.height, layers: p.layers.map((l) => `${l.name}/${l.opacity}/${l.blend}/${l.visible ? 1 : 0}`) };
+        // Guardar como .pdn: las capas con sus propiedades y la resolución vuelven igual.
+        second.opacity = 96;
+        second.blend = "overlay";
+        doc.dpi = 150;
+        const saved = await openFile(new File([await encode(doc, SaveFormats.find((x) => x.ext === "pdn"))], "prueba.pdn"));
+        out.pdnSaved = { w: saved.width, dpi: saved.dpi, layers: saved.layers.map((l) => `${l.name}/${l.opacity}/${l.blend}/${l.visible ? 1 : 0}`),
+                         px: [...saved.layers[1].ctx.getImageData(7, 7, 1, 1).data] };
         return out;
     }, pdn);
     check(formats.gif.layers.join() === "Fotograma 1 (120ms),Fotograma 2 (300ms)" && formats.gif.px[0] > 200 && formats.gif.px[1] < 40,
@@ -884,6 +891,8 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `TIFF, TGA, DDS, BMP, ICO y PNG (${JSON.stringify(formats)})`);
     check(formats.pdn.w === 40 && formats.pdn.h === 30 && formats.pdn.layers.join() === "Fondo/255/normal/1,Capa 2/96/overlay/1,Capa 3/255/screen/0",
           `abrir .pdn con sus capas (${JSON.stringify(formats.pdn)})`);
+    check(formats.pdnSaved.w === 40 && formats.pdnSaved.dpi === 150 && formats.pdnSaved.layers.join() === "Uno (120ms)/255/normal/1,Dos (300ms)/96/overlay/1"
+          && formats.pdnSaved.px[0] === 255 && formats.pdnSaved.px[3] === 255, `guardar .pdn con sus capas (${JSON.stringify(formats.pdnSaved)})`);
     await page.evaluate(async () => {
         window.showSaveFilePicker = undefined;
         const { Document } = await import("./js/core/Document.js");

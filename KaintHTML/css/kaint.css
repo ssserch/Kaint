@@ -859,7 +859,7 @@ input[type="checkbox"] {
     transition: opacity 180ms ease-out;
 }
 
-.translucent .floating-panel:not(:hover):not(.dragging) {
+.translucent .floating-panel:not(:hover):not(.dragging):not(.solid) {
     opacity: 0.75;
 }
 
@@ -1608,53 +1608,57 @@ body.busy, body.busy * {
     margin: 0;
 }
 
-/* Paint.NET: un riel fino y el tirador azul con punta abajo (negro bajo el puntero y gris al
-   arrastrarlo en el tema claro, como los de Windows 10). El riel ocupa lo mismo que el tirador y
-   solo pinta la línea a 2/5 de su alto: así los dos navegadores centran el tirador en la fila (con
-   un riel de 2px, Firefox lo dejaba colgando muy por debajo). */
+/* Paint.NET: el riel blanco de 4px con borde gris claro que cruza el tirador azul por la mitad
+   (no por arriba: si no, el tirador se ve colgando por debajo), y el tirador con punta abajo
+   (negro bajo el puntero y gris al arrastrarlo en el tema claro, como los de Windows 10). El riel
+   ocupa lo mismo que el tirador y solo pinta la franja del medio: así los dos navegadores centran
+   el tirador en la fila. */
 :root.pdn:not(.classic) .fx-slider input[type="range"] {
     appearance: none;
     -webkit-appearance: none;
     height: 22px;
     background: transparent;
     --track: #c4c4c4;
+    --track-fill: #ffffff;
     --thumb: var(--accent);
     --thumb-hot: #171717;
     --thumb-down: #cccccc;
 }
 
 :root.pdn.dark:not(.classic) .fx-slider input[type="range"] {
-    --track: #7a7a7a;
+    --track: #d6d6d6;
     --thumb-hot: color-mix(in srgb, var(--accent) 70%, #fff);
     --thumb-down: color-mix(in srgb, var(--accent) 80%, #fff);
 }
 
 :root.pdn:not(.classic) .fx-slider input[type="range"]::-webkit-slider-runnable-track {
-    height: 20px;
-    background: linear-gradient(transparent 7px, var(--track) 7px, var(--track) 9px, transparent 9px);
+    height: 19px;
+    background: linear-gradient(transparent 7px, var(--track) 7px, var(--track) 8px, var(--track-fill) 8px,
+                                var(--track-fill) 10px, var(--track) 10px, var(--track) 11px, transparent 11px);
 }
 
 :root.pdn:not(.classic) .fx-slider input[type="range"]::-moz-range-track {
-    height: 20px;
-    background: linear-gradient(transparent 7px, var(--track) 7px, var(--track) 9px, transparent 9px);
+    height: 19px;
+    background: linear-gradient(transparent 7px, var(--track) 7px, var(--track) 8px, var(--track-fill) 8px,
+                                var(--track-fill) 10px, var(--track) 10px, var(--track) 11px, transparent 11px);
 }
 
 :root.pdn:not(.classic) .fx-slider input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 11px;
-    height: 20px;
+    height: 19px;
     border: none;
     background: var(--thumb);
-    clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
+    clip-path: polygon(0 0, 100% 0, 100% 14px, 50% 100%, 0 14px);
 }
 
 :root.pdn:not(.classic) .fx-slider input[type="range"]::-moz-range-thumb {
     width: 11px;
-    height: 20px;
+    height: 19px;
     border: none;
     border-radius: 0;
     background: var(--thumb);
-    clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
+    clip-path: polygon(0 0, 100% 0, 100% 14px, 50% 100%, 0 14px);
 }
 
 :root.pdn:not(.classic) .fx-slider input[type="range"]:hover::-webkit-slider-thumb {
@@ -1671,6 +1675,14 @@ body.busy, body.busy * {
 
 :root.pdn:not(.classic) .fx-slider input[type="range"]:active::-moz-range-thumb {
     background: var(--thumb-down);
+}
+
+:root.pdn:not(.classic) .fx-slider input[type="range"]:disabled {
+    --track-fill: #f0f0f0;
+}
+
+:root.pdn.dark:not(.classic) .fx-slider input[type="range"]:disabled {
+    --track-fill: #9a9a9a;
 }
 
 .fx-gradient {
@@ -2597,10 +2609,7 @@ fieldset.group > legend {
 }
 
 /* El crédito del sistema de complementos, discreto, al pie. */
-.about .plugin-credit {
-    opacity: 0.6;
-    font-size: 11px;
-}
+
 
 /* Logo de Acerca de (como el de Kaint): icono de 56 px y el nombre con la letra fina de Paint.NET,
    que se aclara desde muy desenfocado. */
@@ -3071,4 +3080,414 @@ fieldset.group > legend {
 
 :root.dark .format-tip {
     color: #fff;
+}
+
+/* Configuración > Complementos: cada complemento con sus efectos debajo, cada uno con su casilla
+   (como en Kaint y Paint.NET). */
+.plugin-list .row .plugin-state {
+    margin-left: auto;
+    opacity: 0.75;
+    padding-right: 4px;
+}
+
+.plugin-list .tree-toggle {
+    width: 16px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.plugin-list .plugin-effects .effect-row {
+    padding-left: 38px;
+}
+
+/* Configuración > Personalización: los efectos agrupados por menú y las herramientas. */
+.settings .customize-effects {
+    min-height: 240px;
+    max-height: 320px;
+}
+
+.settings .customize-effects .group-header {
+    font-weight: 600;
+    padding: 4px 6px 2px;
+    opacity: 0.85;
+}
+
+.settings .customize-effects .row {
+    padding-left: 18px;
+}
+
+.settings .customize-tools-row {
+    display: flex;
+    gap: 8px;
+}
+
+.settings .customize-tools {
+    min-height: 220px;
+    max-height: 300px;
+}
+
+.settings .column-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Ventanas con su tamaño elegido (modo Ventanas del teléfono): se escalan desde su esquina. */
+.floating-panel.scaled {
+    scale: var(--panel-scale, 1);
+}
+
+/* Teléfono, con las ventanas escondidas en las esquinas: cada una sale por su lado al tocar su asa
+   (alargada, pegada al borde, con el icono de la ventana) y se vuelve a esconder con ella, con su
+   ×, al tocar el lienzo o, en Herramientas, al elegir una. */
+.panel-handle {
+    position: absolute;
+    z-index: 30;
+    width: 30px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--text);
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    border: 1px solid var(--panel-border, var(--line));
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+    touch-action: manipulation;
+    transition: left 180ms ease-out, right 180ms ease-out, background 120ms;
+}
+
+.panel-handle[data-side="left"] {
+    border-left: none;
+    border-radius: 0 16px 16px 0;
+}
+
+.panel-handle[data-side="right"] {
+    border-right: none;
+    border-radius: 16px 0 0 16px;
+}
+
+.panel-handle.active {
+    background: color-mix(in srgb, var(--accent) 30%, var(--panel));
+}
+
+.panel-handle .kicon {
+    pointer-events: none;
+}
+
+.mobile-autohide .floating-panel.docked {
+    border-radius: 0;
+    max-height: calc(100% - 4px);
+    max-width: calc(100% - 40px);
+}
+
+.mobile-autohide .floating-panel.docked .resize {
+    display: none;
+}
+
+.mobile-autohide .floating-panel.docked > .title {
+    cursor: default;
+}
+
+.mobile-autohide .floating-panel.docked.open[data-side="left"] {
+    animation: kaint-slide-from-left 180ms ease-out;
+}
+
+.mobile-autohide .floating-panel.docked.open[data-side="right"] {
+    animation: kaint-slide-from-right 180ms ease-out;
+}
+
+@keyframes kaint-slide-from-left {
+    from { translate: -100% 0; }
+    to { translate: 0 0; }
+}
+
+@keyframes kaint-slide-from-right {
+    from { translate: 100% 0; }
+    to { translate: 0 0; }
+}
+
+/* En el teléfono, botones algo más grandes para el dedo en las ventanas. */
+:root.phone .floating-panel > .title .close {
+    min-width: 28px;
+    min-height: 24px;
+}
+
+.settings .phone-sizes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings .phone-size {
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Teléfono: la fila de arriba en dos filas que caben (como la idea de la versión para móvil):
+   arriba los menús (Capas va en la flecha de la derecha, con las imágenes abiertas) y debajo un
+   botón de archivo con menú (Nuevo, Abrir, Guardar...), la edición, deshacer y rehacer y, a la
+   derecha, Configuración y Ayuda (las ventanas se sacan con sus asas). La tira de miniaturas deja
+   su sitio; lo que no quepa se desplaza de lado con el dedo en vez de cortarse. */
+.phone-file {
+    display: none;
+}
+
+:root.phone #top-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "menu list" "tools corner";
+    gap: 0 2px;
+    padding: 4px 2px 0 0;
+}
+
+:root.phone #top-row .top-left {
+    display: contents;
+}
+
+:root.phone #menubar {
+    grid-area: menu;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+:root.phone .menubar > .menu-title {
+    padding: 3px 5px;
+    flex: none;
+}
+
+:root.phone .menubar > .menu-title[data-menu="layers"] {
+    display: none;
+}
+
+:root.phone #main-toolbar {
+    grid-area: tools;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+}
+
+:root.phone #main-toolbar > * {
+    flex: none;
+}
+
+:root.phone #main-toolbar .tbutton[data-action="new"],
+:root.phone #main-toolbar .tbutton[data-action="open"],
+:root.phone #main-toolbar .tbutton[data-action="save"],
+:root.phone #main-toolbar .tbutton[data-action="print"],
+:root.phone #main-toolbar .sep.desktop-only {
+    display: none;
+}
+
+:root.phone .phone-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    width: auto;
+    padding: 0 3px;
+}
+
+:root.phone .phone-file .arrow {
+    font-size: 9px;
+}
+
+:root.phone #image-list {
+    grid-area: list;
+    align-self: end;
+}
+
+:root.phone #image-strip,
+:root.phone #corner-buttons .tbutton[data-action],
+:root.phone #corner-buttons .gap {
+    display: none;
+}
+
+:root.phone #corner-buttons {
+    grid-area: corner;
+    flex: none;
+    align-self: center;
+}
+
+:root.phone #tool-options {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+}
+
+:root.phone #tool-options > * {
+    flex: none;
+}
+
+/* Abajo, la barra de estado entera: sin la ayuda de la herramienta, la posición del cursor (sin
+   ratón no dice nada) ni el deslizador del zum; y la página, del alto de la pantalla visible (sin
+   quedar debajo de la barra del navegador). */
+:root.phone #app {
+    height: 100dvh;
+}
+
+:root.phone #status-bar {
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+:root.phone #status-bar .hint,
+:root.phone #status-bar .cursor-position,
+:root.phone #status-bar input[type="range"] {
+    display: none;
+}
+
+:root.phone #status-bar > * {
+    flex: none;
+}
+
+/* Paint.NET: el deslizador con el foco lleva un recuadro punteado fino, no el anillo del navegador. */
+:root.pdn:not(.classic) .fx-slider input[type="range"]:focus-visible {
+    outline: 1px dotted color-mix(in srgb, var(--text) 70%, transparent);
+    outline-offset: 0;
+}
+
+/* Windows 7 (como el tema de Kaint), con los degradados de 7.css (https://khang-nd.github.io/7.css/,
+   licencia MIT, © 2021 Khang Nguyen Duy): botones grises en degradado con el celeste de Aero bajo
+   el puntero, campos con su borde, menús y barras de herramientas en degradado (su licencia, en
+   licenses/7.css-LICENSE.txt). Los marcos de cristal y el botón de cerrar, en themes.css. */
+:root.win7 {
+    --radius: 3px;
+}
+
+:root.win7 .pushbutton,
+:root.win7 .dialog select {
+    background: linear-gradient(#f2f2f2 45%, #ebebeb 45%, #cfcfcf);
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px #fffc;
+    color: #222222;
+}
+
+:root.win7 .pushbutton:hover:not(:disabled),
+:root.win7 .dialog select:hover:not(:disabled) {
+    background: linear-gradient(#eaf6fd 45%, #bee6fd 45%, #a7d9f5);
+    border-color: #3c7fb1;
+}
+
+:root.win7 .pushbutton:active:not(:disabled) {
+    background: linear-gradient(#e5f4fc, #c4e5f6 30% 50%, #98d1ef 50%, #68b3db);
+    border-color: #6d91ab;
+}
+
+:root.win7 .pushbutton.default {
+    border-color: #3c7fb1;
+    box-shadow: inset 0 0 0 1px #98d1ef;
+}
+
+:root.win7 .pushbutton:disabled {
+    background: #f4f4f4;
+    border-color: #adb2b5;
+    color: #838383;
+    box-shadow: none;
+}
+
+:root.win7 input[type="text"],
+:root.win7 input[type="number"],
+:root.win7 textarea {
+    background: #ffffff;
+    border: 1px solid;
+    border-color: #abadb3 #dbdfe6 #e3e9ef #e2e3ea;
+    border-radius: 2px;
+}
+
+:root.win7 input[type="text"]:hover,
+:root.win7 input[type="number"]:hover,
+:root.win7 textarea:hover {
+    border-color: #5794bf #b7d5ea #c7e2f1 #c5daed;
+}
+
+:root.win7 input[type="text"]:focus,
+:root.win7 input[type="number"]:focus,
+:root.win7 textarea:focus {
+    border-color: #3d7bad #a4c9e3 #b7d9ed #b5cfe7;
+    outline: none;
+}
+
+:root.win7 .menubar {
+    background: linear-gradient(#ffffff 20%, #f1f4fa 25%, #f1f4fa 43%, #d4dbee 48%, #e6eaf6);
+    border-color: #a0afc3;
+}
+
+:root.win7 .menubar > .menu-title:hover,
+:root.win7 .menubar.active > .menu-title.open {
+    background: #3399ff;
+    border-color: #3399ff;
+    color: #ffffff;
+}
+
+:root.win7 .popup-menu {
+    background: #f0f0f0;
+    border-color: rgba(0, 0, 0, 0.4);
+    box-shadow: 4px 4px 3px -2px rgba(0, 0, 0, 0.5);
+}
+
+:root.win7 .popup-menu .item.active:not(.disabled) {
+    background: linear-gradient(rgba(255, 255, 255, 0.6), rgba(230, 236, 245, 0.8) 90%, rgba(255, 255, 255, 0.8));
+    border-color: #aaddfa;
+    border-radius: 3px;
+}
+
+:root.win7 #main-toolbar,
+:root.win7 .tool-options {
+    background: linear-gradient(#fdfeff, #e6ecf4);
+}
+
+:root.win7 .tool-options {
+    border-bottom: 1px solid #a0afc3;
+}
+
+:root.win7 .tbutton:hover:not(:disabled) {
+    background: linear-gradient(#fafcfe, #e3eefb);
+    border-color: #b8d6fb;
+    border-radius: 3px;
+}
+
+:root.win7 .tbutton.checked {
+    background: linear-gradient(#e0edfa, #c3dcf6);
+    border-color: #7da2ce;
+    border-radius: 3px;
+}
+
+:root.win7 .list .row.selected {
+    background: linear-gradient(#dcebfc, #c1dbfc);
+    outline: 1px solid #7da2ce;
+    outline-offset: -1px;
+    border-radius: 3px;
+}
+
+:root.win7 .floating-panel > .title,
+:root.win7 .dialog > .title,
+:root.win7.pdn:not(.classic) .floating-panel > .title,
+:root.win7.pdn:not(.classic) .dialog > .title {
+    background: linear-gradient(90deg, var(--panel-title), var(--panel-title-end));
+    color: #000000;
+    text-shadow: 0 0 8px #ffffff, 0 0 8px #ffffff;
+}
+
+:root.win7 progress {
+    accent-color: #0bd82c;
+}
+
+:root.win7 .status-bar {
+    border-top: 1px solid #cfcfcf;
+}
+
+/* Paint.NET: el icono de las reglas girado, como una «Γ» (como el suyo); con el estilo de Kaint, el
+   de siempre. */
+:root.pdn .kicon[data-icon="measure"] {
+    rotate: 90deg;
 }

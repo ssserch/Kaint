@@ -5,6 +5,7 @@
 #include "core/plugins/PdnBridge.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
 
@@ -58,7 +59,7 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
     , m_pluginName(pluginName)
     , m_help(d.value(QStringLiteral("help")).toString())
 {
-    m_id = QStringLiteral("pdn:%1:%2").arg(QFileInfo(assembly).fileName(), m_typeId);
+    m_id = makeId(assembly, m_typeId);
     if (!m_adjustment)
         m_category = kaintCategory(d.value(QStringLiteral("subMenu")).toString());
     const QByteArray icon = QByteArray::fromBase64(d.value(QStringLiteral("icon")).toString().toLatin1());
@@ -161,6 +162,11 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
     }
 }
 
+QString PdnEffect::makeId(const QString& assembly, const QString& typeId)
+{
+    return QStringLiteral("pdn:%1:%2").arg(QFileInfo(assembly).fileName(), typeId);
+}
+
 QJsonObject PdnEffect::toHostValues(const ParamValues& values) const
 {
     QJsonObject out;
@@ -219,13 +225,57 @@ bool PdnEffect::showCustomDialog(const QImage& src, const QRect& roi, const Effe
 // Complementos nativos
 // ---------------------------------------------------------------------------
 
-NativeEffect::NativeEffect(const KaintEffectInfo& info, const QString& pluginName)
+namespace {
+
+// KaintEffectInfo de la versión 1 de la API (sin los campos del icono).
+struct KaintEffectInfoV1 {
+    const char* id;
+    const char* name;
+    const char* category;
+    const KaintParam* params;
+    int param_count;
+    void (*render)(const KaintRenderArgs* args);
+};
+
+} // namespace
+
+KaintEffectInfo nativeEffectAt(const KaintPluginInfo* plugin, int index)
+{
+    KaintEffectInfo info{};
+    if (!plugin || !plugin->effects || index < 0 || index >= plugin->effect_count)
+        return info;
+    if (plugin->api_version >= 2)
+        return plugin->effects[index];
+    const KaintEffectInfoV1& old = reinterpret_cast<const KaintEffectInfoV1*>(plugin->effects)[index];
+    info.id = old.id;
+    info.name = old.name;
+    info.category = old.category;
+    info.params = old.params;
+    info.param_count = old.param_count;
+    info.render = old.render;
+    return info;
+}
+
+NativeEffect::NativeEffect(const KaintEffectInfo& info, const QString& folder, const QString& pluginName)
     : m_id(QStringLiteral("native:") + QString::fromUtf8(info.id ? info.id : ""))
-    , m_name(QString::fromUtf8(info.name ? info.name : info.id))
+    , m_name(QString::fromUtf8(info.name ? info.name : info.id ? info.id : ""))
     , m_category(info.category ? PdnEffect::kaintCategory(QString::fromUtf8(info.category)) : QString())
     , m_pluginName(pluginName)
     , m_render(info.render)
 {
+    // Icono propio (API 2): píxeles, una imagen codificada o un archivo junto al complemento.
+    if (info.icon && info.icon->pixels && info.icon->width > 0 && info.icon->height > 0 && info.icon->width <= 1024
+        && info.icon->height <= 1024 && info.icon->stride >= info.icon->width * 4) {
+        m_icon = QImage(info.icon->pixels, info.icon->width, info.icon->height, info.icon->stride, QImage::Format_ARGB32).copy();
+    } else if (info.icon_data && info.icon_data_size > 0) {
+        m_icon.loadFromData(info.icon_data, info.icon_data_size);
+    } else if (info.icon_file && *info.icon_file) {
+        const QString file = QString::fromUtf8(info.icon_file);
+        m_icon.load(QFileInfo(file).isAbsolute() || folder.isEmpty() ? file : QDir(folder).filePath(file));
+    }
+    // Los iconos enormes se reducen (en los menús se ven a 16 px).
+    if (!m_icon.isNull() && (m_icon.width() > 256 || m_icon.height() > 256))
+        m_icon = m_icon.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     for (int i = 0; i < info.param_count && info.params; ++i) {
         const KaintParam& kp = info.params[i];
         const QString key = QString::fromUtf8(kp.key);

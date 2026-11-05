@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QColor>
+#include <QList>
+#include <QRect>
 #include <QWidget>
 
 class QPainter;
@@ -24,13 +26,42 @@ bool enabled();
 void decorate(QWidget* window, bool titleBar = true);
 bool isDecorated(const QWidget* window);
 
+// Estilo de los botones de la barra de título (minimizar, maximizar o restaurar y cerrar).
+enum class Buttons { Windows10, Windows11, MacOS, Windows7, WindowsXP, Windows98 };
+void setButtons(Buttons style);
+Buttons buttons();
+// El que se dibuja: con el tema Windows 98, «Windows 10» (el predeterminado) son los de Windows 98.
+Buttons effectiveButtons();
+// Los botones a la izquierda de la barra (en el orden cerrar, minimizar, maximizar) o a la derecha.
+void setButtonsOnLeft(bool on);
+bool buttonsOnLeft();
+// Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana. Se decide al
+// arrancar, antes de crear las ventanas (necesitan fondo translúcido).
+void setRoundedCorners(bool on);
+bool roundedCorners();
+// Las ventanas con el marco de Kaint se vuelven a dibujar (cambió el estilo o el lado de los botones).
+void refreshAll();
+
+// Rectángulos de minimizar (0), maximizar (1) y cerrar (2) dentro de la fila 'area' de la barra de
+// título; con 'closeOnly' (los diálogos), solo el de cerrar.
+QList<QRect> buttonRects(const QRect& area, bool closeOnly);
+// Ancho que ocupan los botones (con sus márgenes) en una fila de ese alto.
+int buttonsWidth(int rowHeight, bool closeOnly);
+// Un botón: 'which' 0 minimizar, 1 maximizar, 2 cerrar; 'groupHot', el puntero sobre alguno (los de
+// macOS muestran entonces sus dibujos); 'alone', el único botón (el de cerrar de los diálogos).
+void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool hot, bool down, bool active, bool groupHot,
+                 bool alone = false);
+
 // Colores de la barra de título (activa o no) y del borde.
 QColor titleColor();
 QColor titleTextColor(bool active);
 // Con el tema Windows 98, la barra de título es la de Windows 98: degradado azul, botones grises en
-// relieve y el título en negrita.
+// relieve y el título en negrita; con el tema Windows XP, la de Luna.
 bool classicTitle();
+bool lunaTitle();
 void paintClassicTitle(QPainter& p, const QRect& r, bool active);
+// El botón de cerrar de las ventanas flotantes con el estilo de 'style' (Windows 98, XP o 7, suelto).
+void paintPanelClose(QPainter& p, const QRect& box, Buttons style, bool hot, bool down);
 
 } // namespace WindowFrame
 
@@ -53,8 +84,9 @@ private:
     bool m_watching = false;
 };
 
-// Minimizar, maximizar (o restaurar) y cerrar, como los de Windows 10: 46 px de ancho, el fondo se
-// aclara bajo el puntero y el de cerrar se vuelve rojo (con el tema Windows 98, los suyos).
+// Minimizar, maximizar (o restaurar) y cerrar con el estilo elegido (WindowFrame::Buttons): los de
+// Windows 10 u 11 (46 px de ancho, el fondo se aclara bajo el puntero y el de cerrar se vuelve
+// rojo), los semáforos de macOS, los de cristal de Windows 7, los de Windows XP o los de Windows 98.
 class CaptionButtons : public QWidget {
 public:
     explicit CaptionButtons(QWidget* parent = nullptr);
@@ -76,6 +108,7 @@ protected:
 private:
     QRect buttonRect(int i) const;
     int buttonAt(const QPoint& pos) const;
+    bool groupHot() const;
     bool m_watching = false;
     int m_hover = -1;
     int m_pressed = -1;

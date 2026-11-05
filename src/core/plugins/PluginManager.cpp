@@ -192,6 +192,19 @@ QString PluginManager::settingsKey(const PluginInfo& info) const
     return QStringLiteral("plugins/enabled/") + QString::fromLatin1(encoded);
 }
 
+QString PluginManager::effectsKey(const PluginInfo& info) const
+{
+    QString key = settingsKey(info);
+    return key.replace(QLatin1String("plugins/enabled/"), QLatin1String("plugins/disabledEffects/"));
+}
+
+void PluginManager::registerEffects(const PluginInfo& info, const QList<Effect*>& effects) const
+{
+    for (Effect* e : effects)
+        if (info.effectEnabled(e->id()))
+            Effects::addExternal(e);
+}
+
 // --- Caché de descripciones de Paint.NET ------------------------------------
 
 QString PluginManager::cacheFile() const
@@ -277,6 +290,7 @@ void PluginManager::scan()
         info.file = QFileInfo(c.path).fileName();
         m_roots.insert(info.id, c.root);
         info.enabled = QSettings().value(settingsKey(info), true).toBool();
+        info.disabledEffects = QSettings().value(effectsKey(info)).toStringList();
         if (CraftPlugins::isCraftFile(c.path)) {
             // Filtros de PhotoCraft, looks y ajustes de LightCraft: se leen aquí mismo (si están
             // activados, ya cargados).
@@ -323,8 +337,8 @@ void PluginManager::readNative(PluginInfo& info, bool keepLoaded)
     const KaintPluginInfo* pi = entry ? entry() : nullptr;
     if (!pi) {
         info.errors << tr("No exporta la función %1: no es un complemento de Kaint.").arg(QLatin1String(KAINT_PLUGIN_ENTRY));
-    } else if (pi->api_version != KAINT_PLUGIN_API_VERSION) {
-        info.errors << tr("Usa la versión %1 de la API de complementos; Kaint admite la %2.")
+    } else if (pi->api_version < 1 || pi->api_version > KAINT_PLUGIN_API_VERSION) {
+        info.errors << tr("Usa la versión %1 de la API de complementos; Kaint admite de la 1 a la %2.")
                            .arg(pi->api_version)
                            .arg(KAINT_PLUGIN_API_VERSION);
     } else {
@@ -335,17 +349,25 @@ void PluginManager::readNative(PluginInfo& info, bool keepLoaded)
         info.description = str(pi->description);
         info.website = str(pi->website);
         info.effects.clear();
+        info.effectIds.clear();
+        info.effectIcons.clear();
         auto* loaded = keepLoaded ? new Loaded : nullptr;
+        const QString folder = QFileInfo(info.id).absolutePath();
         for (int i = 0; i < pi->effect_count && pi->effects; ++i) {
-            info.effects << str(pi->effects[i].name);
+            // Con la versión 1 de la API, la tabla de efectos tiene la estructura antigua (sin
+            // icono): se recorre con su tamaño.
+            const KaintEffectInfo& e = nativeEffectAt(pi, i);
+            const NativeEffect effect(e, folder, QString());
+            info.effects << effect.name();
+            info.effectIds << effect.id();
+            info.effectIcons << effect.iconImage();
             if (loaded)
-                loaded->effects << new NativeEffect(pi->effects[i], info.name.isEmpty() ? info.file : info.name);
+                loaded->effects << new NativeEffect(e, folder, info.name.isEmpty() ? info.file : info.name);
         }
         if (loaded) {
             loaded->id = info.id;
             loaded->library = library;
-            for (Effect* e : std::as_const(loaded->effects))
-                Effects::addExternal(e);
+            registerEffects(info, loaded->effects);
             m_loaded << loaded;
             info.loaded = true;
             return;
@@ -365,8 +387,13 @@ void PluginManager::readCraft(PluginInfo& info, bool keepLoaded)
     info.description = craft.description;
     info.errors = craft.errors;
     info.effects.clear();
-    for (const Effect* e : std::as_const(craft.effects))
+    info.effectIds.clear();
+    info.effectIcons.clear();
+    for (const Effect* e : std::as_const(craft.effects)) {
         info.effects << e->name();
+        info.effectIds << e->id();
+        info.effectIcons << e->iconImage();
+    }
     if (!keepLoaded || craft.effects.isEmpty()) {
         qDeleteAll(craft.effects);
         return;
@@ -374,8 +401,7 @@ void PluginManager::readCraft(PluginInfo& info, bool keepLoaded)
     auto* loaded = new Loaded;
     loaded->id = info.id;
     loaded->effects = craft.effects;
-    for (Effect* e : std::as_const(loaded->effects))
-        Effects::addExternal(e);
+    registerEffects(info, loaded->effects);
     m_loaded << loaded;
     info.loaded = true;
 }
@@ -390,8 +416,18 @@ void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& repl
     info.website = str("website");
     info.description = str("description");
     info.effects.clear();
-    for (const QJsonValue& e : reply.value(QStringLiteral("effects")).toArray())
-        info.effects << e.toObject().value(QStringLiteral("name")).toString().simplified();
+    info.effectIds.clear();
+    info.effectIcons.clear();
+    for (const QJsonValue& e : reply.value(QStringLiteral("effects")).toArray()) {
+        const QJsonObject o = e.toObject();
+        info.effects << o.value(QStringLiteral("name")).toString().simplified();
+        info.effectIds << PdnEffect::makeId(info.id, o.value(QStringLiteral("id")).toString());
+        QImage icon;
+        const QByteArray png = QByteArray::fromBase64(o.value(QStringLiteral("icon")).toString().toLatin1());
+        if (!png.isEmpty())
+            icon.loadFromData(png, "PNG");
+        info.effectIcons << icon;
+    }
     info.errors.clear();
     for (const QJsonValue& e : reply.value(QStringLiteral("errors")).toArray())
         info.errors << e.toString();
@@ -426,8 +462,7 @@ void PluginManager::load(PluginInfo& info)
     const QString pluginName = info.name.isEmpty() ? info.file : info.name;
     for (const QJsonValue& e : reply.value(QStringLiteral("effects")).toArray())
         loaded->effects << new PdnEffect(info.id, pluginName, e.toObject());
-    for (Effect* e : std::as_const(loaded->effects))
-        Effects::addExternal(e);
+    registerEffects(info, loaded->effects);
     m_loaded << loaded;
     info.loaded = !loaded->effects.isEmpty();
 }
@@ -463,6 +498,38 @@ void PluginManager::setEnabled(const QString& id, bool on)
             load(p);
         else
             unload(p);
+        emit changed();
+        return;
+    }
+}
+
+void PluginManager::setEffectEnabled(const QString& pluginId, const QString& effectId, bool on)
+{
+    for (PluginInfo& p : m_plugins) {
+        if (p.id != pluginId)
+            continue;
+        if (p.effectEnabled(effectId) == on)
+            return;
+        if (on)
+            p.disabledEffects.removeAll(effectId);
+        else
+            p.disabledEffects << effectId;
+        QSettings settings;
+        if (p.disabledEffects.isEmpty())
+            settings.remove(effectsKey(p));
+        else
+            settings.setValue(effectsKey(p), p.disabledEffects);
+        for (const Loaded* l : std::as_const(m_loaded)) {
+            if (l->id != pluginId)
+                continue;
+            for (Effect* e : l->effects)
+                if (e->id() == effectId) {
+                    if (on)
+                        Effects::addExternal(e);
+                    else
+                        Effects::removeExternal(e);
+                }
+        }
         emit changed();
         return;
     }

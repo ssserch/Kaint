@@ -109,6 +109,21 @@
   </keywords>
 
   <releases>
+    <release version="1.1.5" date="2026-11-04">
+      <description>
+        <p>Saving as Paint.NET files, customizable menus and title bars, and a phone-friendly web version.</p>
+        <ul>
+          <li>Save as Paint.NET (.pdn), with layers, blend modes, resolution and thumbnail</li>
+          <li>Move any effect, plugin ones too, to another menu or submenu, hide effects and reorder the Tools window</li>
+          <li>Turn single effects of a plugin on or off; native plugins can bring their own icon (plugin API 2)</li>
+          <li>Animated GIFs open as layers or as separate images, and save from the layers or from the open images you pick</li>
+          <li>On Linux, title bar buttons like those of Windows 11, 10, 7, XP or 98 or macOS, on the right or on the left</li>
+          <li>Paint.NET style: a Windows 11 recreation with rounded windows and slider tracks like Paint.NET's</li>
+          <li>Windows 7, Windows XP and Windows 98 ALT themes, based on 7.css, XP.css and 98.css, with their window frames on floating windows and dialogs</li>
+          <li>Floating windows are translucent only while they cover the image, like Paint.NET</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.4" date="2026-11-01">
       <description>
         <p>Plugins from PhotoCraft and LightCraft, a sharper brush and a closer Paint.NET look.</p>

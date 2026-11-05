@@ -60,12 +60,14 @@ runs on Windows 10 and 11.
       Windows, plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
       sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
       develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
-      them.
+      them. Each effect of a plugin can be turned on or off on its own, and native plugins can bring
+      their own menu icon.
     </td>
     <td valign="top">
       <h4>Formats</h4>
-      OpenRaster (.ora, with layers), PNG, JPEG, WebP, AVIF, JPEG XL, BMP, TIFF, TGA, animated GIF
-      and ICO. Opens Paint.NET <b>.pdn</b> files. Animated GIFs have a playable preview and
+      Paint.NET <b>.pdn</b> and OpenRaster (.ora), both with layers, PNG, JPEG, WebP, AVIF, JPEG XL,
+      BMP, TIFF, TGA, animated GIF and ICO. Animated GIFs open as layers or as separate images, and
+      can be saved from the layers or from the open images you pick, with a playable preview and
       ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
       frames, global palette, crossfades and a background frame.
     </td>
@@ -105,22 +107,31 @@ runs on Windows 10 and 11.
 Kaint looks the way you want. Almost everything about its appearance can be changed from
 **Settings → User interface**, and every change shows at once:
 
-- **Themes**: light and dark (or follow the system), Paint.NET's Blue, the classic gray,
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, **Windows 7** (with 7.css's
+  colors and glass buttons), **Windows XP** (Luna, with XP.css's), the classic gray of **Windows 98**
+  and **Windows 98 ALT** (the classic look of Windows 2000 and XP),
   the real **KDE** theme on Linux, and a **custom theme** editor with every color,
   the toolbar layout and a canvas background image (placement, scale, blur and tint), which you can
   export and share.
 - **Interface style**: Kaint's own or a recreation of **Paint.NET 5** (the default): more compact,
   with borderless windows, tighter menus and buttons, gray and blue bar sliders, hollow ring handles,
   a grid of shapes and Paint.NET's Colors window.
-- **Title bar**: on Linux, with the Paint.NET style, Kaint draws a Windows 10 title bar of its own
-  (or a Windows 98 one with that theme), with its shadow from KWin; drag it from anywhere. The top
-  bar and the window headers can take **a color of your own**, like Windows' accent color.
+- **Title bar**: on Linux, Kaint draws a title bar of its own, with its shadow from KWin; drag it
+  from anywhere. Its buttons can look like those of **Windows 11, 10, 7, XP or 98, or macOS**, on
+  the right or on the left (or keep the desktop's title bar). With the Paint.NET style, the
+  **Windows recreation** picks Windows 10 or Windows 11 (slightly rounded windows when not
+  maximized). The top bar and the window headers can take **a color of your own**, like Windows'
+  accent color.
 - **Cursors**: Kaint's tool icons or Paint.NET's pixel-art cursors (the default), with the system
   pointer or Kaint's own beside the small tool icon.
 - **Icons and fonts**: install **icon packs** (.zip files with a preview), pick the **interface
   font** and its size, and add fonts for the Text tool without installing them system-wide.
 - **Floating windows**: a Windows 10 inspired frame or Kaint's compact one, the border width,
-  translucency when the pointer leaves them, and **snapping** to the edges and to each other.
+  translucency when the pointer leaves them (only while they cover the image, like Paint.NET, or
+  always), and **snapping** to the edges and to each other.
+- **Menus and tools**: move any effect, plugin ones too, to Adjustments, Effects or another
+  submenu (say, a plugin's blur into **Effects → Blurs**), hide the ones you never use, and choose
+  which tools the Tools window shows and in what order (**Settings → Customization**).
 - **Canvas**: your own background color around the image (one for light themes and one for dark
   ones), the checkerboard brightness, the drop shadow and dark or toolbar-colored rulers.
 - **Little touches**: tool icons in the active colors, Paint.NET's orange star on unsaved images,
@@ -147,8 +158,8 @@ window with a primary/secondary selector and a brightness slider.
 
 A recreation of Paint.NET 5: more compact, with borderless windows, tighter menus and buttons and
 Paint.NET's Colors window, gray and blue bar sliders and hollow ring handles. On Linux the window
-and its dialogs draw a Windows 10 title bar of their own (black, with a shadow; it can be turned
-off in **Settings**). Pick it in **Settings → User interface → Interface style** (or in the
+and its dialogs draw a Windows 10 or Windows 11 title bar of their own (black, with a shadow; its
+buttons can take another look or be turned off in **Settings**). Pick it in **Settings → User interface → Interface style** (or in the
 welcome window).
 
 The floating windows snap to the edges of the workspace and to each other (hold Shift to place
@@ -260,6 +271,26 @@ fonts and recovery copies. If NSIS is missing, it offers to download it (about 2
 
 </details>
 
+<details open>
+<summary><b>🤖 Android (Kaint.APK)</b></summary>
+
+Kaint.APK is the web version (`KaintHTML`) as an Android app (`android/`). `./build-apk.sh` asks
+whether you want an **APK** (to install on the phone) or an **App Bundle** (to publish on Google
+Play), where `KaintHTML` is (Enter accepts this repository's) and, for the App Bundle, your upload
+key, its alias and passwords. The result goes to `build-apk/Kaint-<version>.apk` or
+`build-aab/Kaint-<version>.aab`. It needs a JDK from 17 to 25 (21 is best: `jdk21-openjdk` on Arch,
+`openjdk-21-jdk` on Debian/Ubuntu); the Android SDK command-line tools and Gradle are downloaded the
+first time if missing (checked against their checksums), and you accept the Android SDK licenses
+yourself. APKs are signed with a key kept on this computer, so newer versions install over older
+ones.
+
+```bash
+./build-apk.sh              # asks APK or App Bundle, the KaintHTML folder and (AAB) your key
+adb install -r build-apk/Kaint-*.apk
+```
+
+</details>
+
 > [!TIP]
 > Optional extras for more formats and for Paint.NET plugins: `qt6-imageformats kimageformats
 > mono libgdiplus` (Arch) or `qt6-image-formats-plugins kimageformat6-plugins mono-devel libgdiplus`
@@ -281,7 +312,10 @@ manager and never looks for new versions on GitHub (the Flatpak does this).
 
 Kaint is free software under the [GNU General Public License v3.0](LICENSE).
 `src/pdnbridge/` contains MIT-licensed code from Paint.NET 3.36, `data/icons/` bundles KDE's
-Breeze icons (LGPL-3.0-or-later), and the interface
+Breeze icons (LGPL-3.0-or-later), and the Windows 7, Windows XP and Windows 98 themes and title bar
+buttons use colors, gradients and drawings from [7.css](https://khang-nd.github.io/7.css/) by Khang
+Nguyen Duy, [XP.css](https://botoxparty.github.io/XP.css/) by Adam Hammad and Jordan Scales and
+[98.css](https://jdan.github.io/98.css/) by Jordan Scales (all MIT, see `data/licenses/`).
 
 ## Disclaimer
 

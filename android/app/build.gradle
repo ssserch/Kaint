@@ -1,0 +1,49 @@
+plugins {
+    id("com.android.application")
+}
+
+// La versión y la firma las pone build-apk.sh (versión de version.json; la llave, por variables de
+// entorno para que las contraseñas no aparezcan en la línea de órdenes).
+def env = { String name -> System.getenv(name) ?: "" }
+
+android {
+    namespace = "io.github.ssserch.kaint"
+    compileSdk = 36
+    buildToolsVersion = "36.1.0"
+
+    defaultConfig {
+        applicationId = "io.github.ssserch.kaint"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = (project.findProperty("kaintVersionCode") ?: "1") as Integer
+        versionName = (project.findProperty("kaintVersionName") ?: "1.0") as String
+    }
+
+    signingConfigs {
+        release {
+            if (env("KAINT_STORE_FILE")) {
+                storeFile = file(env("KAINT_STORE_FILE"))
+                storePassword = env("KAINT_STORE_PASSWORD")
+                keyAlias = env("KAINT_KEY_ALIAS")
+                keyPassword = env("KAINT_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+            signingConfig = signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // Los archivos de la web van tal cual (sin comprimir los que ya lo están).
+    androidResources {
+        ignoreAssetsPattern = "!.git:!node_modules:!tests:!tools"
+    }
+}

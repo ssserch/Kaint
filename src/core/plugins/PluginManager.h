@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QImage>
 #include <QJsonObject>
 #include <QList>
 #include <QObject>
@@ -25,8 +26,15 @@ struct PluginInfo {
     bool enabled = false;
     bool loaded = false;
     bool pending = false;
+    // Nombres, identificadores e iconos de sus efectos (en el mismo orden).
     QStringList effects;
+    QStringList effectIds;
+    QList<QImage> effectIcons;
+    // Efectos que el usuario desactivó (el resto del complemento sigue cargado).
+    QStringList disabledEffects;
     QStringList errors;
+
+    bool effectEnabled(const QString& effectId) const { return !disabledEffects.contains(effectId); }
 };
 
 // Busca, carga y descarga los complementos de efectos: · Bibliotecas .so con la API C de Kaint
@@ -50,6 +58,8 @@ public:
     void scan();
     const QList<PluginInfo>& plugins() const { return m_plugins; }
     void setEnabled(const QString& id, bool on);
+    // Activa o desactiva un solo efecto de un complemento (sus menús lo muestran u ocultan).
+    void setEffectEnabled(const QString& pluginId, const QString& effectId, bool on);
 
     // Pruebas: sustituye las carpetas de búsqueda y la caché.
     void setPathsForTesting(const QStringList& userPaths, const QString& cacheFile);
@@ -67,6 +77,9 @@ private:
     };
     QList<Candidate> findCandidates() const;
     QString settingsKey(const PluginInfo& info) const;
+    QString effectsKey(const PluginInfo& info) const;
+    // Añade a los menús los efectos cargados del complemento que estén activados.
+    void registerEffects(const PluginInfo& info, const QList<Effect*>& effects) const;
     void readNative(PluginInfo& info, bool keepLoaded);
     void readCraft(PluginInfo& info, bool keepLoaded);
     void fillFromInspection(PluginInfo& info, const QJsonObject& reply);

@@ -9,6 +9,7 @@ import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 import { kIndicator, outCubic, run, slideRows } from "./Animations.js";
 import { remember, Settings } from "../Settings.js";
+import { Customization } from "../Customization.js";
 import { plain, tr, trc } from "../i18n.js";
 
 export class FloatingPanel {
@@ -24,6 +25,11 @@ export class FloatingPanel {
         const head = el("div", { className: "title" }, [el("span", { textContent: title })]);
         const close = el("button", { className: "close", title: tr("Cerrar"), style: { border: "none", padding: 0 } });
         close.addEventListener("click", () => {
+            // En el teléfono, con las ventanas en las esquinas, la × la vuelve a esconder.
+            if (this.dock) {
+                this.dockHost?.collapse(this.id);
+                return;
+            }
             this.setVisible(false);
             this.onClose?.();
         });
@@ -50,9 +56,24 @@ export class FloatingPanel {
         this.installDrag(head);
         this.installResize();
         this.reposition();
+        // El contenido cambió de tamaño por su cuenta (Herramientas al ocultar u ordenar botones).
+        this.element.addEventListener("panel-content-resized", () => {
+            this.reposition();
+            this.save();
+        });
+    }
+
+    // Tamaño de la ventana (modo Ventanas del teléfono): se escala desde su esquina.
+    setScale(scale) {
+        this.scale = scale;
+        this.element.style.setProperty("--panel-scale", String(scale));
+        this.element.classList.toggle("scaled", scale !== 1);
     }
 
     save() {
+        // Escondida en su esquina (teléfono), no se guarda: es solo de esta vista.
+        if (this.dock)
+            return;
         remember(`panel.${this.id}`, {
             corner: this.corner, offset: this.offset, visible: this.visible,
             size: this.element.style.width ? { w: this.element.offsetWidth, h: this.element.style.height ? this.element.offsetHeight : 0 } : null,
@@ -70,12 +91,16 @@ export class FloatingPanel {
     reposition() {
         const a = this.area(), W = a.w, H = a.h;
         const w = this.element.offsetWidth, h = this.element.offsetHeight;
-        let x = this.corner.includes("l") ? this.offset.x : W - w - this.offset.x;
-        let y = this.corner.includes("t") ? this.offset.y : H - h - this.offset.y;
+        // Escondida en la esquina (teléfono): sale pegada a los bordes.
+        const offset = this.dock ? { x: 0, y: this.dock.y } : this.offset;
+        let x = this.corner.includes("l") ? offset.x : W - w - offset.x;
+        let y = this.corner.includes("t") ? offset.y : H - h - offset.y;
+        this.element.style.transformOrigin = `${this.corner.includes("t") ? "top" : "bottom"} ${this.corner.includes("l") ? "left" : "right"}`;
         x = Math.max(0, Math.min(W - w, x));
         y = Math.max(0, Math.min(H - h, y));
         this.element.style.left = `${x + a.x}px`;
         this.element.style.top = `${y + a.y}px`;
+        this.updateOverImage();
     }
 
     // Esquina más cercana y distancia a ella (así se quedan en su sitio al cambiar el tamaño).
@@ -117,7 +142,7 @@ export class FloatingPanel {
     installDrag(head) {
         let start = null;
         head.addEventListener("pointerdown", (e) => {
-            if (e.target.closest("button"))
+            if (e.target.closest("button") || this.dock)
                 return;
             start = { x: e.clientX, y: e.clientY, left: this.element.offsetLeft, top: this.element.offsetTop };
             head.setPointerCapture(e.pointerId);
@@ -134,6 +159,7 @@ export class FloatingPanel {
                 ({ x, y } = this.snapped(x, y));
             this.element.style.left = `${Math.max(a.x, Math.min(a.x + a.w - this.element.offsetWidth, x))}px`;
             this.element.style.top = `${Math.max(a.y, Math.min(a.y + a.h - this.element.offsetHeight, y))}px`;
+            this.updateOverImage();
         });
         head.addEventListener("pointerup", () => {
             if (!start)
@@ -190,8 +216,21 @@ export class FloatingPanel {
                 start = null;
                 this.element.classList.remove("dragging");
                 this.anchorFromGeometry();
+                this.updateOverImage();
             });
         }
+    }
+
+    // Rectángulo de la imagen en la vista, en coordenadas del área de trabajo (lo pone App al
+    // dibujar el lienzo): con la translucidez solo sobre la imagen, las ventanas que no la tapan
+    // se quedan opacas (la clase "solid").
+    static imageRect = null;
+
+    updateOverImage() {
+        const r = FloatingPanel.imageRect, e = this.element;
+        const over = !!r && this.visible && e.offsetLeft < r.x + r.w && r.x < e.offsetLeft + e.offsetWidth
+            && e.offsetTop < r.y + r.h && r.y < e.offsetTop + e.offsetHeight;
+        e.classList.toggle("solid", Settings.get("translucentOverImage") !== false && !over);
     }
 
     raise() {
@@ -200,6 +239,11 @@ export class FloatingPanel {
     }
 
     setVisible(on, animated = false) {
+        // Escondida en su esquina (teléfono): mostrarla es sacarla por su lado.
+        if (this.dock) {
+            on ? this.dockHost?.expand(this.id) : this.dockHost?.collapse(this.id);
+            return;
+        }
         this.visible = on;
         this.element.style.display = on ? "" : "none";
         if (on) {
@@ -238,13 +282,30 @@ export function toolsPanel(app) {
         const b = el("button", { className: "tbutton", title: `${tool.name} (${tool.letter})` }, [icon(tool.icon, 22)]);
         b.addEventListener("click", () => app.tools.select(tool.id));
         buttons.set(tool.id, b);
-        grid.appendChild(b);
     }
+    // Orden y herramientas ocultas de Configuración > Personalización (sus atajos siguen).
+    let count = 0;
+    const arrange = () => {
+        const order = Customization.toolOrder(app.tools.tools.map((t) => t.id));
+        let shown = order.filter((id) => !Customization.isToolHidden(id));
+        if (!shown.length)
+            shown = [order[0]];
+        grid.replaceChildren(...shown.map((id) => buttons.get(id)));
+        count = shown.length;
+    };
+    arrange();
+    window.addEventListener("kaint-settings", (e) => {
+        if (e.detail.key !== "toolOrder" && e.detail.key !== "hiddenTools")
+            return;
+        arrange();
+        grid.fit.apply(columns);
+        grid.closest(".floating-panel") && grid.dispatchEvent(new Event("panel-content-resized", { bubbles: true }));
+    });
     const sync = () => buttons.forEach((b, id) => b.classList.toggle("checked", app.tools.current?.id === id));
     app.tools.addEventListener("changed", sync);
     sync();
     // Lado de los botones (30 px; 24 con el aspecto de Paint.NET) y su separación.
-    const count = buttons.size, gap = 1, cell = () => grid.firstElementChild?.offsetWidth || 30;
+    const gap = 1, cell = () => grid.firstElementChild?.offsetWidth || 30;
     let columns = 2;
     grid.fit = {
         initial: 2,
@@ -253,6 +314,8 @@ export function toolsPanel(app) {
             columns = Math.min(count, Math.max(1, Math.round(Number(c) || 2)));
             grid.style.setProperty("--columns", columns);
             // Como en Paint.NET, el último botón (Formas) ocupa lo que quede de su fila.
+            for (const b of grid.children)
+                b.style.gridColumn = "";
             grid.lastElementChild.style.gridColumn = `span ${columns - ((count - 1) % columns)}`;
         },
         fromSize(w, h, horizontal, vertical) {

@@ -4,6 +4,9 @@ const KEY = "kaint.settings";
 const defaults = {
     animations: true,
     translucentPanels: true,
+    // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar su
+    // borde o encima de ella); fuera de la imagen, opacas.
+    translucentOverImage: true,
     // Desplazamiento más allá del borde de la imagen, desplazamiento automático al dibujar en el
     // borde y elegir la capa visible más cercana al ocultar una (como en Kaint).
     overscroll: true,
@@ -21,12 +24,14 @@ const defaults = {
     welcomed: false,
     // Subrayar siempre las letras de acceso de los menús (si no, como en Windows, solo con Alt).
     menuMnemonics: false,
-    colorScheme: 0, // 0: seguir al sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul
+    colorScheme: 0, // 0: sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul · 7: Windows 7 · 8: XP · 9: 98 ALT
     // Inglés por defecto (como Kaint); el español se elige en la bienvenida o en Configuración.
     language: "en",
     dropShadow: true,
     checkerBrightness: 191,
     askOnceOnClose: true,
+    // Al abrir un GIF animado: 0, preguntar; 1, como capas; 2, como imágenes (un fotograma por imagen).
+    gifOpenMode: 0,
     // Al iniciar, volver a abrir los archivos de la última sesión; copias de recuperación de las
     // imágenes sin guardar cada tantos minutos (0: nunca); memoria máxima del historial de cada
     // imagen en MB (0: sin límite).
@@ -70,6 +75,20 @@ const defaults = {
     canvasBorderDark: null,
     // Tema personalizado: { base: "light" | "dark" | "win98", colors: { rol: "#rrggbb" } }.
     customTheme: null,
+    // Personalización: efectos movidos a otro menú (id → ubicación), efectos ocultos y el orden y
+    // las herramientas ocultas de la ventana Herramientas (Customization.js).
+    // Botones de las ventanas y diálogos (como los de la barra de título de Kaint): 0 Windows 10,
+    // 1 Windows 11, 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98; y a la izquierda.
+    titleButtons: 0,
+    titleButtonsLeft: false,
+    // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), y el
+    // tamaño de cada una en ese modo (en %).
+    mobilePanels: "autohide",
+    mobilePanelScale: { tools: 100, history: 100, layers: 100, colors: 100 },
+    effectLocations: {},
+    hiddenEffects: [],
+    toolOrder: [],
+    hiddenTools: [],
 };
 
 function load() {

@@ -32,9 +32,13 @@ private:
     QSize cell() const;
     QSize sizeFor(int columns) const;
     void layoutButtons();
+    // Orden y herramientas ocultas de Configuración > Personalización.
+    void applyCustomization();
 
     ToolManager* m_manager;
     QButtonGroup* m_group;
+    // Todos los botones y, en el orden elegido, los que se ven.
+    QList<QToolButton*> m_all;
     QList<QToolButton*> m_buttons;
     int m_columns = 2;
 };

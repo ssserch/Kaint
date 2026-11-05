@@ -221,7 +221,9 @@ void Document::setFilePath(const QString& path)
 
 QString Document::displayName() const
 {
-    return m_filePath.isEmpty() ? tr("Sin título") : QFileInfo(m_filePath).fileName();
+    if (m_filePath.isEmpty())
+        return m_untitledName.isEmpty() ? tr("Sin título") : m_untitledName;
+    return QFileInfo(m_filePath).fileName();
 }
 
 QString Document::nextLayerName() const

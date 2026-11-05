@@ -27,6 +27,8 @@ QIcon tool(const QString& name, const QIcon& fallback);
 // Primer icono disponible: los de estilo Paint.NET de Kaint y, si no hay, el del tema del
 // sistema (Breeze en KDE).
 QIcon theme(std::initializer_list<const char*> names);
+// El mismo icono girado 90° a la derecha (sigue al paquete de iconos activo).
+QIcon rotated(const QIcon& icon);
 QIcon theme(const QString& name);
 // Primer icono disponible del tema del sistema (Breeze en KDE o el incluido), sin los de estilo
 // Paint.NET.

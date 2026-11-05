@@ -1,5 +1,5 @@
-// Temas de Kaint (src/app/Theme.cpp): claro, oscuro y azul de Paint.NET, Windows 98 (con los
-// colores de 98.css y botones en relieve) y el personalizado, que parte de uno de ellos y cambia sus
+// Temas de Kaint (src/app/Theme.cpp): claro, oscuro y azul de Paint.NET, Windows 7 (con los de
+// 7.css), Windows 98 (con los colores de 98.css y botones en relieve) y el personalizado, que parte de uno de ellos y cambia sus
 // colores.
 import { Settings } from "../Settings.js";
 
@@ -37,10 +37,38 @@ export const Presets = {
 // azul claro.
 const BlueColors = { toolBar: "#fbfdff", statusBar: "#ebf2fa", border: "#8fa6c3", hover: "#e5f1fb" };
 
+// Windows 7 (Theme::windows7 de Kaint), con los colores de 7.css (https://khang-nd.github.io/7.css/,
+// licencia MIT, © 2021 Khang Nguyen Duy): el claro con la barra de arriba y las cabeceras en el azul
+// de Aero Basic y la selección celeste (los degradados, en la hoja de estilo con la clase "win7").
+const Win7Colors = { accent: "#3399ff", window: "#f0f0f0", text: "#222222", base: "#ffffff", button: "#ebebeb", border: "#8e8f8f",
+                     menuBar: "#b9d1ea", menuBarText: "#000000", toolBar: "#f1f4fa", statusBar: "#f0f0f0", panel: "#f0f0f0",
+                     panelTitle: "#c4d8ee", panelTitleEnd: "#a9c4e6", panelTitleText: "#000000", panelClose: "#c9503a",
+                     selection: "#d5e6fb", selectionBorder: "#7da2ce", hover: "#e8f2fd", workspace: "#c8d4e3" };
+
+// Windows XP (Theme::windowsXP de Kaint), con los colores de XP.css (https://botoxparty.github.io/XP.css/,
+// licencia MIT, © 2020 Adam Hammad y Jordan Scales): Luna azul, ventanas beige y la selección azul.
+const XpColors = { accent: "#316ac5", window: "#ece9d8", text: "#000000", base: "#ffffff", button: "#ece9d8", border: "#7f9db9",
+                   menuBar: "#ece9d8", menuBarText: "#000000", toolBar: "#ece9d8", statusBar: "#ece9d8", panel: "#ece9d8",
+                   panelTitle: "#0058e6", panelTitleEnd: "#3a8cf5", panelTitleText: "#ffffff", panelClose: "#e0461d",
+                   selection: "#316ac5", selectionBorder: "#316ac5", hover: "#c1d2ee", workspace: "#a7a6aa" };
+
+// Windows 98 ALT: el clásico de Windows 2000 y XP (Paint.NET 2 en Windows XP con el estilo clásico):
+// gris #d4d0c8, cabeceras de azul oscuro a celeste y el lienzo sobre gris.
+const Win98AltColors = { accent: "#0a246a", window: "#d4d0c8", text: "#000000", base: "#ffffff", button: "#d4d0c8", border: "#808080",
+                         menuBar: "#d4d0c8", menuBarText: "#000000", toolBar: "#d4d0c8", statusBar: "#d4d0c8", panel: "#d4d0c8",
+                         panelTitle: "#0a246a", panelTitleEnd: "#a6caf0", panelTitleText: "#ffffff", panelClose: "#d4d0c8",
+                         selection: "#0a246a", selectionBorder: "#0a246a", hover: "#d4d0c8", workspace: "#808080" };
+
 // Esquema guardado → { base: "light" | "dark" | "win98", custom }.
 export function resolveScheme(scheme, systemDark) {
     if (scheme === 4)
         return { base: "win98" };
+    if (scheme === 9)
+        return { base: "win98", colors: Win98AltColors, alt: true };
+    if (scheme === 8)
+        return { base: "light", colors: XpColors, xp: true };
+    if (scheme === 7)
+        return { base: "light", colors: Win7Colors, win7: true };
     if (scheme === 6)
         return { base: "light", colors: BlueColors, blue: true };
     if (scheme === 5) {
@@ -50,14 +78,31 @@ export function resolveScheme(scheme, systemDark) {
     return { base: scheme === 2 || (scheme === 0 && systemDark) ? "dark" : "light" };
 }
 
+// Botones de las ventanas (Configuración > Interfaz de usuario), como los de la barra de título de
+// Kaint: Windows 10 (los predeterminados), 11, macOS, 7, XP o 98, a la derecha o a la izquierda. Con
+// los temas Windows 98, 7 y XP, «Windows 10» son los suyos.
+export const WindowButtons = ["win10", "win11", "macos", "win7", "xp", "win98"];
+export function applyWindowButtons(root) {
+    let style = WindowButtons[Math.max(0, Math.min(5, Number(Settings.get("titleButtons")) || 0))];
+    if (style === "win10")
+        style = root.classList.contains("classic") ? "win98" : root.classList.contains("win7") ? "win7" : root.classList.contains("xp") ? "xp" : style;
+    for (const name of WindowButtons)
+        root.classList.toggle(`btn-${name}`, name === style);
+    root.classList.toggle("btn-left", !!Settings.get("titleButtonsLeft"));
+}
+
 // Aplica el tema: clases del documento (oscuro, clásico) y, con Windows 98 y el personalizado, los
 // colores en las variables de CSS.
 export function applyThemeColors(root, scheme, systemDark) {
-    const { base, colors, blue } = resolveScheme(scheme, systemDark);
+    const { base, colors, blue, win7, xp, alt } = resolveScheme(scheme, systemDark);
     const classic = base === "win98";
     root.classList.toggle("dark", base === "dark");
     root.classList.toggle("classic", classic);
     root.classList.toggle("blue", !!blue);
+    root.classList.toggle("win7", !!win7);
+    root.classList.toggle("xp", !!xp);
+    root.classList.toggle("alt", !!alt);
+    applyWindowButtons(root);
     for (const [key, cssVar] of ColorRoles) {
         const value = colors?.[key] || (classic ? Presets.win98[key] : null);
         if (value)
@@ -68,7 +113,7 @@ export function applyThemeColors(root, scheme, systemDark) {
     // Como el color de énfasis en las barras de título de Windows (y el color propio de Kaint en
     // Linux): con los temas de Paint.NET, la barra superior y las cabeceras de las ventanas lo llevan.
     const title = Settings.get("titleBarColor");
-    if (title && /^#[0-9a-f]{6}$/i.test(title) && (scheme === 0 || scheme === 1 || scheme === 2 || scheme === 6)) {
+    if (title && /^#[0-9a-f]{6}$/i.test(title) && (scheme === 0 || scheme === 1 || scheme === 2 || scheme === 6 || scheme === 7)) {
         const n = parseInt(title.slice(1), 16), light = Math.max(n >> 16, (n >> 8) & 255, n & 255) + Math.min(n >> 16, (n >> 8) & 255, n & 255);
         for (const cssVar of ["--menubar", "--panel-title", "--panel-title-end", "--win-title"])
             root.style.setProperty(cssVar, title);

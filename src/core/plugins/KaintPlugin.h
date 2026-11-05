@@ -22,7 +22,9 @@
 extern "C" {
 #endif
 
-#define KAINT_PLUGIN_API_VERSION 1
+/* Versión 2: los efectos pueden traer su propio icono (icon, icon_data o
+   icon_file). Kaint sigue cargando los complementos de la versión 1. */
+#define KAINT_PLUGIN_API_VERSION 2
 
 #if defined(_WIN32)
 #define KAINT_PLUGIN_EXPORT __declspec(dllexport)
@@ -79,6 +81,17 @@ typedef struct KaintEffectInfo {
     /* Kaint la llama desde varios hilos a la vez con rectángulos
        distintos: debe ser reentrante. */
     void (*render)(const KaintRenderArgs* args);
+
+    /* --- Desde la versión 2 de la API ---------------------------------
+       Icono del efecto en los menús y en Configuración > Complementos
+       (mejor de 16x16 o más grande y cuadrado: Kaint lo escala). Se usa el
+       primero que esté puesto; con los tres en NULL, el efecto no lleva
+       icono. */
+    const KaintImage* icon;          /* píxeles BGRA con alfa directo */
+    const unsigned char* icon_data;  /* o una imagen codificada (PNG, SVG, ICO...) */
+    int icon_data_size;              /* bytes de icon_data */
+    const char* icon_file;           /* o un archivo de imagen; si la ruta es
+                                        relativa, desde la carpeta del complemento */
 } KaintEffectInfo;
 
 typedef struct KaintPluginInfo {

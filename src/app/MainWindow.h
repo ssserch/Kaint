@@ -186,6 +186,7 @@ private:
     void syncToolWithHistory();
     QPoint pastePosition(const QImage& image) const;
     void keepOpaque();
+    void placeCaptionButtons();
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();

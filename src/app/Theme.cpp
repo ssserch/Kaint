@@ -67,6 +67,13 @@ const std::array<ColorRole, 19> kColorRoles{{
 
 namespace {
 
+// Los temas de época (Windows 98, 98 ALT, XP y 7): con su fuente y su selección.
+bool retroScheme(Scheme scheme)
+{
+    return scheme == Scheme::Windows98 || scheme == Scheme::Windows98Alt || scheme == Scheme::WindowsXP
+        || scheme == Scheme::Windows7;
+}
+
 QString g_systemIconTheme;
 QString g_configStamp;
 Scheme g_current = Scheme::System;
@@ -671,6 +678,10 @@ public:
         // como un menú con flechas para desplazarse.
         if (hint == SH_ComboBox_Popup && widget && widget->property("kaintScrollableList").toBool())
             return 0;
+        // Con los temas Windows 98, XP y 7, como en Windows: la lista se abre debajo del cuadro, con
+        // la selección azul de la lista, no como un menú encima.
+        if (hint == SH_ComboBox_Popup && g_current != Scheme::Kde && (g_active.classic || g_active.xp || g_active.win7))
+            return 0;
         // Como en Windows: las letras de acceso, subrayadas solo con Alt (o siempre, en Configuración).
         if (hint == SH_UnderlineShortcut)
             return g_underlineAlways || g_altShortcuts ? 1 : 0;
@@ -687,17 +698,25 @@ private:
         QRect handle = subControlRect(CC_Slider, opt, SC_SliderHandle, widget);
         const bool dark = isDark();
         p->save();
-        p->setRenderHint(QPainter::Antialiasing);
-        // El riel, a la altura de la parte cuadrada del tirador.
-        const QColor track = dark ? QColor(0x7a, 0x7a, 0x7a) : QColor(0xc4, 0xc4, 0xc4);
-        if (horizontal) {
-            const int y = handle.top() + handle.height() * 2 / 5;
-            p->fillRect(QRect(groove.left() + 2, y - 1, groove.width() - 4, 2), track);
-        } else {
-            const int x = handle.left() + handle.width() * 2 / 5;
-            p->fillRect(QRect(x - 1, groove.top() + 2, 2, groove.height() - 4), track);
-        }
         const bool enabled = opt->state & State_Enabled;
+        // El riel de Paint.NET: 4 px blancos con un borde gris claro de 1 px, cruzando el tirador
+        // por la mitad (no por arriba: así el tirador no se ve colgando por debajo del riel).
+        const QColor trackBorder = dark ? QColor(0xd6, 0xd6, 0xd6) : QColor(0xc4, 0xc4, 0xc4);
+        QColor trackFill = Qt::white;
+        if (!enabled)
+            trackFill = dark ? QColor(0x9a, 0x9a, 0x9a) : QColor(0xf0, 0xf0, 0xf0);
+        constexpr int kTrack = 4;
+        QRect track;
+        if (horizontal) {
+            const int y = handle.top() + (handle.height() - kTrack) / 2;
+            track = QRect(groove.left() + 2, y, groove.width() - 4, kTrack);
+        } else {
+            const int x = handle.left() + (handle.width() - kTrack) / 2;
+            track = QRect(x, groove.top() + 2, kTrack, groove.height() - 4);
+        }
+        p->fillRect(track, trackBorder);
+        p->fillRect(track.adjusted(1, 1, -1, -1), trackFill);
+        p->setRenderHint(QPainter::Antialiasing);
         const bool active = opt->activeSubControls & SC_SliderHandle;
         QColor fill = g_active.accent.isValid() ? g_active.accent : QColor(0x00, 0x78, 0xd7);
         if (!enabled)
@@ -706,15 +725,17 @@ private:
             fill = dark ? fill.lighter(125) : QColor(0xcc, 0xcc, 0xcc);
         else if (active && (opt->state & State_MouseOver))
             fill = dark ? fill.lighter(140) : QColor(0x17, 0x17, 0x17);
-        // Rectángulo con la punta en medio del lado de abajo (o del derecho).
-        const QRectF r = QRectF(handle).adjusted(0.5, 0.5, -0.5, -0.5);
+        // Rectángulo con la punta en medio del lado de abajo (o del derecho). Los lados rectos van
+        // por el borde de los píxeles (nítidos, sin el filo oscuro del suavizado): solo la punta
+        // se suaviza, como en Paint.NET.
+        const QRectF r = QRectF(handle);
         QPolygonF shape;
         if (horizontal) {
-            const qreal tip = r.width() / 2;
+            const qreal tip = (r.width() - 1) / 2;
             shape << r.topLeft() << r.topRight() << QPointF(r.right(), r.bottom() - tip) << QPointF(r.center().x(), r.bottom())
                   << QPointF(r.left(), r.bottom() - tip);
         } else {
-            const qreal tip = r.height() / 2;
+            const qreal tip = (r.height() - 1) / 2;
             shape << r.topLeft() << QPointF(r.right() - tip, r.top()) << QPointF(r.right(), r.center().y())
                   << QPointF(r.right() - tip, r.bottom()) << r.bottomLeft();
         }
@@ -853,6 +874,103 @@ Spec windows98()
     s.pixelFont = true;
     s.panelOpacity = 100;
     s.fontFamily = QStringLiteral("Microsoft Sans Serif");
+    s.fontSize = 8;
+    return s;
+}
+
+// Windows 7, con los colores de 7.css (https://khang-nd.github.io/7.css/, licencia MIT, © 2021
+// Khang Nguyen Duy): gris claro, botones en degradado con el celeste de Aero bajo el puntero, la
+// barra de título y las cabeceras en el azul claro de Aero Basic y la selección celeste.
+Spec windows7()
+{
+    Spec s;
+    s.dark = false;
+    s.win7 = true;
+    s.accent = rgb(0x3399ff);
+    s.window = rgb(0xf0f0f0);
+    s.text = rgb(0x222222);
+    s.base = rgb(0xffffff);
+    s.button = rgb(0xebebeb);
+    s.border = rgb(0x8e8f8f);
+    s.menuBar = rgb(0xb9d1ea);
+    s.menuBarText = rgb(0x000000);
+    s.toolBar = rgb(0xf1f4fa);
+    s.statusBar = rgb(0xf0f0f0);
+    s.panel = rgb(0xf0f0f0);
+    s.panelTitle = rgb(0xc4d8ee);
+    s.panelTitleEnd = rgb(0xa9c4e6);
+    s.panelTitleText = rgb(0x000000);
+    s.panelClose = rgb(0xc9503a);
+    s.selection = rgb(0xd5e6fb);
+    s.selectionBorder = rgb(0x7da2ce);
+    s.hover = rgb(0xe8f2fd);
+    s.workspace = rgb(0xc8d4e3);
+    s.radius = 3;
+    s.buttonStyle = ButtonStyle::Flat;
+    s.density = Density::Normal;
+    s.panelOpacity = 80;
+    s.fontFamily = QStringLiteral("Segoe UI");
+    s.fontSize = 9;
+    return s;
+}
+
+// Windows 98 ALT: el clásico de Windows 2000 y XP, como Paint.NET en Windows XP con el estilo
+// clásico (el gris #d4d0c8, las cabeceras de azul oscuro a celeste, Tahoma y el lienzo sobre gris).
+Spec windows98Alt()
+{
+    Spec s = windows98();
+    s.accent = rgb(0x0a246a);
+    s.window = rgb(0xd4d0c8);
+    s.button = rgb(0xd4d0c8);
+    s.menuBar = rgb(0xd4d0c8);
+    s.toolBar = rgb(0xd4d0c8);
+    s.statusBar = rgb(0xd4d0c8);
+    s.panel = rgb(0xd4d0c8);
+    s.panelTitle = rgb(0x0a246a);
+    s.panelTitleEnd = rgb(0xa6caf0);
+    s.panelClose = rgb(0xd4d0c8);
+    s.selection = rgb(0x0a246a);
+    s.selectionBorder = rgb(0x0a246a);
+    s.hover = rgb(0xd4d0c8);
+    s.workspace = rgb(0x808080);
+    s.pixelFont = false;
+    s.fontFamily = QStringLiteral("Tahoma");
+    s.fontSize = 8;
+    return s;
+}
+
+// Windows XP (Luna), con los colores de XP.css (https://botoxparty.github.io/XP.css/, licencia MIT,
+// © 2020 Adam Hammad y Jordan Scales): el beige #ece9d8, los botones con borde azul oscuro y las
+// cabeceras de las ventanas en el azul de Luna.
+Spec windowsXP()
+{
+    Spec s;
+    s.dark = false;
+    s.xp = true;
+    s.accent = rgb(0x316ac5);
+    s.window = rgb(0xece9d8);
+    s.text = rgb(0x000000);
+    s.base = rgb(0xffffff);
+    s.button = rgb(0xf4f3ee);
+    s.border = rgb(0x7f9db9);
+    s.menuBar = rgb(0xece9d8);
+    s.menuBarText = rgb(0x000000);
+    s.toolBar = rgb(0xece9d8);
+    s.statusBar = rgb(0xece9d8);
+    s.panel = rgb(0xece9d8);
+    s.panelTitle = rgb(0x0058e6);
+    s.panelTitleEnd = rgb(0x3a8cf5);
+    s.panelTitleText = rgb(0xffffff);
+    s.panelClose = rgb(0xe0461d);
+    s.selection = rgb(0x316ac5);
+    s.selectionBorder = rgb(0x316ac5);
+    s.hover = rgb(0xc1d2ee);
+    s.workspace = rgb(0xa7a6aa);
+    s.radius = 3;
+    s.buttonStyle = ButtonStyle::Flat;
+    s.density = Density::Normal;
+    s.panelOpacity = 80;
+    s.fontFamily = QStringLiteral("Tahoma");
     s.fontSize = 8;
     return s;
 }
@@ -1101,6 +1219,141 @@ FloatingPanel QAbstractItemView::indicator:checked { background: #ffffff; border
 
 } // namespace
 
+// Los degradados de Windows 7 de 7.css: botones, menús, campos, listas, cabeceras, barras de
+// herramientas y de progreso.
+// Los de Windows XP de XP.css: botones con borde azul oscuro y el naranja bajo el puntero, campos
+// con el borde azul, menús con la selección azul, barras de herramientas en degradado y la barra
+// de progreso verde a bloques.
+QString xpStyleSheet()
+{
+    return QStringLiteral(R"(
+QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:0.86 #ecebe5, stop:1 #d8d0c4);
+              border: 1px solid #003c74; border-radius: 3px; color: #000000; padding: 3px 12px; }
+QPushButton:hover { border: 2px solid #f8b636; padding: 2px 11px; }
+QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #cdcac3, stop:0.08 #e3e3db,
+                    stop:0.94 #e5e5de, stop:1 #f2f2f1); border: 1px solid #003c74; padding: 3px 12px; }
+QPushButton:default, QPushButton:focus { border: 2px solid #98b8ea; padding: 2px 11px; }
+QPushButton:default:hover, QPushButton:focus:hover { border-color: #f8b636; }
+QPushButton:disabled { background: #f5f4ea; border: 1px solid #c9c7ba; color: #a19f94; padding: 3px 12px; }
+QComboBox:!editable { background: #ffffff; border: 1px solid #7f9db9; border-radius: 0; color: #000000; }
+QComboBox:!editable:hover { border-color: #7f9db9; }
+QComboBox::drop-down { width: 16px; margin: 1px; border: 1px solid #b5c8f6; border-radius: 2px;
+                       background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #c1d4fe, stop:1 #a8c1f5); }
+QComboBox::drop-down:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #e1ebff, stop:1 #bcd1fc); }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: #ffffff; border: 1px solid #7f9db9;
+              border-radius: 0; }
+QMenuBar { background: #ece9d8; border-color: #aca899; }
+QMenuBar::item:selected, QMenuBar::item:pressed { background: #316ac5; color: #ffffff; border-color: #316ac5; }
+QMenu { background: #ffffff; border: 1px solid #aca899; padding: 2px; }
+QMenu::item:selected { background: #316ac5; color: #ffffff; border: none; border-radius: 0; }
+QMenu::separator { height: 1px; background: #aca899; margin: 3px 2px 3px 28px; }
+QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fefefe, stop:0.85 #ece9d8, stop:1 #d8d2bd); }
+QToolBar#ToolOptionsBar { border-bottom: 1px solid #aca899; }
+QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f0f0ea); border: 1px solid #cecec3;
+                    border-radius: 3px; }
+QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dfded6, stop:1 #ebeae3);
+                    border: 1px solid #a5a593; border-radius: 3px; }
+QStatusBar { background: #ece9d8; border-top: 1px solid #aca899; }
+QHeaderView::section { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:0.85 #f3f2ea, stop:1 #e2dfd0);
+                       border: none; border-right: 1px solid #c7c5b2; border-bottom: 2px solid #d6d2c2; padding: 2px 8px; color: #000000; }
+QAbstractItemView { selection-background-color: #316ac5; selection-color: #ffffff; }
+QComboBox QAbstractItemView { background: #ffffff; color: #000000; border: 1px solid #000000; selection-background-color: #316ac5;
+                              selection-color: #ffffff; }
+QListView::item:selected, QTreeView::item:selected { background: #316ac5; color: #ffffff; border: none; border-radius: 0; }
+QGroupBox { border: 1px solid #d0d0bf; border-radius: 4px; margin-top: 8px; padding-top: 6px; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; color: #0046d5; }
+QTabWidget::pane { border: 1px solid #919b9c; background: #fcfcfe; }
+QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #ecebe5); border: 1px solid #919b9c;
+               border-bottom: none; padding: 3px 10px; margin-right: 1px; }
+QTabBar::tab:selected { background: #fcfcfe; border-top: 3px solid #e68b2c; padding-top: 2px; }
+QTabBar::tab:hover:!selected { border-top: 3px solid #ffc73c; padding-top: 1px; }
+QProgressBar { background: #ffffff; border: 1px solid #686868; border-radius: 4px; padding: 1px; text-align: center; color: #000000; }
+QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #acedad, stop:0.14 #7be47d, stop:0.28 #4cda50,
+                      stop:0.42 #2ed330, stop:0.57 #42d845, stop:0.71 #76e275, stop:0.85 #8fe791, stop:1 #ffffff);
+                      width: 8px; margin: 0 1px; }
+QScrollBar:vertical { background: #f7f7f2; width: 17px; margin: 17px 0; border: none; }
+QScrollBar:horizontal { background: #f7f7f2; height: 17px; margin: 0 17px; border: none; }
+QScrollBar::handle { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #c8d6fb, stop:0.5 #bccdf9, stop:1 #b0c4f7);
+                     border: 1px solid #a8bbf2; border-radius: 3px; }
+QScrollBar::handle:horizontal { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c8d6fb, stop:0.5 #bccdf9, stop:1 #b0c4f7); }
+QScrollBar::handle:hover { border-color: #d3dff9; }
+QScrollBar::handle:vertical { min-height: 20px; }
+QScrollBar::handle:horizontal { min-width: 20px; }
+QScrollBar::add-line, QScrollBar::sub-line { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #c8d6fb, stop:1 #a8bff4);
+                     border: 1px solid #a8bbf2; border-radius: 3px; }
+QScrollBar::add-line:vertical { subcontrol-position: bottom; subcontrol-origin: margin; height: 16px; }
+QScrollBar::sub-line:vertical { subcontrol-position: top; subcontrol-origin: margin; height: 16px; }
+QScrollBar::add-line:horizontal { subcontrol-position: right; subcontrol-origin: margin; width: 16px; }
+QScrollBar::sub-line:horizontal { subcontrol-position: left; subcontrol-origin: margin; width: 16px; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+)");
+}
+
+QString win7StyleSheet()
+{
+    return QStringLiteral(R"(
+QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb,
+              stop:1 #cfcfcf); border: 1px solid #8e8f8f; border-radius: 3px; color: #222222; padding: 3px 12px; }
+QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd, stop:0.45 #eaf6fd, stop:0.4501 #bee6fd,
+                    stop:1 #a7d9f5); border-color: #3c7fb1; }
+QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e5f4fc, stop:0.3 #c4e5f6,
+                    stop:0.5 #c4e5f6, stop:0.5001 #98d1ef, stop:1 #68b3db); border-color: #6d91ab; }
+QPushButton:default { border-color: #3c7fb1; }
+QPushButton:disabled { background: #f4f4f4; border-color: #adb2b5; color: #838383; }
+QComboBox:!editable { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb,
+                      stop:1 #cfcfcf); border: 1px solid #8e8f8f; border-radius: 3px; color: #222222; }
+QComboBox:!editable:hover, QComboBox:!editable:on { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd,
+                      stop:0.45 #eaf6fd, stop:0.4501 #bee6fd, stop:1 #a7d9f5); border-color: #3c7fb1; }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: #ffffff; border: 1px solid;
+              border-color: #abadb3 #dbdfe6 #e3e9ef #e2e3ea; border-radius: 2px; }
+QLineEdit:hover, QAbstractSpinBox:hover, QPlainTextEdit:hover, QTextEdit:hover, QComboBox:editable:hover {
+              border-color: #5794bf #b7d5ea #c7e2f1 #c5daed; }
+QLineEdit:focus, QAbstractSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:editable:focus {
+              border-color: #3d7bad #a4c9e3 #b7d9ed #b5cfe7; }
+QMenuBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:0.2 #ffffff, stop:0.25 #f1f4fa, stop:0.43 #f1f4fa,
+           stop:0.48 #d4dbee, stop:1 #e6eaf6); border-color: #a0afc3; }
+QMenuBar::item:selected, QMenuBar::item:pressed { background: #3399ff; color: #ffffff; border-color: #3399ff; }
+QMenu { background: #f0f0f0; border: 1px solid rgba(0, 0, 0, 102); padding: 2px; }
+QMenu::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 153),
+                       stop:0.9 rgba(230, 236, 245, 204), stop:1 rgba(255, 255, 255, 204)); border: 1px solid #aaddfa;
+                       border-radius: 3px; color: #000000; }
+QMenu::separator { height: 1px; background: #e0e0e0; margin: 3px 2px 3px 28px; }
+QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfeff, stop:1 #e6ecf4); }
+QToolBar#ToolOptionsBar { border-bottom: 1px solid #a0afc3; }
+QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fafcfe, stop:1 #e3eefb); border: 1px solid #b8d6fb;
+                    border-radius: 3px; }
+QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e0edfa, stop:1 #c3dcf6);
+                    border: 1px solid #7da2ce; border-radius: 3px; }
+QStatusBar { background: #f0f0f0; border-top: 1px solid #cfcfcf; }
+QHeaderView::section { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:0.45 #ffffff, stop:0.4501 #fafafa,
+                       stop:1 #f0f0f0); border: 1px solid #d7d7d7; padding: 2px 8px; color: #222222; }
+QAbstractItemView { selection-background-color: #d5e6fb; selection-color: #000000; }
+QComboBox QAbstractItemView { background: #ffffff; color: #000000; border: 1px solid #646464; selection-background-color: #3399ff;
+                              selection-color: #ffffff; }
+QComboBox QAbstractItemView::item { padding: 1px 3px; border: none; border-radius: 0; }
+QComboBox QAbstractItemView::item:selected { background: #3399ff; color: #ffffff; }
+QComboBox QAbstractItemView::item:hover:!selected { background: transparent; }
+QListView::item:selected, QTreeView::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dcebfc,
+                       stop:1 #c1dbfc); border: 1px solid #7da2ce; border-radius: 3px; color: #000000; }
+QListView::item:hover:!selected, QTreeView::item:hover:!selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                       stop:0 #fafbfd, stop:1 #ebf3fd); border: 1px solid #b8d6fb; border-radius: 3px; }
+QGroupBox { border: 1px solid #cdd7db; border-radius: 3px; margin-top: 8px; padding-top: 6px; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }
+QProgressBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f3f3f3, stop:0.25 #fcfcfc, stop:0.5 #dbdbdb, stop:1 #cacaca);
+               border: 1px solid #8e8f8f; border-radius: 3px; text-align: center; color: #222222; }
+QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #a6f2b3, stop:0.25 #5fe474, stop:0.5 #0bd82c,
+                      stop:1 #0bc128); border-radius: 2px; }
+QTabWidget::pane { background: #ffffff; border: 1px solid #8e8f8f; }
+QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb,
+               stop:1 #cfcfcf); border: 1px solid #8e8f8f; padding: 3px 8px; margin-right: -1px; color: #222222; }
+QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd, stop:0.45 #eaf6fd, stop:0.4501 #bee6fd,
+               stop:1 #a7d9f5); border-color: #3c7fb1; }
+QTabBar::tab:selected { background: #ffffff; border-bottom-color: #ffffff; }
+QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #e4e5f0); color: #575757;
+           border: 1px solid #767676; border-radius: 2px; }
+)");
+}
+
 QString styleSheet(const Spec& s)
 {
     const int d = int(s.density);
@@ -1336,6 +1589,12 @@ QToolBar#ToolOptionsBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, st
 QStatusBar { border-top: 1px solid #a9bcd4; }
 QWidget#PanelButtons { background: #d5dde7; border-top: 1px solid #58769c; }
 )");
+    // Windows 7: lo último, para que sus degradados manden.
+    if (s.win7)
+        qss += win7StyleSheet();
+    // Windows XP: lo mismo, con los de Luna.
+    if (s.xp)
+        qss += xpStyleSheet();
     // Paint.NET: los deslizadores los dibuja KaintStyle (el tirador azul con punta), no la hoja.
     if (s.paintNet && !s.classic)
         qss.remove(QRegularExpression(QStringLiteral("^QSlider[^\n]*\n"), QRegularExpression::MultilineOption));
@@ -1415,6 +1674,12 @@ void apply(Scheme scheme)
         g_active = resolved(custom());
     else if (scheme == Scheme::Windows98)
         g_active = windows98();
+    else if (scheme == Scheme::Windows98Alt)
+        g_active = windows98Alt();
+    else if (scheme == Scheme::WindowsXP)
+        g_active = windowsXP();
+    else if (scheme == Scheme::Windows7)
+        g_active = withTitleBarColor(windows7(), g_titleBar);
     else if (scheme == Scheme::Blue)
         g_active = withTitleBarColor(blue(), g_titleBar);
     else
@@ -1427,7 +1692,7 @@ void apply(Scheme scheme)
         g_active.radius = 0;
         g_active.density = Density::Compact;
         g_active.toolIconSize = std::min(g_active.toolIconSize, 20);
-        if (scheme != Scheme::Custom && scheme != Scheme::Windows98) {
+        if (!retroScheme(scheme) && scheme != Scheme::Custom) {
             g_active.selection = g_active.dark ? QColor(0x19, 0x5b, 0xa0) : QColor(0xcc, 0xe8, 0xff);
             g_active.selectionBorder = g_active.dark ? QColor(0x00, 0x78, 0xd7) : QColor(0x99, 0xd1, 0xff);
             // Bajo el puntero (herramientas, capas, listas), el celeste de Paint.NET en vez de casi
@@ -1439,12 +1704,15 @@ void apply(Scheme scheme)
 
     if (g_baseFontSet) {
         // Fuente propia: la del personalizado o la de Windows 98.
-        const bool ownFont = scheme == Scheme::Custom || scheme == Scheme::Windows98;
+        const bool ownFont = scheme == Scheme::Custom || retroScheme(scheme);
         QFont font = g_baseFont;
-        // Si no está la fuente (Microsoft Sans Serif en Linux), las más parecidas.
+        // Si no está la fuente (Microsoft Sans Serif o Segoe UI en Linux), las más parecidas.
         if (ownFont && !g_active.fontFamily.isEmpty())
-            font.setFamilies({g_active.fontFamily, QStringLiteral("Tahoma"), QStringLiteral("Arial"),
-                              QStringLiteral("Liberation Sans"), g_baseFont.family()});
+            font.setFamilies(scheme == Scheme::Windows7
+                                 ? QStringList{g_active.fontFamily, QStringLiteral("Noto Sans"), QStringLiteral("Open Sans"),
+                                               g_baseFont.family()}
+                                 : QStringList{g_active.fontFamily, QStringLiteral("Tahoma"), QStringLiteral("DejaVu Sans"),
+                                               QStringLiteral("Arial"), QStringLiteral("Liberation Sans"), g_baseFont.family()});
         if (ownFont && g_active.fontSize > 0)
             font.setPointSize(g_active.fontSize);
         font.setStyleStrategy(ownFont && g_active.pixelFont ? QFont::NoAntialias : QFont::PreferDefault);
@@ -1683,7 +1951,7 @@ void Notifier::systemSettingChanged()
     g_systemDark = readSystemScheme() == 1 ? 1 : 0;
     // Claro, oscuro y sistema llevan el color de énfasis de las barras de título (Windows).
     const bool accented = g_current == Scheme::System || g_current == Scheme::Light || g_current == Scheme::Dark
-                       || g_current == Scheme::Blue;
+                       || g_current == Scheme::Blue || g_current == Scheme::Windows7;
     if ((before != g_systemDark && g_current == Scheme::System) || (accented && titleBarColor() != g_titleBar))
         apply(g_current);
 }

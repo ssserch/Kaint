@@ -332,6 +332,23 @@ export class CanvasView extends EventTarget {
         });
     }
 
+    // La imagen tal como se ve, recortada a la vista y en coordenadas del área de trabajo: las
+    // ventanas flotantes miran si la tapan (translucidez solo sobre la imagen). Solo se avisa si
+    // cambió.
+    reportImageRect(r, v) {
+        let rect = null;
+        if (r) {
+            const x0 = Math.max(0, r.x), y0 = Math.max(0, r.y), x1 = Math.min(v.w, r.x + r.w), y1 = Math.min(v.h, r.y + r.h);
+            if (x1 > x0 && y1 > y0)
+                rect = { x: x0 + this.canvas.offsetLeft, y: y0 + this.canvas.offsetTop, w: x1 - x0, h: y1 - y0 };
+        }
+        const key = rect ? `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.w)},${Math.round(rect.h)}` : "";
+        if (key === this.imageRectKey)
+            return;
+        this.imageRectKey = key;
+        this.onImageRect?.(rect);
+    }
+
     stepAnts() {
         const selection = this.doc && !this.doc.selection.isEmpty();
         if (!selection && !this.overlayAnts)
@@ -350,10 +367,12 @@ export class CanvasView extends EventTarget {
         if (!doc) {
             this.updateScrollbars();
             this.renderRulers();
+            this.reportImageRect(null, v);
             return;
         }
         this.updateComposite();
         const x = this.origin.x, y = this.origin.y, w = doc.width * this.scale, h = doc.height * this.scale;
+        this.reportImageRect({ x, y, w, h }, v);
         // Sombra bajo el lienzo, como Paint.NET.
         if (Settings.get("dropShadow")) {
             ctx.save();

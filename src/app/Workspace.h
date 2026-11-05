@@ -6,6 +6,7 @@
 
 class QAbstractButton;
 class QLabel;
+class QPainter;
 class Canvas;
 
 // Contenido de panel que decide su propio tamaño al redimensionarlo (la rejilla de
@@ -42,6 +43,13 @@ public:
     void restoreState(Corner defaultCorner, QPoint defaultOffset, QSize defaultSize);
     void resetToDefault();
     void setTranslucent(bool on);
+    // Como en Paint.NET: con la translucidez solo sobre la imagen, la ventana se vuelve
+    // translúcida mientras tapa parte de la imagen (al cruzar su borde o encima de ella) y opaca
+    // cuando queda del todo fuera.
+    static void setTranslucentOverImageOnly(bool on);
+    static bool translucentOverImageOnly();
+    void setOverImage(bool on);
+    bool overImage() const { return m_overImage; }
     // Se muestra delante de las demás con un fundido (si hay animaciones).
     void showAnimated();
     void fitToContent();
@@ -69,6 +77,8 @@ protected:
     void enterEvent(QEnterEvent* e) override;
     void leaveEvent(QEvent* e) override;
     void paintEvent(QPaintEvent* e) override;
+    void moveEvent(QMoveEvent* e) override;
+    void showEvent(QShowEvent* e) override;
 
 private:
     void updateColors();
@@ -80,6 +90,8 @@ private:
     QPoint snapped(QPoint pos) const;
     QSize chromeSize() const;
     int titleInset() const;
+    // Los marcos de Windows XP (Luna) y Windows 7 (cristal de Aero).
+    void paintFrame(QPainter& p, bool luna);
     // Zona del área de trabajo donde puede estar la ventana (sin tapar las reglas).
     QRect area() const;
     // Con los temas de Paint.NET y el personalizado (no con el de KDE ni el clásico).
@@ -110,6 +122,7 @@ private:
     QSize m_defaultSize;
     class QGraphicsOpacityEffect* m_opacity = nullptr;
     bool m_translucent = false;
+    bool m_overImage = false;
     QPointer<class QVariantAnimation> m_fade;
 };
 
@@ -124,6 +137,9 @@ public:
     void saveState() const;
     void resetPanels();
     void setTranslucentPanels(bool on);
+    void setTranslucentOverImageOnly(bool on);
+    // Marca las ventanas que tapan la imagen (para la translucidez solo sobre la imagen).
+    void updatePanelsOverImage();
     void setPanelChrome(FloatingPanel::Style style, int border);
     // Zona para las ventanas: todo el área de trabajo menos las reglas, si se ven.
     QRect panelArea() const;

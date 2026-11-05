@@ -16,6 +16,10 @@ import { REPOSITORY, VERSION } from "../version.js";
 import { ColorRoles, Presets } from "./Themes.js";
 import { currentLanguage, plain, tr } from "../i18n.js";
 import { ResampleMethods } from "../core/Resample.js";
+import { Effects } from "../core/Effects.js";
+import { Customization } from "../Customization.js";
+import { popupMenu } from "./Menu.js";
+import { isPhone, mobileMode, PanelScaleRange } from "./Mobile.js";
 
 let openDialogs = 0;
 
@@ -709,7 +713,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
     let show = null;
     const pages = [
         ["interface", "settings-interface", tr("Interfaz de usuario"), async () => {
-            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [4, tr("Windows 98")], [5, tr("Personalizado")]],
+            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
                                   Settings.get("colorScheme"));
             scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
             const cursors = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("cursorStyle"));
@@ -747,6 +751,14 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 }
             };
             panelStyle.addEventListener("change", () => Settings.set("panelStyle", Number(panelStyle.value)));
+            // Botones de cerrar de las ventanas y los diálogos (la web no tiene barra de título), como
+            // los de la barra de título de Kaint. Con los temas Windows 7, XP y 98, «Windows 10» son los suyos.
+            const buttonsStyle = select([[0, tr("Windows 10")], [1, tr("Windows 11")], [2, "macOS"], [3, tr("Windows 7")], [4, tr("Windows XP")], [5, tr("Windows 98")]],
+                                        Settings.get("titleButtons") || 0);
+            buttonsStyle.title = tr("El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, Windows XP y Windows 98, «Windows 10» usa el del tema.");
+            buttonsStyle.addEventListener("change", () => Settings.set("titleButtons", Number(buttonsStyle.value)));
+            const buttonsSide = select([[0, tr("A la derecha")], [1, tr("A la izquierda")]], Settings.get("titleButtonsLeft") ? 1 : 0);
+            buttonsSide.addEventListener("change", () => Settings.set("titleButtonsLeft", buttonsSide.value === "1"));
             const border = numberInput(Settings.get("panelBorder"), 1, 12);
             border.style.width = "60px";
             border.title = tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.");
@@ -778,11 +790,52 @@ export async function settingsDialog(app = null, startPage = "interface") {
             titleOn.input.addEventListener("change", applyTitle);
             titleColor.addEventListener("input", applyTitle);
             queueMicrotask(paintNetCompat);
+            // Teléfono (solo se ve en uno): las ventanas escondidas en las esquinas o flotantes, con el
+            // tamaño de cada una.
+            const phoneSection = () => {
+                if (!isPhone())
+                    return [];
+                const mode = select([["autohide", tr("Ocultarse en las esquinas")], ["windows", tr("Ventanas")]], mobileMode());
+                mode.title = tr("Ocultarse en las esquinas: cada ventana se esconde en su esquina con un asa; al tocarla sale y se vuelve a esconder al tocar el lienzo o elegir una herramienta. Ventanas: las flotantes de siempre, con el tamaño que elijas.");
+                const sizes = el("div", { className: "phone-sizes" });
+                const names = { tools: tr("Herramientas"), history: tr("Historial"), layers: tr("Capas"), colors: tr("Colores") };
+                for (const id of ["tools", "history", "layers", "colors"]) {
+                    const current = (Settings.get("mobilePanelScale") || {})[id] || 100;
+                    const row = slider(current, PanelScaleRange.min, PanelScaleRange.max, 5, (v) => {
+                        Settings.set("mobilePanelScale", { ...(Settings.get("mobilePanelScale") || {}), [id]: Math.round(v) });
+                    });
+                    sizes.appendChild(el("label", { className: "phone-size" }, [el("span", { textContent: names[id] }), row, tr("%")]));
+                }
+                const sync = () => (sizes.style.display = mode.value === "windows" ? "" : "none");
+                mode.addEventListener("change", () => {
+                    Settings.set("mobilePanels", mode.value);
+                    sync();
+                });
+                sync();
+                return [heading(tr("Teléfono")), el("label", {}, [tr("Ventanas en el teléfono:"), mode]),
+                        note(tr("Tamaño de cada ventana en el modo Ventanas:")), sizes];
+            };
+            // GIF animados: como capas de una imagen o un fotograma por imagen.
+            const gifOpen = select([[0, tr("Preguntar")], [1, tr("Como capas")], [2, tr("Como imágenes")]], Settings.get("gifOpenMode") || 0);
+            gifOpen.title = tr("Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte.");
+            gifOpen.addEventListener("change", () => Settings.set("gifOpenMode", Number(gifOpen.value)));
+            const translucent = check(tr("Ventanas translúcidas"), "translucentPanels",
+                                      tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
+            // Debajo, con sangría: solo mientras tapan la imagen (como Paint.NET).
+            const overImage = check(tr("Solo mientras tapan la imagen"), "translucentOverImage",
+                                    tr("Como en Paint.NET: una ventana se vuelve translúcida mientras el borde de la imagen la cruza o la imagen queda debajo, y vuelve a ser opaca cuando se aparta de la imagen."));
+            overImage.style.marginLeft = "20px";
+            const syncOverImage = () => {
+                overImage.input.disabled = !translucent.input.checked;
+                overImage.classList.toggle("disabled", !translucent.input.checked);
+            };
+            translucent.input.addEventListener("change", syncOverImage);
+            syncOverImage();
             return [
                 check(tr("Animaciones"), "animations",
                       tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones.")),
-                check(tr("Ventanas translúcidas"), "translucentPanels",
-                      tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima.")),
+                translucent,
+                overImage,
                 check(tr("Desplazamiento más allá del borde de la imagen (overscroll)"), "overscroll",
                       tr("Permite ver un margen alrededor de la imagen; así el zum hacia el cursor funciona también en las esquinas.")),
                 check(tr("Desplazamiento automático al dibujar en el borde de la ventana"), "autoScroll"),
@@ -810,11 +863,14 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 heading(tr("Ventanas")),
                 el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
                 el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
+                el("label", {}, [tr("Botones de las ventanas:"), buttonsStyle, buttonsSide]),
                 check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), "snapPanels",
                       tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él.")),
+                ...phoneSection(),
                 heading(tr("Al iniciar")),
                 check(tr("Volver a abrir las imágenes de la última sesión"), "reopenLast",
                       window.showOpenFilePicker ? "" : tr("Este navegador no deja volver a abrir los archivos: solo funciona en los que tienen acceso a los archivos del sistema.")),
+                el("label", {}, [tr("Al abrir un GIF animado:"), gifOpen]),
                 heading(tr("Al cerrar")),
                 check(tr("Preguntar una sola vez por todas las imágenes sin guardar"), "askOnceOnClose",
                       tr("Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.")),
@@ -926,6 +982,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
         ["iconpacks", "document-open", tr("Paquetes de iconos"), () => iconPacksPage(() => show("iconpacks"))],
         ["fonts", "text", tr("Fuentes"), () => fontsPage(() => show("fonts"))],
         ["shapes", "shapes", tr("Formas"), () => shapesPage(() => show("shapes"))],
+        ["customize", "configure", tr("Personalización"), () => customizePage(app, () => show("customize"))],
         ["keyboard", "configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
     ];
     show = async (id) => {
@@ -942,6 +999,137 @@ export async function settingsDialog(app = null, startPage = "interface") {
     show(startPage);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
+}
+
+// Personalización (SettingsDialog::createCustomizePage de Kaint): en qué menú sale cada efecto
+// (también los de los complementos), qué efectos se ocultan y qué herramientas hay en la ventana
+// Herramientas y en qué orden.
+function customizePage(app, refresh) {
+    const selected = new Set();
+    const list = el("div", { className: "list customize-effects" });
+    const visibleEffects = Effects.filter((e) => !e.hidden);
+    const groups = new Map();
+    for (const e of visibleEffects) {
+        const loc = Customization.location(e);
+        if (!groups.has(loc))
+            groups.set(loc, []);
+        groups.get(loc).push(e);
+    }
+    const rank = (l) => (l === "adjustments" ? 0 : l === "effects" ? 1 : 2);
+    const order = [...groups.keys()].sort((a, b) => rank(a) - rank(b) || Customization.locationName(a).localeCompare(Customization.locationName(b)));
+    const moveButton = el("button", { className: "pushbutton", textContent: `${plain(tr("Mover a"))} ▾`, title: tr("Pasa los efectos elegidos a otro menú o submenú") });
+    const resetSelected = el("button", { className: "pushbutton", textContent: tr("Restablecer"), title: tr("Devuelve los efectos elegidos a su sitio de siempre y los muestra") });
+    const resetAll = el("button", { className: "pushbutton", textContent: tr("Restablecer todo"), title: tr("Todos los efectos en su sitio de siempre, sin ninguno oculto") });
+    const syncButtons = () => {
+        moveButton.disabled = !selected.size;
+        resetSelected.disabled = ![...selected].some((id) => Customization.isMoved(id) || Customization.isHidden(id));
+        resetAll.disabled = !Customization.hasEffectChanges();
+    };
+    for (const loc of order) {
+        list.appendChild(el("div", { className: "group-header", textContent: Customization.locationName(loc) }));
+        for (const e of groups.get(loc).sort((a, b) => tr(a.name).localeCompare(tr(b.name)))) {
+            const check = el("input", { type: "checkbox", checked: !Customization.isHidden(e.id), title: tr("Quita la casilla para que no salga en los menús") });
+            check.addEventListener("change", () => {
+                Customization.setHidden([e.id], !check.checked);
+                syncButtons();
+            });
+            const name = tr(e.name) + (Customization.isMoved(e.id) ? tr("  (antes en %1)", Customization.locationName(Customization.defaultLocation(e))) : "");
+            const row = el("div", { className: "row", dataset: { id: e.id } },
+                           [check, icon(`effect-${e.id}`, 16), el("span", { textContent: name }),
+                            el("small", { textContent: e.plugin || "", style: { marginLeft: "auto", opacity: 0.7, paddingRight: "4px" } })]);
+            row.addEventListener("click", (ev) => {
+                if (ev.target === check)
+                    return;
+                if (!ev.ctrlKey && !ev.metaKey && !ev.shiftKey)
+                    selected.clear();
+                selected.has(e.id) ? selected.delete(e.id) : selected.add(e.id);
+                for (const r of list.querySelectorAll(".row"))
+                    r.classList.toggle("selected", selected.has(r.dataset.id));
+                syncButtons();
+            });
+            list.appendChild(row);
+        }
+    }
+    const chosen = () => visibleEffects.filter((e) => selected.has(e.id));
+    moveButton.addEventListener("click", () => {
+        const submenus = new Set();
+        for (const e of visibleEffects)
+            for (const loc of [Customization.defaultLocation(e), Customization.location(e)])
+                if (loc.startsWith("effects/"))
+                    submenus.add(loc);
+        const target = (loc) => ({ text: Customization.locationName(loc), run: () => {
+            Customization.setLocation(chosen(), loc);
+            refresh();
+        } });
+        const r = moveButton.getBoundingClientRect();
+        popupMenu([target("adjustments"), target("effects"), "-",
+                   ...[...submenus].sort((a, b) => Customization.locationName(a).localeCompare(Customization.locationName(b))).map(target), "-",
+                   { text: tr("Nuevo submenú de Efectos…"), run: async () => {
+                       const name = (await promptText(tr("Nuevo submenú"), tr("Nombre del submenú de Efectos:"), ""))?.trim().replace(/\//g, "");
+                       if (!name)
+                           return;
+                       Customization.setLocation(chosen(), `effects/${Customization.submenuKey(name)}`);
+                       refresh();
+                   } }], r.left, r.bottom);
+    });
+    resetSelected.addEventListener("click", () => {
+        Customization.resetEffects([...selected]);
+        refresh();
+    });
+    resetAll.addEventListener("click", () => {
+        Customization.resetEffects();
+        refresh();
+    });
+    syncButtons();
+
+    // Ventana Herramientas: casilla para mostrarla y su orden.
+    const tools = el("div", { className: "list customize-tools" });
+    let current = null;
+    const toolIds = app.tools.tools.map((t) => t.id);
+    const fillTools = () => {
+        tools.replaceChildren();
+        for (const id of Customization.toolOrder(toolIds)) {
+            const tool = app.tools.tools.find((t) => t.id === id);
+            const check = el("input", { type: "checkbox", checked: !Customization.isToolHidden(id) });
+            check.addEventListener("change", () => Customization.setToolHidden(id, !check.checked));
+            const row = el("div", { className: "row" + (id === current ? " selected" : ""), dataset: { id } },
+                           [check, icon(tool.icon, 20), el("span", { textContent: tool.name })]);
+            row.addEventListener("click", (ev) => {
+                if (ev.target === check)
+                    return;
+                current = id;
+                for (const r of tools.children)
+                    r.classList.toggle("selected", r.dataset.id === id);
+            });
+            tools.appendChild(row);
+        }
+    };
+    const moveTool = (delta) => {
+        const order = Customization.toolOrder(toolIds), i = order.indexOf(current);
+        if (i < 0 || i + delta < 0 || i + delta >= order.length)
+            return;
+        [order[i], order[i + delta]] = [order[i + delta], order[i]];
+        Customization.setToolOrder(order);
+        fillTools();
+    };
+    fillTools();
+    const up = el("button", { className: "pushbutton", textContent: tr("Subir") });
+    up.addEventListener("click", () => moveTool(-1));
+    const down = el("button", { className: "pushbutton", textContent: tr("Bajar") });
+    down.addEventListener("click", () => moveTool(+1));
+    const resetTools = el("button", { className: "pushbutton", textContent: tr("Restablecer"), title: tr("Todas las herramientas, en el orden de Paint.NET") });
+    resetTools.addEventListener("click", () => {
+        Customization.resetTools();
+        fillTools();
+    });
+    return [
+        el("p", { textContent: tr("Ordena los menús a tu gusto: mueve cualquier efecto (también los de los complementos) a Ajustes, a Efectos o a otro submenú, por ejemplo a Efectos > Desenfoques, u ocúltalo quitando su casilla. Debajo, las herramientas de la ventana Herramientas.") }),
+        el("h4", { className: "section", textContent: tr("Menús de efectos") }),
+        list, el("div", { className: "row-buttons" }, [moveButton, resetSelected, el("span", { style: { flex: 1 } }), resetAll]),
+        el("h4", { className: "section", textContent: tr("Ventana Herramientas") }),
+        el("p", { textContent: tr("Quita la casilla de las herramientas que no uses y cambia su orden. Sus atajos de teclado siguen funcionando aunque estén ocultas.") }),
+        el("div", { className: "customize-tools-row" }, [tools, el("div", { className: "column-buttons" }, [up, down, el("span", { style: { flex: 1 } }), resetTools])]),
+    ];
 }
 
 // Formas de Paint.NET (.xaml) para la herramienta Formas (SettingsDialog::createShapesPage).
@@ -1027,34 +1215,81 @@ function pluginsPage(refresh) {
     let selected = Plugins.records[0]?.id || null;
     const details = el("p", { className: "plugin-details" });
     const sync = () => {
-        for (const row of list.children)
+        for (const row of list.querySelectorAll(":scope > .row"))
             row.classList.toggle("selected", row.dataset.id === selected);
         const r = Plugins.records.find((x) => x.id === selected);
         const error = Plugins.errors.find((e) => e.id === selected);
+        const off = new Set(r?.disabledEffects || []);
+        const effects = r ? pluginEffects(r) : [];
         details.textContent = r ? [r.description, r.craftKind ? `${tr("Tipo")}: ${r.craftKind}` : "", r.version ? `${tr("Versión")}: ${r.version}` : "",
                                    `${tr("Autor")}: ${r.author}`,
-                                   tr("%1 efectos · %2 formatos", r.effectCount, r.fileTypeCount), error ? `${tr("Problemas:")} ${error.message}` : ""]
+                                   tr("%1 efectos · %2 formatos", r.effectCount, r.fileTypeCount),
+                                   effects.length ? `${tr("Efectos:")}\n${effects.map((e) => `  ${e.name}${off.has(e.id) ? tr(" (desactivado)") : ""}`).join("\n")}` : "",
+                                   error ? `${tr("Problemas:")} ${error.message}` : ""]
             .filter(Boolean).join("\n") : tr("No hay complementos instalados.");
         remove.disabled = !r;
     };
+    // Los efectos de un complemento: los del activo o, si está desactivado, los que se guardaron.
+    const pluginEffects = (r) => Plugins.active.get(r.id)?.effects.map((e) => ({ id: e.id, name: e.name })) || r.effects || [];
     for (const r of Plugins.records) {
         const enabled = el("input", { type: "checkbox", checked: r.enabled, title: tr("Activado") });
+        const effects = pluginEffects(r);
+        const off = new Set(r.disabledEffects || []);
+        const children = [];
         enabled.addEventListener("change", async () => {
             try {
                 await Plugins.setEnabled(r.id, enabled.checked);
+                children.forEach((c) => (c.disabled = !enabled.checked));
+                sync();
             } catch (e) {
                 enabled.checked = !enabled.checked;
                 status.textContent = e.message;
             }
         });
-        const row = el("div", { className: "row", dataset: { id: r.id } }, [enabled, icon("plugins", 16), el("span", { textContent: `${r.name} ${r.version}` })]);
+        const count = effects.length ? effects.filter((e) => !off.has(e.id)).length : r.effectCount;
+        const state = el("small", { className: "plugin-state",
+                                    textContent: count === r.effectCount ? tr("%1 efectos", r.effectCount) : tr("%1 de %2 efectos", count, r.effectCount) });
+        const toggle = el("button", { className: "tree-toggle", title: tr("Mostrar u ocultar sus efectos"), textContent: "▾",
+                                      style: { visibility: effects.length ? "visible" : "hidden" } });
+        const row = el("div", { className: "row", dataset: { id: r.id } }, [toggle, enabled, icon("plugins", 16),
+                                                                          el("span", { textContent: `${r.name} ${r.version}` }), state]);
         row.addEventListener("click", (e) => {
-            if (e.target === enabled)
+            if (e.target === enabled || e.target === toggle)
                 return;
             selected = r.id;
             sync();
         });
         list.appendChild(row);
+        // Cada efecto con su casilla, debajo del complemento (como en Kaint y Paint.NET).
+        const group = el("div", { className: "plugin-effects" });
+        for (const effect of effects) {
+            const check = el("input", { type: "checkbox", checked: !off.has(effect.id), disabled: !r.enabled, title: tr("Activado") });
+            children.push(check);
+            const label = el("small", { className: "plugin-state", textContent: check.checked ? tr("Activado") : tr("Desactivado") });
+            check.addEventListener("change", async () => {
+                await Plugins.setEffectEnabled(r.id, effect.id, check.checked);
+                label.textContent = check.checked ? tr("Activado") : tr("Desactivado");
+                const now = new Set(Plugins.records.find((x) => x.id === r.id)?.disabledEffects || []);
+                const on = effects.filter((e) => !now.has(e.id)).length;
+                state.textContent = on === effects.length ? tr("%1 efectos", effects.length) : tr("%1 de %2 efectos", on, effects.length);
+                sync();
+            });
+            const effectRow = el("div", { className: "row effect-row", dataset: { id: r.id } },
+                                 [check, icon(`effect-${effect.id}`, 16), el("span", { textContent: effect.name }), label]);
+            effectRow.addEventListener("click", (e) => {
+                if (e.target === check)
+                    return;
+                selected = r.id;
+                sync();
+            });
+            group.appendChild(effectRow);
+        }
+        toggle.addEventListener("click", () => {
+            const hidden = group.style.display === "none";
+            group.style.display = hidden ? "" : "none";
+            toggle.textContent = hidden ? "▾" : "▸";
+        });
+        list.appendChild(group);
     }
     const status = el("p", { className: "plugin-status", style: { minHeight: "1.2em" } });
     const file = el("input", { type: "file", accept: ".paintjs,.wasm,.cube,.3dl,.xmp", hidden: true });
@@ -1222,7 +1457,7 @@ async function iconPacksPage(refresh) {
     const file = el("input", { type: "file", accept: ".zip,application/zip", hidden: true });
     const status = el("p", { className: "pack-status", style: { minHeight: "1.2em" } });
     const sync = () => {
-        for (const row of list.children)
+        for (const row of list.querySelectorAll(":scope > .row"))
             row.classList.toggle("selected", row.dataset.id === selected);
         const p = packs.find((x) => x.id === selected);
         details.textContent = p ? [p.description, p.id !== DEFAULT_PACK ? tr("Imágenes: %1", p.images) : ""].filter(Boolean).join(" · ") : "";
@@ -1372,6 +1607,11 @@ const credits = [
     ["Paint.NET", "dotPDN LLC, Rick Brewster", "https://www.getpaint.net/"],
     ["Paint.NET API", "dotPDN LLC", "https://paintdotnet.github.io/apidocs/"],
     ["Breeze Icons", "KDE", "https://invent.kde.org/frameworks/breeze-icons"],
+    ["7.css (MIT)", "Khang Nguyen Duy", "https://khang-nd.github.io/7.css/"],
+    ["XP.css (MIT)", "Adam Hammad, Jordan Scales", "https://botoxparty.github.io/XP.css/"],
+    ["98.css (MIT)", "Jordan Scales", "https://jdan.github.io/98.css/"],
+    // El sistema de complementos de la web sale del de paint.js.
+    [`paint.js (${tr("sistema de complementos")})`, "LabyStudio", "https://github.com/LabyStudio/paintdotjs"],
 ];
 
 // Como el Acerca de de Kaint: el logo, la versión, los derechos, el enlace al repositorio, la firma
@@ -1390,10 +1630,6 @@ export async function aboutDialog(version) {
         el("div", { textContent: tr("Bibliotecas de software y contribuciones:"), style: { marginTop: "6px" } }),
         list,
         el("small", { textContent: "Paint.NET is a trademark of dotPDN LLC.", style: { opacity: 0.7 } }),
-        // El sistema de complementos de la web sale del de paint.js: el crédito, discreto, al final.
-        el("small", { className: "plugin-credit" }, [tr("Sistema de complementos basado en el de "),
-            el("a", { href: "https://github.com/LabyStudio/paintdotjs", target: "_blank", rel: "noopener", textContent: "paint.js" }),
-            " (LabyStudio)"]),
     ]));
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     return dlg.exec();
@@ -1405,7 +1641,7 @@ export async function aboutDialog(version) {
 export async function welcomeDialog() {
     const dlg = new Dialog(tr("Te damos la bienvenida a Kaint"));
     const startLanguage = Settings.get("language");
-    const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [4, tr("Windows 98")], [5, tr("Personalizado")]],
+    const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
                           Settings.get("colorScheme"));
     scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
     const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));

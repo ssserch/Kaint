@@ -251,7 +251,13 @@ export class EncodedPreview {
 // también las ocultas, marcadas con 'hidden') si hay más de uno. Devuelve null o { options,
 // frames }: 'frames' son los fotogramas tal como quedaron en la configuración avanzada (vacío si
 // no se guarda como animación).
-export async function saveConfigDialog(format, image, initial, frames = [], { dpi = 96, icc = null } = {}) {
+// 'sources': las imágenes abiertas ({ name, image, delay }); con dos o más, el GIF se puede hacer con
+// ellas en vez de con las capas.
+export async function saveConfigDialog(format, image, initial, frames = [], { dpi = 96, icc = null, sources = [] } = {}) {
+    const layerFrames = frames;
+    if (sources.length < 2)
+        sources = [];
+    let fromImages = false, sourceOrder = sources.map((_, i) => i), sourceOn = sources.map(() => true);
     const ext = format.ext, t = traits(ext);
     const dlg = new Dialog(tr("Configuración de guardado: %1", ext.toUpperCase()), { iconName: "document-save" });
     dlg.element.classList.add("save-config");
@@ -306,7 +312,29 @@ export async function saveConfigDialog(format, image, initial, frames = [], { dp
         quantization: 1, globalPalette: false, stack: false, effects: clone(defaultSaveOptions().gifEffects),
     });
     if (t.animation) {
-        if (frames.length > 1) {
+        if (frames.length > 1 || sources.length) {
+            // Con varias imágenes abiertas, los fotogramas pueden ser las capas (lo de siempre) o las
+            // imágenes que se elijan.
+            if (sources.length) {
+                c.frameSource = el("select", { title: tr("Cada imagen abierta que elijas es un fotograma, en el orden que quieras.") },
+                                   [el("option", { value: 0, textContent: tr("Las capas de esta imagen") }), el("option", { value: 1, textContent: tr("Imágenes abiertas") })]);
+                c.chooseImages = el("button", { className: "pushbutton", type: "button", title: tr("Qué imágenes abiertas van en el GIF y en qué orden") },
+                                    [icon("image-list-menu", 16), tr("Elegir imágenes…")]);
+                row(tr("Fotogramas:"), c.frameSource);
+                wide(c.chooseImages);
+                c.frameSource.addEventListener("change", async () => {
+                    const images = c.frameSource.value === "1";
+                    if (images && !fromImages && !(await pickImages())) {
+                        c.frameSource.value = "0";
+                        return;
+                    }
+                    setFromImages(images);
+                });
+                c.chooseImages.addEventListener("click", async () => {
+                    if (await pickImages())
+                        setFromImages(true);
+                });
+            }
             c.animation = el("label", {}, [el("input", { type: "checkbox", checked: initial.animation }), tr("Animación: cada capa visible es un fotograma")]);
             c.animation.title = tr("La capa de abajo es el primer fotograma. La duración de cada uno va en el nombre de la capa, p. ej. «Fotograma 1 (100ms)» (Imagen > Animación).");
             c.animation.firstChild.addEventListener("change", () => {
@@ -373,7 +401,8 @@ export async function saveConfigDialog(format, image, initial, frames = [], { dp
         if (c.threshold) o.alphaThreshold = c.threshold.value();
         if (c.quantization) o.quantization = Number(c.quantization.value);
         if (c.interlaced) o.interlaced = c.interlaced.firstChild.checked;
-        if (c.animation) o.animation = c.animation.firstChild.checked;
+        // Sin animación posible (una sola capa) no se guarda "sin animación" para la próxima vez.
+        if (c.animation) o.animation = c.animation.firstChild.disabled ? true : c.animation.firstChild.checked;
         if (c.delay) o.frameDelay = c.delay.read();
         if (c.loopForever) o.loops = c.loopForever.firstChild.checked ? 0 : c.loops.read() === 0 ? -1 : c.loops.read();
         if (c.advanced) {
@@ -434,6 +463,16 @@ export async function saveConfigDialog(format, image, initial, frames = [], { dp
         c.thresholdNote?.classList.toggle("disabled", !eight);
         if (c.quantization)
             c.quantization.disabled = !eight;
+        // Con las capas, solo hay animación con dos o más; con las imágenes, siempre.
+        if (c.animation) {
+            const possible = fromImages || layerFrames.length > 1;
+            if (!possible)
+                c.animation.firstChild.checked = false;
+            c.animation.firstChild.disabled = !possible;
+            c.animation.classList.toggle("disabled", !possible);
+        }
+        if (c.chooseImages)
+            c.chooseImages.disabled = !fromImages;
         const animated = !!c.animation?.firstChild.checked;
         c.delayRow?.classList.toggle("disabled", !animated);
         if (c.loopForever) {
@@ -468,6 +507,51 @@ export async function saveConfigDialog(format, image, initial, frames = [], { dp
         schedule();
     };
 
+    // Las imágenes elegidas como fotogramas: las de otro tamaño, centradas en un lienzo del tamaño
+    // de la más grande.
+    const framesFromImages = () => {
+        const chosen = sourceOrder.filter((i) => sourceOn[i]).map((i) => sources[i]);
+        const width = Math.max(1, ...chosen.map((s) => s.image.width)), height = Math.max(1, ...chosen.map((s) => s.image.height));
+        return chosen.map((s) => {
+            const img = s.image;
+            if (img.width === width && img.height === height)
+                return { width, height, data: img.data, delay: s.delay || 0, hidden: false };
+            const data = new Uint8ClampedArray(width * height * 4), ox = Math.floor((width - img.width) / 2), oy = Math.floor((height - img.height) / 2);
+            for (let y = 0; y < img.height; ++y)
+                data.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), ((y + oy) * width + ox) * 4);
+            return { width, height, data, delay: s.delay || 0, hidden: false };
+        });
+    };
+    function setFromImages(on) {
+        fromImages = on;
+        frames = on ? framesFromImages() : layerFrames;
+        if (c.frameSource)
+            c.frameSource.value = on ? "1" : "0";
+        c.animation.lastChild.textContent = on ? tr("Animación: cada imagen elegida es un fotograma") : tr("Animación: cada capa visible es un fotograma");
+        c.animation.title = on ? tr("La primera imagen de la lista es el primer fotograma. La duración de cada una va en el nombre de su capa o se cambia en la configuración avanzada.")
+            : tr("La capa de abajo es el primer fotograma. La duración de cada uno va en el nombre de la capa, p. ej. «Fotograma 1 (100ms)» (Imagen > Animación).");
+        if (on) {
+            c.animation.firstChild.checked = true;
+            showHidden = false;
+        }
+        // Los fotogramas de la configuración avanzada vuelven a ser los de la lista nueva.
+        hiddenLocked = false;
+        const previous = advanced;
+        advanced = defaultAdvanced();
+        if (previous)
+            Object.assign(advanced, { quantization: previous.quantization, globalPalette: previous.globalPalette, stack: previous.stack, effects: clone(previous.effects) });
+        updateControls();
+        schedule();
+    }
+    async function pickImages() {
+        preview.setPlaying(false);
+        const r = await gifImagesDialog(sources, sourceOrder, sourceOn);
+        if (!r)
+            return false;
+        ({ order: sourceOrder, on: sourceOn } = r);
+        return true;
+    }
+
     async function showAdvanced() {
         preview.setPlaying(false);
         const r = await gifAdvancedDialog(frames, advanced, { image, ext, dpi, icc, delay: c.delay.read(), options: options(), defaultAdvanced });
@@ -501,6 +585,86 @@ export async function saveConfigDialog(format, image, initial, frames = [], { dp
     const accepted = await dlg.exec();
     preview.destroy();
     return accepted ? { options: options(), frames: animationFrames() } : null;
+}
+
+// --- Imágenes del GIF (al hacerlo con las imágenes abiertas) --------------------------------
+
+// Como la configuración avanzada: las imágenes abiertas una al lado de otra, con su miniatura, para
+// elegir cuáles van en el GIF y su orden. Devuelve { order, on } o null.
+async function gifImagesDialog(sources, initialOrder, initialOn) {
+    const dlg = new Dialog(tr("Imágenes del GIF"), { iconName: "image-list-menu" });
+    dlg.element.classList.add("gif-images");
+    let order = [...initialOrder];
+    const on = [...initialOn];
+    const thumbs = sources.map(({ image: f }) => {
+        const s = Math.min(96 / f.width, 72 / f.height), w = Math.max(1, Math.round(f.width * s)), h = Math.max(1, Math.round(f.height * s));
+        const src = createCanvas(f.width, f.height);
+        src.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(f.data), f.width, f.height), 0, 0);
+        const c = createCanvas(w, h), p = c.getContext("2d");
+        p.fillStyle = checkerPattern(p);
+        p.fillRect(0, 0, w, h);
+        p.imageSmoothingQuality = "high";
+        p.drawImage(src, 0, 0, w, h);
+        return c;
+    });
+    const row = el("div", { className: "gif-frames" });
+    const count = el("div");
+    let ok = null;
+    const sync = () => {
+        const n = on.filter(Boolean).length;
+        count.textContent = tr("%1 imágenes en el GIF", n);
+        if (ok)
+            ok.disabled = n === 0;
+    };
+    const rebuild = () => {
+        row.replaceChildren();
+        order.forEach((i, k) => {
+            const include = el("label", {}, [el("input", { type: "checkbox", checked: on[i] }), tr("Incluir")]);
+            const thumb = el("div", { className: "gif-thumb" }, [thumbs[i]]);
+            thumb.style.opacity = on[i] ? "" : "0.4";
+            include.firstChild.addEventListener("change", () => {
+                on[i] = include.firstChild.checked;
+                thumb.style.opacity = on[i] ? "" : "0.4";
+                sync();
+            });
+            const move = (delta, text, glyph) => {
+                const b = el("button", { className: "tbutton", type: "button", title: text, textContent: glyph, disabled: k + delta < 0 || k + delta >= order.length });
+                b.addEventListener("click", () => {
+                    [order[k], order[k + delta]] = [order[k + delta], order[k]];
+                    rebuild();
+                });
+                return b;
+            };
+            row.appendChild(el("div", { className: `gif-card${on[i] ? "" : " skipped"}` }, [
+                el("div", { className: "row" }, [el("span", { textContent: tr("N.º %1", k + 1) })]),
+                thumb,
+                el("div", { className: "row", title: sources[i].name }, [el("span", { textContent: sources[i].name, style: { maxWidth: "110px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } })]),
+                el("div", { className: "row" }, [move(-1, tr("Antes"), "◀"), el("span", { style: { flex: 1 } }), include, el("span", { style: { flex: 1 } }), move(+1, tr("Después"), "▶")]),
+            ]));
+        });
+        sync();
+    };
+    const all = el("button", { className: "pushbutton push-left", type: "button", textContent: tr("Todas") });
+    all.addEventListener("click", () => {
+        on.fill(true);
+        rebuild();
+    });
+    const none = el("button", { className: "pushbutton push-left", type: "button", textContent: tr("Ninguna") });
+    none.addEventListener("click", () => {
+        on.fill(false);
+        rebuild();
+    });
+    dlg.body.append(
+        el("p", { textContent: tr("Marca las imágenes abiertas que forman el GIF y ordénalas con las flechas: cada una es un fotograma, de izquierda a derecha. Después puedes ajustar cada fotograma en la configuración avanzada."), style: { maxWidth: "560px" } }),
+        row, count,
+        el("div", { className: "note", textContent: tr("Las imágenes de otro tamaño se centran en un lienzo del tamaño de la más grande.") }),
+    );
+    dlg.buttons.append(all, none);
+    ok = dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    rebuild();
+    const result = await dlg.exec();
+    return result === "ok" ? { order, on } : null;
 }
 
 // --- Configuración avanzada del GIF (como ezgif) ------------------------------------------

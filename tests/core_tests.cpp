@@ -999,7 +999,7 @@ static void testPdn()
     CHECK(qAlpha(doc->layer(3)->image.pixel(300, 600)) == 0);
     CHECK(doc->layer(4)->image.pixel(1500, 500) == 0xffef9907u);
     CHECK(!Pdn::thumbnail(path).isNull());
-    CHECK(!ImageIO::isWritable(path));
+    CHECK(ImageIO::isWritable(path) && ImageIO::isLayered(path));
     CHECK(ImageIO::isWritable(QStringLiteral("a.ora")) && ImageIO::isWritable(QStringLiteral("a.gif")));
     const QStringList open = ImageIO::openFilter().split(QStringLiteral(";;"));
     CHECK(open.first().startsWith(QStringLiteral("Todos los tipos de imagen (")) && open.first().contains(QStringLiteral("*.jfif")));
@@ -1007,7 +1007,8 @@ static void testPdn()
     CHECK(open.indexOf(QStringLiteral("PNG (*.png)")) < open.indexOf(QStringLiteral("JPEG (*.jpg *.jpeg *.jpe *.jfif *.exif)")));
     QString png;
     const QStringList save = ImageIO::saveFilter(&png).split(QStringLiteral(";;"));
-    CHECK(save.first() == QStringLiteral("OpenRaster con capas (*.ora)") && png == QStringLiteral("PNG (*.png)"));
+    CHECK(save.first() == QStringLiteral("Paint.NET con capas (*.pdn)") && save.value(1) == QStringLiteral("OpenRaster con capas (*.ora)")
+          && png == QStringLiteral("PNG (*.png)"));
     CHECK(ImageIO::isWritable(QStringLiteral("a.jfif")) && ImageIO::isWritable(QStringLiteral("a.JPE")));
     QTemporaryDir dir;
     QFile broken(dir.filePath(QStringLiteral("roto.pdn")));
@@ -1017,6 +1018,61 @@ static void testPdn()
     broken.close();
     std::unique_ptr<Document> bad(ImageIO::load(broken.fileName(), &error));
     CHECK(!bad && !error.isEmpty());
+}
+
+// Escritura de .pdn: capas con nombre, visibilidad, opacidad y fusión, la resolución y la
+// miniatura; se vuelve a leer igual. Con el ejemplo de Paint.NET 5.1 de evidencias/, también ida
+// y vuelta de un archivo real.
+static void testPdnWrite()
+{
+    std::unique_ptr<Document> doc(Document::createFromImage(testPattern(37, 21), QStringLiteral("Fondo")));
+    QImage second(37, 21, kLayerFormat);
+    second.fill(qRgba(10, 200, 30, 120));
+    second.setPixel(3, 4, qRgba(255, 0, 0, 0));
+    auto layer = std::make_shared<Layer>(QStringLiteral("Capa ñ 2"), second);
+    layer->props.opacity = 96;
+    layer->props.blend = BlendMode::Overlay;
+    doc->insertLayer(1, layer);
+    auto hidden = std::make_shared<Layer>(QStringLiteral("Oculta"), QSize(37, 21));
+    hidden->props.visible = false;
+    hidden->props.blend = BlendMode::Multiply;
+    doc->insertLayer(2, hidden);
+    doc->setDpi(150);
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("prueba.pdn"));
+    QString error;
+    CHECK(ImageIO::save(doc.get(), path, ImageIO::SaveOptions(), &error));
+    if (!error.isEmpty())
+        std::fprintf(stderr, "  error: %s\n", qPrintable(error));
+    std::unique_ptr<Document> back(ImageIO::load(path, &error));
+    CHECK(back);
+    if (!back)
+        return;
+    CHECK(back->size() == QSize(37, 21) && back->layerCount() == 3);
+    CHECK(std::abs(back->dpi() - 150) < 0.01);
+    for (int i = 0; i < std::min(3, back->layerCount()); ++i) {
+        CHECK(back->layer(i)->props == doc->layer(i)->props);
+        CHECK(back->layer(i)->image == doc->layer(i)->image);
+    }
+    CHECK(Pdn::thumbnail(path).size() == QSize(37, 21));
+
+    const QString sample = QStringLiteral(KAINT_SOURCE_DIR "/evidencias/ejemplodearchivopdn.pdn");
+    if (!QFile::exists(sample)) {
+        std::printf("Se omite la ida y vuelta del .pdn de Paint.NET: no está %s\n", qPrintable(sample));
+        return;
+    }
+    std::unique_ptr<Document> real(ImageIO::load(sample, &error));
+    CHECK(real && real->layerCount() == 4 && real->size() == QSize(6, 6));
+    if (!real)
+        return;
+    const QString again = dir.filePath(QStringLiteral("otra.pdn"));
+    CHECK(Pdn::save(real.get(), again, &error));
+    std::unique_ptr<Document> twice(ImageIO::load(again, &error));
+    CHECK(twice && twice->layerCount() == real->layerCount());
+    for (int i = 0; twice && i < twice->layerCount(); ++i) {
+        CHECK(twice->layer(i)->props == real->layer(i)->props);
+        CHECK(twice->layer(i)->image == real->layer(i)->image);
+    }
 }
 
 // Complementos: el nativo de ejemplo (API C) y, si hay mono, PolyGlitch a través del proceso
@@ -1048,6 +1104,11 @@ static void testPlugins()
         CHECK(p.enabled && p.loaded);
         CHECK(p.effects.size() == 2);
         CHECK(p.errors.isEmpty());
+        // API 2: el tinte trae su icono (16x16 en píxeles); el otro, ninguno.
+        CHECK(p.effectIds.size() == 2 && p.effectIcons.size() == 2);
+        const int tintIndex = int(p.effectIds.indexOf(QStringLiteral("native:kaint.ejemplo.tinte")));
+        CHECK(tintIndex >= 0 && p.effectIcons.value(tintIndex).size() == QSize(16, 16));
+        CHECK(p.effectIcons.value(1 - tintIndex).isNull());
     }
     const Effect* tint = Effects::find(QStringLiteral("native:kaint.ejemplo.tinte"));
     const Effect* swap = Effects::find(QStringLiteral("native:kaint.ejemplo.intercambiar"));
@@ -1066,6 +1127,18 @@ static void testPlugins()
         const QImage tinted = Effects::apply(*tint, img, Selection(), v, EffectContext(), cancel);
         CHECK(tinted.pixel(0, 0) == qRgba(255, 128, 0, 128));
     }
+    if (tint)
+        CHECK(tint->iconImage().size() == QSize(16, 16) && qAlpha(tint->iconImage().pixel(5, 5)) > 0);
+    // Un solo efecto se desactiva (sale de los menús) y el otro sigue; se recuerda al volver a buscar.
+    const QString pluginId = pm->plugins().value(0).id;
+    pm->setEffectEnabled(pluginId, QStringLiteral("native:kaint.ejemplo.tinte"), false);
+    CHECK(!Effects::find(QStringLiteral("native:kaint.ejemplo.tinte")));
+    CHECK(Effects::find(QStringLiteral("native:kaint.ejemplo.intercambiar")));
+    pm->scan();
+    CHECK(!pm->plugins().value(0).effectEnabled(QStringLiteral("native:kaint.ejemplo.tinte")));
+    CHECK(!Effects::find(QStringLiteral("native:kaint.ejemplo.tinte")));
+    pm->setEffectEnabled(pluginId, QStringLiteral("native:kaint.ejemplo.tinte"), true);
+    CHECK(Effects::find(QStringLiteral("native:kaint.ejemplo.tinte")));
     pm->setEnabled(pm->plugins().value(0).id, false);
     CHECK(!Effects::find(QStringLiteral("native:kaint.ejemplo.tinte")));
 
@@ -1406,6 +1479,7 @@ int main(int argc, char** argv)
     testSmoothMaskSelection();
     testGifAndIco();
     testPdn();
+    testPdnWrite();
     testPlugins();
     testCraftPlugins();
     testPngWriter();

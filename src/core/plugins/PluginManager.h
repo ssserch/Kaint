@@ -33,13 +33,22 @@ struct PluginInfo {
     // Efectos que el usuario desactivó (el resto del complemento sigue cargado).
     QStringList disabledEffects;
     QStringList errors;
+    // paint.js: el identificador del paquete (el de plugin.json), sus formatos de archivo
+    // ("Photoshop (*.psd)") y los efectos que solo funcionan en la versión web (abren una ventana
+    // propia hecha para el navegador), con sus iconos.
+    QString packageId;
+    QString license;
+    QStringList fileTypes;
+    QStringList webOnlyEffects;
+    QList<QImage> webOnlyIcons;
 
     bool effectEnabled(const QString& effectId) const { return !disabledEffects.contains(effectId); }
 };
 
 // Busca, carga y descarga los complementos de efectos: · Bibliotecas .so con la API C de Kaint
 // (KaintPlugin.h). · Filtros .wasm de PhotoCraft y looks (.cube, .3dl) y ajustes de revelado
-// (.xmp) de LightCraft (CraftPlugins).
+// (.xmp) de LightCraft (CraftPlugins). · Paquetes .paintjs de paint.js, con efectos y formatos
+// de archivo (PaintJs).
 class PluginManager : public QObject {
     Q_OBJECT
 public:
@@ -60,6 +69,9 @@ public:
     void setEnabled(const QString& id, bool on);
     // Activa o desactiva un solo efecto de un complemento (sus menús lo muestran u ocultan).
     void setEffectEnabled(const QString& pluginId, const QString& effectId, bool on);
+    // Vuelve a leer un complemento que se sustituyó por otra versión (si no, seguiría cargada la
+    // de antes hasta reiniciar Kaint).
+    void reload(const QString& id);
 
     // Pruebas: sustituye las carpetas de búsqueda y la caché.
     void setPathsForTesting(const QStringList& userPaths, const QString& cacheFile);
@@ -82,6 +94,7 @@ private:
     void registerEffects(const PluginInfo& info, const QList<Effect*>& effects) const;
     void readNative(PluginInfo& info, bool keepLoaded);
     void readCraft(PluginInfo& info, bool keepLoaded);
+    void readPaintJs(PluginInfo& info, bool keepLoaded);
     void fillFromInspection(PluginInfo& info, const QJsonObject& reply);
     void load(PluginInfo& info);
     void unload(PluginInfo& info);

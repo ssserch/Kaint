@@ -400,7 +400,7 @@ export class ShapesTool extends EditableTool {
 
     hint() {
         return this.editing
-            ? tr("Tiradores: redimensionar (Mayús: proporción, Alt: desde el centro). Dentro: mover. Clic derecho o fuera del borde: girar. A: siguiente forma. Intro: terminar.")
+            ? tr("Tiradores: redimensionar (Mayús: proporción, Alt: desde el centro). Dentro: mover. Clic derecho o fuera del borde: girar. Clic lejos de ella o Intro: terminar. A: siguiente forma.")
             : tr("Arrastra para dibujar la forma: contorno con el color principal y relleno con el secundario (clic derecho: al revés). Mayús: proporciones iguales. Alt: desde el centro.");
     }
 
@@ -497,6 +497,19 @@ export class ShapesTool extends EditableTool {
         this.drag.moved = true;
         this.steps.changed();
         this.render();
+    }
+
+    // Un clic sin arrastrar no crea ninguna forma (como en Kaint): el que terminó la anterior, lejos
+    // de ella, solo la suelta. Antes quedaba otra de tamaño cero en edición, con sus tiradores en el
+    // punto del clic, y parecía que la forma seguía seleccionada.
+    onPointerUp(e) {
+        if (this.drag?.creating && !this.hasContent()) {
+            this.drag = null;
+            this.leave();
+            this.repaint();
+            return;
+        }
+        super.onPointerUp(e);
     }
 
     render() {

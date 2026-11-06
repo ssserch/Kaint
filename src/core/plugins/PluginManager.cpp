@@ -3,6 +3,7 @@
 #include "core/effects/Effect.h"
 #include "core/plugins/CraftPlugins.h"
 #include "core/plugins/KaintPlugin.h"
+#include "core/plugins/PaintJs.h"
 #include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginEffects.h"
 
@@ -24,6 +25,7 @@ struct PluginManager::Loaded {
     QString id;
     QLibrary* library = nullptr;
     QList<Effect*> effects;
+    bool fileTypes = false;
 };
 
 namespace {
@@ -71,8 +73,9 @@ constexpr int kCacheVersion = 1;
 
 QStringList pluginFiles(const QString& dir)
 {
-    return QDir(dir).entryList(QStringList{QStringLiteral("*.so"), QStringLiteral("*.dll")} + CraftPlugins::fileFilters(), QDir::Files,
-                               QDir::Name);
+    return QDir(dir).entryList(QStringList{QStringLiteral("*.so"), QStringLiteral("*.dll"), QStringLiteral("*.paintjs")}
+                                   + CraftPlugins::fileFilters(),
+                               QDir::Files, QDir::Name);
 }
 
 // Firma del archivo para saber si la caché sigue valiendo.
@@ -295,6 +298,9 @@ void PluginManager::scan()
             // Filtros de PhotoCraft, looks y ajustes de LightCraft: se leen aquí mismo (si están
             // activados, ya cargados).
             readCraft(info, info.enabled);
+        } else if (PaintJs::isPackage(c.path)) {
+            // Paquetes de paint.js: igual, aquí mismo.
+            readPaintJs(info, info.enabled);
         } else if (isNativePlugin(c.path)) {
             info.kind = QStringLiteral("Kaint");
             readNative(info, false);
@@ -406,6 +412,60 @@ void PluginManager::readCraft(PluginInfo& info, bool keepLoaded)
     info.loaded = true;
 }
 
+void PluginManager::readPaintJs(PluginInfo& info, bool keepLoaded)
+{
+    PaintJs::Info pj = PaintJs::load(info.id);
+    info.kind = QStringLiteral("paint.js");
+    info.packageId = pj.id;
+    info.name = pj.name;
+    info.version = pj.version;
+    info.author = pj.author;
+    info.copyright = pj.copyright;
+    info.website = pj.website;
+    info.description = pj.description;
+    info.license = pj.license;
+    info.errors = pj.errors;
+    info.effects.clear();
+    info.effectIds.clear();
+    info.effectIcons.clear();
+    for (const Effect* e : std::as_const(pj.effects)) {
+        info.effects << e->name();
+        info.effectIds << e->id();
+        info.effectIcons << e->iconImage();
+    }
+    info.webOnlyEffects = pj.browserOnly;
+    info.webOnlyIcons = pj.browserOnlyIcons;
+    info.fileTypes.clear();
+    for (const PaintJs::FileType& t : std::as_const(pj.fileTypes))
+        info.fileTypes << t.filter();
+    // Dos paquetes con el mismo identificador (dos copias del mismo complemento) darían los
+    // mismos efectos: se carga el primero.
+    bool duplicate = false;
+    for (const PluginInfo& other : std::as_const(m_plugins))
+        duplicate = duplicate || (other.id != info.id && other.loaded && !pj.id.isEmpty() && other.packageId == pj.id);
+    for (const Effect* e : std::as_const(pj.effects))
+        duplicate = duplicate || (keepLoaded && Effects::find(e->id()) != nullptr);
+    if (duplicate)
+        info.errors << tr("Ya hay otro complemento cargado con el identificador %1.").arg(pj.id);
+    if (!keepLoaded || duplicate || (pj.effects.isEmpty() && pj.fileTypes.isEmpty())) {
+        qDeleteAll(pj.effects);
+        return;
+    }
+    auto* loaded = new Loaded;
+    loaded->id = info.id;
+    loaded->effects = pj.effects;
+    QString conflict;
+    if (!pj.fileTypes.isEmpty()) {
+        if (PaintJs::registerFileTypes(info.id, pj.fileTypes, &conflict))
+            loaded->fileTypes = true;
+        else
+            info.errors << tr("Otro complemento ya abre los archivos %1.").arg(conflict);
+    }
+    registerEffects(info, loaded->effects);
+    m_loaded << loaded;
+    info.loaded = true;
+}
+
 void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& reply)
 {
     auto str = [&](const char* key) { return reply.value(QLatin1String(key)).toString(); };
@@ -448,6 +508,10 @@ void PluginManager::load(PluginInfo& info)
         readCraft(info, true);
         return;
     }
+    if (PaintJs::isPackage(info.id)) {
+        readPaintJs(info, true);
+        return;
+    }
     const QJsonObject reply = cachedReply(info.id);
     if (reply.isEmpty())
         return;
@@ -481,6 +545,8 @@ void PluginManager::unload(PluginInfo& info)
             l->library->unload();
             delete l->library;
         }
+        if (l->fileTypes)
+            PaintJs::unregisterFileTypes(l->id);
         delete l;
         m_loaded.removeAt(i);
     }
@@ -498,6 +564,24 @@ void PluginManager::setEnabled(const QString& id, bool on)
             load(p);
         else
             unload(p);
+        emit changed();
+        return;
+    }
+}
+
+void PluginManager::reload(const QString& id)
+{
+    for (PluginInfo& p : m_plugins) {
+        if (p.id != id)
+            continue;
+        unload(p);
+        p.errors.clear();
+        if (PaintJs::isPackage(id))
+            readPaintJs(p, p.enabled);
+        else if (CraftPlugins::isCraftFile(id))
+            readCraft(p, p.enabled);
+        else if (p.enabled)
+            load(p);
         emit changed();
         return;
     }

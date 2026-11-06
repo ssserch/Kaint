@@ -10,6 +10,56 @@ import { Settings } from "../Settings.js";
 import { miniCursor, toolPixelCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
+// El tirador de mover de Kaint (Handles::draw, Shape::Move): un recuadro con una cruz de cuatro
+// flechas.
+function drawMoveHandle(ctx, c) {
+    const dark = "rgba(30,30,30,0.9)", light = "rgba(255,255,255,0.94)";
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = dark;
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.roundRect(c.x - 9 + 0.5, c.y - 9 + 0.5, 17, 17, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(c.x - 6, c.y);
+    ctx.lineTo(c.x + 6, c.y);
+    ctx.moveTo(c.x, c.y - 6);
+    ctx.lineTo(c.x, c.y + 6);
+    ctx.stroke();
+    ctx.fillStyle = dark;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const tx = c.x + dx * 7, ty = c.y + dy * 7, sx = -dy, sy = dx;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - dx * 3 + sx * 2.5, ty - dy * 3 + sy * 2.5);
+        ctx.lineTo(tx - dx * 3 - sx * 2.5, ty - dy * 3 - sy * 2.5);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// El del teclado en pantalla: el mismo recuadro con una «A» cursiva (azul mientras se ve).
+function drawKeyboardHandle(ctx, c, open) {
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(30,30,30,0.9)";
+    ctx.fillStyle = open ? "#0078d7" : "rgba(255,255,255,0.94)";
+    ctx.beginPath();
+    ctx.roundRect(c.x - 9 + 0.5, c.y - 9 + 0.5, 17, 17, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = open ? "#fff" : "rgba(30,30,30,0.95)";
+    ctx.font = "italic bold 13px Georgia, \"Times New Roman\", serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("A", c.x, c.y + 1);
+    ctx.restore();
+}
+
 export class TextTool extends Tool {
     constructor(app) {
         super(app);
@@ -27,6 +77,17 @@ export class TextTool extends Tool {
                 setTimeout(() => this.render(), 0);
             }
         });
+        // Alto de la página sin el teclado en pantalla (para saber si se ve: el de Android encoge la
+        // vista o, en Kaint.APK, la página entera).
+        this.fullHeight = window.innerHeight;
+        const viewportChanged = () => {
+            this.fullHeight = Math.max(this.fullHeight, window.innerHeight);
+            if (this.editing)
+                this.repaint();
+        };
+        window.addEventListener("resize", viewportChanged);
+        window.visualViewport?.addEventListener("resize", viewportChanged);
+        screen.orientation?.addEventListener?.("change", () => (this.fullHeight = window.innerHeight));
         this.caretOn = true;
         setInterval(() => {
             if (!this.editing)
@@ -49,6 +110,9 @@ export class TextTool extends Tool {
     }
 
     cursor() {
+        // Sobre el tirador, el de mover (como en Kaint).
+        if (this.overHandle)
+            return "move";
         return toolPixelCursor(this.id) || miniCursor("text", true);
     }
 
@@ -88,15 +152,89 @@ export class TextTool extends Tool {
         return { lines, widths, w, h: lines.length * f.line, f };
     }
 
+    // Tiradores, como en Kaint: el de mover (la cruz con cuatro flechas) abajo a la derecha del texto
+    // y, con pantalla táctil, el del teclado en pantalla (una «A» cursiva) arriba a la derecha. En
+    // coordenadas de la vista.
+    handles() {
+        const l = this.layout(), view = this.view;
+        const b = view.imageToView(this.pos.x + l.w + 2, this.pos.y + l.h + 2), t = view.imageToView(this.pos.x + l.w + 2, this.pos.y - 2);
+        return { move: { x: b.x + 16, y: b.y + 16 }, keyboard: this.touchScreen() ? { x: t.x + 16, y: t.y - 16 } : null };
+    }
+
+    touchScreen() {
+        return this.usedTouch || matchMedia("(pointer: coarse)").matches;
+    }
+
+    // Con el dedo, los tiradores se agarran desde más lejos.
+    hits(e, c) {
+        return !!c && Math.hypot(e.vx - c.x, e.vy - c.y) <= (e.pointerType === "touch" ? 22 : 11);
+    }
+
+    // Posición del cursor (índice en el texto) más cercana al punto de la imagen (x, y).
+    indexAt(x, y) {
+        const l = this.layout(), f = l.f, s = this.settings;
+        const row = Math.max(0, Math.min(l.lines.length - 1, Math.floor((y - this.pos.y) / f.line)));
+        const line = l.lines[row];
+        const ctx = context(this.temp);
+        ctx.font = f.css;
+        const start = this.pos.x + (s.textAlign === "center" ? (l.w - l.widths[row]) / 2 : s.textAlign === "right" ? l.w - l.widths[row] : 0);
+        let best = 0, bestDistance = Infinity;
+        for (let i = 0; i <= line.length; ++i) {
+            const d = Math.abs(start + ctx.measureText(line.slice(0, i)).width - x);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = i;
+            }
+        }
+        let index = best;
+        for (let r = 0; r < row; ++r)
+            index += l.lines[r].length + 1;
+        return index;
+    }
+
+    // El teclado en pantalla se ve (el campo tiene el foco y la vista o la página encogió).
+    keyboardVisible() {
+        if (document.activeElement !== this.input)
+            return false;
+        const vv = window.visualViewport;
+        return (vv && vv.height < window.innerHeight * 0.8) || window.innerHeight < this.fullHeight * 0.8;
+    }
+
+    // Abre o cierra el teclado en pantalla. Se llama al soltar el dedo (solo entonces deja el
+    // navegador sacar el teclado): para abrirlo, el campo pierde el foco y lo recupera.
+    toggleKeyboard() {
+        const open = this.keyboardVisible();
+        this.input.blur();
+        if (!open)
+            this.input.focus({ preventScroll: true });
+        this.repaint();
+    }
+
     onPointerDown(e) {
         if (!this.doc || (e.button !== "left" && e.button !== "right"))
             return;
+        if (e.pointerType === "touch")
+            this.usedTouch = true;
         if (this.editing) {
-            const l = this.layout();
-            const inside = e.x >= this.pos.x - 4 && e.y >= this.pos.y - 4 && e.x <= this.pos.x + l.w + 8 && e.y <= this.pos.y + l.h + 8;
-            if (inside || e.button === "right") {
+            const h = this.handles();
+            if (e.button === "right" || this.hits(e, h.move)) {
                 this.drag = { from: { x: e.x, y: e.y }, start: { ...this.pos } };
                 this.focusInput(e);
+                return;
+            }
+            if (this.hits(e, h.keyboard)) {
+                this.keyboardTap = true;
+                e.original?.preventDefault();
+                return;
+            }
+            // Dentro del texto (con un margen de una línea), el cursor va donde se pulsa.
+            const l = this.layout(), m = l.f.line;
+            if (e.x >= this.pos.x - m && e.y >= this.pos.y - m && e.x <= this.pos.x + l.w + m && e.y <= this.pos.y + l.h + m) {
+                const at = this.indexAt(e.x, e.y);
+                this.focusInput(e);
+                this.input.setSelectionRange(at, at);
+                this.caretOn = true;
+                this.repaint();
                 return;
             }
             this.finish();
@@ -124,14 +262,25 @@ export class TextTool extends Tool {
     }
 
     onPointerMove(e) {
-        if (!this.drag)
+        if (!this.drag) {
+            const over = !!this.editing && e.pointerType !== "touch" && this.hits(e, this.handles().move);
+            if (over !== !!this.overHandle) {
+                this.overHandle = over;
+                this.view.updateCursor();
+            }
             return;
+        }
         this.pos = { x: this.drag.start.x + e.x - this.drag.from.x, y: this.drag.start.y + e.y - this.drag.from.y };
         this.drag.moved = true;
         this.render();
     }
 
     onPointerUp() {
+        if (this.keyboardTap) {
+            this.keyboardTap = false;
+            this.toggleKeyboard();
+            return;
+        }
         const moved = this.drag?.moved;
         this.drag = null;
         if (moved)
@@ -265,11 +414,10 @@ export class TextTool extends Tool {
         ctx.lineWidth = 1;
         ctx.strokeRect(a.x + 0.5, a.y + 0.5, b.x - a.x, b.y - a.y);
         ctx.setLineDash([]);
-        // Tirador para mover, abajo a la derecha.
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(b.x - 3, b.y - 3, 7, 7);
-        ctx.strokeStyle = "#000";
-        ctx.strokeRect(b.x - 2.5, b.y - 2.5, 6, 6);
+        const h = this.handles();
+        drawMoveHandle(ctx, h.move);
+        if (h.keyboard)
+            drawKeyboardHandle(ctx, h.keyboard, this.keyboardVisible());
         if (!this.caretOn)
             return;
         // Cursor de texto en la posición del campo oculto.
@@ -299,6 +447,7 @@ export class TextTool extends Tool {
             return;
         this.editing = false;
         this.drag = null;
+        this.overHandle = false;
         this.input.blur();
         const doc = this.doc, layer = this.layer;
         if (!this.input.value.trim() && !this.resumed) {

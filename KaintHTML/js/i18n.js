@@ -4,7 +4,6 @@
 import en from "./i18n/en.js";
 
 const extra = {
-    "sistema de complementos": "plugin system",
     "Archivo": "File",
     "Botones de las ventanas:": "Window buttons:",
     "El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, Windows XP y Windows 98, «Windows 10» usa el del tema.":
@@ -15,6 +14,9 @@ const extra = {
     "%1 imágenes en el GIF": "%1 images in the GIF",
     "Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte.": "As layers: each frame is a layer of a single image. As images: each frame opens as a separate image.",
     "Mostrar u ocultar sus efectos": "Show or hide its effects",
+    "Opciones de la herramienta": "Tool options",
+    "Al sacar una ventana, esconder las que tape": "When a window slides out, hide the ones it covers",
+    "Con las ventanas en las esquinas: al sacar una, las que estaban abiertas debajo de ella se vuelven a esconder. Sin la casilla, se quedan abiertas y la última que sacaste queda delante, con su asa.": "With the windows in the corners: when one slides out, the open ones underneath it hide again. Unchecked, they stay open and the last one you slid out stays in front, with its handle.",
     "Ocultarse en las esquinas": "Hide in the corners",
     "Ocultarse en las esquinas: cada ventana se esconde en su esquina con un asa; al tocarla sale y se vuelve a esconder al tocar el lienzo o elegir una herramienta. Ventanas: las flotantes de siempre, con el tamaño que elijas.": "Hide in the corners: each window hides in its corner behind a handle; tap it to slide the window out, and it hides again when you tap the canvas or pick a tool. Windows: the usual floating windows, at the size you choose.",
     "Tamaño de cada ventana en el modo Ventanas:": "Size of each window in Windows mode:",

@@ -137,10 +137,17 @@ reg add "%UNINSTALL_KEY%" /v DisplayVersion /d "%KAINT_VERSION%" /f >nul
 reg add "%UNINSTALL_KEY%" /v Publisher /d "SSSerch" /f >nul
 reg add "%UNINSTALL_KEY%" /v DisplayIcon /d "%PREFIX%\bin\kaint.exe" /f >nul
 reg add "%UNINSTALL_KEY%" /v InstallLocation /d "%PREFIX%" /f >nul
-reg add "%UNINSTALL_KEY%" /v UninstallString /d "\"%PREFIX%\build.bat\" --uninstall --prefix \"%PREFIX%\"" /f >nul
+rem El desinstalador (Uninstall.exe) es el que abre "Aplicaciones instaladas" o el Panel de control
+rem (sin bloques entre paréntesis: la carpeta puede llevarlos, como "Program Files (x86)").
+set "KAINT_UNINSTALL=\"%PREFIX%\build.bat\" --uninstall --prefix \"%PREFIX%\""
+if exist "%PREFIX%\Uninstall.exe" set "KAINT_UNINSTALL=\"%PREFIX%\Uninstall.exe\""
+reg add "%UNINSTALL_KEY%" /v UninstallString /d "%KAINT_UNINSTALL%" /f >nul
+if exist "%PREFIX%\Uninstall.exe" reg add "%UNINSTALL_KEY%" /v QuietUninstallString /d "\"%PREFIX%\Uninstall.exe\" /S" /f >nul
+if not exist "%PREFIX%\Uninstall.exe" reg delete "%UNINSTALL_KEY%" /v QuietUninstallString /f >nul 2>&1
+reg add "%UNINSTALL_KEY%" /v URLInfoAbout /d "https://github.com/ssserch/Kaint" /f >nul
 reg add "%UNINSTALL_KEY%" /v NoModify /t REG_DWORD /d 1 /f >nul
 reg add "%UNINSTALL_KEY%" /v NoRepair /t REG_DWORD /d 1 /f >nul
-echo Instalado: %PREFIX%\bin\kaint.exe (también en el menú Inicio)
+echo Instalado: %PREFIX%\bin\kaint.exe (también en el menú Inicio; se desinstala con %PREFIX%\Uninstall.exe o desde "Aplicaciones instaladas")
 exit /b 0
 
 rem --- Copia de la instalación para empaquetar (%1: carpeta) --------------------
@@ -159,6 +166,8 @@ set "PACKAGE=%CD%\%BUILD_DIR%\package\Kaint"
 set "ZIP=%CD%\%BUILD_DIR%\Kaint-%KAINT_VERSION%-windows-x64.zip"
 echo Creando %ZIP%...
 call :stage "%PACKAGE%" || exit /b 1
+rem El portable no se instala: sin desinstalador.
+if exist "%PACKAGE%\Uninstall.exe" del /q "%PACKAGE%\Uninstall.exe"
 if exist "%ZIP%" del /q "%ZIP%"
 powershell -NoProfile -Command "Compress-Archive -Path '%PACKAGE%' -DestinationPath '%ZIP%'" || exit /b 1
 echo Paquete: %ZIP% (descomprimir y abrir Kaint\bin\kaint.exe)
@@ -213,12 +222,25 @@ exit /b 0
 rem --- Desinstalar ------------------------------------------------------------
 :uninstall
 echo Desinstalando Kaint de %PREFIX%...
+rem Con el desinstalador de la instalación (sin preguntar). Aquí mismo si no lo hay (instalaciones de
+rem antes) o si este build.bat es la copia de la instalación (el desinstalador lo borraría a medias).
+if not exist "%PREFIX%\Uninstall.exe" goto uninstall_here
+if not exist "%PREFIX%\bin\kaint.exe" goto uninstall_here
+if /i "%SCRIPT_DIR%"=="%PREFIX%\" goto uninstall_here
+"%PREFIX%\Uninstall.exe" /S
+if errorlevel 1 echo No se pudo desinstalar: ¿está Kaint abierto?
+if errorlevel 1 exit /b 1
+echo Kaint desinstalado. Tus imágenes y tu configuración no se han tocado.
+exit /b 0
+:uninstall_here
 del /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Kaint.lnk" 2>nul
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Kaint" /f >nul 2>&1
 if exist "%PREFIX%\bin" rmdir /s /q "%PREFIX%\bin"
 if exist "%PREFIX%\share" rmdir /s /q "%PREFIX%\share"
 if exist "%PREFIX%\plugins" rmdir /s /q "%PREFIX%\plugins"
 if exist "%PREFIX%\translations" rmdir /s /q "%PREFIX%\translations"
+if exist "%PREFIX%\include" rmdir /s /q "%PREFIX%\include"
+if exist "%PREFIX%\Uninstall.exe" del /q "%PREFIX%\Uninstall.exe"
 echo Kaint desinstalado. Tus imágenes y tu configuración no se han tocado.
 if /i "%SCRIPT_DIR%"=="%PREFIX%\" (
     start "" /min cmd /c timeout /t 2 ^>nul ^& rmdir /s /q "%PREFIX%"

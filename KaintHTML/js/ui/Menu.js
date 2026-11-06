@@ -1,6 +1,8 @@
 // Menús: la barra de menús y los menús emergentes (también los contextuales y los de los botones
 // con opciones). Una entrada es una acción, "-" (separador), { section } (título de sección) o
-// { text, icon, shortcut, checked, enabled, run, submenu }. Aparecen con el fundido de paint.js (kaint.css).
+// { text, icon, shortcut, checked, enabled, run, submenu, badge }. 'badge' es un icono a la derecha,
+// donde va la flecha de los submenús (la pieza de puzle de los efectos de complementos). Aparecen
+// con el fundido de paint.js (kaint.css).
 import { icon } from "./Icons.js";
 import { mnemonicHtml, plain } from "../i18n.js";
 
@@ -49,7 +51,9 @@ function normalize(entry) {
 // Abre un menú en (x, y) de la pantalla; 'level' es la profundidad (submenús).
 // Con 'grid', las opciones van en una cuadrícula de iconos de esas columnas con un título por
 // sección (el menú de formas de Paint.NET); su nombre sale al dejar el puntero encima.
-export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false, grid = 0 } = {}) {
+// 'beside' es la opción de la que sale un submenú: va a su derecha y, si ahí no cabe, a su
+// izquierda (como en Qt; antes se corría hacia dentro y tapaba el menú del que salía).
+export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false, grid = 0, beside = null } = {}) {
     while (openMenus.length > level)
         openMenus.pop().remove();
     const menu = document.createElement("div");
@@ -128,6 +132,8 @@ export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above =
         const arrow = document.createElement("span");
         if (entry.submenu)
             arrow.className = "sub";
+        else if (entry.badge)
+            arrow.append(typeof entry.badge === "string" ? icon(entry.badge, 16) : entry.badge);
         item.appendChild(arrow);
         item.addEventListener("pointerenter", () => {
             items.forEach((i) => i.classList.remove("active"));
@@ -136,7 +142,7 @@ export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above =
             if (entry.submenu && entry.enabled !== false) {
                 submenuTimer = setTimeout(() => {
                     const r = item.getBoundingClientRect();
-                    popupMenu(entry.submenu(), r.right - 2, r.top - 4, { level: level + 1 });
+                    popupMenu(entry.submenu(), r.right - 2, r.top - 4, { level: level + 1, beside: r });
                 }, 120);
             } else {
                 submenuTimer = setTimeout(() => {
@@ -161,6 +167,11 @@ export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above =
     document.body.appendChild(menu);
     // Dentro de la ventana
     const r = menu.getBoundingClientRect();
+    if (beside && x + r.width > window.innerWidth - 2) {
+        // Un submenú que no cabe a la derecha: a la izquierda o, si tampoco, del lado con más sitio.
+        const left = beside.left + 2 - r.width;
+        x = left >= 0 || beside.left > window.innerWidth - beside.right ? left : x;
+    }
     menu.style.left = `${Math.max(0, Math.min(x, window.innerWidth - r.width - 2))}px`;
     // 'above': el menú sube desde y (botones de la barra de estado).
     menu.style.top = `${Math.max(0, Math.min(above ? y - r.height : y, window.innerHeight - r.height - 2))}px`;
@@ -191,7 +202,7 @@ document.addEventListener("keydown", (e) => {
         select(current < 0 ? -1 : current - 1);
     } else if (e.key === "ArrowRight" && current >= 0 && items[current].entry.submenu) {
         const r = items[current].getBoundingClientRect();
-        const sub = popupMenu(items[current].entry.submenu(), r.right - 2, r.top - 4, { level: openMenus.length });
+        const sub = popupMenu(items[current].entry.submenu(), r.right - 2, r.top - 4, { level: openMenus.length, beside: r });
         sub.items[0]?.classList.add("active");
     } else if (e.key === "ArrowLeft" && openMenus.length > 1) {
         openMenus.pop().remove();

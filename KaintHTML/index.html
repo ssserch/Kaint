@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Sin el zum de la página con dos dedos: en el lienzo se acerca la imagen, y en el resto de la
+         interfaz movía y agrandaba toda la ventana. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+
     <title>Kaint</title>
     <meta name="description" content="Kaint for the web: the Paint.NET-style image editor, in your browser.">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/kaint-32.png">
@@ -37,6 +40,46 @@
     </div>
     <textarea class="text-input" id="text-input" spellcheck="false" autocomplete="off"></textarea>
     <noscript>Kaint needs JavaScript.</noscript>
-    <script type="module" src="js/main.js"></script>
+    <script>
+        // Si algo impide arrancar (un módulo que no se encuentra, un navegador sin lo necesario...),
+        // se dice en vez de dejar la página en blanco.
+        (function () {
+            var pending = null;
+            // Un error antes de que exista la ventana: si al poco sigue sin existir, no arrancó (un
+            // error suelto que no impide arrancar no muestra nada).
+            function failed(reason) {
+                if (window.kaint || pending)
+                    return;
+                pending = setTimeout(function () {
+                    pending = null;
+                    if (!window.kaint)
+                        show(reason);
+                }, 2500);
+            }
+            function show(reason) {
+                if (window.kaint || document.getElementById("boot-error"))
+                    return;
+                var spanish = /^es\b/i.test(navigator.language || "");
+                var box = document.createElement("div");
+                box.id = "boot-error";
+                box.setAttribute("role", "alert");
+                box.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;"
+                    + "padding:24px;background:#1e1e1e;color:#f0f0f0;font:14px system-ui,sans-serif;text-align:center";
+                var text = document.createElement("div");
+                var title = document.createElement("b");
+                title.textContent = spanish ? "Kaint no ha podido arrancar." : "Kaint could not start.";
+                var detail = document.createElement("div");
+                detail.style.cssText = "margin-top:8px;opacity:0.75;word-break:break-word";
+                detail.textContent = String(reason && (reason.message || reason) || "");
+                text.appendChild(title);
+                text.appendChild(detail);
+                box.appendChild(text);
+                (document.body || document.documentElement).appendChild(box);
+            }
+            window.addEventListener("error", function (e) { failed(e.error || e.message); });
+            window.addEventListener("unhandledrejection", function (e) { failed(e.reason); });
+        })();
+    </script>
+    <script type="module" src="js/main.js" onerror="dispatchEvent(new ErrorEvent('error', { message: 'js/main.js' }))"></script>
 </body>
 </html>

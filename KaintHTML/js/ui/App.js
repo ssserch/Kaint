@@ -8,7 +8,7 @@ import { animationFrames, baseName, download, embeddedProfile, encode, flattened
 import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
 import { isCraftFile } from "../plugins/Craft.js";
-import { cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
+import { BlendModes, cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
 import { scaleImage } from "../core/Resample.js";
 import { transformPixels } from "../core/ColorProfiles.js";
 import { Selection, SelectionMode } from "../core/Selection.js";
@@ -457,23 +457,26 @@ export class App extends EventTarget {
                 close();
                 return;
             }
-            // En el teléfono, el menú Capas (que no cabe en la fila de los menús) va primero y debajo,
-            // las imágenes abiertas.
+            // En el teléfono, las imágenes abiertas en un menú (Capas ya va en la fila de los menús),
+            // con el sol de los cambios sin guardar a la derecha de cada una.
             if (isPhone()) {
                 const r = button.getBoundingClientRect();
-                const layers = this.menuBar.menus.find((m) => m.id === "layers");
                 const images = this.docs.map((doc) => ({
                     text: (doc.isModified() ? "*" : "") + doc.displayName(), icon: thumbnail(doc.flattened(), 24, 18), checked: doc === this.doc,
+                    badge: doc.isModified() ? el("span", { className: "unsaved-badge", title: tr("Cambios no guardados") }, [unsavedStar(14)]) : undefined,
                     run: () => this.setCurrent(doc),
                 }));
-                popupMenu([{ section: tr("Capas") }, ...(layers ? layers.entries() : []), "-", { section: tr("Imágenes abiertas") }, ...images],
-                          Math.max(0, r.right - 240), r.bottom + 1, { minWidth: 220 });
+                popupMenu([{ section: tr("Imágenes abiertas") }, ...images], Math.max(0, r.right - 240), r.bottom + 1, { minWidth: 220 });
                 return;
             }
             popup = el("div", { className: "image-list-popup" });
             for (const doc of this.docs) {
+                // Como en la tira: el sol de los cambios sin guardar arriba a la izquierda de la miniatura.
+                const thumb = el("span", { className: "thumb" }, [thumbnail(doc.flattened(), 64, 48)]);
+                if (doc.isModified())
+                    thumb.appendChild(el("span", { className: "unsaved", title: tr("Cambios no guardados") }, [unsavedStar(12)]));
                 const row = el("div", { className: "row" + (doc === this.doc ? " selected" : "") },
-                               [el("span", { className: "thumb" }, [thumbnail(doc.flattened(), 64, 48)]),
+                               [thumb,
                                 el("span", { className: "name", textContent: (doc.isModified() ? "*" : "") + doc.displayName() })]);
                 row.addEventListener("click", () => choose(doc));
                 row.addEventListener("pointerenter", () => {
@@ -722,14 +725,18 @@ export class App extends EventTarget {
 
     createMenus() {
         const a = (id) => this.actions.get(id);
+        // Los de los complementos, con la pieza de puzle a la derecha (se quita en Configuración >
+        // Complementos).
         const effectEntry = (e) => ({
             text: tr(e.name) + (e.params.length || e.configure ? "..." : ""), icon: `effect-${e.id}`, shortcut: e.shortcut || "",
             enabled: !!this.doc, run: this.command(() => this.runEffect(e, false)),
+            badge: e.pluginId && Settings.get("pluginMenuIcons") !== false ? "settings-plugins" : undefined,
         });
         const menuEffects = () => Effects.filter((e) => !e.hidden && !Customization.isHidden(e.id));
         const sorted = (list) => [...list].sort((x, y) => tr(x.name).localeCompare(tr(y.name)));
         this.menuBar.setMenus([
-            { title: tr("&Archivo"), entries: () => [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print"), "-", a("close"), a("closeAll")] },
+            // En el teléfono no se ve: lo mismo está en el botón de guardar con flecha (createToolBar).
+            { id: "file", title: tr("&Archivo"), entries: () => this.fileEntries() },
             { title: tr("&Edición"), entries: () => [a("undo"), a("redo"), "-", a("cut"), a("copy"), a("copyMerged"), a("paste"), a("pasteLayer"),
                                                       a("pasteImage"), "-", a("copySelection"),
                                                       { text: tr("Pegar s&elección"), icon: "edit-paste-selection", enabled: !!this.doc,
@@ -781,6 +788,12 @@ export class App extends EventTarget {
         ]);
     }
 
+    // El menú Archivo (también el del botón de guardar con flecha del teléfono).
+    fileEntries() {
+        const a = (id) => this.actions.get(id);
+        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print"), "-", a("close"), a("closeAll")];
+    }
+
     createToolBar() {
         // La barra principal lleva los mismos iconos que los menús, salvo de Cortar a Anular la
         // selección, que son como los de Paint.NET 4 (como en Kaint).
@@ -788,12 +801,13 @@ export class App extends EventTarget {
         const groups = [["new", "open", "save"], ["print"], ["cut", "copy", "paste"], ["crop", "deselect"], ["undo", "redo"], ["pixelGrid", "rulers"]];
         const barIcons = { cut: "toolbar-cut", copy: "toolbar-copy", paste: "toolbar-paste", crop: "toolbar-crop", deselect: "toolbar-deselect" };
         // En el teléfono, Nuevo, Abrir, Guardar e Imprimir van juntos en un botón con menú (como el de
-        // guardar con flecha), para que la barra quepa.
-        const file = el("button", { className: "tbutton phone-file", type: "button", title: tr("Archivo") }, [icon("document-save", 16),
-                                                                                                      el("span", { className: "arrow", textContent: "▾" })]);
+        // guardar con flecha), para que la barra quepa. Es el menú Archivo entero: así ese menú no
+        // ocupa sitio en la fila de los menús.
+        const file = el("button", { className: "tbutton phone-file", type: "button", title: tr("Archivo") },
+                        [icon("document-save", 16), el("span", { className: "arrow", textContent: "▾" })]);
         file.addEventListener("click", () => {
-            const r = file.getBoundingClientRect(), a = (id) => this.actions.get(id);
-            popupMenu([a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print")], r.left, r.bottom + 1);
+            const r = file.getBoundingClientRect();
+            popupMenu(this.fileEntries(), r.left, r.bottom + 1);
         });
         bar.appendChild(file);
         groups.forEach((group, i) => {
@@ -803,6 +817,14 @@ export class App extends EventTarget {
                 const b = toolButton(this.actions.get(id), barIcons[id] || this.actions.get(id).icon, 16);
                 b.dataset.action = id;
                 bar.appendChild(b);
+                // En el teléfono, junto a Anular la selección, la papelera: borra la selección como
+                // Supr, que el teléfono no tiene (ocupa el sitio de Reglas, que ahí no se ve).
+                if (id === "deselect") {
+                    const erase = toolButton(this.actions.get("eraseSel"), "edit-delete", 16);
+                    erase.classList.add("phone-erase");
+                    erase.dataset.action = "eraseSel";
+                    bar.appendChild(erase);
+                }
             }
         });
     }
@@ -866,6 +888,17 @@ export class App extends EventTarget {
                       r.right - 260, r.bottom, { minWidth: 260 });
         });
         box.appendChild(help);
+        // En el teléfono, la rueda con flecha despliega todo lo de la esquina: las ventanas,
+        // Configuración y la Ayuda (los demás botones no caben).
+        const more = el("button", { className: "tbutton phone-more", type: "button", title: tr("Configuración") },
+                        [icon("configure", 16), el("span", { className: "arrow", textContent: "▾" })]);
+        more.addEventListener("click", () => {
+            const r = more.getBoundingClientRect(), a = (id) => this.actions.get(id);
+            popupMenu([a("tools"), a("history"), a("layers"), a("colors"), "-", a("settings"), "-", { section: tr("Ayuda") },
+                       a("docs"), a("website"), "-", a("donate"), a("forum"), a("tutorials"), a("pluginsSite"), a("feedback"), "-", a("about")],
+                      Math.max(0, r.right - 250), r.bottom + 1, { minWidth: 250 });
+        });
+        box.prepend(more);
     }
 
     createStatusBar() {
@@ -1229,7 +1262,9 @@ export class App extends EventTarget {
             layer.ctx.putImageData(new ImageData(new Uint8ClampedArray(l.data), w, h), 0, 0);
             layer.visible = l.visible !== false;
             layer.opacity = Math.max(0, Math.min(255, Number(l.opacity ?? 255)));
-            layer.blend = l.blendMode || "normal";
+            // Los nombres de paint.js ("colorBurn") en los de Kaint ("colorburn").
+            const blend = String(l.blendMode || "normal").toLowerCase().replace(/[-_ ]/g, "");
+            layer.blend = BlendModes.includes(blend) ? blend : "normal";
             return layer;
         });
         doc.active = Math.min(Number(r.activeLayer ?? doc.layers.length - 1), doc.layers.length - 1);

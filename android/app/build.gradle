@@ -42,8 +42,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Los archivos de la web van tal cual (sin comprimir los que ya lo están).
+    // Los archivos de la web van tal cual. Solo se dejan fuera los de control de versiones: un
+    // patrón con un nombre de carpeta (como «!tools») quita TODAS las carpetas que se llamen así, y
+    // «!tools» dejaba el APK sin js/tools/ (las herramientas): la web no arrancaba y la pantalla se
+    // quedaba en blanco. Las carpetas tests/ y tools/ de KaintHTML ya no se copian (build-apk.sh).
     androidResources {
-        ignoreAssetsPattern = "!.git:!node_modules:!tests:!tools"
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
     }
 }

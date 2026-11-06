@@ -678,6 +678,187 @@ export function decodeDds(b) {
     return out;
 }
 
+// --- QOI ----------------------------------------------------------------------------------
+
+// «Quite OK Image» (https://qoiformat.org): sin pérdida, como Qoi:: de Kaint (ExtraFormats.cpp).
+const qoiSlot = (r, g, b, a) => ((r * 3 + g * 5 + b * 7 + a * 11) % 64) * 4;
+
+export function encodeQoi(image) {
+    const { width: w, height: h, data } = image, n = w * h;
+    let alpha = false;
+    for (let i = 3; i < data.length && !alpha; i += 4)
+        alpha = data[i] !== 255;
+    const out = new Writer(22 + n * 2);
+    out.ascii("qoif");
+    out.u32be(w); out.u32be(h); out.u8(alpha ? 4 : 3); out.u8(0);
+    const index = new Uint8Array(256), wrap = (v) => ((v + 128) & 255) - 128;
+    let pr = 0, pg = 0, pb = 0, pa = 255, run = 0;
+    for (let i = 0; i < n; ++i) {
+        const o = i * 4, r = data[o], g = data[o + 1], b = data[o + 2], a = data[o + 3];
+        if (r === pr && g === pg && b === pb && a === pa) {
+            if (++run === 62 || i === n - 1) {
+                out.u8(0xc0 | (run - 1));
+                run = 0;
+            }
+            continue;
+        }
+        if (run > 0) {
+            out.u8(0xc0 | (run - 1));
+            run = 0;
+        }
+        const s = qoiSlot(r, g, b, a);
+        if (index[s] === r && index[s + 1] === g && index[s + 2] === b && index[s + 3] === a) {
+            out.u8(s / 4);
+        } else {
+            index[s] = r; index[s + 1] = g; index[s + 2] = b; index[s + 3] = a;
+            if (a === pa) {
+                const vr = wrap(r - pr), vg = wrap(g - pg), vb = wrap(b - pb), vgr = vr - vg, vgb = vb - vg;
+                if (vr > -3 && vr < 2 && vg > -3 && vg < 2 && vb > -3 && vb < 2) {
+                    out.u8(0x40 | ((vr + 2) << 4) | ((vg + 2) << 2) | (vb + 2));
+                } else if (vgr > -9 && vgr < 8 && vg > -33 && vg < 32 && vgb > -9 && vgb < 8) {
+                    out.u8(0x80 | (vg + 32));
+                    out.u8(((vgr + 8) << 4) | (vgb + 8));
+                } else {
+                    out.u8(0xfe); out.u8(r); out.u8(g); out.u8(b);
+                }
+            } else {
+                out.u8(0xff); out.u8(r); out.u8(g); out.u8(b); out.u8(a);
+            }
+        }
+        pr = r; pg = g; pb = b; pa = a;
+    }
+    for (let i = 0; i < 7; ++i)
+        out.u8(0);
+    out.u8(1);
+    return out.result();
+}
+
+export function decodeQoi(b) {
+    if (b.length < 22 || ascii(b, 0, 4) !== "qoif")
+        throw new Error("QOI");
+    const w = u32be(b, 4), h = u32be(b, 8), channels = b[12];
+    if (!w || !h || (channels !== 3 && channels !== 4) || w * h > 16384 * 16384)
+        throw new Error("QOI");
+    const out = newImage(w, h), d = out.data, index = new Uint8Array(256), end = b.length - 8;
+    let r = 0, g = 0, bl = 0, a = 255, run = 0, p = 14;
+    for (let i = 0; i < w * h; ++i) {
+        if (run > 0) {
+            --run;
+        } else if (p < end) {
+            const op = b[p++];
+            if (op === 0xfe) {
+                r = b[p]; g = b[p + 1]; bl = b[p + 2]; p += 3;
+            } else if (op === 0xff) {
+                r = b[p]; g = b[p + 1]; bl = b[p + 2]; a = b[p + 3]; p += 4;
+            } else if ((op & 0xc0) === 0x00) {
+                const s = op * 4;
+                r = index[s]; g = index[s + 1]; bl = index[s + 2]; a = index[s + 3];
+            } else if ((op & 0xc0) === 0x40) {
+                r = (r + ((op >> 4) & 3) - 2) & 255;
+                g = (g + ((op >> 2) & 3) - 2) & 255;
+                bl = (bl + (op & 3) - 2) & 255;
+            } else if ((op & 0xc0) === 0x80) {
+                const next = b[p++], vg = (op & 0x3f) - 32;
+                r = (r + vg - 8 + ((next >> 4) & 15)) & 255;
+                g = (g + vg) & 255;
+                bl = (bl + vg - 8 + (next & 15)) & 255;
+            } else {
+                run = op & 0x3f;
+            }
+            const s = qoiSlot(r, g, bl, a);
+            index[s] = r; index[s + 1] = g; index[s + 2] = bl; index[s + 3] = a;
+        } else {
+            throw new Error("QOI");
+        }
+        const o = i * 4;
+        d[o] = r; d[o + 1] = g; d[o + 2] = bl; d[o + 3] = channels === 4 ? a : 255;
+    }
+    return out;
+}
+
+// --- Netpbm (PPM, PGM y PBM) --------------------------------------------------------------
+
+// PPM binario (P6), en color y sin transparencia, como el que escribe Qt para Kaint.
+export function encodePpm(image) {
+    const { width: w, height: h, data } = image;
+    const out = new Writer(16 + w * h * 3);
+    out.ascii(`P6\n${w} ${h}\n255\n`);
+    for (let i = 0; i < w * h; ++i) {
+        out.u8(data[i * 4]); out.u8(data[i * 4 + 1]); out.u8(data[i * 4 + 2]);
+    }
+    return out.result();
+}
+
+// P1 a P6: blanco y negro, grises o color, en texto o binario (de 8 o 16 bits).
+export function decodeNetpbm(b) {
+    let p = 0;
+    const space = (c) => c === 32 || c === 9 || c === 10 || c === 13;
+    const skip = () => {
+        for (;;) {
+            while (p < b.length && space(b[p])) ++p;
+            if (b[p] !== 35) // #
+                return;
+            while (p < b.length && b[p] !== 10) ++p;
+        }
+    };
+    const token = () => {
+        skip();
+        const start = p;
+        while (p < b.length && !space(b[p]) && b[p] !== 35) ++p;
+        return ascii(b, start, p - start);
+    };
+    const magic = token(), type = Number(magic[1]);
+    if (magic.length !== 2 || magic[0] !== "P" || !(type >= 1 && type <= 6))
+        throw new Error("Netpbm");
+    const w = Number(token()), h = Number(token()), max = type === 1 || type === 4 ? 1 : Number(token());
+    if (!(w > 0 && h > 0 && max > 0 && max < 65536) || w * h > 16384 * 16384)
+        throw new Error("Netpbm");
+    ++p; // El espacio tras la cabecera.
+    const out = newImage(w, h), d = out.data, n = w * h, color = type === 3 || type === 6, wide = max > 255;
+    const level = (v) => Math.round((Math.min(v, max) * 255) / max);
+    const put = (i, r, g, bl) => {
+        d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = bl; d[i * 4 + 3] = 255;
+    };
+    if (type === 1) {
+        // Los bits pueden ir seguidos, sin espacios: 1 es negro.
+        for (let i = 0; i < n; ++i) {
+            skip();
+            if (p >= b.length)
+                throw new Error("Netpbm");
+            const v = b[p++] === 49 ? 0 : 255;
+            put(i, v, v, v);
+        }
+    } else if (type === 2 || type === 3) {
+        for (let i = 0; i < n; ++i) {
+            const r = level(Number(token()));
+            if (color) put(i, r, level(Number(token())), level(Number(token())));
+            else put(i, r, r, r);
+        }
+    } else if (type === 4) {
+        const row = Math.ceil(w / 8);
+        if (p + row * h > b.length)
+            throw new Error("Netpbm");
+        for (let y = 0; y < h; ++y)
+            for (let x = 0; x < w; ++x) {
+                const v = (b[p + y * row + (x >> 3)] >> (7 - (x & 7))) & 1 ? 0 : 255;
+                put(y * w + x, v, v, v);
+            }
+    } else {
+        const size = (wide ? 2 : 1) * (color ? 3 : 1);
+        if (p + n * size > b.length)
+            throw new Error("Netpbm");
+        const at = (k) => (wide ? (b[p + k * 2] << 8) | b[p + k * 2 + 1] : b[p + k]);
+        for (let i = 0; i < n; ++i) {
+            if (color) put(i, level(at(i * 3)), level(at(i * 3 + 1)), level(at(i * 3 + 2)));
+            else {
+                const v = level(at(i));
+                put(i, v, v, v);
+            }
+        }
+    }
+    return out;
+}
+
 // --- Iconos (Ico de Kaint) ----------------------------------------------------------------
 
 export const IcoSizes = [16, 24, 32, 48, 64, 128, 256];

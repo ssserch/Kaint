@@ -109,6 +109,18 @@
   </keywords>
 
   <releases>
+    <release version="1.1.6" date="2026-11-05">
+      <description>
+        <p>Desktop support for paint.js plugins, more image formats everywhere and a tidier phone version.</p>
+        <ul>
+          <li>Support for paint.js plugins (.paintjs), the same ones as the web version: their effects and file types (Photoshop PSD with layers, for example), run in a sandboxed JavaScript engine with no access to your files or the internet</li>
+          <li>The web version's plugin catalog, behind a button you can turn on in Settings → Plugins</li>
+          <li>TGA, DDS and QOI open and save on every system, without depending on Qt's image plugins</li>
+          <li>Kaint's own title bar and window frame can also be used on Windows</li>
+          <li>Phone version: windows hidden in the corners stay out of each other's way, the File menu lives in the save button and the menus fit in one row</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.5" date="2026-11-04">
       <description>
         <p>Saving as Paint.NET files, customizable menus and title bars, and a phone-friendly web version.</p>

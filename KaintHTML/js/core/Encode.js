@@ -17,6 +17,8 @@ export const FormatTraits = {
     ico: { icon: true },
     tiff: {},
     dds: {},
+    qoi: {},
+    ppm: { opaque: true },
 };
 
 export const traits = (ext) => FormatTraits[ext] || {};
@@ -244,6 +246,10 @@ export async function encodeImage(prepared, ext, o, extra = {}) {
         return Codecs.encodeTiff(prepared, { dpi: dpi || 96, icc });
     case "dds":
         return Codecs.encodeDds(prepared);
+    case "qoi":
+        return Codecs.encodeQoi(prepared);
+    case "ppm":
+        return Codecs.encodePpm(prepared);
     case "png":
         if (prepared.indices || prepared.depth === 24 || o.interlaced) {
             const bytes = await Codecs.encodePng(prepared, { depth: prepared.depth || 32, interlaced: o.interlaced, dpi });
@@ -278,6 +284,10 @@ export async function decodeForPreview(bytes, ext) {
         return [await Codecs.decodeTiff(bytes)];
     if (ext === "dds")
         return [Codecs.decodeDds(bytes)];
+    if (ext === "qoi")
+        return [Codecs.decodeQoi(bytes)];
+    if (ext === "ppm")
+        return [Codecs.decodeNetpbm(bytes)];
     const bitmap = await createImageBitmap(new Blob([bytes], { type: ext === "ico" ? "image/x-icon" : MIMES[ext] || `image/${ext}` }));
     return [{ width: bitmap.width, height: bitmap.height, bitmap, delay: 100 }];
 }

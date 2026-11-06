@@ -43,6 +43,12 @@ struct AppSettings {
     bool layerDropLine = false;
     // Botones de ir al principio y al final del historial, junto a deshacer y rehacer.
     bool historyJumpButtons = false;
+    // En los menús Ajustes y Efectos, los efectos de los complementos con el icono de los
+    // complementos (la pieza de puzle) a la derecha.
+    bool pluginMenuIcons = true;
+    // Configuración > Complementos: el botón «Complementos de Kaint.HTML», el catálogo de
+    // complementos de paint.js de la versión web. Escondido mientras no se active.
+    bool kaintHtmlPlugins = false;
     // Colores ampliado: también los colores semitransparentes de la paleta (las filas de abajo de
     // la de fábrica, como en Paint.NET). El blanco de relleno de las paletas cortas nunca se ve.
     bool paletteTranslucent = true;
@@ -59,12 +65,17 @@ struct AppSettings {
     // Linux: color de la barra superior y de las cabeceras de las ventanas, como el de énfasis de
     // Windows (no válido: el del tema).
     QColor titleBarColor;
-    // Linux, con el estilo de Paint.NET: la ventana principal y los diálogos con su propia barra de
-    // título, como las de Windows 10, en vez de la del escritorio.
-    bool windows10Frame = true;
-    // Botones de la barra de título (WindowFrame::Buttons): -1, la barra del escritorio (sin la de
-    // Kaint); 0 Windows 10, 1 Windows 11, 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98. Con
-    // el estilo Paint.NET, por defecto los de Windows 10.
+    // La ventana principal y los diálogos con la barra de título y el marco de Kaint (con los
+    // botones de titleButtons) o con los del sistema: los de Windows o, en Linux, los del escritorio
+    // (en KDE, los de Plasma). Por defecto, en Linux sí y en Windows no.
+#ifdef Q_OS_WIN
+    bool customFrame = false;
+#else
+    bool customFrame = true;
+#endif
+    // Botones de la barra de título de Kaint (WindowFrame::Buttons): 0 Windows 10, 1 Windows 11,
+    // 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98. (Antes, -1 era «la del escritorio»: ahora es
+    // customFrame.)
     int titleButtons = 0;
     // Los botones a la izquierda de la barra de título.
     bool titleButtonsLeft = false;

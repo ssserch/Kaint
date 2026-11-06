@@ -224,6 +224,26 @@ function linearToPremul(c) {
     return qPremultiply(qRgba(ch(c[0]), ch(c[1]), ch(c[2]), Math.round(a * 255)));
 }
 
+// Lo que cubre cada píxel de destino de la imagen transformada (Resample::drawTransformed de
+// Kaint): 1 dentro, 0 fuera y la parte cubierta en el borde. Las muestras repiten el píxel del borde
+// en vez de mezclar transparencia, así una imagen opaca escalada sigue con el borde nítido (como en
+// Paint.NET; antes un cuadrado opaco ampliado salía con el contorno semitransparente y desenfocado)
+// y girada, con el borde suavizado por lo que cubre. (sx, sy): el centro del píxel en la imagen.
+function coverageOf(matrix, sw, sh) {
+    const det = Math.abs(matrix.a * matrix.d - matrix.b * matrix.c);
+    const perX = det / Math.max(1e-9, Math.hypot(matrix.c, matrix.d)), perY = det / Math.max(1e-9, Math.hypot(matrix.a, matrix.b));
+    const axis = (a, b) => Math.min(1, Math.max(0, Math.min(a + 0.5, 1) + Math.min(b + 0.5, 1) - 1));
+    return (sx, sy) => axis(sx * perX, (sw - sx) * perX) * axis(sy * perY, (sh - sy) * perY);
+}
+
+// Un píxel premultiplicado con su alfa (y sus colores) por lo que cubre.
+function covered(s, cover) {
+    if (cover >= 1)
+        return s;
+    const k = (v) => Math.round(v * cover);
+    return qRgba(k(qRed(s)), k(qGreen(s)), k(qBlue(s)), k(qAlpha(s)));
+}
+
 // Dibuja 'source' (ImageData, alfa directo) transformada por 'matrix' (DOMMatrix: de sus píxeles
 // a los de 'dst') sobre 'dst' (ImageData transparente, alfa directo), con el muestreo bicúbico, el
 // bilineal con la corrección gamma, la multimuestra bilineal (2×2 muestras por píxel) o el
@@ -243,14 +263,20 @@ export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect
     const px = new Uint32Array(new Uint8ClampedArray(source.data).buffer).map(qPremultiply);
     const out = new Uint32Array(dst.data.buffer, dst.data.byteOffset, dw * dh);
     const weights = (t) => [kCatmullRom(t + 1), kCatmullRom(t), kCatmullRom(t - 1), kCatmullRom(t - 2)];
+    const coverage = coverageOf(matrix, sw, sh);
+    // Fuera de la imagen, el píxel del borde más cercano.
+    const cx = (x) => Math.min(sw - 1, Math.max(0, x)), cy = (y) => Math.min(sh - 1, Math.max(0, y));
     if (gammaCorrect && interpolation !== "nearest") {
         const lin = linearImage(px, sw, sh), zero = [0, 0, 0, 0];
-        const at = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? null : (y * sw + x) * 4);
+        const at = (x, y) => (cy(y) * sw + cx(x)) * 4;
         const c = new Float32Array(4);
         for (let y = y0; y <= y1; ++y)
             for (let x = x0; x <= x1; ++x) {
                 const X = x + 0.5, Y = y + 0.5;
                 let sx = inv.a * X + inv.c * Y + inv.e - 0.5, sy = inv.b * X + inv.d * Y + inv.f - 0.5;
+                const cover = coverage(sx + 0.5, sy + 0.5);
+                if (cover <= 0)
+                    continue;
                 const ix = Math.floor(sx), iy = Math.floor(sy);
                 c.fill(0);
                 if (interpolation === "bilinear") {
@@ -275,20 +301,25 @@ export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect
                     for (let k = 0; k < 3; ++k)
                         c[k] = Math.min(c[3], Math.max(0, c[k]));
                 }
-                const s = linearToPremul(c);
+                const s = covered(linearToPremul(c), cover);
                 if (qAlpha(s))
                     out[y * dw + x] = qUnpremultiply(s);
             }
         return;
     }
-    const pixel = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? 0 : px[y * sw + x]);
+    const outside = (x, y) => x < 0 || y < 0 || x >= sw || y >= sh;
+    const pixel = (x, y) => px[cy(y) * sw + cx(x)];
     for (let y = y0; y <= y1; ++y)
         for (let x = x0; x <= x1; ++x) {
             const X = x + 0.5, Y = y + 0.5;
             const sx = inv.a * X + inv.c * Y + inv.e, sy = inv.b * X + inv.d * Y + inv.f;
+            const cover = interpolation === "nearest" ? 1 : coverage(sx, sy);
+            if (cover <= 0)
+                continue;
             let s;
             if (interpolation === "nearest") {
-                s = pixel(Math.floor(sx), Math.floor(sy));
+                const ix = Math.floor(sx), iy = Math.floor(sy);
+                s = outside(ix, iy) ? 0 : pixel(ix, iy);
             } else if (interpolation === "bilinear") {
                 const fx = sx - 0.5, fy = sy - 0.5, ix = Math.floor(fx), iy = Math.floor(fy);
                 const tx = Math.trunc((fx - ix) * 256), ty = Math.trunc((fy - iy) * 256);
@@ -310,6 +341,7 @@ export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect
                 s = qRgba(Math.min(a, clamp255f(Math.fround(acc[0]))), Math.min(a, clamp255f(Math.fround(acc[1]))),
                           Math.min(a, clamp255f(Math.fround(acc[2]))), a);
             }
+            s = covered(s, cover);
             if (qAlpha(s))
                 out[y * dw + x] = qUnpremultiply(s);
         }
@@ -335,11 +367,17 @@ function drawMultisampled(dst, source, matrix, interpolation, gammaCorrect) {
     const px = new Uint32Array(new Uint8ClampedArray(source.data).buffer).map(qPremultiply);
     const out = new Uint32Array(dst.data.buffer, dst.data.byteOffset, dw * dh);
     const lin = gammaCorrect ? linearImage(px, sw, sh) : null;
-    const pixel = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? 0 : px[y * sw + x]);
-    const at = (x, y) => (x < 0 || y < 0 || x >= sw || y >= sh ? -1 : (y * sw + x) * 4);
+    // Fuera de la imagen, el píxel del borde más cercano (el borde lo recorta lo que cubre).
+    const cx = (x) => Math.min(sw - 1, Math.max(0, x)), cy = (y) => Math.min(sh - 1, Math.max(0, y));
+    const pixel = (x, y) => px[cy(y) * sw + cx(x)];
+    const at = (x, y) => (cy(y) * sw + cx(x)) * 4;
+    const coverage = coverageOf(matrix, sw, sh);
     const c = new Float32Array(4), acc = [0, 0, 0, 0];
     for (let y = y0; y <= y1; ++y)
         for (let x = x0; x <= x1; ++x) {
+            const cover = coverage(inv.a * (x + 0.5) + inv.c * (y + 0.5) + inv.e, inv.b * (x + 0.5) + inv.d * (y + 0.5) + inv.f);
+            if (cover <= 0)
+                continue;
             c.fill(0);
             acc.fill(0);
             for (let j = 0; j < ny; ++j)
@@ -366,6 +404,7 @@ function drawMultisampled(dst, source, matrix, interpolation, gammaCorrect) {
                 const a = clamp255f(acc[3] / n);
                 s = qRgba(Math.min(a, clamp255f(acc[0] / n)), Math.min(a, clamp255f(acc[1] / n)), Math.min(a, clamp255f(acc[2] / n)), a);
             }
+            s = covered(s, cover);
             if (qAlpha(s))
                 out[y * dw + x] = qUnpremultiply(s);
         }

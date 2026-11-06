@@ -204,6 +204,14 @@ await page.keyboard.up("Control");
 await drag([[100, 400], [105, 400]]);
 check((await pixel(102, 400, 0))[0] > 150, "el tampón copia desde el origen");
 
+// Capas: al pulsar una fila, esa capa pasa a ser la activa y su fila se marca (antes la capa
+// cambiaba, pero la fila marcada seguía siendo la de antes y parecía que no pasaba nada).
+await page.evaluate(() => window.kaint.doc.setActiveIndex(1));
+await page.click(".layer-list .row >> nth=-1");
+check(await page.evaluate(() => window.kaint.doc.active === 0
+                          && [...document.querySelectorAll(".layer-list .row")].map((r) => r.classList.contains("selected")).join() === "false,true"),
+      "pulsar una capa la marca como activa");
+
 // Capas: propiedades (con vista previa), subir, combinar y la animación de las filas
 await page.evaluate(() => window.kaint.doc.setActiveIndex(1));
 const propsDone = page.evaluate(() => window.kaint.layerProperties());
@@ -335,8 +343,8 @@ const icons = await page.evaluate(() => {
     const buttons = [...document.querySelectorAll(".tools-grid .tbutton")];
     const last = buttons[buttons.length - 1].getBoundingClientRect(), first = buttons[0].getBoundingClientRect();
     return { drawn: buttons.every((b) => b.querySelector(".kicon").tagName === "CANVAS"), lastWide: last.width > first.width * 1.5,
-             toolbar: [...document.querySelectorAll("#main-toolbar .kicon")].every((i) => i.tagName === (i.dataset.icon.startsWith("toolbar-") ? "CANVAS" : "IMG")),
-             drawnBar: [...document.querySelectorAll("#main-toolbar .kicon")].filter((i) => i.tagName === "CANVAS").map((i) => i.dataset.icon).join(),
+             toolbar: [...document.querySelectorAll("#main-toolbar .kicon")].filter((i) => !i.closest(".tool-options-toggle")).every((i) => i.tagName === (i.dataset.icon.startsWith("toolbar-") ? "CANVAS" : "IMG")),
+             drawnBar: [...document.querySelectorAll("#main-toolbar .kicon")].filter((i) => i.tagName === "CANVAS" && !i.closest(".tool-options-toggle")).map((i) => i.dataset.icon).join(),
              cutGray: getComputedStyle(document.querySelector('#main-toolbar .kicon[data-icon="toolbar-cut"]')).filter.includes("grayscale")
                       && document.querySelector('#main-toolbar .kicon[data-icon="toolbar-cut"]').closest("button").disabled,
              pasteColored: getComputedStyle(document.querySelector('#main-toolbar .kicon[data-icon="toolbar-paste"]')).filter === "none",
@@ -371,6 +379,13 @@ await page.keyboard.press("Control+z");
 check(await lastStep() === "Rectángulo" && await page.evaluate(() => window.kaint.tools.current.editing), "deshacer vuelve a la forma y sigue editable");
 await page.keyboard.press("Enter");
 check(await lastStep() === "Finalizar forma", "Intro termina la forma");
+// Un clic dentro de la forma la deja seleccionada; uno lejos de ella la termina.
+await drag([[100, 100], [160, 160]]);
+await click(130, 130);
+check(await page.evaluate(() => window.kaint.tools.current.editing), "un clic dentro deja la forma seleccionada");
+await click(330, 260);
+check(!(await page.evaluate(() => window.kaint.tools.current.editing)) && await lastStep() === "Finalizar forma",
+      "un clic lejos de la forma la termina");
 await tool("paintbucket");
 await click(300, 250);
 check(await lastStep() === "Cubo de pintura", "el cubo entra en el historial al momento");
@@ -715,7 +730,7 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
         }
         document.getElementById("image-list").click();
         const popup = document.querySelector(".image-list-popup");
-        const out = { rows: popup?.querySelectorAll(".row").length, thumbs: popup?.querySelectorAll(".row canvas").length,
+        const out = { rows: popup?.querySelectorAll(".row").length, thumbs: popup?.querySelectorAll(".row .thumb > canvas").length,
                       selected: [...(popup?.querySelectorAll(".row") || [])].findIndex((r) => r.classList.contains("selected")),
                       current: k.docs.indexOf(k.doc), down: document.getElementById("image-list").classList.contains("down") };
         return out;

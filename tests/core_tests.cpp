@@ -3,6 +3,7 @@
 #include "core/Commands.h"
 #include "core/CustomShapes.h"
 #include "core/Document.h"
+#include "core/ExtraFormats.h"
 #include "core/FloodFill.h"
 #include "core/Gif.h"
 #include "core/ImageIO.h"
@@ -13,9 +14,11 @@
 #include "core/Raster.h"
 #include "core/Resample.h"
 #include "core/Stroke.h"
+#include "core/Zip.h"
 #include "core/effects/Effect.h"
 #include "core/effects/EffectUtils.h"
 #include "core/plugins/CraftPlugins.h"
+#include "core/plugins/PaintJs.h"
 #include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginEffects.h"
 #include "core/plugins/PluginManager.h"
@@ -38,6 +41,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <thread>
 
 static int g_failures = 0;
 
@@ -523,6 +527,121 @@ static void testSaveOptions()
     const QByteArray small = ImageIO::encode(prepared, jpg, low, &error);
     const QByteArray big = ImageIO::encode(prepared, jpg, high, &error);
     CHECK(!small.isEmpty() && small.size() < big.size());
+}
+
+// Mover píxeles seleccionados, al escalar: un cuadrado opaco ampliado sigue con el borde nítido
+// con cualquier interpolación (como en Paint.NET; antes salía semitransparente y desenfocado); con
+// un margen transparente sí se mezcla, y al girarlo el borde se suaviza sin salirse.
+static void testTransformedEdges()
+{
+    QImage red(10, 10, QImage::Format_ARGB32_Premultiplied);
+    red.fill(QColor(255, 0, 0));
+    for (auto interp : Resample::interpolations()) {
+        for (bool gamma : {false, true}) {
+            QImage dst(40, 40, QImage::Format_ARGB32_Premultiplied);
+            dst.fill(Qt::transparent);
+            Resample::drawTransformed(dst, red, QTransform::fromScale(1.5, 1.5) * QTransform::fromTranslate(5, 5), interp, dst.rect(),
+                                      gamma);
+            CHECK(qAlpha(dst.pixel(5, 12)) == 255 && qAlpha(dst.pixel(5, 5)) == 255 && qAlpha(dst.pixel(19, 19)) == 255);
+            CHECK(qAlpha(dst.pixel(4, 12)) == 0 && qAlpha(dst.pixel(20, 12)) == 0 && dst.pixel(12, 12) == qRgb(255, 0, 0));
+        }
+    }
+    // Con un píxel transparente alrededor, la bilineal mezcla el borde (es otra cosa).
+    QImage framed(12, 12, QImage::Format_ARGB32_Premultiplied);
+    framed.fill(Qt::transparent);
+    QPainter(&framed).fillRect(QRect(1, 1, 10, 10), QColor(255, 0, 0));
+    QImage soft(40, 40, QImage::Format_ARGB32_Premultiplied);
+    soft.fill(Qt::transparent);
+    Resample::drawTransformed(soft, framed, QTransform::fromScale(2, 2), Resample::Interpolation::Bilinear, soft.rect());
+    CHECK(qAlpha(soft.pixel(2, 12)) > 0 && qAlpha(soft.pixel(2, 12)) < 255 && qAlpha(soft.pixel(12, 12)) == 255);
+    // Girado 30°: dentro opaco, el borde con valores intermedios y nada lejos de él.
+    QImage turned(60, 60, QImage::Format_ARGB32_Premultiplied);
+    turned.fill(Qt::transparent);
+    QTransform t;
+    t.translate(30, 30);
+    t.rotate(30);
+    t.scale(2, 2);
+    t.translate(-5, -5);
+    Resample::drawTransformed(turned, red, t, Resample::Interpolation::Bicubic, turned.rect());
+    CHECK(qAlpha(turned.pixel(30, 30)) == 255 && qAlpha(turned.pixel(2, 2)) == 0);
+    int partial = 0;
+    for (int y = 0; y < 60; ++y)
+        for (int x = 0; x < 60; ++x)
+            partial += qAlpha(turned.pixel(x, y)) > 0 && qAlpha(turned.pixel(x, y)) < 255;
+    CHECK(partial > 20 && partial < 160);
+}
+
+// TGA, DDS y QOI con los codificadores de Kaint: se guardan y se vuelven a abrir igual (también
+// sin los complementos de imagen de Qt), y se leen archivos hechos a mano (TGA con RLE, DDS DXT1).
+static void testExtraFormats()
+{
+    std::unique_ptr<Document> doc(Document::createBlank(QSize(37, 21), Qt::transparent));
+    QImage& img = doc->layer(0)->image;
+    for (int y = 0; y < img.height(); ++y)
+        for (int x = 0; x < img.width(); ++x)
+            img.setPixel(x, y, qPremultiply(qRgba(x * 7, y * 12, (x * y) & 255, x < 3 ? 0 : x < 6 ? 128 : 255)));
+    QTemporaryDir dir;
+    QString error;
+    for (const char* suffix : {"tga", "dds", "qoi"}) {
+        const QString path = dir.filePath(QStringLiteral("a.") + QLatin1String(suffix));
+        CHECK(ImageIO::isWritable(path));
+        CHECK(ImageIO::save(doc.get(), path, ImageIO::SaveOptions(), &error));
+        std::unique_ptr<Document> back(ImageIO::load(path, &error));
+        CHECK(back && back->size() == doc->size());
+        if (back)
+            CHECK(sameImage(back->flattened(), doc->flattened()));
+        CHECK(ImageIO::saveFilter().contains(QStringLiteral("*.") + QLatin1String(suffix)));
+        CHECK(ImageIO::openFilter().contains(QStringLiteral("*.") + QLatin1String(suffix)));
+    }
+    // TGA de 24 y de 8 bits (con paleta).
+    ImageIO::SaveOptions o;
+    for (int depth : {24, 8}) {
+        o.bitDepth = depth;
+        const QString path = dir.filePath(QStringLiteral("b%1.tga").arg(depth));
+        CHECK(ImageIO::save(doc.get(), path, o, &error));
+        const QImage back = ImageIO::readImage(path, &error);
+        CHECK(back.size() == doc->size() && !back.isNull());
+        if (!back.isNull())
+            CHECK(qAlpha(back.pixel(20, 10)) == 255 && std::abs(qRed(back.pixel(20, 10)) - 140) <= (depth == 8 ? 40 : 0));
+    }
+    // QOI: cabecera y vuelta exacta en memoria.
+    const QImage straight = doc->flattened().convertToFormat(QImage::Format_ARGB32);
+    const QByteArray qoi = Qoi::encode(straight);
+    CHECK(qoi.startsWith("qoif") && qoi.at(12) == 4 && qoi.endsWith(QByteArray("\0\0\0\0\0\0\0\1", 8)));
+    CHECK(Qoi::decode(qoi) == straight);
+    // TGA con RLE de abajo arriba: 3 × 2, la fila de abajo roja (repetida) y la de arriba azul,
+    // verde y blanca (literales).
+    QByteArray rle("\0\0\x0a\0\0\0\0\0\0\0\0\0\x03\0\x02\0\x18\0", 18);
+    rle += QByteArray("\x82\0\0\xff", 4);
+    rle += QByteArray("\x02\xff\0\0\0\xff\0\xff\xff\xff", 10);
+    const QImage tga = Tga::decode(rle, &error);
+    CHECK(tga.size() == QSize(3, 2));
+    if (tga.size() == QSize(3, 2))
+        CHECK(tga.pixel(0, 1) == qRgb(255, 0, 0) && tga.pixel(2, 1) == qRgb(255, 0, 0) && tga.pixel(0, 0) == qRgb(0, 0, 255)
+              && tga.pixel(1, 0) == qRgb(0, 255, 0) && tga.pixel(2, 0) == qRgb(255, 255, 255));
+    // DDS DXT1 de 4 × 4: color 0 rojo, color 1 azul; la primera fila con el 1 y el resto con el 0.
+    QByteArray dds = Dds::encode(QImage(4, 4, QImage::Format_ARGB32)).left(128);
+    auto setU32 = [&dds](int at, quint32 v) {
+        for (int i = 0; i < 4; ++i)
+            dds[at + i] = char(v >> (8 * i) & 0xff);
+    };
+    setU32(80, 0x4);
+    setU32(84, quint32('D') | quint32('X') << 8 | quint32('T') << 16 | quint32('1') << 24);
+    dds += QByteArray("\x00\xf8\x1f\x00\x55\x00\x00\x00", 8);
+    const QImage dxt = Dds::decode(dds, &error);
+    CHECK(dxt.size() == QSize(4, 4));
+    if (dxt.size() == QSize(4, 4))
+        CHECK(dxt.pixel(0, 0) == qRgb(0, 0, 255) && dxt.pixel(3, 0) == qRgb(0, 0, 255) && dxt.pixel(0, 1) == qRgb(255, 0, 0)
+              && dxt.pixel(3, 3) == qRgb(255, 0, 0));
+    // Archivos dañados o cortados: error, sin leer fuera.
+    CHECK(Tga::decode(rle.left(20), &error).isNull() && !error.isEmpty());
+    CHECK(Dds::decode(dds.left(130), &error).isNull());
+    CHECK(Qoi::decode(qoi.left(30), &error).isNull());
+    // Netpbm (lo escribe Qt): sin transparencia.
+    const QString ppm = dir.filePath(QStringLiteral("c.ppm"));
+    CHECK(!ImageIO::supportsAlpha(ppm));
+    CHECK(ImageIO::save(doc.get(), ppm, ImageIO::SaveOptions(), &error));
+    CHECK(QImage(ppm).size() == doc->size());
 }
 
 // Bote de pintura con suavizado: un círculo con contorno suavizado se rellena de un clic sin
@@ -1453,6 +1572,225 @@ static void testCraftPlugins()
     CHECK(CraftPlugins::parseLut("0 341 682 1023\n" + QByteArray("0 0 4095\n").repeated(64), true, &error, &size) && size == 4);
 }
 
+// Complementos de paint.js (.paintjs): un paquete hecho aquí con sintaxis moderna, efectos con
+// controles, renderPixel, configure() sin ventana y con una propia (solo en la web), el lienzo, la
+// API paintDotJs.effects, un formato con capas y la cancelación.
+static void testPaintJs()
+{
+    // El entorno: lo que da el navegador y usan los paquetes.
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral(
+              "const c = new OffscreenCanvas(8, 8), x = c.getContext('2d'); x.fillStyle = 'rgb(255 0 0 / 50%)'; x.fillRect(0, 0, 4, 4);"
+              "x.getImageData(0, 0, 1, 1).data.join(',') + '|' + x.getImageData(5, 5, 1, 1).data.join(',') + '|' + x.fillStyle"))
+          == QLatin1String("255,0,0,128|0,0,0,0|rgba(255, 0, 0, 0.5)"));
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral("new TextDecoder().decode(new TextEncoder().encode('ñandú'))")) == QString::fromUtf8("ñandú"));
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral("const o = { a: new Uint8Array([1, 2]) }; const k = structuredClone(o); k.a[0] = 9; o.a[0] + ',' + k.a[0]"))
+          == QLatin1String("1,9"));
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral("(async () => (await new Blob(['ab', new Uint8Array([99])]).text()))()")) == QLatin1String("abc"));
+    // Sin red ni DOM: fetch() falla y document.createElement("div") avisa de que necesita un navegador.
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral("fetch('https://example.com')")).startsWith(QLatin1String("Error: TypeError")));
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral("document.createElement('div')")).contains(QLatin1String("needs a web browser")));
+    // Un trazado con arco, recorte y composición.
+    CHECK(PaintJs::evaluateForTesting(QStringLiteral(
+              "const c = new OffscreenCanvas(20, 20), x = c.getContext('2d'); x.fillStyle = '#00f'; x.fillRect(0, 0, 20, 20);"
+              "x.beginPath(); x.arc(10, 10, 6, 0, Math.PI * 2); x.clip(); x.globalCompositeOperation = 'copy'; x.fillStyle = '#0f0';"
+              "x.fillRect(0, 0, 20, 20); [x.getImageData(10, 10, 1, 1).data.join(','), x.getImageData(1, 1, 1, 1).data.join(',')].join('|')"))
+          == QLatin1String("0,255,0,255|0,0,255,255"));
+
+    const QByteArray source = R"JS(
+class Counter { count = 0; static made = 0; bump() { this.count ??= 0; return ++this.count; } }
+const { range, checkbox, select, color } = paintDotJs.controls;
+const opts = { ...{ a: 1 }, b: 2 };
+let probe; try { probe = JSON.parse("{"); } catch { probe = opts.a + opts.b; }
+paintDotJs.registerPlugin({
+    effects: [
+        { id: "invert", name: "Invert JS", menu: "Adjustments",
+          renderPixel: ({ r, g, b, a }) => [255 - r, 255 - g, 255 - b, a] },
+        { id: "fill", name: "Fill JS", category: "Render", icon: paintDotJs.asset("icon.png"),
+          controls: [range("amount", "Amount", 0, 255, 200), checkbox("on", "On", true),
+                     select("mode", "Mode", "green", [["red", "Red"], ["green", "Green"]]), color("tint", "Tint", "#102030")],
+          render({ source, destination, width, height, values, selectionBounds }) {
+              const c = values.mode === "green" ? [0, values.amount, 0] : [values.amount, 0, 0];
+              for (let i = 0; i < destination.length; i += 4)
+                  if (values.on) { destination[i] = c[0]; destination[i + 1] = c[1]; destination[i + 2] = c[2] + probe; }
+              destination[3] = selectionBounds.width;
+          } },
+        { id: "shift", name: "Shift JS", category: "Root",
+          configure: async (ctx) => ({ add: ctx.width > 0 ? 10 : 0 }),
+          render({ destination, values }) { for (let i = 0; i < destination.length; i += 4) destination[i] = Math.min(255, destination[i] + values.add); } },
+        { id: "window", name: "Window JS",
+          configure(ctx) { const d = paintDotJs.dialogs.create({ title: ctx.title }); return new Promise(() => d); },
+          render() {} },
+        { id: "canvas", name: "Canvas JS",
+          render({ destination, width, height }) {
+              const c = document.createElement("canvas"); c.width = width; c.height = height;
+              const x = c.getContext("2d"); x.fillStyle = "#ff0000"; x.fillRect(1, 1, 2, 2);
+              destination.set(x.getImageData(0, 0, width, height).data);
+          } },
+        { id: "chain", name: "Chain JS",
+          render({ source, destination, width, height }) { destination.set(paintDotJs.effects.apply("invert", source, width, height)); } },
+        { id: "forever", name: "Forever JS", render() { for (;;) {} } },
+    ],
+    fileTypes: [{
+        id: "kraw", name: "Kaint raw", extensions: [".kraw"], supportsLayers: true,
+        async decode({ bytes }) {
+            const head = JSON.parse(new TextDecoder().decode(bytes.subarray(4, 4 + new DataView(bytes.buffer).getUint32(0, true))));
+            let o = 4 + new DataView(bytes.buffer).getUint32(0, true);
+            const layers = head.layers.map((l) => { const data = bytes.slice(o, o + head.width * head.height * 4); o += data.length; return { ...l, data }; });
+            return { width: head.width, height: head.height, resolution: head.resolution, activeLayer: head.activeLayer, layers };
+        },
+        encode({ document }) {
+            const head = new TextEncoder().encode(JSON.stringify({ width: document.width, height: document.height, resolution: document.resolution,
+                activeLayer: document.activeLayer, layers: document.layers.map(({ data, ...l }) => l) }));
+            return new Blob([new Uint32Array([head.length]), head, ...document.layers.map((l) => l.data)]);
+        },
+    }],
+});
+)JS";
+    QImage icon(4, 4, QImage::Format_ARGB32);
+    icon.fill(Qt::red);
+    QByteArray iconPng;
+    {
+        QBuffer buffer(&iconPng);
+        buffer.open(QIODevice::WriteOnly);
+        icon.save(&buffer, "PNG");
+    }
+    ZipWriter zip;
+    zip.add(QStringLiteral("plugin.json"), R"({"id": "kaint.test", "name": "Test JS", "version": "2.0.0", "apiVersion": 1, "author": "Kaint"})");
+    zip.add(QStringLiteral("plugin.js"), source);
+    zip.add(QStringLiteral("assets/icon.png"), iconPng);
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("test.paintjs"));
+    {
+        QFile f(path);
+        CHECK(f.open(QIODevice::WriteOnly) && f.write(zip.finish()) > 0);
+    }
+    PaintJs::Info info = PaintJs::load(path);
+    CHECK(info.errors.isEmpty());
+    CHECK(info.id == QLatin1String("kaint.test") && info.version == QLatin1String("2.0.0"));
+    CHECK(info.effects.size() == 6);
+    CHECK(info.browserOnly == QStringList{QStringLiteral("Window JS")});
+    CHECK(info.fileTypes.size() == 1 && info.fileTypes.value(0).layers && info.fileTypes.value(0).canRead && info.fileTypes.value(0).canWrite);
+    auto effect = [&](const char* id) -> Effect* {
+        for (Effect* e : info.effects)
+            if (e->id() == QLatin1String(id))
+                return e;
+        return nullptr;
+    };
+    QImage src(6, 4, kLayerFormat);
+    src.fill(QColor(10, 20, 30, 255));
+    const EffectContext ctx;
+    const std::atomic_bool never{false};
+    if (Effect* e = effect("plugin.kaint.test.invert")) {
+        CHECK(e->isAdjustment() && e->params().isEmpty());
+        const QImage out = Effects::apply(*e, src, Selection(), {}, ctx, never);
+        CHECK(out.pixel(2, 2) == qRgba(245, 235, 225, 255));
+    } else {
+        CHECK(false);
+    }
+    if (Effect* e = effect("plugin.kaint.test.fill")) {
+        CHECK(!e->isAdjustment() && e->category() == fx::catRender());
+        CHECK(e->params().size() == 4 && !e->iconImage().isNull());
+        // Valores de Kaint → los del paquete: la opción elegida como cadena ("red").
+        ParamValues values = Effects::defaults(*e);
+        CHECK(values.value(QStringLiteral("tint")).value<QColor>() == QColor(0x10, 0x20, 0x30));
+        values.insert(QStringLiteral("mode"), 0);
+        values.insert(QStringLiteral("amount"), 100);
+        // Con selección: fuera de ella la imagen no cambia y selectionBounds es su rectángulo.
+        const Selection sel = Selection::fromRect(QRect(1, 1, 3, 2), src.size());
+        const QImage out = Effects::apply(*e, src, sel, values, ctx, never);
+        CHECK(out.pixel(2, 2) == qRgba(100, 0, 3, 255));
+        CHECK(out.pixel(5, 3) == src.pixel(5, 3));
+        CHECK(e->takeError().isEmpty());
+    } else {
+        CHECK(false);
+    }
+    if (Effect* e = effect("plugin.kaint.test.shift")) {
+        // configure() sin ventana: se usa lo que devuelve (aquí, una promesa).
+        CHECK(e->hasCustomDialog() && e->category().isEmpty() && !e->isAdjustment());
+        QString error;
+        CHECK(e->showCustomDialog(src, src.rect(), ctx, &error) && error.isEmpty());
+        const QImage out = Effects::apply(*e, src, Selection(), {}, ctx, never);
+        CHECK(qRed(out.pixel(0, 0)) == 20);
+    } else {
+        CHECK(false);
+    }
+    if (Effect* e = effect("plugin.kaint.test.canvas")) {
+        const QImage out = Effects::apply(*e, src, Selection(), {}, ctx, never);
+        CHECK(out.pixel(1, 1) == qRgba(255, 0, 0, 255) && out.pixel(2, 2) == qRgba(255, 0, 0, 255));
+        CHECK(qAlpha(out.pixel(4, 3)) == 0);
+    } else {
+        CHECK(false);
+    }
+    if (Effect* e = effect("plugin.kaint.test.chain")) {
+        const QImage out = Effects::apply(*e, src, Selection(), {}, ctx, never);
+        CHECK(out.pixel(0, 0) == qRgba(245, 235, 225, 255));
+    } else {
+        CHECK(false);
+    }
+    if (Effect* e = effect("plugin.kaint.test.forever")) {
+        // Un bucle sin fin se detiene al cancelar.
+        std::atomic_bool cancel{false};
+        std::thread stopper([&cancel] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            cancel = true;
+        });
+        QElapsedTimer t;
+        t.start();
+        const QImage out = Effects::apply(*e, src, Selection(), {}, ctx, cancel);
+        stopper.join();
+        CHECK(out.isNull() && t.elapsed() < 5000);
+    } else {
+        CHECK(false);
+    }
+    qDeleteAll(info.effects);
+
+    // Con PluginManager: sus efectos en los menús y su formato en Abrir y Guardar como.
+    QSettings().clear();
+    PluginManager* pm = PluginManager::instance();
+    const QString user = dir.filePath(QStringLiteral("plugins"));
+    pm->setPathsForTesting({user}, dir.filePath(QStringLiteral("cache.json")));
+    CHECK(pm->install({path}, false).size() == 1);
+    pm->scan();
+    const QString installed = QFileInfo(user + QStringLiteral("/test.paintjs")).absoluteFilePath();
+    const PluginInfo* found = nullptr;
+    for (const PluginInfo& p : pm->plugins())
+        if (p.id == installed)
+            found = &p;
+    CHECK(found && found->kind == QLatin1String("paint.js") && found->loaded && found->packageId == QLatin1String("kaint.test"));
+    CHECK(found && found->effects.size() == 6 && found->webOnlyEffects.size() == 1 && found->fileTypes.size() == 1);
+    CHECK(Effects::find(QStringLiteral("plugin.kaint.test.fill")) != nullptr);
+    CHECK(ImageIO::isWritable(QStringLiteral("x.kraw")) && ImageIO::isLayered(QStringLiteral("x.kraw")));
+    CHECK(ImageIO::openFilter().contains(QLatin1String("*.kraw")) && ImageIO::saveFilter().contains(QLatin1String("*.kraw")));
+    std::unique_ptr<Document> doc(Document::createFromImage(src, QStringLiteral("Fondo")));
+    QImage top(src.size(), kLayerFormat);
+    top.fill(QColor(200, 100, 50, 128));
+    auto layer = std::make_shared<Layer>(QStringLiteral("Arriba"), top);
+    layer->props.opacity = 77;
+    layer->props.blend = BlendMode::Screen;
+    doc->insertLayer(1, layer);
+    doc->setDpi(150);
+    const QString kraw = dir.filePath(QStringLiteral("doc.kraw"));
+    QString error;
+    CHECK(ImageIO::save(doc.get(), kraw, 95, &error));
+    std::unique_ptr<Document> back(ImageIO::load(kraw, &error));
+    CHECK(back && back->layerCount() == 2);
+    if (back && back->layerCount() == 2) {
+        CHECK(back->layer(1)->props.name == QLatin1String("Arriba") && back->layer(1)->props.opacity == 77);
+        CHECK(back->layer(1)->props.blend == BlendMode::Screen && back->activeIndex() == doc->activeIndex());
+        CHECK(sameImage(back->layer(1)->image, top) && sameImage(back->layer(0)->image, src));
+        CHECK(std::abs(back->dpi() - 150) < 0.01);
+    }
+    // Desactivado: ni efectos ni formato.
+    pm->setEnabled(installed, false);
+    CHECK(Effects::find(QStringLiteral("plugin.kaint.test.fill")) == nullptr);
+    CHECK(!ImageIO::isWritable(QStringLiteral("x.kraw")));
+    pm->setEnabled(installed, true);
+    CHECK(ImageIO::isWritable(QStringLiteral("x.kraw")));
+    pm->setEnabled(installed, false);
+    pm->setPathsForTesting({}, dir.filePath(QStringLiteral("cache.json")));
+    pm->scan();
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1473,6 +1811,8 @@ int main(int argc, char** argv)
     testShrinkTransform();
     testPaletteAndJson();
     testSaveOptions();
+    testExtraFormats();
+    testTransformedEdges();
     testStraightAlpha();
     testBucketHalo();
     testBucketAccumulate();
@@ -1482,6 +1822,7 @@ int main(int argc, char** argv)
     testPdnWrite();
     testPlugins();
     testCraftPlugins();
+    testPaintJs();
     testPngWriter();
     testSelectionReshape();
     testColorBalance();

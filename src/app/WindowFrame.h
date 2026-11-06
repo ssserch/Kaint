@@ -7,16 +7,17 @@
 
 class QPainter;
 
-// Linux, con el estilo de Paint.NET: las ventanas sin la barra de título del escritorio, con una
-// propia como la de Windows 10 (del color de la franja de los menús: negra con los temas oscuros,
-// o el color propio de la barra superior), un borde fino y sombra alrededor. Se mueven y cambian de
-// tamaño con el gestor de ventanas (startSystemMove y startSystemResize). Los diálogos la llevan
-// dibujada encima de su contenido; la ventana principal, en su fila de arriba (CaptionTitle y
-// CaptionButtons).
+// La barra de título y el marco de Kaint (Configuración > Barra de título; por defecto en Linux sí y
+// en Windows no): las ventanas sin la barra de título del sistema, con una propia como la de
+// Windows 10 (del color de la franja de los menús: negra con los temas oscuros, o el color propio
+// de la barra superior o el de énfasis de Windows), un borde fino y sombra alrededor (la de KWin o
+// la de Windows). Se mueven y cambian de tamaño con el gestor de ventanas (startSystemMove y
+// startSystemResize). Los diálogos la llevan dibujada encima de su contenido; la ventana principal,
+// en su fila de arriba (CaptionTitle y CaptionButtons).
 namespace WindowFrame {
 
-// Se decide al arrancar (Linux, estilo Paint.NET y la opción de Configuración): los diálogos que se
-// creen desde entonces llevan el marco mientras siga el estilo de Paint.NET.
+// Se decide al arrancar (la opción de Configuración, salvo con el tema KDE): los diálogos que se
+// creen desde entonces llevan el marco.
 void setEnabled(bool on);
 bool enabled();
 
@@ -35,8 +36,9 @@ Buttons effectiveButtons();
 // Los botones a la izquierda de la barra (en el orden cerrar, minimizar, maximizar) o a la derecha.
 void setButtonsOnLeft(bool on);
 bool buttonsOnLeft();
-// Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana. Se decide al
-// arrancar, antes de crear las ventanas (necesitan fondo translúcido).
+// Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana. En Linux se
+// decide al arrancar, antes de crear las ventanas (necesitan fondo translúcido); en Windows las
+// redondea el propio Windows 11 y cambia al momento (roundedCorners() es entonces false).
 void setRoundedCorners(bool on);
 bool roundedCorners();
 // Las ventanas con el marco de Kaint se vuelven a dibujar (cambió el estilo o el lado de los botones).

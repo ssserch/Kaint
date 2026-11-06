@@ -58,6 +58,9 @@ const defaults = {
     rulers: false,
     rulerStyle: 0,
     historyJumpButtons: false,
+    // En Ajustes y Efectos, los efectos de los complementos con el icono de los complementos (la
+    // pieza de puzle) a la derecha, como en Kaint.
+    pluginMenuIcons: true,
     paletteTranslucent: true,
     cursorStyle: 1,
     // Unidades de medida (Ver): 0, píxeles; 1, pulgadas; 2, centímetros.
@@ -81,9 +84,11 @@ const defaults = {
     // 1 Windows 11, 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98; y a la izquierda.
     titleButtons: 0,
     titleButtonsLeft: false,
-    // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), y el
-    // tamaño de cada una en ese modo (en %).
+    // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), si al
+    // sacar una se esconden las que tape (en las esquinas) y el tamaño de cada una en el modo
+    // Ventanas (en %).
     mobilePanels: "autohide",
+    mobileHideCovered: true,
     mobilePanelScale: { tools: 100, history: 100, layers: 100, colors: 100 },
     effectLocations: {},
     hiddenEffects: [],

@@ -69,6 +69,24 @@ qt_standard_project_setup()
 include(GNUInstallDirs)
 
 # ---------------------------------------------------------------------------
+# Motor de JavaScript de los complementos de paint.js (.paintjs): QuickJS-ng, sin quickjs-libc
+# (los complementos no tienen acceso a archivos, procesos ni red). Se optimiza también en Debug:
+# es un intérprete y sin optimizar los efectos irían muy lentos.
+# ---------------------------------------------------------------------------
+add_library(kaintquickjs STATIC third_party/quickjs-ng/quickjs-amalgam.c)
+target_include_directories(kaintquickjs PUBLIC third_party/quickjs-ng)
+set_target_properties(kaintquickjs PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS ON POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(kaintquickjs PRIVATE /W0 $<$<CONFIG:Debug>:/O2>)
+else()
+    target_compile_options(kaintquickjs PRIVATE -w $<$<CONFIG:Debug>:-O2>)
+endif()
+target_link_libraries(kaintquickjs PRIVATE Threads::Threads)
+if(UNIX)
+    target_link_libraries(kaintquickjs PRIVATE m)
+endif()
+
+# ---------------------------------------------------------------------------
 # Núcleo (solo QtGui)
 # ---------------------------------------------------------------------------
 add_library(kaintcore STATIC
@@ -76,6 +94,7 @@ add_library(kaintcore STATIC
     src/core/Commands.cpp
     src/core/CustomShapes.cpp
     src/core/Document.cpp
+    src/core/ExtraFormats.cpp
     src/core/FillPattern.cpp
     src/core/FloodFill.cpp
     src/core/Gif.cpp
@@ -106,10 +125,12 @@ add_library(kaintcore STATIC
     src/core/plugins/PluginEffects.cpp
     src/core/plugins/CraftPlugins.cpp
     src/core/plugins/PluginManager.cpp
+    src/core/plugins/PaintJs.cpp
+    src/core/plugins/PaintJsCanvas.cpp
     src/core/plugins/Wasm.cpp
 )
 target_include_directories(kaintcore PUBLIC src)
-target_link_libraries(kaintcore PUBLIC Qt6::Gui ZLIB::ZLIB Threads::Threads)
+target_link_libraries(kaintcore PUBLIC Qt6::Gui ZLIB::ZLIB Threads::Threads PRIVATE kaintquickjs)
 
 # ---------------------------------------------------------------------------
 # Aplicación (interfaz Qt Widgets)
@@ -152,6 +173,7 @@ add_library(kaintui STATIC
     src/app/dialogs/DialogExec.cpp
     src/app/dialogs/EffectDialog.cpp
     src/app/dialogs/ImageDialogs.cpp
+    src/app/dialogs/PluginCatalogDialog.cpp
     src/app/dialogs/SaveConfigDialog.cpp
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp
@@ -429,9 +451,22 @@ endif()
 # ---------------------------------------------------------------------------
 install(TARGETS kaint RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES third_party/quickjs-ng/LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME QuickJS-ng-LICENSE.txt)
 if(WIN32)
     qt_generate_deploy_app_script(TARGET kaint OUTPUT_SCRIPT KAINT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT "${KAINT_DEPLOY_SCRIPT}")
+    # Desinstalador (Uninstall.exe, en la carpeta de la instalación): lo abre "Aplicaciones
+    # instaladas" al desinstalar Kaint instalado con build.bat. Sin Qt ni las DLL de MinGW (está
+    # enlazado de forma estática), porque borra la carpeta bin donde están.
+    configure_file(packaging/windows/uninstall.rc.in uninstall.rc @ONLY)
+    add_executable(kaint_uninstall WIN32 packaging/windows/uninstall.cpp "${CMAKE_CURRENT_BINARY_DIR}/uninstall.rc")
+    set_target_properties(kaint_uninstall PROPERTIES OUTPUT_NAME Uninstall AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+    target_compile_definitions(kaint_uninstall PRIVATE UNICODE _UNICODE)
+    target_link_libraries(kaint_uninstall PRIVATE shell32 ole32 advapi32 uuid)
+    if(MINGW)
+        target_link_options(kaint_uninstall PRIVATE -municode -static -s)
+    endif()
+    install(TARGETS kaint_uninstall RUNTIME DESTINATION .)
 endif()
 if(UNIX AND NOT APPLE) 
     configure_file(data/${KAINT_APP_ID}.desktop.in ${KAINT_APP_ID}.desktop @ONLY)

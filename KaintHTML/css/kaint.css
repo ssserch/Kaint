@@ -125,9 +125,18 @@ u {
     min-width: 0;
 }
 
+/* Cada parte en su fila aunque otra no se vea (en el teléfono, la barra de opciones plegada). */
+#top-row { grid-row: 1; }
+#tool-options { grid-row: 2; }
+#workspace { grid-row: 3; }
+#status-bar { grid-row: 4; }
+
 /* Como la fila de arriba de Kaint, bajo la barra de título de la ventana: una franja del color de
    los menús encima (si no, los menús y la miniatura quedaban pegados al borde, como cortados),
-   los menús de 26 px y la barra principal de 33 px. */
+   los menús de 26 px y la barra principal de 33 px.
+   Como TopRow en Kaint, el fondo de la barra principal sigue a lo ancho de toda la fila, también
+   bajo la tira de imágenes y los botones de la derecha (antes acababa con los menús y a su lado
+   quedaba un hueco vacío del color de la franja de arriba). */
 #top-row {
     display: flex;
     align-items: stretch;
@@ -135,6 +144,8 @@ u {
     background: var(--menubar);
     padding: 6px 4px 0 0;
     min-width: 0;
+    isolation: isolate;
+    overflow: clip;
 }
 
 #top-row .top-left {
@@ -187,9 +198,20 @@ u {
     min-height: 26px;
 }
 
+/* La barra principal sin bordes a los lados (con su fondo a lo ancho de la fila, como en Kaint, un
+   borde a la derecha la cortaba): su fondo, sea el que sea con cada tema (liso o en degradado),
+   sigue detrás de la tira de imágenes hasta el final de la fila. */
 #main-toolbar {
-    border-left: 1px solid var(--line);
-    border-right: 1px solid var(--line);
+    position: relative;
+}
+
+#main-toolbar::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 -100vw;
+    background: inherit;
+    pointer-events: none;
 }
 
 .toolbar .sep {
@@ -314,8 +336,29 @@ u {
     flex: none;
 }
 
-.image-list-popup .thumb canvas {
+.image-list-popup .thumb > canvas {
     box-shadow: 0 0 0 1px var(--line);
+}
+
+/* El sol de los cambios sin guardar, arriba a la izquierda de la miniatura (como en la tira); en el
+   menú del teléfono, a la derecha de cada imagen. */
+.image-list-popup .thumb {
+    position: relative;
+}
+
+.image-list-popup .thumb .unsaved {
+    position: absolute;
+    top: -2px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    line-height: 0;
+}
+
+.popup-menu .unsaved-badge {
+    display: inline-flex;
+    line-height: 0;
+    vertical-align: middle;
 }
 
 .image-list-popup .name {
@@ -673,7 +716,8 @@ input[type="checkbox"] {
 
 .popup-menu .item {
     display: grid;
-    grid-template-columns: 22px 1fr auto 14px;
+    /* La última columna, la flecha de los submenús o un icono (la pieza de los complementos). */
+    grid-template-columns: 22px 1fr auto minmax(14px, auto);
     align-items: center;
     gap: 4px;
     padding: 3px 4px 3px 4px;
@@ -724,17 +768,49 @@ input[type="checkbox"] {
 /* --- Área de trabajo y ventanas flotantes ---------------------------------------------------- */
 
 .workspace {
+    /* Grosor de las barras de desplazamiento (más gruesas con el dedo). */
+    --scrollbar: 14px;
     position: relative;
     overflow: hidden;
     background: var(--workspace);
     min-height: 0;
 }
 
+/* Con el dedo (teléfonos y tabletas): barras más gruesas, fáciles de agarrar, y sin que el
+   navegador se quede el gesto (desplazar o acercar la página cancelaba el arrastre a medias). */
+@media (pointer: coarse) {
+    .workspace {
+        --scrollbar: 22px;
+    }
+
+    .scrollbar .thumb {
+        border-radius: 999px;
+    }
+
+    .scrollbar.h .thumb {
+        top: 5px;
+        bottom: 5px;
+    }
+
+    .scrollbar.v .thumb {
+        left: 5px;
+        right: 5px;
+    }
+
+    .scrollbar.dragging .thumb {
+        background: color-mix(in srgb, var(--thumb) 55%, var(--accent));
+    }
+}
+
+.scrollbar, .scroll-corner {
+    touch-action: none;
+}
+
 #view {
     position: absolute;
-    inset: 0 14px 14px 0;
-    width: calc(100% - 14px);
-    height: calc(100% - 14px);
+    inset: 0 var(--scrollbar) var(--scrollbar) 0;
+    width: calc(100% - var(--scrollbar));
+    height: calc(100% - var(--scrollbar));
     outline: none;
     touch-action: none;
 }
@@ -753,17 +829,17 @@ input[type="checkbox"] {
 .ruler.h {
     top: 0;
     left: 20px;
-    right: 14px;
+    right: var(--scrollbar);
     height: 20px;
-    width: calc(100% - 34px);
+    width: calc(100% - 20px - var(--scrollbar));
 }
 
 .ruler.v {
     top: 20px;
     left: 0;
-    bottom: 14px;
+    bottom: var(--scrollbar);
     width: 20px;
-    height: calc(100% - 34px);
+    height: calc(100% - 20px - var(--scrollbar));
 }
 
 .ruler-corner {
@@ -793,9 +869,9 @@ input[type="checkbox"] {
 }
 
 .workspace.rulers #view {
-    inset: 20px 14px 14px 20px;
-    width: calc(100% - 34px);
-    height: calc(100% - 34px);
+    inset: 20px var(--scrollbar) var(--scrollbar) 20px;
+    width: calc(100% - 20px - var(--scrollbar));
+    height: calc(100% - 20px - var(--scrollbar));
 }
 
 .scrollbar {
@@ -805,16 +881,16 @@ input[type="checkbox"] {
 
 .scrollbar.h {
     left: 0;
-    right: 14px;
+    right: var(--scrollbar);
     bottom: 0;
-    height: 14px;
+    height: var(--scrollbar);
 }
 
 .scrollbar.v {
     top: 0;
-    bottom: 14px;
+    bottom: var(--scrollbar);
     right: 0;
-    width: 14px;
+    width: var(--scrollbar);
 }
 
 .scrollbar .thumb {
@@ -841,8 +917,8 @@ input[type="checkbox"] {
     position: absolute;
     right: 0;
     bottom: 0;
-    width: 14px;
-    height: 14px;
+    width: var(--scrollbar);
+    height: var(--scrollbar);
     background: color-mix(in srgb, var(--window) 60%, var(--base));
 }
 
@@ -1002,6 +1078,14 @@ input[type="checkbox"] {
 
 .history-list .row {
     height: 22px;
+}
+
+/* Mantener pulsada una fila con el dedo la levanta para moverla: sin seleccionar texto ni el menú
+   del navegador. */
+.layer-list .row {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .layer-list .row {
@@ -1196,6 +1280,17 @@ input[type="checkbox"] {
     grid-template-columns: auto minmax(90px, 1fr) auto;
     gap: 2px 6px;
     align-items: center;
+}
+
+/* Teléfono estrecho: con «Más», los deslizadores debajo de la rueda y la paleta (así cabe). */
+.colors-panel.stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+}
+
+.colors-panel.stacked .extended {
+    flex: none;
 }
 
 .colors-panel .extended .section {
@@ -3144,9 +3239,11 @@ fieldset.group > legend {
 /* Teléfono, con las ventanas escondidas en las esquinas: cada una sale por su lado al tocar su asa
    (alargada, pegada al borde, con el icono de la ventana) y se vuelve a esconder con ella, con su
    ×, al tocar el lienzo o, en Herramientas, al elegir una. */
+/* Las de las ventanas escondidas, detrás de las abiertas (desde 20, MobilePanels.stack): una
+   ventana abierta tapa las asas de su lado. */
 .panel-handle {
     position: absolute;
-    z-index: 30;
+    z-index: 19;
     width: 30px;
     height: 64px;
     display: flex;
@@ -3179,10 +3276,9 @@ fieldset.group > legend {
     pointer-events: none;
 }
 
+/* Lo que mide como mucho cada una (sin tapar el carril de las asas) lo pone MobilePanels.fit. */
 .mobile-autohide .floating-panel.docked {
     border-radius: 0;
-    max-height: calc(100% - 4px);
-    max-width: calc(100% - 40px);
 }
 
 .mobile-autohide .floating-panel.docked .resize {
@@ -3230,21 +3326,33 @@ fieldset.group > legend {
     gap: 6px;
 }
 
-/* Teléfono: la fila de arriba en dos filas que caben (como la idea de la versión para móvil):
-   arriba los menús (Capas va en la flecha de la derecha, con las imágenes abiertas) y debajo un
-   botón de archivo con menú (Nuevo, Abrir, Guardar...), la edición, deshacer y rehacer y, a la
-   derecha, Configuración y Ayuda (las ventanas se sacan con sus asas). La tira de miniaturas deja
-   su sitio; lo que no quepa se desplaza de lado con el dedo en vez de cortarse. */
-.phone-file {
+/* Teléfono: arriba, los menús (todos menos Archivo, que es el botón de guardar con flecha, en
+   letra algo más pequeña para que quepan en una fila) y a la derecha la rueda de Configuración con
+   flecha, que despliega lo de la esquina (las ventanas, Configuración y la Ayuda); debajo, la barra
+   principal (con un botón de archivo con menú: Nuevo, Abrir, Guardar...) y la flecha de la lista de
+   imágenes. Lo que no quepa sigue en otra línea en vez de cortarse. La barra de opciones de la
+   herramienta se esconde tras un botón con su icono y una flecha, al final de la barra principal,
+   que la despliega debajo (también en varias líneas). Sin la tira de miniaturas ni el hueco que
+   dejaba (en horizontal, si cabe, sí: más abajo). */
+.phone-file, .phone-erase, .phone-more, .tool-options-toggle, .tool-options-sep {
+    display: none;
+}
+
+/* La papelera (borrar la selección, como Supr) solo en el teléfono, en vez de Reglas. */
+:root.phone #main-toolbar .phone-erase {
+    display: inline-flex;
+}
+
+:root.phone #main-toolbar .tbutton[data-action="rulers"] {
     display: none;
 }
 
 :root.phone #top-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "menu list" "tools corner";
-    gap: 0 2px;
-    padding: 4px 2px 0 0;
+    grid-template-areas: "menu corner" "tools list";
+    gap: 0;
+    padding: 4px 0 0;
 }
 
 :root.phone #top-row .top-left {
@@ -3254,29 +3362,44 @@ fieldset.group > legend {
 :root.phone #menubar {
     grid-area: menu;
     min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    align-self: end;
+    margin-left: 2px;
 }
 
 :root.phone .menubar > .menu-title {
-    padding: 3px 5px;
+    padding: 3px 4px;
     flex: none;
+    font-size: 0.92em;
 }
 
-:root.phone .menubar > .menu-title[data-menu="layers"] {
+/* Archivo está en el botón de guardar con flecha de la barra principal (.phone-file). */
+:root.phone .menubar > .menu-title[data-menu="file"] {
     display: none;
 }
 
 :root.phone #main-toolbar {
     grid-area: tools;
     min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 :root.phone #main-toolbar > * {
     flex: none;
+}
+
+/* El fondo de la barra principal no sale de ella: lo lleva también la celda de la flecha. */
+:root.phone #main-toolbar::before {
+    display: none;
+}
+
+:root.phone.blue #main-toolbar,
+:root.phone.blue #image-list {
+    background: linear-gradient(#fbfdff, #ebf1f9);
+}
+
+:root.phone:not(.blue) #image-list {
+    background: var(--toolbar);
 }
 
 :root.phone #main-toolbar .tbutton[data-action="new"],
@@ -3295,18 +3418,23 @@ fieldset.group > legend {
     padding: 0 3px;
 }
 
-:root.phone .phone-file .arrow {
+:root.phone .phone-file .arrow, :root.phone .phone-more .arrow, :root.phone .tool-options-toggle .arrow {
     font-size: 9px;
 }
 
 :root.phone #image-list {
     grid-area: list;
-    align-self: end;
+    align-self: stretch;
+    width: 30px;
+    min-width: 30px;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+    border-radius: 0;
 }
 
 :root.phone #image-strip,
-:root.phone #corner-buttons .tbutton[data-action],
-:root.phone #corner-buttons .gap {
+:root.phone #corner-buttons > :not(.phone-more) {
     display: none;
 }
 
@@ -3314,17 +3442,83 @@ fieldset.group > legend {
     grid-area: corner;
     flex: none;
     align-self: center;
+    padding: 0 2px;
+}
+
+:root.phone .phone-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    width: auto;
+    padding: 0 3px;
+}
+
+/* Opciones de la herramienta: plegadas tras su botón (en la barra principal); desplegadas, debajo,
+   en las líneas que hagan falta. */
+:root.phone .tool-options-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    width: auto;
+    padding: 0 4px;
+    flex: none;
+}
+
+:root.phone .tool-options-sep {
+    display: block;
 }
 
 :root.phone #tool-options {
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    height: auto;
+    min-height: 31px;
+    overflow: visible;
+}
+
+:root.phone #tool-options:not(.expanded) {
+    display: none;
 }
 
 :root.phone #tool-options > * {
     flex: none;
+}
+
+/* En horizontal, si cabe, la tira de miniaturas de las imágenes abiertas, como en el ordenador: a
+   la derecha de los menús y de la barra principal (de su alto), con la flecha de la lista justo
+   después; la rueda, arriba a la derecha. */
+@media (orientation: landscape) and (min-width: 640px) {
+    :root.phone #top-row {
+        grid-template-columns: auto minmax(0, auto) auto minmax(0, 1fr) auto;
+        grid-template-areas: "menu strip list . corner" "tools strip list . .";
+        column-gap: 6px;
+        padding-right: 2px;
+    }
+
+    :root.phone #image-strip {
+        display: flex;
+        grid-area: strip;
+        justify-self: start;
+        max-width: 100%;
+        align-self: end;
+    }
+
+    :root.phone #image-list,
+    :root.phone.blue #image-list,
+    :root.phone:not(.blue) #image-list {
+        width: 16px;
+        min-width: 16px;
+        margin: 2px 0 2px -4px;
+        padding: 6px 0 0;
+        align-items: flex-start;
+        background: none;
+        border-radius: var(--radius);
+    }
+
+    /* El fondo de la barra principal sigue a lo ancho de la fila, también bajo la tira. */
+    :root.phone #main-toolbar::before {
+        display: block;
+    }
 }
 
 /* Abajo, la barra de estado entera: sin la ayuda de la herramienta, la posición del cursor (sin
@@ -3490,4 +3684,71 @@ fieldset.group > legend {
    de siempre. */
 :root.pdn .kicon[data-icon="measure"] {
     rotate: 90deg;
+}
+
+/* --- Con el dedo --------------------------------------------------------------------------- */
+
+/* Las cabeceras de los diálogos y de las ventanas y los bordes para cambiar su tamaño no dejan que
+   el navegador se quede el gesto (desplazar la página cancelaba el arrastre a medias y moverlas
+   con el dedo costaba). */
+.dialog > .title, .floating-panel > .title, .floating-panel > .resize {
+    touch-action: none;
+}
+
+:root.phone .dialog > .title {
+    min-height: 38px;
+}
+
+:root.phone .floating-panel > .title {
+    min-height: 30px;
+}
+
+/* En las pantallas táctiles no hay "puntero encima": el navegador deja el último botón tocado como
+   si lo estuviera (Deshacer, Rehacer... se veían seleccionados después de pulsarlos). Al pulsar
+   (:active) sí se ve. */
+@media (hover: none) {
+    :root:not(#k) .tbutton:hover:not(:disabled):not(.checked):not(.down):not(:active) {
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    :root:not(#k) .menubar:not(.active) > .menu-title:hover {
+        background: transparent;
+        border-color: transparent;
+        color: inherit;
+    }
+
+    :root:not(#k) .floating-panel > .title .close:hover:not(:active),
+    :root:not(#k) .dialog > .title .close:hover:not(:active) {
+        background: transparent;
+    }
+}
+
+/* Configuración en el teléfono: las secciones solo con su icono (el nombre de la elegida va en la
+   cabecera: «Configuración - Lienzo») y la página con todo el ancho que queda. */
+.settings .sections .row .name {
+    min-width: 0;
+}
+
+:root.phone .settings {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 8px;
+    /* El ancho del diálogo (100vw - 32px) sin su relleno ni su borde. */
+    width: calc(100vw - 32px - 2 * 12px - 2px);
+    height: calc(100vh - 150px);
+    height: calc(100dvh - 150px);
+}
+
+:root.phone .settings .sections .row {
+    justify-content: center;
+    padding: 7px 0;
+}
+
+:root.phone .settings .sections .row .name {
+    display: none;
+}
+
+:root.phone .settings .page select {
+    max-width: 100%;
 }

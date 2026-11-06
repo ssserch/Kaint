@@ -21,12 +21,14 @@ export const SaveFormats = [
     { ext: "bmp", mime: "image/bmp", name: "BMP" },
     { ext: "tga", mime: "image/x-tga", name: "TGA" },
     { ext: "ico", mime: "image/x-icon", name: "Icono de Windows" },
+    { ext: "qoi", mime: "image/qoi", name: "QOI" },
+    { ext: "ppm", mime: "image/x-portable-pixmap", name: "Netpbm" },
 ];
 
 // Lo que se puede abrir (además de lo que entienda el navegador).
-export const OpenAccept = "image/*,.ora,.pdn,.tga,.tif,.tiff,.dds,.ico,.cur";
+export const OpenAccept = "image/*,.ora,.pdn,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm";
 export const OpenExtensions = [".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".gif", ".bmp", ".avif", ".ico", ".ora", ".pdn", ".tga",
-                               ".tif", ".tiff", ".dds"];
+                               ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm", ".pbm", ".pnm"];
 
 export function extensionOf(name) {
     return (name.split(".").pop() || "").toLowerCase();
@@ -71,8 +73,8 @@ function documentFrom(width, height, name, layers) {
 }
 
 // Abre una imagen como Kaint (ImageIO::load): OpenRaster y Paint.NET con sus capas, el GIF
-// animado con un fotograma por capa (la duración en el nombre), TGA, TIFF y DDS, y lo demás con
-// el navegador.
+// animado con un fotograma por capa (la duración en el nombre), TGA, TIFF, DDS, QOI y Netpbm, y lo
+// demás con el navegador.
 export async function openFile(file) {
     const ext = extensionOf(file.name), name = baseName(file.name);
     const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
@@ -94,6 +96,10 @@ export async function openFile(file) {
             : documentFrom(width, height, name, anim.frames.map((f, i) => ({ name: Codecs.nameWithDelay(tr("Fotograma %1", i + 1), f.delay), data: f.data })));
         doc.active = 0;
         doc.gifLoops = anim.loops;
+    } else if (ext === "qoi" || magic === "qoif" || ["ppm", "pgm", "pbm", "pnm"].includes(ext)) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const image = magic === "qoif" ? Codecs.decodeQoi(bytes) : Codecs.decodeNetpbm(bytes);
+        doc = documentFrom(image.width, image.height, name, [{ name: tr("Fondo"), data: image.data }]);
     } else if (ext === "tga" || magic === "DDS " || magic === "II*\0" || magic === "MM\0*") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const image = magic === "DDS " ? Codecs.decodeDds(bytes) : ext === "tga" ? Codecs.decodeTga(bytes) : await Codecs.decodeTiff(bytes);
@@ -224,11 +230,14 @@ export async function encode(doc, format, options = defaultSaveOptions(), frames
     return new Blob([bytes], { type: format.mime });
 }
 
+// Los modos de fusión con los nombres de paint.js.
+const pluginBlend = { colorburn: "colorBurn", colordodge: "colorDodge" };
+
 // Formato de un complemento: recibe las capas (o la imagen combinada) en RGBA y devuelve los bytes.
 async function encodePlugin(doc, format) {
     const pixelsOf = (canvas) => canvas.getContext("2d").getImageData(0, 0, doc.width, doc.height).data;
     const layers = format.supportsLayers
-        ? doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blendMode: l.blend, data: pixelsOf(l.canvas) }))
+        ? doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blendMode: pluginBlend[l.blend] || l.blend, data: pixelsOf(l.canvas) }))
         : [{ name: doc.layers[0]?.name || "", visible: true, opacity: 255, blendMode: "normal", data: pixelsOf(doc.flattened()) }];
     const values = Object.fromEntries((format.saveParams || []).map((p) => [p.key, p.type === "choice" ? p.values[p.def] : p.def]));
     const result = await format.encode({ document: { width: doc.width, height: doc.height, resolution: 96, activeLayer: doc.active, layers }, values });

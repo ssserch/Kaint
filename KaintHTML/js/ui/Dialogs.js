@@ -19,7 +19,7 @@ import { ResampleMethods } from "../core/Resample.js";
 import { Effects } from "../core/Effects.js";
 import { Customization } from "../Customization.js";
 import { popupMenu } from "./Menu.js";
-import { isPhone, mobileMode, PanelScaleRange } from "./Mobile.js";
+import { installPinch, isPhone, mobileMode, PanelScaleRange } from "./Mobile.js";
 
 let openDialogs = 0;
 
@@ -90,24 +90,46 @@ export class Dialog {
         });
     }
 
+    // Se mueve arrastrando la cabecera (también con el dedo: la cabecera no deja que el navegador se
+    // quede el gesto, kaint.css) y la cabecera nunca sale de la pantalla. En el teléfono, pellizcar
+    // con dos dedos sobre la ventana cambia su tamaño (se recuerda para las siguientes).
     makeDraggable(handle) {
         let start = null;
         handle.addEventListener("pointerdown", (e) => {
-            if (e.target.closest("button"))
+            if (e.target.closest("button") || e.button > 0)
                 return;
             const r = this.element.getBoundingClientRect();
-            start = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+            // La posición sin la escala (offsetLeft/Top) y la de lo que se ve (para no salirse).
+            start = { x: e.clientX, y: e.clientY, left: this.element.offsetLeft, top: this.element.offsetTop, rect: r, id: e.pointerId };
             handle.setPointerCapture(e.pointerId);
         });
         handle.addEventListener("pointermove", (e) => {
-            if (!start)
+            if (!start || e.pointerId !== start.id)
                 return;
+            const r = start.rect;
+            const dx = Math.min(innerWidth - 48 - r.left, Math.max(48 - r.right, e.clientX - start.x));
+            const dy = Math.min(innerHeight - 32 - r.top, Math.max(-r.top, e.clientY - start.y));
             this.element.style.position = "fixed";
             this.element.style.margin = "0";
-            this.element.style.left = `${start.left + e.clientX - start.x}px`;
-            this.element.style.top = `${Math.max(0, start.top + e.clientY - start.y)}px`;
+            this.element.style.left = `${start.left + dx}px`;
+            this.element.style.top = `${start.top + dy}px`;
         });
-        handle.addEventListener("pointerup", () => (start = null));
+        const end = () => (start = null);
+        handle.addEventListener("pointerup", end);
+        handle.addEventListener("pointercancel", end);
+        handle.addEventListener("lostpointercapture", end);
+        if (isPhone())
+            this.setScale(Number(Settings.get("phoneDialogScale")) || 1);
+        installPinch(this.element, {
+            begin: () => (isPhone() ? this.scale || 1 : null),
+            update: (scale) => this.setScale(scale),
+            end: (scale) => Settings.set("phoneDialogScale", scale),
+        });
+    }
+
+    setScale(scale) {
+        this.scale = scale;
+        this.element.style.scale = scale === 1 ? "" : String(scale);
     }
 
     addButton(text, value, { isDefault = false } = {}) {
@@ -806,14 +828,21 @@ export async function settingsDialog(app = null, startPage = "interface") {
                     });
                     sizes.appendChild(el("label", { className: "phone-size" }, [el("span", { textContent: names[id] }), row, tr("%")]));
                 }
-                const sync = () => (sizes.style.display = mode.value === "windows" ? "" : "none");
+                // Al sacar una ventana de su esquina se esconden las que tape (si no, va delante).
+                const hideCovered = check(tr("Al sacar una ventana, esconder las que tape"), "mobileHideCovered",
+                                          tr("Con las ventanas en las esquinas: al sacar una, las que estaban abiertas debajo de ella se vuelven a esconder. Sin la casilla, se quedan abiertas y la última que sacaste queda delante, con su asa."));
+                const sizeNote = note(tr("Tamaño de cada ventana en el modo Ventanas:"));
+                const sync = () => {
+                    const windows = mode.value === "windows";
+                    sizes.style.display = sizeNote.style.display = windows ? "" : "none";
+                    hideCovered.style.display = windows ? "none" : "";
+                };
                 mode.addEventListener("change", () => {
                     Settings.set("mobilePanels", mode.value);
                     sync();
                 });
                 sync();
-                return [heading(tr("Teléfono")), el("label", {}, [tr("Ventanas en el teléfono:"), mode]),
-                        note(tr("Tamaño de cada ventana en el modo Ventanas:")), sizes];
+                return [heading(tr("Teléfono")), el("label", {}, [tr("Ventanas en el teléfono:"), mode]), hideCovered, sizeNote, sizes];
             };
             // GIF animados: como capas de una imagen o un fotograma por imagen.
             const gifOpen = select([[0, tr("Preguntar")], [1, tr("Como capas")], [2, tr("Como imágenes")]], Settings.get("gifOpenMode") || 0);
@@ -985,13 +1014,18 @@ export async function settingsDialog(app = null, startPage = "interface") {
         ["customize", "configure", tr("Personalización"), () => customizePage(app, () => show("customize"))],
         ["keyboard", "configure", tr("Atajos de teclado"), () => shortcutsPage(app)],
     ];
+    // En el teléfono las secciones van solo con su icono y la elegida se nombra en la cabecera
+    // («Configuración - Lienzo»).
+    const titleText = dlg.element.querySelector(".title span");
     show = async (id) => {
         const i = Math.max(0, typeof id === "number" ? id : pages.findIndex((p) => p[0] === id));
         [...sections.children].forEach((row, k) => row.classList.toggle("selected", k === i));
+        titleText.textContent = isPhone() ? `${plain(tr("Configuración"))} - ${plain(pages[i][2])}` : plain(tr("Configuración"));
         page.replaceChildren(...(await pages[i][3]()));
+        page.scrollTop = 0;
     };
     pages.forEach(([id, iconName, name]) => {
-        const row = el("div", { className: "row" }, [icon(iconName, 24), name]);
+        const row = el("div", { className: "row", title: plain(name) }, [icon(iconName, 24), el("span", { className: "name", textContent: name })]);
         row.addEventListener("click", () => show(id));
         sections.appendChild(row);
     });
@@ -1321,6 +1355,9 @@ function pluginsPage(refresh) {
         refresh();
     });
     sync();
+    const menuIcons = checkbox(tr("Mostrar el icono de complemento junto a sus efectos en los menús"), Settings.get("pluginMenuIcons") !== false);
+    menuIcons.title = tr("En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de puzle de los complementos.");
+    menuIcons.input.addEventListener("change", () => Settings.set("pluginMenuIcons", menuIcons.input.checked));
     return [
         withFormats(tr("Complementos de efectos y formatos de archivo (%1). Se guardan en este navegador. Los .paintjs tienen el mismo acceso que Kaint: instala solo los que sean de confianza. Aparecen en Efectos > Complementos."), [
             [".paintjs", tr("De paint.js")],
@@ -1330,6 +1367,7 @@ function pluginsPage(refresh) {
             [".xmp", tr("Ajustes de LightCraft")],
         ]),
         list, details, el("div", { className: "row-buttons" }, [install, browse, remove, file]), status,
+        menuIcons,
     ];
 }
 
@@ -1610,8 +1648,8 @@ const credits = [
     ["7.css (MIT)", "Khang Nguyen Duy", "https://khang-nd.github.io/7.css/"],
     ["XP.css (MIT)", "Adam Hammad, Jordan Scales", "https://botoxparty.github.io/XP.css/"],
     ["98.css (MIT)", "Jordan Scales", "https://jdan.github.io/98.css/"],
-    // El sistema de complementos de la web sale del de paint.js.
-    [`paint.js (${tr("sistema de complementos")})`, "LabyStudio", "https://github.com/LabyStudio/paintdotjs"],
+    // Kaint no usa el sistema de complementos de paint.js: solo admite sus complementos (.paintjs).
+    [`paint.js (${tr("soporte de sus complementos")})`, "LabyStudio", "https://github.com/LabyStudio/paintdotjs"],
 ];
 
 // Como el Acerca de de Kaint: el logo, la versión, los derechos, el enlace al repositorio, la firma

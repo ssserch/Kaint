@@ -17,6 +17,15 @@
 #include <KWindowShadow>
 #endif
 
+#include <algorithm>
+#include <cmath>
+
+#ifdef Q_OS_WIN
+#include <QAbstractNativeEventFilter>
+#include <windows.h>
+#include <dwmapi.h>
+#endif
+
 namespace WindowFrame {
 
 namespace {
@@ -25,6 +34,10 @@ bool g_enabled = false;
 Buttons g_buttons = Buttons::Windows10;
 bool g_left = false;
 bool g_rounded = false;
+#ifdef Q_OS_WIN
+// Windows 11: esquinas redondeadas (las pone el propio Windows) con la recreación de Windows 11.
+bool g_winRound = false;
+#endif
 // Radio de las esquinas de las ventanas de Windows 11.
 constexpr int kRadius = 8;
 // Alto de la barra de título de los diálogos (Windows 10 y 98) y ancho de sus botones.
@@ -201,33 +214,46 @@ void paintButton98(QPainter& p, const QRect& r, int which, bool maximized, bool 
 
 // --- Windows 10 ------------------------------------------------------------------------------
 
-// Las aspas de cerrar, el cuadrado de maximizar (dos al restaurar) y la raya de minimizar, de
-// 10 px como los de Windows 10.
+// Las aspas de cerrar, el cuadrado de maximizar (dos al restaurar) y la raya de minimizar, como
+// los de Windows 10 (Segoe MDL2 Assets): los tres de 10 × 10 píxeles, de un píxel de grueso,
+// centrados en el botón y alineados con los píxeles. El aspa va de esquina a esquina con los
+// extremos planos: así Qt pinta un píxel entero por fila (antes, con los extremos cuadrados, cada
+// línea se repartía entre dos píxeles a medias y salía gris y borrosa) y a 200 % sale suavizada,
+// como la de Windows. El cuadrado medía 11 px.
 void paintGlyph(QPainter& p, const QRect& box, int which, bool maximized, const QColor& color)
 {
     p.save();
-    const QPointF c = QRectF(box).center();
-    p.setPen(QPen(color, 1));
-    p.setBrush(Qt::NoBrush);
+    constexpr int kSide = 10;
+    const int x = box.left() + (box.width() - kSide) / 2, y = box.top() + (box.height() - kSide) / 2;
+    // Un recuadro de un píxel de grueso (con rectángulos: igual de nítido a cualquier escala).
+    auto outline = [&p, &color](const QRect& r) {
+        p.fillRect(QRect(r.left(), r.top(), r.width(), 1), color);
+        p.fillRect(QRect(r.left(), r.bottom(), r.width(), 1), color);
+        p.fillRect(QRect(r.left(), r.top(), 1, r.height()), color);
+        p.fillRect(QRect(r.right(), r.top(), 1, r.height()), color);
+    };
     switch (which) {
     case 0:
-        p.setRenderHint(QPainter::Antialiasing, false);
-        p.drawLine(QPointF(c.x() - 5, c.y()), QPointF(c.x() + 5, c.y()));
+        p.fillRect(QRect(x, y + kSide / 2, kSide, 1), color);
         break;
     case 1:
-        p.setRenderHint(QPainter::Antialiasing, false);
         if (maximized) {
-            p.drawRect(QRectF(c.x() - 5, c.y() - 3, 8, 8));
-            p.drawPolyline(QPolygonF{QPointF(c.x() - 3, c.y() - 3), QPointF(c.x() - 3, c.y() - 5), QPointF(c.x() + 5, c.y() - 5),
-                                     QPointF(c.x() + 5, c.y() + 3), QPointF(c.x() + 3, c.y() + 3)});
+            // Restaurar: la ventana de delante (8 × 8, abajo a la izquierda) y lo que asoma de la de
+            // detrás (arriba y a la derecha).
+            outline(QRect(x, y + 2, 8, 8));
+            p.fillRect(QRect(x + 2, y, 8, 1), color);
+            p.fillRect(QRect(x + kSide - 1, y, 1, 8), color);
+            p.fillRect(QRect(x + 2, y, 1, 2), color);
+            p.fillRect(QRect(x + 8, y + 7, 2, 1), color);
         } else {
-            p.drawRect(QRectF(c.x() - 5, c.y() - 5, 10, 10));
+            outline(QRect(x, y, kSide, kSide));
         }
         break;
     default:
         p.setRenderHint(QPainter::Antialiasing);
-        p.drawLine(QPointF(c.x() - 5, c.y() - 5), QPointF(c.x() + 5, c.y() + 5));
-        p.drawLine(QPointF(c.x() - 5, c.y() + 5), QPointF(c.x() + 5, c.y() - 5));
+        p.setPen(QPen(color, 1, Qt::SolidLine, Qt::FlatCap));
+        p.drawLine(QPointF(x, y), QPointF(x + kSide, y + kSide));
+        p.drawLine(QPointF(x + kSide, y), QPointF(x, y + kSide));
         break;
     }
     p.restore();
@@ -549,6 +575,71 @@ KWindowShadow* makeShadow(QObject* parent)
 }
 #endif
 
+#ifdef Q_OS_WIN
+// Windows: la ventana con el marco de Kaint sigue siendo una ventana normal para Windows (su sombra,
+// Aero Snap, las animaciones de minimizar y maximizar, minimizarla desde la barra de tareas y su
+// menú), pero sin la barra de título ni los bordes del sistema: WM_NCCALCSIZE deja toda la ventana
+// para su contenido, como espera Qt con una ventana sin marco (Qt::FramelessWindowHint).
+class NativeFrame : public QAbstractNativeEventFilter {
+public:
+    bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override
+    {
+        if (type != "windows_generic_MSG")
+            return false;
+        const MSG* msg = static_cast<const MSG*>(message);
+        if (msg->message != WM_NCCALCSIZE)
+            return false;
+        QWidget* w = QWidget::find(WId(msg->hwnd));
+        if (!w || !w->isWindow() || !isDecorated(w))
+            return false;
+        *result = 0;
+        return true;
+    }
+};
+
+void applyNativeFrame(QWidget* window)
+{
+    const auto hwnd = reinterpret_cast<HWND>(window->winId());
+    // El borde de cambiar el tamaño (que Windows ya no dibuja) trae la sombra y Aero Snap; en la
+    // principal, también minimizar y maximizar. Sin WS_CAPTION: con él, Qt contaría una barra de
+    // título que no hay.
+    const LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    LONG_PTR wanted = WS_THICKFRAME | WS_SYSMENU;
+    if (window->inherits("QMainWindow"))
+        wanted |= WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    if ((style & wanted) != wanted) {
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style | wanted);
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
+    // La sombra de Windows: el marco del sistema extendido un píxel dentro (lo tapa el contenido).
+    const MARGINS shadow{1, 1, 1, 1};
+    DwmExtendFrameIntoClientArea(hwnd, &shadow);
+    // Windows 11: esquinas redondeadas con la recreación de Windows 11 y rectas con la de Windows 10
+    // (DWMWA_WINDOW_CORNER_PREFERENCE; Windows 10 no lo conoce y no hace nada).
+    const DWORD corners = g_winRound ? 2 : 1;
+    DwmSetWindowAttribute(hwnd, 33, &corners, sizeof corners);
+}
+
+// Maximizada en otra pantalla, Windows deja la ventana más grande que el área de trabajo (lo que
+// ocuparía el borde que ya no tiene): lo que sobresale por cada lado, en píxeles de la ventana.
+QMargins maximizedOverhang(QWidget* window)
+{
+    if (!window->isMaximized() || !window->testAttribute(Qt::WA_WState_Created))
+        return {};
+    const auto hwnd = reinterpret_cast<HWND>(window->winId());
+    RECT r;
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof monitor;
+    if (!GetWindowRect(hwnd, &r) || !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &monitor))
+        return {};
+    const qreal dpr = std::max<qreal>(1, window->devicePixelRatioF());
+    auto px = [dpr](LONG v) { return v > 0 ? int(std::ceil(v / dpr)) : 0; };
+    return QMargins(px(monitor.rcWork.left - r.left), px(monitor.rcWork.top - r.top), px(r.right - monitor.rcWork.right),
+                    px(r.bottom - monitor.rcWork.bottom));
+}
+#endif
+
 // El marco de una ventana: pinta el borde y (en los diálogos) la barra de título, y se ocupa de
 // moverla, de cambiarle el tamaño desde los bordes y del botón de cerrar. La ventana es opaca: la
 // sombra, si el escritorio la ofrece (KWin), la pone él.
@@ -600,12 +691,22 @@ public:
 #endif
             break;
         case QEvent::WindowStateChange:
+#ifdef Q_OS_WIN
+            // Qt vuelve a poner sus estilos al salir de pantalla completa (antes de mostrarse, al
+            // abrirse maximizada, aún no hay ventana: los pone el Show).
+            if (m_window->testAttribute(Qt::WA_WState_Created))
+                applyNativeFrame(m_window);
+#endif
             updateMargins();
             updateMask();
             m_window->update();
             break;
         case QEvent::Resize:
             updateMask();
+#ifdef Q_OS_WIN
+            // Lo que sobresale al maximizar se sabe cuando ya tiene su tamaño.
+            updateMargins();
+#endif
             break;
         case QEvent::ActivationChange:
         case QEvent::WindowTitleChange:
@@ -650,6 +751,9 @@ public:
 private:
     void installShadow()
     {
+#ifdef Q_OS_WIN
+        applyNativeFrame(m_window);
+#endif
 #ifdef KAINT_HAVE_KWINDOWSHADOW
         if (!m_window->windowHandle())
             return;
@@ -752,11 +856,16 @@ private:
     void updateMargins()
     {
         const int b = border();
+        QMargins extra;
+#ifdef Q_OS_WIN
+        extra = maximizedOverhang(m_window);
+#endif
         if (aero()) {
-            m_window->setContentsMargins(b, titleRect().bottom() + 2, b, b);
+            m_window->setContentsMargins(QMargins(b, titleRect().bottom() + 2, b, b) + extra);
             return;
         }
-        m_window->setContentsMargins(b, b + (m_titleBar ? (classic() ? kTitle98 + 1 : luna() ? kTitleXP : kTitle) : 0), b, b);
+        m_window->setContentsMargins(QMargins(b, b + (m_titleBar ? (classic() ? kTitle98 + 1 : luna() ? kTitleXP : kTitle) : 0), b, b)
+                                     + extra);
     }
 
     // 7.css: el cristal (un azul con brillos), el contorno oscuro con otro blanco por dentro y el
@@ -1020,12 +1129,19 @@ public:
 
 void setEnabled(bool on)
 {
-#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+#if defined(Q_OS_MACOS)
     on = false;
 #endif
     if (on == g_enabled)
         return;
     g_enabled = on;
+#ifdef Q_OS_WIN
+    static NativeFrame* native = nullptr;
+    if (on && !native && qApp) {
+        native = new NativeFrame;
+        qApp->installNativeEventFilter(native);
+    }
+#endif
     static Installer* installer = nullptr;
     if (on && !installer && qApp) {
         installer = new Installer(qApp);
@@ -1089,7 +1205,11 @@ bool buttonsOnLeft()
 
 void setRoundedCorners(bool on)
 {
-#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+#ifdef Q_OS_WIN
+    // En Windows las redondea el propio Windows 11 (sin ventanas translúcidas).
+    g_winRound = on;
+    on = false;
+#elif defined(Q_OS_MACOS)
     on = false;
 #endif
     g_rounded = on;
@@ -1104,6 +1224,10 @@ void refreshAll()
 {
     for (QWidget* w : QApplication::topLevelWidgets())
         if (isDecorated(w)) {
+#ifdef Q_OS_WIN
+            if (w->testAttribute(Qt::WA_WState_Created))
+                applyNativeFrame(w);
+#endif
             w->update();
             for (QWidget* child : w->findChildren<QWidget*>())
                 if (dynamic_cast<CaptionButtons*>(child) || dynamic_cast<CaptionTitle*>(child)) {

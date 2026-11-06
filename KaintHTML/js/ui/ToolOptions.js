@@ -144,6 +144,18 @@ export class ToolOptions {
             this.rebuild();
             return;
         }
+        // En el teléfono la barra va plegada tras un botón con el icono de la herramienta y una
+        // flecha, al final de la barra principal (en su hueco: así no ocupa otra línea); al pulsarlo
+        // se despliega debajo, en las líneas que hagan falta (kaint.css).
+        if (element.id === "tool-options") {
+            this.toggle = el("button", { className: "tbutton tool-options-toggle", type: "button", title: tr("Opciones de la herramienta") });
+            this.toggle.addEventListener("click", () => {
+                this.expanded = !this.expanded;
+                this.element.classList.toggle("expanded", this.expanded);
+                this.updateToggle();
+            });
+            document.getElementById("main-toolbar")?.append(el("span", { className: "sep tool-options-sep" }), this.toggle);
+        }
         app.tools.addEventListener("changed", () => this.rebuild());
         window.addEventListener("kaint-fonts", () => this.rebuild());
         window.addEventListener("kaint-shapes", () => this.rebuild());
@@ -175,6 +187,7 @@ export class ToolOptions {
         this.controls = [];
         if (!tool)
             return;
+        this.updateToggle();
         // Herramienta: [icono ▾]
         const pick = button([icon(tool.icon, 16), el("span", { className: "arrow", textContent: "▼" })], tool.name, () => {
             const r = pick.getBoundingClientRect();
@@ -184,6 +197,13 @@ export class ToolOptions {
         this.element.append(label(tr("Herramienta:")), pick);
         for (const option of tool.options)
             this.addOption(option, tool);
+    }
+
+    updateToggle() {
+        const tool = this.app.tools.current;
+        if (this.toggle && tool)
+            this.toggle.replaceChildren(icon(tool.icon, 16), el("span", { className: "arrow", textContent: this.expanded ? "▾" : "▸" }));
+        this.toggle?.classList.toggle("checked", !!this.expanded);
     }
 
     addOption(option, tool) {

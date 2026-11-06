@@ -4,6 +4,10 @@
 <context>
     <name>AboutDialog</name>
     <message>
+        <source>soporte de sus complementos</source>
+        <translation>support for its plugins</translation>
+    </message>
+    <message>
         <source>Acerca de Kaint</source>
         <translation>About Kaint</translation>
     </message>
@@ -1132,6 +1136,18 @@ Opacity: %2 · Blend: %3</translation>
         <translation>&amp;Plugins...</translation>
     </message>
     <message>
+        <source>Efectos añadidos (en Ajustes o Efectos): %1</source>
+        <translation>Effects added (in Adjustments or Effects): %1</translation>
+    </message>
+    <message>
+        <source>Formatos añadidos en Abrir y Guardar como: %1</source>
+        <translation>File types added to Open and Save As: %1</translation>
+    </message>
+    <message>
+        <source>Solo funcionan en la versión web de Kaint, porque abren una ventana propia hecha para el navegador: %1</source>
+        <translation>Only work in the web version of Kaint, because they open their own window made for the browser: %1</translation>
+    </message>
+    <message>
         <source>Recuperar imágenes</source>
         <translation>Recover Images</translation>
     </message>
@@ -1523,10 +1539,6 @@ Do you want to replace them?</translation>
         <translation>These could not be added:
 
 %1</translation>
-    </message>
-    <message>
-        <source>Complementos añadidos en Efectos &gt; Complementos: %1</source>
-        <translation>Plugins added to Effects &gt; Plugins: %1</translation>
     </message>
     <message>
         <source>Cortar</source>
@@ -1963,6 +1975,85 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
 </context>
 <context>
+    <name>PluginCatalogDialog</name>
+    <message>
+        <source>El catálogo o el complemento pasa del tamaño máximo.</source>
+        <translation>The catalog or the plugin is larger than the maximum size.</translation>
+    </message>
+    <message>
+        <source>No se pudo descargar (HTTP %1).</source>
+        <translation>Could not download it (HTTP %1).</translation>
+    </message>
+    <message>
+        <source>Complementos de Kaint.HTML</source>
+        <translation>Kaint.HTML plugins</translation>
+    </message>
+    <message>
+        <source>Complementos de paint.js del catálogo que usa la versión web de Kaint (Kaint.HTML). Se ejecutan sin acceso a tus archivos ni a internet. Los que abren una ventana propia hecha para el navegador solo funcionan en la versión web.</source>
+        <translation>paint.js plugins from the catalog used by the web version of Kaint (Kaint.HTML). They run with no access to your files or the internet. Those that open their own window made for the browser only work in the web version.</translation>
+    </message>
+    <message>
+        <source>Cargando el catálogo…</source>
+        <translation>Loading the catalog…</translation>
+    </message>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>El formato del catálogo no es compatible.</source>
+        <translation>The catalog format is not supported.</translation>
+    </message>
+    <message>
+        <source>Desconocido</source>
+        <translation>Unknown</translation>
+    </message>
+    <message>
+        <source>El catálogo está vacío.</source>
+        <translation>The catalog is empty.</translation>
+    </message>
+    <message>
+        <source>Instalado</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <source>Instalar</source>
+        <translation>Install</translation>
+    </message>
+    <message>
+        <source>Instalando…</source>
+        <translation>Installing…</translation>
+    </message>
+    <message>
+        <source>El complemento descargado no coincide con el del catálogo: no se instaló nada.</source>
+        <translation>The downloaded plugin does not match the one in the catalog: nothing was installed.</translation>
+    </message>
+    <message>
+        <source>El complemento no coincide con el del catálogo.</source>
+        <translation>The plugin does not match the one in the catalog.</translation>
+    </message>
+    <message>
+        <source>No se pudo copiar el complemento.</source>
+        <translation>Could not copy the plugin.</translation>
+    </message>
+    <message>
+        <source>No se pudieron copiar:
+
+%1</source>
+        <translation>Could not copy:
+
+%1</translation>
+    </message>
+    <message>
+        <source>Instalado, pero solo funciona en la versión web de Kaint: abre una ventana propia hecha para el navegador.</source>
+        <translation>Installed, but it only works in the web version of Kaint: it opens its own window made for the browser.</translation>
+    </message>
+    <message>
+        <source>Solo en la versión web: %1</source>
+        <translation>Web version only: %1</translation>
+    </message>
+</context>
+<context>
     <name>PluginManager</name>
     <message>
         <source>No exporta la función %1: no es un complemento de Kaint.</source>
@@ -1971,6 +2062,14 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Usa la versión %1 de la API de complementos; Kaint admite de la 1 a la %2.</source>
         <translation>It uses version %1 of the plugin API; Kaint supports versions 1 to %2.</translation>
+    </message>
+    <message>
+        <source>Ya hay otro complemento cargado con el identificador %1.</source>
+        <translation>Another plugin with the identifier %1 is already loaded.</translation>
+    </message>
+    <message>
+        <source>Otro complemento ya abre los archivos %1.</source>
+        <translation>Another plugin already opens %1 files.</translation>
     </message>
 </context>
 <context>
@@ -3507,6 +3606,14 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Windows Icon</translation>
     </message>
     <message>
+        <source>QOI</source>
+        <translation>QOI</translation>
+    </message>
+    <message>
+        <source>Netpbm</source>
+        <translation>Netpbm</translation>
+    </message>
+    <message>
         <source>Paint.NET con capas</source>
         <translation>Paint.NET with layers</translation>
     </message>
@@ -3517,6 +3624,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Todos los tipos de imagen (%1)</source>
         <translation>All image types (%1)</translation>
+    </message>
+    <message>
+        <source>Complementos de paint.js (*.paintjs)</source>
+        <translation>paint.js plugins (*.paintjs)</translation>
     </message>
     <message>
         <source>Todos los archivos (*)</source>
@@ -3537,6 +3648,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>No se pudo comprimir la imagen.</source>
         <translation>The image could not be compressed.</translation>
+    </message>
+    <message>
+        <source>TGA admite imágenes de hasta 65535 × 65535 píxeles.</source>
+        <translation>TGA supports images up to 65535 × 65535 pixels.</translation>
     </message>
     <message>
         <source>El archivo no es un OpenRaster válido.</source>
@@ -3828,6 +3943,154 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>El complemento se quedó sin memoria.</source>
         <translation>The plugin ran out of memory.</translation>
+    </message>
+    <message>
+        <source>El archivo TGA no es válido o está dañado.</source>
+        <translation>The TGA file is not valid or is damaged.</translation>
+    </message>
+    <message>
+        <source>Este tipo de archivo TGA no se puede abrir.</source>
+        <translation>This kind of TGA file can&apos;t be opened.</translation>
+    </message>
+    <message>
+        <source>La imagen es demasiado grande.</source>
+        <translation>The image is too large.</translation>
+    </message>
+    <message>
+        <source>El archivo DDS no es válido o está dañado.</source>
+        <translation>The DDS file is not valid or is damaged.</translation>
+    </message>
+    <message>
+        <source>Este tipo de archivo DDS no se puede abrir.</source>
+        <translation>This kind of DDS file can&apos;t be opened.</translation>
+    </message>
+    <message>
+        <source>El archivo QOI no es válido o está dañado.</source>
+        <translation>The QOI file is not valid or is damaged.</translation>
+    </message>
+    <message>
+        <source>Un complemento no puede ocupar más de 5 MB.</source>
+        <translation>A plugin cannot be larger than 5 MB.</translation>
+    </message>
+    <message>
+        <source>No es un archivo ZIP válido.</source>
+        <translation>This is not a valid ZIP file.</translation>
+    </message>
+    <message>
+        <source>Archivo no válido en el complemento: %1</source>
+        <translation>Invalid file in the plugin: %1</translation>
+    </message>
+    <message>
+        <source>El complemento debe tener plugin.json y plugin.js en la raíz.</source>
+        <translation>The plugin must have plugin.json and plugin.js at its root.</translation>
+    </message>
+    <message>
+        <source>plugin.json no es válido: %1</source>
+        <translation>plugin.json is not valid: %1</translation>
+    </message>
+    <message>
+        <source>Esta versión de Kaint admite la versión %1 de la API de complementos.</source>
+        <translation>This version of Kaint supports version %1 of the plugin API.</translation>
+    </message>
+    <message>
+        <source>%1 no es válido.</source>
+        <translation>%1 is not valid.</translation>
+    </message>
+    <message>
+        <source>El identificador del complemento</source>
+        <translation>The plugin identifier</translation>
+    </message>
+    <message>
+        <source>Desconocido</source>
+        <translation>Unknown</translation>
+    </message>
+    <message>
+        <source>Falta la imagen del complemento: %1</source>
+        <translation>The plugin image is missing: %1</translation>
+    </message>
+    <message>
+        <source>El complemento tardó demasiado y se detuvo.</source>
+        <translation>The plugin took too long and was stopped.</translation>
+    </message>
+    <message>
+        <source>El complemento se quedó esperando algo que solo da un navegador web.</source>
+        <translation>The plugin was left waiting for something only a web browser provides.</translation>
+    </message>
+    <message>
+        <source>No se pudo preparar el motor de JavaScript.</source>
+        <translation>Could not set up the JavaScript engine.</translation>
+    </message>
+    <message>
+        <source>No se pudo ejecutar %1.</source>
+        <translation>Could not run %1.</translation>
+    </message>
+    <message>
+        <source>%1 debe llamar a paintDotJs.registerPlugin() una vez.</source>
+        <translation>%1 must call paintDotJs.registerPlugin() once.</translation>
+    </message>
+    <message>
+        <source>Control sin clave (key).</source>
+        <translation>Control without a key.</translation>
+    </message>
+    <message>
+        <source>Control desconocido: %1</source>
+        <translation>Unknown control: %1</translation>
+    </message>
+    <message>
+        <source>«%1» abre una ventana propia hecha para el navegador, que la versión de escritorio de Kaint no puede mostrar. Úsalo en la versión web de Kaint.</source>
+        <translation>“%1” opens its own window made for the browser, which the desktop version of Kaint cannot show. Use it in the web version of Kaint.</translation>
+    </message>
+    <message>
+        <source>El complemento ya no tiene el efecto %1.</source>
+        <translation>The plugin no longer has the %1 effect.</translation>
+    </message>
+    <message>
+        <source>El complemento se detuvo.</source>
+        <translation>The plugin stopped.</translation>
+    </message>
+    <message>
+        <source>%1: render() devolvió un valor que no vale.</source>
+        <translation>%1: render() returned a value that is not valid.</translation>
+    </message>
+    <message>
+        <source>El identificador del efecto</source>
+        <translation>The effect identifier</translation>
+    </message>
+    <message>
+        <source>El efecto %1 debe definir render() o renderPixel().</source>
+        <translation>The %1 effect must define render() or renderPixel().</translation>
+    </message>
+    <message>
+        <source>El identificador del formato</source>
+        <translation>The file type identifier</translation>
+    </message>
+    <message>
+        <source>El formato %1 debe definir decode() o encode().</source>
+        <translation>The %1 file type must define decode() or encode().</translation>
+    </message>
+    <message>
+        <source>El formato %1 no tiene extensiones válidas.</source>
+        <translation>The %1 file type has no valid extensions.</translation>
+    </message>
+    <message>
+        <source>Un complemento debe añadir al menos un efecto o un formato.</source>
+        <translation>A plugin must add at least one effect or file type.</translation>
+    </message>
+    <message>
+        <source>El complemento de este formato ya no está activado.</source>
+        <translation>The plugin for this file type is no longer enabled.</translation>
+    </message>
+    <message>
+        <source>El archivo es demasiado grande.</source>
+        <translation>The file is too large.</translation>
+    </message>
+    <message>
+        <source>El complemento no devolvió ninguna capa.</source>
+        <translation>The plugin returned no layers.</translation>
+    </message>
+    <message>
+        <source>encode() no devolvió datos.</source>
+        <translation>encode() returned no data.</translation>
     </message>
 </context>
 <context>
@@ -4494,7 +4757,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css.</source>
-        <translation>Luna's beige with the blue windows and the XP buttons, with XP.css's colors.</translation>
+        <translation>Luna&apos;s beige with the blue windows and the XP buttons, with XP.css&apos;s colors.</translation>
     </message>
     <message>
         <source>Windows 98</source>
@@ -4641,14 +4904,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Raised gray buttons.</translation>
     </message>
     <message>
-        <source>Los del escritorio</source>
-        <translation>The desktop&apos;s</translation>
-    </message>
-    <message>
-        <source>Sin la barra de título de Kaint: la del gestor de ventanas.</source>
-        <translation>Without Kaint&apos;s title bar: the window manager&apos;s.</translation>
-    </message>
-    <message>
         <source>Los botones de cerrar, maximizar o restaurar y minimizar. Con el tema Windows 98, «Windows 10» usa los de Windows 98.</source>
         <translation>The close, maximize or restore and minimize buttons. With the Windows 98 theme, “Windows 10” uses the Windows 98 ones.</translation>
     </message>
@@ -4679,10 +4934,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Recreación de Windows:</source>
         <translation>Windows recreation:</translation>
-    </message>
-    <message>
-        <source>Dejar los botones como estaban.</source>
-        <translation>Keep the buttons as they were.</translation>
     </message>
     <message>
         <source>Seguir con el tema actual.</source>
@@ -4765,8 +5016,28 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Dropping a window near an edge of the workspace or near another window places it right next to it.</translation>
     </message>
     <message>
+        <source>Usar la barra de título y el marco de ventana de Kaint</source>
+        <translation>Use Kaint&apos;s title bar and window frame</translation>
+    </message>
+    <message>
+        <source>Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, llevan la de Windows.</source>
+        <translation>Windows get Kaint&apos;s title bar, with the chosen buttons. When it&apos;s off, they get the Windows one.</translation>
+    </message>
+    <message>
+        <source>Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, llevan la del escritorio (en KDE, la de Plasma).</source>
+        <translation>Windows get Kaint&apos;s title bar, with the chosen buttons. When it&apos;s off, they get the desktop&apos;s (on KDE, Plasma&apos;s).</translation>
+    </message>
+    <message>
         <source>Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin guardar, te lo preguntará antes.</source>
         <translation>Kaint will close and open again with the chosen title bar. If there are unsaved changes, it will ask you first.</translation>
+    </message>
+    <message>
+        <source>Dejar la barra de título como estaba.</source>
+        <translation>Keep the title bar as it was.</translation>
+    </message>
+    <message>
+        <source>Con el tema KDE, las ventanas llevan la barra de título de Plasma.</source>
+        <translation>With the KDE theme, windows get Plasma&apos;s title bar.</translation>
     </message>
     <message>
         <source>Se desbloquea con el estilo de interfaz Paint.NET.</source>
@@ -4915,14 +5186,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>LightCraft presets</translation>
     </message>
     <message>
-        <source>Complementos de efectos instalados (%1). Se guardan en %2; si un complemento trae varios archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos &gt; Complementos.</source>
-        <translation>Installed effect plugins (%1). They are kept in %2; if a plugin comes with several files, add them all or copy its folder there. They appear in Effects &gt; Plugins.</translation>
-    </message>
-    <message>
-        <source>%1, %2, %3, %4, %5 y %6</source>
-        <translation>%1, %2, %3, %4, %5 and %6</translation>
-    </message>
-    <message>
         <source>Complemento</source>
         <translation>Plugin</translation>
     </message>
@@ -4939,8 +5202,28 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Also show plugins that are not compatible</translation>
     </message>
     <message>
+        <source>Mostrar el icono de complemento junto a sus efectos en los menús</source>
+        <translation>Show the plugin icon next to its effects in the menus</translation>
+    </message>
+    <message>
+        <source>En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de puzle de los complementos.</source>
+        <translation>In Adjustments and Effects, effects that come from plugins show the plugins&apos; puzzle piece on the right.</translation>
+    </message>
+    <message>
+        <source>Mostrar el botón «Complementos de Kaint.HTML»</source>
+        <translation>Show the “Kaint.HTML plugins” button</translation>
+    </message>
+    <message>
+        <source>Un botón para instalar complementos de paint.js del catálogo de la versión web de Kaint (Kaint.HTML).</source>
+        <translation>A button to install paint.js plugins from the catalog of the web version of Kaint (Kaint.HTML).</translation>
+    </message>
+    <message>
         <source>Añadir…</source>
         <translation>Add…</translation>
+    </message>
+    <message>
+        <source>Copiar complementos (.so, .dll, .wasm, .cube, .3dl, .xmp o .paintjs) a la carpeta de complementos</source>
+        <translation>Copy plugins (.so, .dll, .wasm, .cube, .3dl, .xmp or .paintjs) to the plugins folder</translation>
     </message>
     <message>
         <source>Abrir la carpeta</source>
@@ -4990,6 +5273,17 @@ Left click: active slot · right click: inactive slot</translation>
         </translation>
     </message>
     <message numerus="yes">
+        <source>%n formato(s)</source>
+        <translation>
+            <numerusform>%n file type</numerusform>
+            <numerusform>%n file types</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Solo en la versión web</source>
+        <translation>Web version only</translation>
+    </message>
+    <message numerus="yes">
         <source>%n efecto(s)</source>
         <translation>
             <numerusform>%n effect</numerusform>
@@ -5005,8 +5299,24 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Enabled</translation>
     </message>
     <message>
+        <source>Formato</source>
+        <translation>File type</translation>
+    </message>
+    <message>
+        <source>En Abrir y Guardar como</source>
+        <translation>In Open and Save As</translation>
+    </message>
+    <message>
+        <source>Abre una ventana propia hecha para el navegador, que la versión de escritorio de Kaint no puede mostrar. Úsalo en la versión web de Kaint.</source>
+        <translation>It opens its own window made for the browser, which the desktop version of Kaint cannot show. Use it in the web version of Kaint.</translation>
+    </message>
+    <message>
         <source>Añadir complementos</source>
         <translation>Add plugins</translation>
+    </message>
+    <message>
+        <source>Complementos (*.dll *.so *.wasm *.cube *.3dl *.xmp *.paintjs);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so);;Filtros de PhotoCraft (*.wasm);;Looks y ajustes de LightCraft (*.cube *.3dl *.xmp);;Complementos de paint.js (*.paintjs)</source>
+        <translation>Plugins (*.dll *.so *.wasm *.cube *.3dl *.xmp *.paintjs);;Paint.NET plugins (*.dll);;Kaint plugins (*.so);;PhotoCraft filters (*.wasm);;LightCraft looks and presets (*.cube *.3dl *.xmp);;paint.js plugins (*.paintjs)</translation>
     </message>
     <message>
         <source>Ya hay complementos con estos nombres:
@@ -5053,6 +5363,10 @@ Do you want to replace them?</translation>
         <translation>Copyright</translation>
     </message>
     <message>
+        <source>Licencia</source>
+        <translation>License</translation>
+    </message>
+    <message>
         <source>Sitio web</source>
         <translation>Website</translation>
     </message>
@@ -5071,6 +5385,18 @@ Do you want to replace them?</translation>
     <message>
         <source> (desactivado)</source>
         <translation> (disabled)</translation>
+    </message>
+    <message>
+        <source>Formatos de archivo (en Abrir y Guardar como):</source>
+        <translation>File types (in Open and Save As):</translation>
+    </message>
+    <message>
+        <source>Solo en la versión web de Kaint (abren una ventana propia hecha para el navegador):</source>
+        <translation>Only in the web version of Kaint (they open their own window made for the browser):</translation>
+    </message>
+    <message>
+        <source>Complemento de paint.js: Kaint lo ejecuta con su propio motor de JavaScript, sin acceso a tus archivos ni a internet.</source>
+        <translation>paint.js plugin: Kaint runs it with its own JavaScript engine, with no access to your files or the internet.</translation>
     </message>
     <message>
         <source>Problemas:</source>
@@ -5368,12 +5694,12 @@ Do you want to replace them?</translation>
         <translation>Dark</translation>
     </message>
     <message>
-        <source>Copiar complementos (.so, .dll, .wasm, .cube, .3dl o .xmp) a la carpeta de complementos</source>
-        <translation>Copy plugins (.so, .dll, .wasm, .cube, .3dl or .xmp) to the plugins folder</translation>
+        <source>Complementos de Kaint.HTML…</source>
+        <translation>Kaint.HTML plugins…</translation>
     </message>
     <message>
-        <source>Complementos (*.dll *.so *.wasm *.cube *.3dl *.xmp);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so);;Filtros de PhotoCraft (*.wasm);;Looks y ajustes de LightCraft (*.cube *.3dl *.xmp)</source>
-        <translation>Plugins (*.dll *.so *.wasm *.cube *.3dl *.xmp);;Paint.NET plugins (*.dll);;Kaint plugins (*.so);;PhotoCraft filters (*.wasm);;LightCraft looks and presets (*.cube *.3dl *.xmp)</translation>
+        <source>El catálogo de complementos de paint.js de la versión web de Kaint</source>
+        <translation>The paint.js plugin catalog of the web version of Kaint</translation>
     </message>
     <message>
         <source>Las versiones nuevas se publican en %1</source>
@@ -5464,6 +5790,18 @@ Do you want to replace them?</translation>
         <translation>The ones from Paint.NET, in pixel art: the crosshair with the drawing of the tool.</translation>
     </message>
     <message>
+        <source>De paint.js (sin acceso a tus archivos ni a internet)</source>
+        <translation>From paint.js (no access to your files or the internet)</translation>
+    </message>
+    <message>
+        <source>Complementos de efectos y formatos de archivo instalados (%1). Se guardan en %2; si un complemento trae varios archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos &gt; Complementos.</source>
+        <translation>Installed effect and file type plugins (%1). They are kept in %2; if a plugin comes with several files, add them all or copy its folder there. They appear in Effects &gt; Plugins.</translation>
+    </message>
+    <message>
+        <source>%1, %2, %3, %4, %5, %6 y %7</source>
+        <translation>%1, %2, %3, %4, %5, %6 and %7</translation>
+    </message>
+    <message>
         <source>Avisar cuando haya una versión nueva</source>
         <translation>Notify me when there is a new version</translation>
     </message>
@@ -5487,8 +5825,8 @@ Do you want to replace them?</translation>
 <context>
     <name>ShapesTool</name>
     <message>
-        <source>Tiradores: redimensionar (Mayús: proporción, Alt: desde el centro). Dentro: mover. Clic derecho o fuera del borde: girar. A: siguiente forma. Intro: terminar.</source>
-        <translation>Handles: resize (Shift: keep proportions, Alt: from the center). Inside: move. Right click or just outside the edge: rotate. A: next shape. Enter: finish.</translation>
+        <source>Tiradores: redimensionar (Mayús: proporción, Alt: desde el centro). Dentro: mover. Clic derecho o fuera del borde: girar. Clic lejos de ella o Intro: terminar. A: siguiente forma.</source>
+        <translation>Handles: resize (Shift: keep proportions, Alt: from the center). Inside: move. Right click or just outside the edge: rotate. Click away from it or Enter: finish. A: next shape.</translation>
     </message>
     <message>
         <source>Arrastra para dibujar la forma: contorno con el color principal y relleno con el secundario (clic derecho: al revés). Mayús: proporciones iguales. Alt: desde el centro.</source>

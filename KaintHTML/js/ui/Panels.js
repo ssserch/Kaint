@@ -11,6 +11,7 @@ import { kIndicator, outCubic, run, slideRows } from "./Animations.js";
 import { remember, Settings } from "../Settings.js";
 import { Customization } from "../Customization.js";
 import { plain, tr, trc } from "../i18n.js";
+import { installPinch, isPhone, PanelScaleRange } from "./Mobile.js";
 
 export class FloatingPanel {
     constructor(workspace, id, title, content, { corner = "tl", offset = { x: 8, y: 8 }, size = null, onClose = null } = {}) {
@@ -43,8 +44,11 @@ export class FloatingPanel {
         const saved = remember(`panel.${id}`) || {};
         this.corner = saved.corner || corner;
         this.offset = saved.offset || offset;
+        // La disposición elegida (columnas de Herramientas, escala de Colores): en el teléfono se
+        // puede cambiar para que quepa (fitInto), pero se guarda esta.
+        this.userLayout = saved.layout ?? this.fit?.initial;
         if (this.fit) {
-            this.fit.apply(saved.layout ?? this.fit.initial);
+            this.fit.apply(this.userLayout);
         } else if (saved.size || size) {
             const s = saved.size || size;
             this.element.style.width = `${s.w}px`;
@@ -77,7 +81,7 @@ export class FloatingPanel {
         remember(`panel.${this.id}`, {
             corner: this.corner, offset: this.offset, visible: this.visible,
             size: this.element.style.width ? { w: this.element.offsetWidth, h: this.element.style.height ? this.element.offsetHeight : 0 } : null,
-            layout: this.fit ? this.fit.state() : undefined,
+            layout: this.fit ? this.userLayout : undefined,
         });
     }
 
@@ -85,28 +89,40 @@ export class FloatingPanel {
     // paint.js, las reglas.
     area() {
         const r = this.workspace.classList.contains("rulers") ? kRuler : 0;
-        return { x: r, y: r, w: this.workspace.clientWidth - 14 - r, h: this.workspace.clientHeight - 14 - r };
+        // El grosor de las barras de desplazamiento (más gruesas con el dedo).
+        const bar = this.workspace.querySelector(".scrollbar.v")?.offsetWidth || 14;
+        return { x: r, y: r, w: this.workspace.clientWidth - bar - r, h: this.workspace.clientHeight - bar - r };
     }
 
+    // Con su tamaño en el teléfono (setScale) la ventana se escala desde su esquina: se coloca lo
+    // que se ve (antes, una más grande que la zona anclada a la derecha se salía por ese lado).
     reposition() {
-        const a = this.area(), W = a.w, H = a.h;
-        const w = this.element.offsetWidth, h = this.element.offsetHeight;
+        const a = this.area(), W = a.w, H = a.h, s = this.scale || 1;
+        const w = this.element.offsetWidth, h = this.element.offsetHeight, sw = w * s, sh = h * s;
+        const left = this.corner.includes("l"), top = this.corner.includes("t");
         // Escondida en la esquina (teléfono): sale pegada a los bordes.
         const offset = this.dock ? { x: 0, y: this.dock.y } : this.offset;
-        let x = this.corner.includes("l") ? offset.x : W - w - offset.x;
-        let y = this.corner.includes("t") ? offset.y : H - h - offset.y;
-        this.element.style.transformOrigin = `${this.corner.includes("t") ? "top" : "bottom"} ${this.corner.includes("l") ? "left" : "right"}`;
-        x = Math.max(0, Math.min(W - w, x));
-        y = Math.max(0, Math.min(H - h, y));
-        this.element.style.left = `${x + a.x}px`;
-        this.element.style.top = `${y + a.y}px`;
+        let x = left ? offset.x : W - sw - offset.x;
+        let y = top ? offset.y : H - sh - offset.y;
+        this.element.style.transformOrigin = `${top ? "top" : "bottom"} ${left ? "left" : "right"}`;
+        x = Math.max(0, Math.min(W - sw, x));
+        y = Math.max(0, Math.min(H - sh, y));
+        this.element.style.left = `${(left ? x : x - (w - sw)) + a.x}px`;
+        this.element.style.top = `${(top ? y : y - (h - sh)) + a.y}px`;
         this.updateOverImage();
+    }
+
+    // Lo que se ve de la ventana (con su escala), en coordenadas del área de trabajo.
+    visualRect() {
+        const e = this.element, s = this.scale || 1, w = e.offsetWidth, h = e.offsetHeight;
+        return { x: e.offsetLeft + (this.corner.includes("l") ? 0 : w - w * s), y: e.offsetTop + (this.corner.includes("t") ? 0 : h - h * s),
+                 w: w * s, h: h * s };
     }
 
     // Esquina más cercana y distancia a ella (así se quedan en su sitio al cambiar el tamaño).
     anchorFromGeometry() {
-        const a = this.area(), W = a.w, H = a.h;
-        const x = this.element.offsetLeft - a.x, y = this.element.offsetTop - a.y, w = this.element.offsetWidth, h = this.element.offsetHeight;
+        const a = this.area(), W = a.w, H = a.h, r = this.visualRect();
+        const x = r.x - a.x, y = r.y - a.y, w = r.w, h = r.h;
         const left = x + w / 2 < W / 2, top = y + h / 2 < H / 2;
         this.corner = (top ? "t" : "b") + (left ? "l" : "r");
         this.offset = { x: left ? x : W - x - w, y: top ? y : H - y - h };
@@ -161,14 +177,34 @@ export class FloatingPanel {
             this.element.style.top = `${Math.max(a.y, Math.min(a.y + a.h - this.element.offsetHeight, y))}px`;
             this.updateOverImage();
         });
-        head.addEventListener("pointerup", () => {
+        // También si el navegador se queda el gesto (antes la ventana se quedaba "agarrada").
+        const end = () => {
             if (!start)
                 return;
             start = null;
             this.element.classList.remove("dragging");
             this.anchorFromGeometry();
-        });
+        };
+        head.addEventListener("pointerup", end);
+        head.addEventListener("pointercancel", end);
+        head.addEventListener("lostpointercapture", end);
         this.element.addEventListener("pointerdown", () => this.raise());
+        // Teléfono, modo Ventanas: pellizcar con dos dedos sobre la ventana cambia su tamaño (el mismo
+        // de Configuración > Interfaz de usuario > Teléfono, que se guarda).
+        installPinch(this.element, {
+            begin: () => (isPhone() && !this.dock && this.visible ? this.scale || 1 : null),
+            update: (scale) => {
+                this.setScale(scale);
+                this.reposition();
+            },
+            end: (scale) => {
+                const scales = { ...(Settings.get("mobilePanelScale") || {}) };
+                scales[this.id] = Math.round(scale * 100);
+                Settings.set("mobilePanelScale", scales);
+            },
+            min: PanelScaleRange.min / 100,
+            max: PanelScaleRange.max / 100,
+        });
     }
 
     installResize() {
@@ -210,14 +246,19 @@ export class FloatingPanel {
                 Object.assign(this.element.style, { left: `${l}px`, top: `${t}px`, width: `${w}px`, height: `${h}px` });
                 this.onResize?.();
             });
-            grip.addEventListener("pointerup", () => {
+            const end = () => {
                 if (!start)
                     return;
                 start = null;
                 this.element.classList.remove("dragging");
+                if (this.fit)
+                    this.userLayout = this.fit.state();
                 this.anchorFromGeometry();
                 this.updateOverImage();
-            });
+            };
+            grip.addEventListener("pointerup", end);
+            grip.addEventListener("pointercancel", end);
+            grip.addEventListener("lostpointercapture", end);
         }
     }
 
@@ -234,8 +275,59 @@ export class FloatingPanel {
     }
 
     raise() {
+        // Escondidas en las esquinas (teléfono), el orden lo lleva MobilePanels (cada una con su asa).
+        if (this.dock && this.dockHost) {
+            this.dockHost.bringToFront(this.id);
+            return;
+        }
         for (const p of this.workspace.querySelectorAll(".floating-panel"))
             p.style.zIndex = p === this.element ? "20" : "10";
+    }
+
+    // Teléfono: la ventana entera en 'room' (lo que cabe en el área de trabajo), como mucho con la
+    // escala elegida. Si su contenido lo permite (fit.alternatives), con otra disposición:
+    // Herramientas con las columnas que hagan falta para caber de alto (en horizontal no cabía) y
+    // Colores con «Más» con los deslizadores debajo en vez de al lado (cabe a lo ancho). Si aun así
+    // no cabe, más pequeña. Capas e Historial no se escalan: como mucho miden la zona y su lista se
+    // desplaza. Nada de esto se guarda.
+    fitInto(room, scale) {
+        const e = this.element;
+        this.phoneFitted = true;
+        e.style.maxWidth = e.style.maxHeight = "";
+        if (!this.fit) {
+            e.style.maxWidth = `${Math.max(60, room.w / scale)}px`;
+            e.style.maxHeight = `${Math.max(40, room.h / scale)}px`;
+            this.setScale(scale);
+            return;
+        }
+        const fitting = () => Math.min(scale, room.w / Math.max(1, e.offsetWidth), room.h / Math.max(1, e.offsetHeight));
+        this.fit.apply(this.userLayout);
+        let best = null;
+        for (const option of this.fit.alternatives?.() ?? [null]) {
+            if (option !== null)
+                this.fit.choose(option);
+            const s = fitting();
+            if (!best || s > best.s + 0.001)
+                best = { option, s };
+            if (s >= scale)
+                break;
+        }
+        if (best.option !== null)
+            this.fit.choose(best.option);
+        this.setScale(Math.round(best.s * 1000) / 1000);
+    }
+
+    // Fuera del teléfono: como estaba.
+    unfit() {
+        if (!this.phoneFitted)
+            return;
+        this.phoneFitted = false;
+        this.element.style.maxWidth = this.element.style.maxHeight = "";
+        if (this.fit) {
+            this.fit.choose?.(this.fit.alternatives()[0]);
+            this.fit.apply(this.userLayout);
+        }
+        this.setScale(1);
     }
 
     setVisible(on, animated = false) {
@@ -262,6 +354,7 @@ export class FloatingPanel {
         this.corner = this.defaults.corner;
         this.offset = { ...this.defaults.offset };
         if (this.fit) {
+            this.userLayout = this.fit.initial;
             this.fit.apply(this.fit.initial);
         } else {
             this.element.style.width = this.defaults.size ? `${this.defaults.size.w}px` : "";
@@ -325,6 +418,15 @@ export function toolsPanel(app) {
             }
             // Al menos una columna (ToolsPanel::columnsFor): con 0, apply() volvía a las dos.
             return Math.max(1, Math.floor((w + gap) / (cell() + gap)));
+        },
+        // Teléfono (FloatingPanel.fitInto): las columnas que se prueban para que quepa, primero
+        // las de ahora y luego las más parecidas (en horizontal, más columnas y menos filas).
+        alternatives() {
+            const all = Array.from({ length: Math.max(1, count) }, (_, i) => i + 1);
+            return all.sort((a, b) => Math.abs(a - columns) - Math.abs(b - columns) || b - a);
+        },
+        choose(c) {
+            this.apply(c);
         },
     };
     return grid;
@@ -431,6 +533,15 @@ export function layersPanel(app, actionIds) {
         endDrag();
         refresh();
     });
+    // Otra capa activa (al tocarla o pulsarla, o con Capa de arriba / de abajo): se marca su fila
+    // sin rehacer la lista, que la que se está arrastrando sigue en ella. Antes no se marcaba y
+    // parecía que no pasaba nada.
+    app.addEventListener("active", () => {
+        const active = app.doc?.active;
+        for (const row of list.querySelectorAll(".row"))
+            row.classList.toggle("selected", row.index === active);
+        list.querySelector(".row.selected")?.scrollIntoView({ block: "nearest" });
+    });
     // Clic: capa activa · arrastrar: mover la capa. Como en Kaint, la fila sigue al ratón y las
     // demás le van dejando sitio; con la opción de Configuración, se queda en su sitio y una línea
     // marca dónde quedará.
@@ -454,6 +565,7 @@ export function layersPanel(app, actionIds) {
     const endDrag = () => {
         if (!drag)
             return;
+        clearTimeout(drag.hold);
         clearInterval(drag.scroll);
         for (const r of rows()) {
             r.classList.remove("dragging", "live", "making-room");
@@ -462,15 +574,50 @@ export function layersPanel(app, actionIds) {
         dropLine.style.display = "none";
         drag = null;
     };
+    // Con el dedo, deslizar desplaza la lista; para mover una capa se mantiene pulsada un momento
+    // (kHold) y entonces se arrastra. Antes el navegador se quedaba el gesto para desplazar la lista
+    // y la capa no se movía.
+    const kHold = 350, kSlop = 8;
+    const lift = () => {
+        drag.moving = true;
+        drag.row.classList.add(drag.live ? "live" : "dragging");
+        if (drag.live)
+            rows().forEach((r) => r !== drag.row && r.classList.add("making-room"));
+    };
     list.addEventListener("pointerdown", (e) => {
         const row = e.target.closest(".row");
         if (!row || e.button !== 0)
             return;
+        endDrag();
         app.doc.setActiveIndex(row.index);
         const all = rows();
-        drag = { row, y: e.clientY, from: all.indexOf(row), slot: all.indexOf(row), moving: false, live: !Settings.get("layerDropLine") };
-        list.setPointerCapture(e.pointerId);
+        const touch = e.pointerType === "touch";
+        drag = { row, y: e.clientY, from: all.indexOf(row), slot: all.indexOf(row), moving: false, live: !Settings.get("layerDropLine"),
+                 pointer: e.pointerId, touch, ready: !touch };
+        if (touch) {
+            const mine = drag;
+            mine.hold = setTimeout(() => {
+                if (drag !== mine)
+                    return;
+                mine.ready = true;
+                list.setPointerCapture(mine.pointer);
+                lift();
+            }, kHold);
+        } else {
+            list.setPointerCapture(e.pointerId);
+        }
     });
+    // Ya levantada, el dedo mueve la capa y no la lista.
+    list.addEventListener("touchmove", (e) => {
+        if (drag?.touch && drag.ready)
+            e.preventDefault();
+    }, { passive: false });
+    // Mantener pulsado no abre el menú del navegador.
+    list.addEventListener("contextmenu", (e) => {
+        if (drag?.touch)
+            e.preventDefault();
+    });
+    list.addEventListener("pointercancel", () => endDrag());
     const dragTo = (y) => {
         const all = rows(), h = drag.row.offsetHeight;
         if (drag.live) {
@@ -500,14 +647,16 @@ export function layersPanel(app, actionIds) {
         dropLine.style.top = `${target.offsetTop + (slot > drag.from ? target.offsetHeight - 2 : -1)}px`;
     };
     list.addEventListener("pointermove", (e) => {
-        if (!drag)
+        if (!drag || e.pointerId !== drag.pointer)
             return;
-        if (!drag.moving && Math.abs(e.clientY - drag.y) > 4) {
-            drag.moving = true;
-            drag.row.classList.add(drag.live ? "live" : "dragging");
-            if (drag.live)
-                rows().forEach((r) => r !== drag.row && r.classList.add("making-room"));
+        // Con el dedo, moverlo antes de tiempo es desplazar la lista.
+        if (!drag.ready) {
+            if (Math.abs(e.clientY - drag.y) > kSlop)
+                endDrag();
+            return;
         }
+        if (!drag.moving && Math.abs(e.clientY - drag.y) > 4)
+            lift();
         if (!drag.moving)
             return;
         drag.lastY = e.clientY;
@@ -1102,9 +1251,10 @@ export function colorsPanel(app) {
     hexInput.addEventListener("change", applyHex);
     hexInput.addEventListener("keydown", (e) => e.key === "Enter" && applyHex());
 
-    // Escala (como el ajuste de Kaint al cambiar el tamaño de la ventana) y ancho de cada vista.
-    let scale = 1;
-    const baseWidth = () => (expanded ? 466 : 220);
+    // Escala (como el ajuste de Kaint al cambiar el tamaño de la ventana) y ancho de cada vista. En
+    // el teléfono, con «Más», los deslizadores pueden ir debajo (stacked) para que quepa a lo ancho.
+    let scale = 1, stacked = false;
+    const baseWidth = () => (expanded && !stacked ? 466 : 220);
     const applyScale = (s) => {
         scale = Math.min(3, Math.max(0.8, Number(s) || 1));
         panel.style.setProperty("--s", scale);
@@ -1118,6 +1268,12 @@ export function colorsPanel(app) {
             const sx = w / baseWidth(), sy = h / Math.max(1, panel.offsetHeight / scale);
             return vertical && !horizontal ? sy : horizontal && !vertical ? sx : Math.max(sx, sy);
         },
+        alternatives: () => (expanded ? [false, true] : [false]),
+        choose(on) {
+            stacked = !!on;
+            panel.classList.toggle("stacked", stacked);
+            applyScale(scale);
+        },
     };
     applyScale(1);
 
@@ -1126,13 +1282,22 @@ export function colorsPanel(app) {
     // más colores a la paleta.
     const setExpanded = (on) => {
         expanded = on;
+        if (!on) {
+            stacked = false;
+            panel.classList.remove("stacked");
+        }
         extended.style.display = on ? "" : "none";
         panel.classList.toggle("expanded", on);
         moreText();
         drawPalette();
         applyScale(scale);
-        app.panels.colors.reposition();
-        app.panels.colors.save();
+        // Se guarda como la eligió (sin lo que cambie para caber en el teléfono). En el teléfono,
+        // que quepa ya (con los deslizadores debajo si hace falta), antes de que se vea: si no, se
+        // veía un momento con el tamaño de antes, cortada.
+        const colors = app.panels.colors;
+        colors.save();
+        if (!colors.dockHost?.refit("colors"))
+            colors.reposition();
     };
     more.addEventListener("click", () => setExpanded(!expanded));
     // Con el aspecto de Paint.NET, «Más >>» y «<< Menos».

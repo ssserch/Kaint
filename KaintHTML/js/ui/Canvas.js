@@ -9,6 +9,11 @@ import { pixelsPerUnit } from "./Units.js";
 import { isSrgb, transformPixels } from "../core/ColorProfiles.js";
 
 const kMargin = 24;
+// Dedos: lo que espera el primero antes de usar la herramienta (por si llega el segundo), lo que
+// puede moverse mientras tanto sin empezar el trazo y hasta cuándo el segundo deshace el trazo.
+const kTouchDelay = 90;
+const kTouchSlop = 8;
+const kTouchUndoWindow = 400;
 // Grosor de las reglas (Ver > Reglas).
 export const kRuler = 20;
 
@@ -264,33 +269,62 @@ export class CanvasView extends EventTarget {
         for (const [bar, horizontal] of [[this.hScroll, true], [this.vScroll, false]]) {
             const thumb = bar.querySelector(".thumb");
             let start = null;
-            thumb.addEventListener("pointerdown", (e) => {
-                e.preventDefault();
-                thumb.setPointerCapture(e.pointerId);
-                start = { pos: horizontal ? e.clientX : e.clientY, origin: { ...this.origin } };
-            });
-            thumb.addEventListener("pointermove", (e) => {
-                if (!start || !this.doc)
-                    return;
+            const at = (e) => (horizontal ? e.clientX : e.clientY);
+            // Lo que se mueve el origen por cada píxel que se mueve el pulgar (lo inverso de
+            // updateScrollbars): así el pulgar se queda justo bajo el ratón o el dedo.
+            const ratio = () => {
                 const v = this.viewSize(), view = horizontal ? v.w : v.h;
                 const [lo, hi] = this.originLimits((horizontal ? this.doc.width : this.doc.height) * this.scale, view);
                 const track = horizontal ? bar.clientWidth : bar.clientHeight;
-                const delta = ((horizontal ? e.clientX : e.clientY) - start.pos) * ((hi - lo + view) / track);
-                if (horizontal) this.origin.x = start.origin.x - delta;
-                else this.origin.y = start.origin.y - delta;
+                const size = horizontal ? thumb.offsetWidth : thumb.offsetHeight;
+                return (hi - lo) / Math.max(1, track - size);
+            };
+            const moveTo = (origin, delta) => {
+                if (horizontal) this.origin.x = origin.x - delta;
+                else this.origin.y = origin.y - delta;
                 this.fitOnResize = false;
                 this.clampOrigin();
                 this.update();
-            });
-            thumb.addEventListener("pointerup", () => (start = null));
+            };
+            const begin = (e) => {
+                e.preventDefault();
+                this.stopInertia();
+                bar.setPointerCapture(e.pointerId);
+                start = { pos: at(e), origin: { ...this.origin }, id: e.pointerId };
+                bar.classList.add("dragging");
+            };
+            const end = () => {
+                start = null;
+                bar.classList.remove("dragging");
+            };
             bar.addEventListener("pointerdown", (e) => {
-                if (e.target !== bar || !this.doc)
+                if (!this.doc || e.button !== 0)
                     return;
+                if (e.target === thumb) {
+                    begin(e);
+                    return;
+                }
                 const r = thumb.getBoundingClientRect();
+                // Con el dedo, el pulgar salta bajo él y se sigue arrastrando (acertar en una barra
+                // estrecha con el dedo cuesta); con el ratón, como siempre, una página.
+                if (e.pointerType !== "mouse" && thumb.style.display !== "none") {
+                    const center = horizontal ? (r.left + r.right) / 2 : (r.top + r.bottom) / 2;
+                    moveTo({ ...this.origin }, (at(e) - center) * ratio());
+                    begin(e);
+                    return;
+                }
                 const before = horizontal ? e.clientX < r.left : e.clientY < r.top;
                 const page = (horizontal ? this.viewSize().w : this.viewSize().h) * 0.9;
                 horizontal ? this.scrollBy(before ? -page : page, 0) : this.scrollBy(0, before ? -page : page);
             });
+            bar.addEventListener("pointermove", (e) => {
+                if (!start || e.pointerId !== start.id || !this.doc)
+                    return;
+                moveTo(start.origin, (at(e) - start.pos) * ratio());
+            });
+            bar.addEventListener("pointerup", end);
+            bar.addEventListener("pointercancel", end);
+            bar.addEventListener("lostpointercapture", end);
         }
     }
 
@@ -786,80 +820,248 @@ export class CanvasView extends EventTarget {
         }
     }
 
+    // --- Dedos ------------------------------------------------------------------------------
+    // En las pantallas táctiles, como en las aplicaciones de dibujo: un dedo usa la herramienta y
+    // dos mueven la imagen (arrastrando) y la acercan o alejan (pellizcando), con inercia al
+    // soltar. El primer dedo espera un instante antes de pintar: si llega el segundo, no deja
+    // marca; si llega con el trazo recién empezado, el trazo se deshace.
+
+    // true: el evento táctil es del gesto y la herramienta no lo ve.
+    touchDown(e) {
+        this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        this.stopInertia();
+        if (this.touches.size === 1) {
+            this.touchBlocked = false;
+            // La Mano ya mueve la imagen con un dedo (y ahora con inercia).
+            if (this.tool?.id === "pan")
+                return false;
+            this.touchPending = { down: e, moves: [], id: e.pointerId, x: e.clientX, y: e.clientY,
+                                  timer: setTimeout(() => this.flushTouch(), kTouchDelay) };
+            return true;
+        }
+        if (this.touchPending) {
+            clearTimeout(this.touchPending.timer);
+            this.touchPending = null;
+        } else if (this.dragEvent?.pointerType === "touch") {
+            this.abortTouchStroke();
+        }
+        this.panning = null;
+        if (this.touches.size === 2)
+            this.startGesture();
+        return true;
+    }
+
+    touchMove(e) {
+        if (!this.touches.has(e.pointerId))
+            return false;
+        this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.gesture) {
+            this.updateGesture();
+            return true;
+        }
+        if (this.touchBlocked)
+            return true;
+        const p = this.touchPending;
+        if (p && p.id === e.pointerId) {
+            if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < kTouchSlop) {
+                p.moves.push(e);
+                return true;
+            }
+            // Se movió lo bastante: era un trazo; sigue como con el ratón.
+            this.flushTouch();
+        }
+        return false;
+    }
+
+    touchUp(e) {
+        if (!this.touches.delete(e.pointerId))
+            return false;
+        if (this.gesture) {
+            if (this.touches.size < 2)
+                this.endGesture();
+            this.touchBlocked = this.touches.size > 0;
+            return true;
+        }
+        if (this.touchBlocked) {
+            this.touchBlocked = this.touches.size > 0;
+            return true;
+        }
+        if (this.touchPending?.id === e.pointerId) {
+            // El navegador se quedó el toque: no llegó a empezar nada.
+            if (e.type === "pointercancel") {
+                clearTimeout(this.touchPending.timer);
+                this.touchPending = null;
+                return true;
+            }
+            // Un toque corto (sin moverse): la herramienta recibe el toque entero.
+            this.flushTouch();
+        }
+        return false;
+    }
+
+    // El primer dedo, que esperaba, empieza de verdad con lo que se movió mientras tanto.
+    flushTouch() {
+        const p = this.touchPending;
+        if (!p)
+            return;
+        clearTimeout(p.timer);
+        this.touchPending = null;
+        this.pointerDown(p.down);
+        this.strokeStart = performance.now();
+        for (const m of p.moves)
+            this.pointerMove(m);
+    }
+
+    // El segundo dedo llegó con el trazo ya empezado: se termina y, si acababa de empezar, se
+    // deshace sin dejar nada que rehacer (era el principio del gesto, no un trazo).
+    abortTouchStroke() {
+        const doc = this.doc, te = this.dragEvent;
+        this.dragEvent = null;
+        this.stopAutoScroll();
+        if (!doc || !te)
+            return;
+        const recent = performance.now() - (this.strokeStart || 0) < kTouchUndoWindow;
+        const before = doc.history.index;
+        this.tool?.onPointerUp?.(te);
+        if (!recent)
+            return;
+        if (doc.history.index === before + 1) {
+            doc.undo();
+            doc.history.steps.splice(doc.history.index + 1);
+            doc.emit("history");
+        } else if (this.tool?.isBusy?.()) {
+            this.tool.cancel?.();
+        }
+        this.update();
+    }
+
+    touchPoints() {
+        const rect = this.canvas.getBoundingClientRect();
+        const [a, b] = [...this.touches.values()];
+        return {
+            mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top },
+            dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        };
+    }
+
+    startGesture() {
+        if (!this.doc)
+            return;
+        const { mid, dist } = this.touchPoints();
+        this.gesture = { dist, zoom: this.zoom, image: this.viewToImage(mid.x, mid.y), samples: [] };
+        this.fitOnResize = false;
+        this.touchBlocked = true;
+        this.stopAutoScroll();
+        this.updateCursor();
+    }
+
+    // Pellizcar acerca o aleja con el punto de la imagen que estaba entre los dedos siempre entre
+    // ellos (también al arrastrar a la vez); cerca del 100 % se queda en él.
+    updateGesture() {
+        const g = this.gesture;
+        if (!g || this.touches.size < 2 || !this.doc)
+            return;
+        const { mid, dist } = this.touchPoints();
+        let zoom = Math.min(64, Math.max(0.01, (g.zoom * dist) / g.dist));
+        if (Math.abs(zoom - 1) < 0.04)
+            zoom = 1;
+        const changed = zoom !== this.zoom;
+        this.zoom = zoom;
+        this.origin = { x: mid.x - g.image.x * this.scale, y: mid.y - g.image.y * this.scale };
+        this.clampOrigin();
+        this.update();
+        if (changed)
+            this.emitZoom();
+        const now = performance.now();
+        g.samples.push({ t: now, x: mid.x, y: mid.y });
+        while (g.samples.length > 2 && now - g.samples[0].t > 100)
+            g.samples.shift();
+    }
+
+    endGesture() {
+        const g = this.gesture;
+        this.gesture = null;
+        if (!g)
+            return;
+        this.flingFrom(g.samples);
+    }
+
+    // Inercia: la imagen sigue con la velocidad de los últimos 100 ms y se frena poco a poco.
+    flingFrom(samples) {
+        if (!samples || samples.length < 2)
+            return;
+        const a = samples[0], b = samples[samples.length - 1], dt = b.t - a.t;
+        if (dt <= 0 || performance.now() - b.t > 80)
+            return;
+        let vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt;
+        if (Math.hypot(vx, vy) < 0.25)
+            return;
+        let last = performance.now();
+        const step = (now) => {
+            const ms = Math.min(48, now - last);
+            last = now;
+            const before = { ...this.origin };
+            this.scrollBy(-vx * ms, -vy * ms);
+            const decay = Math.pow(0.996, ms);
+            vx *= decay;
+            vy *= decay;
+            // Se para al frenar o al llegar al límite.
+            if (Math.hypot(vx, vy) < 0.03 || (before.x === this.origin.x && before.y === this.origin.y)) {
+                this.inertia = 0;
+                return;
+            }
+            this.inertia = requestAnimationFrame(step);
+        };
+        this.inertia = requestAnimationFrame(step);
+    }
+
+    stopInertia() {
+        if (this.inertia) {
+            cancelAnimationFrame(this.inertia);
+            this.inertia = 0;
+        }
+    }
+
     installEvents() {
         const c = this.canvas;
+        this.touches = new Map();
+        this.touchPending = null;
+        this.touchBlocked = false;
+        this.gesture = null;
+        this.inertia = 0;
         c.addEventListener("contextmenu", (e) => e.preventDefault());
         c.addEventListener("pointerdown", (e) => {
             c.focus({ preventScroll: true });
             if (!this.doc)
                 return;
             c.setPointerCapture(e.pointerId);
-            const te = this.toolEvent(e);
-            if (e.button === 1 || (this.spaceDown && e.button === 0) || (e.button === 0 && this.tool?.id === "pan")) {
-                this.panning = { x: e.clientX, y: e.clientY };
-                this.updateCursor();
+            // Sin los eventos de ratón que el navegador emula tras soltar el dedo: su mousedown
+            // devolvía el foco al lienzo y el Texto se quedaba sin teclado (las letras cambiaban de
+            // herramienta).
+            if (e.pointerType === "touch")
                 e.preventDefault();
+            if (e.pointerType === "touch" && this.touchDown(e))
                 return;
-            }
-            if (e.button === 3 || e.button === 4) {
-                this.tool?.extraButton?.(te, true);
-                return;
-            }
-            // Como en Kaint: el extremo borrador del lápiz usa la Goma mientras se pinta.
-            if (e.pointerType === "pen" && (e.button === 5 || (e.buttons & 32)) && Settings.get("tabletEraser") !== false && this.tool?.id !== "eraser") {
-                this.dispatchEvent(new CustomEvent("pen-eraser", { detail: true }));
-                te.button = "left";
-            }
-            this.dragEvent = te;
-            this.tool?.onPointerDown?.(te);
-            this.update();
+            this.stopInertia();
+            this.pointerDown(e);
         });
         c.addEventListener("pointermove", (e) => {
             if (!this.doc)
                 return;
-            const te = this.toolEvent(e);
-            this.mouse = te;
-            this.lastMouse = { x: te.x, y: te.y };
-            this.placeMini();
-            this.checkOutlineEdge(e);
-            this.dispatchEvent(new CustomEvent("cursor", { detail: te }));
-            if (this.panning) {
-                this.scrollBy(this.panning.x - e.clientX, this.panning.y - e.clientY);
-                this.panning = { x: e.clientX, y: e.clientY };
+            if (e.pointerType === "touch" && this.touchMove(e))
                 return;
-            }
-            this.updateAutoScroll(te, e.buttons);
-            if (this.dragEvent)
-                this.dragEvent = te;
-            // Eventos agrupados (trazos más finos con lápices y ratones rápidos).
-            const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-            for (const ce of events.length ? events : [e])
-                this.tool?.onPointerMove?.(this.toolEvent(ce));
-            this.update();
+            this.pointerMove(e);
         });
         const up = (e) => {
-            this.stopAutoScroll();
-            if (!this.doc)
+            if (e.pointerType === "touch" && this.touchUp(e))
                 return;
-            if (e.button === 0 || e.button === 2 || e.type === "pointercancel")
-                this.dragEvent = null;
-            if (this.panning) {
-                this.panning = null;
-                this.updateCursor();
-                return;
-            }
-            if (e.button === 3 || e.button === 4) {
-                this.tool?.extraButton?.(this.toolEvent(e), false);
-                return;
-            }
-            this.tool?.onPointerUp?.(this.toolEvent(e));
-            if (this.penEraser)
-                this.dispatchEvent(new CustomEvent("pen-eraser", { detail: false }));
-            this.update();
+            this.pointerUp(e);
         };
         c.addEventListener("pointerup", up);
         c.addEventListener("pointercancel", up);
-        c.addEventListener("pointerleave", () => {
+        c.addEventListener("pointerleave", (e) => {
+            if (e.pointerType === "touch" && (this.gesture || this.touchBlocked || this.touchPending))
+                return;
             this.mouse = null;
             this.placeMini();
             this.dispatchEvent(new CustomEvent("cursor", { detail: null }));
@@ -870,6 +1072,7 @@ export class CanvasView extends EventTarget {
             if (!this.doc)
                 return;
             e.preventDefault();
+            this.stopInertia();
             const rect = c.getBoundingClientRect();
             const anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
             const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
@@ -889,5 +1092,81 @@ export class CanvasView extends EventTarget {
             }
             this.followPointer(anchor);
         }, { passive: false });
+    }
+
+    pointerDown(e) {
+        const te = this.toolEvent(e);
+        if (e.button === 1 || (this.spaceDown && e.button === 0) || (e.button === 0 && this.tool?.id === "pan")) {
+            this.panning = { x: e.clientX, y: e.clientY, samples: [] };
+            this.updateCursor();
+            e.preventDefault();
+            return;
+        }
+        if (e.button === 3 || e.button === 4) {
+            this.tool?.extraButton?.(te, true);
+            return;
+        }
+        // Como en Kaint: el extremo borrador del lápiz usa la Goma mientras se pinta.
+        if (e.pointerType === "pen" && (e.button === 5 || (e.buttons & 32)) && Settings.get("tabletEraser") !== false && this.tool?.id !== "eraser") {
+            this.dispatchEvent(new CustomEvent("pen-eraser", { detail: true }));
+            te.button = "left";
+        }
+        this.dragEvent = te;
+        this.tool?.onPointerDown?.(te);
+        this.update();
+    }
+
+    pointerMove(e) {
+        const te = this.toolEvent(e);
+        this.mouse = te;
+        this.lastMouse = { x: te.x, y: te.y };
+        this.placeMini();
+        this.checkOutlineEdge(e);
+        this.dispatchEvent(new CustomEvent("cursor", { detail: te }));
+        if (this.panning) {
+            this.scrollBy(this.panning.x - e.clientX, this.panning.y - e.clientY);
+            this.panning.x = e.clientX;
+            this.panning.y = e.clientY;
+            // Con el dedo, la Mano deja la imagen con inercia al soltar.
+            if (e.pointerType === "touch") {
+                const now = performance.now(), samples = this.panning.samples;
+                samples.push({ t: now, x: e.clientX, y: e.clientY });
+                while (samples.length > 2 && now - samples[0].t > 100)
+                    samples.shift();
+            }
+            return;
+        }
+        this.updateAutoScroll(te, e.buttons);
+        if (this.dragEvent)
+            this.dragEvent = te;
+        // Eventos agrupados (trazos más finos con lápices y ratones rápidos).
+        const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+        for (const ce of events.length ? events : [e])
+            this.tool?.onPointerMove?.(this.toolEvent(ce));
+        this.update();
+    }
+
+    pointerUp(e) {
+        this.stopAutoScroll();
+        if (!this.doc)
+            return;
+        if (e.button === 0 || e.button === 2 || e.type === "pointercancel")
+            this.dragEvent = null;
+        if (this.panning) {
+            const samples = this.panning.samples;
+            this.panning = null;
+            this.updateCursor();
+            if (e.pointerType === "touch" && e.type === "pointerup")
+                this.flingFrom(samples);
+            return;
+        }
+        if (e.button === 3 || e.button === 4) {
+            this.tool?.extraButton?.(this.toolEvent(e), false);
+            return;
+        }
+        this.tool?.onPointerUp?.(this.toolEvent(e));
+        if (this.penEraser)
+            this.dispatchEvent(new CustomEvent("pen-eraser", { detail: false }));
+        this.update();
     }
 }

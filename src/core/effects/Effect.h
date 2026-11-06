@@ -131,6 +131,9 @@ struct RenderArgs {
     const EffectContext& ctx;
     const std::atomic_bool& cancel;
     const std::any& state;
+    // La selección (vacía si no hay): los efectos se aplican a todo 'roi' y Effects::apply mezcla
+    // después con ella; los complementos de paint.js la reciben como máscara.
+    const Selection* selection = nullptr;
 };
 
 class Effect {

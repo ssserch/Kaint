@@ -736,6 +736,15 @@ export const ShapeTypes = [
     ["checkmark", "Marca de verificación"], ["multiply", "Multiplicar"], ["gear", "Engranaje"], ["heart", "Corazón"],
 ];
 
+// Contorno de la nube del bocadillo de nube (el mismo en Kaint, AppState.cpp): desde CloudStart,
+// cada bulto es una curva [control x, control y, hasta x, hasta y], en fracciones del rectángulo.
+const CloudStart = [0.13, 0.269];
+const CloudPuffs = [
+    [0.093, 0.149, 0.244, 0.131], [0.294, -0.02, 0.47, 0.047], [0.616, -0.06, 0.715, 0.078], [0.907, 0.058, 0.897, 0.214],
+    [1.072, 0.3, 0.949, 0.433], [1.04, 0.605, 0.813, 0.64], [0.734, 0.817, 0.529, 0.728], [0.333, 0.82, 0.256, 0.648],
+    [0.062, 0.625, 0.118, 0.474], [-0.004, 0.367, 0.13, 0.269],
+];
+
 export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
     if (w < 0) { x += w; w = -w; }
     if (h < 0) { y += h; h = -h; }
@@ -761,7 +770,6 @@ export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
         }
         polygon(pts);
     };
-    const tail = (top) => polygon([[0.25, top - 0.05], [0.45, top - 0.05], [0.2, 1]]);
     const ellipse = (fx0, fy0, fx1, fy1) => {
         const [ax, ay] = at(fx0, fy0), [bx, by] = at(fx1, fy1);
         ctx.moveTo(bx, (ay + by) / 2);
@@ -789,19 +797,44 @@ export function shapePath(ctx, type, x, y, w, h, cornerRadius = 20) {
     case "pentagonarrow": polygon([[0, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0, 1]]); break;
     case "chevronarrow": polygon([[0, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0, 1], [0.25, 0.5]]); break;
     case "rectcallout": polygon([[0, 0], [1, 0], [1, 0.75], [0.45, 0.75], [0.2, 1], [0.25, 0.75], [0, 0.75]]); break;
+    // Los bocadillos, cada uno con un solo contorno (como en Kaint, AppState.cpp shapePath): la cola
+    // sale del borde de abajo, entre 0,25 y 0,45 del ancho, hasta la punta (0,2; 1). Antes eran
+    // varias figuras encima (la cola sobre el cuerpo y la nube con sus círculos), y al trazarlas se
+    // veían todas las líneas.
     case "roundedrectcallout": {
-        const [bx, by] = at(0, 0), [ex, ey] = at(1, 0.75);
-        ctx.roundRect(bx, by, ex - bx, ey - by, Math.min(ex - bx, ey - by) * 0.2);
-        tail(0.75);
+        const r = Math.min(w, 0.75 * h) * 0.2, b = y + 0.75 * h;
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, b, r);
+        ctx.arcTo(x + w, b, x, b, r);
+        ctx.lineTo(...at(0.45, 0.75));
+        ctx.lineTo(...at(0.2, 1));
+        ctx.lineTo(...at(0.25, 0.75));
+        ctx.arcTo(x, b, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
         break;
     }
-    case "ellipsecallout": ellipse(0, 0, 1, 0.8); tail(0.72); break;
-    case "cloudcallout":
-        for (const [px, py] of [[0.25, 0.32], [0.45, 0.22], [0.68, 0.25], [0.8, 0.45], [0.65, 0.6], [0.4, 0.62], [0.2, 0.52]])
-            ellipse(px - 0.2, py - 0.2, px + 0.2, py + 0.2);
+    case "ellipsecallout": {
+        // La elipse (arriba, 0,8 del alto) abierta donde sale la cola.
+        const cx = x + w / 2, cy = y + 0.4 * h, rx = w / 2, ry = 0.4 * h;
+        const left = Math.acos(-0.5), right = Math.acos(-0.1);
+        ctx.moveTo(cx + rx * Math.cos(left), cy + ry * Math.sin(left));
+        ctx.ellipse(cx, cy, rx, ry, 0, left, right + 2 * Math.PI);
+        ctx.lineTo(...at(0.2, 1));
+        ctx.closePath();
+        break;
+    }
+    case "cloudcallout": {
+        // La nube: bultos (curvas) de un punto al siguiente alrededor, sin nada dentro; debajo, a la
+        // izquierda, las dos burbujas del pensamiento.
+        ctx.moveTo(...at(...CloudStart));
+        for (const [qx, qy, px, py] of CloudPuffs)
+            ctx.quadraticCurveTo(...at(qx, qy), ...at(px, py));
+        ctx.closePath();
         ellipse(0.12, 0.8, 0.2, 0.88);
         ellipse(0.02, 0.92, 0.07, 0.98);
         break;
+    }
     case "lightningbolt": polygon([[0.55, 0], [0.12, 0.56], [0.42, 0.56], [0.28, 1], [0.88, 0.38], [0.56, 0.38], [0.76, 0]]); break;
     case "checkmark": polygon([[0, 0.55], [0.15, 0.4], [0.38, 0.62], [0.85, 0.1], [1, 0.25], [0.38, 0.92]]); break;
     case "multiply":

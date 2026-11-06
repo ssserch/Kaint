@@ -117,7 +117,8 @@ Section "$(SecApp)" SecApp
     RMDir /r "$INSTDIR\translations"
     Delete "$INSTDIR\build.bat"
     SetOutPath "$INSTDIR"
-    File /r "${SOURCE}\*.*"
+    ; El Uninstall.exe de build.bat --install no hace falta: este instalador escribe el suyo.
+    File /r /x Uninstall.exe "${SOURCE}\*.*"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
     SetOutPath "$INSTDIR\bin"
     CreateShortcut "$SMPROGRAMS\${APP}.lnk" "$INSTDIR\bin\kaint.exe" "" "$INSTDIR\bin\kaint.exe" 0

@@ -71,12 +71,18 @@ QString AboutDialog::credits()
         const char* name;
         const char* author;
         const char* url;
+        // Para qué se usa, entre paréntesis tras el nombre (traducido).
+        const char* note = nullptr;
     };
     static const Credit list[] = {
         {"Qt 6", "The Qt Company", "https://www.qt.io/"},
         {"zlib", "Jean-loup Gailly, Mark Adler", "https://zlib.net/"},
+        {"QuickJS-ng (MIT)", "Fabrice Bellard, Charlie Gordon, Ben Noordhuis, Saúl Ibarra Corretgé",
+         "https://github.com/quickjs-ng/quickjs"},
         {"Paint.NET 3.36 (MIT)", "dotPDN LLC, Rick Brewster", "https://www.getpaint.net/"},
         {"Paint.NET API", "dotPDN LLC", "https://paintdotnet.github.io/apidocs/"},
+        // Kaint no usa el sistema de complementos de paint.js: solo admite sus complementos (.paintjs).
+        {"paint.js", "LabyStudio", "https://github.com/LabyStudio/paintdotjs", QT_TRANSLATE_NOOP("AboutDialog", "soporte de sus complementos")},
         {"Breeze Icons", "KDE", "https://invent.kde.org/frameworks/breeze-icons"},
         {"7.css (MIT)", "Khang Nguyen Duy", "https://khang-nd.github.io/7.css/"},
         {"XP.css (MIT)", "Adam Hammad, Jordan Scales", "https://botoxparty.github.io/XP.css/"},
@@ -90,9 +96,11 @@ QString AboutDialog::credits()
         {"GCC", "GNU Project", "https://gcc.gnu.org/"},
     };
     QString html;
-    for (const Credit& c : list)
+    for (const Credit& c : list) {
+        const QString name = c.note ? QStringLiteral("%1 (%2)").arg(QString::fromUtf8(c.name), tr(c.note)) : QString::fromUtf8(c.name);
         html += QStringLiteral("• %1 – %2 <a href=\"%3\">%3</a><br>")
-                    .arg(QString::fromUtf8(c.name), QString::fromUtf8(c.author), QString::fromLatin1(c.url));
+                    .arg(name.toHtmlEscaped(), QString::fromUtf8(c.author).toHtmlEscaped(), QString::fromLatin1(c.url));
+    }
     return html;
 }
 

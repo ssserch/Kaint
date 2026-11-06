@@ -72,9 +72,10 @@ Safari download the saved file and paste with Ctrl+V instead.
   modes) and Grow, Shrink and Feather Selection; **View** > Pixels, Inches and Centimeters for the
   rulers and the status bar.
 - **Files** like Kaint's: opens PNG, JPEG, WebP, GIF (animated GIFs as one layer per frame), BMP,
-  AVIF, ICO, TGA, TIFF and DDS images, **OpenRaster (.ora)** and **Paint.NET (.pdn)** with their
-  layers; saves **Paint.NET (.pdn)** and OpenRaster with their layers, PNG, JPEG, WebP, DDS, TIFF,
-  GIF (animated, with Kaint's advanced options), BMP, TGA and ICO. Animated GIFs open as layers or
+  AVIF, ICO, TGA, TIFF, DDS, QOI and Netpbm (PPM, PGM, PBM) images, **OpenRaster (.ora)** and
+  **Paint.NET (.pdn)** with their layers; saves **Paint.NET (.pdn)** and OpenRaster with their
+  layers, PNG, JPEG, WebP, DDS, TIFF, GIF (animated, with Kaint's advanced options), BMP, TGA, ICO,
+  QOI and Netpbm (PPM). Animated GIFs open as layers or
   as separate images, and save from the layers or from the open images you pick. **Save Configuration** shows the encoded file and its size, with the
   quality, bit depth, dithering and transparency threshold. **Image > Animation** edits the frame
   durations and **Image > Color Profile** converts or assigns sRGB, Adobe RGB, Display P3 or
@@ -97,8 +98,28 @@ Safari download the saved file and paste with Ctrl+V instead.
   submenu, hide effects, and choose and order the tools of the Tools window) and editable keyboard
   shortcuts.
 - **Phones**: the floating windows hide in their corners behind a handle with their icon; tap it
-  to slide the window out, and it hides again when you tap the canvas or pick a tool. Or keep them
-  as windows and pick the size of each one (**Settings → User interface → Phone**).
+  to slide the window out, and it hides again when you tap the canvas or pick a tool. Sliding one
+  out hides the open ones it would cover (or, if you turn that off, it stays in front with its
+  handle). Windows always fit on the screen, also in landscape: Tools takes more columns, Colors
+  with "More" puts its sliders below the wheel when that fits better, and whatever still doesn't
+  fit is scaled down. Or keep them as windows and pick the size of each one (**Settings → User
+  interface → Phone**).
+- **Fingers** (phones and tablets): one finger uses the tool; two fingers move the image and pinch
+  to zoom, and the image keeps gliding when you let go. A stroke cut short by a second finger is
+  undone. The scrollbars get thicker under a finger, and tapping one brings its thumb under your
+  finger to drag it. Dialogs and windows move with one finger on their title bar, and pinching
+  one with two fingers changes its size (remembered). Buttons don't stay highlighted after a tap.
+- **Phone layout**: the menus (all of them) with a gear at the right whose arrow drops down the
+  windows, Settings and Help; below, the main toolbar and the open images arrow, wrapping to
+  another line when they don't fit. The tool options hide behind a button with the tool's icon and
+  an arrow at the end of the main toolbar, which unfolds them below over as many lines as they
+  need. In landscape, when there's room, the thumbnails of the open images show up at the top as
+  on a computer. The open images list marks unsaved ones with the orange star on the right.
+  Submenus that don't fit on the right open to the left. **Settings** shows its sections as
+  icons, with the chosen one named in the title bar ("Settings - Canvas").
+- **Text tool**: click or tap inside the text to put the cursor there; drag the move handle (the
+  four-way cross at the bottom right, as in Kaint) or use the right button to move it. On touch
+  screens, a box with an italic "A" at the top right opens or closes the on-screen keyboard.
 - **Recovery copies**: every few minutes, images with unsaved changes are copied into the browser
   (IndexedDB); if the page closes abruptly, Kaint offers them the next time it opens.
 - **Colors window** like Kaint's: gap-free swatches and a palette menu with saved palettes, a
@@ -148,5 +169,6 @@ software Kaint is inspired by.
 
 ---
 
-<sub>The plugin system of the web version is based on the one of
-[paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio.</sub>
+<sub>Kaint supports the plugins of [paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio
+(.paintjs packages and their JavaScript API); it doesn't use paint.js's own plugin system. The
+desktop version supports them too.</sub>

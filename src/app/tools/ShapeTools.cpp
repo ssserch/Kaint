@@ -510,7 +510,7 @@ QString ShapesTool::hint() const
 {
     return m_edit.isActive()
              ? tr("Tiradores: redimensionar (Mayús: proporción, Alt: desde el centro). Dentro: mover. "
-                  "Clic derecho o fuera del borde: girar. A: siguiente forma. Intro: terminar.")
+                  "Clic derecho o fuera del borde: girar. Clic lejos de ella o Intro: terminar. A: siguiente forma.")
              : tr("Arrastra para dibujar la forma: contorno con el color principal y relleno con el secundario "
                   "(clic derecho: al revés). Mayús: proporciones iguales. Alt: desde el centro.");
 }
@@ -556,12 +556,25 @@ void ShapesTool::mousePress(const ToolEvent& e)
         return;
     if (m_edit.isActive()) {
         int handle = -1;
-        TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), e.button == Qt::RightButton, &handle);
-        if (mode == TransformBox::Mode::None && Handles::hit(e.viewPos, moveIcon(), 11))
-            mode = TransformBox::Mode::Translate;
-        if (mode != TransformBox::Mode::None) {
-            m_box.begin(mode, handle, e.pos);
-            return;
+        bool inside = false;
+        const QTransform toView = canvas()->imageToViewTransform();
+        TransformBox::Mode mode = m_box.hit(e.viewPos, toView, false, &handle, &inside);
+        const bool onMoveIcon = Handles::hit(e.viewPos, moveIcon(), 11);
+        // Lejos de la forma (fuera de su cuadro, de sus tiradores, de la franja de girar y del icono
+        // de mover), el cuadro diría «mover» (como con una selección): aquí se deja de editar y el
+        // clic empieza otra forma (sin arrastrar, ninguna). Antes la forma seguía seleccionada y se
+        // movía.
+        const bool far = mode == TransformBox::Mode::Translate && !inside && !onMoveIcon;
+        if (!far) {
+            // El clic derecho gira desde cualquier sitio cerca de ella.
+            if (e.button == Qt::RightButton)
+                mode = m_box.hit(e.viewPos, toView, true, &handle);
+            else if (mode == TransformBox::Mode::None && onMoveIcon)
+                mode = TransformBox::Mode::Translate;
+            if (mode != TransformBox::Mode::None) {
+                m_box.begin(mode, handle, e.pos);
+                return;
+            }
         }
         finish();
     }

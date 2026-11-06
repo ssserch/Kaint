@@ -2,6 +2,7 @@
 
 #include "core/CustomShapes.h"
 #include "core/FillPattern.h"
+#include "core/ImageIO.h"
 
 #include "core/Ora.h"
 #include "core/Palette.h"
@@ -257,6 +258,9 @@ QIcon AppState::recentThumbnail(const QString& path)
             if (size.isValid() && (size.width() > 512 || size.height() > 512))
                 reader.setScaledSize(size.scaled(QSize(256, 256), Qt::KeepAspectRatio));
             img = reader.read();
+            // TGA, DDS y QOI con los lectores de Kaint si Qt no puede.
+            if (img.isNull())
+                img = ImageIO::readImage(path);
         }
         if (!img.isNull()) {
             thumb = Raster::thumbnail(img, kRecentThumb);
@@ -412,7 +416,6 @@ QPainterPath shapePath(ShapeType type, const QRectF& rect, double cornerRadius)
         p.closeSubpath();
         return p;
     };
-    auto tail = [&](qreal top) { return polygon({{0.25, top - 0.05}, {0.45, top - 0.05}, {0.2, 1.0}}); };
 
     QPainterPath p;
     switch (type) {
@@ -449,32 +452,54 @@ QPainterPath shapePath(ShapeType type, const QRectF& rect, double cornerRadius)
     case ShapeType::RectCallout:
         p = polygon({{0, 0}, {1, 0}, {1, 0.75}, {0.45, 0.75}, {0.2, 1}, {0.25, 0.75}, {0, 0.75}});
         break;
+    // Los bocadillos, cada uno con un solo contorno (como en la web, Icons.js shapePath): la cola sale
+    // del borde de abajo, entre 0,25 y 0,45 del ancho, hasta la punta (0,2; 1). Antes se unían varias
+    // figuras (QPainterPath::united), y la nube dejaba restos dentro.
     case ShapeType::RoundedRectCallout: {
-        QPainterPath body;
-        const QRectF b(at(0, 0), at(1, 0.75));
-        const qreal radius = std::min(b.width(), b.height()) * 0.2;
-        body.addRoundedRect(b, radius, radius);
-        p = body.united(tail(0.75));
+        const qreal radius = std::min(r.width(), 0.75 * r.height()) * 0.2, d = 2 * radius;
+        const qreal left = r.left(), top = r.top(), right = r.right(), bottom = r.top() + 0.75 * r.height();
+        p.moveTo(left + radius, top);
+        p.lineTo(right - radius, top);
+        p.arcTo(QRectF(right - d, top, d, d), 90, -90);
+        p.lineTo(right, bottom - radius);
+        p.arcTo(QRectF(right - d, bottom - d, d, d), 0, -90);
+        p.lineTo(at(0.45, 0.75));
+        p.lineTo(at(0.2, 1));
+        p.lineTo(at(0.25, 0.75));
+        p.lineTo(left + radius, bottom);
+        p.arcTo(QRectF(left, bottom - d, d, d), 270, -90);
+        p.lineTo(left, top + radius);
+        p.arcTo(QRectF(left, top, d, d), 180, -90);
+        p.closeSubpath();
         break;
     }
     case ShapeType::EllipseCallout: {
-        QPainterPath body;
-        body.addEllipse(QRectF(at(0, 0), at(1, 0.8)));
-        p = body.united(tail(0.72));
+        // La elipse (arriba, 0,8 del alto) abierta donde sale la cola. Ángulos de Qt: en grados y
+        // en sentido contrario a las agujas del reloj.
+        const QRectF body(at(0, 0), at(1, 0.8));
+        const qreal left = std::acos(-0.5) * 180 / M_PI, right = std::acos(-0.1) * 180 / M_PI;
+        p.arcMoveTo(body, -left);
+        p.arcTo(body, -left, -(right + 360 - left));
+        p.lineTo(at(0.2, 1));
+        p.closeSubpath();
         break;
     }
     case ShapeType::CloudCallout: {
-        QPainterPath body;
-        const std::pair<qreal, qreal> puffs[] = {{0.25, 0.32}, {0.45, 0.22}, {0.68, 0.25}, {0.8, 0.45},
-                                                 {0.65, 0.6},  {0.4, 0.62}, {0.2, 0.52}};
-        for (const auto& [x, y] : puffs) {
-            QPainterPath c;
-            c.addEllipse(QRectF(at(x - 0.2, y - 0.2), at(x + 0.2, y + 0.2)));
-            body = body.united(c);
-        }
-        body.addEllipse(QRectF(at(0.12, 0.8), at(0.2, 0.88)));
-        body.addEllipse(QRectF(at(0.02, 0.92), at(0.07, 0.98)));
-        p = body;
+        // La nube: bultos (curvas) de un punto al siguiente alrededor, sin nada dentro; debajo, a la
+        // izquierda, las dos burbujas del pensamiento. Los mismos números que en la web.
+        static constexpr qreal start[2] = {0.13, 0.269};
+        static constexpr qreal puffs[][4] = {
+            {0.093, 0.149, 0.244, 0.131}, {0.294, -0.02, 0.47, 0.047}, {0.616, -0.06, 0.715, 0.078},
+            {0.907, 0.058, 0.897, 0.214}, {1.072, 0.3, 0.949, 0.433},  {1.04, 0.605, 0.813, 0.64},
+            {0.734, 0.817, 0.529, 0.728}, {0.333, 0.82, 0.256, 0.648}, {0.062, 0.625, 0.118, 0.474},
+            {-0.004, 0.367, 0.13, 0.269},
+        };
+        p.moveTo(at(start[0], start[1]));
+        for (const auto& q : puffs)
+            p.quadTo(at(q[0], q[1]), at(q[2], q[3]));
+        p.closeSubpath();
+        p.addEllipse(QRectF(at(0.12, 0.8), at(0.2, 0.88)));
+        p.addEllipse(QRectF(at(0.02, 0.92), at(0.07, 0.98)));
         break;
     }
     case ShapeType::LightningBolt:

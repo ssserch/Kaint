@@ -8,10 +8,12 @@
 #include <QStandardPaths>
 #include <QtEndian>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <vector>
 
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -92,11 +94,18 @@ QList<Image> parse(const QString& file, int size)
     QFile f(file);
     if (!f.open(QIODevice::ReadOnly))
         return {};
-    const QByteArray data = f.read(32 << 20);
-    auto u32 = [&data](qint64 at) -> quint32 {
-        return at >= 0 && at + 4 <= data.size() ? qFromLittleEndian<quint32>(data.constData() + at) : 0;
+    // En un vector y no en un QByteArray: con uno vacío, GCC creía que se podía leer del QByteArray
+    // vacío compartido (de un byte) y avisaba de un acceso fuera de límites que nunca ocurre.
+    std::vector<uchar> data(size_t(std::clamp<qint64>(f.size(), 0, 32 << 20)));
+    data.resize(size_t(std::max<qint64>(0, f.read(reinterpret_cast<char*>(data.data()), qint64(data.size())))));
+    const qint64 length = qint64(data.size());
+    auto u32 = [&data, length](qint64 at) -> quint32 {
+        if (at < 0 || at + 4 > length)
+            return 0;
+        const uchar* p = data.data() + at;
+        return quint32(p[0]) | quint32(p[1]) << 8 | quint32(p[2]) << 16 | quint32(p[3]) << 24;
     };
-    if (!data.startsWith("Xcur"))
+    if (length < 16 || std::memcmp(data.data(), "Xcur", 4) != 0)
         return {};
     const quint32 header = u32(4), count = std::min<quint32>(u32(12), 4096);
     constexpr quint32 kImage = 0xfffd0002;
@@ -119,7 +128,7 @@ QList<Image> parse(const QString& file, int size)
         const qint64 chunk = u32(entry(i) + 8);
         const quint32 w = u32(chunk + 16), h = u32(chunk + 20);
         const qint64 pixels = chunk + u32(chunk);
-        if (w == 0 || h == 0 || w > 1024 || h > 1024 || pixels + qint64(w) * h * 4 > data.size())
+        if (w == 0 || h == 0 || w > 1024 || h > 1024 || pixels + qint64(w) * h * 4 > length)
             continue;
         QImage image(int(w), int(h), QImage::Format_ARGB32_Premultiplied);
         for (quint32 y = 0; y < h; ++y) {

@@ -337,6 +337,13 @@ inline QRgb pixelOrTransparent(const ConstPixels& p, int x, int y)
     return (x < 0 || y < 0 || x >= p.w || y >= p.h) ? 0 : p.at(x, y);
 }
 
+// Fuera de la imagen, el píxel del borde más cercano: al interpolar junto al borde no se mezcla
+// transparencia que la imagen no tiene (el borde lo recorta drawTransformed con lo que cubre).
+inline QRgb pixelClamped(const ConstPixels& p, int x, int y)
+{
+    return p.at(std::clamp(x, 0, p.w - 1), std::clamp(y, 0, p.h - 1));
+}
+
 QRgb sampleBicubic(const ConstPixels& src, double x, double y)
 {
     x -= 0.5;
@@ -352,7 +359,7 @@ QRgb sampleBicubic(const ConstPixels& src, double x, double y)
     double acc[4] = {0, 0, 0, 0};
     for (int j = 0; j < 4; ++j) {
         for (int i = 0; i < 4; ++i) {
-            const QRgb p = pixelOrTransparent(src, ix + i - 1, iy + j - 1);
+            const QRgb p = pixelClamped(src, ix + i - 1, iy + j - 1);
             const double w = wx[i] * wy[j];
             acc[0] += qRed(p) * w, acc[1] += qGreen(p) * w, acc[2] += qBlue(p) * w, acc[3] += qAlpha(p) * w;
         }
@@ -362,15 +369,15 @@ QRgb sampleBicubic(const ConstPixels& src, double x, double y)
                  std::min(a, clamp255f(float(acc[2]))), a);
 }
 
-QRgb sampleBilinearTransparent(const ConstPixels& src, double x, double y)
+QRgb sampleBilinear(const ConstPixels& src, double x, double y)
 {
     x -= 0.5;
     y -= 0.5;
     const int ix = int(std::floor(x));
     const int iy = int(std::floor(y));
     const int tx = int((x - ix) * 256), ty = int((y - iy) * 256);
-    const QRgb p00 = pixelOrTransparent(src, ix, iy), p10 = pixelOrTransparent(src, ix + 1, iy);
-    const QRgb p01 = pixelOrTransparent(src, ix, iy + 1), p11 = pixelOrTransparent(src, ix + 1, iy + 1);
+    const QRgb p00 = pixelClamped(src, ix, iy), p10 = pixelClamped(src, ix + 1, iy);
+    const QRgb p01 = pixelClamped(src, ix, iy + 1), p11 = pixelClamped(src, ix + 1, iy + 1);
     auto mix = [&](int c00, int c10, int c01, int c11) {
         const int top = c00 * (256 - tx) + c10 * tx;
         const int bottom = c01 * (256 - tx) + c11 * tx;
@@ -412,10 +419,10 @@ struct LinearImage {
         });
     }
 
+    // Fuera de la imagen, el píxel del borde más cercano (como pixelClamped).
     const float* at(int x, int y) const
     {
-        static const float zero[4] = {0, 0, 0, 0};
-        return (x < 0 || y < 0 || x >= w || y >= h) ? zero : &px[(size_t(y) * w + x) * 4];
+        return &px[(size_t(std::clamp(y, 0, h - 1)) * w + size_t(std::clamp(x, 0, w - 1))) * 4];
     }
 
     // De vuelta a sRGB premultiplicado de 8 bits.
@@ -522,6 +529,28 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
     const QImage src = source.convertToFormat(kPremulFormat);
     const bool dstPremul = isPremultiplied(dst);
 
+    // Lo que cubre cada píxel de destino de la imagen transformada (con las interpolaciones que
+    // mezclan): 1 dentro, 0 fuera y la parte cubierta en el borde. Las muestras repiten el píxel del
+    // borde en vez de mezclar transparencia, así que una imagen opaca escalada sigue con el borde
+    // nítido (como en Paint.NET: antes un cuadrado opaco ampliado salía con el contorno
+    // semitransparente y desenfocado) y girada, con el borde suavizado por lo que cubre. La
+    // distancia de cada lado se pasa a píxeles de destino con el determinante (también con
+    // inclinación).
+    const double det = std::abs(transform.m11() * transform.m22() - transform.m12() * transform.m21());
+    const double perX = det / std::max(1e-9, std::hypot(transform.m21(), transform.m22()));
+    const double perY = det / std::max(1e-9, std::hypot(transform.m11(), transform.m12()));
+    const double srcW = src.width(), srcH = src.height();
+    auto coverage = [&](const QPointF& p) {
+        auto axis = [](double a, double b) { return std::clamp(std::min(a + 0.5, 1.0) + std::min(b + 0.5, 1.0) - 1.0, 0.0, 1.0); };
+        return axis(p.x() * perX, (srcW - p.x()) * perX) * axis(p.y() * perY, (srcH - p.y()) * perY);
+    };
+    auto covered = [](QRgb s, double c) {
+        if (c >= 1.0)
+            return s;
+        auto k = [c](int v) { return int(v * c + 0.5); };
+        return qRgba(k(qRed(s)), k(qGreen(s)), k(qBlue(s)), k(qAlpha(s)));
+    };
+
     // Multimuestra bilineal y anisotrópico: varias muestras bilineales repartidas por el píxel de
     // destino (2×2; en el anisotrópico, tantas en cada eje de la pantalla como píxeles de la imagen
     // abarque el píxel en ese eje, hasta 8) y su media.
@@ -542,6 +571,9 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
             for (int y = y0; y < y1; ++y) {
                 QRgb* d = out.row(y);
                 for (int x = area.left(); x <= area.right(); ++x) {
+                    const double cover = coverage(inv.map(QPointF(x + 0.5, y + 0.5)));
+                    if (cover <= 0)
+                        continue;
                     QRgb s;
                     if (multi) {
                         float acc[4] = {0, 0, 0, 0};
@@ -555,6 +587,7 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
                         const QPointF p = inv.map(QPointF(x + 0.5, y + 0.5));
                         s = interpolation == Interpolation::Bilinear ? lin.bilinear(p.x(), p.y()) : lin.bicubic(p.x(), p.y());
                     }
+                    s = covered(s, cover);
                     if (qAlpha(s))
                         d[x] = dstPremul ? overPixel(d[x], s) : overStraight(d[x], qUnpremultiply(s));
                 }
@@ -569,13 +602,16 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
             QRgb* d = out.row(y);
             for (int x = area.left(); x <= area.right(); ++x) {
                 const QPointF p = inv.map(QPointF(x + 0.5, y + 0.5));
+                const double cover = interpolation == Interpolation::NearestNeighbor ? 1.0 : coverage(p);
+                if (cover <= 0)
+                    continue;
                 QRgb s;
                 switch (interpolation) {
                 case Interpolation::NearestNeighbor:
                     s = pixelOrTransparent(in, int(std::floor(p.x())), int(std::floor(p.y())));
                     break;
                 case Interpolation::Bilinear:
-                    s = sampleBilinearTransparent(in, p.x(), p.y());
+                    s = sampleBilinear(in, p.x(), p.y());
                     break;
                 case Interpolation::BilinearMultisample:
                 case Interpolation::Anisotropic: {
@@ -583,7 +619,7 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
                     for (int j = 0; j < ny; ++j)
                         for (int i = 0; i < nx; ++i) {
                             const QPointF q = inv.map(QPointF(x + (i + 0.5) / nx, y + (j + 0.5) / ny));
-                            const QRgb c = sampleBilinearTransparent(in, q.x(), q.y());
+                            const QRgb c = sampleBilinear(in, q.x(), q.y());
                             acc[0] += qRed(c), acc[1] += qGreen(c), acc[2] += qBlue(c), acc[3] += qAlpha(c);
                         }
                     const int n = nx * ny;
@@ -595,6 +631,7 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
                     s = sampleBicubic(in, p.x(), p.y());
                     break;
                 }
+                s = covered(s, cover);
                 if (qAlpha(s))
                     d[x] = dstPremul ? overPixel(d[x], s) : overStraight(d[x], qUnpremultiply(s));
             }

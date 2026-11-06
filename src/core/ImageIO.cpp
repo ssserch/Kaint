@@ -1,13 +1,16 @@
 #include "core/ImageIO.h"
 
 #include "core/Document.h"
+#include "core/ExtraFormats.h"
 #include "core/Gif.h"
 #include "core/Ora.h"
 #include "core/PngWriter.h"
 #include "core/Pdn.h"
 #include "core/effects/Effect.h"
+#include "core/plugins/PaintJs.h"
 
 #include <QBuffer>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QImageReader>
@@ -70,6 +73,8 @@ const FormatInfo kOpenFormats[] = {
     {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
     {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.wmp"},
     {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
+    {"qoi", QT_TRANSLATE_NOOP("QObject", "QOI"), "*.qoi"},
+    {"ppm", QT_TRANSLATE_NOOP("QObject", "Netpbm"), "*.ppm *.pgm *.pbm"},
 };
 
 const FormatInfo kSaveFormats[] = {
@@ -86,13 +91,49 @@ const FormatInfo kSaveFormats[] = {
     {"gif", QT_TRANSLATE_NOOP("QObject", "GIF"), "*.gif"},
     {"bmp", QT_TRANSLATE_NOOP("QObject", "BMP"), "*.bmp"},
     {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
+    {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp"},
     {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
+    {"qoi", QT_TRANSLATE_NOOP("QObject", "QOI"), "*.qoi"},
+    {"ppm", QT_TRANSLATE_NOOP("QObject", "Netpbm"), "*.ppm *.pgm *.pbm"},
 };
 
-// Formatos que escribe Kaint sin depender de los complementos de Qt.
+// Formatos que escribe Kaint sin depender de los complementos de Qt (los de Netpbm los escribe
+// siempre Qt). JPEG XL, AVIF, HEIC y JPEG XR aparecen si hay un complemento de Qt que los escriba
+// (kimageformats).
 bool ownWriter(const QByteArray& suffix)
 {
-    return suffix == "ora" || suffix == "pdn" || suffix == "gif" || suffix == "ico";
+    return suffix == "ora" || suffix == "pdn" || suffix == "gif" || suffix == "ico" || suffix == "tga" || suffix == "dds"
+           || suffix == "qoi";
+}
+
+// Formatos que Kaint también lee por su cuenta (ExtraFormats), aunque Qt no pueda.
+bool ownReader(const QString& suffix)
+{
+    return suffix == QLatin1String("tga") || suffix == QLatin1String("dds") || suffix == QLatin1String("qoi");
+}
+
+QImage decodeOwn(const QString& suffix, const QByteArray& data, QString* error)
+{
+    if (suffix == QLatin1String("tga"))
+        return Tga::decode(data, error);
+    if (suffix == QLatin1String("dds"))
+        return Dds::decode(data, error);
+    return Qoi::decode(data, error);
+}
+
+// Formato de un complemento de paint.js para el archivo. Los de las listas de arriba los lee y
+// escribe siempre Kaint; los demás (PSD, por ejemplo), mejor el complemento que un lector de Qt
+// sin capas.
+std::optional<PaintJs::FileType> pluginType(const QString& path, bool writing)
+{
+    const QString suffix = suffixOf(path);
+    for (const FormatInfo& f : kOpenFormats)
+        if (suffix == QLatin1String(f.suffix))
+            return std::nullopt;
+    for (const FormatInfo& f : kSaveFormats)
+        if (suffix == QLatin1String(f.suffix))
+            return std::nullopt;
+    return PaintJs::fileTypeFor(path, writing);
 }
 
 // Se escribe a un archivo temporal y se renombra: un error no destruye el original.
@@ -113,12 +154,18 @@ namespace ImageIO {
 
 QStringList supportedReadSuffixes()
 {
-    QStringList list{QStringLiteral("ora"), QStringLiteral("pdn")};
+    QStringList list{QStringLiteral("ora"), QStringLiteral("pdn"), QStringLiteral("tga"), QStringLiteral("dds"),
+                     QStringLiteral("qoi")};
     for (const QByteArray& f : QImageReader::supportedImageFormats()) {
         const QString s = suffixOf(QStringLiteral("x.") + QString::fromLatin1(f));
         if (!list.contains(s))
             list.append(s);
     }
+    for (const PaintJs::FileType& t : PaintJs::fileTypes())
+        if (t.canRead)
+            for (const QString& e : t.extensions)
+                if (!list.contains(e.mid(1)))
+                    list.append(e.mid(1));
     return list;
 }
 
@@ -133,12 +180,24 @@ QString openFilter()
         all << patterns;
         filters << QStringLiteral("%1 (%2)").arg(QObject::tr(f.label), patterns);
     }
+    // Los de los complementos de paint.js (Photoshop, por ejemplo).
+    for (const PaintJs::FileType& t : PaintJs::fileTypes()) {
+        if (!t.canRead)
+            continue;
+        QStringList patterns;
+        for (const QString& e : t.extensions)
+            patterns << QLatin1Char('*') + e;
+        all << patterns;
+        filters << t.filter();
+    }
     for (const QString& s : readable) {
         const QString pattern = QStringLiteral("*.%1").arg(s);
         if (!all.join(QLatin1Char(' ')).split(QLatin1Char(' ')).contains(pattern))
             all << pattern;
     }
     filters.prepend(QObject::tr("Todos los tipos de imagen (%1)").arg(all.join(QLatin1Char(' '))));
+    // Al abrir un paquete de paint.js, se instala (como en la web).
+    filters << QObject::tr("Complementos de paint.js (*.paintjs)");
     filters << QObject::tr("Todos los archivos (*)");
     return filters.join(QStringLiteral(";;"));
 }
@@ -156,19 +215,24 @@ QString saveFilter(QString* defaultFilter)
             *defaultFilter = filter;
         filters << filter;
     }
+    for (const PaintJs::FileType& t : PaintJs::fileTypes())
+        if (t.canWrite && pluginType(QStringLiteral("x") + t.extensions.value(0), true))
+            filters << t.filter();
     return filters.join(QStringLiteral(";;"));
 }
 
 bool isLayered(const QString& path)
 {
     const QString suffix = suffixOf(path);
+    if (const auto type = pluginType(path, true))
+        return type->layers;
     return suffix == QLatin1String("ora") || suffix == QLatin1String("pdn");
 }
 
 bool isWritable(const QString& path)
 {
     const QByteArray suffix = suffixOf(path).toLatin1();
-    if (ownWriter(suffix))
+    if (ownWriter(suffix) || pluginType(path, true))
         return true;
     return QImageWriter::supportedImageFormats().contains(writerFormat(suffixOf(path)));
 }
@@ -193,14 +257,54 @@ bool supportsQuality(const QString& path)
 
 bool supportsAlpha(const QString& path)
 {
-    static const QStringList opaque{QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("bmp")};
+    static const QStringList opaque{QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("bmp"), QStringLiteral("ppm"),
+                                    QStringLiteral("pgm"), QStringLiteral("pbm")};
     return !opaque.contains(suffixOf(path));
+}
+
+QImage readImage(const QString& path, QString* error)
+{
+    // TGA, DDS y QOI: primero con lo de Kaint; si no puede (un DDS con BC7, por ejemplo), con el
+    // complemento de Qt si lo hay.
+    const QString suffix = suffixOf(path);
+    QString ownError;
+    if (ownReader(suffix)) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            if (error)
+                *error = file.errorString();
+            return {};
+        }
+        const QImage image = decodeOwn(suffix, file.readAll(), &ownError);
+        if (!image.isNull())
+            return image;
+    }
+    QImageReader reader(path);
+    reader.setAutoTransform(true);
+    const QImage image = reader.read();
+    if (image.isNull() && error)
+        *error = ownError.isEmpty() ? reader.errorString() : ownError;
+    return image;
+}
+
+QImage decode(const QByteArray& data, const QString& path)
+{
+    const QString suffix = suffixOf(path);
+    if (ownReader(suffix))
+        return decodeOwn(suffix, data, nullptr);
+    QImage image;
+    image.loadFromData(data, writerFormat(suffix).constData());
+    if (image.isNull())
+        image.loadFromData(data);
+    return image;
 }
 
 Document* load(const QString& path, QString* error)
 {
     Document* doc = nullptr;
-    if (suffixOf(path) == QLatin1String("ora")) {
+    if (const auto type = pluginType(path, false)) {
+        doc = PaintJs::decode(*type, path, error);
+    } else if (suffixOf(path) == QLatin1String("ora")) {
         doc = Ora::load(path, error);
     } else if (suffixOf(path) == QLatin1String("pdn")) {
         doc = Pdn::load(path, error);
@@ -226,14 +330,9 @@ Document* load(const QString& path, QString* error)
             return nullptr;
         doc = Document::createFromImage(image, QObject::tr("Fondo"));
     } else {
-        QImageReader reader(path);
-        reader.setAutoTransform(true);
-        const QImage image = reader.read();
-        if (image.isNull()) {
-            if (error)
-                *error = reader.errorString();
+        const QImage image = readImage(path, error);
+        if (image.isNull())
             return nullptr;
-        }
         doc = Document::createFromImage(image, QObject::tr("Fondo"));
         if (image.dotsPerMeterX() > 0)
             doc->setDpi(image.dotsPerMeterX() * 0.0254);
@@ -349,10 +448,23 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
             *error = QObject::tr("No se pudo comprimir la imagen.");
         return png;
     }
+    const QString format = suffixOf(path);
+    if (ownReader(format)) {
+        if (format == QLatin1String("tga") && (prepared.width() > 0xffff || prepared.height() > 0xffff)) {
+            if (error)
+                *error = QObject::tr("TGA admite imágenes de hasta 65535 × 65535 píxeles.");
+            return {};
+        }
+        const QByteArray own = format == QLatin1String("tga") ? Tga::encode(prepared)
+                               : format == QLatin1String("dds") ? Dds::encode(prepared)
+                                                                : Qoi::encode(prepared);
+        if (own.isEmpty() && error)
+            *error = QObject::tr("No se pudo comprimir la imagen.");
+        return own;
+    }
     QByteArray data;
     QBuffer buffer(&data);
     buffer.open(QIODevice::WriteOnly);
-    const QString format = suffixOf(path);
     QImageWriter writer(&buffer, writerFormat(format));
     if (supportsQuality(path))
         writer.setQuality(options.quality);
@@ -368,6 +480,8 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
 
 bool save(const Document* doc, const QString& path, const SaveOptions& options, QString* error)
 {
+    if (const auto type = pluginType(path, true))
+        return PaintJs::encode(*type, doc, path, error);
     if (suffixOf(path) == QLatin1String("pdn"))
         return Pdn::save(doc, path, error);
     if (isLayered(path))

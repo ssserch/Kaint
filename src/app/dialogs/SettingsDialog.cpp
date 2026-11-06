@@ -20,6 +20,7 @@
 #include "app/widgets/EffectControls.h"
 #include "app/widgets/UnitField.h"
 #include "core/CustomShapes.h"
+#include "app/dialogs/PluginCatalogDialog.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
@@ -75,6 +76,25 @@
 
 #include <memory>
 
+namespace {
+
+// La barra de título de Kaint (y, en Linux, las esquinas redondeadas de Windows 11, que necesitan
+// las ventanas translúcidas desde que se crean) se pone o se quita al abrir Kaint: true si lo
+// elegido no es lo que hay ahora. Con el tema KDE, siempre la del escritorio. En Windows las
+// esquinas las pone el propio Windows 11 al momento.
+bool frameNeedsRestart(const AppSettings& s)
+{
+    const bool frame = s.customFrame && s.colorScheme != int(Theme::Scheme::Kde);
+#ifdef Q_OS_WIN
+    const bool rounded = false;
+#else
+    const bool rounded = frame && s.uiStyle == 1 && s.windowsVersion == 11;
+#endif
+    return frame != WindowFrame::enabled() || rounded != WindowFrame::roundedCorners();
+}
+
+} // namespace
+
 AppSettings AppSettings::load()
 {
     QSettings s;
@@ -92,6 +112,8 @@ AppSettings AppSettings::load()
     a.systemPointer = get("systemPointer", a.systemPointer);
     a.layerDropLine = get("layerDropLine", a.layerDropLine);
     a.historyJumpButtons = get("historyJumpButtons", a.historyJumpButtons);
+    a.pluginMenuIcons = get("pluginMenuIcons", a.pluginMenuIcons);
+    a.kaintHtmlPlugins = get("kaintHtmlPlugins", a.kaintHtmlPlugins);
     a.paletteTranslucent = get("paletteTranslucent", a.paletteTranslucent);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
@@ -99,16 +121,19 @@ AppSettings AppSettings::load()
     a.uiFontFamily = get("uiFontFamily", a.uiFontFamily);
     a.uiFontSize = std::clamp(get("uiFontSize", a.uiFontSize), 0, 24);
     a.titleBarColor = s.value(QStringLiteral("titleBarColor"), QColor()).value<QColor>();
-    a.windows10Frame = get("windows10Frame", a.windows10Frame);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
-    // Antes solo había la barra de Windows 10 con el estilo Paint.NET: sin elección guardada, la de
-    // Windows 10 si estaba activada con ese estilo; con el de Kaint, la del escritorio.
-    if (s.contains(QStringLiteral("titleButtons")))
-        a.titleButtons = std::clamp(get("titleButtons", a.titleButtons), -1, 5);
-    else
-        a.titleButtons = a.uiStyle == 1 && a.windows10Frame ? 0 : -1;
-    a.titleButtonsLeft = get("titleButtonsLeft", a.titleButtonsLeft);
     a.windowsVersion = get("windowsVersion", a.windowsVersion) == 11 ? 11 : 10;
+    // La barra de título de Kaint o la del sistema. Antes no había casilla: los botones -1 («Los del
+    // escritorio») eran la del sistema; sin nada elegido, lo de cada sistema.
+    const int defaultButtons = a.windowsVersion == 11 ? 1 : 0;
+    const int buttons = s.contains(QStringLiteral("titleButtons")) ? std::clamp(get("titleButtons", defaultButtons), -1, 5)
+                                                                   : defaultButtons;
+    if (s.contains(QStringLiteral("customWindowFrame")))
+        a.customFrame = get("customWindowFrame", a.customFrame);
+    else if (buttons < 0)
+        a.customFrame = false;
+    a.titleButtons = buttons < 0 ? defaultButtons : buttons;
+    a.titleButtonsLeft = get("titleButtonsLeft", a.titleButtonsLeft);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
@@ -169,6 +194,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("systemPointer"), systemPointer);
     s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
     s.setValue(QStringLiteral("historyJumpButtons"), historyJumpButtons);
+    s.setValue(QStringLiteral("pluginMenuIcons"), pluginMenuIcons);
+    s.setValue(QStringLiteral("kaintHtmlPlugins"), kaintHtmlPlugins);
     s.setValue(QStringLiteral("paletteTranslucent"), paletteTranslucent);
     s.remove(QStringLiteral("allPaletteColors"));
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
@@ -177,7 +204,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("uiFontFamily"), uiFontFamily);
     s.setValue(QStringLiteral("uiFontSize"), uiFontSize);
     s.setValue(QStringLiteral("titleBarColor"), titleBarColor);
-    s.setValue(QStringLiteral("windows10Frame"), titleButtons >= 0);
+    s.setValue(QStringLiteral("customWindowFrame"), customFrame);
+    s.setValue(QStringLiteral("windows10Frame"), customFrame);
     s.setValue(QStringLiteral("titleButtons"), titleButtons);
     s.setValue(QStringLiteral("titleButtonsLeft"), titleButtonsLeft);
     s.setValue(QStringLiteral("windowsVersion"), windowsVersion);
@@ -436,17 +464,9 @@ QWidget* SettingsDialog::createInterfacePage()
         if (chosen == m_settings.uiStyle)
             return;
         m_settings.uiStyle = chosen;
-#ifndef Q_OS_WIN
-        // Con el estilo Paint.NET, por defecto la barra de Kaint con los botones de Windows 10 (o los
-        // de la recreación de Windows elegida).
-        if (chosen == 1 && m_settings.titleButtons < 0)
-            m_settings.titleButtons = m_settings.windowsVersion == 11 ? 1 : 0;
-        m_settings.windows10Frame = m_settings.titleButtons >= 0;
-        // La barra de título dibujada por Kaint (Linux) y sus esquinas se ponen o se quitan al abrir
-        // Kaint: se ofrece reiniciar si cambian.
-        const bool frame = m_settings.titleButtons >= 0 && m_settings.colorScheme != int(Theme::Scheme::Kde);
-        const bool rounded = frame && m_settings.uiStyle == 1 && m_settings.windowsVersion == 11;
-        if ((frame != WindowFrame::enabled() || rounded != WindowFrame::roundedCorners())
+        // La barra de título de Kaint y sus esquinas (las redondeadas de Windows 11 en Linux) se ponen
+        // o se quitan al abrir Kaint: se ofrece reiniciar si cambian.
+        if (frameNeedsRestart(m_settings)
             && askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
                           tr("Kaint se cerrará y se abrirá de nuevo con el estilo elegido. Si hay cambios sin guardar, te lo "
                              "preguntará antes."),
@@ -455,7 +475,6 @@ QWidget* SettingsDialog::createInterfacePage()
             accept();
             return;
         }
-#endif
         changed();
     });
 
@@ -576,11 +595,22 @@ QWidget* SettingsDialog::createInterfacePage()
     page.layout->addLayout(panelForm);
     check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), &AppSettings::snapPanels,
           tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él."));
-#ifndef Q_OS_WIN
-    // Barra de título dibujada por Kaint (Linux): los botones como los de Windows 11, 10, 7, XP o 98
-    // o los de macOS, a la derecha o a la izquierda; o la barra del escritorio. Con el estilo
-    // Paint.NET, además, la recreación de Windows 10 u 11 (esquinas redondeadas en modo ventana).
+    // Barra de título: la de Kaint (con los botones como los de Windows 11, 10, 7, XP o 98 o los de
+    // macOS, a la derecha o a la izquierda) o la del sistema (la de Windows o, en Linux, la del
+    // escritorio: en KDE, la de Plasma). Con el estilo Paint.NET, además, la recreación de Windows 10
+    // u 11 (esquinas redondeadas en modo ventana). Por defecto, la de Kaint en Linux y la del
+    // sistema en Windows.
     page.layout->addWidget(sectionHeader(tr("Barra de título"), page.widget));
+    auto* customFrame = new QCheckBox(tr("Usar la barra de título y el marco de ventana de Kaint"), page.widget);
+    customFrame->setChecked(m_settings.customFrame);
+#ifdef Q_OS_WIN
+    customFrame->setToolTip(tr("Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, "
+                               "llevan la de Windows."));
+#else
+    customFrame->setToolTip(tr("Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, "
+                               "llevan la del escritorio (en KDE, la de Plasma)."));
+#endif
+    page.layout->addWidget(customFrame);
     auto* titleForm = new QFormLayout;
     titleForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
     auto* buttonsStyle = new QComboBox(page.widget);
@@ -591,7 +621,6 @@ QWidget* SettingsDialog::createInterfacePage()
         {3, QStringLiteral("Windows 7"), tr("De cristal, colgando del borde de arriba, con cerrar en rojo.")},
         {4, QStringLiteral("Windows XP"), tr("Los azules de Luna con las esquinas redondeadas y cerrar en naranja.")},
         {5, QStringLiteral("Windows 98"), tr("Grises en relieve.")},
-        {-1, tr("Los del escritorio"), tr("Sin la barra de título de Kaint: la del gestor de ventanas.")},
     };
     for (const auto& st : styles) {
         buttonsStyle->addItem(st.name, st.id);
@@ -616,22 +645,22 @@ QWidget* SettingsDialog::createInterfacePage()
     titleForm->addRow(tr("Posición de los botones:"), buttonsSide);
     titleForm->addRow(tr("Recreación de Windows:"), recreation);
     page.layout->addLayout(titleForm);
-    // Poner o quitar la barra de Kaint o las esquinas redondeadas se aplica al abrir Kaint.
-    // Poner o quitar la barra de Kaint o las esquinas redondeadas pide reiniciar. Si se dice que no,
-    // todo vuelve a como estaba (los botones de antes y su recreación de Windows).
-    auto applyTitleChange = [this, buttonsStyle, recreation](const AppSettings& before) {
-        const bool frame = m_settings.titleButtons >= 0 && m_settings.colorScheme != int(Theme::Scheme::Kde);
-        const bool rounded = frame && m_settings.uiStyle == 1 && m_settings.windowsVersion == 11;
-        if (frame != WindowFrame::enabled() || rounded != WindowFrame::roundedCorners()) {
+    // Poner o quitar la barra de Kaint (o, en Linux, las esquinas redondeadas) pide reiniciar. Si se
+    // dice que no, todo vuelve a como estaba (la casilla, los botones de antes y su recreación).
+    auto applyTitleChange = [this, customFrame, buttonsStyle, recreation](const AppSettings& before) {
+        if (frameNeedsRestart(m_settings)) {
             if (!askRestart(tr("La barra de título de la ventana cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
                             tr("Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin "
                                "guardar, te lo preguntará antes."),
-                            tr("Dejar los botones como estaban."))) {
+                            tr("Dejar la barra de título como estaba."))) {
+                m_settings.customFrame = before.customFrame;
                 m_settings.titleButtons = before.titleButtons;
                 m_settings.windowsVersion = before.windowsVersion;
-                m_settings.windows10Frame = before.windows10Frame;
+                const QSignalBlocker block(customFrame);
+                customFrame->setChecked(m_settings.customFrame);
                 buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
                 recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
+                emit settingsChanged(m_settings);
                 return;
             }
             m_restartRequested = true;
@@ -641,10 +670,14 @@ QWidget* SettingsDialog::createInterfacePage()
         }
         changed();
     };
+    connect(customFrame, &QCheckBox::toggled, this, [this, applyTitleChange](bool on) {
+        const AppSettings before = m_settings;
+        m_settings.customFrame = on;
+        applyTitleChange(before);
+    });
     connect(buttonsStyle, &QComboBox::activated, this, [this, buttonsStyle, recreation, applyTitleChange](int i) {
         const AppSettings before = m_settings;
         m_settings.titleButtons = buttonsStyle->itemData(i).toInt();
-        m_settings.windows10Frame = m_settings.titleButtons >= 0;
         // Con el estilo Paint.NET, los botones de Windows 11 traen su recreación (ventanas con las
         // esquinas redondeadas) y los de Windows 10, la suya.
         if (m_settings.uiStyle == 1 && (m_settings.titleButtons == 0 || m_settings.titleButtons == 1)) {
@@ -671,14 +704,19 @@ QWidget* SettingsDialog::createInterfacePage()
         buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
         applyTitleChange(before);
     });
-    // La recreación de Windows solo con el estilo Paint.NET; la posición, solo con la barra de Kaint.
-    auto syncTitle = [this, titleForm, recreation, buttonsSide, buttonsStyle] {
-        const bool paintNet = m_settings.uiStyle == 1 && m_settings.colorScheme != int(Theme::Scheme::Kde);
+    // Los botones, su posición y la recreación solo con la barra de Kaint (y la recreación, con el
+    // estilo Paint.NET); con el tema KDE, siempre la barra del escritorio.
+    auto syncTitle = [this, titleForm, customFrame, recreation, buttonsSide, buttonsStyle] {
         const bool kde = m_settings.colorScheme == int(Theme::Scheme::Kde);
-        recreation->setEnabled(paintNet);
+        const bool own = m_settings.customFrame && !kde;
+        const bool paintNet = m_settings.uiStyle == 1 && !kde;
+        customFrame->setEnabled(!kde);
+        if (kde)
+            customFrame->setToolTip(tr("Con el tema KDE, las ventanas llevan la barra de título de Plasma."));
+        recreation->setEnabled(own && paintNet);
         recreation->setToolTip(paintNet ? QString() : tr("Se desbloquea con el estilo de interfaz Paint.NET."));
-        buttonsSide->setEnabled(m_settings.titleButtons >= 0 && !kde);
-        buttonsStyle->setEnabled(!kde);
+        buttonsSide->setEnabled(own);
+        buttonsStyle->setEnabled(own);
         buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
         for (QWidget* field : {static_cast<QWidget*>(recreation), static_cast<QWidget*>(buttonsSide), static_cast<QWidget*>(buttonsStyle)})
             if (QWidget* label = titleForm->labelForField(field))
@@ -686,7 +724,6 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     syncTitle();
     connect(this, &SettingsDialog::settingsChanged, this, syncTitle);
-#endif
     // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
     // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
     // interfaz, a su vez, no se aplica con el tema KDE.
@@ -830,7 +867,9 @@ QWidget* SettingsDialog::createCanvasPage()
     auto* picker = new QWidget(page.widget);
     picker->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     auto* pickerRow = new QHBoxLayout(picker);
-    pickerRow->setContentsMargins(20, 0, 0, 4);
+    // El selector, centrado en la página (con un margen a cada lado, no pegado a la izquierda).
+    pickerRow->setContentsMargins(0, 0, 0, 4);
+    pickerRow->addStretch();
     auto* swatch = new ColorButton(picker);
     swatch->setFixedSize(26, 26);
     swatch->setToolTip(tr("Elegir el color con más opciones"));
@@ -1117,15 +1156,17 @@ QWidget* SettingsDialog::createPluginsPage()
         {".cube", tr("Looks de LightCraft")},
         {".3dl", tr("Looks de LightCraft")},
         {".xmp", tr("Ajustes de LightCraft")},
+        {".paintjs", tr("De paint.js (sin acceso a tus archivos ni a internet)")},
     };
     QStringList names;
     for (const auto& f : formats)
         names << QStringLiteral("<a href=\"%1\" style=\"color:%2; font-weight:600; text-decoration:none\">%1</a>")
                      .arg(QString::fromLatin1(f.ext), strong.name());
-    auto* intro = new QLabel(tr("Complementos de efectos instalados (%1). Se guardan en %2; si un complemento trae varios "
-                                "archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos > Complementos.")
-                                 .arg(tr("%1, %2, %3, %4, %5 y %6")
-                                          .arg(names[0], names[1], names[2], names[3], names[4], names[5]),
+    auto* intro = new QLabel(tr("Complementos de efectos y formatos de archivo instalados (%1). Se guardan en %2; si un "
+                                "complemento trae varios archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos > "
+                                "Complementos.")
+                                 .arg(tr("%1, %2, %3, %4, %5, %6 y %7")
+                                          .arg(names[0], names[1], names[2], names[3], names[4], names[5], names[6]),
                                       QDir::toNativeSeparators(PluginManager::instance()->userPath()).toHtmlEscaped()),
                              page.widget);
     intro->setWordWrap(true);
@@ -1157,11 +1198,40 @@ QWidget* SettingsDialog::createPluginsPage()
     m_showIncompatible = new QCheckBox(tr("Mostrar también los complementos que no son compatibles"), page.widget);
     connect(m_showIncompatible, &QCheckBox::toggled, this, &SettingsDialog::refreshPlugins);
     page.layout->addWidget(m_showIncompatible);
+    auto* menuIcons = new QCheckBox(tr("Mostrar el icono de complemento junto a sus efectos en los menús"), page.widget);
+    menuIcons->setToolTip(tr("En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de "
+                             "puzle de los complementos."));
+    menuIcons->setChecked(m_settings.pluginMenuIcons);
+    connect(menuIcons, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.pluginMenuIcons = on;
+        changed();
+    });
+    page.layout->addWidget(menuIcons);
+    auto* kaintHtml = new QCheckBox(tr("Mostrar el botón «Complementos de Kaint.HTML»"), page.widget);
+    kaintHtml->setToolTip(tr("Un botón para instalar complementos de paint.js del catálogo de la versión web de Kaint "
+                             "(Kaint.HTML)."));
+    kaintHtml->setChecked(m_settings.kaintHtmlPlugins);
+    page.layout->addWidget(kaintHtml);
 
     auto* row = new QHBoxLayout;
     auto* add = new QPushButton(Icons::theme({"list-add", "document-import"}), tr("Añadir…"), page.widget);
-    add->setToolTip(tr("Copiar complementos (.so, .dll, .wasm, .cube, .3dl o .xmp) a la carpeta de complementos"));
+    add->setToolTip(tr("Copiar complementos (.so, .dll, .wasm, .cube, .3dl, .xmp o .paintjs) a la carpeta de complementos"));
     connect(add, &QPushButton::clicked, this, &SettingsDialog::addPlugins);
+    // El catálogo de complementos de paint.js (el de Explorar complementos de la versión web),
+    // solo si se activó con la casilla de arriba.
+    auto* browse = new QPushButton(Icons::theme({"plugins", "application-x-addon"}), tr("Complementos de Kaint.HTML…"), page.widget);
+    browse->setToolTip(tr("El catálogo de complementos de paint.js de la versión web de Kaint"));
+    browse->setVisible(m_settings.kaintHtmlPlugins);
+    connect(browse, &QPushButton::clicked, this, [this] {
+        PluginCatalogDialog dlg(this);
+        dlg.exec();
+        refreshPlugins();
+    });
+    connect(kaintHtml, &QCheckBox::toggled, this, [this, browse](bool on) {
+        m_settings.kaintHtmlPlugins = on;
+        browse->setVisible(on);
+        changed();
+    });
     auto* openFolder = new QPushButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), page.widget);
     openFolder->setToolTip(tr("Abre la carpeta de complementos"));
     connect(openFolder, &QPushButton::clicked, this, [] {
@@ -1188,6 +1258,11 @@ QWidget* SettingsDialog::createPluginsPage()
     row->addStretch();
     row->addWidget(rescan);
     page.layout->addLayout(row);
+    // En su fila: con los demás, la de los botones no cabía a lo ancho.
+    auto* catalogRow = new QHBoxLayout;
+    catalogRow->addWidget(browse);
+    catalogRow->addStretch();
+    page.layout->addLayout(catalogRow);
 
     connect(m_pluginList, &QTreeWidget::currentItemChanged, this, &SettingsDialog::showPluginDetails);
     connect(m_pluginList, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int column) {
@@ -1226,7 +1301,8 @@ void SettingsDialog::refreshPlugins()
     const int scroll = m_pluginList->verticalScrollBar()->value();
     m_pluginList->clear();
     for (const PluginInfo& p : PluginManager::instance()->plugins()) {
-        const bool incompatible = !p.pending && p.effects.isEmpty() && !p.errors.isEmpty();
+        const bool incompatible =
+            !p.pending && p.effects.isEmpty() && p.fileTypes.isEmpty() && p.webOnlyEffects.isEmpty() && !p.errors.isEmpty();
         if (incompatible && !p.enabled && !m_showIncompatible->isChecked())
             continue;
         auto* item = new QTreeWidgetItem(m_pluginList);
@@ -1248,7 +1324,11 @@ void SettingsDialog::refreshPlugins()
             for (const QString& e : p.effectIds)
                 on += p.effectEnabled(e) ? 1 : 0;
             state = tr("%1 de %n efecto(s)", nullptr, int(p.effects.size())).arg(on);
-        } else
+        } else if (p.effects.isEmpty() && !p.fileTypes.isEmpty())
+            state = tr("%n formato(s)", nullptr, int(p.fileTypes.size()));
+        else if (p.effects.isEmpty() && !p.webOnlyEffects.isEmpty())
+            state = tr("Solo en la versión web");
+        else
             state = tr("%n efecto(s)", nullptr, int(p.effects.size()));
         item->setText(2, state);
         item->setIcon(0, Icons::theme(p.errors.isEmpty() ? std::initializer_list<const char*>{"plugins", "application-x-addon"}
@@ -1282,6 +1362,31 @@ void SettingsDialog::refreshPlugins()
             if (p.id == selected && effectId == selectedEffect)
                 m_pluginList->setCurrentItem(child);
         }
+        // paint.js: sus formatos de archivo y los efectos que solo funcionan en la versión web
+        // (abren una ventana propia hecha para el navegador), sin casilla.
+        auto infoChild = [&](const QString& name, const QString& type, const QString& childState, const QIcon& icon) {
+            auto* child = new QTreeWidgetItem(item);
+            child->setText(0, name);
+            child->setText(1, type);
+            child->setText(2, childState);
+            child->setIcon(0, icon);
+            child->setData(0, Qt::UserRole, p.id);
+            child->setFlags(child->flags() & ~Qt::ItemIsUserCheckable);
+            if (!p.enabled || incompatible)
+                child->setFlags(child->flags() & ~Qt::ItemIsEnabled);
+        };
+        for (const QString& type : p.fileTypes)
+            infoChild(type, tr("Formato"), p.loaded ? tr("En Abrir y Guardar como") : tr("Desactivado"),
+                      Icons::theme({"image-x-generic", "document-open"}));
+        for (int i = 0; i < p.webOnlyEffects.size(); ++i) {
+            const QImage icon = p.webOnlyIcons.value(i);
+            infoChild(p.webOnlyEffects[i], tr("Efecto"), tr("Solo en la versión web"),
+                      icon.isNull() ? QIcon() : QIcon(QPixmap::fromImage(icon)));
+            QTreeWidgetItem* child = item->child(item->childCount() - 1);
+            child->setToolTip(0, tr("Abre una ventana propia hecha para el navegador, que la versión de escritorio de Kaint no puede "
+                                    "mostrar. Úsalo en la versión web de Kaint."));
+            child->setForeground(2, palette().color(QPalette::PlaceholderText));
+        }
         item->setExpanded(!m_collapsedPlugins.contains(p.id));
     }
     if (!m_pluginList->currentItem() && m_pluginList->topLevelItemCount() > 0) {
@@ -1304,8 +1409,8 @@ void SettingsDialog::addPlugins()
 {
     const QStringList files = QFileDialog::getOpenFileNames(
         this, tr("Añadir complementos"), QDir::homePath(),
-        tr("Complementos (*.dll *.so *.wasm *.cube *.3dl *.xmp);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so);;"
-           "Filtros de PhotoCraft (*.wasm);;Looks y ajustes de LightCraft (*.cube *.3dl *.xmp)"));
+        tr("Complementos (*.dll *.so *.wasm *.cube *.3dl *.xmp *.paintjs);;Complementos de Paint.NET (*.dll);;Complementos de Kaint (*.so);;"
+           "Filtros de PhotoCraft (*.wasm);;Looks y ajustes de LightCraft (*.cube *.3dl *.xmp);;Complementos de paint.js (*.paintjs)"));
     if (files.isEmpty())
         return;
     PluginManager* pm = PluginManager::instance();
@@ -1332,6 +1437,10 @@ void SettingsDialog::addPlugins()
         return;
     QApplication::setOverrideCursor(Qt::WaitCursor);
     pm->scan();
+    // Los que se sustituyeron estando cargados, con la versión nueva.
+    if (replace)
+        for (const QString& f : existing)
+            pm->reload(QFileInfo(pm->userPath() + QLatin1Char('/') + QFileInfo(f).fileName()).absoluteFilePath());
     QApplication::restoreOverrideCursor();
     refreshPlugins();
     for (int i = 0; i < m_pluginList->topLevelItemCount(); ++i) {
@@ -1366,6 +1475,7 @@ void SettingsDialog::showPluginDetails()
         field(tr("Versión"), p.version);
         field(tr("Autor"), p.author);
         field(tr("Derechos de autor"), p.copyright);
+        field(tr("Licencia"), p.license);
         field(tr("Sitio web"), p.website);
         field(tr("Descripción"), p.description);
         if (p.kind == QLatin1String("Paint.NET"))
@@ -1379,6 +1489,16 @@ void SettingsDialog::showPluginDetails()
                 lines << QStringLiteral("  ") + p.effects[i] + (off ? tr(" (desactivado)") : QString());
             }
         }
+        if (!p.fileTypes.isEmpty())
+            lines << QString() << tr("Formatos de archivo (en Abrir y Guardar como):") << QStringLiteral("  ") + p.fileTypes.join(QStringLiteral("\n  "));
+        if (!p.webOnlyEffects.isEmpty())
+            lines << QString()
+                  << tr("Solo en la versión web de Kaint (abren una ventana propia hecha para el navegador):")
+                  << QStringLiteral("  ") + p.webOnlyEffects.join(QStringLiteral("\n  "));
+        if (p.kind == QLatin1String("paint.js"))
+            lines << QString()
+                  << tr("Complemento de paint.js: Kaint lo ejecuta con su propio motor de JavaScript, sin acceso a tus "
+                        "archivos ni a internet.");
         if (!p.errors.isEmpty())
             lines << QString() << tr("Problemas:") << QStringLiteral("  ") + p.errors.join(QStringLiteral("\n  "));
         if (p.pending)

@@ -887,7 +887,7 @@ QImage apply(const Effect& effect, const QImage& src, const Selection& selection
         ctx.progress->total = roi.height();
     }
     const std::any state = effect.prepare(work, roi, values, ctx);
-    effect.render(RenderArgs{work, dst, roi, values, ctx, cancel, state});
+    effect.render(RenderArgs{work, dst, roi, values, ctx, cancel, state, &selection});
     if (cancel)
         return {};
 

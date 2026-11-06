@@ -113,8 +113,9 @@ void EncodedPreview::start()
             if (!largest.isNull())
                 frames << Gif::Frame{largest, 100};
         } else if (!data.isEmpty()) {
-            QImage decoded;
-            if (decoded.loadFromData(data))
+            // Con los lectores de Kaint para TGA, DDS y QOI (Qt no siempre puede).
+            const QImage decoded = ImageIO::decode(data, path);
+            if (!decoded.isNull())
                 frames << Gif::Frame{decoded, 100};
         }
         const qint64 bytes = data.size();

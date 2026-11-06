@@ -60,13 +60,22 @@ runs on Windows 10 and 11.
       Windows, plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
       sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
       develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
-      them. Each effect of a plugin can be turned on or off on its own, and native plugins can bring
-      their own menu icon.
+      them. <b>paint.js plugins</b> (.paintjs) too, the same ones as the web version, with their
+      effects and file types (Photoshop PSD with layers, for example), installed from a file or from
+      the web version's plugin catalog (<b>Settings → Plugins → Kaint.HTML plugins…</b>, a button you
+      turn on there first). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
+      your files or the internet; plugins that open their own HTML window only work in the web
+      version, and Kaint says so. Each effect of a plugin
+      can be turned on or off on its own, and native plugins can bring their own menu icon. In the
+      menus, plugin effects carry the green puzzle piece on the right (it can be turned off in
+      <b>Settings → Plugins</b>).
     </td>
     <td valign="top">
       <h4>Formats</h4>
       Paint.NET <b>.pdn</b> and OpenRaster (.ora), both with layers, PNG, JPEG, WebP, AVIF, JPEG XL,
-      BMP, TIFF, TGA, animated GIF and ICO. Animated GIFs open as layers or as separate images, and
+      HEIC, JPEG XR, BMP, TIFF, TGA, DDS, QOI, Netpbm (PPM, PGM, PBM), animated GIF and ICO. TGA, DDS
+      and QOI are read and written by Kaint itself, so they work everywhere; AVIF, JPEG XL, HEIC and
+      JPEG XR show up when Qt's image plugins can write them (kimageformats). Animated GIFs open as layers or as separate images, and
       can be saved from the layers or from the open images you pick, with a playable preview and
       ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
       frames, global palette, crossfades and a background frame.
@@ -116,9 +125,11 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
 - **Interface style**: Kaint's own or a recreation of **Paint.NET 5** (the default): more compact,
   with borderless windows, tighter menus and buttons, gray and blue bar sliders, hollow ring handles,
   a grid of shapes and Paint.NET's Colors window.
-- **Title bar**: on Linux, Kaint draws a title bar of its own, with its shadow from KWin; drag it
-  from anywhere. Its buttons can look like those of **Windows 11, 10, 7, XP or 98, or macOS**, on
-  the right or on the left (or keep the desktop's title bar). With the Paint.NET style, the
+- **Title bar**: Kaint can draw a title bar and window frame of its own (**Settings → User
+  interface → Title bar**; on by default on Linux, off on Windows), with the shadow from KWin or
+  from Windows; drag it from anywhere. Its buttons can look like those of **Windows 11, 10, 7, XP or
+  98, or macOS**, on the right or on the left. Turned off, windows get the system's title bar
+  (Windows', or your desktop's: Plasma's on KDE). With the Paint.NET style, the
   **Windows recreation** picks Windows 10 or Windows 11 (slightly rounded windows when not
   maximized). The top bar and the window headers can take **a color of your own**, like Windows'
   accent color.
@@ -134,7 +145,8 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   which tools the Tools window shows and in what order (**Settings → Customization**).
 - **Canvas**: your own background color around the image (one for light themes and one for dark
   ones), the checkerboard brightness, the drop shadow and dark or toolbar-colored rulers.
-- **Little touches**: tool icons in the active colors, Paint.NET's orange star on unsaved images,
+- **Little touches**: tool icons in the active colors, Paint.NET's orange star on unsaved images
+  (on their thumbnail in the strip and in the open images list),
   animations everywhere (fades, sliding layers, the active color slot) that you can turn off, and a
   welcome window on the first start to pick the theme, style, cursors and language.
 
@@ -256,8 +268,10 @@ sudo apt install ./build-deb/kaint_*_amd64.deb
 <summary><b>🪟 Windows 10 / 11</b></summary>
 
 Download the source code and double-click `build.bat` (or run `build.bat --install`). It builds
-Kaint and installs it in `%LOCALAPPDATA%\Programs\Kaint` with a Start menu entry; uninstall it
-from *Installed apps*. If Qt, MinGW, CMake and Ninja are missing, it offers to download them
+Kaint and installs it in `%LOCALAPPDATA%\Programs\Kaint` with a Start menu entry and its own
+uninstaller (`Uninstall.exe`, next to the `bin` folder): uninstall it from *Installed apps* or the
+*Control Panel* like any other app (or run `build.bat --uninstall`). Installs made with an older
+`build.bat` get the uninstaller when you install again. If Qt, MinGW, CMake and Ninja are missing, it offers to download them
 (about 1.5 GB) into `%LOCALAPPDATA%\Kaint\toolchain`.
 
 `build.bat --setup` makes `Kaint-<version>-windows-x64-setup.exe`, a regular installer for
@@ -316,9 +330,16 @@ Breeze icons (LGPL-3.0-or-later), and the Windows 7, Windows XP and Windows 98 t
 buttons use colors, gradients and drawings from [7.css](https://khang-nd.github.io/7.css/) by Khang
 Nguyen Duy, [XP.css](https://botoxparty.github.io/XP.css/) by Adam Hammad and Jordan Scales and
 [98.css](https://jdan.github.io/98.css/) by Jordan Scales (all MIT, see `data/licenses/`).
+`third_party/quickjs-ng/` is [QuickJS-ng](https://github.com/quickjs-ng/quickjs) (MIT), the
+JavaScript engine that runs paint.js plugins.
 
 ## Disclaimer
 
 Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
 LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the
 software Kaint is inspired by.
+
+---
+
+<sub>Kaint supports the plugins of [paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio
+(.paintjs packages and their JavaScript API); it doesn't use paint.js's own plugin system.</sub>

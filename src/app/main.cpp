@@ -108,6 +108,8 @@ int main(int argc, char** argv)
                                       QStringLiteral("win7"), QStringLiteral("xp"), QStringLiteral("win98")};
         if (buttonNames.contains(buttons))
             preset.setValue(QStringLiteral("settings/titleButtons"), int(buttonNames.indexOf(buttons)));
+        // En las capturas la barra de Kaint solo va si se pide (--preview-frame).
+        preset.setValue(QStringLiteral("settings/customWindowFrame"), true);
         yesNo("--preview-title-left", "settings/titleButtonsLeft");
         const QString windows = rawOption(argc, argv, QStringLiteral("--preview-windows")).toLower();
         if (windows == QLatin1String("11") || windows == QLatin1String("10"))
@@ -211,12 +213,12 @@ int main(int argc, char** argv)
     Theme::setUiFont(startup.uiFontFamily, startup.uiFontSize);
     Theme::setCustomTitleBarColor(startup.titleBarColor);
     Theme::apply(scheme);
-    // Linux: la barra de título dibujada por Kaint con los botones elegidos (en las capturas de
-    // muestra, solo si se pide).
+    // La barra de título dibujada por Kaint con los botones elegidos, si se quiere (por defecto en
+    // Linux sí y en Windows no; en las capturas de muestra, solo si se pide).
     const QString previewFrame = parser.value(QStringLiteral("preview-frame")).toLower();
-    const bool frame = startup.titleButtons >= 0 && Theme::current() != Theme::Scheme::Kde
+    const bool frame = startup.customFrame && Theme::current() != Theme::Scheme::Kde
                        && (!preview || previewFrame == QLatin1String("yes") || previewFrame == QLatin1String("true"));
-    WindowFrame::setButtons(WindowFrame::Buttons(std::max(0, startup.titleButtons)));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 5)));
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     // Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana.
     WindowFrame::setRoundedCorners(frame && Theme::paintNetLook() && startup.windowsVersion == 11);

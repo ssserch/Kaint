@@ -62,6 +62,10 @@ bool supportsInterlace(const QString& path);
 int automaticBitDepth(const QImage& flattened);
 
 Document* load(const QString& path, QString* error);
+// Una imagen sola (acoplada) del archivo: con los lectores de Kaint (TGA, DDS, QOI) o los de Qt.
+QImage readImage(const QString& path, QString* error = nullptr);
+// Lo codificado con encode(), vuelto a leer (la vista previa de "Configuración de guardado").
+QImage decode(const QByteArray& data, const QString& path);
 // Imagen tal como se escribirá (acoplada, sin alfa si el formato no lo admite y con la
 // profundidad elegida).
 QImage prepare(const QImage& flattened, const QString& path, const SaveOptions& options);

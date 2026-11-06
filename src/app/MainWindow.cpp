@@ -36,6 +36,7 @@
 #include "core/Ora.h"
 #include "core/Raster.h"
 #include "core/plugins/CraftPlugins.h"
+#include "core/plugins/PaintJs.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QActionGroup>
@@ -490,6 +491,60 @@ private:
     QWidget* m_menu = nullptr;
     QWidget* m_caption = nullptr;
     bool m_watching = false;
+};
+
+// Menús de efectos (Ajustes, Efectos y sus submenús): los efectos de los complementos llevan a la
+// derecha el icono de los complementos, la pieza de puzle verde (se quita en Configuración >
+// Complementos). El menú se ensancha un poco para que el icono no tape el texto.
+class EffectMenu : public QMenu {
+public:
+    explicit EffectMenu(const QString& title, QWidget* parent = nullptr)
+        : QMenu(title, parent)
+    {
+        connect(this, &QMenu::aboutToShow, this, [this] {
+            setMinimumWidth(0);
+            if (showPluginIcons() && hasPluginActions())
+                setMinimumWidth(sizeHint().width() + kIcon + 6);
+        });
+    }
+
+    static bool& showPluginIcons()
+    {
+        static bool show = true;
+        return show;
+    }
+
+    static void markPlugin(QAction* action) { action->setProperty("kaintPlugin", true); }
+
+protected:
+    void paintEvent(QPaintEvent* e) override
+    {
+        QMenu::paintEvent(e);
+        if (!showPluginIcons())
+            return;
+        const QIcon icon = Icons::theme({"settings-plugins", "preferences-plugin", "application-x-addon"});
+        if (icon.isNull())
+            return;
+        QPainter p(this);
+        for (QAction* a : actions()) {
+            if (!a->isVisible() || !a->property("kaintPlugin").toBool())
+                continue;
+            const QRect r = actionGeometry(a);
+            if (!r.intersects(e->rect()))
+                continue;
+            const QRect box(r.right() - kIcon - 5, r.top() + (r.height() - kIcon) / 2, kIcon, kIcon);
+            icon.paint(&p, box, Qt::AlignCenter, a->isEnabled() ? QIcon::Normal : QIcon::Disabled);
+        }
+    }
+
+private:
+    static constexpr int kIcon = 16;
+
+    bool hasPluginActions() const
+    {
+        const QList<QAction*> list = actions();
+        return std::any_of(list.cbegin(), list.cend(), [](const QAction* a) { return a->property("kaintPlugin").toBool(); });
+    }
 };
 
 // Flecha de la lista de imágenes: una franja de la altura de la tira con el chevrón arriba,
@@ -1004,8 +1059,10 @@ void MainWindow::createMenus()
     layers->addSeparator();
     layers->addAction(A["layerProps"]);
 
-    m_adjustmentsMenu = bar->addMenu(tr("A&justes"));
-    m_effectsMenu = bar->addMenu(tr("Efe&ctos"));
+    m_adjustmentsMenu = new EffectMenu(tr("A&justes"), bar);
+    bar->addMenu(m_adjustmentsMenu);
+    m_effectsMenu = new EffectMenu(tr("Efe&ctos"), bar);
+    bar->addMenu(m_effectsMenu);
     A["repeatEffect"] = new QAction(tr("Repetir el último efecto"), this);
     A["repeatEffect"]->setShortcut(QKeySequence(QStringLiteral("Ctrl+F")));
     connect(A["repeatEffect"], &QAction::triggered, this, [this] { runEffect(m_lastEffect, true); });
@@ -1065,7 +1122,8 @@ void MainWindow::rebuildEffectMenus()
     std::sort(categories.begin(), categories.end(), [&](const QString& a, const QString& b) { return collator.compare(a, b) < 0; });
     QHash<QString, QMenu*> submenus;
     for (const QString& cat : std::as_const(categories)) {
-        QMenu* sub = m_effectsMenu->addMenu(cat);
+        QMenu* sub = new EffectMenu(cat, m_effectsMenu);
+        m_effectsMenu->addMenu(sub);
         submenus.insert(cat, sub);
         m_effectSubmenus.append(sub);
     }
@@ -1078,8 +1136,10 @@ void MainWindow::rebuildEffectMenus()
         const bool hasDialog = !e->params().isEmpty() || e->hasCustomDialog();
         QAction* a = menu->addAction(icon, e->name() + (hasDialog ? QStringLiteral("...") : QString()));
         a->setShortcut(e->shortcut());
-        if (!e->pluginName().isEmpty())
+        if (!e->pluginName().isEmpty()) {
             a->setToolTip(tr("%1 (complemento %2)").arg(e->name(), e->pluginName()));
+            EffectMenu::markPlugin(a);
+        }
         connect(a, &QAction::triggered, this, [this, e] { runEffect(e, false); });
         m_docActions.append(a);
         m_effectActions.append(a);
@@ -1689,9 +1749,23 @@ void MainWindow::showImageList()
     for (int i = 0; i < m_docs.size(); ++i) {
         Document* d = m_docs.at(i);
         const QString name = (d->isModified() ? QStringLiteral("*") : QString()) + d->displayName();
-        // La miniatura de la actual sin teñir por el resaltado.
+        // La miniatura de la actual sin teñir por el resaltado y, si tiene cambios sin guardar, con
+        // el sol arriba a la izquierda, como en la tira.
         QIcon icon;
-        const QPixmap thumb = m_tabs->tabIcon(i).pixmap(m_tabs->iconSize());
+        QPixmap thumb = m_tabs->tabIcon(i).pixmap(m_tabs->iconSize());
+        if (d->isModified()) {
+            const QSize box = m_tabs->iconSize();
+            const qreal dpr = devicePixelRatioF();
+            QPixmap marked(box * dpr);
+            marked.setDevicePixelRatio(dpr);
+            marked.fill(Qt::transparent);
+            QPainter p(&marked);
+            const QSizeF size = thumb.deviceIndependentSize();
+            p.drawPixmap(QPointF((box.width() - size.width()) / 2, (box.height() - size.height()) / 2), thumb);
+            Icons::paintUnsavedStar(p, QRectF(0, 0, 12, 12));
+            p.end();
+            thumb = marked;
+        }
         icon.addPixmap(thumb, QIcon::Normal);
         icon.addPixmap(thumb, QIcon::Selected);
         auto* item = new QListWidgetItem(icon, name, list);
@@ -1915,7 +1989,16 @@ void MainWindow::acquireFromScanner()
 
 void MainWindow::openFiles(const QStringList& paths)
 {
+    // Los complementos de paint.js que se abren se instalan (como en la versión web).
+    QStringList packages;
+    for (const QString& path : paths)
+        if (PaintJs::isPackage(path))
+            packages << path;
+    if (!packages.isEmpty())
+        installDroppedPlugins(packages);
     for (const QString& path : paths) {
+        if (PaintJs::isPackage(path))
+            continue;
         const QString abs = QFileInfo(path).absoluteFilePath();
         bool alreadyOpen = false;
         for (Document* d : std::as_const(m_docs)) {
@@ -2337,10 +2420,11 @@ void MainWindow::dropEvent(QDropEvent* e)
     for (const QUrl& url : e->mimeData()->urls())
         if (url.isLocalFile())
             files << url.toLocalFile();
-    // Los filtros de PhotoCraft y los looks y ajustes de LightCraft que se sueltan se instalan.
+    // Los filtros de PhotoCraft, los looks y ajustes de LightCraft y los paquetes de paint.js que se
+    // sueltan se instalan.
     QStringList plugins;
     for (const QString& f : std::as_const(files))
-        if (CraftPlugins::isCraftFile(f))
+        if (CraftPlugins::isCraftFile(f) || PaintJs::isPackage(f))
             plugins << f;
     if (!plugins.isEmpty()) {
         for (const QString& f : std::as_const(plugins))
@@ -2376,20 +2460,42 @@ void MainWindow::installDroppedPlugins(const QStringList& files)
     }
     QStringList errors;
     const QStringList copied = pm->install(files, replace, &errors);
+    QApplication::setOverrideCursor(Qt::WaitCursor);
     pm->scan();
+    // Los que se sustituyeron estando cargados, con la versión nueva.
+    for (const QString& f : existing)
+        if (replace)
+            pm->reload(QFileInfo(pm->userPath() + QLatin1Char('/') + QFileInfo(f).fileName()).absoluteFilePath());
+    QApplication::restoreOverrideCursor();
     QStringList problems = errors;
-    QStringList added;
+    QStringList added, formats, webOnly;
     for (const PluginInfo& p : pm->plugins())
         if (copied.contains(p.id)) {
-            if (p.effects.isEmpty())
+            if (p.effects.isEmpty() && p.fileTypes.isEmpty() && p.webOnlyEffects.isEmpty()) {
                 problems << QStringLiteral("%1: %2").arg(p.file, p.errors.join(QLatin1Char(' ')));
-            else
-                added << p.effects;
+                continue;
+            }
+            added << p.effects;
+            formats << p.fileTypes;
+            webOnly << p.webOnlyEffects;
         }
-    if (!problems.isEmpty())
+    if (!problems.isEmpty()) {
         QMessageBox::warning(this, tr("Añadir complementos"), tr("No se pudieron añadir:\n\n%1").arg(problems.join(QLatin1Char('\n'))));
-    else if (!added.isEmpty())
-        showToolHint(tr("Complementos añadidos en Efectos > Complementos: %1").arg(added.join(QStringLiteral(", "))));
+        return;
+    }
+    QStringList lines;
+    if (!added.isEmpty())
+        lines << tr("Efectos añadidos (en Ajustes o Efectos): %1").arg(added.join(QStringLiteral(", ")));
+    if (!formats.isEmpty())
+        lines << tr("Formatos añadidos en Abrir y Guardar como: %1").arg(formats.join(QStringLiteral(", ")));
+    if (!webOnly.isEmpty()) {
+        // Lo que no se puede usar aquí se dice en una ventana: si no, parecería que no se instaló.
+        lines << tr("Solo funcionan en la versión web de Kaint, porque abren una ventana propia hecha para el navegador: %1")
+                     .arg(webOnly.join(QStringLiteral(", ")));
+        QMessageBox::information(this, tr("Añadir complementos"), lines.join(QStringLiteral("\n\n")));
+    } else if (!lines.isEmpty()) {
+        showToolHint(lines.join(QStringLiteral(" · ")));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2968,11 +3074,10 @@ void MainWindow::importLayer()
     const QString path = QFileDialog::getOpenFileName(this, tr("Importar desde archivo"), m_lastDir, ImageIO::openFilter());
     if (path.isEmpty())
         return;
-    QImageReader reader(path);
-    reader.setAutoTransform(true);
-    const QImage img = reader.read();
+    QString error;
+    const QImage img = ImageIO::readImage(path, &error);
     if (img.isNull()) {
-        QMessageBox::critical(this, tr("No se pudo importar"), reader.errorString());
+        QMessageBox::critical(this, tr("No se pudo importar"), error);
         return;
     }
     if (!ensureCanvasFits(img, tr("Importar desde archivo"), true))
@@ -3245,10 +3350,6 @@ void MainWindow::showWelcome()
     dlg.exec();
     const AppSettings chosen = dlg.settings();
     m_settings.uiStyle = chosen.uiStyle;
-    // Con el estilo de Kaint, la barra de título del escritorio (si no se eligió otra): la de Kaint
-    // con los botones de Windows 10 es la predeterminada del estilo Paint.NET.
-    if (chosen.uiStyle == 0 && !QSettings().contains(QStringLiteral("settings/titleButtons")))
-        m_settings.titleButtons = -1;
     m_settings.cursorStyle = chosen.cursorStyle;
     m_settings.discordEnabled = chosen.discordEnabled;
     m_settings.welcomed = true;
@@ -3270,7 +3371,7 @@ void MainWindow::restartWith(const AppSettings& settings)
     m_settings.language = settings.language;
     // El estilo de la interfaz y la barra de título simulada (Linux) también reinician.
     m_settings.uiStyle = settings.uiStyle;
-    m_settings.windows10Frame = settings.windows10Frame;
+    m_settings.customFrame = settings.customFrame;
     m_settings.titleButtons = settings.titleButtons;
     m_settings.titleButtonsLeft = settings.titleButtonsLeft;
     m_settings.windowsVersion = settings.windowsVersion;
@@ -3403,6 +3504,7 @@ void MainWindow::applySettings()
     Theme::setUnderlineShortcuts(m_settings.menuMnemonics);
     m_layers->setDropLineMode(m_settings.layerDropLine);
     m_history->setJumpButtonsVisible(m_settings.historyJumpButtons);
+    EffectMenu::showPluginIcons() = m_settings.pluginMenuIcons;
     m_colors->setShowTranslucent(m_settings.paletteTranslucent);
     ToolPreferences preferences;
     preferences.hideBoxWhileDragging = m_settings.hideMoveBox;
@@ -3411,8 +3513,11 @@ void MainWindow::applySettings()
     m_canvas->viewport()->update();
     FloatingPanel::setSnapping(m_settings.snapPanels);
     // Botones de la barra de título: el estilo y el lado cambian al momento.
-    if (m_settings.titleButtons >= 0)
-        WindowFrame::setButtons(WindowFrame::Buttons(m_settings.titleButtons));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 5)));
+#ifdef Q_OS_WIN
+    // Windows 11 redondea (o no) las esquinas de las ventanas con el marco de Kaint al momento.
+    WindowFrame::setRoundedCorners(m_settings.uiStyle == 1 && m_settings.windowsVersion == 11);
+#endif
     WindowFrame::setButtonsOnLeft(m_settings.titleButtonsLeft);
     placeCaptionButtons();
     WindowFrame::refreshAll();

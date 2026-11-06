@@ -313,6 +313,42 @@ static void testTransformBox()
 // Temas: claro y oscuro de Paint.NET, el personalizado (colores propios, JSON, imagen de fondo),
 // la detección del modo oscuro de Plasma y que entrar o salir del tema KDE pide reiniciar. El
 // fondo del lienzo siempre es opaco (un color translúcido dejaba rastros).
+// Bocadillos: un solo contorno. Trazados con un pincel grueso, la nube no tiene nada dentro y la
+// cola se abre al cuerpo (antes se veían los círculos de la nube y la línea de la base de la cola).
+static void testCallouts(const QString& outDir)
+{
+    QImage all(800, 600, QImage::Format_ARGB32_Premultiplied);
+    all.fill(Qt::white);
+    const struct { ShapeType type; QRectF rect; } shapes[] = {
+        {ShapeType::RectCallout, {40, 30, 240, 200}},
+        {ShapeType::RoundedRectCallout, {450, 30, 260, 210}},
+        {ShapeType::EllipseCallout, {40, 300, 270, 250}},
+        {ShapeType::CloudCallout, {430, 300, 320, 250}},
+    };
+    QPainter p(&all);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(Qt::black, 8, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
+    for (const auto& s : shapes)
+        p.drawPath(shapePath(s.type, s.rect));
+    p.end();
+    auto white = [&](const QRectF& r, qreal fx, qreal fy) {
+        return QColor(all.pixel(QPointF(r.left() + fx * r.width(), r.top() + fy * r.height()).toPoint())).lightness() > 240;
+    };
+    // Dentro de la nube, en varios sitios.
+    for (const auto& [fx, fy] : {std::pair{0.5, 0.4}, {0.3, 0.3}, {0.7, 0.3}, {0.35, 0.55}, {0.65, 0.55}, {0.5, 0.15}})
+        CHECK(white(shapes[3].rect, fx, fy));
+    // La base de la cola, abierta: en medio, a la altura del borde de abajo del cuerpo.
+    CHECK(white(shapes[1].rect, 0.35, 0.75));
+    CHECK(white(shapes[2].rect, 0.36, 0.785));
+    CHECK(white(shapes[0].rect, 0.35, 0.75));
+    // Y la punta de la cola, trazada.
+    for (const auto& s : shapes)
+        if (s.type != ShapeType::CloudCallout)
+            CHECK(!white(s.rect, 0.2, 0.985));
+    if (!outDir.isEmpty())
+        all.save(QDir(outDir).filePath(QStringLiteral("bocadillos.png")));
+}
+
 static void testTheme()
 {
     CHECK(!Theme::needsRestart(Theme::Scheme::Dark) && !Theme::needsRestart(Theme::Scheme::Custom));
@@ -771,6 +807,21 @@ int main(int argc, char** argv)
         CHECK(!tools->current()->isBusy());
     }
 
+    // Formas: un clic dentro de la forma la deja seleccionada; uno lejos de ella la termina (antes
+    // la movía y seguía seleccionada).
+    {
+        tools->select(ToolId::Shapes);
+        state->updateTools([](ToolSettings& s) { s.shape = ShapeType::Ellipse; });
+        const int steps = doc->undoStack()->count();
+        drag(canvas, {QPointF(80, 80), QPointF(150, 150)});
+        CHECK(tools->current()->isBusy());
+        drag(canvas, {QPointF(115, 115)});
+        CHECK(tools->current()->isBusy());
+        drag(canvas, {QPointF(500, 420)});
+        CHECK(!tools->current()->isBusy());
+        CHECK(doc->undoStack()->count() == steps + 2 && doc->undoStack()->text(steps + 1) == QStringLiteral("Finalizar forma"));
+    }
+
     // Formas personalizadas: aparecen tras las integradas (A llega a ellas) y se dibujan
     // estiradas al rectángulo, con su nombre en el historial.
     {
@@ -1132,6 +1183,36 @@ int main(int argc, char** argv)
             CHECK(plugins >= 0 && discord == plugins + 1);
         }
         CHECK(AppSettings().discordEnabled);
+        // Complementos: el botón del catálogo de paint.js (Complementos de Kaint.HTML) solo se ve
+        // si se activa con su casilla; por defecto, no.
+        {
+            CHECK(!AppSettings().kaintHtmlPlugins);
+            QPushButton* catalog = nullptr;
+            for (QPushButton* b : dlg.findChildren<QPushButton*>())
+                if (b->text().startsWith(QLatin1String("Complementos de Kaint.HTML")))
+                    catalog = b;
+            QCheckBox* show = nullptr;
+            for (QCheckBox* c : dlg.findChildren<QCheckBox*>())
+                if (c->text().contains(QLatin1String("Complementos de Kaint.HTML")))
+                    show = c;
+            CHECK(catalog && show);
+            if (catalog && show) {
+                const bool was = show->isChecked();
+                show->setChecked(false);
+                CHECK(catalog->isHidden());
+                show->setChecked(true);
+                CHECK(!catalog->isHidden() && dlg.settings().kaintHtmlPlugins);
+                if (!outDir.isEmpty()) {
+                    // Alta, para que se vea entera (con el botón, abajo).
+                    dlg.showPage(SettingsDialog::Page::Plugins);
+                    dlg.resize(860, 760);
+                    dlg.show();
+                    settle();
+                    dlg.grab().save(QDir(outDir).filePath(QStringLiteral("complementos-kainthtml.png")));
+                }
+                show->setChecked(was);
+            }
+        }
         if (!outDir.isEmpty()) {
             dlg.showPage(SettingsDialog::Page::Discord);
             dlg.resize(820, 560);
@@ -1145,6 +1226,7 @@ int main(int argc, char** argv)
     }
     testDiscordPresence();
     testTransformBox();
+    testCallouts(outDir);
     testTheme();
 
     // Acerca de: el logo se aclara (desenfoque animado), la firma enlaza a la web del autor y su
@@ -1718,6 +1800,40 @@ int main(int argc, char** argv)
         CHECK(back.canvasBorderDark == QColor(0x2c, 0x2c, 0x2c) && !back.canvasBorderLight.isValid());
         s.remove(QStringLiteral("settings/canvasBorderDark"));
         s.remove(QStringLiteral("settings/canvasBorderLight"));
+    }
+
+    // La barra de título de Kaint ahora es una casilla (por defecto en Linux sí y en Windows no):
+    // los botones -1 de antes («Los del escritorio») pasan a la casilla desactivada con los botones
+    // de su recreación de Windows, y lo elegido se guarda tal cual.
+    {
+        QSettings s;
+        const QVariant buttons = s.value(QStringLiteral("settings/titleButtons"));
+        const QVariant custom = s.value(QStringLiteral("settings/customWindowFrame"));
+        const QVariant version = s.value(QStringLiteral("settings/windowsVersion"));
+        s.remove(QStringLiteral("settings/customWindowFrame"));
+        s.remove(QStringLiteral("settings/titleButtons"));
+#ifdef Q_OS_WIN
+        CHECK(!AppSettings::load().customFrame);
+#else
+        CHECK(AppSettings::load().customFrame);
+#endif
+        s.setValue(QStringLiteral("settings/titleButtons"), -1);
+        s.setValue(QStringLiteral("settings/windowsVersion"), 11);
+        AppSettings old = AppSettings::load();
+        CHECK(!old.customFrame && old.titleButtons == 1);
+        old.customFrame = true;
+        old.titleButtons = 2;
+        old.save();
+        const AppSettings back = AppSettings::load();
+        CHECK(back.customFrame && back.titleButtons == 2 && s.value(QStringLiteral("settings/customWindowFrame")).toBool());
+        for (const auto& [key, value] : {std::pair{QStringLiteral("settings/titleButtons"), buttons},
+                                         std::pair{QStringLiteral("settings/customWindowFrame"), custom},
+                                         std::pair{QStringLiteral("settings/windowsVersion"), version}}) {
+            if (value.isValid())
+                s.setValue(key, value);
+            else
+                s.remove(key);
+        }
     }
 
     // Reconstruir el menú Efectos y luego deshabilitar la ventana no debe tocar acciones ya

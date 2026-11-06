@@ -1184,7 +1184,7 @@ int main(int argc, char** argv)
         }
         CHECK(AppSettings().discordEnabled);
         // Complementos: el botón del catálogo de paint.js (Complementos de Kaint.HTML) solo se ve
-        // si se activa con su casilla; por defecto, no.
+        // si se activa con su casilla (en Interfaz de usuario); por defecto, no.
         {
             CHECK(!AppSettings().kaintHtmlPlugins);
             QPushButton* catalog = nullptr;
@@ -1204,8 +1204,12 @@ int main(int argc, char** argv)
                 CHECK(!catalog->isHidden() && dlg.settings().kaintHtmlPlugins);
                 if (!outDir.isEmpty()) {
                     // Alta, para que se vea entera (con el botón, abajo).
-                    dlg.showPage(SettingsDialog::Page::Plugins);
+                    dlg.showPage(SettingsDialog::Page::Interface);
                     dlg.resize(860, 760);
+                    dlg.show();
+                    settle();
+                    dlg.grab().save(QDir(outDir).filePath(QStringLiteral("interfaz-kainthtml.png")));
+                    dlg.showPage(SettingsDialog::Page::Plugins);
                     dlg.show();
                     settle();
                     dlg.grab().save(QDir(outDir).filePath(QStringLiteral("complementos-kainthtml.png")));

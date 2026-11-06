@@ -47,7 +47,8 @@ struct AppSettings {
     // complementos (la pieza de puzle) a la derecha.
     bool pluginMenuIcons = true;
     // Configuración > Complementos: el botón «Complementos de Kaint.HTML», el catálogo de
-    // complementos de paint.js de la versión web. Escondido mientras no se active.
+    // complementos de paint.js de la versión web. Escondido mientras no se active (con su casilla,
+    // en Interfaz de usuario).
     bool kaintHtmlPlugins = false;
     // Colores ampliado: también los colores semitransparentes de la paleta (las filas de abajo de
     // la de fábrica, como en Paint.NET). El blanco de relleno de las paletas cortas nunca se ve.
@@ -209,6 +210,8 @@ private:
     QPlainTextEdit* m_pluginDetails = nullptr;
     QCheckBox* m_showIncompatible = nullptr;
     QPushButton* m_openPluginFolder = nullptr;
+    // Complementos de Kaint.HTML (en Complementos); su casilla está en Interfaz de usuario.
+    QPushButton* m_kaintHtmlButton = nullptr;
     QSet<QString> m_collapsedPlugins;
     QLabel* m_updateStatus = nullptr;
     QLabel* m_discordStatus = nullptr;

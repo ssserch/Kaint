@@ -5000,6 +5000,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Reset</translation>
     </message>
     <message>
+        <source>En Complementos, un botón para instalar complementos de paint.js del catálogo de la versión web de Kaint (Kaint.HTML).</source>
+        <translation>In Plugins, a button to install paint.js plugins from the catalog of the web version of Kaint (Kaint.HTML).</translation>
+    </message>
+    <message>
         <source>Windows 7</source>
         <translation>Windows 7</translation>
     </message>
@@ -5212,10 +5216,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Mostrar el botón «Complementos de Kaint.HTML»</source>
         <translation>Show the “Kaint.HTML plugins” button</translation>
-    </message>
-    <message>
-        <source>Un botón para instalar complementos de paint.js del catálogo de la versión web de Kaint (Kaint.HTML).</source>
-        <translation>A button to install paint.js plugins from the catalog of the web version of Kaint (Kaint.HTML).</translation>
     </message>
     <message>
         <source>Añadir…</source>

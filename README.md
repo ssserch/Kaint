@@ -63,7 +63,7 @@ runs on Windows 10 and 11.
       them. <b>paint.js plugins</b> (.paintjs) too, the same ones as the web version, with their
       effects and file types (Photoshop PSD with layers, for example), installed from a file or from
       the web version's plugin catalog (<b>Settings → Plugins → Kaint.HTML plugins…</b>, a button you
-      turn on there first). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
+      turn on in <b>Settings → User interface</b>). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
       your files or the internet; plugins that open their own HTML window only work in the web
       version, and Kaint says so. Each effect of a plugin
       can be turned on or off on its own, and native plugins can bring their own menu icon. In the
@@ -286,7 +286,7 @@ fonts and recovery copies. If NSIS is missing, it offers to download it (about 2
 </details>
 
 <details open>
-<summary><b>🤖 Android (Kaint.APK)</b></summary>
+<summary><b>🟢 Android (Kaint.APK)</b></summary>
 
 Kaint.APK is the web version (`KaintHTML`) as an Android app (`android/`). `./build-apk.sh` asks
 whether you want an **APK** (to install on the phone) or an **App Bundle** (to publish on Google

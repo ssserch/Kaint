@@ -414,6 +414,14 @@ QWidget* SettingsDialog::createInterfacePage()
     check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), &AppSettings::paletteTranslucent,
           tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de "
              "menos colores no se muestra nunca."));
+    // El botón está en Complementos (se muestra o se esconde al momento).
+    QCheckBox* kaintHtml = check(tr("Mostrar el botón «Complementos de Kaint.HTML»"), &AppSettings::kaintHtmlPlugins,
+                                 tr("En Complementos, un botón para instalar complementos de paint.js del catálogo de la versión "
+                                    "web de Kaint (Kaint.HTML)."));
+    connect(kaintHtml, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_kaintHtmlButton)
+            m_kaintHtmlButton->setVisible(on);
+    });
 
     // Temas: los cuatro primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
     // tema nativo aparte: claro y oscuro ya son los de Windows, como en Paint.NET.
@@ -1207,30 +1215,21 @@ QWidget* SettingsDialog::createPluginsPage()
         changed();
     });
     page.layout->addWidget(menuIcons);
-    auto* kaintHtml = new QCheckBox(tr("Mostrar el botón «Complementos de Kaint.HTML»"), page.widget);
-    kaintHtml->setToolTip(tr("Un botón para instalar complementos de paint.js del catálogo de la versión web de Kaint "
-                             "(Kaint.HTML)."));
-    kaintHtml->setChecked(m_settings.kaintHtmlPlugins);
-    page.layout->addWidget(kaintHtml);
 
     auto* row = new QHBoxLayout;
     auto* add = new QPushButton(Icons::theme({"list-add", "document-import"}), tr("Añadir…"), page.widget);
     add->setToolTip(tr("Copiar complementos (.so, .dll, .wasm, .cube, .3dl, .xmp o .paintjs) a la carpeta de complementos"));
     connect(add, &QPushButton::clicked, this, &SettingsDialog::addPlugins);
     // El catálogo de complementos de paint.js (el de Explorar complementos de la versión web),
-    // solo si se activó con la casilla de arriba.
+    // solo si se activó en Interfaz de usuario.
     auto* browse = new QPushButton(Icons::theme({"plugins", "application-x-addon"}), tr("Complementos de Kaint.HTML…"), page.widget);
     browse->setToolTip(tr("El catálogo de complementos de paint.js de la versión web de Kaint"));
     browse->setVisible(m_settings.kaintHtmlPlugins);
+    m_kaintHtmlButton = browse;
     connect(browse, &QPushButton::clicked, this, [this] {
         PluginCatalogDialog dlg(this);
         dlg.exec();
         refreshPlugins();
-    });
-    connect(kaintHtml, &QCheckBox::toggled, this, [this, browse](bool on) {
-        m_settings.kaintHtmlPlugins = on;
-        browse->setVisible(on);
-        changed();
     });
     auto* openFolder = new QPushButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), page.widget);
     openFolder->setToolTip(tr("Abre la carpeta de complementos"));

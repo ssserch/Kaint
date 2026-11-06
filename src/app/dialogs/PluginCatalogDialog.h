@@ -13,7 +13,8 @@ class QVBoxLayout;
 // Complementos de Kaint.HTML: el catálogo de complementos de paint.js, el mismo que usa la versión
 // web (Explorar complementos), cada uno con su botón de instalar. Se descargan, se comprueba que
 // su SHA-256 sea el del catálogo y se copian a la carpeta de complementos. Se abre desde
-// Configuración > Complementos, si se activó su botón (AppSettings::kaintHtmlPlugins).
+// Configuración > Complementos, si se activó su botón en Interfaz de usuario
+// (AppSettings::kaintHtmlPlugins).
 class PluginCatalogDialog : public QDialog {
     Q_OBJECT
 public:

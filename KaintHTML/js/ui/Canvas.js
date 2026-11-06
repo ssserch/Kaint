@@ -1031,7 +1031,11 @@ export class CanvasView extends EventTarget {
         this.inertia = 0;
         c.addEventListener("contextmenu", (e) => e.preventDefault());
         c.addEventListener("pointerdown", (e) => {
-            c.focus({ preventScroll: true });
+            // Con el dedo y una herramienta que escribe (Texto), el foco se queda en su campo: si el
+            // lienzo se lo quitaba, el teclado en pantalla se cerraba al tocar (y se volvía a abrir
+            // al dárselo otra vez, al mover el texto), y la «A» no sabía si estaba abierto.
+            if (!(e.pointerType === "touch" && this.tool?.wantsKeyboard?.()))
+                c.focus({ preventScroll: true });
             if (!this.doc)
                 return;
             c.setPointerCapture(e.pointerId);

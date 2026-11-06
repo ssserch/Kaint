@@ -82,6 +82,15 @@ export class TextTool extends Tool {
         this.fullHeight = window.innerHeight;
         const viewportChanged = () => {
             this.fullHeight = Math.max(this.fullHeight, window.innerHeight);
+            // Se cerró el teclado por su cuenta (el botón Atrás de Android): la «A» lo vuelve a abrir
+            // al primer toque. Solo si antes se vio abierto (no todos los navegadores encogen la vista).
+            const visible = this.keyboardVisible();
+            if (visible) {
+                this.keyboardSeen = true;
+            } else if (this.keyboardSeen) {
+                this.keyboardSeen = false;
+                this.softKeyboard = false;
+            }
             if (this.editing)
                 this.repaint();
         };
@@ -200,12 +209,21 @@ export class TextTool extends Tool {
         return (vv && vv.height < window.innerHeight * 0.8) || window.innerHeight < this.fullHeight * 0.8;
     }
 
+    // El teclado en pantalla abierto, según lo que se pidió (softKeyboard) y no midiendo la vista ni
+    // mirando el foco: la medida fallaba en algunos navegadores y en Kaint.APK, y la «A» no lo cerraba.
+    keyboardOn() {
+        return !!this.softKeyboard;
+    }
+
     // Abre o cierra el teclado en pantalla. Se llama al soltar el dedo (solo entonces deja el
-    // navegador sacar el teclado): para abrirlo, el campo pierde el foco y lo recupera.
+    // navegador sacar el teclado): para abrirlo, el campo pierde el foco y lo recupera; para
+    // cerrarlo, lo pierde.
     toggleKeyboard() {
-        const open = this.keyboardVisible();
+        const open = !this.keyboardOn();
         this.input.blur();
-        if (!open)
+        this.softKeyboard = open;
+        this.keyboardSeen = false;
+        if (open)
             this.input.focus({ preventScroll: true });
         this.repaint();
     }
@@ -219,7 +237,8 @@ export class TextTool extends Tool {
             const h = this.handles();
             if (e.button === "right" || this.hits(e, h.move)) {
                 this.drag = { from: { x: e.x, y: e.y }, start: { ...this.pos } };
-                this.focusInput(e);
+                // Mover el texto no saca el teclado en pantalla (si estaba abierto, sigue).
+                this.focusInput(e, false);
                 return;
             }
             if (this.hits(e, h.keyboard)) {
@@ -255,9 +274,16 @@ export class TextTool extends Tool {
         this.render();
     }
 
-    // El campo oculto recibe el teclado al momento (sin que el clic devuelva el foco al lienzo).
-    focusInput(e) {
+    // El campo oculto recibe el teclado al momento (sin que el clic devuelva el foco al lienzo). Con
+    // el dedo, darle el foco saca el teclado en pantalla: con 'open' en false, solo si ya estaba
+    // abierto.
+    focusInput(e, open = true) {
         e.original?.preventDefault();
+        if (e.pointerType === "touch") {
+            if (!open && !this.softKeyboard)
+                return;
+            this.softKeyboard = true;
+        }
         this.input.focus({ preventScroll: true });
     }
 
@@ -321,6 +347,7 @@ export class TextTool extends Tool {
             this.drag = null;
             this.steps.leave();
             this.input.value = "";
+            this.softKeyboard = false;
             this.input.blur();
             if (this.doc?.preview?.canvas === this.preview)
                 this.doc.setPreview(null);
@@ -350,7 +377,9 @@ export class TextTool extends Tool {
         this.input.value = st.text;
         this.doc.setPreview({ layer: this.layer, canvas: this.preview });
         this.render();
-        this.input.focus({ preventScroll: true });
+        // Con el dedo y el teclado en pantalla cerrado, deshacer no lo vuelve a abrir.
+        if (!this.usedTouch || this.softKeyboard)
+            this.input.focus({ preventScroll: true });
         this.setHint(this.hint());
     }
 
@@ -417,7 +446,7 @@ export class TextTool extends Tool {
         const h = this.handles();
         drawMoveHandle(ctx, h.move);
         if (h.keyboard)
-            drawKeyboardHandle(ctx, h.keyboard, this.keyboardVisible());
+            drawKeyboardHandle(ctx, h.keyboard, this.keyboardOn());
         if (!this.caretOn)
             return;
         // Cursor de texto en la posición del campo oculto.
@@ -448,6 +477,7 @@ export class TextTool extends Tool {
         this.editing = false;
         this.drag = null;
         this.overHandle = false;
+        this.softKeyboard = false;
         this.input.blur();
         const doc = this.doc, layer = this.layer;
         if (!this.input.value.trim() && !this.resumed) {
@@ -480,6 +510,7 @@ export class TextTool extends Tool {
         }
         this.editing = false;
         this.input.value = "";
+        this.softKeyboard = false;
         this.input.blur();
         this.steps.leave();
         this.doc.setPreview(null);

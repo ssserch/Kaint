@@ -16,6 +16,7 @@ public:
     void finish() override;
     bool isBusy() const override { return m_engine.isActive(); }
     qreal brushOutlineDiameter() const override;
+    bool arrowKeysMovePointer() const override { return true; }
 
 protected:
     virtual StrokeParams params(const ToolEvent& e) const = 0;

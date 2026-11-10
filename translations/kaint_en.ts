@@ -2338,10 +2338,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Images to open.</translation>
     </message>
     <message>
-        <source>Tema: system, light, dark, blue, kde, custom, windows7, windowsxp, windows98 o windows98alt (se guarda).</source>
-        <translation>Theme: system, light, dark, blue, kde, custom, windows7, windowsxp, windows98 or windows98alt (saved).</translation>
-    </message>
-    <message>
         <source>Guarda una captura de la ventana con la configuración de fábrica (la primera imagen es la actual) y sale.</source>
         <translation>Saves a screenshot of the window with the factory settings (the first image is the current one) and exits.</translation>
     </message>
@@ -4151,6 +4147,26 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>encode() no devolvió datos.</source>
         <translation>encode() returned no data.</translation>
+    </message>
+    <message>
+        <source>Tema: system, light, dark, blue, kde, custom, windows7, windows7dark, windowsxp, windows98 o windows98alt (se guarda).</source>
+        <translation>Theme: system, light, dark, blue, kde, custom, windows7, windows7dark, windowsxp, windows98 or windows98alt (saved).</translation>
+    </message>
+    <message>
+        <source>Leve</source>
+        <translation>Light</translation>
+    </message>
+    <message>
+        <source>Solo hacia arriba</source>
+        <translation>Up only</translation>
+    </message>
+    <message>
+        <source>Solo hacia abajo</source>
+        <translation>Down only</translation>
+    </message>
+    <message>
+        <source>Atravesado</source>
+        <translation>Through</translation>
     </message>
 </context>
 <context>
@@ -6019,6 +6035,46 @@ Do you want to replace them?</translation>
         <source>Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de menos colores no se muestra nunca.</source>
         <translation>The bottom rows of the default palette, like in Paint.NET. The white that pads palettes with fewer colors is never shown.</translation>
     </message>
+    <message>
+        <source>Animar las ventanas al abrirse</source>
+        <translation>Animate windows when they open</translation>
+    </message>
+    <message>
+        <source>Como en Windows: la ventana (Configuración, un ajuste...) aparece desde un poco más pequeña y transparente, rápido al principio y despacio al final.</source>
+        <translation>Like in Windows: the window (Settings, an adjustment...) grows in from slightly smaller and transparent, fast at first and slow at the end.</translation>
+    </message>
+    <message>
+        <source>Duración de la animación.</source>
+        <translation>Length of the animation.</translation>
+    </message>
+    <message>
+        <source>ms</source>
+        <translation>ms</translation>
+    </message>
+    <message>
+        <source>En Wayland las ventanas las anima el escritorio.</source>
+        <translation>On Wayland, the desktop animates the windows.</translation>
+    </message>
+    <message>
+        <source>Windows 7 oscuro</source>
+        <translation>Windows 7 Dark</translation>
+    </message>
+    <message>
+        <source>El de Windows 7 en grises oscuros, con el cristal ahumado.</source>
+        <translation>Windows 7 in dark grays, with smoked glass.</translation>
+    </message>
+    <message>
+        <source>Habilitar transparencia</source>
+        <translation>Enable transparency</translation>
+    </message>
+    <message>
+        <source>Como en Windows 7: el cristal de los marcos de las ventanas deja ver lo que hay detrás. Solo con los temas Windows 7.</source>
+        <translation>Like in Windows 7: the glass of the window frames lets you see what is behind. Only with the Windows 7 themes.</translation>
+    </message>
+    <message>
+        <source>Se desbloquea con la barra de título de Kaint.</source>
+        <translation>Unlocked with Kaint's title bar.</translation>
+    </message>
 </context>
 <context>
     <name>ShapesTool</name>
@@ -7064,6 +7120,10 @@ Do you want to replace them?</translation>
         <source>px</source>
         <translation>px</translation>
     </message>
+    <message>
+        <source>Zalgo: marcas apiladas encima y debajo de cada letra (la flecha elige el tipo)</source>
+        <translation>Zalgo: marks stacked above and below each letter (the arrow picks the type)</translation>
+    </message>
 </context>
 <context>
     <name>WelcomeDialog</name>
@@ -7162,6 +7222,10 @@ Do you want to replace them?</translation>
     <message>
         <source>Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.</source>
         <translation>The ones from Paint.NET, in pixel art: the crosshair with the drawing of the tool.</translation>
+    </message>
+    <message>
+        <source>Windows 7 oscuro</source>
+        <translation>Windows 7 Dark</translation>
     </message>
 </context>
 <context>

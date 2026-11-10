@@ -24,6 +24,16 @@ class ToolOptionsPanel;
 struct AppSettings {
     // Interfaz de usuario
     bool animations = true;
+    // Al abrir una ventana (Configuración, un ajuste...), como en Windows: aparece desde un poco
+    // más pequeña y transparente. Por defecto en Windows (en Linux la anima el escritorio).
+#ifdef Q_OS_WIN
+    bool windowAnimation = true;
+#else
+    bool windowAnimation = false;
+#endif
+    int windowAnimationMs = 300;
+    // Windows 7: «Habilitar transparencia» (el cristal de los marcos deja ver lo de detrás).
+    bool aeroTransparency = true;
     bool translucentPanels = true;
     // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar
     // su borde o encima de ella); fuera de la imagen, opacas.

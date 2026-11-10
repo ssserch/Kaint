@@ -447,7 +447,12 @@ protected:
     }
 
 public:
-    void setCaption(QWidget* caption) { m_caption = caption; }
+    void setCaption(QWidget* caption)
+    {
+        m_caption = caption;
+        // Los huecos de la franja mueven la ventana (en Windows, como su barra de título).
+        setProperty("kaintCaption", caption != nullptr);
+    }
 
 protected:
     // Como en Windows, la ventana se mueve arrastrando cualquier hueco de la barra de título
@@ -3675,15 +3680,18 @@ void MainWindow::applySettings()
     // La fuente de la interfaz y (Linux) el color de la barra superior se ven al volver a aplicar
     // el tema.
     const bool fontChanged = Theme::uiFontFamily() != m_settings.uiFontFamily || Theme::uiFontSize() != m_settings.uiFontSize;
+    // El color propio de la barra superior (en Windows, solo con la barra de título de Kaint).
 #ifdef Q_OS_WIN
-    const bool titleChanged = false;
+    const QColor ownTitle = WindowFrame::enabled() ? m_settings.titleBarColor : QColor();
 #else
-    const bool titleChanged = Theme::titleBarColor() != (m_settings.titleBarColor.isValid() ? QColor(m_settings.titleBarColor.rgb()) : QColor());
+    const QColor ownTitle = m_settings.titleBarColor;
 #endif
+    const bool titleChanged = Theme::customTitleBarColor() != (ownTitle.isValid() ? QColor(ownTitle.rgb()) : QColor());
     Theme::setUiFont(m_settings.uiFontFamily, m_settings.uiFontSize);
-    Theme::setCustomTitleBarColor(m_settings.titleBarColor);
+    Theme::setCustomTitleBarColor(ownTitle);
+    const bool glassChanged = Theme::setAeroTransparency(m_settings.aeroTransparency);
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)
-        || fontChanged || titleChanged) {
+        || fontChanged || titleChanged || glassChanged) {
         Theme::setLook(Theme::Look(m_settings.uiStyle));
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     }
@@ -3694,6 +3702,7 @@ void MainWindow::applySettings()
         QApplication::setEffectEnabled(effect, false);
     QApplication::setEffectEnabled(Qt::UI_AnimateToolBox, m_settings.animations);
     Animations::setEnabled(m_settings.animations);
+    Animations::setWindowAnimation(m_settings.windowAnimation, m_settings.windowAnimationMs);
     if (m_settings.autosaveMinutes > 0)
         m_autosaveTimer.start(m_settings.autosaveMinutes * 60 * 1000);
     else

@@ -8,6 +8,7 @@
 #include "app/tools/Handles.h"
 #include "app/tools/ShapeTools.h"
 #include "core/Raster.h"
+#include "core/Zalgo.h"
 
 #include <QClipboard>
 #include <QFontMetricsF>
@@ -16,6 +17,7 @@
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QUndoStack>
 
 #include <cmath>
@@ -394,11 +396,25 @@ void TextTool::render()
     const QStringList lines = displayLines();
     const qreal ls = fm.lineSpacing();
 
+    // Zalgo: las mismas letras con sus marcas (no ocupan ancho: el cursor y la alineación son los de
+    // siempre); cada letra lleva siempre las mismas, según su sitio.
+    QStringList drawn = lines;
+    if (s.zalgo)
+        for (int i = 0; i < drawn.size(); ++i)
+            drawn[i] = Zalgo::apply(lines[i], Zalgo::Type(s.zalgoType), quint32(i) * 7919u);
+
     QRectF bounds(m_pos, QSizeF(1, ls));
     for (int i = 0; i < lines.size(); ++i) {
         const qreal left = lineLeft(fm, lines[i]);
-        bounds |= fm.boundingRect(lines[i]).translated(left, m_pos.y() + fm.ascent() + i * ls);
+        const QPointF origin(left, m_pos.y() + fm.ascent() + i * ls);
+        bounds |= fm.boundingRect(lines[i]).translated(origin);
         bounds |= QRectF(left, m_pos.y() + i * ls, fm.horizontalAdvance(lines[i]), ls);
+        if (s.zalgo && drawn[i] != lines[i]) {
+            // Las marcas suben y bajan mucho más que la línea.
+            QPainterPath outline;
+            outline.addText(origin, f, drawn[i]);
+            bounds |= outline.boundingRect();
+        }
     }
     m_bounds = bounds;
 
@@ -408,7 +424,7 @@ void TextTool::render()
         p.setFont(f);
         p.setPen(QPen(coverage ? QBrush(Qt::black) : Raster::patternBrush(0, app->primary(), app->secondary()), 1));
         for (int i = 0; i < lines.size(); ++i)
-            p.drawText(QPointF(lineLeft(fm, lines[i]), m_pos.y() + fm.ascent() + i * ls), lines[i]);
+            p.drawText(QPointF(lineLeft(fm, lines[i]), m_pos.y() + fm.ascent() + i * ls), drawn[i]);
     });
     touch();
 }
@@ -576,6 +592,8 @@ void TextTool::historyChanged()
         s.bold = o.bold;
         s.italic = o.italic;
         s.underline = o.underline;
+        s.zalgo = o.zalgo;
+        s.zalgoType = o.zalgoType;
         s.strikeout = o.strikeout;
         s.textAlign = o.textAlign;
         s.fontMetric = o.fontMetric;

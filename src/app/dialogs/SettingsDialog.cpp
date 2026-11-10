@@ -102,6 +102,9 @@ AppSettings AppSettings::load()
     AppSettings a;
     auto get = [&](const char* key, auto def) { return s.value(QLatin1String(key), def).template value<decltype(def)>(); };
     a.animations = get("animations", a.animations);
+    a.windowAnimation = get("windowAnimation", a.windowAnimation);
+    a.windowAnimationMs = std::clamp(get("windowAnimationMs", a.windowAnimationMs), 50, 2000);
+    a.aeroTransparency = get("aeroTransparency", a.aeroTransparency);
     a.translucentPanels = get("translucentPanels", a.translucentPanels);
     a.translucentOverImage = get("translucentOverImage", a.translucentOverImage);
     a.overscroll = get("overscroll", a.overscroll);
@@ -138,7 +141,7 @@ AppSettings AppSettings::load()
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
     a.menuMnemonics = get("menuMnemonics", a.menuMnemonics);
-    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 9);
+    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, Theme::kLastScheme);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
         a.colorScheme = int(Theme::Scheme::System);
@@ -184,6 +187,9 @@ void AppSettings::save() const
     QSettings s;
     s.beginGroup(QStringLiteral("settings"));
     s.setValue(QStringLiteral("animations"), animations);
+    s.setValue(QStringLiteral("windowAnimation"), windowAnimation);
+    s.setValue(QStringLiteral("windowAnimationMs"), windowAnimationMs);
+    s.setValue(QStringLiteral("aeroTransparency"), aeroTransparency);
     s.setValue(QStringLiteral("translucentPanels"), translucentPanels);
     s.setValue(QStringLiteral("translucentOverImage"), translucentOverImage);
     s.setValue(QStringLiteral("overscroll"), overscroll);
@@ -376,8 +382,40 @@ QWidget* SettingsDialog::createInterfacePage()
         page.layout->addWidget(c);
         return c;
     };
-    check(tr("Animaciones"), &AppSettings::animations,
+    QCheckBox* animations = check(tr("Animaciones"), &AppSettings::animations,
           tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones."));
+    {
+        // Debajo, con sangría: la de abrir ventanas, como en Windows, y cuánto dura.
+        QCheckBox* windowAnimation = check(tr("Animar las ventanas al abrirse"), &AppSettings::windowAnimation,
+                                           tr("Como en Windows: la ventana (Configuración, un ajuste...) aparece desde un "
+                                              "poco más pequeña y transparente, rápido al principio y despacio al final."));
+        page.layout->removeWidget(windowAnimation);
+        auto* duration = new QSpinBox(page.widget);
+        duration->setRange(50, 2000);
+        duration->setSingleStep(50);
+        duration->setValue(m_settings.windowAnimationMs);
+        duration->setToolTip(tr("Duración de la animación."));
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(windowAnimation);
+        indent->addWidget(withUnit(duration, tr("ms"), {}, page.widget));
+        indent->addStretch();
+        page.layout->addLayout(indent);
+        const bool wayland = QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
+        auto sync = [animations, windowAnimation, duration, wayland] {
+            windowAnimation->setEnabled(animations->isChecked() && !wayland);
+            duration->setEnabled(windowAnimation->isEnabled() && windowAnimation->isChecked());
+        };
+        if (wayland)
+            windowAnimation->setToolTip(tr("En Wayland las ventanas las anima el escritorio."));
+        sync();
+        connect(animations, &QCheckBox::toggled, this, sync);
+        connect(windowAnimation, &QCheckBox::toggled, this, sync);
+        connect(duration, &QSpinBox::valueChanged, this, [this](int v) {
+            m_settings.windowAnimationMs = v;
+            changed();
+        });
+    }
     QCheckBox* translucent = check(tr("Ventanas translúcidas"), &AppSettings::translucentPanels,
                                    tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
     {
@@ -439,6 +477,8 @@ QWidget* SettingsDialog::createInterfacePage()
     addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
     addScheme(tr("Windows 7"), Theme::Scheme::Windows7, tr("Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css."));
+    addScheme(tr("Windows 7 oscuro"), Theme::Scheme::Windows7Dark,
+              tr("El de Windows 7 en grises oscuros, con el cristal ahumado."));
     addScheme(tr("Windows XP"), Theme::Scheme::WindowsXP, tr("El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css."));
     addScheme(tr("Windows 98"), Theme::Scheme::Windows98, tr("El clásico gris con relieve. También es una plantilla del personalizado."));
     addScheme(tr("Windows 98 ALT"), Theme::Scheme::Windows98Alt,
@@ -452,6 +492,29 @@ QWidget* SettingsDialog::createInterfacePage()
     schemeRow->addWidget(customize);
     schemeRow->addStretch();
     page.layout->addLayout(schemeRow);
+    // Windows 7: «Habilitar transparencia», como en Windows 7 (solo con sus temas).
+    auto* aeroGlass = new QCheckBox(tr("Habilitar transparencia"), page.widget);
+    aeroGlass->setChecked(m_settings.aeroTransparency);
+    aeroGlass->setToolTip(tr("Como en Windows 7: el cristal de los marcos de las ventanas deja ver lo que hay detrás. "
+                             "Solo con los temas Windows 7."));
+    {
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(aeroGlass);
+        page.layout->addLayout(indent);
+    }
+    connect(aeroGlass, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.aeroTransparency = on;
+        changed();
+    });
+    auto syncAeroGlass = [this, aeroGlass] {
+        const bool win7 = m_settings.colorScheme == int(Theme::Scheme::Windows7)
+                          || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark);
+        aeroGlass->setEnabled(win7);
+        aeroGlass->setVisible(win7);
+    };
+    syncAeroGlass();
+    connect(this, &SettingsDialog::settingsChanged, this, syncAeroGlass);
 
     // Aspecto: el de Kaint o la recreación de Paint.NET (solo lo visual).
     auto* lookRow = new QHBoxLayout;
@@ -543,10 +606,12 @@ QWidget* SettingsDialog::createInterfacePage()
         changed();
     });
 
-#ifndef Q_OS_WIN
-    // Linux: el color de la barra superior (y de las cabeceras de las ventanas), como el color de
-    // énfasis en las barras de título de Windows.
-    auto* titleRow = new QHBoxLayout;
+    // El color de la barra superior (y de las cabeceras de las ventanas), como el color de énfasis
+    // en las barras de título de Windows. En Windows, con la barra de título de Kaint (sin ella, la
+    // de Windows lleva su color de énfasis).
+    auto* titleRowWidget = new QWidget(page.widget);
+    auto* titleRow = new QHBoxLayout(titleRowWidget);
+    titleRow->setContentsMargins(0, 0, 0, 0);
     auto* ownTitle = new QCheckBox(tr("Color propio en la barra superior:"), page.widget);
     ownTitle->setToolTip(tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los "
                             "menús y las cabeceras de las ventanas llevan este color."));
@@ -557,7 +622,7 @@ QWidget* SettingsDialog::createInterfacePage()
     titleRow->addWidget(ownTitle);
     titleRow->addWidget(titleColor);
     titleRow->addStretch();
-    page.layout->addLayout(titleRow);
+    page.layout->addWidget(titleRowWidget);
     auto applyTitle = [this, ownTitle, titleColor] {
         titleColor->setEnabled(ownTitle->isChecked());
         m_settings.titleBarColor = ownTitle->isChecked() ? titleColor->color() : QColor();
@@ -565,7 +630,6 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     connect(ownTitle, &QCheckBox::toggled, this, applyTitle);
     connect(titleColor, &ColorButton::colorChanged, this, applyTitle);
-#endif
 
     // Paquete de iconos (como en paint.js; se administran en su página).
     auto* packRow = new QHBoxLayout;
@@ -732,6 +796,19 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     syncTitle();
     connect(this, &SettingsDialog::settingsChanged, this, syncTitle);
+#ifdef Q_OS_WIN
+    // En Windows, el color propio va con la barra de título de Kaint.
+    auto syncTitleColor = [this, titleRowWidget] {
+        const bool own = m_settings.customFrame && m_settings.colorScheme != int(Theme::Scheme::Kde);
+        titleRowWidget->setEnabled(own);
+        titleRowWidget->setToolTip(own ? QString() : tr("Se desbloquea con la barra de título de Kaint."));
+    };
+    syncTitleColor();
+    connect(this, &SettingsDialog::settingsChanged, this, syncTitleColor);
+    connect(customFrame, &QCheckBox::toggled, this, syncTitleColor);
+#else
+    Q_UNUSED(titleRowWidget);
+#endif
     // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
     // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
     // interfaz, a su vez, no se aplica con el tema KDE.

@@ -79,6 +79,10 @@ struct ToolSettings {
     bool bold = false;
     bool italic = false;
     bool underline = false;
+    // Zalgo: marcas diacríticas apiladas encima, en medio y debajo de cada letra (zalgoType: cuánto y
+    // dónde, ver Zalgo::Type).
+    bool zalgo = false;
+    int zalgoType = 1;
     bool strikeout = false;
     TextAlign textAlign = TextAlign::Left;
     int pickerSize = 1;

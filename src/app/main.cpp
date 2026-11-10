@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <functional>
 
 namespace {
 
@@ -40,7 +41,7 @@ QString rawOption(int argc, char** argv, const QString& name)
 }
 
 // Tema guardado o el de --color-scheme (system, light, dark, kde, custom, windows98, blue, windows7,
-// windowsxp o windows98alt), que también se guarda: así se puede recuperar el tema sin abrir la configuración.
+// windowsxp, windows98alt o windows7dark), que también se guarda: así se puede recuperar el tema sin abrir la configuración.
 Theme::Scheme startupScheme(int argc, char** argv)
 {
     QSettings settings(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"));
@@ -55,16 +56,54 @@ Theme::Scheme startupScheme(int argc, char** argv)
         const QStringList names{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark"),
                                 QStringLiteral("kde"), QStringLiteral("custom"), QStringLiteral("windows98"),
                                 QStringLiteral("blue"), QStringLiteral("windows7"), QStringLiteral("windowsxp"),
-                                QStringLiteral("windows98alt")};
+                                QStringLiteral("windows98alt"), QStringLiteral("windows7dark")};
         settings.setValue(QStringLiteral("colorScheme"), std::max(0, int(names.indexOf(value))));
     }
-    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, 9));
+    const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, Theme::kLastScheme));
 #ifdef Q_OS_WIN
     // En Windows no hay tema nativo aparte (versiones anteriores lo tenían).
     if (scheme == Theme::Scheme::Kde)
         return Theme::Scheme::System;
 #endif
     return scheme;
+}
+
+// Llama a 'next' cuando la ventana ya se ha pintado por primera vez (si no llegara a pintarse, al
+// cabo de un momento).
+void afterFirstPaint(QWidget* window, std::function<void()> next)
+{
+    class Watcher : public QObject {
+    public:
+        Watcher(QWidget* w, std::function<void()> next)
+            : QObject(w)
+            , m_next(std::move(next))
+        {
+            w->installEventFilter(this);
+            QTimer::singleShot(1000, this, [this] { fire(); });
+        }
+
+        bool eventFilter(QObject*, QEvent* event) override
+        {
+            // Después de este paso del bucle de eventos, ya en la pantalla.
+            if (event->type() == QEvent::Paint)
+                QTimer::singleShot(0, this, [this] { fire(); });
+            return false;
+        }
+
+    private:
+        void fire()
+        {
+            if (!m_next)
+                return;
+            const std::function<void()> next = std::move(m_next);
+            m_next = nullptr;
+            deleteLater();
+            next();
+        }
+
+        std::function<void()> m_next;
+    };
+    new Watcher(window, std::move(next));
 }
 
 } // namespace
@@ -169,8 +208,8 @@ int main(int argc, char** argv)
     parser.addPositionalArgument(QStringLiteral("archivos"), QObject::tr("Imágenes que abrir."),
                                  QStringLiteral("[archivos...]"));
     parser.addOption(QCommandLineOption(QStringLiteral("color-scheme"),
-                                        QObject::tr("Tema: system, light, dark, blue, kde, custom, windows7, windowsxp, windows98 "
-                                                    "o windows98alt (se guarda)."),
+                                        QObject::tr("Tema: system, light, dark, blue, kde, custom, windows7, windows7dark, windowsxp, "
+                                                    "windows98 o windows98alt (se guarda)."),
                                         QStringLiteral("scheme")));
     parser.addOption(QCommandLineOption(QStringLiteral("screenpreview"),
                                         QObject::tr("Guarda una captura de la ventana con la configuración de fábrica "
@@ -211,13 +250,19 @@ int main(int argc, char** argv)
     const AppSettings startup = AppSettings::load();
     Theme::setLook(Theme::Look(startup.uiStyle));
     Theme::setUiFont(startup.uiFontFamily, startup.uiFontSize);
-    Theme::setCustomTitleBarColor(startup.titleBarColor);
-    Theme::apply(scheme);
     // La barra de título dibujada por Kaint con los botones elegidos, si se quiere (por defecto en
     // Linux sí y en Windows no; en las capturas de muestra, solo si se pide).
     const QString previewFrame = parser.value(QStringLiteral("preview-frame")).toLower();
-    const bool frame = startup.customFrame && Theme::current() != Theme::Scheme::Kde
+    const bool frame = startup.customFrame && scheme != Theme::Scheme::Kde
                        && (!preview || previewFrame == QLatin1String("yes") || previewFrame == QLatin1String("true"));
+    // El color propio de la barra superior (en Windows, solo con la barra de título de Kaint).
+#ifdef Q_OS_WIN
+    Theme::setCustomTitleBarColor(frame ? startup.titleBarColor : QColor());
+#else
+    Theme::setCustomTitleBarColor(startup.titleBarColor);
+#endif
+    Theme::setAeroTransparency(startup.aeroTransparency);
+    Theme::apply(scheme);
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 5)));
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     // Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana.
@@ -241,18 +286,22 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    PluginManager::instance()->scan();
-
     MainWindow window;
     window.show();
+    // Como Paint.NET: primero se ve lo fundamental (la ventana con sus barras y las ventanas de
+    // herramientas) y, ya pintada, se carga lo demás: los complementos (sus efectos y formatos
+    // aparecen en los menús al terminar), las imágenes que abrir y los avisos.
     const QStringList files = parser.positionalArguments();
-    if (files.isEmpty())
-        window.restoreSessionOrNew();
-    else
-        window.openFiles(files);
-    window.startupChecks();
-    if (!AppSettings::load().welcomed)
-        QTimer::singleShot(0, &window, &MainWindow::showWelcome);
+    afterFirstPaint(&window, [&window, files] {
+        PluginManager::instance()->scan();
+        if (files.isEmpty())
+            window.restoreSessionOrNew();
+        else
+            window.openFiles(files);
+        window.startupChecks();
+        if (!AppSettings::load().welcomed)
+            QTimer::singleShot(0, &window, &MainWindow::showWelcome);
+    });
     const int code = app.exec();
     if (window.restartRequested())
         QProcess::startDetached(QCoreApplication::applicationFilePath(),

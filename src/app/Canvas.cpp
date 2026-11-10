@@ -829,11 +829,58 @@ void Canvas::scrollContentsBy(int, int)
 // Entrada
 // ---------------------------------------------------------------------------
 
+bool Canvas::nudgePointer(QKeyEvent* e)
+{
+    QPoint d;
+    switch (e->key()) {
+    case Qt::Key_Left: d = QPoint(-1, 0); break;
+    case Qt::Key_Right: d = QPoint(1, 0); break;
+    case Qt::Key_Up: d = QPoint(0, -1); break;
+    case Qt::Key_Down: d = QPoint(0, 1); break;
+    default: return false;
+    }
+    if (e->modifiers() & ~(Qt::ControlModifier | Qt::KeypadModifier))
+        return false;
+    if (e->modifiers() & Qt::ControlModifier)
+        d *= 10;
+    const QPointF from = m_nudged ? m_nudgeView : m_mouseInside ? m_mouseView : QPointF(viewport()->mapFromGlobal(QCursor::pos()));
+    // Del centro de un píxel al centro del siguiente.
+    const QPointF img = viewToImage(from);
+    const QPointF target = QPointF(std::floor(img.x()) + 0.5 + d.x(), std::floor(img.y()) + 0.5 + d.y());
+    const QPointF previous = m_mouseView;
+    m_nudgeView = imageToView(target);
+    m_nudgeGlobal = viewport()->mapToGlobal(m_nudgeView).toPoint();
+    m_nudged = true;
+    m_mouseView = m_nudgeView;
+    m_mouseInside = true;
+    // El puntero del sistema va también (Wayland no deja moverlo: entonces solo lo sigue el pincel).
+    QCursor::setPos(m_nudgeGlobal);
+    emit cursorMoved(QPoint(int(std::floor(target.x())), int(std::floor(target.y()))), true);
+    updateRulers();
+    ToolEvent ev;
+    ev.viewPos = m_nudgeView;
+    ev.pos = target;
+    ev.buttons = m_toolButton != Qt::NoButton ? m_lastButtons : Qt::NoButton;
+    ev.modifiers = e->modifiers() & ~Qt::ControlModifier;
+    ev.pressure = m_tabletDown ? m_pressure : 1.0;
+    m_tool->mouseMove(ev);
+    if (m_toolButton != Qt::NoButton)
+        m_lastToolPos = m_nudgeView;
+    if (m_tool->brushOutlineDiameter() > 0) {
+        viewport()->update(brushOutlineRect(previous));
+        viewport()->update(brushOutlineRect(m_mouseView));
+    }
+    return true;
+}
+
 ToolEvent Canvas::makeEvent(QMouseEvent* e) const
 {
     ToolEvent ev;
-    ev.viewPos = e->position();
-    ev.pos = viewToImage(e->position());
+    // El movimiento que llega de la posición en que dejaron el puntero las flechas: en la exacta
+    // (la de la pantalla está redondeada a píxeles de la pantalla).
+    const bool nudged = m_nudged && e->globalPosition().toPoint() == m_nudgeGlobal;
+    ev.viewPos = nudged ? m_nudgeView : e->position();
+    ev.pos = viewToImage(ev.viewPos);
     ev.button = e->button();
     ev.buttons = e->buttons();
     ev.modifiers = e->modifiers();
@@ -948,12 +995,15 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent* e)
 void Canvas::mouseMoveEvent(QMouseEvent* e)
 {
     const QPointF previous = m_mouseView;
-    m_mouseView = e->position();
+    // El ratón de verdad se movió: las flechas vuelven a partir de donde esté.
+    if (m_nudged && e->globalPosition().toPoint() != m_nudgeGlobal)
+        m_nudged = false;
+    m_mouseView = m_nudged ? m_nudgeView : e->position();
     m_mouseInside = true;
     m_mouseSeen = true;
     if (!m_doc)
         return;
-    const QPointF img = viewToImage(e->position());
+    const QPointF img = viewToImage(m_mouseView);
     const QPoint px(int(std::floor(img.x())), int(std::floor(img.y())));
     emit cursorMoved(px, true);
     updateRulers();
@@ -1088,6 +1138,8 @@ void Canvas::keyPressEvent(QKeyEvent* e)
 {
     m_fitPending = false;
     if (m_spaceDown && keyboardScroll(e))
+        return;
+    if (m_tool && m_doc && m_tool->arrowKeysMovePointer() && nudgePointer(e))
         return;
     if (m_tool && m_doc && m_tool->keyPress(e))
         return;

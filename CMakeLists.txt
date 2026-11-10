@@ -108,6 +108,7 @@ add_library(kaintcore STATIC
     src/core/Resample.cpp
     src/core/Selection.cpp
     src/core/Stroke.cpp
+    src/core/Zalgo.cpp
     src/core/Zip.cpp
     src/core/effects/Effect.cpp
     src/core/effects/Adjustments.cpp

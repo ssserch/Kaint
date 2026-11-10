@@ -12,9 +12,11 @@
 #include <QWidget>
 #include <QWindow>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -25,6 +27,126 @@ namespace Animations {
 namespace {
 
 bool g_enabled = true;
+bool g_windowAnimation = false;
+int g_windowMs = 300;
+
+// Lo que se ve mientras se abre una ventana: su imagen, de un poco más pequeña y transparente a su
+// tamaño. Es una ventana aparte, encima, que no recibe el ratón; la de verdad, transparente debajo,
+// aparece al terminar. Así tampoco se ve la ventana a medio pintar.
+class OpenOverlay : public QWidget {
+public:
+    OpenOverlay(const QPixmap& shot, const QRect& geometry)
+        : QWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowTransparentForInput | Qt::NoDropShadowWindowHint)
+        , m_shot(shot)
+    {
+        setAttribute(Qt::WA_TranslucentBackground);
+        setAttribute(Qt::WA_ShowWithoutActivating);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_DeleteOnClose);
+        setProperty("kaintOpenOverlay", true);
+        setGeometry(geometry);
+    }
+
+    void setProgress(qreal t)
+    {
+        m_t = t;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        p.fillRect(rect(), Qt::transparent);
+        p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        // Del 92 % a su tamaño, desde el centro, y de transparente a opaca.
+        const qreal scale = 0.92 + 0.08 * m_t;
+        const QPointF c = QRectF(rect()).center();
+        p.translate(c);
+        p.scale(scale, scale);
+        p.translate(-c);
+        p.setOpacity(std::clamp(m_t, 0.0, 1.0));
+        p.drawPixmap(QPointF(0, 0), m_shot);
+    }
+
+private:
+    QPixmap m_shot;
+    qreal m_t = 0;
+};
+
+// Anima la apertura de las ventanas con el marco de Kaint (ver setWindowAnimation).
+class WindowOpener : public QObject {
+public:
+    using QObject::QObject;
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() != QEvent::Show || !g_enabled || !g_windowAnimation || !watched->isWidgetType())
+            return false;
+        auto* w = static_cast<QWidget*>(watched);
+        if (!w->isWindow() || w->windowType() != Qt::Dialog || !w->property("kaintWindowFrame").toBool()
+            || w->property("kaintOpenOverlay").toBool() || w->testAttribute(Qt::WA_DontShowOnScreen))
+            return false;
+        start(w);
+        return false;
+    }
+
+private:
+    static void start(QWidget* w)
+    {
+        // La imagen de la ventana ya colocada (el Show llega antes de mostrarla en la pantalla).
+        const QPixmap shot = w->grab();
+        if (shot.isNull())
+            return;
+        QPointer<QWidget> window(w);
+        w->setWindowOpacity(0.0);
+        QPointer<OpenOverlay> overlay = new OpenOverlay(shot, w->geometry());
+        overlay->show();
+        auto finish = [window, overlay] {
+            if (window)
+                window->setWindowOpacity(1.0);
+            if (overlay)
+                overlay->close();
+        };
+        QVariantAnimation* animation = run(overlay, 0, 1, g_windowMs, QEasingCurve::OutCubic,
+            [overlay](qreal v) {
+                if (overlay)
+                    overlay->setProgress(v);
+            },
+            finish);
+        // Si la ventana se cierra o se esconde antes de terminar, se acaba ya.
+        if (animation) {
+            QObject::connect(w, &QObject::destroyed, overlay.data(), [finish] { finish(); });
+            auto* hide = new HideWatcher(w, finish);
+            QObject::connect(animation, &QObject::destroyed, hide, &QObject::deleteLater);
+        }
+    }
+
+    class HideWatcher : public QObject {
+    public:
+        HideWatcher(QWidget* w, std::function<void()> done)
+            : QObject(w)
+            , m_done(std::move(done))
+        {
+            w->installEventFilter(this);
+        }
+
+        bool eventFilter(QObject*, QEvent* event) override
+        {
+            if (event->type() == QEvent::Hide && m_done) {
+                auto done = std::move(m_done);
+                m_done = nullptr;
+                done();
+            }
+            return false;
+        }
+
+    private:
+        std::function<void()> m_done;
+    };
+};
 
 // Fundido de una ventana emergente. Una ventana no tiene nada debajo con lo que mezclarse (en
 // su lugar quedaría lo que hubiera en memoria): primero se pinta su color de fondo y encima el
@@ -195,6 +317,18 @@ bool enabled()
     return g_enabled;
 }
 
+void setWindowAnimation(bool on, int ms)
+{
+    // En Wayland no se puede poner una ventana encima de otra en su sitio: la anima el escritorio.
+    g_windowAnimation = on && !QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
+    g_windowMs = std::clamp(ms, 50, 2000);
+}
+
+bool windowAnimation()
+{
+    return g_enabled && g_windowAnimation;
+}
+
 QEasingCurve listMoveCurve()
 {
     QEasingCurve curve(QEasingCurve::BezierSpline);
@@ -265,6 +399,7 @@ void install()
         return;
     installed = true;
     qApp->installEventFilter(new PopupFader(qApp));
+    qApp->installEventFilter(new WindowOpener(qApp));
     static ModalAttention attention;
     qApp->installNativeEventFilter(&attention);
 }

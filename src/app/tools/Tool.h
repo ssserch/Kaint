@@ -111,6 +111,9 @@ public:
     virtual void mouseRelease(const ToolEvent&) {}
     virtual void extraButton(const ToolEvent&, bool /*pressed*/) {}
     virtual bool keyPress(QKeyEvent*) { return false; }
+    // Las flechas mueven el puntero un píxel de la imagen (Ctrl: diez), pintando si hay un botón
+    // pulsado: el pincel y demás herramientas de trazos.
+    virtual bool arrowKeysMovePointer() const { return false; }
     virtual void inputMethod(QInputMethodEvent*) {}
     virtual bool wantsKeyboard() const { return false; }
     virtual QRectF inputCursorRect() const { return {}; }

@@ -25,7 +25,8 @@ class QWidget;
 namespace Theme {
 
 enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5, Blue = 6, Windows7 = 7, WindowsXP = 8,
-                    Windows98Alt = 9 };
+                    Windows98Alt = 9, Windows7Dark = 10 };
+constexpr int kLastScheme = 10;
 enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
 enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
 enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
@@ -151,14 +152,23 @@ Spec active();
 bool isDark();
 bool systemPrefersDark();
 
-// Color de la barra de título del sistema cuando no es la del tema (Windows con el color de
-// énfasis en las barras de título; en Linux, el que se elige en Configuración), o no válido.
+// Color de la barra de título cuando no es la del tema (el propio que se elige en Configuración
+// o, en Windows, el de énfasis si se muestra en las barras de título), o no válido. Los temas
+// Windows 98, 98 ALT y XP no llevan ninguno.
 QColor titleBarColor();
+// Windows 7: «Habilitar transparencia», como en Windows 7: el cristal de los marcos de las
+// ventanas deja ver lo de detrás (difuminado, donde el sistema lo permite). Solo con sus temas.
+// Devuelve si cambió (entonces hay que volver a aplicar el tema).
+bool setAeroTransparency(bool on);
+bool aeroTransparency();
+// El color propio elegido (no válido: ninguno).
+QColor customTitleBarColor();
 // El de la barra de título inactiva (al pasar a otro programa) cuando titleBarColor() es válido:
 // como en Windows, sin el color de énfasis.
 QColor inactiveTitleBarColor();
-// Linux: color propio de la barra superior y de las cabeceras de las ventanas, como el de énfasis
-// de Windows (no válido: el del tema). Se ve al volver a aplicar el tema.
+// Color propio de la barra superior y de las cabeceras de las ventanas, como el de énfasis de
+// Windows (no válido: el del tema; en Windows, solo con la barra de título de Kaint). Se ve al
+// volver a aplicar el tema.
 void setCustomTitleBarColor(const QColor& color);
 // Fuente de la interfaz elegida en Configuración (familia vacía o tamaño 0: los del sistema o del
 // tema). Se ve al volver a aplicar el tema.

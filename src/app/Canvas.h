@@ -123,6 +123,8 @@ private:
     void centerOn(const QPointF& imagePoint);
     qreal edgeOrigin(Qt::Orientation axis, bool start) const;
     ToolEvent makeEvent(QMouseEvent* e) const;
+    // Pincel y demás herramientas de trazos: una flecha mueve el puntero un píxel de la imagen.
+    bool nudgePointer(QKeyEvent* e);
     void onPixelsChanged(const QRect& r);
     void onSizeChanged();
     void onSelectionChanged();
@@ -166,6 +168,11 @@ private:
     QTimer m_autoScrollTimer;
     QPointF m_autoScrollDelta;
     QPointF m_lastToolPos;
+    // Dónde dejaron las flechas el puntero: la posición exacta en la vista y la redondeada en la
+    // pantalla (el movimiento que llega de ella se toma en la exacta).
+    QPointF m_nudgeView;
+    QPoint m_nudgeGlobal;
+    bool m_nudged = false;
     Qt::MouseButtons m_lastButtons;
     Qt::KeyboardModifiers m_lastModifiers;
     QPointF m_mouseView;

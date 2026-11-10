@@ -71,8 +71,10 @@ namespace {
 bool retroScheme(Scheme scheme)
 {
     return scheme == Scheme::Windows98 || scheme == Scheme::Windows98Alt || scheme == Scheme::WindowsXP
-        || scheme == Scheme::Windows7;
+        || scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark;
 }
+
+bool g_aeroTransparency = true;
 
 QString g_systemIconTheme;
 QString g_configStamp;
@@ -917,6 +919,33 @@ Spec windows7()
     return s;
 }
 
+// Windows 7 oscuro: el de Windows 7 con el cristal ahumado (como los temas oscuros de Aero) y los
+// controles en grises oscuros.
+Spec windows7Dark()
+{
+    Spec s = windows7();
+    s.dark = true;
+    s.accent = rgb(0x3399ff);
+    s.window = rgb(0x2b2d30);
+    s.text = rgb(0xe8e8e8);
+    s.base = rgb(0x1e1f22);
+    s.button = rgb(0x3a3d41);
+    s.border = rgb(0x5a5f66);
+    s.menuBar = rgb(0x2a3542);
+    s.menuBarText = rgb(0xf0f0f0);
+    s.toolBar = rgb(0x30343a);
+    s.statusBar = rgb(0x2b2d30);
+    s.panel = rgb(0x2b2d30);
+    s.panelTitle = rgb(0x3a4a5e);
+    s.panelTitleEnd = rgb(0x2c3a4c);
+    s.panelTitleText = rgb(0xffffff);
+    s.selection = rgb(0x26476b);
+    s.selectionBorder = rgb(0x4f86c6);
+    s.hover = rgb(0x2f3f52);
+    s.workspace = rgb(0x1b1d20);
+    return s;
+}
+
 // Windows 98 ALT: el clásico de Windows 2000 y XP, como Paint.NET en Windows XP con el estilo
 // clásico (el gris #d4d0c8, las cabeceras de azul oscuro a celeste, Tahoma y el lienzo sobre gris).
 Spec windows98Alt()
@@ -1357,6 +1386,72 @@ QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, s
 )");
 }
 
+// Windows 7 oscuro: los mismos degradados de cristal de 7.css, en grises oscuros y azules apagados.
+QString win7DarkStyleSheet()
+{
+    return QStringLiteral(R"(
+QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44,
+              stop:1 #2e3136); border: 1px solid #5f646b; border-radius: 3px; color: #ececec; padding: 3px 12px; }
+QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78, stop:0.45 #3a5470, stop:0.4501 #2f4862,
+                    stop:1 #284057); border-color: #5c95d0; }
+QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a3f56, stop:0.3 #284057,
+                    stop:0.5 #284057, stop:0.5001 #213650, stop:1 #1c2f45); border-color: #4c7fb4; }
+QPushButton:default { border-color: #5c95d0; }
+QPushButton:disabled { background: #33363a; border-color: #45494e; color: #7c7f84; }
+QComboBox:!editable { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44,
+                      stop:1 #2e3136); border: 1px solid #5f646b; border-radius: 3px; color: #ececec; }
+QComboBox:!editable:hover, QComboBox:!editable:on { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78,
+                      stop:0.45 #3a5470, stop:0.4501 #2f4862, stop:1 #284057); border-color: #5c95d0; }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: #1e1f22; border: 1px solid;
+              border-color: #5a5f66 #44484e #3e4247 #44484e; border-radius: 2px; color: #ececec; }
+QLineEdit:hover, QAbstractSpinBox:hover, QPlainTextEdit:hover, QTextEdit:hover, QComboBox:editable:hover {
+              border-color: #4f86c6 #3d5f86 #36547a #3d5f86; }
+QLineEdit:focus, QAbstractSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:editable:focus {
+              border-color: #5c95d0 #4677ab #3f6c9c #4677ab; }
+QMenuBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3c4048, stop:0.2 #3a3e45, stop:0.25 #33373d, stop:0.43 #33373d,
+           stop:0.48 #2a2d32, stop:1 #30343a); border-color: #4a5260; color: #f0f0f0; }
+QMenuBar::item:selected, QMenuBar::item:pressed { background: #3399ff; color: #ffffff; border-color: #3399ff; }
+QMenu { background: #2b2d30; color: #ececec; border: 1px solid rgba(255, 255, 255, 60); padding: 2px; }
+QMenu::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(92, 149, 208, 110),
+                       stop:0.9 rgba(60, 100, 150, 140), stop:1 rgba(92, 149, 208, 120)); border: 1px solid #4f86c6;
+                       border-radius: 3px; color: #ffffff; }
+QMenu::separator { height: 1px; background: #45494e; margin: 3px 2px 3px 28px; }
+QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3e45, stop:1 #2c2f34); }
+QToolBar#ToolOptionsBar { border-bottom: 1px solid #4a5260; }
+QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3d4f63, stop:1 #2f3f52); border: 1px solid #4f86c6;
+                    border-radius: 3px; }
+QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2c4560, stop:1 #223a54);
+                    border: 1px solid #5c95d0; border-radius: 3px; }
+QStatusBar { background: #2b2d30; border-top: 1px solid #45494e; }
+QHeaderView::section { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #44484e, stop:0.45 #3e4248, stop:0.4501 #383c42,
+                       stop:1 #33363b); border: 1px solid #4a4e54; padding: 2px 8px; color: #ececec; }
+QAbstractItemView { selection-background-color: #26476b; selection-color: #ffffff; }
+QComboBox QAbstractItemView { background: #1e1f22; color: #ececec; border: 1px solid #6a6f76; selection-background-color: #3399ff;
+                              selection-color: #ffffff; }
+QComboBox QAbstractItemView::item { padding: 1px 3px; border: none; border-radius: 0; }
+QComboBox QAbstractItemView::item:selected { background: #3399ff; color: #ffffff; }
+QComboBox QAbstractItemView::item:hover:!selected { background: transparent; }
+QListView::item:selected, QTreeView::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34587f,
+                       stop:1 #284768); border: 1px solid #4f86c6; border-radius: 3px; color: #ffffff; }
+QListView::item:hover:!selected, QTreeView::item:hover:!selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                       stop:0 #33404e, stop:1 #2c3846); border: 1px solid #3d5f86; border-radius: 3px; }
+QGroupBox { border: 1px solid #45494e; border-radius: 3px; margin-top: 8px; padding-top: 6px; }
+QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }
+QProgressBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3d41, stop:0.25 #44474b, stop:0.5 #2e3134, stop:1 #26282b);
+               border: 1px solid #5f646b; border-radius: 3px; text-align: center; color: #ececec; }
+QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #a6f2b3, stop:0.25 #5fe474, stop:0.5 #0bd82c,
+                      stop:1 #0bc128); border-radius: 2px; }
+QTabWidget::pane { background: #1e1f22; border: 1px solid #5f646b; }
+QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44,
+               stop:1 #2e3136); border: 1px solid #5f646b; padding: 3px 8px; margin-right: -1px; color: #ececec; }
+QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78, stop:0.45 #3a5470, stop:0.4501 #2f4862,
+               stop:1 #284057); border-color: #5c95d0; }
+QTabBar::tab:selected { background: #1e1f22; border-bottom-color: #1e1f22; }
+QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3d41, stop:1 #2b2d30); color: #e0e0e0;
+           border: 1px solid #6a6f76; border-radius: 2px; }
+)");
+}
+
 QString styleSheet(const Spec& s)
 {
     const int d = int(s.density);
@@ -1598,7 +1693,7 @@ QWidget#PanelButtons { background: #d5dde7; border-top: 1px solid #58769c; }
 )");
     // Windows 7: lo último, para que sus degradados manden.
     if (s.win7)
-        qss += win7StyleSheet();
+        qss += s.dark ? win7DarkStyleSheet() : win7StyleSheet();
     // Windows XP: lo mismo, con los de Luna.
     if (s.xp)
         qss += xpStyleSheet();
@@ -1687,6 +1782,8 @@ void apply(Scheme scheme)
         g_active = windowsXP();
     else if (scheme == Scheme::Windows7)
         g_active = withTitleBarColor(windows7(), g_titleBar);
+    else if (scheme == Scheme::Windows7Dark)
+        g_active = withTitleBarColor(windows7Dark(), g_titleBar);
     else if (scheme == Scheme::Blue)
         g_active = withTitleBarColor(blue(), g_titleBar);
     else
@@ -1715,7 +1812,7 @@ void apply(Scheme scheme)
         QFont font = g_baseFont;
         // Si no está la fuente (Microsoft Sans Serif o Segoe UI en Linux), las más parecidas.
         if (ownFont && !g_active.fontFamily.isEmpty())
-            font.setFamilies(scheme == Scheme::Windows7
+            font.setFamilies(scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark
                                  ? QStringList{g_active.fontFamily, QStringLiteral("Noto Sans"), QStringLiteral("Open Sans"),
                                                g_baseFont.family()}
                                  : QStringList{g_active.fontFamily, QStringLiteral("Tahoma"), QStringLiteral("DejaVu Sans"),
@@ -1804,6 +1901,13 @@ Spec active()
 
 QColor titleBarColor()
 {
+    // Los temas de antes (Windows 98, 98 ALT y XP) no llevan el color de énfasis ni el propio: sus
+    // barras son las suyas (el color de énfasis sobre la franja de Luna se veía mal).
+    if (g_current == Scheme::Windows98 || g_current == Scheme::Windows98Alt || g_current == Scheme::WindowsXP)
+        return {};
+    // El color propio de la barra superior (en Windows, con la barra de título de Kaint).
+    if (g_customTitleBar.isValid())
+        return g_customTitleBar;
 #ifdef Q_OS_WIN
     // "Mostrar el color de énfasis en las barras de título" (AccentColor está en ABGR).
     const QSettings dwm(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\DWM"), QSettings::NativeFormat);
@@ -1812,19 +1916,34 @@ QColor titleBarColor()
         if (abgr != 0)
             return QColor(int(abgr & 0xff), int(abgr >> 8 & 0xff), int(abgr >> 16 & 0xff));
     }
-    return {};
-#else
-    return g_customTitleBar;
 #endif
+    return {};
+}
+
+QColor customTitleBarColor()
+{
+    return g_customTitleBar;
+}
+
+bool setAeroTransparency(bool on)
+{
+    const bool changed = g_aeroTransparency != on;
+    g_aeroTransparency = on;
+    return changed;
+}
+
+bool aeroTransparency()
+{
+    return g_aeroTransparency && active().win7 && g_current != Scheme::Kde;
 }
 
 QColor inactiveTitleBarColor()
 {
 #ifdef Q_OS_WIN
-    // Si se eligió uno en el registro (AccentColorInactive, ABGR), ese.
+    // Si se eligió uno en el registro (AccentColorInactive, ABGR), ese (salvo con el color propio).
     const QSettings dwm(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\DWM"), QSettings::NativeFormat);
     const QVariant inactive = dwm.value(QStringLiteral("AccentColorInactive"));
-    if (inactive.isValid()) {
+    if (inactive.isValid() && !g_customTitleBar.isValid()) {
         const auto abgr = quint32(inactive.toLongLong());
         return QColor(int(abgr & 0xff), int(abgr >> 8 & 0xff), int(abgr >> 16 & 0xff));
     }
@@ -1958,7 +2077,7 @@ void Notifier::systemSettingChanged()
     g_systemDark = readSystemScheme() == 1 ? 1 : 0;
     // Claro, oscuro y sistema llevan el color de énfasis de las barras de título (Windows).
     const bool accented = g_current == Scheme::System || g_current == Scheme::Light || g_current == Scheme::Dark
-                       || g_current == Scheme::Blue || g_current == Scheme::Windows7;
+                       || g_current == Scheme::Blue || g_current == Scheme::Windows7 || g_current == Scheme::Windows7Dark;
     if ((before != g_systemDark && g_current == Scheme::System) || (accented && titleBarColor() != g_titleBar))
         apply(g_current);
 }

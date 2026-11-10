@@ -28,6 +28,7 @@
 #include <QSet>
 #include <QShortcut>
 #include <QSlider>
+#include <QStyleOption>
 #include <QTabWidget>
 #include <QSpinBox>
 #include <QToolButton>
@@ -59,24 +60,42 @@ QWidget* header(const QString& text, QWidget* parent, bool line = true)
     return w;
 }
 
-// Franja con un degradado bajo un deslizador (Matiz, Temperatura...).
-class GradientStrip : public QWidget {
+// Deslizador con el riel pintado con un degradado, como los de Matiz y saturación de Paint.NET:
+// el riel lleva los colores (el matiz, la saturación, la claridad) y el estilo dibuja solo el
+// tirador encima.
+class GradientSlider : public QSlider {
 public:
-    GradientStrip(const QList<QColor>& colors, QWidget* parent)
-        : QWidget(parent)
+    GradientSlider(const QList<QColor>& colors, QWidget* parent)
+        : QSlider(Qt::Horizontal, parent)
         , m_colors(colors)
     {
-        setFixedHeight(5);
     }
 
 protected:
     void paintEvent(QPaintEvent*) override
     {
         QPainter p(this);
-        QLinearGradient g(rect().topLeft(), rect().topRight());
+        QStyleOptionSlider opt;
+        initStyleOption(&opt);
+        const QRect groove = style()->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderGroove, this);
+        const QRect handle = style()->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this);
+        constexpr int kTrack = 6;
+        const QRect track(groove.left() + 2, handle.top() + (handle.height() - kTrack) / 2, groove.width() - 4, kTrack);
+        // Los colores van de donde queda el centro del tirador en el mínimo a donde queda en el
+        // máximo: el color bajo el tirador es el del valor.
+        const qreal half = handle.width() / 2.0;
+        QLinearGradient g(QPointF(groove.left() + half, 0), QPointF(groove.right() + 1 - half, 0));
         for (int i = 0; i < m_colors.size(); ++i)
             g.setColorAt(m_colors.size() > 1 ? double(i) / (m_colors.size() - 1) : 0, m_colors[i]);
-        p.fillRect(rect().adjusted(6, 0, -6, 0), g);
+        const QColor border = palette().color(QPalette::Mid);
+        p.save();
+        if (!isEnabled())
+            p.setOpacity(0.4);
+        p.fillRect(track, border);
+        p.fillRect(track.adjusted(1, 1, -1, -1), g);
+        p.restore();
+        opt.subControls = QStyle::SC_SliderHandle;
+        style()->drawComplexControl(QStyle::CC_Slider, &opt, &p, this);
     }
 
 private:
@@ -221,7 +240,7 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
             title(false);
             describe();
             auto* row = new QHBoxLayout;
-            auto* slider = new QSlider(Qt::Horizontal, this);
+            QSlider* slider = p.gradient.isEmpty() ? new QSlider(Qt::Horizontal, this) : new GradientSlider(p.gradient, this);
             slider->setRange(int(std::round(p.min * scale)), int(std::round(p.max * scale)));
             auto* reset = resetButton(this);
             const double current = m_values.value(key, p.def).toDouble();
@@ -262,15 +281,7 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
                 });
             }
             slider->setValue(int(std::round(current * scale)));
-            if (p.gradient.isEmpty()) {
-                row->addWidget(slider, 1);
-            } else {
-                auto* column = new QVBoxLayout;
-                column->setSpacing(0);
-                column->addWidget(slider);
-                column->addWidget(new GradientStrip(p.gradient, this));
-                row->addLayout(column, 1);
-            }
+            row->addWidget(slider, 1);
             row->addWidget(spin);
             row->addWidget(reset);
             layout->addLayout(row);

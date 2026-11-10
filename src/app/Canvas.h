@@ -60,6 +60,9 @@ public:
     void setOverlayAnts(bool on);
     void updateCursor();
     void setToolCursor(const QCursor& cursor);
+    // Con el puntero quieto sobre el lienzo, la herramienta vuelve a elegir su cursor (después de
+    // deshacer, por ejemplo: la flecha de girar no se queda si ya no hay nada que girar).
+    void refreshToolCursor();
 
     // Reglas y unidades de medida
     void setRulersVisible(bool on);

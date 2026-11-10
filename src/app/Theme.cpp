@@ -714,8 +714,11 @@ private:
             const int x = handle.left() + (handle.width() - kTrack) / 2;
             track = QRect(x, groove.top() + 2, kTrack, groove.height() - 4);
         }
-        p->fillRect(track, trackBorder);
-        p->fillRect(track.adjusted(1, 1, -1, -1), trackFill);
+        // Sin el riel cuando el deslizador lo pinta él (los degradados de Matiz y saturación).
+        if (opt->subControls & SC_SliderGroove) {
+            p->fillRect(track, trackBorder);
+            p->fillRect(track.adjusted(1, 1, -1, -1), trackFill);
+        }
         p->setRenderHint(QPainter::Antialiasing);
         const bool active = opt->activeSubControls & SC_SliderHandle;
         QColor fill = g_active.accent.isValid() ? g_active.accent : QColor(0x00, 0x78, 0xd7);
@@ -1556,6 +1559,10 @@ QAbstractSpinBox::up-arrow { image: url("%6"); width: 9px; height: 9px; }
 QAbstractSpinBox::down-arrow { image: url("%1"); width: 9px; height: 9px; }
 QAbstractSpinBox::up-arrow:disabled, QAbstractSpinBox::up-arrow:off { image: url("%7"); }
 QAbstractSpinBox::down-arrow:disabled, QAbstractSpinBox::down-arrow:off { image: url("%2"); }
+QToolButton::menu-button { subcontrol-origin: padding; subcontrol-position: center right; width: 12px; border: none;
+                           background: transparent; }
+QToolButton::menu-arrow { image: url("%1"); width: 8px; height: 8px; }
+QToolButton::menu-arrow:disabled { image: url("%2"); }
 )")
                .arg(indicatorImage("down", arrow), indicatorImage("down", disabled), css(mix(field, s.base, 0.5)),
                     css(s.hover), css(s.selection), indicatorImage("up", arrow), indicatorImage("up", disabled));

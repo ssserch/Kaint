@@ -19,6 +19,7 @@
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/ImageDialogs.h"
+#include "app/dialogs/SaveAllDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/WelcomeDialog.h"
@@ -588,6 +589,19 @@ QString zoomText(qreal z)
     return (pct < 10 ? QString::number(pct, 'f', 1) : QString::number(std::round(pct))) + QStringLiteral(" %");
 }
 
+// La imagen de un archivo para agregarla como capa: también de los formatos con capas (.pdn, .ora,
+// los de los complementos), acoplada.
+QImage readLayerImage(const QString& path, QString* error)
+{
+    QImage image = ImageIO::readImage(path, error);
+    if (!image.isNull())
+        return image;
+    QString loadError;
+    if (const std::unique_ptr<Document> doc(ImageIO::load(path, &loadError)); doc)
+        return doc->flattened();
+    return {};
+}
+
 } // namespace
 
 MainWindow::MainWindow()
@@ -743,6 +757,8 @@ void MainWindow::createActions()
                              [this] { saveAs(m_doc); }, doc);
     A["saveAll"] = makeAction(tr("Guardar &todo"), {"document-save-all"}, QKeySequence(QStringLiteral("Ctrl+Alt+S")),
                               [this] { saveAll(); }, doc);
+    A["saveAllAs"] = makeAction(tr("Guardar to&dos..."), {"document-save-all", "document-save-as"}, {},
+                                [this] { saveAllAs(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
     A["close"] = makeAction(tr("&Cerrar"), {"document-close"}, QKeySequence(QStringLiteral("Ctrl+W")),
                             [this] { closeDocument(m_doc); }, doc);
@@ -1002,7 +1018,7 @@ void MainWindow::createMenus()
     QMenu* acquire = file->addMenu(Icons::theme({"scanner", "document-import"}), tr("A&dquirir"));
     acquire->addAction(A["acquire"]);
     file->addSeparator();
-    file->addActions({A["save"], A["saveAs"], A["saveAll"]});
+    file->addActions({A["save"], A["saveAs"], A["saveAll"], A["saveAllAs"]});
     file->addSeparator();
     file->addAction(A["print"]);
     file->addSeparator();
@@ -1156,6 +1172,15 @@ void MainWindow::createToolBars()
     main->setMovable(false);
     main->setIconSize(QSize(16, 16));
     main->addActions({A["new"], A["open"], A["save"]});
+    // Guardar lleva una flecha con las opciones de guardado (Guardar como, Guardar todos...).
+    if (auto* saveButton = qobject_cast<QToolButton*>(main->widgetForAction(A["save"]))) {
+        auto* saveMenu = new QMenu(saveButton);
+        saveMenu->addActions({A["save"], A["saveAs"]});
+        saveMenu->addSeparator();
+        saveMenu->addActions({A["saveAll"], A["saveAllAs"]});
+        saveButton->setMenu(saveMenu);
+        saveButton->setPopupMode(QToolButton::MenuButtonPopup);
+    }
     main->addSeparator();
     main->addAction(A["print"]);
     main->addSeparator();
@@ -2164,6 +2189,76 @@ bool MainWindow::saveAll()
     return true;
 }
 
+void MainWindow::saveAllAs()
+{
+    if (m_docs.isEmpty())
+        return;
+    finishTool();
+    // Los formatos de Guardar como, por su primera extensión.
+    QStringList suffixes, labels;
+    for (const QString& filter : ImageIO::saveFilter().split(QStringLiteral(";;"))) {
+        const QRegularExpressionMatch m = QRegularExpression(QStringLiteral("\\*\\.([A-Za-z0-9]+)")).match(filter);
+        if (!m.hasMatch() || suffixes.contains(m.captured(1).toLower()))
+            continue;
+        suffixes << m.captured(1).toLower();
+        labels << filter;
+    }
+    QList<SaveAllDialog::Entry> entries;
+    QString folder = m_lastDir;
+    for (Document* d : std::as_const(m_docs)) {
+        SaveAllDialog::Entry e;
+        e.filePath = d->filePath();
+        e.image = d == m_doc ? m_canvas->composite() : d->flattened();
+        if (e.filePath.isEmpty()) {
+            e.name = d->untitledName().isEmpty() ? tr("Sin título") : d->untitledName();
+            e.suffix = d->layerCount() > 1 ? QStringLiteral("ora") : QStringLiteral("png");
+            e.checked = true;
+        } else {
+            const QFileInfo info(e.filePath);
+            e.name = info.completeBaseName();
+            e.suffix = ImageIO::isWritable(e.filePath) ? info.suffix().toLower()
+                                                        : (d->layerCount() > 1 ? QStringLiteral("ora") : QStringLiteral("png"));
+            // Las que ya están guardadas, sin marcar.
+            e.checked = d->isModified() || !ImageIO::isWritable(e.filePath);
+            if (folder.isEmpty())
+                folder = info.absolutePath();
+        }
+        entries << e;
+    }
+    if (folder.isEmpty())
+        folder = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    SaveAllDialog dlg(entries, suffixes, labels, folder, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    const QList<Document*> docs = m_docs;
+    QStringList errors;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    for (const SaveAllDialog::Result& r : dlg.results()) {
+        Document* doc = docs.value(r.index);
+        if (!doc || !m_docs.contains(doc))
+            continue;
+        const QString suffix = QFileInfo(r.path).suffix().toLower();
+        ImageIO::SaveOptions options = m_saveOptions.value(suffix);
+        if (ImageIO::isAnimation(r.path) && !m_saveOptions.contains(suffix))
+            options.loops = doc->gifLoops();
+        QString error;
+        // Los formatos sin capas guardan la imagen acoplada (sin tocar las capas del documento).
+        if (!ImageIO::save(doc, r.path, options, &error)) {
+            errors << tr("«%1»: %2").arg(QFileInfo(r.path).fileName(), error);
+            continue;
+        }
+        doc->setFilePath(r.path);
+        doc->markSaved();
+        AppState::instance()->addRecentFile(r.path, doc == m_doc ? m_canvas->composite() : doc->flattened());
+        m_lastDir = QFileInfo(r.path).absolutePath();
+        updateTab(doc);
+    }
+    QApplication::restoreOverrideCursor();
+    updateTitle();
+    if (!errors.isEmpty())
+        QMessageBox::critical(this, tr("No se pudo guardar"), tr("No se pudieron guardar:\n\n%1").arg(errors.join(QLatin1Char('\n'))));
+}
+
 bool MainWindow::closeAll(Document* except)
 {
     finishTool();
@@ -2431,14 +2526,62 @@ void MainWindow::dropEvent(QDropEvent* e)
             files.removeAll(f);
         installDroppedPlugins(plugins);
     }
-    if (!files.isEmpty()) {
-        openFiles(files);
-    } else if (e->mimeData()->hasImage()) {
-        const QImage img = qvariant_cast<QImage>(e->mimeData()->imageData());
-        if (!img.isNull())
-            addDocument(Document::createFromImage(img, tr("Fondo")));
-    }
+    QImage image;
+    if (files.isEmpty() && e->mimeData()->hasImage())
+        image = qvariant_cast<QImage>(e->mimeData()->imageData());
     e->acceptProposedAction();
+    // La pregunta se hace después de terminar el arrastre: con un diálogo modal dentro de dropEvent,
+    // la aplicación de origen se quedaría esperando.
+    if (!files.isEmpty() || !image.isNull())
+        QTimer::singleShot(0, this, [this, files, image] { handleDroppedImages(files, image); });
+}
+
+void MainWindow::handleDroppedImages(const QStringList& files, const QImage& image)
+{
+    if (!m_doc) {
+        if (!files.isEmpty())
+            openFiles(files);
+        else
+            addDocument(Document::createFromImage(image, tr("Fondo")));
+        return;
+    }
+    const bool several = files.size() > 1;
+    TaskDialog dlg(tr("Arrastrar y soltar"), Icons::theme({"insert-image", "document-import"}), QImage(),
+                   several ? tr("¿Qué quiere hacer con los archivos?") : tr("¿Qué quiere hacer con el archivo?"), this);
+    const int open = dlg.addChoice(Icons::theme({"document-open", "folder-open"}),
+                                   several ? tr("Abrir los archivos") : tr("Abrir el archivo"),
+                                   several ? tr("Abre las imágenes.") : tr("Abre la imagen."), true);
+    const int layer = dlg.addChoice(Icons::theme({"layer-import", "document-import", "insert-image"}),
+                                    several ? tr("Agregar capas") : tr("Agregar capa"),
+                                    several ? tr("Carga las imágenes y las agrega como capas nuevas en la imagen actual.")
+                                            : tr("Carga la imagen y la agrega como una nueva capa en la imagen actual."));
+    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), QString());
+    const int answer = dlg.choose();
+    if (answer == open) {
+        if (!files.isEmpty())
+            openFiles(files);
+        else
+            addDocument(Document::createFromImage(image, tr("Fondo")));
+    } else if (answer == layer) {
+        finishTool();
+        if (files.isEmpty()) {
+            importImageAsLayer(image, m_doc->nextLayerName());
+            return;
+        }
+        for (const QString& path : files) {
+            QString error;
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            const QImage img = readLayerImage(path, &error);
+            QApplication::restoreOverrideCursor();
+            if (img.isNull()) {
+                QMessageBox::critical(this, tr("No se pudo importar"), tr("No se pudo abrir «%1»:\n%2").arg(path, error));
+                continue;
+            }
+            if (!importImageAsLayer(img, QFileInfo(path).completeBaseName()))
+                break;
+            m_lastDir = QFileInfo(path).absolutePath();
+        }
+    }
 }
 
 void MainWindow::installDroppedPlugins(const QStringList& files)
@@ -3075,17 +3218,25 @@ void MainWindow::importLayer()
     if (path.isEmpty())
         return;
     QString error;
-    const QImage img = ImageIO::readImage(path, &error);
+    const QImage img = readLayerImage(path, &error);
     if (img.isNull()) {
         QMessageBox::critical(this, tr("No se pudo importar"), error);
         return;
     }
-    if (!ensureCanvasFits(img, tr("Importar desde archivo"), true))
-        return;
-    auto layer = std::make_shared<Layer>(QFileInfo(path).completeBaseName(), m_doc->size());
-    Raster::blit(layer->image, img.convertToFormat(kLayerFormat), QPoint(0, 0));
+    importImageAsLayer(img, QFileInfo(path).completeBaseName());
+}
+
+bool MainWindow::importImageAsLayer(const QImage& image, const QString& name)
+{
+    if (!m_doc || image.isNull())
+        return false;
+    if (!ensureCanvasFits(image, tr("Importar desde archivo"), true))
+        return false;
+    auto layer = std::make_shared<Layer>(name, m_doc->size());
+    Raster::blit(layer->image, image.convertToFormat(kLayerFormat), QPoint(0, 0));
     push(new InsertLayerCommand(m_doc, m_doc->activeIndex() + 1, layer, tr("Importar desde archivo")),
          QStringLiteral("document-import"));
+    return true;
 }
 
 void MainWindow::flipLayer(bool horizontal)

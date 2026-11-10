@@ -11,6 +11,7 @@
 #include <QPainter>
 #include <QPainterPathStroker>
 
+#include <algorithm>
 #include <cmath>
 
 void renderVector(LayerEdit& edit, const QRect& area, const VectorDrawFn& draw)
@@ -78,6 +79,70 @@ QPen strokePen(const QBrush& brush, Qt::PenCapStyle cap)
     const ToolSettings& s = AppState::instance()->tools();
     QPen pen(brush, s.brushSize, s.dash, s.dash == Qt::SolidLine ? cap : Qt::FlatCap, Qt::RoundJoin);
     return pen;
+}
+
+// Contorno continuo de un trazado: la unión de sus tramos, cada uno con los extremos redondos
+// (lo mismo que un trazo con uniones redondas). El trazo de Qt da la vuelta al borde de dentro
+// cuando el pincel es más grueso que una curva cerrada (una forma muy pequeña, las burbujas de la
+// nube) y deja agujeros en medio: «círculos negativos».
+QPainterPath solidOutline(const QPainterPath& path, qreal width)
+{
+    QPainterPathStroker stroker;
+    stroker.setWidth(width);
+    stroker.setCapStyle(Qt::RoundCap);
+    stroker.setJoinStyle(Qt::RoundJoin);
+    QPainterPath out;
+    out.setFillRule(Qt::WindingFill);
+    for (const QPolygonF& poly : path.toSubpathPolygons()) {
+        if (poly.isEmpty())
+            continue;
+        // Un punto (la forma de un cuadro sin tamaño): un círculo del grosor del pincel.
+        if (const QRectF bounds = poly.boundingRect(); bounds.width() == 0 && bounds.height() == 0) {
+            out.addEllipse(bounds.topLeft(), width / 2, width / 2);
+            continue;
+        }
+        for (int i = 0; i + 1 < poly.size(); ++i) {
+            if (poly[i] == poly[i + 1])
+                continue;
+            QPainterPath segment;
+            segment.moveTo(poly[i]);
+            segment.lineTo(poly[i + 1]);
+            out.addPath(stroker.createStroke(segment));
+        }
+    }
+    return out;
+}
+
+// La forma dentro de su cuadro: el contorno (medio pincel hacia fuera) y lo que sobresale de la
+// figura (los bultos de la nube) quedan dentro, como en Paint.NET, así que el cuadro de la forma
+// la abarca entera. 'width' es el grosor del contorno (0: solo relleno) y se reduce si el cuadro
+// es más pequeño que él.
+QPainterPath shapeInBox(const ToolSettings& s, const QRectF& local, const QTransform& toCanvas, qreal* width)
+{
+    QRectF box = local.normalized();
+    // Escala del cuadro en cada eje (el contorno se mide en píxeles del lienzo, el cuadro no).
+    const qreal sx = std::max(1e-6, std::hypot(toCanvas.m11(), toCanvas.m12()));
+    const qreal sy = std::max(1e-6, std::hypot(toCanvas.m21(), toCanvas.m22()));
+    qreal w = *width;
+    if (w > 0) {
+        w = std::min({w, box.width() * sx, box.height() * sy});
+        const qreal dx = w / 2 / sx, dy = w / 2 / sy;
+        box.adjust(dx, dy, -dx, -dy);
+    }
+    *width = w;
+    QPainterPath path = toolShapePath(s, box);
+    // Lo que sobresale del rectángulo (curvas de la nube, formas personalizadas), dentro.
+    const QRectF b = path.boundingRect();
+    if (b.isValid() && b != box) {
+        const qreal kx = b.width() > 1e-9 ? box.width() / b.width() : 1;
+        const qreal ky = b.height() > 1e-9 ? box.height() / b.height() : 1;
+        QTransform fit;
+        fit.translate(box.left(), box.top());
+        fit.scale(kx, ky);
+        fit.translate(-b.left(), -b.top());
+        path = fit.map(path);
+    }
+    return toCanvas.map(path);
 }
 
 // Punta de flecha en 'tip' apuntando en la dirección 'angleDeg' (de Qt).
@@ -527,8 +592,12 @@ void ShapesTool::render()
     const AppState* app = AppState::instance();
     const QColor main = m_secondary ? app->secondary() : app->primary();
     const QColor other = m_secondary ? app->primary() : app->secondary();
-    const QPainterPath path = m_box.transform().map(toolShapePath(s, m_box.localRect()));
-    const double w = s.brushSize;
+    qreal w = s.shapeStyle == ShapeStyle::Fill ? 0 : s.brushSize;
+    const QPainterPath path = shapeInBox(s, m_box.localRect(), m_box.transform(), &w);
+    // Con línea continua, el contorno se rellena (sin los agujeros del trazo de Qt en las curvas
+    // más pequeñas que el pincel); con guiones, el trazo de siempre.
+    const bool solid = s.dash == Qt::SolidLine;
+    const QPainterPath outline = solid && w > 0 ? solidOutline(path, w) : QPainterPath();
     const QRect region = path.boundingRect().adjusted(-w - 3, -w - 3, w + 3, w + 3).toAlignedRect();
     renderVector(m_edit, region, [&](QPainter& p, bool coverage) {
         const QBrush fillBrush = coverage ? QBrush(Qt::black)
@@ -540,9 +609,15 @@ void ShapesTool::render()
             p.setBrush(fillBrush);
             p.drawPath(path);
         }
-        if (s.shapeStyle != ShapeStyle::Fill) {
+        if (s.shapeStyle != ShapeStyle::Fill && solid) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(lineBrush);
+            p.drawPath(outline);
+        } else if (s.shapeStyle != ShapeStyle::Fill) {
+            QPen pen = strokePen(lineBrush, Qt::SquareCap);
+            pen.setWidthF(w);
             p.setBrush(Qt::NoBrush);
-            p.setPen(strokePen(lineBrush, Qt::SquareCap));
+            p.setPen(pen);
             p.drawPath(path);
         }
     });
@@ -589,6 +664,8 @@ void ShapesTool::mousePress(const ToolEvent& e)
 void ShapesTool::mouseMove(const ToolEvent& e)
 {
     if (!m_edit.isActive()) {
+        // Sin forma que editar (también después de deshacerla) no queda la flecha de girar ni la mano.
+        canvas()->setToolCursor(cursor());
         return;
     }
     if (m_creating) {

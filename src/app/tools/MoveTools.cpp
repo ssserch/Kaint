@@ -486,8 +486,11 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
 void MoveSelectionTool::mouseMove(const ToolEvent& e)
 {
     if (!m_active) {
-        if (!document() || document()->selection().isEmpty())
+        if (!document() || document()->selection().isEmpty()) {
+            // Sin selección (también después de deshacerla) no queda la flecha de girar ni la mano.
+            canvas()->setToolCursor(cursor());
             return;
+        }
         syncBox();
         int handle = -1;
         const TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle);

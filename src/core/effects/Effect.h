@@ -15,6 +15,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <vector>
 
 using ParamValues = QVariantMap;
 
@@ -86,6 +87,9 @@ struct CurvesValue {
 
     CurvesValue();
     std::array<uint8_t, 256> lut(int channel) const;
+    // La curva del canal en 'samples' puntos de x = 0 a 255 (sin redondear, entre 0 y 255): para
+    // dibujarla suave.
+    std::vector<double> sample(int channel, int samples) const;
     bool operator==(const CurvesValue& o) const { return mode == o.mode && points == o.points; }
 };
 Q_DECLARE_METATYPE(CurvesValue)

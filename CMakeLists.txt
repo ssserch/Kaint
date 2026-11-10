@@ -174,6 +174,7 @@ add_library(kaintui STATIC
     src/app/dialogs/EffectDialog.cpp
     src/app/dialogs/ImageDialogs.cpp
     src/app/dialogs/PluginCatalogDialog.cpp
+    src/app/dialogs/SaveAllDialog.cpp
     src/app/dialogs/SaveConfigDialog.cpp
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp

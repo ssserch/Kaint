@@ -1827,6 +1827,66 @@ Do you want to replace them?</translation>
         <source>Se puede volver a activar en Configuración &gt; Actualizaciones.</source>
         <translation>It can be turned back on in Settings &gt; Updates.</translation>
     </message>
+    <message>
+        <source>Arrastrar y soltar</source>
+        <translation>Drag and Drop</translation>
+    </message>
+    <message>
+        <source>¿Qué quiere hacer con el archivo?</source>
+        <translation>What would you like to do with the file?</translation>
+    </message>
+    <message>
+        <source>¿Qué quiere hacer con los archivos?</source>
+        <translation>What would you like to do with the files?</translation>
+    </message>
+    <message>
+        <source>Abrir el archivo</source>
+        <translation>Open the file</translation>
+    </message>
+    <message>
+        <source>Abrir los archivos</source>
+        <translation>Open the files</translation>
+    </message>
+    <message>
+        <source>Abre la imagen.</source>
+        <translation>Opens the image.</translation>
+    </message>
+    <message>
+        <source>Abre las imágenes.</source>
+        <translation>Opens the images.</translation>
+    </message>
+    <message>
+        <source>Agregar capa</source>
+        <translation>Add layer</translation>
+    </message>
+    <message>
+        <source>Agregar capas</source>
+        <translation>Add layers</translation>
+    </message>
+    <message>
+        <source>Carga la imagen y la agrega como una nueva capa en la imagen actual.</source>
+        <translation>Loads the image and adds it as a new layer in the current image.</translation>
+    </message>
+    <message>
+        <source>Carga las imágenes y las agrega como capas nuevas en la imagen actual.</source>
+        <translation>Loads the images and adds them as new layers in the current image.</translation>
+    </message>
+    <message>
+        <source>Guardar to&amp;dos...</source>
+        <translation>Save All &amp;As...</translation>
+    </message>
+    <message>
+        <source>«%1»: %2</source>
+        <translation>“%1”: %2</translation>
+    </message>
+    <message>
+        <source>No se pudieron guardar:
+
+%1</source>
+        <translation>Could not save:
+
+%1</translation>
+    </message>
 </context>
 <context>
     <name>MoveSelectedTool</name>
@@ -4158,6 +4218,144 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Arrastra para inclinar; con el botón derecho (o Mayús) para girar</source>
         <translation>Drag to tilt; with the right button (or Shift) to rotate</translation>
+    </message>
+</context>
+<context>
+    <name>SaveAllDialog</name>
+    <message>
+        <source>Arrastra para cambiar el orden</source>
+        <translation>Drag to change the order</translation>
+    </message>
+    <message>
+        <source>Guardar esta imagen</source>
+        <translation>Save this image</translation>
+    </message>
+    <message>
+        <source>Guardar todos</source>
+        <translation>Save All</translation>
+    </message>
+    <message>
+        <source>Marca las imágenes que quieres guardar. Puedes darles a todas el mismo nombre con un número (# marca dónde va; si no, va al final) y el mismo formato, o cambiar cada una. Arrastra los puntos de una imagen para cambiar el orden en que se numeran.</source>
+        <translation>Check the images you want to save. You can give them all the same name with a number (# marks where it goes; otherwise it goes at the end) and the same format, or change each one. Drag the dots of an image to change the order in which they are numbered.</translation>
+    </message>
+    <message>
+        <source>Marcar o desmarcar todas</source>
+        <translation>Check or uncheck all</translation>
+    </message>
+    <message>
+        <source>Todas</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Nombre para todas (por ejemplo, foto#)</source>
+        <translation>Name for all (for example, photo#)</translation>
+    </message>
+    <message>
+        <source>El mismo nombre para todas las imágenes marcadas, con un número que las distingue. # marca dónde va el número; si no hay, va al final.</source>
+        <translation>The same name for all the checked images, with a number that tells them apart. # marks where the number goes; if there is none, it goes at the end.</translation>
+    </message>
+    <message>
+        <source>El mismo formato para todas</source>
+        <translation>The same format for all</translation>
+    </message>
+    <message>
+        <source>Varios</source>
+        <translation>Mixed</translation>
+    </message>
+    <message>
+        <source>Cifras mínimas del número: con 3, 001, 002...</source>
+        <translation>Minimum digits of the number: with 3, 001, 002...</translation>
+    </message>
+    <message>
+        <source>nombre</source>
+        <translation>name</translation>
+    </message>
+    <message>
+        <source>Formato del número</source>
+        <translation>Number format</translation>
+    </message>
+    <message>
+        <source>La primera también lleva número</source>
+        <translation>The first one is numbered too</translation>
+    </message>
+    <message>
+        <source>Sin marcar, la primera se llama como el nombre común (foto, foto1, foto2...).</source>
+        <translation>Unchecked, the first one gets just the common name (photo, photo1, photo2...).</translation>
+    </message>
+    <message>
+        <source>Número:</source>
+        <translation>Number:</translation>
+    </message>
+    <message>
+        <source>Empieza en</source>
+        <translation>Starts at</translation>
+    </message>
+    <message>
+        <source>Cifras</source>
+        <translation>Digits</translation>
+    </message>
+    <message>
+        <source>Sin guardar</source>
+        <translation>Not saved</translation>
+    </message>
+    <message>
+        <source>Examinar...</source>
+        <translation>Browse...</translation>
+    </message>
+    <message>
+        <source>Carpeta</source>
+        <translation>Folder</translation>
+    </message>
+    <message>
+        <source>Carpeta:</source>
+        <translation>Folder:</translation>
+    </message>
+    <message>
+        <source>Las que ya tienen archivo se guardan en su misma carpeta</source>
+        <translation>Images that already have a file are saved in their own folder</translation>
+    </message>
+    <message>
+        <source>Guardar</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n imagen(es) para guardar</source>
+        <translation>
+            <numerusform>%n image to save</numerusform>
+            <numerusform>%n images to save</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>«%1» no es un nombre de archivo válido.</source>
+        <translation>“%1” is not a valid file name.</translation>
+    </message>
+    <message>
+        <source>Elige la carpeta donde se guardan.</source>
+        <translation>Choose the folder to save them in.</translation>
+    </message>
+    <message>
+        <source>Hay varias imágenes que se guardarían como «%1».</source>
+        <translation>Several images would be saved as “%1”.</translation>
+    </message>
+    <message>
+        <source>No se pudo crear la carpeta «%1».</source>
+        <translation>Could not create the folder “%1”.</translation>
+    </message>
+    <message>
+        <source>Ya existen estos archivos:
+
+%1
+
+¿Quieres reemplazarlos?</source>
+        <translation>These files already exist:
+
+%1
+
+Do you want to replace them?</translation>
     </message>
 </context>
 <context>

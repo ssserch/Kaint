@@ -1036,7 +1036,7 @@ QCursor miniToolCursor(const QString& name, bool ibeam)
 
 QCursor rotateCursor(qreal angle)
 {
-    // La flecha de girar de paint.js: un trozo de circunferencia de 32° con una punta en cada
+    // La flecha de girar de paint.js: un trozo de circunferencia de 30° con una punta en cada
     // extremo, que pasa por el puntero y se curva alrededor del centro del giro.
     const int steps = 72;
     const int index = ((int(std::lround(angle / (2 * M_PI) * steps)) % steps) + steps) % steps;
@@ -1045,7 +1045,8 @@ QCursor rotateCursor(qreal angle)
         return *it;
     const qreal a = index * 2 * M_PI / steps;
     const qreal scale = drawnCursorSize() / 24.0;
-    const int side = int(std::ceil(40 * scale));
+    // Más pequeña que la de paint.js (la flecha medía casi 30 px con el cursor de 24): unos 18.
+    const int side = int(std::ceil(28 * scale));
     const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
     QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
     image.setDevicePixelRatio(dpr);
@@ -1055,7 +1056,7 @@ QCursor rotateCursor(qreal angle)
         p.setRenderHint(QPainter::Antialiasing);
         p.translate(side / 2.0, side / 2.0);
         p.scale(scale, scale);
-        const qreal radius = 50, halfArc = qDegreesToRadians(16.0);
+        const qreal radius = 34, halfArc = qDegreesToRadians(15.0);
         const QPointF center(std::cos(a) * radius, std::sin(a) * radius);
         const qreal middle = a + M_PI, start = middle - halfArc, end = middle + halfArc;
         auto onArc = [&](qreal t) { return center + QPointF(std::cos(t), std::sin(t)) * radius; };
@@ -1069,15 +1070,15 @@ QCursor rotateCursor(qreal angle)
             const QPointF tip = onArc(t);
             const QPointF tangent(direction * -std::sin(t), direction * std::cos(t));
             const QPointF normal(-tangent.y(), tangent.x());
-            const QPointF base = tip - tangent * 4;
-            path.moveTo(base + normal * 2.25);
+            const QPointF base = tip - tangent * 3.5;
+            path.moveTo(base + normal * 2);
             path.lineTo(tip);
-            path.lineTo(base - normal * 2.25);
+            path.lineTo(base - normal * 2);
         };
         arrow(start, -1);
         arrow(end, 1);
         p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(Qt::white, 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setPen(QPen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawPath(path);
         p.setPen(QPen(Qt::black, 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawPath(path);

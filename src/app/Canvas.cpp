@@ -16,6 +16,8 @@
 #include <QScopedValueRollback>
 #include <QScrollBar>
 #include <QTabletEvent>
+#include <QTimer>
+#include <QUndoStack>
 
 #include <cmath>
 
@@ -87,6 +89,7 @@ void Canvas::setDocument(Document* doc)
     if (m_doc) {
         m_views.insert(m_doc, {m_zoom, m_origin});
         disconnect(m_doc, nullptr, this, nullptr);
+        disconnect(m_doc->undoStack(), nullptr, this, nullptr);
     }
     m_doc = doc;
     m_toolButton = Qt::NoButton;
@@ -96,6 +99,10 @@ void Canvas::setDocument(Document* doc)
         connect(m_doc, &Document::sizeChanged, this, &Canvas::onSizeChanged);
         connect(m_doc, &Document::selectionChanged, this, &Canvas::onSelectionChanged);
         connect(m_doc, &Document::colorSpaceChanged, this, &Canvas::onColorSpaceChanged);
+        // Deshacer y rehacer cambian lo que hay bajo el puntero (el cuadro de la selección, la
+        // forma que se edita): el cursor se vuelve a elegir sin esperar a que se mueva el ratón.
+        connect(m_doc->undoStack(), &QUndoStack::indexChanged, this,
+                [this] { QTimer::singleShot(0, this, &Canvas::refreshToolCursor); });
         m_composite = QImage(m_doc->size(), QImage::Format_ARGB32_Premultiplied);
         onColorSpaceChanged();
 
@@ -477,6 +484,23 @@ void Canvas::setToolCursor(const QCursor& cursor)
 {
     if (!m_panning && !m_spaceDown)
         applyCursor(cursor);
+}
+
+void Canvas::refreshToolCursor()
+{
+    if (!m_doc || !m_tool || m_panning || m_spaceDown || m_toolButton != Qt::NoButton)
+        return;
+    // Primero el de la herramienta; si el puntero está sobre el lienzo, la herramienta lo cambia
+    // por el que toca ahí, como al pasar el ratón.
+    applyCursor(m_tool->cursor());
+    if (!m_mouseInside || !viewport()->underMouse())
+        return;
+    ToolEvent ev;
+    ev.viewPos = m_mouseView;
+    ev.pos = viewToImage(m_mouseView);
+    ev.buttons = Qt::NoButton;
+    ev.modifiers = QGuiApplication::keyboardModifiers();
+    m_tool->mouseMove(ev);
 }
 
 void Canvas::applyCursor(const QCursor& cursor)

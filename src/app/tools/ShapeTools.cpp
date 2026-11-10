@@ -683,7 +683,7 @@ void ShapesTool::mouseMove(const ToolEvent& e)
     if (m_box.mode() != TransformBox::Mode::None) {
         m_box.update(e.pos, e.modifiers);
         if (m_box.mode() == TransformBox::Mode::Rotate)
-            canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+            canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos), true));
         render();
         return;
     }

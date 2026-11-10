@@ -69,9 +69,10 @@ int cursorSize();
 // Cursor con el icono actual de una herramienta ("paintbrush", "zoom"...), a la medida del cursor
 // del sistema y con el punto activo en su punta; si no hay icono, 'fallback'.
 QCursor toolCursor(const QString& name, Qt::CursorShape fallback = Qt::CrossCursor);
-// Flecha curva de girar (como la de paint.js) apuntando a lo largo del giro: 'angle' es la
-// dirección, en radianes, desde el puntero hacia el centro del giro.
-QCursor rotateCursor(qreal angle);
+// Cursor de girar, como el de Paint.NET: la mano (agarrando con 'grabbing') delante de una flecha
+// doble curva a lo largo del giro. 'angle' es la dirección, en radianes, desde el puntero hacia el
+// centro del giro.
+QCursor rotateCursor(qreal angle, bool grabbing = false);
 // Como en Paint.NET, el puntero normal (la flecha o, con 'ibeam', la I del texto) con un dibujo en
 // miniatura al lado: 'paint' lo dibuja en el rectángulo que recibe y 'key' lo identifica en la
 // caché. Lo usan la selección, el degradado, la línea, el texto y las formas.

@@ -268,7 +268,7 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
     if (m_box.mode() == TransformBox::Mode::Rotate) {
         emit hintChanged(tr("Ángulo: %1°").arg(m_box.rotationDegrees(), 0, 'f', 2));
         // La flecha de girar sigue al puntero alrededor del centro.
-        canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+        canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos), true));
     }
     repaint();
 }
@@ -512,7 +512,7 @@ void MoveSelectionTool::mouseMove(const ToolEvent& e)
     if (m_box.mode() == TransformBox::Mode::Rotate) {
         emit hintChanged(tr("Ángulo: %1°").arg(m_box.rotationDegrees(), 0, 'f', 2));
         // La flecha de girar sigue al puntero alrededor del centro.
-        canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+        canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos), true));
     }
     repaint();
 }

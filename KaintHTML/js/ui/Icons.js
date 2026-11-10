@@ -1345,9 +1345,13 @@ export function miniCursor(name, ibeam = false) {
 
 // Flecha curva de girar (como la de paint.js): 'angle' es la dirección, en radianes, desde el
 // puntero hacia el centro del giro.
-export function rotateCursor(angle) {
+// Cursor de girar, como el de Paint.NET (rotateCursor de Kaint): detrás, la flecha doble curva y,
+// delante, la mano (agarrando mientras se gira). La flecha es un trozo de circunferencia alrededor
+// del centro del giro que pasa un poco por fuera del puntero: sus puntas asoman a los lados de la
+// mano y siguen al puntero al girar.
+export function rotateCursor(angle, grabbing = false) {
     const steps = 72, index = ((Math.round((angle / (2 * Math.PI)) * steps) % steps) + steps) % steps;
-    const key = `rotate/${index}`;
+    const key = `rotate/${index}/${grabbing ? 1 : 0}`;
     if (!cursorCache[key]) {
         const a = (index * 2 * Math.PI) / steps;
         const draw = (scale) => {
@@ -1356,7 +1360,9 @@ export function rotateCursor(angle) {
             const ctx = canvas.getContext("2d");
             ctx.translate(side / 2, side / 2);
             ctx.scale(scale, scale);
-            const radius = 50, half = (16 * Math.PI) / 180, cx = Math.cos(a) * radius, cy = Math.sin(a) * radius;
+            // 'a' apunta del puntero al centro del giro; la mitad del arco queda 'offset' más allá.
+            const radius = 26, offset = 6, half = (34 * Math.PI) / 180;
+            const cx = Math.cos(a) * (radius - offset), cy = Math.sin(a) * (radius - offset);
             const middle = a + Math.PI, start = middle - half, end = middle + half;
             const on = (t) => [cx + Math.cos(t) * radius, cy + Math.sin(t) * radius];
             const trace = () => {
@@ -1365,20 +1371,24 @@ export function rotateCursor(angle) {
                 for (const [t, d] of [[start, -1], [end, 1]]) {
                     const [tx, ty] = on(t), gx = d * -Math.sin(t), gy = d * Math.cos(t), nx = -gy, ny = gx;
                     const bx = tx - gx * 4, by = ty - gy * 4;
-                    ctx.moveTo(bx + nx * 2.25, by + ny * 2.25);
+                    ctx.moveTo(bx + nx * 2.75, by + ny * 2.75);
                     ctx.lineTo(tx, ty);
-                    ctx.lineTo(bx - nx * 2.25, by - ny * 2.25);
+                    ctx.lineTo(bx - nx * 2.75, by - ny * 2.75);
                 }
             };
             ctx.lineCap = ctx.lineJoin = "round";
             trace();
             ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 3.5;
+            ctx.lineWidth = 3;
             ctx.stroke();
             trace();
             ctx.strokeStyle = "#000";
             ctx.lineWidth = 1;
             ctx.stroke();
+            // La mano encima, con su punto activo (el centro) en el del cursor.
+            ctx.translate(-12, -12);
+            ctx.scale(24 / 20, 24 / 20);
+            (grabbing ? drawPanGrab : drawPan)(ctx);
             return canvas.toDataURL();
         };
         cursorCache[key] = `-webkit-image-set(url(${draw(1)}) 1x, url(${draw(2)}) 2x) 20 20, alias`;

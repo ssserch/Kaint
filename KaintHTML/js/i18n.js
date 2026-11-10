@@ -5,6 +5,8 @@ import en from "./i18n/en.js";
 
 const extra = {
     "Archivo": "File",
+    "Opciones de guardado": "Save options",
+    "Tipo de zalgo": "Zalgo type",
     "Botones de las ventanas:": "Window buttons:",
     "El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, Windows XP y Windows 98, «Windows 10» usa el del tema.":
         "The close button of the windows and dialogs. With the Windows 7, Windows XP and Windows 98 themes, “Windows 10” uses the theme's own.",

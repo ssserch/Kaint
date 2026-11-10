@@ -101,6 +101,9 @@ export class CanvasView extends EventTarget {
         on("pixels", (e) => this.invalidate(e.detail.rect));
         on("layers", () => this.invalidate(null));
         on("selection", () => this.update());
+        // Deshacer y rehacer cambian lo que hay bajo el puntero (el cuadro de la selección, la forma
+        // que se edita): la herramienta vuelve a elegir su cursor sin esperar a que se mueva el ratón.
+        on("history", () => setTimeout(() => this.refreshToolCursor(), 0));
         on("size", () => {
             doc.compositeCanvas = null;
             this.clampOrigin();
@@ -1118,6 +1121,13 @@ export class CanvasView extends EventTarget {
         this.dragEvent = te;
         this.tool?.onPointerDown?.(te);
         this.update();
+    }
+
+    refreshToolCursor() {
+        if (!this.doc || !this.tool || !this.mouse || this.dragEvent || this.panning)
+            return;
+        this.setCursor(this.tool.cursor?.() ?? "default");
+        this.tool.onPointerMove?.({ ...this.mouse, buttons: 0 });
     }
 
     pointerMove(e) {

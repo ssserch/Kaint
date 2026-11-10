@@ -216,6 +216,99 @@ class EditableTool extends Tool {
     }
 }
 
+// El trazado como líneas quebradas (una por subtrazado; las cerradas, con su último tramo): se
+// recorre con un contexto de mentira que solo mira por dónde pasa. Sirve para saber lo que ocupa de
+// verdad (las curvas de la nube sobresalen de su rectángulo) y para el contorno sin agujeros.
+function tracePolylines(trace) {
+    const lines = [];
+    let current = null, cx = 0, cy = 0;
+    const start = (x, y) => {
+        current = [[x, y]];
+        lines.push(current);
+        cx = x; cy = y;
+    };
+    const to = (x, y) => {
+        if (!current)
+            start(x, y);
+        else
+            current.push([x, y]);
+        cx = x; cy = y;
+    };
+    // Tramos según lo largo que sea (unos 3 píxeles cada uno).
+    const stepsFor = (length) => Math.min(256, Math.max(8, Math.ceil(length / 3)));
+    const arcPoints = (x, y, rx, ry, rot, a0, a1, ccw) => {
+        let sweep = a1 - a0;
+        if (!ccw && sweep < 0) sweep = (sweep % (2 * Math.PI)) + 2 * Math.PI;
+        if (ccw && sweep > 0) sweep = (sweep % (2 * Math.PI)) - 2 * Math.PI;
+        if (Math.abs(a1 - a0) >= 2 * Math.PI) sweep = ccw ? -2 * Math.PI : 2 * Math.PI;
+        const cr = Math.cos(rot), sr = Math.sin(rot), steps = stepsFor(Math.abs(sweep) * Math.max(rx, ry));
+        for (let i = 0; i <= steps; ++i) {
+            const t = a0 + (sweep * i) / steps, px = Math.cos(t) * rx, py = Math.sin(t) * ry;
+            to(x + px * cr - py * sr, y + px * sr + py * cr);
+        }
+    };
+    const fake = {
+        beginPath() {},
+        closePath() {
+            if (current && current.length > 1) {
+                const [x, y] = current[0];
+                current.push([x, y]);
+                current.closed = true;
+                current = null;
+                cx = x; cy = y;
+            }
+        },
+        moveTo: start,
+        lineTo: to,
+        quadraticCurveTo(qx, qy, x, y) {
+            const px = cx, py = cy, steps = stepsFor(Math.hypot(qx - px, qy - py) + Math.hypot(x - qx, y - qy));
+            for (let i = 1; i <= steps; ++i) {
+                const t = i / steps, u = 1 - t;
+                to(u * u * px + 2 * u * t * qx + t * t * x, u * u * py + 2 * u * t * qy + t * t * y);
+            }
+        },
+        bezierCurveTo(ax, ay, bx, by, x, y) {
+            const px = cx, py = cy, steps = stepsFor(Math.hypot(ax - px, ay - py) + Math.hypot(bx - ax, by - ay) + Math.hypot(x - bx, y - by));
+            for (let i = 1; i <= steps; ++i) {
+                const t = i / steps, u = 1 - t;
+                to(u * u * u * px + 3 * u * u * t * ax + 3 * u * t * t * bx + t * t * t * x,
+                   u * u * u * py + 3 * u * u * t * ay + 3 * u * t * t * by + t * t * t * y);
+            }
+        },
+        arc(x, y, r, a0, a1, ccw = false) {
+            arcPoints(x, y, r, r, 0, a0, a1, ccw);
+        },
+        ellipse(x, y, rx, ry, rot, a0, a1, ccw = false) {
+            arcPoints(x, y, rx, ry, rot, a0, a1, ccw);
+        },
+        arcTo(x1, y1, x2, y2) {
+            to(x1, y1);
+            to(x2, y2);
+        },
+        rect(x, y, w, h) {
+            start(x, y);
+            to(x + w, y);
+            to(x + w, y + h);
+            to(x, y + h);
+            this.closePath();
+        },
+        roundRect(x, y, w, h) {
+            this.rect(x, y, w, h);
+        },
+    };
+    trace(fake);
+    return lines;
+}
+
+function polylineBounds(lines) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const line of lines)
+        for (const [x, y] of line) {
+            x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+        }
+    return Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+
 function strokeStyle(ctx, s, css) {
     ctx.strokeStyle = css;
     ctx.lineWidth = s.brushSize;
@@ -520,15 +613,47 @@ export class ShapesTool extends EditableTool {
             line = AppState.secondary;
             fill = s.shapeStyle === "fill" ? AppState.secondary : AppState.primary;
         }
+        // La forma dentro de su cuadro, como en Paint.NET (y en Kaint): el contorno (medio pincel
+        // hacia fuera) y lo que sobresale de la figura (los bultos de la nube) quedan dentro, así que
+        // el cuadro la abarca entera. Si el cuadro es más pequeño que el pincel, el contorno se afina.
+        const lw = s.shapeStyle === "fill" ? 0 : Math.min(s.brushSize, n.w, n.h);
+        const inner = { x: n.x + lw / 2, y: n.y + lw / 2, w: Math.max(0, n.w - lw), h: Math.max(0, n.h - lw) };
+        const lines = tracePolylines((fake) => shapePath(fake, s.shape, inner.x, inner.y, inner.w, inner.h, s.cornerRadius));
+        const b = polylineBounds(lines);
+        const fit = b && (Math.abs(b.x - inner.x) > 1e-6 || Math.abs(b.y - inner.y) > 1e-6 || Math.abs(b.w - inner.w) > 1e-6 || Math.abs(b.h - inner.h) > 1e-6);
+        const kx = fit && b.w > 1e-9 ? inner.w / b.w : 1, ky = fit && b.h > 1e-9 ? inner.h / b.h : 1;
+        const place = fit ? ([x, y]) => [inner.x + (x - b.x) * kx, inner.y + (y - b.y) * ky] : (p) => p;
+        // Con línea continua, el contorno es la unión de sus tramos, cada uno con los extremos
+        // redondos: el trazo del navegador da la vuelta al borde de dentro cuando el pincel es más
+        // grueso que una curva cerrada (las burbujas de la nube) y deja agujeros: «círculos negativos».
+        const solid = !(dashPatterns[s.dash] || []).length;
         this.renderWith((ctx, paint) => {
             ctx.beginPath();
-            shapePath(ctx, s.shape, n.x, n.y, n.w, n.h, s.cornerRadius);
+            ctx.save();
+            if (fit) {
+                ctx.translate(inner.x, inner.y);
+                ctx.scale(b.w > 1e-9 ? inner.w / b.w : 1, b.h > 1e-9 ? inner.h / b.h : 1);
+                ctx.translate(-b.x, -b.y);
+            }
+            shapePath(ctx, s.shape, inner.x, inner.y, inner.w, inner.h, s.cornerRadius);
+            ctx.restore();
             if (s.shapeStyle !== "outline") {
                 ctx.fillStyle = paint(fill);
                 ctx.fill(shapeFillRule(s.shape));
             }
             if (s.shapeStyle !== "fill") {
                 strokeStyle(ctx, s, paint(line));
+                ctx.lineWidth = lw;
+                if (solid) {
+                    ctx.beginPath();
+                    for (const polyline of lines)
+                        for (let i = 0; i + 1 < polyline.length; ++i) {
+                            const [x0, y0] = place(polyline[i]), [x1, y1] = place(polyline[i + 1]);
+                            ctx.moveTo(x0, y0);
+                            ctx.lineTo(x1, y1);
+                        }
+                    ctx.lineCap = "round";
+                }
                 ctx.stroke();
             }
         });

@@ -4,7 +4,7 @@ import { Tool } from "./Tool.js";
 import { drawMoveHandle, nearPoint, StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { paintBucket } from "../core/PaintBucket.js";
-import { blendPixels, cloneCanvas, context, lerpStraight, scaleAlpha, unionRect } from "../core/Raster.js";
+import { blendPixels, cloneCanvas, context, drawBlended, lerpStraight, rgba, scaleAlpha, unionRect } from "../core/Raster.js";
 import { tr } from "../i18n.js";
 
 // Base de las dos: pasos editables como en Kaint (crear, "Editar…"/"Mover…" y "Finalizar…") y
@@ -346,13 +346,29 @@ export class GradientTool extends EditableFill {
             this.drag.handle === 0 ? (this.a = p) : (this.b = p);
         }
         this.drag.moved = true;
-        this.render();
         this.steps.changed();
+        // Una vez por fotograma (el ratón puede mandar varios movimientos en cada uno) y, mientras se
+        // arrastra, con los degradados del navegador (en la tarjeta gráfica) cuando se puede.
+        this.scheduleFrame();
+    }
+
+    scheduleFrame() {
+        if (this.frameQueued)
+            return;
+        this.frameQueued = true;
+        requestAnimationFrame(() => {
+            this.frameQueued = false;
+            if (this.editing && this.drag)
+                this.render(true);
+        });
     }
 
     onPointerUp() {
         const moved = this.drag?.moved;
         this.drag = null;
+        // Al soltar, el degradado exacto (el de Kaint, píxel a píxel).
+        if (moved && this.editing)
+            this.render();
         if (moved && (this.a.x !== this.b.x || this.a.y !== this.b.y))
             this.commitStep();
     }
@@ -370,6 +386,111 @@ export class GradientTool extends EditableFill {
         AppState.updateTools(st.settings);
         AppState.setPrimary(st.primary);
         AppState.setSecondary(st.secondary);
+    }
+
+    // Como value(), pero preparada una vez por dibujo (sin crear funciones en cada píxel).
+    valueFunction() {
+        // Las mismas cuentas que value() (el resultado es idéntico, píxel a píxel).
+        const s = this.settings, ax = this.a.x, ay = this.a.y, dx = this.b.x - ax, dy = this.b.y - ay;
+        const len2 = dx * dx + dy * dy, len = Math.sqrt(len2), repeat = s.gradientRepeat;
+        const shape = repeat === "wrapped" ? (t) => t - Math.floor(t)
+            : repeat === "reflected" ? (t) => {
+                const m = Math.abs(t) % 2;
+                return m <= 1 ? m : 2 - m;
+            }
+            : (t) => Math.min(1, Math.max(0, t));
+        const dot = (vx, vy) => (vx * dx + vy * dy) / len2;
+        switch (s.gradient) {
+        case "reflected": return (px, py) => shape(Math.abs(dot(px - ax, py - ay)));
+        case "diamond": return (px, py) => {
+            const vx = px - ax, vy = py - ay;
+            return shape(Math.abs((vx * dx + vy * dy) / len2) + Math.abs((vx * dy - vy * dx) / len2));
+        };
+        case "radial": return (px, py) => shape(Math.hypot(px - ax, py - ay) / len);
+        case "conical": return (px, py) => {
+            const vx = px - ax, vy = py - ay;
+            return Math.abs(Math.atan2(vx * dy - vy * dx, vx * dx + vy * dy)) / Math.PI;
+        };
+        case "spiralcw":
+        case "spiralccw": {
+            const cw = s.gradient === "spiralcw";
+            return (px, py) => {
+                const vx = px - ax, vy = py - ay;
+                const ang = Math.atan2(vx * dy - vy * dx, vx * dx + vy * dy) / (2 * Math.PI);
+                const t = Math.hypot(vx, vy) / len + (cw ? -ang : ang);
+                return t - Math.floor(t);
+            };
+        }
+        default: return (px, py) => shape(dot(px - ax, py - ay));
+        }
+    }
+
+    // Mientras se arrastra: el degradado lo dibuja el navegador (lineal, reflejado, radial y cónico,
+    // sin repetir, en modo de color y con los modos de fusión que tiene). Devuelve false si este no
+    // se puede (entonces se dibuja el exacto).
+    renderFast(b, clipCanvas) {
+        const s = this.settings, mode = s.blend;
+        if (s.gradientTransparency || s.gradientRepeat !== "none" || !["linear", "reflected", "radial", "conical"].includes(s.gradient)
+            || !(mode === "normal" || mode === "overwrite" || ["multiply", "overlay", "difference", "lighten", "darken", "screen"].includes(mode)))
+            return false;
+        const doc = this.doc, w = doc.width, h = doc.height;
+        let c0 = AppState.primary, c1 = AppState.secondary;
+        if (this.reversed) [c0, c1] = [c1, c0];
+        const ax = this.a.x, ay = this.a.y, dx = this.b.x - ax, dy = this.b.y - ay, len = Math.hypot(dx, dy);
+        this.fastCanvas ||= document.createElement("canvas");
+        const top = this.fastCanvas;
+        if (top.width !== w || top.height !== h) {
+            top.width = w;
+            top.height = h;
+        }
+        const tctx = top.getContext("2d");
+        tctx.globalCompositeOperation = "copy";
+        let g;
+        if (s.gradient === "radial") {
+            g = tctx.createRadialGradient(ax, ay, 0, ax, ay, len);
+            g.addColorStop(0, rgba(c0));
+            g.addColorStop(1, rgba(c1));
+        } else if (s.gradient === "conical") {
+            g = tctx.createConicGradient(Math.atan2(dy, dx), ax, ay);
+            g.addColorStop(0, rgba(c0));
+            g.addColorStop(0.5, rgba(c1));
+            g.addColorStop(1, rgba(c0));
+        } else if (s.gradient === "reflected") {
+            g = tctx.createLinearGradient(ax - dx, ay - dy, ax + dx, ay + dy);
+            g.addColorStop(0, rgba(c1));
+            g.addColorStop(0.5, rgba(c0));
+            g.addColorStop(1, rgba(c1));
+        } else {
+            g = tctx.createLinearGradient(ax, ay, ax + dx, ay + dy);
+            g.addColorStop(0, rgba(c0));
+            g.addColorStop(1, rgba(c1));
+        }
+        tctx.fillStyle = g;
+        tctx.fillRect(b.x, b.y, b.w, b.h);
+        tctx.globalCompositeOperation = "destination-in";
+        if (clipCanvas)
+            tctx.drawImage(clipCanvas, 0, 0);
+        tctx.globalCompositeOperation = "source-over";
+        const pctx = context(this.preview);
+        pctx.save();
+        pctx.globalCompositeOperation = "copy";
+        pctx.drawImage(this.start, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+        pctx.restore();
+        if (mode === "overwrite") {
+            // Lo de dentro de la selección se sustituye: se quita y se suma el degradado.
+            pctx.save();
+            pctx.globalCompositeOperation = "destination-out";
+            if (clipCanvas)
+                pctx.drawImage(clipCanvas, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+            else
+                pctx.fillRect(b.x, b.y, b.w, b.h);
+            pctx.globalCompositeOperation = "lighter";
+            pctx.drawImage(top, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+            pctx.restore();
+        } else {
+            drawBlended(pctx, top, mode, 255, b);
+        }
+        return true;
     }
 
     // Parámetro del degradado (0..1) en el centro de un píxel, según el tipo y la repetición
@@ -405,19 +526,30 @@ export class GradientTool extends EditableFill {
 
     // Modo de color: del principal al secundario, compuesto con el modo de fusión; modo de
     // transparencia: del alfa del principal al inverso del alfa del secundario.
-    render() {
+    render(fast = false) {
         const doc = this.doc, s = this.settings, w = doc.width, h = doc.height, sel = doc.selection;
-        const clip = sel.clipMask(AppState.selectionAntialias());
+        const antialias = AppState.selectionAntialias();
+        const clip = sel.clipMask(antialias);
         const b = sel.bounds() || { x: 0, y: 0, w, h };
-        const startCtx = context(this.start), base = startCtx.getImageData(b.x, b.y, b.w, b.h), d = base.data;
-        const pctx = context(this.preview);
         const ddx = this.b.x - this.a.x, ddy = this.b.y - this.a.y;
+        if (fast && ddx * ddx + ddy * ddy >= 1 && this.renderFast(b, clip ? sel.clipCanvas(antialias) : null)) {
+            doc.pixelsChanged(this.layer, b);
+            this.rect = b;
+            return;
+        }
+        // Lo de debajo se lee una vez (leer el lienzo en cada movimiento costaba mucho).
+        const key = `${b.x},${b.y},${b.w},${b.h}`;
+        if (this.baseCache?.canvas !== this.start || this.baseCache.key !== key)
+            this.baseCache = { canvas: this.start, key, data: context(this.start).getImageData(b.x, b.y, b.w, b.h) };
+        const base = new ImageData(new Uint8ClampedArray(this.baseCache.data.data), b.w, b.h), d = base.data;
+        const pctx = context(this.preview);
         if (ddx * ddx + ddy * ddy < 1) {
             pctx.putImageData(base, b.x, b.y);
             doc.pixelsChanged(this.layer, b);
             this.rect = b;
             return;
         }
+        const value = this.valueFunction();
         let c0 = AppState.primary, c1 = AppState.secondary;
         if (this.reversed) [c0, c1] = [c1, c0];
         const weight = (x, y) => (clip ? clip[(b.y + y) * w + b.x + x] : 255);
@@ -425,7 +557,7 @@ export class GradientTool extends EditableFill {
             const a0 = (c0.a ?? 255) / 255, a1 = 1 - (c1.a ?? 255) / 255;
             for (let y = 0; y < b.h; ++y)
                 for (let x = 0; x < b.w; ++x) {
-                    const t = this.value(b.x + x + 0.5, b.y + y + 0.5), i = (y * b.w + x) * 4;
+                    const t = value(b.x + x + 0.5, b.y + y + 0.5), i = (y * b.w + x) * 4;
                     const faded = scaleAlpha(d[i + 3], Math.trunc((a0 + (a1 - a0) * t) * 255 + 0.5));
                     lerpStraight(d, i, d[i], d[i + 1], d[i + 2], faded, weight(x, y));
                 }
@@ -435,7 +567,7 @@ export class GradientTool extends EditableFill {
             const ca0 = c0.a ?? 255, ca1 = c1.a ?? 255;
             for (let y = 0; y < b.h; ++y)
                 for (let x = 0; x < b.w; ++x) {
-                    const t = Math.fround(this.value(b.x + x + 0.5, b.y + y + 0.5)), i = (y * b.w + x) * 4, m = weight(x, y);
+                    const t = Math.fround(value(b.x + x + 0.5, b.y + y + 0.5)), i = (y * b.w + x) * 4, m = weight(x, y);
                     const r = mix(c0.r, c1.r, t), g = mix(c0.g, c1.g, t), bl = mix(c0.b, c1.b, t), al = mix(ca0, ca1, t);
                     if (overwrite) {
                         lerpStraight(d, i, r, g, bl, al, m);

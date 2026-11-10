@@ -432,7 +432,7 @@ class MoveToolBase extends Tool {
             if (snap)
                 box.snapToPixels();
             this.setHint(tr("Ángulo: %1°", ((-box.angle * 180) / Math.PI).toFixed(2)));
-            this.view.setCursor(rotateCursor(this.angleTo(box, e)));
+            this.view.setCursor(rotateCursor(this.angleTo(box, e), true));
         }
         this.scheduleRender(d.session);
     }

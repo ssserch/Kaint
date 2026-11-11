@@ -3755,6 +3755,7 @@ void MainWindow::applySettings()
     WindowFrame::setRoundedCorners(m_settings.uiStyle == 1 && m_settings.windowsVersion == 11);
 #endif
     WindowFrame::setButtonsOnLeft(m_settings.titleButtonsLeft);
+    WindowFrame::setWin7Shape(WindowFrame::Win7Shape(std::clamp(m_settings.win7ButtonShape, 0, 2)));
     placeCaptionButtons();
     WindowFrame::refreshAll();
     // La fuente de la interfaz y (Linux) el color de la barra superior se ven al volver a aplicar

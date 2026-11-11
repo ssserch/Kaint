@@ -34,6 +34,12 @@ Buttons buttons();
 // El que se dibuja: con el tema Windows 98, «Windows 10» (el predeterminado) son los de Windows 98.
 Buttons effectiveButtons();
 // Los botones a la izquierda de la barra (en el orden cerrar, minimizar, maximizar) o a la derecha.
+// Forma de los botones de Windows 7: colgando del borde de arriba (como siempre), unidos al marco
+// como el de cerrar de los diálogos (con su contorno oscuro encima y algo separados del borde) o
+// sueltos y cuadrados, con las cuatro esquinas redondeadas (como las X de Paint.NET).
+enum class Win7Shape { Hanging = 0, Attached = 1, Square = 2 };
+void setWin7Shape(Win7Shape shape);
+Win7Shape win7Shape();
 void setButtonsOnLeft(bool on);
 bool buttonsOnLeft();
 // Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana. En Linux se

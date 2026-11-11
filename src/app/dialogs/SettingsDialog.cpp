@@ -144,6 +144,7 @@ AppSettings AppSettings::load()
         a.customFrame = false;
     a.titleButtons = buttons < 0 ? defaultButtons : buttons;
     a.titleButtonsLeft = get("titleButtonsLeft", a.titleButtonsLeft);
+    a.win7ButtonShape = std::clamp(get("win7ButtonShape", a.win7ButtonShape), 0, 2);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
@@ -221,6 +222,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("windows10Frame"), customFrame);
     s.setValue(QStringLiteral("titleButtons"), titleButtons);
     s.setValue(QStringLiteral("titleButtonsLeft"), titleButtonsLeft);
+    s.setValue(QStringLiteral("win7ButtonShape"), win7ButtonShape);
     s.setValue(QStringLiteral("windowsVersion"), windowsVersion);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
     s.setValue(QStringLiteral("cursorStyle"), cursorStyle);
@@ -755,7 +757,41 @@ QWidget* SettingsDialog::createInterfacePage()
                                   "Windows 11."),
                             Qt::ToolTipRole);
     recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
-    titleForm->addRow(tr("Botones de la barra de título:"), buttonsStyle);
+    // Windows 7 (elegidos o, con los temas Windows 7, los predeterminados): al lado, su forma.
+    auto* win7Shape = new QComboBox(page.widget);
+    win7Shape->addItem(tr("Colgando del borde"), 0);
+    win7Shape->setItemData(0, tr("Como siempre: cuelgan del borde de arriba de la ventana."), Qt::ToolTipRole);
+    win7Shape->addItem(tr("Unidos al marco"), 1);
+    win7Shape->setItemData(1, tr("Como el de cerrar de los diálogos (Configuración): cuelgan del contorno oscuro de la ventana, "
+                                 "algo separados del borde."),
+                           Qt::ToolTipRole);
+    win7Shape->addItem(tr("Cuadrados"), 2);
+    win7Shape->setItemData(2, tr("Sueltos, con las cuatro esquinas redondeadas, como las X de las ventanas de Paint.NET en Windows 7."),
+                           Qt::ToolTipRole);
+    win7Shape->setCurrentIndex(std::max(0, win7Shape->findData(m_settings.win7ButtonShape)));
+    win7Shape->setToolTip(tr("La forma de los botones de Windows 7."));
+    auto* buttonsRow = new QWidget(page.widget);
+    {
+        auto* l = new QHBoxLayout(buttonsRow);
+        l->setContentsMargins(0, 0, 0, 0);
+        buttonsStyle->setParent(buttonsRow);
+        win7Shape->setParent(buttonsRow);
+        l->addWidget(buttonsStyle);
+        l->addWidget(win7Shape);
+        l->addStretch();
+    }
+    auto syncWin7Shape = [this, win7Shape] {
+        const bool win7Theme = m_settings.colorScheme == int(Theme::Scheme::Windows7)
+                               || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark);
+        win7Shape->setVisible(m_settings.titleButtons == 3 || (m_settings.titleButtons == 0 && win7Theme));
+    };
+    syncWin7Shape();
+    connect(this, &SettingsDialog::settingsChanged, win7Shape, syncWin7Shape);
+    connect(win7Shape, &QComboBox::activated, this, [this, win7Shape](int i) {
+        m_settings.win7ButtonShape = win7Shape->itemData(i).toInt();
+        changed();
+    });
+    titleForm->addRow(tr("Botones de la barra de título:"), buttonsRow);
     titleForm->addRow(tr("Posición de los botones:"), buttonsSide);
     titleForm->addRow(tr("Recreación de Windows:"), recreation);
     page.layout->addLayout(titleForm);

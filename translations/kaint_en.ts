@@ -7224,6 +7224,34 @@ Do you want to replace them?</translation>
         <source>Puerto TCP de la sesión en la red local (por defecto %1). Se aplica a la próxima sesión.</source>
         <translation>TCP port of the session on the local network (%1 by default). Applies to the next session.</translation>
     </message>
+    <message>
+        <source>Colgando del borde</source>
+        <translation>Hanging from the edge</translation>
+    </message>
+    <message>
+        <source>Como siempre: cuelgan del borde de arriba de la ventana.</source>
+        <translation>As always: they hang from the top edge of the window.</translation>
+    </message>
+    <message>
+        <source>Unidos al marco</source>
+        <translation>Joined to the frame</translation>
+    </message>
+    <message>
+        <source>Como el de cerrar de los diálogos (Configuración): cuelgan del contorno oscuro de la ventana, algo separados del borde.</source>
+        <translation>Like the close button of dialogs (Settings): they hang from the window's dark outline, a little away from the edge.</translation>
+    </message>
+    <message>
+        <source>Cuadrados</source>
+        <translation>Square</translation>
+    </message>
+    <message>
+        <source>Sueltos, con las cuatro esquinas redondeadas, como las X de las ventanas de Paint.NET en Windows 7.</source>
+        <translation>Loose, with all four corners rounded, like the X of Paint.NET's windows on Windows 7.</translation>
+    </message>
+    <message>
+        <source>La forma de los botones de Windows 7.</source>
+        <translation>The shape of the Windows 7 buttons.</translation>
+    </message>
 </context>
 <context>
     <name>ShapesTool</name>

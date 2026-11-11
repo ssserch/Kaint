@@ -89,6 +89,9 @@ export function applyWindowButtons(root) {
     for (const name of WindowButtons)
         root.classList.toggle(`btn-${name}`, name === style);
     root.classList.toggle("btn-left", !!Settings.get("titleButtonsLeft"));
+    // Windows 7: el de cerrar de los diálogos cuelga del marco (colgando o unidos al marco, como en
+    // los diálogos de Kaint) o va suelto y cuadrado (como las X de las ventanas).
+    root.classList.toggle("btn-win7-square", style === "win7" && Number(Settings.get("win7ButtonShape")) === 2);
 }
 
 // Aplica el tema: clases del documento (oscuro, clásico) y, con Windows 98 y el personalizado, los

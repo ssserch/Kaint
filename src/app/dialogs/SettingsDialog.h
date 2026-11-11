@@ -95,6 +95,8 @@ struct AppSettings {
     // 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98. (Antes, -1 era «la del escritorio»: ahora es
     // customFrame.)
     int titleButtons = 0;
+    // Forma de los de Windows 7 (WindowFrame::Win7Shape): colgando, unidos al marco o cuadrados.
+    int win7ButtonShape = 0;
     // Los botones a la izquierda de la barra de título.
     bool titleButtonsLeft = false;
     // Recreación de Windows (solo con el estilo Paint.NET): 10 u 11 (esquinas redondeadas en modo

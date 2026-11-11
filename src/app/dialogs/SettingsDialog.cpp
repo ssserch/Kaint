@@ -132,6 +132,8 @@ AppSettings AppSettings::load()
     a.uiFontFamily = get("uiFontFamily", a.uiFontFamily);
     a.uiFontSize = std::clamp(get("uiFontSize", a.uiFontSize), 0, 24);
     a.titleBarColor = s.value(QStringLiteral("titleBarColor"), QColor()).value<QColor>();
+    a.selectionColorLight = s.value(QStringLiteral("selectionColorLight"), QColor()).value<QColor>();
+    a.selectionColorDark = s.value(QStringLiteral("selectionColorDark"), QColor()).value<QColor>();
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.windowsVersion = get("windowsVersion", a.windowsVersion) == 11 ? 11 : 10;
     // La barra de título de Kaint o la del sistema. Antes no había casilla: los botones -1 («Los del
@@ -177,7 +179,7 @@ AppSettings AppSettings::load()
     a.hideMoveBox = get("hideMoveBox", a.hideMoveBox);
     a.replacePixels = get("replacePixels", a.replacePixels);
     a.askOnceOnClose = get("askOnceOnClose", a.askOnceOnClose);
-    a.gifOpenMode = std::clamp(get("gifOpenMode", a.gifOpenMode), 0, 2);
+    a.gifOpenMode = std::clamp(get("gifOpenMode", a.gifOpenMode), 0, 4);
     a.tabletEraser = get("tabletEraser", a.tabletEraser);
     a.historyLimitMB = std::max(0, get("historyLimitMB", a.historyLimitMB));
     a.checkUpdates = get("checkUpdates", a.checkUpdates);
@@ -222,6 +224,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("uiFontFamily"), uiFontFamily);
     s.setValue(QStringLiteral("uiFontSize"), uiFontSize);
     s.setValue(QStringLiteral("titleBarColor"), titleBarColor);
+    s.setValue(QStringLiteral("selectionColorLight"), selectionColorLight);
+    s.setValue(QStringLiteral("selectionColorDark"), selectionColorDark);
     s.setValue(QStringLiteral("customWindowFrame"), customFrame);
     s.setValue(QStringLiteral("windows10Frame"), customFrame);
     s.setValue(QStringLiteral("titleButtons"), titleButtons);
@@ -704,6 +708,64 @@ QWidget* SettingsDialog::createInterfacePage()
     connect(ownTitle, &QCheckBox::toggled, this, applyTitle);
     connect(titleColor, &ColorButton::colorChanged, this, applyTitle);
 
+    // El color de selección de los temas Claro y Oscuro (lo elegido en las ventanas, la barra
+    // superior y las listas): uno para cada modo, así «Seguir al sistema» usa el que toque.
+    auto* selectionRowWidget = new QWidget(page.widget);
+    auto* selectionRow = new QHBoxLayout(selectionRowWidget);
+    selectionRow->setContentsMargins(0, 0, 0, 0);
+    auto* ownSelection = new QCheckBox(tr("Color de selección propio:"), page.widget);
+    ownSelection->setToolTip(tr("El fondo de lo elegido en las ventanas (Herramientas, Colores, Historial, Capas), en la barra "
+                                "superior y en las listas, en lugar del azul. Uno para el tema claro y otro para el oscuro "
+                                "(«Seguir al sistema» usa el del modo del escritorio)."));
+    auto* lightSelection = new ColorButton(page.widget);
+    lightSelection->setColor(m_settings.selectionColorLight.isValid() ? m_settings.selectionColorLight
+                                                                      : Theme::defaultSelectionColor(false));
+    lightSelection->setToolTip(tr("Con el tema claro"));
+    auto* darkSelection = new ColorButton(page.widget);
+    darkSelection->setColor(m_settings.selectionColorDark.isValid() ? m_settings.selectionColorDark
+                                                                    : Theme::defaultSelectionColor(true));
+    darkSelection->setToolTip(tr("Con el tema oscuro"));
+    auto* resetSelection = new QPushButton(tr("Restablecer"), page.widget);
+    resetSelection->setToolTip(tr("Volver al azul de siempre."));
+    ownSelection->setChecked(m_settings.selectionColorLight.isValid() || m_settings.selectionColorDark.isValid());
+    selectionRow->addWidget(ownSelection);
+    selectionRow->addWidget(new QLabel(tr("Claro"), page.widget));
+    selectionRow->addWidget(lightSelection);
+    selectionRow->addSpacing(8);
+    selectionRow->addWidget(new QLabel(tr("Oscuro"), page.widget));
+    selectionRow->addWidget(darkSelection);
+    selectionRow->addWidget(resetSelection);
+    selectionRow->addStretch();
+    page.layout->addWidget(selectionRowWidget);
+    auto applySelection = [this, ownSelection, lightSelection, darkSelection, resetSelection] {
+        const bool on = ownSelection->isChecked();
+        lightSelection->setEnabled(on);
+        darkSelection->setEnabled(on);
+        resetSelection->setEnabled(on);
+        m_settings.selectionColorLight = on ? lightSelection->color() : QColor();
+        m_settings.selectionColorDark = on ? darkSelection->color() : QColor();
+        changed();
+    };
+    lightSelection->setEnabled(ownSelection->isChecked());
+    darkSelection->setEnabled(ownSelection->isChecked());
+    resetSelection->setEnabled(ownSelection->isChecked());
+    connect(ownSelection, &QCheckBox::toggled, this, applySelection);
+    connect(lightSelection, &ColorButton::colorChanged, this, applySelection);
+    connect(darkSelection, &ColorButton::colorChanged, this, applySelection);
+    connect(resetSelection, &QPushButton::clicked, this, [lightSelection, darkSelection, ownSelection] {
+        lightSelection->setColor(Theme::defaultSelectionColor(false));
+        darkSelection->setColor(Theme::defaultSelectionColor(true));
+        ownSelection->setChecked(false);
+    });
+    // Solo con los temas Claro, Oscuro y Seguir al sistema.
+    auto syncSelectionRow = [this, selectionRowWidget] {
+        const auto scheme = Theme::Scheme(m_settings.colorScheme);
+        selectionRowWidget->setVisible(scheme == Theme::Scheme::System || scheme == Theme::Scheme::Light
+                                       || scheme == Theme::Scheme::Dark);
+    };
+    syncSelectionRow();
+    connect(this, &SettingsDialog::settingsChanged, this, syncSelectionRow);
+
     // Paquete de iconos (como en paint.js; se administran en su página).
     auto* packRow = new QHBoxLayout;
     m_iconPackChoice = new QComboBox(page.widget);
@@ -970,6 +1032,10 @@ QWidget* SettingsDialog::createInterfacePage()
                          Qt::ToolTipRole);
     gifOpen->addItem(tr("Como imágenes"), 2);
     gifOpen->setItemData(2, tr("Cada fotograma se abre como una imagen aparte."), Qt::ToolTipRole);
+    gifOpen->addItem(tr("Como una sola imagen"), 3);
+    gifOpen->setItemData(3, tr("Solo el primer fotograma, como una imagen normal."), Qt::ToolTipRole);
+    gifOpen->addItem(tr("Elegir los fotogramas"), 4);
+    gifOpen->setItemData(4, tr("Cada vez, elegir qué fotogramas abrir y cómo."), Qt::ToolTipRole);
     gifOpen->setCurrentIndex(std::max(0, gifOpen->findData(m_settings.gifOpenMode)));
     gifRow->addWidget(new QLabel(tr("Al abrir un GIF animado:"), page.widget));
     gifRow->addWidget(gifOpen);
@@ -2417,14 +2483,14 @@ QWidget* SettingsDialog::createCollabView(QWidget* parent, const std::shared_ptr
 
     // Cómo llegan los cambios de los invitados.
     QVBoxLayout* changesBox = compact ? hostBox : section(tr("Cambios de los invitados"));
-    option(changesBox, tr("Edición en tiempo real entre copias de Kaint"), &Collab::Settings::realtime,
-           tr("Los invitados con Kaint (escritorio) cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios "
+    option(changesBox, tr("Edición en tiempo real"), &Collab::Settings::realtime,
+           tr("Los invitados (con Kaint o con Kaint para la web) cambian la imagen al momento. Sin marcar, sugieren sus cambios "
               "para que los aceptes."));
     option(changesBox, tr("Aceptar automáticamente los cambios sugeridos"), &Collab::Settings::autoAccept,
            tr("Lo que sugieran los invitados se aplica a la imagen sin preguntar."));
-    changesBox->addWidget(note(tr("Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un "
-                                  "borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en "
-                                  "tu historial como «Cambio hecho por…»."),
+    changesBox->addWidget(note(tr("En tiempo real también entre Kaint y Kaint para la web. Con confirmaciones, el invitado edita "
+                                  "un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y "
+                                  "en tu historial como «Cambio hecho por…»."),
                                view));
 
     // --- Más opciones: P2P, red local y la vista -----------------------------------------------

@@ -72,6 +72,9 @@ const defaults = {
     uiFontFamily: "",
     uiFontSize: 0,
     titleBarColor: null,
+    // Color de selección propio de los temas Claro y Oscuro (null: el azul de siempre).
+    selectionColorLight: null,
+    selectionColorDark: null,
     // Ver > Reglas y su estilo: 0, oscura como la de paint.js; 1, del color de la barra.
     rulers: false,
     rulerStyle: 0,

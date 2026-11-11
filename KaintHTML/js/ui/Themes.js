@@ -127,6 +127,21 @@ export function applyThemeColors(root, scheme, systemDark) {
         root.style.removeProperty("--win-title");
         root.style.removeProperty("--win-title-text");
     }
+    // Color de selección propio (temas Claro, Oscuro y Seguir al sistema, como en Kaint): el fondo
+    // de lo elegido; el borde, más oscuro (claro) o más claro (oscuro), y lo de bajo el puntero, a
+    // medio camino del fondo de las ventanas.
+    const own = Settings.get(base === "dark" ? "selectionColorDark" : "selectionColorLight");
+    const ownSelection = (scheme === 0 || scheme === 1 || scheme === 2) && /^#[0-9a-f]{6}$/i.test(own || "");
+    root.classList.toggle("own-selection", ownSelection);
+    if (ownSelection) {
+        root.style.setProperty("--selection", own);
+        root.style.setProperty("--selection-border", base === "dark" ? `color-mix(in srgb, ${own} 55%, white)` : `color-mix(in srgb, ${own} 70%, black)`);
+        for (const cssVar of ["--hover", "--button-hover"])
+            root.style.setProperty(cssVar, `color-mix(in srgb, ${own} 45%, var(--panel))`);
+    } else {
+        // (--selection, --selection-border y --hover los vuelve a poner o quitar el bucle de arriba.)
+        root.style.removeProperty("--button-hover");
+    }
     // Como en Kaint (Configuración > Lienzo): el fondo alrededor de la imagen puede tener su color.
     const border = Settings.get(base === "dark" ? "canvasBorderDark" : "canvasBorderLight");
     if (border)

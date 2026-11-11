@@ -1179,10 +1179,10 @@ export function collabSettingsPage(app, refresh) {
     syncAccess(s.access);
 
     const changes = compact ? hosting : section(tr("Cambios de los invitados"));
-    check(changes, tr("Edición en tiempo real entre copias de Kaint para la web"), "collabRealtime",
-          tr("Los invitados con Kaint para la web cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios para que los aceptes."));
+    check(changes, tr("Edición en tiempo real"), "collabRealtime",
+          tr("Los invitados (con Kaint o con Kaint para la web) cambian la imagen al momento. Sin marcar, sugieren sus cambios para que los aceptes."));
     check(changes, tr("Aceptar automáticamente los cambios sugeridos"), "collabAutoAccept", tr("Lo que sugieran los invitados se aplica a la imagen sin preguntar."));
-    changes.append(el("small", { className: "collab-note", textContent: tr("Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en el historial del anfitrión como «Cambio hecho por…».") }));
+    changes.append(el("small", { className: "collab-note", textContent: tr("En tiempo real también entre Kaint y Kaint para la web. Con confirmaciones, el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en el historial del anfitrión como «Cambio hecho por…».") }));
 
     // --- Más opciones: P2P, red local y la vista ---------------------------------------------------
     let more = page;

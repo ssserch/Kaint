@@ -14,7 +14,10 @@ const extra = {
     "%1 de %2 efectos": "%1 of %2 effects",
     "%1 efectos": "%1 effects",
     "%1 imágenes en el GIF": "%1 images in the GIF",
-    "Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte.": "As layers: each frame is a layer of a single image. As images: each frame opens as a separate image.",
+    "Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte. Como una sola imagen: solo el primer fotograma. Elegir los fotogramas: cada vez, qué fotogramas abrir y cómo.":
+        "As layers: each frame is a layer of a single image. As images: each frame opens as a separate image. As a single image: only the first frame. Choose the frames: each time, which frames to open and how.",
+    "Capas de una imagen: un fotograma en cada capa (se puede guardar como GIF animado). Imágenes aparte: cada fotograma se abre como una imagen.":
+        "Layers of one image: one frame on each layer (it can be saved as an animated GIF). Separate images: each frame opens as an image.",
     "Mostrar u ocultar sus efectos": "Show or hide its effects",
     "Opciones de la herramienta": "Tool options",
     "Al sacar una ventana, esconder las que tape": "When a window slides out, hide the ones it covers",
@@ -165,8 +168,6 @@ const extra = {
         "With the computers on your own network (home, office, classroom): they find you in the list of nearby sessions or by the IP address.",
     "Copia exportada como «%1». La imagen de la sesión la guarda el anfitrión.":
         "Copy exported as “%1”. The host saves the session's image.",
-    "Edición en tiempo real entre copias de Kaint para la web":
-        "Real-time editing between copies of Kaint for the web",
     "Edita la imagen actual con otras personas: tú la hospedas y los demás se unen desde Kaint o desde Kaint para la web. Solo el anfitrión guarda la imagen; los invitados pueden exportar una copia.":
         "Edit the current image with other people: you host it and the others join from Kaint or Kaint for the web. Only the host saves the image; guests can export a copy.",
     "Ej.: 192.168.1.20 o 192.168.1.20:47913":
@@ -179,8 +180,8 @@ const extra = {
         "The server shows it when it starts; it isn't needed on the same computer.",
     "Elige una sesión de la lista o escribe la dirección del equipo que la hospeda (lo dice su ventana de la sesión).":
         "Choose a session from the list or type the address of the computer that hosts it (its session window shows it).",
-    "Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en el historial del anfitrión como «Cambio hecho por…».":
-        "Between Kaint and Kaint for the web, editing always uses confirmations: the guest edits a draft with its own history and suggests it; once accepted, the change appears for everyone and in the host's history as “Change made by…”.",
+    "En tiempo real también entre Kaint y Kaint para la web. Con confirmaciones, el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en el historial del anfitrión como «Cambio hecho por…».":
+        "In real time also between Kaint and Kaint for the web. With confirmations, the guest edits a draft with its own history and suggests it; when it's accepted, the change appears for everyone and in the host's history as “Change made by…”.",
     "Escribe la dirección del anfitrión.":
         "Type the host's address.",
     "Ese servidor ya tiene un anfitrión.":
@@ -209,8 +210,6 @@ const extra = {
         "The hosting key is not correct.",
     "La lista la da el equipo que sirvió esta página (las sesiones que se anuncian en su red).":
         "The list comes from the computer that served this page (the sessions announced on its network).",
-    "Los invitados con Kaint para la web cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios para que los aceptes.":
-        "Guests using Kaint for the web change the image right away. Unchecked, they also suggest their changes for you to accept.",
     "Ningún equipo todavía.":
         "No computers yet.",
     "No se pudo conectar con %1.":

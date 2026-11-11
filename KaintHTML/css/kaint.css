@@ -2969,6 +2969,18 @@ fieldset.group > legend {
     border-color: #99d1ff;
 }
 
+/* Con el color de selección propio, la pestaña de la imagen y los botones de las ventanas lo llevan. */
+:root.pdn.own-selection .image-tab.current,
+:root.pdn.own-selection:not(.dark) .image-tab.current {
+    background: var(--selection);
+    border-color: var(--selection-border);
+}
+
+:root.own-selection:not(.classic) .corner-buttons .tbutton.checked {
+    background: color-mix(in srgb, var(--selection-border) 25%, transparent);
+    border-color: var(--selection-border);
+}
+
 /* La X de cerrar solo en la imagen que tiene el puntero. */
 :root.pdn .image-tab.current:not(:hover) .close {
     opacity: 0;
@@ -3891,8 +3903,26 @@ fieldset.group > legend {
     white-space: pre;
     font: inherit;
 }
+/* El texto se ve en la capa de encima (con el número en amarillo); el del campo, transparente. */
+.save-all-name input {
+    -webkit-text-fill-color: transparent;
+    caret-color: var(--text);
+}
+
+.save-all-name input::placeholder {
+    color: var(--disabled-text, #888);
+}
+
 .save-all-name .sizer {
-    visibility: hidden;
+    color: var(--text);
+}
+
+.save-all-name .sizer .number {
+    color: #b88a00;
+}
+
+:root.dark .save-all-name .sizer .number {
+    color: #ffd54a;
 }
 .save-all-numbers {
     display: flex;
@@ -3914,15 +3944,30 @@ fieldset.group > legend {
     margin-right: auto;
     align-self: center;
 }
-/* La flecha de Guardar con sus opciones (Guardar como, Guardar todos...). */
-.tbutton.menu-arrow {
+/* La flecha de Guardar con sus opciones (Guardar como, Guardar todos...): estrecha y pegada a su
+   botón, como en Kaint (con el aspecto de Paint.NET, la medida de los demás botones de la barra no
+   vale para ella: la ensanchaba y separaba los iconos). */
+.tbutton.menu-arrow,
+:root.pdn .toolbar .tbutton.menu-arrow {
     min-width: 0;
+    width: auto;
     padding-left: 1px;
     padding-right: 1px;
+    margin-left: -2px;
+}
+
+:root.pdn .toolbar .tbutton.menu-arrow {
+    margin-left: 0;
+}
+
+.tbutton.menu-arrow .arrow {
+    font-size: 10px;
+    line-height: 1;
 }
 
 /* La flecha de los tipos de zalgo, pegada a su botón. */
-.tbutton.zalgo-type {
+.tbutton.zalgo-type,
+:root.pdn .toolbar .tbutton.zalgo-type {
     min-width: 0;
     padding-left: 1px;
     padding-right: 1px;
@@ -4007,6 +4052,73 @@ fieldset.group > legend {
 
 .collab-session .list .row > span:not(.collab-swatch):not(.collab-thumb) {
     flex: 1;
+}
+
+/* Filas de botones de los diálogos de fotogramas, del editor de paquetes y del historial de la sesión. */
+.gif-frames-dialog .row-buttons,
+.icon-pack-editor .row-buttons,
+.collab-history .row-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Abrir un GIF animado > Elegir los fotogramas. */
+.gif-frames {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+    gap: 6px;
+    width: min(680px, 86vw);
+    max-height: min(420px, 55vh);
+    overflow: auto;
+    padding: 2px;
+}
+
+.gif-frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    min-height: 128px;
+    padding: 6px 4px 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    opacity: 0.55;
+}
+
+.gif-frame.checked {
+    opacity: 1;
+    background: var(--selection);
+    border-color: var(--selection-border);
+}
+
+/* La casilla de cada fotograma. */
+.gif-frame::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border, #888);
+    border-radius: 2px;
+    background: var(--base, #fff);
+}
+
+.gif-frame.checked::before {
+    content: "✓";
+    font-size: 12px;
+    line-height: 14px;
+    text-align: center;
+    color: #fff;
+    background: var(--accent, #0078d7);
+    border-color: var(--accent, #0078d7);
 }
 
 /* Editor de paquetes de iconos. */

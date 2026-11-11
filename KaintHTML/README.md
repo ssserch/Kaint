@@ -54,9 +54,9 @@ settings in **Settings → Collaboration**, with a simplified and a compact view
   is a P2P signaling server at `ws://<your-ip>:47913/signal` if you'd rather not use the public ones.
 
 Addresses and session codes stay blurred until clicked (they don't leak into screenshots or
-streams), with a button to copy them. Between browsers (and between copies of Kaint) changes are
-live; between Kaint and the web, guests edit a draft with its own history and suggest it to the
-host, who accepts it. The protocol is described in [docs/collaboration.md](../docs/collaboration.md).
+streams), with a button to copy them. Changes are live between browsers, between copies of Kaint
+and between Kaint and the web; with the host's real-time option off, guests edit a draft with its
+own history and suggest it to the host, who accepts it. The protocol is described in [docs/collaboration.md](../docs/collaboration.md).
 
 ## What's in it
 

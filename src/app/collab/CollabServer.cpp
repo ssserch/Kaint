@@ -242,8 +242,8 @@ void Server::setSettings(const Settings& settings)
         Client& c = *it;
         if (!c.joined)
             continue;
-        const QString mode = (c.peer.platform == QLatin1String("desktop") && m_settings.realtime) ? QStringLiteral("live")
-                                                                                                    : QStringLiteral("confirm");
+        // En tiempo real con todos (también con Kaint para la web) o con confirmaciones.
+        const QString mode = m_settings.realtime ? QStringLiteral("live") : QStringLiteral("confirm");
         send(c.socket, QJsonObject{{QStringLiteral("t"), QStringLiteral("settings")},
                                    {QStringLiteral("mode"), mode},
                                    {QStringLiteral("autoAccept"), m_settings.autoAccept}});
@@ -451,7 +451,7 @@ void Server::accept(Client& client)
     client.joined = true;
     Peer& p = client.peer;
     p.color = colorFor(p.color);
-    p.mode = (p.platform == QLatin1String("desktop") && m_settings.realtime) ? QStringLiteral("live") : QStringLiteral("confirm");
+    p.mode = m_settings.realtime ? QStringLiteral("live") : QStringLiteral("confirm");
     client.socket->setMaxMessage(Link::kMaxMessage);
     send(client.socket, QJsonObject{{QStringLiteral("t"), QStringLiteral("joined")},
                                     {QStringLiteral("you"), p.id},

@@ -1196,16 +1196,35 @@ export async function effectDialog(app, effect, initial) {
         stepHistory(redo);
     }, true);
 
-    // Vista previa en segundo plano: cada cambio cancela la anterior (como EffectPreview).
+    // Vista previa en segundo plano (como EffectPreview): un efecto rápido (como los ajustes)
+    // termina lo que está calculando y sigue enseguida con lo último que se pidió, así la imagen
+    // sigue al deslizador mientras se arrastra; uno lento se cancela con cada cambio. La espera no
+    // vuelve a empezar con cada cambio (si no, no se veía nada hasta soltar).
+    const FAST_PREVIEW_MS = 250;
     const preview = cloneCanvas(layer.canvas);
-    let job = null, previewTimer = 0, last = null;
+    let job = null, previewTimer = 0, last = null, pending = false, lastDuration = -1;
     function requestPreview() {
-        clearTimeout(previewTimer);
-        previewTimer = setTimeout(startPreview, 40);
+        pending = true;
+        const fast = lastDuration >= 0 && lastDuration < FAST_PREVIEW_MS;
+        if (job) {
+            // El rápido sigue al terminar; el lento se cancela y vuelve a empezar dentro de un momento.
+            if (fast)
+                return;
+            job.cancel();
+            job = null;
+            app.setEffectProgress?.(null);
+        }
+        if (!previewTimer)
+            previewTimer = setTimeout(() => {
+                previewTimer = 0;
+                startPreview();
+            }, fast ? 0 : 40);
     }
     const startPreview = () => {
         job?.cancel();
+        pending = false;
         const snap = snapshot(), key = JSON.stringify(snap);
+        const started = performance.now();
         const current = computeEffect(input, effect, snap, (f) => app.setEffectProgress?.(f));
         job = current;
         current.promise.then((res) => {
@@ -1213,12 +1232,16 @@ export async function effectDialog(app, effect, initial) {
                 return;
             job = null;
             app.setEffectProgress?.(null);
-            if (!res)
-                return;
-            last = { key, rect: res.rect, data: res.data };
-            context(preview).putImageData(res.data, res.rect.x, res.rect.y);
-            if (shown)
-                doc.setPreview({ layer, canvas: preview }, res.rect);
+            if (res) {
+                lastDuration = performance.now() - started;
+                last = { key, rect: res.rect, data: res.data };
+                context(preview).putImageData(res.data, res.rect.x, res.rect.y);
+                if (shown)
+                    doc.setPreview({ layer, canvas: preview }, res.rect);
+            }
+            // Lo que se pidió mientras tanto.
+            if (pending && !previewTimer)
+                startPreview();
         }, (err) => {
             if (job === current) {
                 job = null;

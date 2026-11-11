@@ -83,6 +83,9 @@ struct AppSettings {
     // Linux: color de la barra superior y de las cabeceras de las ventanas, como el de énfasis de
     // Windows (no válido: el del tema).
     QColor titleBarColor;
+    // Color de selección propio de los temas Claro y Oscuro (no válido: el azul de siempre).
+    QColor selectionColorLight;
+    QColor selectionColorDark;
     // La ventana principal y los diálogos con la barra de título y el marco de Kaint (con los
     // botones de titleButtons) o con los del sistema: los de Windows o, en Linux, los del escritorio
     // (en KDE, los de Plasma). Por defecto, en Linux sí y en Windows no.
@@ -138,6 +141,8 @@ struct AppSettings {
     bool askOnceOnClose = true;
     // Al abrir un GIF animado: 0, preguntar; 1, como capas (un fotograma por capa); 2, como
     // imágenes (cada fotograma, una imagen aparte).
+    // Al abrir un GIF animado: 0 preguntar, 1 como capas, 2 como imágenes, 3 solo el primer
+    // fotograma, 4 elegir los fotogramas.
     int gifOpenMode = 0;
     bool tabletEraser = true;
     int historyLimitMB = 4096;

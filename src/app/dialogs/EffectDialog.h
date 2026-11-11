@@ -5,6 +5,7 @@
 
 #include <QDialog>
 #include <QHash>
+#include <QElapsedTimer>
 #include <QTimer>
 
 #include <atomic>
@@ -54,8 +55,9 @@ private:
     QTimer m_stepTimer;
 };
 
-// Calcula la vista previa en un hilo aparte (cancelando la anterior si el usuario sigue
-// moviendo un deslizador) y la muestra en el lienzo.
+// Calcula la vista previa en un hilo aparte y la muestra en el lienzo. Con un efecto rápido, la
+// imagen sigue al deslizador mientras se arrastra; uno lento se cancela si el usuario sigue
+// moviéndolo.
 class EffectPreview : public QObject {
     Q_OBJECT
 public:
@@ -84,6 +86,10 @@ private:
 
     QTimer m_debounce;
     QTimer m_progressTimer;
+    // Lo que tardó el último cálculo terminado: los rápidos no se cancelan ni esperan (la vista
+    // previa sigue al deslizador mientras se arrastra, como en Paint.NET).
+    QElapsedTimer m_runClock;
+    qint64 m_lastDuration = -1;
     ParamValues m_pending;
     bool m_hasPending = false;
     std::thread m_thread;

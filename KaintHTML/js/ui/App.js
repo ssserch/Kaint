@@ -21,7 +21,7 @@ import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
 import { applyThemeColors, applyWindowButtons } from "./Themes.js";
 import {
-    aboutDialog, animationDialog, canvasSizeDialog, checkbox, colorProfileDialog, Dialog, dialogOpen, el, layerPropertiesDialog, message, newImageDialog, promptNumber,
+    aboutDialog, animationDialog, canvasSizeDialog, checkbox, colorProfileDialog, Dialog, dialogOpen, el, gifFramesDialog, layerPropertiesDialog, message, newImageDialog, promptNumber,
     resizeDialog, saveAsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
 import { delayFromName } from "../core/Codecs.js";
@@ -158,6 +158,7 @@ export class App extends EventTarget {
         const root = document.documentElement;
         const key = JSON.stringify([Settings.get("colorScheme"), Settings.get("customTheme"), Settings.get("canvasBorderLight"),
                                     Settings.get("canvasBorderDark"), Settings.get("titleBarColor"),
+                                    Settings.get("selectionColorLight"), Settings.get("selectionColorDark"),
                                     matchMedia("(prefers-color-scheme: dark)").matches]);
         if (this.themeKey !== key) {
             this.themeKey = key;
@@ -1335,8 +1336,8 @@ export class App extends EventTarget {
             await message(tr("Abrir"), tr("No se pudo abrir «%1».", file.name));
             return;
         }
-        // GIF animado: como capas (un fotograma por capa, como hasta ahora) o cada fotograma como
-        // una imagen aparte.
+        // GIF animado: como capas (un fotograma por capa, como hasta ahora), cada fotograma como
+        // una imagen aparte, solo el primero como una imagen normal o los fotogramas que se elijan.
         if (/\.gif$/i.test(file.name) && doc.layers.length > 1) {
             let mode = Settings.get("gifOpenMode") || 0;
             if (mode === 0) {
@@ -1348,21 +1349,41 @@ export class App extends EventTarget {
                                              tr("Una sola imagen con un fotograma en cada capa, una encima de otra. Se vuelve a guardar como GIF animado."), true);
                 const images = ask.addChoice("image-list-menu", tr("Como imágenes"),
                                              tr("Cada fotograma se abre como una imagen aparte. Al guardar como GIF se pueden elegir las imágenes que forman la animación."));
+                const single = ask.addChoice("document-new", tr("Como una sola imagen"),
+                                             tr("Solo el primer fotograma, como una imagen normal (sin animación)."));
+                const pick = ask.addChoice("edit-select-all", tr("Elegir los fotogramas…"),
+                                           tr("Elige qué fotogramas abrir y si se abren como capas o como imágenes."));
                 const choice = await ask.exec();
-                if (choice !== layers && choice !== images)
+                mode = { [layers]: 1, [images]: 2, [single]: 3, [pick]: 4 }[choice] || 0;
+                if (!mode)
                     return;
-                mode = choice === images ? 2 : 1;
                 if (remember.input.checked)
                     Settings.set("gifOpenMode", mode);
             }
-            if (mode === 2) {
+            // Fotogramas elegidos (todos si no se elige).
+            let frames = doc.layers.map((_, i) => i);
+            let asImages = mode === 2;
+            if (mode === 3) {
+                frames = [0];
+            } else if (mode === 4) {
+                const picked = await gifFramesDialog(doc, file.name);
+                if (!picked)
+                    return;
+                frames = picked.frames;
+                asImages = picked.asImages;
+            }
+            // Uno solo (el primero o el único elegido): una imagen normal.
+            if (frames.length === 1)
+                asImages = true;
+            if (asImages) {
                 // Cada fotograma, una imagen sin archivo ("animación (3)"); el nombre de su capa
                 // conserva la duración, para volver a guardarlas como GIF eligiendo las imágenes.
                 const base = baseName(file.name);
                 let first = null;
-                doc.layers.forEach((layer, i) => {
-                    const d = new Document(doc.width, doc.height, { name: tr("%1 (%2)", base, i + 1), background: null, historyName: tr("Abrir imagen"),
-                                                                    historyIcon: "document-open", dpi: doc.dpi });
+                frames.forEach((i) => {
+                    const layer = doc.layers[i];
+                    const d = new Document(doc.width, doc.height, { name: frames.length === 1 ? base : tr("%1 (%2)", base, i + 1), background: null,
+                                                                    historyName: tr("Abrir imagen"), historyIcon: "document-open", dpi: doc.dpi });
                     d.layers[0].name = layer.name;
                     d.layers[0].ctx.drawImage(layer.canvas, 0, 0);
                     d.gifLoops = doc.gifLoops;
@@ -1372,6 +1393,17 @@ export class App extends EventTarget {
                 });
                 if (first)
                     this.setCurrent(first);
+                return;
+            }
+            if (frames.length < doc.layers.length) {
+                // Solo los fotogramas elegidos, como capas, y sin archivo: guardar no pisa el GIF con
+                // menos fotogramas.
+                doc.layers = frames.map((i) => doc.layers[i]);
+                doc.active = doc.layers.length - 1;
+                doc.name = baseName(file.name);
+                doc.fileName = "";
+                doc.markSaved();
+                this.addDocument(doc);
                 return;
             }
         }

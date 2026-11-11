@@ -689,6 +689,11 @@ void EffectDialog::set(const QString& key, const QVariant& value)
 
 // ---------------------------------------------------------------------------
 
+namespace {
+// Hasta cuánto tarda un efecto "rápido" para la vista previa (ms).
+constexpr qint64 kFastPreviewMs = 250;
+} // namespace
+
 EffectPreview::EffectPreview(Document* doc, LayerPtr layer, const Effect& effect, const EffectContext& ctx)
     : m_doc(doc)
     , m_layer(std::move(layer))
@@ -715,9 +720,22 @@ void EffectPreview::request(const ParamValues& values)
 {
     m_pending = values;
     m_hasPending = true;
-    if (m_running && m_cancel)
-        m_cancel->store(true);
-    m_debounce.start();
+    // Un efecto rápido (como los ajustes) termina lo que está calculando y sigue enseguida con lo
+    // último que se pidió: mientras se arrastra un deslizador la imagen va cambiando. Uno lento se
+    // cancela y espera a que los valores dejen de cambiar un momento.
+    const bool fast = m_lastDuration >= 0 && m_lastDuration < kFastPreviewMs;
+    if (m_running) {
+        // Al terminar (o cancelarse) sigue con lo pedido.
+        if (!fast && m_cancel)
+            m_cancel->store(true);
+        return;
+    }
+    // La espera no vuelve a empezar con cada cambio: si no, mientras se arrastra no se veía nada
+    // hasta soltar.
+    if (!m_debounce.isActive()) {
+        m_debounce.setInterval(fast ? 0 : 40);
+        m_debounce.start();
+    }
 }
 
 void EffectPreview::start()
@@ -728,6 +746,7 @@ void EffectPreview::start()
         m_thread.join();
     m_hasPending = false;
     m_running = true;
+    m_runClock.start();
     auto cancel = std::make_shared<std::atomic_bool>(false);
     m_cancel = cancel;
     const ParamValues values = m_pending;
@@ -763,6 +782,8 @@ void EffectPreview::onFinished(const QImage& result, const ParamValues& values, 
     m_running = false;
     if (m_thread.joinable())
         m_thread.join();
+    if (!cancelled)
+        m_lastDuration = m_runClock.elapsed();
     if (!cancelled && !result.isNull()) {
         m_lastResult = result;
         m_lastValues = values;

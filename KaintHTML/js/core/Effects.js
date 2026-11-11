@@ -1153,23 +1153,61 @@ const adjustments = [
             withProps(P.int("lightness", "Claridad", -100, 100, 0), { gradient: [[0, 0, 0], [128, 128, 128], [255, 255, 255]] }),
         ],
         run(a) {
-            // HueSaturationLightness de Paint.NET.
+            // HueSaturationLightness de Paint.NET, con rgbToHsv/hsvToRgb escritos aquí mismo (sin
+            // crear un arreglo por píxel), sin pasar por HSV si el matiz no cambia (la ida y vuelta
+            // da el mismo color) y con un caché de los colores ya calculados: la vista previa sigue
+            // al deslizador (como en Kaint).
             const hueDelta = Math.round(a.values.hue), satFactor = idiv(Math.round(a.values.saturation) * 1024, 100);
             const lightness = Math.round(a.values.lightness), blendAlpha = idiv(Math.abs(lightness) * 255, 100);
             const blendTo = lightness > 0 ? 255 : 0;
-            mapStraight(a, (c) => {
+            const rotate = ((hueDelta % 360) + 360) % 360 !== 0;
+            const keys = new Int32Array(1 << 14).fill(-1), values = new Int32Array(1 << 14);
+            const mix = (x) => x + idiv((blendTo - x) * blendAlpha + 127, 255);
+            const compute = (c) => {
                 const i = intensity(c);
-                const r = clamp255((i * 1024 + (qRed(c) - i) * satFactor) >> 10);
-                const g = clamp255((i * 1024 + (qGreen(c) - i) * satFactor) >> 10);
-                const b = clamp255((i * 1024 + (qBlue(c) - i) * satFactor) >> 10);
-                let [h, s, v] = rgbToHsv(r, g, b);
-                h = (h + hueDelta + 720) % 360;
-                let out = hsvToRgb(h, s, v, qAlpha(c));
-                if (lightness !== 0) {
-                    const mix = (x) => x + idiv((blendTo - x) * blendAlpha + 127, 255);
-                    out = qRgba(mix(qRed(out)), mix(qGreen(out)), mix(qBlue(out)), qAlpha(c));
+                let r = clamp255((i * 1024 + (qRed(c) - i) * satFactor) >> 10);
+                let g = clamp255((i * 1024 + (qGreen(c) - i) * satFactor) >> 10);
+                let b = clamp255((i * 1024 + (qBlue(c) - i) * satFactor) >> 10);
+                const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+                if (rotate && mx !== mn) {
+                    const rf = r / 255, gf = g / 255, bf = b / 255;
+                    const v = mx / 255, delta = v - mn / 255, s = delta / v;
+                    let h = r === mx ? (gf - bf) / delta : g === mx ? 2 + (bf - rf) / delta : 4 + (rf - gf) / delta;
+                    h *= 60;
+                    if (h < 0)
+                        h += 360;
+                    h = (((h + hueDelta + 720) % 360) % 360) / 60;
+                    const k = Math.floor(h), f = h - k;
+                    const p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+                    let rr, gg, bb;
+                    switch (k) {
+                    case 0: rr = v; gg = t; bb = p; break;
+                    case 1: rr = q; gg = v; bb = p; break;
+                    case 2: rr = p; gg = v; bb = t; break;
+                    case 3: rr = p; gg = q; bb = v; break;
+                    case 4: rr = t; gg = p; bb = v; break;
+                    default: rr = v; gg = p; bb = q; break;
+                    }
+                    r = clamp255f(rr * 255);
+                    g = clamp255f(gg * 255);
+                    b = clamp255f(bb * 255);
                 }
-                return out;
+                if (lightness !== 0) {
+                    r = mix(r);
+                    g = mix(g);
+                    b = mix(b);
+                }
+                // Como qRgba sin el alfa (rojo en el byte bajo).
+                return (b << 16) | (g << 8) | r;
+            };
+            mapStraight(a, (c) => {
+                const rgb = c & 0xffffff;
+                const slot = Math.imul(rgb, 2654435761) >>> 18;
+                if (keys[slot] !== rgb) {
+                    keys[slot] = rgb;
+                    values[slot] = compute(c);
+                }
+                return ((c & 0xff000000) | values[slot]) >>> 0;
             });
         },
     },

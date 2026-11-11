@@ -114,12 +114,14 @@
         <p>Collaborative mode, over the Internet or on the local network, between Kaint and the web version.</p>
         <ul>
           <li>Edit the current image together: over the Internet with P2P (share the session code; the image goes straight from one computer to the other) or on the local network, where nearby sessions are found automatically</li>
-          <li>Real time between copies of Kaint; guests can also suggest their changes from a private draft, and the host accepts them (between Kaint and the web, always): they appear in the history as "Change made by…"</li>
+          <li>Real time between copies of Kaint, between browsers and between Kaint and the web version; guests can also suggest their changes from a private draft, and the host accepts them: they appear in the history as "Change made by…"</li>
           <li>Colored pointers with each person's name and tool, open, approved, password-protected or ID-only sessions, and only the host saves the image</li>
           <li>The session image's tab turns yellow, with a crown (is the host's image saved?) and, for guests, a computer (is your exported copy up to date?)</li>
           <li>The host's history for everyone, and going back to an earlier version for everyone (the host, and the guests it allows)</li>
           <li>Icon pack editor: create your own icon pack, side by side with Kaint's icons, and export it as a .zip</li>
           <li>The Paintbrush is selected when Kaint starts, sharper image thumbnails, and the ruler's pointer mark grows with the zoom to the size of a pixel</li>
+          <li>Animated GIFs can also be opened as a single image or with just the frames you choose</li>
+          <li>Your own selection color for the Light and Dark themes, a faster live preview in Hue / Saturation, and the numbers in yellow in Save All</li>
           <li>Its own section in Settings, with a simplified and a compact view; addresses and session codes stay blurred until clicked, with a button to copy them</li>
           <li>Dropping an image asks whether to open it or add it as a layer; Save All; color gradients in Hue / Saturation and smoother Curves</li>
           <li>Windows 7 Dark theme with smoked glass, a Windows-like opening animation for windows, and the Zalgo button in the Text tool</li>

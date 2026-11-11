@@ -30,14 +30,22 @@ export function numberText(number, digits, decoration) {
 // El nombre común con el número en el '#' (o '##', '###'...: también son las cifras mínimas) o al
 // final si no hay; 'number' < 0: sin número.
 export function composeName(pattern, number, digits, decoration) {
+    return composeParts(pattern, number, digits, decoration).name;
+}
+
+// Lo mismo, con dónde quedan las cifras del número (para pintarlas en amarillo).
+export function composeParts(pattern, number, digits, decoration) {
     const hash = pattern.indexOf("#");
-    if (hash < 0)
-        return number < 0 ? pattern : pattern + numberText(number, digits, decoration);
     let end = hash;
-    while (end < pattern.length && pattern[end] === "#")
+    while (hash >= 0 && end < pattern.length && pattern[end] === "#")
         ++end;
-    const token = number < 0 ? "" : numberText(number, Math.max(digits, end - hash), decoration);
-    return pattern.slice(0, hash) + token + pattern.slice(end);
+    const min = hash < 0 ? digits : Math.max(digits, end - hash);
+    const token = number < 0 ? "" : numberText(number, min, decoration);
+    const at = hash < 0 ? pattern.length : hash;
+    const inToken = decoration.includes("%1") ? decoration.indexOf("%1") : decoration.length;
+    const length = number < 0 ? 0 : String(number).padStart(Math.max(1, min), "0").length;
+    const name = hash < 0 ? pattern + token : pattern.slice(0, hash) + token + pattern.slice(end);
+    return { name, start: at + (number < 0 ? 0 : inToken), length };
 }
 
 const Decorations = ["%1", " %1", "_%1", "-%1", " (%1)", "(%1)", " [%1]"];
@@ -46,17 +54,37 @@ function validName(name) {
     return !!name.trim() && name !== "." && name !== ".." && !/[/\\:*?"<>|\u0000-\u001f]/.test(name);
 }
 
-// Campo del nombre con la extensión detrás, en su color («prueba.png»).
+// Campo del nombre con la extensión detrás, en su color («prueba.png»), y partes en amarillo (el
+// número de cada nombre, los '#' del nombre común). El texto se ve en la capa de encima (el del
+// campo es transparente, con su cursor y su selección), que sigue al campo al desplazarse.
 function nameField(value) {
     const input = el("input", { type: "text", value, spellcheck: false });
     const ext = el("span", { className: "ext" });
     const sizer = el("span", { className: "sizer" });
-    const wrap = el("div", { className: "save-all-name" }, [input, el("div", { className: "overlay" }, [sizer, ext])]);
+    const overlay = el("div", { className: "overlay" }, [sizer, ext]);
+    const wrap = el("div", { className: "save-all-name" }, [input, overlay]);
+    let highlights = [];
     const sync = () => {
-        sizer.textContent = input.value;
-        ext.style.visibility = input.value ? "" : "hidden";
+        const text = input.value;
+        const parts = [];
+        let at = 0;
+        for (const [start, length] of [...highlights].sort((a, b) => a[0] - b[0])) {
+            if (length <= 0 || start < at || start + length > text.length)
+                continue;
+            if (start > at)
+                parts.push(text.slice(at, start));
+            parts.push(el("span", { className: "number", textContent: text.slice(start, start + length) }));
+            at = start + length;
+        }
+        parts.push(text.slice(at));
+        sizer.replaceChildren(...parts);
+        ext.style.visibility = text ? "" : "hidden";
+        overlay.scrollLeft = input.scrollLeft;
     };
     input.addEventListener("input", sync);
+    input.addEventListener("scroll", () => (overlay.scrollLeft = input.scrollLeft));
+    for (const type of ["keyup", "pointerup", "select"])
+        input.addEventListener(type, () => (overlay.scrollLeft = input.scrollLeft));
     sync();
     return {
         element: wrap, input,
@@ -64,8 +92,13 @@ function nameField(value) {
             ext.textContent = e ? `.${e}` : "";
             ext.style.color = extensionColor(e);
         },
-        setValue(v) {
+        setValue(v, ranges = []) {
             input.value = v;
+            highlights = ranges;
+            sync();
+        },
+        setHighlights(ranges) {
+            highlights = ranges;
             sync();
         },
     };
@@ -115,7 +148,11 @@ export async function saveAllDialog(entries, formats) {
         const thumb = el("span", { className: "thumb" }, [e.image]);
         const element = el("div", { className: "save-all-row" }, [dots, check, thumb, name.element, format]);
         const row = { index, element, check, name, format, custom: false };
-        name.input.addEventListener("input", () => (row.custom = true));
+        name.input.addEventListener("input", () => {
+            row.custom = true;
+            // Escrito a mano: el número deja de marcarse.
+            name.setHighlights([]);
+        });
         format.addEventListener("change", () => {
             name.setExtension(format.value);
             sync();
@@ -172,8 +209,10 @@ export async function saveAllDialog(entries, formats) {
             if (!r.check.checked)
                 continue;
             const number = first ? from + k : k === 0 ? -1 : from + k - 1;
-            if (!r.custom)
-                r.name.setValue(composeName(text, number, d, decoration.value));
+            if (!r.custom) {
+                const parts = composeParts(text, number, d, decoration.value);
+                r.name.setValue(parts.name, [[parts.start, parts.length]]);
+            }
             ++k;
         }
     }
@@ -195,7 +234,11 @@ export async function saveAllDialog(entries, formats) {
         sync();
         applyPattern(false);
     });
-    pattern.input.addEventListener("input", () => applyPattern(true));
+    pattern.input.addEventListener("input", () => {
+        // Los '#' del nombre común, en amarillo como los números que serán.
+        pattern.setHighlights([...pattern.input.value.matchAll(/#+/g)].map((m) => [m.index, m[0].length]));
+        applyPattern(true);
+    });
     allFormat.addEventListener("change", () => {
         if (allFormat.value)
             rows.forEach((r) => {

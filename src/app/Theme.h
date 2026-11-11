@@ -92,6 +92,9 @@ struct Spec {
     bool win7 = false;
     // Tema Windows XP (XP.css): botones, campos, menús y ventanas de Luna (no se guarda).
     bool xp = false;
+    // Con el color de selección propio de los temas Claro y Oscuro (no se guarda): la pestaña de
+    // la imagen y los botones de las ventanas también lo llevan.
+    bool ownSelection = false;
 
     bool operator==(const Spec&) const = default;
 };
@@ -161,6 +164,13 @@ QColor titleBarColor();
 // Devuelve si cambió (entonces hay que volver a aplicar el tema).
 bool setAeroTransparency(bool on);
 bool aeroTransparency();
+// Color de selección propio de los temas Claro y Oscuro (y Seguir al sistema, según el modo):
+// el fondo de lo elegido en las ventanas (herramientas, capas, historial...), en la barra
+// superior y en las listas; el borde y lo de bajo el puntero salen de él. No válido: el azul de
+// siempre. Devuelve si cambió (entonces hay que volver a aplicar el tema).
+bool setSelectionColors(const QColor& light, const QColor& dark);
+// Los de fábrica (para el botón de color en Configuración).
+QColor defaultSelectionColor(bool dark);
 // El color propio elegido (no válido: ninguno).
 QColor customTitleBarColor();
 // El de la barra de título inactiva (al pasar a otro programa) cuando titleBarColor() es válido:

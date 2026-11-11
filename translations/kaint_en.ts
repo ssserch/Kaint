@@ -1314,6 +1314,61 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>GifFramesDialog</name>
+    <message>
+        <source>Elegir los fotogramas</source>
+        <translation>Choose the frames</translation>
+    </message>
+    <message>
+        <source>Elige los fotogramas de «%1» que quieres abrir (un clic marca o desmarca cada uno).</source>
+        <translation>Choose the frames of “%1” you want to open (a click checks or unchecks each one).</translation>
+    </message>
+    <message>
+        <source>%1 · %2 ms</source>
+        <translation>%1 · %2 ms</translation>
+    </message>
+    <message>
+        <source>Todos</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Ninguno</source>
+        <translation>None</translation>
+    </message>
+    <message>
+        <source>Invertir</source>
+        <translation>Invert</translation>
+    </message>
+    <message>
+        <source>Abrir como:</source>
+        <translation>Open as:</translation>
+    </message>
+    <message>
+        <source>Capas de una imagen</source>
+        <translation>Layers of one image</translation>
+    </message>
+    <message>
+        <source>Una sola imagen con un fotograma en cada capa. Se puede guardar como GIF animado.</source>
+        <translation>A single image with one frame on each layer. It can be saved as an animated GIF.</translation>
+    </message>
+    <message>
+        <source>Imágenes aparte</source>
+        <translation>Separate images</translation>
+    </message>
+    <message>
+        <source>Cada fotograma se abre como una imagen.</source>
+        <translation>Each frame opens as an image.</translation>
+    </message>
+    <message>
+        <source>Abrir</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>%1 de %2</source>
+        <translation>%1 of %2</translation>
+    </message>
+</context>
+<context>
     <name>GradientTool</name>
     <message>
         <source>Arrastra los extremos o el icono de mover; clic derecho en un extremo invierte los colores. Intro: terminar.</source>
@@ -2895,6 +2950,22 @@ Do you want to replace them?</translation>
     <message>
         <source>El historial del anfitrión: volver a una versión anterior para todos</source>
         <translation>The host’s history: go back to an earlier version for everyone</translation>
+    </message>
+    <message>
+        <source>Como una sola imagen</source>
+        <translation>As a single image</translation>
+    </message>
+    <message>
+        <source>Solo el primer fotograma, como una imagen normal (sin animación).</source>
+        <translation>Only the first frame, as a normal image (no animation).</translation>
+    </message>
+    <message>
+        <source>Elegir los fotogramas…</source>
+        <translation>Choose the frames…</translation>
+    </message>
+    <message>
+        <source>Elige qué fotogramas abrir y si se abren como capas o como imágenes.</source>
+        <translation>Choose which frames to open and whether they open as layers or as images.</translation>
     </message>
 </context>
 <context>
@@ -7269,14 +7340,6 @@ Do you want to replace them?</translation>
         <translation>Name to recognize it (optional):</translation>
     </message>
     <message>
-        <source>Edición en tiempo real entre copias de Kaint</source>
-        <translation>Real-time editing between copies of Kaint</translation>
-    </message>
-    <message>
-        <source>Los invitados con Kaint (escritorio) cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios para que los aceptes.</source>
-        <translation>Guests using Kaint (desktop) change the image right away. Unchecked, they also suggest their changes for you to accept.</translation>
-    </message>
-    <message>
         <source>Aceptar automáticamente los cambios sugeridos</source>
         <translation>Accept suggested changes automatically</translation>
     </message>
@@ -7299,10 +7362,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Los navegadores de la red abren Kaint para la web desde la dirección de la sesión (si está instalado junto a Kaint).</source>
         <translation>Browsers on the network open Kaint for the web from the session's address (if it is installed with Kaint).</translation>
-    </message>
-    <message>
-        <source>Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en tu historial como «Cambio hecho por…».</source>
-        <translation>Between Kaint and Kaint for the web, editing always uses confirmations: the guest edits a draft with its own history and suggests it; when you accept it, the change appears for everyone and in your history as “Change made by…”.</translation>
     </message>
     <message>
         <source>Vista</source>
@@ -7531,6 +7590,54 @@ Do you want to replace them?</translation>
     <message>
         <source>Crea tu propio paquete de iconos o cambia el elegido (si no es el de Kaint)</source>
         <translation>Create your own icon pack or change the chosen one (if it isn’t Kaint’s)</translation>
+    </message>
+    <message>
+        <source>Color de selección propio:</source>
+        <translation>Own selection color:</translation>
+    </message>
+    <message>
+        <source>El fondo de lo elegido en las ventanas (Herramientas, Colores, Historial, Capas), en la barra superior y en las listas, en lugar del azul. Uno para el tema claro y otro para el oscuro («Seguir al sistema» usa el del modo del escritorio).</source>
+        <translation>The background of what is selected in the windows (Tools, Colors, History, Layers), in the top bar and in lists, instead of the blue. One for the light theme and one for the dark one (“Follow the system” uses the one for the desktop’s mode).</translation>
+    </message>
+    <message>
+        <source>Con el tema claro</source>
+        <translation>With the light theme</translation>
+    </message>
+    <message>
+        <source>Con el tema oscuro</source>
+        <translation>With the dark theme</translation>
+    </message>
+    <message>
+        <source>Volver al azul de siempre.</source>
+        <translation>Go back to the usual blue.</translation>
+    </message>
+    <message>
+        <source>Como una sola imagen</source>
+        <translation>As a single image</translation>
+    </message>
+    <message>
+        <source>Solo el primer fotograma, como una imagen normal.</source>
+        <translation>Only the first frame, as a normal image.</translation>
+    </message>
+    <message>
+        <source>Elegir los fotogramas</source>
+        <translation>Choose the frames</translation>
+    </message>
+    <message>
+        <source>Cada vez, elegir qué fotogramas abrir y cómo.</source>
+        <translation>Each time, choose which frames to open and how.</translation>
+    </message>
+    <message>
+        <source>Edición en tiempo real</source>
+        <translation>Real-time editing</translation>
+    </message>
+    <message>
+        <source>Los invitados (con Kaint o con Kaint para la web) cambian la imagen al momento. Sin marcar, sugieren sus cambios para que los aceptes.</source>
+        <translation>Guests (using Kaint or Kaint for the web) change the image right away. Unchecked, they suggest their changes for you to accept.</translation>
+    </message>
+    <message>
+        <source>En tiempo real también entre Kaint y Kaint para la web. Con confirmaciones, el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en tu historial como «Cambio hecho por…».</source>
+        <translation>In real time also between Kaint and Kaint for the web. With confirmations, the guest edits a draft with its own history and suggests it; when you accept it, the change appears for everyone and in your history as “Change made by…”.</translation>
     </message>
 </context>
 <context>

@@ -176,6 +176,11 @@ add_library(kaintui STATIC
     src/app/dialogs/ImageDialogs.cpp
     src/app/dialogs/PluginCatalogDialog.cpp
     src/app/dialogs/SaveAllDialog.cpp
+    src/app/collab/WebSocket.cpp
+    src/app/collab/CollabProtocol.cpp
+    src/app/collab/CollabServer.cpp
+    src/app/collab/CollabSession.cpp
+    src/app/collab/Discovery.cpp
     src/app/dialogs/SaveConfigDialog.cpp
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp

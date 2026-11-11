@@ -8,6 +8,7 @@
 
 class Canvas;
 class Document;
+struct Layer;
 class QPainter;
 class QKeyEvent;
 class QInputMethodEvent;
@@ -132,6 +133,9 @@ public:
     // Termina la operación en curso (botón "Terminar", Intro, cambio de herramienta...).
     virtual void finish() {}
     virtual bool isBusy() const { return false; }
+    // Capa que la operación en curso está cambiando (en la sesión colaborativa, lo que llega de
+    // otros para ella espera a que termine).
+    virtual const Layer* editingLayer() const { return nullptr; }
 
     // Antes de deshacer, rehacer o saltar en el historial (las que guardan cada paso en él solo
     // registran lo pendiente) y después (para retomar un paso editable).

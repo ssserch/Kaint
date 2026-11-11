@@ -26,6 +26,7 @@ public:
     bool hidesSelectionOutline() const override;
     void finish() override;
     void deactivate() override;
+    const Layer* editingLayer() const override { return m_active && m_float ? m_float->layer.get() : nullptr; }
 
     // Píxeles flotantes de la última operación, si se puede continuar con ellos.
     static FloatingPtr currentFloating(Document* doc);

@@ -41,8 +41,9 @@ export class Hub {
         return [...(this.host ? [this.host.peer] : []), ...this.guests().map((c) => c.peer).sort((a, b) => a.id - b.id)];
     }
 
-    modeFor(peer) {
-        return peer.platform === "web" && this.config.realtime !== false ? "live" : "confirm";
+    // En tiempo real con todos (también con Kaint de escritorio) o con confirmaciones.
+    modeFor() {
+        return this.config.realtime !== false ? "live" : "confirm";
     }
 
     info() {

@@ -57,7 +57,11 @@ public:
     // El número de una imagen tal como queda en el nombre ('decoration' con %1 en su sitio).
     static QString numberText(int number, int digits, const QString& decoration);
     // El nombre común con el número en el '#' (o al final, si no hay); 'number' < 0: sin número.
-    static QString composeName(const QString& pattern, int number, int digits, const QString& decoration);
+    // 'numberStart'/'numberLength': dónde queda el número en el nombre (para pintarlo en amarillo).
+    static QString composeName(const QString& pattern, int number, int digits, const QString& decoration,
+                               int* numberStart = nullptr, int* numberLength = nullptr);
+    // El amarillo de los números (y de los '#'): más oscuro sobre fondo claro, para que se lea.
+    static QColor numberColor(const QColor& background);
 
     void accept() override;
 

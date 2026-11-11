@@ -13,52 +13,6 @@ void applyLuts(const RenderArgs& a, const Lut& lr, const Lut& lg, const Lut& lb)
     mapStraight(a, [&](QRgb c) { return qRgba(lr[qRed(c)], lg[qGreen(c)], lb[qBlue(c)], qAlpha(c)); });
 }
 
-// --- HSV de Paint.NET en coma flotante (h 0..360, s y v 0..1) ---------------
-
-inline void rgbToHsv(int r, int g, int b, double& h, double& s, double& v)
-{
-    const double rf = r / 255.0, gf = g / 255.0, bf = b / 255.0;
-    const double mx = std::max({rf, gf, bf}), mn = std::min({rf, gf, bf});
-    const double delta = mx - mn;
-    v = mx;
-    s = mx == 0 ? 0 : delta / mx;
-    if (delta == 0) {
-        h = 0;
-        return;
-    }
-    if (rf == mx)
-        h = (gf - bf) / delta;
-    else if (gf == mx)
-        h = 2 + (bf - rf) / delta;
-    else
-        h = 4 + (rf - gf) / delta;
-    h *= 60;
-    if (h < 0)
-        h += 360;
-}
-
-inline QRgb hsvToRgb(double h, double s, double v, int alpha)
-{
-    if (s == 0) {
-        const int c = clamp255f(float(v * 255));
-        return qRgba(c, c, c, alpha);
-    }
-    h = std::fmod(h, 360.0) / 60.0;
-    const int i = int(std::floor(h));
-    const double f = h - i;
-    const double p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
-    double r, g, b;
-    switch (i) {
-    case 0: r = v, g = t, b = p; break;
-    case 1: r = q, g = v, b = p; break;
-    case 2: r = p, g = v, b = t; break;
-    case 3: r = p, g = q, b = v; break;
-    case 4: r = t, g = p, b = v; break;
-    default: r = v, g = p, b = q; break;
-    }
-    return qRgba(clamp255f(float(r * 255)), clamp255f(float(g * 255)), clamp255f(float(b * 255)), alpha);
-}
-
 // --- Ajustes --------------------------------------------------------------------
 
 void renderBlackWhite(const RenderArgs& a)
@@ -151,26 +105,84 @@ void renderHighlightsShadows(const RenderArgs& a)
 
 void renderHueSaturation(const RenderArgs& a)
 {
-    // HueSaturationLightness de Paint.NET.
+    // HueSaturationLightness de Paint.NET, con su HSV en coma flotante (h 0..360, s y v 0..1). Para
+    // la vista previa en tiempo real: sin fmod ni floor, sin pasar por HSV si el matiz no cambia
+    // (la ida y vuelta da el mismo color) y con un caché por hilo de los colores ya calculados (las
+    // zonas de un mismo color se calculan una vez).
     const int hueDelta = ival(a.values, "hue");
     const int satFactor = ival(a.values, "saturation") * 1024 / 100;
     const int lightness = ival(a.values, "lightness");
     const int blendAlpha = std::abs(lightness) * 255 / 100;
     const int blendTo = lightness > 0 ? 255 : 0;
-    mapStraight(a, [&](QRgb c) {
-        const int i = intensity(c);
-        const int r = clamp255((i * 1024 + (qRed(c) - i) * satFactor) >> 10);
-        const int g = clamp255((i * 1024 + (qGreen(c) - i) * satFactor) >> 10);
-        const int b = clamp255((i * 1024 + (qBlue(c) - i) * satFactor) >> 10);
-        double h, s, v;
-        rgbToHsv(r, g, b, h, s, v);
-        h = std::fmod(h + hueDelta + 720.0, 360.0);
-        QRgb out = hsvToRgb(h, s, v, qAlpha(c));
+    const bool rotate = ((hueDelta % 360) + 360) % 360 != 0;
+    auto compute = [&](int r, int g, int b) {
+        r = clamp255(r);
+        g = clamp255(g);
+        b = clamp255(b);
+        const int mx = std::max({r, g, b}), mn = std::min({r, g, b});
+        if (rotate && mx != mn) {
+            const double v = mx / 255.0, delta = (mx - mn) / 255.0, s = delta / v;
+            const double rf = r / 255.0, gf = g / 255.0, bf = b / 255.0;
+            double h;
+            if (r == mx)
+                h = (gf - bf) / delta;
+            else if (g == mx)
+                h = 2 + (bf - rf) / delta;
+            else
+                h = 4 + (rf - gf) / delta;
+            h *= 60;
+            if (h < 0)
+                h += 360;
+            // fmod(h + hueDelta + 720, 360) restando 360 (exacto).
+            h = h + hueDelta + 720.0;
+            while (h >= 360.0)
+                h -= 360.0;
+            const double hh = h / 60.0;
+            const int k = int(hh);
+            const double f = hh - k;
+            const double p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+            double rr, gg, bb;
+            switch (k) {
+            case 0: rr = v, gg = t, bb = p; break;
+            case 1: rr = q, gg = v, bb = p; break;
+            case 2: rr = p, gg = v, bb = t; break;
+            case 3: rr = p, gg = q, bb = v; break;
+            case 4: rr = t, gg = p, bb = v; break;
+            default: rr = v, gg = p, bb = q; break;
+            }
+            r = clamp255f(float(rr * 255));
+            g = clamp255f(float(gg * 255));
+            b = clamp255f(float(bb * 255));
+        }
         if (lightness != 0) {
             auto mix = [&](int x) { return x + ((blendTo - x) * blendAlpha + 127) / 255; };
-            out = qRgba(mix(qRed(out)), mix(qGreen(out)), mix(qBlue(out)), qAlpha(c));
+            r = mix(r);
+            g = mix(g);
+            b = mix(b);
         }
-        return out;
+        return uint32_t((r << 16) | (g << 8) | b);
+    };
+    struct Cache {
+        quint64 stamp = ~quint64(0);
+        std::array<uint32_t, 1 << 14> keys;
+        std::array<uint32_t, 1 << 14> values;
+    };
+    const quint64 stamp = (quint64(uint32_t(hueDelta + 1000)) << 40) | (quint64(uint32_t(satFactor)) << 16) | quint64(uint16_t(lightness + 1000));
+    mapStraight(a, [&](QRgb c) {
+        thread_local Cache cache;
+        if (cache.stamp != stamp) {
+            cache.stamp = stamp;
+            cache.keys.fill(0xffffffffu);
+        }
+        const uint32_t rgb = c & 0xffffffu;
+        const uint32_t slot = (rgb * 2654435761u) >> 18;
+        if (cache.keys[slot] != rgb) {
+            const int i = intensity(c);
+            cache.keys[slot] = rgb;
+            cache.values[slot] = compute((i * 1024 + (qRed(c) - i) * satFactor) >> 10, (i * 1024 + (qGreen(c) - i) * satFactor) >> 10,
+                                         (i * 1024 + (qBlue(c) - i) * satFactor) >> 10);
+        }
+        return (c & 0xff000000u) | cache.values[slot];
     });
 }
 

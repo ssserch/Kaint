@@ -80,10 +80,11 @@ back to earlier versions; off by default).
 
 ## Editing
 
-- **live** (real time): only between the same app (desktop–desktop, web–web) when the host allows it.
-  Every finished step of a live guest goes to the host as `change {label, ops}`; the host applies it and
-  sends `commit` to everybody.
-- **confirm** (default, and always between desktop and web): the guest edits a private draft with its own
+- **live** (real time, the default): every guest, from Kaint or from the web version, whatever the host
+  runs, while the host has `realtime` on. Every finished step of a live guest goes to the host as
+  `change {label, ops}`; the host applies it and sends `commit` to everybody. Ops are pixels (PNG with an
+  optional mask), so both apps apply them the same way.
+- **confirm** (when the host turns `realtime` off): the guest edits a private draft with its own
   history and sends it with `propose {pid, label, ops}`. The host accepts or rejects it (or accepts all
   automatically if it chose so) and answers `proposal {pid, state}`; accepted drafts become a `commit`.
   The guest's draft history is cleared once it is accepted.
@@ -143,8 +144,7 @@ guest the pixels it changed itself and hasn't sent yet are kept.
   `history`); `admit`, `kick`, `permit`, `config` and `end` are for the relay; anything else (`commit`,
   `cursor`, `history`) goes to every guest.
 - guest → relay: `revert` goes to the host (with `from`) only if that guest has the `history` permission.
-- Guests on the same platform as the host (web) are `live` when `realtime` is on; desktop guests of a
-  web host use confirmations.
+- Every guest (web or desktop) is `live` while `realtime` is on, and `confirm` otherwise.
 
 ## Applying changes
 

@@ -20,6 +20,7 @@
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
+#include "app/dialogs/GifFramesDialog.h"
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveAllDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
@@ -2168,9 +2169,11 @@ void MainWindow::openFiles(const QStringList& paths)
             QMessageBox::critical(this, tr("No se pudo abrir"), tr("No se pudo abrir «%1»:\n%2").arg(abs, error));
             continue;
         }
-        // GIF animado: como capas (un fotograma por capa, como hasta ahora) o cada fotograma como
-        // una imagen aparte.
+        // GIF animado: como capas (un fotograma por capa, como hasta ahora), cada fotograma como
+        // una imagen aparte, solo el primero como una imagen normal o los fotogramas que se elijan.
         bool asImages = false;
+        // Fotogramas elegidos (vacío: todos).
+        QList<int> frames;
         if (ImageIO::isAnimation(abs) && doc->layerCount() > 1) {
             int mode = m_settings.gifOpenMode;
             if (mode == 0) {
@@ -2187,33 +2190,67 @@ void MainWindow::openFiles(const QStringList& paths)
                 const int images = ask.addChoice(Icons::theme({"image-x-generic", "folder-images"}), tr("Como imágenes"),
                                                  tr("Cada fotograma se abre como una imagen aparte. Al guardar como GIF se "
                                                     "pueden elegir las imágenes que forman la animación."));
+                const int single = ask.addChoice(Icons::theme({"document-new", "image-x-generic"}), tr("Como una sola imagen"),
+                                                 tr("Solo el primer fotograma, como una imagen normal (sin animación)."));
+                const int pick = ask.addChoice(Icons::theme({"edit-select-all", "view-list-icons"}), tr("Elegir los fotogramas…"),
+                                               tr("Elige qué fotogramas abrir y si se abren como capas o como imágenes."));
                 const int choice = ask.choose();
-                if (choice != layers && choice != images) {
+                if (choice == layers) {
+                    mode = 1;
+                } else if (choice == images) {
+                    mode = 2;
+                } else if (choice == single) {
+                    mode = 3;
+                } else if (choice == pick) {
+                    mode = 4;
+                } else {
                     delete doc;
                     continue;
                 }
-                mode = choice == images ? 2 : 1;
                 if (remember->isChecked()) {
                     m_settings.gifOpenMode = mode;
                     m_settings.save();
                 }
             }
             asImages = mode == 2;
+            if (mode == 3) {
+                frames = {0};
+            } else if (mode == 4) {
+                GifFramesDialog pickFrames(doc, QFileInfo(abs).fileName(), this);
+                if (pickFrames.exec() != QDialog::Accepted || pickFrames.frames().isEmpty()) {
+                    delete doc;
+                    continue;
+                }
+                frames = pickFrames.frames();
+                asImages = pickFrames.openAs() == GifFramesDialog::OpenAs::Images;
+                if (frames.size() == doc->layerCount())
+                    frames.clear();
+            }
+            // Uno solo (el primero o el único elegido): una imagen normal.
+            if (frames.size() == 1)
+                asImages = true;
         }
-        if (m_docs.size() == 1 && m_docs.first()->filePath().isEmpty() && !m_docs.first()->isModified()
-            && m_docs.first()->undoStack()->count() == 0)
+        // La imagen en blanco del inicio se sustituye (no una sin archivo con nombre propio, como un
+        // fotograma de un GIF).
+        if (m_docs.size() == 1 && m_docs.first()->filePath().isEmpty() && m_docs.first()->untitledName().isEmpty()
+            && !m_docs.first()->isModified() && m_docs.first()->undoStack()->count() == 0)
             closeDocument(m_docs.first());
         if (asImages) {
             // Cada fotograma, una imagen sin archivo ("animación (3)"); el nombre de su capa conserva
             // la duración, para volver a guardarlas como GIF eligiendo las imágenes.
             const QString base = QFileInfo(abs).completeBaseName();
             Document* first = nullptr;
-            for (int i = 0; i < doc->layerCount(); ++i) {
+            QList<int> indices = frames;
+            if (indices.isEmpty())
+                for (int i = 0; i < doc->layerCount(); ++i)
+                    indices << i;
+            for (int i : std::as_const(indices)) {
                 const Layer* frame = doc->layer(i);
                 Document* d = Document::createFromImage(frame->image, frame->props.name);
                 d->setDpi(doc->dpi());
                 d->setGifLoops(doc->gifLoops());
-                d->setUntitledName(tr("%1 (%2)").arg(base).arg(i + 1));
+                // Sin archivo: guardar no pisa el GIF animado.
+                d->setUntitledName(indices.size() == 1 ? base : tr("%1 (%2)").arg(base).arg(i + 1));
                 d->setHistoryRootLabel(tr("Abrir imagen"));
                 addDocument(d);
                 if (!first)
@@ -2223,6 +2260,16 @@ void MainWindow::openFiles(const QStringList& paths)
             if (first)
                 setCurrentDocument(first);
         } else {
+            if (!frames.isEmpty()) {
+                // Solo los fotogramas elegidos, como capas, y sin archivo: guardar no pisa el GIF con
+                // menos fotogramas.
+                QList<LayerPtr> chosen;
+                for (int i : std::as_const(frames))
+                    chosen << doc->layerPtr(i);
+                doc->replaceState(doc->size(), chosen, int(chosen.size()) - 1);
+                doc->setFilePath(QString());
+                doc->setUntitledName(QFileInfo(abs).completeBaseName());
+            }
             addDocument(doc);
         }
         AppState::instance()->addRecentFile(abs, m_canvas->composite());
@@ -3839,8 +3886,9 @@ void MainWindow::applySettings()
     Theme::setUiFont(m_settings.uiFontFamily, m_settings.uiFontSize);
     Theme::setCustomTitleBarColor(ownTitle);
     const bool glassChanged = Theme::setAeroTransparency(m_settings.aeroTransparency);
+    const bool selectionChanged = Theme::setSelectionColors(m_settings.selectionColorLight, m_settings.selectionColorDark);
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)
-        || fontChanged || titleChanged || glassChanged) {
+        || fontChanged || titleChanged || glassChanged || selectionChanged) {
         Theme::setLook(Theme::Look(m_settings.uiStyle));
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     }

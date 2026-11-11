@@ -90,6 +90,8 @@ bool g_baseFontSet = false;
 QString g_uiFontFamily;
 int g_uiFontSize = 0;
 QColor g_customTitleBar;
+QColor g_selectionLight;
+QColor g_selectionDark;
 bool g_fusion = false;
 Look g_look = Look::Kaint;
 // Letras de acceso: siempre subrayadas o solo con Alt (mientras se pulsa o se navega por los
@@ -1259,8 +1261,9 @@ namespace {
 // (azul con borde de acento), las casillas de las capas blancas y el botón «Más >>» claro.
 QString paintNetStyleSheet(const Spec& s, const QColor& line)
 {
-    const QColor edge(0x00, 0x78, 0xd7);
-    const QColor tab = s.dark ? QColor(0x3a, 0x63, 0xc0) : QColor(0xcc, 0xe8, 0xff);
+    // La pestaña de la imagen actual: el azul de Paint.NET o el color de selección propio.
+    const QColor edge = s.ownSelection ? s.selectionBorder : QColor(0x00, 0x78, 0xd7);
+    const QColor tab = s.ownSelection ? s.selection : s.dark ? QColor(0x3a, 0x63, 0xc0) : QColor(0xcc, 0xe8, 0xff);
     // Los menús van en un recuadro con borde arriba y a los lados, como en Paint.NET (gris en el
     // claro y azul oscuro en el Azul), con algo de espacio antes de «Archivo».
     const QColor menuEdge = s.blue ? QColor(0x36, 0x5d, 0x90) : s.dark ? line : QColor(0xb8, 0xb8, 0xb8);
@@ -1713,14 +1716,16 @@ QToolButton::menu-arrow:disabled { image: url("%2"); }
     qss += QStringLiteral("QSlider[kaintPressed=\"true\"]::handle { background: %1; }\n").arg(css(s.text));
     // Botones de las ventanas de la esquina superior derecha, como en Paint.NET: los activos con
     // el acento translúcido sobre la franja y un borde del acento (no el celeste de la selección).
+    // Con el color de selección propio, ese.
+    const QColor corner = s.ownSelection ? s.selectionBorder : s.accent;
     if (!s.classic)
         qss += QStringLiteral(R"(
 QWidget#CornerButtons QToolButton:checked { background: %1; border: 1px solid %2; }
 QWidget#CornerButtons QToolButton:checked:hover { background: %3; }
 )")
-                   .arg(QStringLiteral("rgba(%1, %2, %3, 64)").arg(s.accent.red()).arg(s.accent.green()).arg(s.accent.blue()),
-                        css(s.accent),
-                        QStringLiteral("rgba(%1, %2, %3, 96)").arg(s.accent.red()).arg(s.accent.green()).arg(s.accent.blue()));
+                   .arg(QStringLiteral("rgba(%1, %2, %3, 64)").arg(corner.red()).arg(corner.green()).arg(corner.blue()),
+                        css(corner),
+                        QStringLiteral("rgba(%1, %2, %3, 96)").arg(corner.red()).arg(corner.green()).arg(corner.blue()));
     if (s.paintNet)
         qss += paintNetStyleSheet(s, line);
     // Azul: las dos barras de herramientas forman un solo degradado de casi blanco a azul claro (la
@@ -1848,6 +1853,18 @@ void apply(Scheme scheme)
             g_active.hover = g_active.dark ? QColor(0x28, 0x45, 0x5d) : QColor(0xd4, 0xe5, 0xf3);
         }
     }
+    // El color de selección propio (temas Claro y Oscuro): el fondo de lo elegido; el borde, más
+    // oscuro (claro) o más claro (oscuro), y lo de bajo el puntero, a medio camino del fondo de las
+    // ventanas.
+    if (scheme == Scheme::System || scheme == Scheme::Light || scheme == Scheme::Dark) {
+        const QColor own = g_active.dark ? g_selectionDark : g_selectionLight;
+        if (own.isValid()) {
+            g_active.selection = own;
+            g_active.selectionBorder = g_active.dark ? own.lighter(160) : own.darker(135);
+            g_active.hover = mix(own, g_active.panel, 0.55);
+            g_active.ownSelection = true;
+        }
+    }
 
     if (g_baseFontSet) {
         // Fuente propia: la del personalizado o la de Windows 98.
@@ -1966,6 +1983,21 @@ QColor titleBarColor()
 QColor customTitleBarColor()
 {
     return g_customTitleBar;
+}
+
+bool setSelectionColors(const QColor& light, const QColor& dark)
+{
+    const QColor l = light.isValid() ? QColor(light.rgb()) : QColor();
+    const QColor d = dark.isValid() ? QColor(dark.rgb()) : QColor();
+    const bool changed = l != g_selectionLight || d != g_selectionDark;
+    g_selectionLight = l;
+    g_selectionDark = d;
+    return changed;
+}
+
+QColor defaultSelectionColor(bool dark)
+{
+    return dark ? QColor(0x19, 0x5b, 0xa0) : QColor(0xcc, 0xe8, 0xff);
 }
 
 bool setAeroTransparency(bool on)

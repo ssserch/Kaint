@@ -259,6 +259,65 @@ export class TaskDialog extends Dialog {
     }
 }
 
+// Abrir un GIF animado > Elegir los fotogramas (GifFramesDialog.cpp de Kaint): las miniaturas de
+// todos con su número y su duración; un clic marca o desmarca cada uno, con botones para todos,
+// ninguno o invertir. Devuelve { frames, asImages } o null.
+export async function gifFramesDialog(doc, fileName) {
+    const dlg = new Dialog(tr("Elegir los fotogramas"), { iconName: "document-open" });
+    dlg.body.classList.add("gif-frames-dialog");
+    const chosen = new Set(doc.layers.map((_, i) => i));
+    const grid = el("div", { className: "gif-frames" });
+    const count = el("span", { className: "count" });
+    const openAs = select([["layers", tr("Capas de una imagen")], ["images", tr("Imágenes aparte")]], "layers");
+    openAs.title = tr("Capas de una imagen: un fotograma en cada capa (se puede guardar como GIF animado). Imágenes aparte: cada fotograma se abre como una imagen.");
+    const cells = doc.layers.map((layer, i) => {
+        const cell = el("button", { className: "gif-frame", title: layer.name }, [
+            thumbnail(layer.canvas, 96, 96, true, true),
+            el("span", { textContent: tr("%1 · %2 ms", i + 1, delayFromName(layer.name, 100)) }),
+        ]);
+        cell.addEventListener("click", () => {
+            chosen.has(i) ? chosen.delete(i) : chosen.add(i);
+            sync();
+        });
+        return cell;
+    });
+    grid.append(...cells);
+    const button = (text, fn) => {
+        const b = el("button", { className: "pushbutton", textContent: text });
+        b.addEventListener("click", () => {
+            fn();
+            sync();
+        });
+        return b;
+    };
+    const open = dlg.addButton(tr("Abrir"), "open", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    const sync = () => {
+        cells.forEach((cell, i) => {
+            cell.classList.toggle("checked", chosen.has(i));
+            cell.setAttribute("aria-pressed", String(chosen.has(i)));
+        });
+        count.textContent = tr("%1 de %2", chosen.size, cells.length);
+        open.disabled = chosen.size === 0;
+        // Uno solo se abre como una imagen normal.
+        openAs.disabled = chosen.size < 2;
+    };
+    dlg.validate = () => chosen.size > 0;
+    dlg.body.append(
+        el("p", { textContent: tr("Elige los fotogramas de «%1» que quieres abrir (un clic marca o desmarca cada uno).", fileName), style: { maxWidth: "640px" } }),
+        grid,
+        el("div", { className: "row-buttons" }, [
+            button(tr("Todos"), () => cells.forEach((_, i) => chosen.add(i))),
+            button(tr("Ninguno"), () => chosen.clear()),
+            button(tr("Invertir"), () => cells.forEach((_, i) => (chosen.has(i) ? chosen.delete(i) : chosen.add(i)))),
+            count, el("span", { style: { flex: "1" } }), el("span", { textContent: tr("Abrir como:") }), openAs,
+        ]));
+    sync();
+    if ((await dlg.exec()) !== "open")
+        return null;
+    return { frames: [...chosen].sort((a, b) => a - b), asImages: openAs.value === "images" };
+}
+
 export async function message(title, text, iconName = "dialog-warning") {
     const dlg = new Dialog(title, { iconName });
     dlg.body.appendChild(el("div", { className: "task" }, [
@@ -825,6 +884,38 @@ export async function settingsDialog(app = null, startPage = "interface") {
             };
             titleOn.input.addEventListener("change", applyTitle);
             titleColor.addEventListener("input", applyTitle);
+            // El color de selección de los temas Claro y Oscuro (uno para cada modo, así «Seguir al
+            // sistema» usa el que toque), como en Kaint.
+            const ownSelection = !!(Settings.get("selectionColorLight") || Settings.get("selectionColorDark"));
+            const selectionOn = checkbox(tr("Color de selección propio:"), ownSelection);
+            selectionOn.title = tr("El fondo de lo elegido en las ventanas (Herramientas, Colores, Historial, Capas), en la barra superior y en las listas, en lugar del azul. Uno para el tema claro y otro para el oscuro («Seguir al sistema» usa el del modo del escritorio).");
+            const lightSelection = el("input", { type: "color", value: Settings.get("selectionColorLight") || "#cce8ff", disabled: !ownSelection,
+                                                 title: tr("Con el tema claro") });
+            const darkSelection = el("input", { type: "color", value: Settings.get("selectionColorDark") || "#195ba0", disabled: !ownSelection,
+                                                title: tr("Con el tema oscuro") });
+            const resetSelection = el("button", { className: "pushbutton", textContent: tr("Restablecer"), title: tr("Volver al azul de siempre."),
+                                                  disabled: !ownSelection });
+            const applySelection = () => {
+                const on = selectionOn.input.checked;
+                lightSelection.disabled = darkSelection.disabled = resetSelection.disabled = !on;
+                Settings.set("selectionColorLight", on ? lightSelection.value : null);
+                Settings.set("selectionColorDark", on ? darkSelection.value : null);
+            };
+            selectionOn.input.addEventListener("change", applySelection);
+            lightSelection.addEventListener("input", applySelection);
+            darkSelection.addEventListener("input", applySelection);
+            resetSelection.addEventListener("click", () => {
+                lightSelection.value = "#cce8ff";
+                darkSelection.value = "#195ba0";
+                selectionOn.input.checked = false;
+                applySelection();
+            });
+            // Solo con los temas Claro, Oscuro y Seguir al sistema.
+            const selectionRow = el("div", { className: "row selection-color-row" }, [selectionOn, el("span", { textContent: tr("Claro") }), lightSelection,
+                                                                                     el("span", { textContent: tr("Oscuro") }), darkSelection, resetSelection]);
+            const syncSelectionRow = () => (selectionRow.hidden = ![0, 1, 2].includes(Number(Settings.get("colorScheme")) || 0));
+            syncSelectionRow();
+            window.addEventListener("kaint-settings", (e) => e.detail?.key === "colorScheme" && syncSelectionRow());
             queueMicrotask(paintNetCompat);
             // Teléfono (solo se ve en uno): las ventanas escondidas en las esquinas o flotantes, con el
             // tamaño de cada una.
@@ -859,8 +950,9 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 return [heading(tr("Teléfono")), el("label", {}, [tr("Ventanas en el teléfono:"), mode]), hideCovered, sizeNote, sizes];
             };
             // GIF animados: como capas de una imagen o un fotograma por imagen.
-            const gifOpen = select([[0, tr("Preguntar")], [1, tr("Como capas")], [2, tr("Como imágenes")]], Settings.get("gifOpenMode") || 0);
-            gifOpen.title = tr("Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte.");
+            const gifOpen = select([[0, tr("Preguntar")], [1, tr("Como capas")], [2, tr("Como imágenes")], [3, tr("Como una sola imagen")],
+                                    [4, tr("Elegir los fotogramas")]], Settings.get("gifOpenMode") || 0);
+            gifOpen.title = tr("Como capas: cada fotograma es una capa de una sola imagen. Como imágenes: cada fotograma se abre como una imagen aparte. Como una sola imagen: solo el primer fotograma. Elegir los fotogramas: cada vez, qué fotogramas abrir y cómo.");
             gifOpen.addEventListener("change", () => Settings.set("gifOpenMode", Number(gifOpen.value)));
             const translucent = check(tr("Ventanas translúcidas"), "translucentPanels",
                                       tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
@@ -902,6 +994,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 note(tr("Los cambios de idioma se aplican al recargar la página.")),
                 el("label", {}, [tr("Fuente de la interfaz:"), uiFont, fontList, uiFontSize, tr("pt")]),
                 el("div", { className: "row" }, [titleOn, titleColor]),
+                selectionRow,
                 el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
                 heading(tr("Ventanas")),
                 el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),

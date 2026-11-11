@@ -262,6 +262,7 @@ int main(int argc, char** argv)
     Theme::setCustomTitleBarColor(startup.titleBarColor);
 #endif
     Theme::setAeroTransparency(startup.aeroTransparency);
+    Theme::setSelectionColors(startup.selectionColorLight, startup.selectionColorDark);
     Theme::apply(scheme);
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 5)));
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);

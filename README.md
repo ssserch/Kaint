@@ -75,7 +75,7 @@ runs on Windows 10 and 11.
       Paint.NET <b>.pdn</b> and OpenRaster (.ora), both with layers, PNG, JPEG, WebP, AVIF, JPEG XL,
       HEIC, JPEG XR, BMP, TIFF, TGA, DDS, QOI, Netpbm (PPM, PGM, PBM), animated GIF and ICO. TGA, DDS
       and QOI are read and written by Kaint itself, so they work everywhere; AVIF, JPEG XL, HEIC and
-      JPEG XR show up when Qt's image plugins can write them (kimageformats). Animated GIFs open as layers or as separate images, and
+      JPEG XR show up when Qt's image plugins can write them (kimageformats). Animated GIFs open as layers, as separate images, as a single image or with just the frames you pick, and
       can be saved from the layers or from the open images you pick, with a playable preview and
       ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
       frames, global palette, crossfades and a background frame.
@@ -107,7 +107,7 @@ runs on Windows 10 and 11.
       running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
       default: share the session code and the image goes straight from one computer to the other,
       with WebRTC) or on your local network. Between copies
-      of Kaint changes appear in real time; guests can also (and between Kaint and the web, always)
+      of Kaint and the web version changes appear in real time (in any combination); guests can also
       edit a private draft with its own history and suggest it, and the host accepts it (or accepts
       everything automatically): the change then shows up for everyone and in the host's history
       as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
@@ -155,7 +155,8 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   (Windows', or your desktop's: Plasma's on KDE). With the Paint.NET style, the
   **Windows recreation** picks Windows 10 or Windows 11 (slightly rounded windows when not
   maximized). The top bar and the window headers can take **a color of your own**, like Windows'
-  accent color.
+  accent color, and the Light and Dark themes can use **your own selection color** instead of the
+  blue (one for each, so "Follow the system" uses the right one).
 - **Cursors**: Kaint's tool icons or Paint.NET's pixel-art cursors (the default), with the system
   pointer or Kaint's own beside the small tool icon.
 - **Icons and fonts**: install **icon packs** (.zip files with a preview) or create your own with

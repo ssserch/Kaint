@@ -5,12 +5,14 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QInputMethodEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -22,6 +24,7 @@
 #include <QSettings>
 #include <QSpinBox>
 #include <QStyleOptionFrame>
+#include <QTextCharFormat>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -66,6 +69,28 @@ public:
     {
     }
 
+    // Partes del texto en amarillo (el número de cada nombre, los '#' del nombre común).
+    void setHighlights(const QList<QPair<int, int>>& ranges)
+    {
+        m_highlights = ranges;
+        applyHighlights();
+    }
+    const QList<QPair<int, int>>& highlights() const { return m_highlights; }
+
+    void applyHighlights()
+    {
+        // QLineEdit no tiene texto enriquecido: los formatos le llegan como los de un método de
+        // entrada (posiciones respecto al cursor), sin cambiar el texto.
+        QList<QInputMethodEvent::Attribute> attributes;
+        QTextCharFormat yellow;
+        yellow.setForeground(SaveAllDialog::numberColor(palette().color(QPalette::Base)));
+        for (const auto& [start, length] : std::as_const(m_highlights))
+            if (length > 0 && start >= 0 && start + length <= text().size())
+                attributes << QInputMethodEvent::Attribute(QInputMethodEvent::TextFormat, start - cursorPosition(), length, yellow);
+        QInputMethodEvent event(QString(), attributes);
+        QCoreApplication::sendEvent(this, &event);
+    }
+
     void setExtension(const QString& suffix)
     {
         m_extension = suffix.isEmpty() ? QString() : QLatin1Char('.') + suffix;
@@ -94,6 +119,7 @@ protected:
 private:
     QString m_extension;
     QColor m_color;
+    QList<QPair<int, int>> m_highlights;
 };
 
 // Los puntos para arrastrar una fila: solo se ven con el cursor encima de ella.
@@ -271,17 +297,30 @@ QString SaveAllDialog::numberText(int number, int digits, const QString& decorat
     return decoration.contains(QLatin1String("%1")) ? QString(decoration).replace(QLatin1String("%1"), n) : decoration + n;
 }
 
-QString SaveAllDialog::composeName(const QString& pattern, int number, int digits, const QString& decoration)
+QString SaveAllDialog::composeName(const QString& pattern, int number, int digits, const QString& decoration, int* numberStart,
+                                   int* numberLength)
 {
     // '#' (o '##', '###'...: también son las cifras mínimas) marca dónde va el número.
     const int hash = int(pattern.indexOf(QLatin1Char('#')));
-    if (hash < 0)
-        return number < 0 ? pattern : pattern + numberText(number, digits, decoration);
     int end = hash;
-    while (end < pattern.size() && pattern[end] == QLatin1Char('#'))
+    while (hash >= 0 && end < pattern.size() && pattern[end] == QLatin1Char('#'))
         ++end;
-    const QString token = number < 0 ? QString() : numberText(number, std::max(digits, end - hash), decoration);
-    return pattern.left(hash) + token + pattern.mid(end);
+    const int minDigits = hash < 0 ? digits : std::max(digits, end - hash);
+    const QString token = number < 0 ? QString() : numberText(number, minDigits, decoration);
+    // Solo las cifras (sin lo que las rodea, como " (" y ")").
+    const int at = hash < 0 ? int(pattern.size()) : hash;
+    const int inToken = decoration.contains(QLatin1String("%1")) ? int(decoration.indexOf(QLatin1String("%1"))) : int(decoration.size());
+    const int length = number < 0 ? 0 : int(QStringLiteral("%1").arg(number, std::max(1, minDigits), 10, QLatin1Char('0')).size());
+    if (numberStart)
+        *numberStart = at + (number < 0 ? 0 : inToken);
+    if (numberLength)
+        *numberLength = length;
+    return hash < 0 ? pattern + token : pattern.left(hash) + token + pattern.mid(end);
+}
+
+QColor SaveAllDialog::numberColor(const QColor& background)
+{
+    return background.lightnessF() < 0.5 ? QColor(0xff, 0xd5, 0x4a) : QColor(0xb8, 0x8a, 0x00);
 }
 
 SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suffixes, const QStringList& labels,
@@ -397,7 +436,11 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
             syncAllControls();
             applyPattern(false);
         });
-        connect(row->name, &QLineEdit::textEdited, this, [row] { row->custom = true; });
+        connect(row->name, &QLineEdit::textEdited, this, [row] {
+            row->custom = true;
+            // Escrito a mano: el número deja de marcarse.
+            row->name->setHighlights({});
+        });
         connect(row->format, &QComboBox::currentIndexChanged, this, [this, row] {
             row->name->setExtension(row->suffix());
             syncAllControls();
@@ -462,7 +505,21 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
         syncAllControls();
         applyPattern(false);
     });
-    connect(m_pattern, &QLineEdit::textChanged, this, [this] { applyPattern(true); });
+    connect(m_pattern, &QLineEdit::textChanged, this, [this](const QString& text) {
+        // Los '#' del nombre común, en amarillo como los números que serán.
+        QList<QPair<int, int>> hashes;
+        for (int i = 0; i < text.size(); ++i) {
+            if (text[i] != QLatin1Char('#'))
+                continue;
+            int end = i;
+            while (end < text.size() && text[end] == QLatin1Char('#'))
+                ++end;
+            hashes.append({i, end - i});
+            i = end;
+        }
+        m_pattern->setHighlights(hashes);
+        applyPattern(true);
+    });
     connect(m_allFormat, &QComboBox::activated, this, [this] { applyFormatToAll(); });
     connect(m_start, &QSpinBox::valueChanged, this, [this] { applyPattern(false); });
     connect(m_digits, &QSpinBox::valueChanged, this, [this] { applyPattern(false); });
@@ -493,8 +550,11 @@ void SaveAllDialog::applyPattern(bool resetCustom)
         if (!r->check->isChecked())
             continue;
         const int number = numberFirst ? m_start->value() + k : (k == 0 ? -1 : m_start->value() + k - 1);
-        if (!r->custom)
-            r->name->setText(composeName(pattern, number, m_digits->value(), decoration));
+        if (!r->custom) {
+            int start = 0, length = 0;
+            r->name->setText(composeName(pattern, number, m_digits->value(), decoration, &start, &length));
+            r->name->setHighlights({{start, length}});
+        }
         ++k;
     }
 }

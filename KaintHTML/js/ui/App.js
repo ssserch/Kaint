@@ -35,6 +35,7 @@ import { saveConfigDialog } from "./SaveDialog.js";
 import { saveAllDialog } from "./SaveAllDialog.js";
 import { formatLength, pixelsPerUnit, unitSuffix } from "./Units.js";
 import { ToolManager } from "../tools/Tool.js";
+import { CollabController } from "../collab/CollabUI.js";
 import { EllipseSelectTool, LassoSelectTool, MagicWandTool, RectSelectTool } from "../tools/SelectionTools.js";
 import { MoveSelectedTool, MoveSelectionTool } from "../tools/MoveTools.js";
 import { ColorPickerTool, PanTool, ZoomTool } from "../tools/ViewTools.js";
@@ -85,6 +86,8 @@ export class App extends EventTarget {
         this.createCornerButtons();
         this.createImageList();
         this.createStatusBar();
+        // Modo colaborativo (Archivo > Colaboración y Configuración > Colaboración).
+        this.collab = new CollabController(this);
         this.toolOptions = new ToolOptions(document.getElementById("tool-options"), this);
         this.tools.addEventListener("changed", () => {
             this.view.tool = this.tools.current;
@@ -128,7 +131,7 @@ export class App extends EventTarget {
             this.refreshHint();
         });
         window.addEventListener("beforeunload", (e) => {
-            if (this.docs.some((d) => d.isModified())) {
+            if (this.collab?.active || this.docs.some((d) => d.isModified() && !this.collab?.isGuestDocument(d))) {
                 e.preventDefault();
                 e.returnValue = "";
             }
@@ -260,7 +263,11 @@ export class App extends EventTarget {
         if (!doc)
             return true;
         this.tools.finishCurrent();
-        if (ask && doc.isModified()) {
+        // La imagen de una sesión colaborativa: cerrarla es salir de ella (el invitado no la guarda).
+        const guest = this.collab?.isGuestDocument(doc);
+        if (guest && !(await this.collab.leave(ask)))
+            return false;
+        if (ask && !guest && doc.isModified()) {
             const dlg = new TaskDialog(tr("Cambios no guardados"), "dialog-warning",
                                        tr("«%1» tiene cambios sin guardar.\n¿Qué quiere hacer?", doc.displayName()),
                                        thumbnail(doc.flattened(), 96, 96));
@@ -275,6 +282,8 @@ export class App extends EventTarget {
                 return false;
             }
         }
+        if (!guest && this.collab?.isSessionDocument(doc) && !(await this.collab.leave(ask)))
+            return false;
         const i = this.docs.indexOf(doc);
         this.docs.splice(i, 1);
         if (doc === this.doc) {
@@ -696,6 +705,12 @@ export class App extends EventTarget {
         A("saveAllAs", tr("Guardar to&dos..."), "document-save-all", null, c(() => this.saveAllAs()), has);
         A("print", tr("&Imprimir..."), "document-print", "Ctrl+P", c(() => this.print()), has);
         A("close", tr("&Cerrar"), "document-close", "Ctrl+W", () => this.closeDocument(this.doc), has);
+        const collabActive = () => !!this.collab?.active;
+        A("collabHost", tr("&Hospedar esta imagen..."), "collab", null, c(() => this.collab.hostDialog()), () => has() && !collabActive());
+        A("collabJoin", tr("&Unirse a una sesión..."), "collab", null, () => this.collab.joinDialog(), () => !collabActive());
+        A("collabWindow", tr("&Ventana de la sesión..."), "collab", null, () => this.collab.sessionDialog(), collabActive);
+        A("collabLeave", tr("&Salir de la sesión"), "application-exit", null, () => this.collab.leave(true), collabActive);
+        A("collabSettings", tr("&Configuración de colaboración..."), "configure", null, () => settingsDialog(this, "collab"));
         A("closeAll", tr("Cerrar t&odas"), "document-close", "Ctrl+Shift+W", () => this.closeAll(), has);
         // Edición
         A("undo", tr("&Deshacer"), "edit-undo", "Ctrl+Z", () => this.undo(), () => this.doc?.history.canUndo() || this.tools.current?.isBusy());
@@ -861,7 +876,9 @@ export class App extends EventTarget {
     // El menú Archivo (también el del botón de guardar con flecha del teléfono).
     fileEntries() {
         const a = (id) => this.actions.get(id);
-        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("print"), "-", a("close"), a("closeAll")];
+        const collab = { text: tr("C&olaboración"), icon: "collab",
+                         submenu: () => [a("collabHost"), a("collabJoin"), a("collabWindow"), a("collabLeave"), "-", a("collabSettings")] };
+        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("print"), "-", collab, "-", a("close"), a("closeAll")];
     }
 
     createToolBar() {
@@ -1220,7 +1237,8 @@ export class App extends EventTarget {
     // se activa esa herramienta para seguir editándolo.
     syncToolWithHistory() {
         const doc = this.doc;
-        if (this.syncingHistory || !doc)
+        // Lo que llega de la sesión colaborativa no cambia de herramienta ni retoma pasos.
+        if (this.syncingHistory || !doc || this.collab?.applyingRemote)
             return;
         this.syncingHistory = true;
         try {
@@ -1529,6 +1547,11 @@ export class App extends EventTarget {
             return false;
         } finally {
             document.body.classList.remove("busy");
+        }
+        // Invitado de una sesión colaborativa: solo una copia (la imagen la guarda el anfitrión).
+        if (this.collab?.isGuestDocument(doc)) {
+            this.showMessage(tr("Copia exportada como «%1». La imagen de la sesión la guarda el anfitrión.", name));
+            return true;
         }
         doc.fileHandle = handle;
         doc.fileName = name;

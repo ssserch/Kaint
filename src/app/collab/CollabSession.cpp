@@ -612,13 +612,17 @@ void Session::onGuestText(const QByteArray& text)
         m_autoAccept = m.value(QStringLiteral("autoAccept")).toBool();
         if (mode != m_mode) {
             m_mode = mode;
-            if (!isLive() && m_doc)
+            if (!isLive() && m_doc) {
                 m_draftStart = m_doc->undoStack()->index();
+                m_inFlight = 0;
+                m_draftTimer.start();
+            }
             if (isLive() && m_doc) {
                 // Lo que quedaba en el borrador pasa a ser un cambio normal.
                 const QJsonArray ops = diff();
                 if (!ops.isEmpty()) {
                     adoptWorking();
+                    ++m_inFlight;
                     send(QJsonObject{{QStringLiteral("t"), QStringLiteral("change")},
                                      {QStringLiteral("label"), tr("Borrador")},
                                      {QStringLiteral("ops"), ops}});
@@ -692,6 +696,7 @@ bool Session::propose()
     if (label.isEmpty())
         label = tr("Cambios");
     m_pendingPid = ++m_nextPid;
+    m_hasDraft = true;
     send(QJsonObject{{QStringLiteral("t"), QStringLiteral("propose")},
                      {QStringLiteral("pid"), m_pendingPid},
                      {QStringLiteral("label"), label},
@@ -799,6 +804,7 @@ void Session::onLocalStep()
         if (ops.isEmpty())
             return;
         adoptWorking();
+        ++m_inFlight;
         send(QJsonObject{{QStringLiteral("t"), QStringLiteral("change")}, {QStringLiteral("label"), label}, {QStringLiteral("ops"), ops}});
     } else {
         m_draftTimer.start();
@@ -1026,11 +1032,15 @@ void Session::processQueue()
                                                         {QStringLiteral("state"), QStringLiteral("accepted")}});
             break;
         }
-        case Incoming::Commit:
-            apply(item.ops, tr("Cambio hecho por %1").arg(item.name));
+        case Incoming::Commit: {
+            const bool ownEcho = item.from == m_myId;
+            if (ownEcho && m_inFlight > 0)
+                --m_inFlight;
+            apply(item.ops, tr("Cambio hecho por %1").arg(item.name), ownEcho && m_inFlight > 0);
             if (!isLive())
                 m_draftTimer.start();
             break;
+        }
         case Incoming::Accepted:
             if (item.pid == m_pendingPid)
                 m_pendingPid = 0;
@@ -1050,11 +1060,17 @@ void Session::processQueue()
     m_processing = false;
 }
 
-QJsonArray Session::apply(const QJsonArray& ops, const QString& historyText)
+QJsonArray Session::apply(const QJsonArray& ops, const QString& historyText, bool canonOnly)
 {
     QJsonArray effective;
     if (!m_doc)
         return effective;
+    if (canonOnly) {
+        for (const QJsonValue& v : ops)
+            if (const QJsonObject op = applyToCanon(m_canon, v.toObject()); !op.isEmpty())
+                effective.append(op);
+        return effective;
+    }
     m_applying = true;
     const DocumentState before = DocumentState::capture(m_doc);
     DocumentState work = before;

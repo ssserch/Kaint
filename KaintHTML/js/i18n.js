@@ -147,6 +147,77 @@ const extra = {
     "Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se guardan en este navegador.":
         "Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom shapes” group. They're saved in this browser.",
     "No hay formas personalizadas.": "There are no custom shapes.",
+    // Modo colaborativo (js/collab/).
+    "&Hospedar esta imagen...":
+        "&Host this image...",
+    "Acceso: %1 · Nombre: %2 (se cambia en Configuración > Colaboración)":
+        "Access: %1 · Name: %2 (changed in Settings > Collaboration)",
+    "Agregar":
+        "Add",
+    "Clave para hospedar:":
+        "Hosting key:",
+    "Copia exportada como «%1». La imagen de la sesión la guarda el anfitrión.":
+        "Copy exported as “%1”. The host saves the session's image.",
+    "Edición en tiempo real entre copias de Kaint para la web":
+        "Real-time editing between copies of Kaint for the web",
+    "Edita la imagen actual con otras personas de tu red local: un anfitrión la comparte y los demás se unen desde Kaint o desde Kaint para la web. Solo el anfitrión guarda la imagen; los invitados pueden exportar una copia.":
+        "Edit the current image with other people on your local network: a host shares it and the others join from Kaint or Kaint for the web. Only the host saves the image; guests can export a copy.",
+    "Ej.: 192.168.1.20 o 192.168.1.20:47913":
+        "E.g. 192.168.1.20 or 192.168.1.20:47913",
+    "El servidor la muestra al arrancar; no hace falta en el mismo equipo.":
+        "The server shows it when it starts; it isn't needed on the same computer.",
+    "Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en el historial del anfitrión como «Cambio hecho por…».":
+        "Between Kaint and Kaint for the web, editing always uses confirmations: the guest edits a draft with its own history and suggests it; once accepted, the change appears for everyone and in the host's history as “Change made by…”.",
+    "Escribe la dirección del anfitrión.":
+        "Type the host's address.",
+    "Escribe la dirección del equipo que hospeda la sesión (lo dice su ventana de la sesión).":
+        "Type the address of the computer that hosts the session (its session window shows it).",
+    "Ese servidor ya tiene un anfitrión.":
+        "That server already has a host.",
+    "Esta página la sirve la sesión «%1» de %2 (%3).":
+        "This page is served by the session “%1” of %2 (%3).",
+    "Esta página se abrió con https: el navegador no deja conectarse a una sesión de la red local. Abre la dirección http:// que muestra el anfitrión.":
+        "This page was opened with https: the browser doesn't allow connecting to a session on the local network. Open the http:// address the host shows.",
+    "Este navegador hospedará la imagen actual a través del servidor de Kaint para la web que abrió esta página. Los demás se unen abriendo esta misma dirección o desde Kaint.":
+        "This browser will host the current image through the Kaint for the web server that opened this page. The others join by opening this same address or from Kaint.",
+    "Hospedando «%1» · %2":
+        "Hosting “%1” · %2",
+    "Hospedar":
+        "Host",
+    "Hospedar esta imagen":
+        "Host this image",
+    "Hospedar la imagen actual…":
+        "Host the current image…",
+    "Kaint (escritorio) la encuentra al buscar sesiones cercanas.":
+        "Kaint (desktop) finds it when looking for nearby sessions.",
+    "La clave para hospedar no es correcta.":
+        "The hosting key is not correct.",
+    "Los invitados con Kaint para la web cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios para que los aceptes.":
+        "Guests using Kaint for the web change the image right away. Unchecked, they also suggest their changes for you to accept.",
+    "Ningún equipo todavía.":
+        "No computers yet.",
+    "No se pudo conectar con %1.":
+        "Couldn't connect to %1.",
+    "Nombre (opcional)":
+        "Name (optional)",
+    "Para hospedar desde el navegador hace falta el servidor de Kaint para la web (node tools/collab-server.mjs).":
+        "Hosting from the browser needs the Kaint for the web server (node tools/collab-server.mjs).",
+    "Para unirse: abrir http://%1/ en un navegador de la red (cambia «localhost» por la IP de este equipo) o, desde Kaint, Archivo > Colaboración > Unirse.":
+        "To join: open http://%1/ in a browser on the network (replace “localhost” with this computer's IP) or, from Kaint, File > Collaboration > Join.",
+    "Servidor:":
+        "Server:",
+    "Sin sugerencias por ahora.":
+        "No suggestions for now.",
+    "Solo desde otro equipo":
+        "Only from another computer",
+    "Todavía no hay ninguna sesión en ese servidor.":
+        "That server has no session yet.",
+    "Un navegador no puede abrir un servidor. Para hospedar, ejecuta en este equipo el servidor de Kaint para la web (con Node.js): «node tools/collab-server.mjs» en la carpeta de Kaint para la web, y abre la dirección que muestra (http://localhost:47913/).":
+        "A browser can't open a server. To host, run the Kaint for the web server on this computer (with Node.js): “node tools/collab-server.mjs” in the Kaint for the web folder, and open the address it shows (http://localhost:47913/).",
+    "no respondió a tiempo":
+        "it didn't answer in time",
+    "zona %1×%2 en (%3, %4)":
+        "area %1×%2 at (%3, %4)",
 };
 
 let language = "en";

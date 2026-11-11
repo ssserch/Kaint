@@ -3,6 +3,18 @@ const KEY = "kaint.settings";
 
 const defaults = {
     animations: true,
+    // Modo colaborativo (Configuración > Colaboración; js/collab/CollabUI.js).
+    collabName: "",
+    collabColor: "",
+    collabSessionName: "",
+    collabAccess: "approve",
+    collabPassword: "",
+    collabAllowedIds: [],
+    collabRealtime: true,
+    collabAutoAccept: false,
+    collabAnnounce: true,
+    collabShowCursors: true,
+    collabServer: "",
     translucentPanels: true,
     // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar su
     // borde o encima de ella); fuera de la imagen, opacas.

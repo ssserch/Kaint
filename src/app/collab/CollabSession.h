@@ -176,7 +176,9 @@ private:
     void enqueue(const Incoming& item);
     void processQueue();
     bool blocked(const QJsonArray& ops) const;
-    QJsonArray apply(const QJsonArray& ops, const QString& historyText);
+    // 'canonOnly': solo la copia canónica (el eco de un cambio propio cuando ya se enviaron otros
+    // más nuevos: el documento ya está más adelante).
+    QJsonArray apply(const QJsonArray& ops, const QString& historyText, bool canonOnly = false);
     // Aplica una operación a la copia canónica; devuelve la operación saneada (vacía si no vale).
     static QJsonObject applyToCanon(Canon& canon, const QJsonObject& op);
     void applyToWork(const Canon& before, const Canon& after, const QJsonObject& op, DocumentState& work,
@@ -221,6 +223,8 @@ private:
     int m_pendingPid = 0;
     // Primer paso del historial que es del borrador actual.
     int m_draftStart = 0;
+    // Cambios propios enviados (en tiempo real) cuyo eco aún no ha llegado.
+    int m_inFlight = 0;
     int m_nextPid = 0;
     QTimer m_draftTimer;
 

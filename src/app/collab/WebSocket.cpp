@@ -438,5 +438,9 @@ void WebSocketServer::serveFile(QTcpSocket* socket, const QString& requested)
         {QStringLiteral("wasm"), "application/wasm"}, {QStringLiteral("ttf"), "font/ttf"},
         {QStringLiteral("woff2"), "font/woff2"}, {QStringLiteral("txt"), "text/plain; charset=utf-8"},
     };
-    reply("200 OK", types.value(QFileInfo(file).suffix().toLower(), "application/octet-stream"), f.readAll());
+    QByteArray body = f.readAll();
+    // La página sabe así que la sirve una sesión (y pregunta por /kaint-collab.json para unirse).
+    if (QFileInfo(file).fileName() == QLatin1String("index.html"))
+        body.replace("<head>", "<head><meta name=\"kaint-collab\" content=\"1\">");
+    reply("200 OK", types.value(QFileInfo(file).suffix().toLower(), "application/octet-stream"), body);
 }

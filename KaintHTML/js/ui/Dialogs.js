@@ -20,6 +20,7 @@ import { Effects } from "../core/Effects.js";
 import { Customization } from "../Customization.js";
 import { popupMenu } from "./Menu.js";
 import { installPinch, isPhone, mobileMode, PanelScaleRange } from "./Mobile.js";
+import { collabSettingsPage } from "../collab/CollabUI.js";
 
 let openDialogs = 0;
 
@@ -977,6 +978,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                     note(tr("Si el historial de una imagen ocupa más, se descartan los pasos más antiguos (y se avisa en la barra de estado)."))];
         }],
         ["plugins", "settings-plugins", tr("Complementos"), () => pluginsPage(() => show("plugins"))],
+        ["collab", "collab", tr("Colaboración"), () => collabSettingsPage(app, () => show("collab"))],
         ["updates", "settings-updates", tr("Actualizaciones"), () => {
             const status = el("p", { textContent: "" });
             const now = button(tr("Buscar ahora"), "", async () => {

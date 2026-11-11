@@ -460,6 +460,13 @@ endif()
 # ---------------------------------------------------------------------------
 install(TARGETS kaint RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+# Kaint para la web: el modo colaborativo la sirve a los navegadores de la red local para que se
+# unan a una sesión (Configuración > Colaboración > Permitir unirse desde el navegador).
+option(KAINT_INSTALL_WEB "Instalar Kaint para la web para los invitados del modo colaborativo" ON)
+if(KAINT_INSTALL_WEB)
+    install(DIRECTORY KaintHTML/ DESTINATION ${CMAKE_INSTALL_DATADIR}/kaint/KaintHTML
+            PATTERN "tests" EXCLUDE PATTERN "package.json" EXCLUDE)
+endif()
 install(FILES third_party/quickjs-ng/LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME QuickJS-ng-LICENSE.txt)
 if(WIN32)
     qt_generate_deploy_app_script(TARGET kaint OUTPUT_SCRIPT KAINT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)

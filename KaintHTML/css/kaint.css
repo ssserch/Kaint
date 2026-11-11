@@ -3904,3 +3904,120 @@ fieldset.group > legend {
     padding-right: 1px;
     margin-left: -2px;
 }
+
+/* --- Modo colaborativo (js/collab/CollabUI.js) --------------------------------------------------- */
+
+#status-bar .collab-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+#status-bar .collab-bar[hidden] {
+    display: none;
+}
+
+#status-bar .collab-bar .tbutton {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    padding: 0 6px;
+}
+
+#status-bar .collab-bar .tbutton[hidden] {
+    display: none;
+}
+
+.collab-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 520px;
+}
+
+.collab-form label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.collab-note {
+    opacity: 0.75;
+}
+
+.collab-status-text.error {
+    color: #c62828;
+}
+
+.collab-code {
+    font-family: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
+    letter-spacing: 0.04em;
+}
+
+.collab-session {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(560px, 86vw);
+}
+
+.collab-session .collab-title {
+    font-weight: 600;
+    margin: 0;
+}
+
+.collab-session .list,
+.settings .collab-ids {
+    max-height: 220px;
+    overflow: auto;
+}
+
+.collab-session .list .row,
+.settings .collab-ids .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.collab-session .list .row > span:not(.collab-swatch):not(.collab-thumb) {
+    flex: 1;
+}
+
+.collab-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    flex: none;
+}
+
+.collab-thumb canvas {
+    display: block;
+    border: 1px solid var(--border);
+    background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+}
+
+.settings .disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.collab-toast {
+    position: fixed;
+    right: 16px;
+    bottom: 40px;
+    z-index: 1000;
+    max-width: min(380px, calc(100vw - 32px));
+    padding: 10px 12px;
+    background: var(--window);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}

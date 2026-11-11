@@ -128,6 +128,514 @@
     </message>
 </context>
 <context>
+    <name>Collab::JoinDialog</name>
+    <message>
+        <source>Unirse a una sesión colaborativa</source>
+        <translation>Join a collaborative session</translation>
+    </message>
+    <message>
+        <source>Sesiones en la red local:</source>
+        <translation>Sessions on the local network:</translation>
+    </message>
+    <message>
+        <source>Sesión</source>
+        <translation>Session</translation>
+    </message>
+    <message>
+        <source>Anfitrión</source>
+        <translation>Host</translation>
+    </message>
+    <message>
+        <source>Dirección</source>
+        <translation>Address</translation>
+    </message>
+    <message>
+        <source>Acceso</source>
+        <translation>Access</translation>
+    </message>
+    <message>
+        <source>Personas</source>
+        <translation>People</translation>
+    </message>
+    <message>
+        <source>Ej.: 192.168.1.20</source>
+        <translation>E.g. 192.168.1.20</translation>
+    </message>
+    <message>
+        <source>Puerto:</source>
+        <translation>Port:</translation>
+    </message>
+    <message>
+        <source>Dirección IP:</source>
+        <translation>IP address:</translation>
+    </message>
+    <message>
+        <source>Solo si la sesión pide contraseña</source>
+        <translation>Only if the session asks for a password</translation>
+    </message>
+    <message>
+        <source>Contraseña:</source>
+        <translation>Password:</translation>
+    </message>
+    <message>
+        <source>Tu nombre:</source>
+        <translation>Your name:</translation>
+    </message>
+    <message>
+        <source>ID de este equipo:</source>
+        <translation>This computer's ID:</translation>
+    </message>
+    <message>
+        <source>Si la sesión solo admite equipos autorizados, dale este ID al anfitrión.</source>
+        <translation>If the session only admits authorized computers, give this ID to the host.</translation>
+    </message>
+    <message>
+        <source>Unirse</source>
+        <translation>Join</translation>
+    </message>
+    <message>
+        <source>No se pueden buscar sesiones (el puerto %1 está ocupado). Escribe la dirección del anfitrión.</source>
+        <translation>Sessions can't be searched for (port %1 is in use). Type the host's address.</translation>
+    </message>
+    <message>
+        <source>Buscando sesiones…</source>
+        <translation>Looking for sessions…</translation>
+    </message>
+    <message>
+        <source>Elige una sesión de la lista o escribe la dirección del anfitrión.</source>
+        <translation>Choose a session from the list or type the host's address.</translation>
+    </message>
+    <message>
+        <source>Conectando con %1:%2…</source>
+        <translation>Connecting to %1:%2…</translation>
+    </message>
+    <message>
+        <source>Esperando a que el anfitrión te deje entrar…</source>
+        <translation>Waiting for the host to let you in…</translation>
+    </message>
+    <message>
+        <source>No se pudo entrar.</source>
+        <translation>Couldn't join.</translation>
+    </message>
+</context>
+<context>
+    <name>Collab::Session</name>
+    <message>
+        <source>%1 salió de la sesión.</source>
+        <translation>%1 left the session.</translation>
+    </message>
+    <message>
+        <source>No se pudo conectar: %1</source>
+        <translation>Couldn't connect: %1</translation>
+    </message>
+    <message>
+        <source>El anfitrión terminó la sesión.</source>
+        <translation>The host ended the session.</translation>
+    </message>
+    <message>
+        <source>El anfitrión te sacó de la sesión.</source>
+        <translation>The host removed you from the session.</translation>
+    </message>
+    <message>
+        <source>La contraseña no es correcta.</source>
+        <translation>The password is not correct.</translation>
+    </message>
+    <message>
+        <source>Este equipo no está en la lista de equipos autorizados del anfitrión.</source>
+        <translation>This computer is not in the host's list of authorized computers.</translation>
+    </message>
+    <message>
+        <source>El anfitrión no aceptó tu solicitud.</source>
+        <translation>The host didn't accept your request.</translation>
+    </message>
+    <message>
+        <source>La sesión usa otra versión del modo colaborativo.</source>
+        <translation>The session uses another version of the collaborative mode.</translation>
+    </message>
+    <message>
+        <source>Se perdió la conexión con la sesión.</source>
+        <translation>The connection to the session was lost.</translation>
+    </message>
+    <message>
+        <source>%1 sugiere un cambio.</source>
+        <translation>%1 suggests a change.</translation>
+    </message>
+    <message>
+        <source>%1 se unió a la sesión.</source>
+        <translation>%1 joined the session.</translation>
+    </message>
+    <message>
+        <source>Esta sesión pide contraseña.</source>
+        <translation>This session requires a password.</translation>
+    </message>
+    <message>
+        <source>El anfitrión rechazó tus cambios. Siguen en tu borrador.</source>
+        <translation>The host rejected your changes. They are still in your draft.</translation>
+    </message>
+    <message>
+        <source>Borrador</source>
+        <translation>Draft</translation>
+    </message>
+    <message>
+        <source>La imagen de la sesión no es válida.</source>
+        <translation>The session's image is not valid.</translation>
+    </message>
+    <message>
+        <source>Unirse a la sesión</source>
+        <translation>Join session</translation>
+    </message>
+    <message>
+        <source>No hay cambios que sugerir.</source>
+        <translation>There are no changes to suggest.</translation>
+    </message>
+    <message>
+        <source>Cambio hecho por %1</source>
+        <translation>Change made by %1</translation>
+    </message>
+    <message>
+        <source>Cambios</source>
+        <translation>Changes</translation>
+    </message>
+    <message>
+        <source>Cambios enviados al anfitrión.</source>
+        <translation>Changes sent to the host.</translation>
+    </message>
+    <message>
+        <source>Deshacer: %1</source>
+        <translation>Undo: %1</translation>
+    </message>
+    <message>
+        <source>El anfitrión aceptó tus cambios.</source>
+        <translation>The host accepted your changes.</translation>
+    </message>
+</context>
+<context>
+    <name>Collab::SessionDialog</name>
+    <message>
+        <source>Sesión colaborativa</source>
+        <translation>Collaborative session</translation>
+    </message>
+    <message>
+        <source>Participantes</source>
+        <translation>Participants</translation>
+    </message>
+    <message>
+        <source>Nombre</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <source>Aplicación</source>
+        <translation>Application</translation>
+    </message>
+    <message>
+        <source>Edición</source>
+        <translation>Editing</translation>
+    </message>
+    <message>
+        <source>Dejar entrar</source>
+        <translation>Let in</translation>
+    </message>
+    <message>
+        <source>Rechazar</source>
+        <translation>Reject</translation>
+    </message>
+    <message>
+        <source>Expulsar</source>
+        <translation>Remove</translation>
+    </message>
+    <message>
+        <source>Cambios sugeridos</source>
+        <translation>Suggested changes</translation>
+    </message>
+    <message>
+        <source>Aceptar</source>
+        <translation>Accept</translation>
+    </message>
+    <message>
+        <source>Aceptar todos</source>
+        <translation>Accept all</translation>
+    </message>
+    <message>
+        <source>Aceptar automáticamente</source>
+        <translation>Accept automatically</translation>
+    </message>
+    <message>
+        <source>Los cambios de los invitados se aplican a la imagen sin preguntar.</source>
+        <translation>The guests' changes are applied to the image without asking.</translation>
+    </message>
+    <message>
+        <source>Tus cambios</source>
+        <translation>Your changes</translation>
+    </message>
+    <message>
+        <source>Sugerir cambios</source>
+        <translation>Suggest changes</translation>
+    </message>
+    <message>
+        <source>Descartar</source>
+        <translation>Discard</translation>
+    </message>
+    <message>
+        <source>Tu nombre en pantalla:</source>
+        <translation>Your display name:</translation>
+    </message>
+    <message>
+        <source>Cambiar</source>
+        <translation>Change</translation>
+    </message>
+    <message>
+        <source>Salir de la sesión</source>
+        <translation>Leave session</translation>
+    </message>
+    <message>
+        <source>%1 — %2
+%3 · zona %4×%5 en (%6, %7)</source>
+        <translation>%1 — %2
+%3 · area %4×%5 at (%6, %7)</translation>
+    </message>
+    <message>
+        <source>Cambios</source>
+        <translation>Changes</translation>
+    </message>
+    <message>
+        <source>Para unirse desde Kaint: Archivo &gt; Colaboración &gt; Unirse, dirección %1, puerto %2.</source>
+        <translation>To join from Kaint: File &gt; Collaboration &gt; Join, address %1, port %2.</translation>
+    </message>
+    <message>
+        <source>Desde un navegador de la red: http://%1:%2/</source>
+        <translation>From a browser on the network: http://%1:%2/</translation>
+    </message>
+    <message>
+        <source>Otras direcciones de este equipo: %1</source>
+        <translation>Other addresses of this computer: %1</translation>
+    </message>
+    <message>
+        <source>Lo que exportes es una copia: la imagen la guarda el anfitrión.</source>
+        <translation>What you export is a copy: the host saves the image.</translation>
+    </message>
+    <message>
+        <source>(tú)</source>
+        <translation>(you)</translation>
+    </message>
+    <message>
+        <source>anfitrión</source>
+        <translation>host</translation>
+    </message>
+    <message>
+        <source>En tiempo real</source>
+        <translation>Real time</translation>
+    </message>
+    <message>
+        <source>Con confirmaciones</source>
+        <translation>With confirmations</translation>
+    </message>
+    <message>
+        <source>Espera tu permiso</source>
+        <translation>Waiting for your permission</translation>
+    </message>
+    <message>
+        <source>Enviados; esperando la respuesta del anfitrión.</source>
+        <translation>Sent; waiting for the host's answer.</translation>
+    </message>
+    <message>
+        <source>Tienes cambios sin sugerir. Su historial es solo tuyo hasta que se aceptan.</source>
+        <translation>You have changes you haven't suggested. Their history is only yours until they are accepted.</translation>
+    </message>
+    <message>
+        <source>Sin cambios. Edita la imagen y sugiere los cambios al anfitrión.</source>
+        <translation>No changes. Edit the image and suggest the changes to the host.</translation>
+    </message>
+    <message>
+        <source>Terminar la sesión</source>
+        <translation>End session</translation>
+    </message>
+</context>
+<context>
+    <name>CollabController</name>
+    <message>
+        <source>Sesión colaborativa: participantes y sugerencias</source>
+        <translation>Collaborative session: participants and suggestions</translation>
+    </message>
+    <message>
+        <source>Sugerir cambios</source>
+        <translation>Suggest changes</translation>
+    </message>
+    <message>
+        <source>Envía al anfitrión lo que has cambiado para que lo acepte.</source>
+        <translation>Send what you changed to the host for approval.</translation>
+    </message>
+    <message>
+        <source>Descartar el borrador (vuelve a la imagen de la sesión)</source>
+        <translation>Discard the draft (back to the session's image)</translation>
+    </message>
+    <message>
+        <source>Descartar el borrador</source>
+        <translation>Discard draft</translation>
+    </message>
+    <message>
+        <source>Se pierden los cambios que no has sugerido y su historial.</source>
+        <translation>The changes you haven't suggested and their history are lost.</translation>
+    </message>
+    <message>
+        <source>Descartar</source>
+        <translation>Discard</translation>
+    </message>
+    <message>
+        <source>Volver a la imagen de la sesión.</source>
+        <translation>Go back to the session's image.</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Seguir con el borrador.</source>
+        <translation>Keep the draft.</translation>
+    </message>
+    <message>
+        <source>No estás en ninguna sesión.</source>
+        <translation>You are not in a session.</translation>
+    </message>
+    <message>
+        <source>Conectando con %1…</source>
+        <translation>Connecting to %1…</translation>
+    </message>
+    <message>
+        <source>Esperando a que el anfitrión te deje entrar…</source>
+        <translation>Waiting for the host to let you in…</translation>
+    </message>
+    <message>
+        <source>Hospedando «%1» en %2 (puerto %3) · %4</source>
+        <translation>Hosting “%1” on %2 (port %3) · %4</translation>
+    </message>
+    <message>
+        <source>este equipo</source>
+        <translation>this computer</translation>
+    </message>
+    <message>
+        <source>1 participante</source>
+        <translation>1 participant</translation>
+    </message>
+    <message>
+        <source>%1 participantes</source>
+        <translation>%1 participants</translation>
+    </message>
+    <message>
+        <source>En «%1» de %2 · %3 · %4</source>
+        <translation>In “%1” by %2 · %3 · %4</translation>
+    </message>
+    <message>
+        <source>en tiempo real</source>
+        <translation>real time</translation>
+    </message>
+    <message>
+        <source>con confirmaciones</source>
+        <translation>with confirmations</translation>
+    </message>
+    <message>
+        <source>Sesión colaborativa</source>
+        <translation>Collaborative session</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir la sesión en el puerto %1:
+%2
+
+Prueba con otro puerto en Configuración &gt; Colaboración.</source>
+        <translation>The session couldn't be opened on port %1:
+%2
+
+Try another port in Settings &gt; Collaboration.</translation>
+    </message>
+    <message>
+        <source>Sesión colaborativa abierta: %1</source>
+        <translation>Collaborative session open: %1</translation>
+    </message>
+    <message>
+        <source>Abre o crea una imagen para compartirla.</source>
+        <translation>Open or create an image to share it.</translation>
+    </message>
+    <message>
+        <source>Terminar la sesión</source>
+        <translation>End session</translation>
+    </message>
+    <message>
+        <source>Salir de la sesión</source>
+        <translation>Leave session</translation>
+    </message>
+    <message>
+        <source>Los invitados dejarán de estar conectados a tu imagen.</source>
+        <translation>Guests will no longer be connected to your image.</translation>
+    </message>
+    <message>
+        <source>Dejarás de estar conectado. Puedes exportar una copia de la imagen antes de salir; lo que no hayas sugerido se pierde.</source>
+        <translation>You will be disconnected. You can export a copy of the image before leaving; whatever you haven't suggested is lost.</translation>
+    </message>
+    <message>
+        <source>Terminar</source>
+        <translation>End</translation>
+    </message>
+    <message>
+        <source>Salir</source>
+        <translation>Leave</translation>
+    </message>
+    <message>
+        <source>Cerrar la sesión para todos.</source>
+        <translation>Close the session for everyone.</translation>
+    </message>
+    <message>
+        <source>Salir de la sesión.</source>
+        <translation>Leave the session.</translation>
+    </message>
+    <message>
+        <source>Seguir en la sesión.</source>
+        <translation>Stay in the session.</translation>
+    </message>
+    <message>
+        <source>Te uniste a «%1».</source>
+        <translation>You joined “%1”.</translation>
+    </message>
+    <message>
+        <source>La imagen sigue abierta: puedes guardarla como una copia.</source>
+        <translation>The image is still open: you can save it as a copy.</translation>
+    </message>
+    <message>
+        <source>La sesión colaborativa terminó.</source>
+        <translation>The collaborative session ended.</translation>
+    </message>
+    <message>
+        <source>%1 quiere unirse a tu sesión (%2).</source>
+        <translation>%1 wants to join your session (%2).</translation>
+    </message>
+    <message>
+        <source>Dejar entrar</source>
+        <translation>Let in</translation>
+    </message>
+    <message>
+        <source>Rechazar</source>
+        <translation>Reject</translation>
+    </message>
+    <message>
+        <source>%1 quiere unirse a tu sesión.</source>
+        <translation>%1 wants to join your session.</translation>
+    </message>
+    <message>
+        <source>1 sugerencia</source>
+        <translation>1 suggestion</translation>
+    </message>
+    <message>
+        <source>%1 sugerencias</source>
+        <translation>%1 suggestions</translation>
+    </message>
+    <message>
+        <source>Conectando…</source>
+        <translation>Connecting…</translation>
+    </message>
+    <message>
+        <source>Esperando al anfitrión…</source>
+        <translation>Waiting for the host…</translation>
+    </message>
+</context>
+<context>
     <name>ColorButton</name>
     <message>
         <source>Haz clic para elegir el color</source>
@@ -1886,6 +2394,42 @@ Do you want to replace them?</translation>
         <translation>Could not save:
 
 %1</translation>
+    </message>
+    <message>
+        <source>&amp;Hospedar esta imagen</source>
+        <translation>&amp;Host this image</translation>
+    </message>
+    <message>
+        <source>&amp;Unirse a una sesión...</source>
+        <translation>&amp;Join a session...</translation>
+    </message>
+    <message>
+        <source>&amp;Ventana de la sesión...</source>
+        <translation>Session &amp;window...</translation>
+    </message>
+    <message>
+        <source>&amp;Salir de la sesión</source>
+        <translation>&amp;Leave session</translation>
+    </message>
+    <message>
+        <source>&amp;Configuración de colaboración...</source>
+        <translation>Collaboration &amp;settings...</translation>
+    </message>
+    <message>
+        <source>C&amp;olaboración</source>
+        <translation>C&amp;ollaboration</translation>
+    </message>
+    <message>
+        <source>Exportar una copia</source>
+        <translation>Export a copy</translation>
+    </message>
+    <message>
+        <source>Copia exportada en %1. La imagen de la sesión la guarda el anfitrión.</source>
+        <translation>Copy exported to %1. The host saves the session's image.</translation>
+    </message>
+    <message>
+        <source>&amp;Terminar la sesión</source>
+        <translation>&amp;End session</translation>
     </message>
 </context>
 <context>
@@ -4168,6 +4712,42 @@ Left click: active slot · right click: inactive slot</translation>
         <source>Atravesado</source>
         <translation>Through</translation>
     </message>
+    <message>
+        <source>Libre</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Con permiso del anfitrión</source>
+        <translation>With the host's permission</translation>
+    </message>
+    <message>
+        <source>Con contraseña</source>
+        <translation>With password</translation>
+    </message>
+    <message>
+        <source>Equipos autorizados</source>
+        <translation>Authorized computers</translation>
+    </message>
+    <message>
+        <source>Kaint para la web</source>
+        <translation>Kaint for the web</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Invitado</source>
+        <translation>Guest</translation>
+    </message>
+    <message>
+        <source>Sesión de %1</source>
+        <translation>%1's session</translation>
+    </message>
+    <message>
+        <source>Invitado %1</source>
+        <translation>Guest %1</translation>
+    </message>
 </context>
 <context>
     <name>QPrintPreviewDialog</name>
@@ -6073,7 +6653,223 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Se desbloquea con la barra de título de Kaint.</source>
-        <translation>Unlocked with Kaint's title bar.</translation>
+        <translation>Unlocked with Kaint&apos;s title bar.</translation>
+    </message>
+    <message>
+        <source>Colaboración</source>
+        <translation>Collaboration</translation>
+    </message>
+    <message>
+        <source>Edita la imagen actual con otras personas de tu red local: tú la hospedas y los demás se unen desde Kaint o desde Kaint para la web. Solo tú guardas la imagen; los invitados pueden exportar una copia.</source>
+        <translation>Edit the current image with other people on your local network: you host it and the others join from Kaint or Kaint for the web. Only you save the image; guests can export a copy.</translation>
+    </message>
+    <message>
+        <source>Sesión</source>
+        <translation>Session</translation>
+    </message>
+    <message>
+        <source>Hospedar la imagen actual</source>
+        <translation>Host the current image</translation>
+    </message>
+    <message>
+        <source>Unirse a una sesión…</source>
+        <translation>Join a session…</translation>
+    </message>
+    <message>
+        <source>Ventana de la sesión</source>
+        <translation>Session window</translation>
+    </message>
+    <message>
+        <source>No disponible.</source>
+        <translation>Not available.</translation>
+    </message>
+    <message>
+        <source>Terminar la sesión</source>
+        <translation>End session</translation>
+    </message>
+    <message>
+        <source>Salir de la sesión</source>
+        <translation>Leave session</translation>
+    </message>
+    <message>
+        <source>Tú</source>
+        <translation>You</translation>
+    </message>
+    <message>
+        <source>Nombre en pantalla:</source>
+        <translation>Display name:</translation>
+    </message>
+    <message>
+        <source>Color propio</source>
+        <translation>Own color</translation>
+    </message>
+    <message>
+        <source>Sin marcar, el anfitrión te da uno que no use nadie más.</source>
+        <translation>Unchecked, the host gives you one nobody else uses.</translation>
+    </message>
+    <message>
+        <source>Color del puntero:</source>
+        <translation>Pointer color:</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Generar otro</source>
+        <translation>Generate another</translation>
+    </message>
+    <message>
+        <source>ID de este equipo:</source>
+        <translation>This computer's ID:</translation>
+    </message>
+    <message>
+        <source>Para entrar en una sesión que solo admite equipos autorizados, dale este ID al anfitrión. El ID no viaja por la red: el equipo demuestra que lo tiene sin enviarlo.</source>
+        <translation>To join a session that only admits authorized computers, give this ID to the host. The ID never travels over the network: the computer proves it has it without sending it.</translation>
+    </message>
+    <message>
+        <source>Generar otro ID</source>
+        <translation>Generate another ID</translation>
+    </message>
+    <message>
+        <source>Los anfitriones que tengan el ID actual en su lista dejarán de reconocer este equipo.</source>
+        <translation>Hosts that have the current ID in their list will no longer recognize this computer.</translation>
+    </message>
+    <message>
+        <source>Cambiar el ID de este equipo.</source>
+        <translation>Change this computer's ID.</translation>
+    </message>
+    <message>
+        <source>Conservar el ID actual.</source>
+        <translation>Keep the current ID.</translation>
+    </message>
+    <message>
+        <source>Al hospedar</source>
+        <translation>When hosting</translation>
+    </message>
+    <message>
+        <source>Sesión de %1</source>
+        <translation>%1's session</translation>
+    </message>
+    <message>
+        <source>Nombre de la sesión:</source>
+        <translation>Session name:</translation>
+    </message>
+    <message>
+        <source>Puerto TCP de la sesión (por defecto %1). Se aplica a la próxima sesión.</source>
+        <translation>TCP port of the session (%1 by default). Applies to the next session.</translation>
+    </message>
+    <message>
+        <source>Puerto:</source>
+        <translation>Port:</translation>
+    </message>
+    <message>
+        <source>Libre: cualquiera de la red puede entrar</source>
+        <translation>Open: anyone on the network can join</translation>
+    </message>
+    <message>
+        <source>Con permiso: apruebas a cada persona</source>
+        <translation>With permission: you approve each person</translation>
+    </message>
+    <message>
+        <source>Con contraseña</source>
+        <translation>With password</translation>
+    </message>
+    <message>
+        <source>Solo equipos autorizados (por su ID)</source>
+        <translation>Authorized computers only (by their ID)</translation>
+    </message>
+    <message>
+        <source>Quién puede entrar:</source>
+        <translation>Who can join:</translation>
+    </message>
+    <message>
+        <source>Contraseña de la sesión</source>
+        <translation>Session password</translation>
+    </message>
+    <message>
+        <source>Mostrar</source>
+        <translation>Show</translation>
+    </message>
+    <message>
+        <source>Contraseña:</source>
+        <translation>Password:</translation>
+    </message>
+    <message>
+        <source>Equipos autorizados (también entran sin esperar con «Con permiso»):</source>
+        <translation>Authorized computers (they also join without waiting with “With permission”):</translation>
+    </message>
+    <message>
+        <source>ID</source>
+        <translation>ID</translation>
+    </message>
+    <message>
+        <source>Agregar…</source>
+        <translation>Add…</translation>
+    </message>
+    <message>
+        <source>Agregar equipo</source>
+        <translation>Add computer</translation>
+    </message>
+    <message>
+        <source>ID del equipo (lo ve en Configuración &gt; Colaboración):</source>
+        <translation>Computer ID (shown in its Settings &gt; Collaboration):</translation>
+    </message>
+    <message>
+        <source>El ID tiene 12 letras y números, como ABCD-EFGH-JKLM.</source>
+        <translation>The ID has 12 letters and digits, like ABCD-EFGH-JKLM.</translation>
+    </message>
+    <message>
+        <source>Nombre para reconocerlo (opcional):</source>
+        <translation>Name to recognize it (optional):</translation>
+    </message>
+    <message>
+        <source>Edición en tiempo real entre copias de Kaint</source>
+        <translation>Real-time editing between copies of Kaint</translation>
+    </message>
+    <message>
+        <source>Los invitados con Kaint (escritorio) cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios para que los aceptes.</source>
+        <translation>Guests using Kaint (desktop) change the image right away. Unchecked, they also suggest their changes for you to accept.</translation>
+    </message>
+    <message>
+        <source>Aceptar automáticamente los cambios sugeridos</source>
+        <translation>Accept suggested changes automatically</translation>
+    </message>
+    <message>
+        <source>Lo que sugieran los invitados se aplica a la imagen sin preguntar.</source>
+        <translation>What guests suggest is applied to the image without asking.</translation>
+    </message>
+    <message>
+        <source>Anunciar la sesión en la red local</source>
+        <translation>Announce the session on the local network</translation>
+    </message>
+    <message>
+        <source>Aparece al buscar sesiones cercanas. Sin marcar, solo se puede entrar escribiendo la dirección.</source>
+        <translation>It shows up when looking for nearby sessions. Unchecked, people can only join by typing the address.</translation>
+    </message>
+    <message>
+        <source>Permitir unirse desde el navegador</source>
+        <translation>Allow joining from a browser</translation>
+    </message>
+    <message>
+        <source>Los navegadores de la red abren Kaint para la web desde la dirección de la sesión (si está instalado junto a Kaint).</source>
+        <translation>Browsers on the network open Kaint for the web from the session's address (if it is installed with Kaint).</translation>
+    </message>
+    <message>
+        <source>Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en tu historial como «Cambio hecho por…».</source>
+        <translation>Between Kaint and Kaint for the web, editing always uses confirmations: the guest edits a draft with its own history and suggests it; when you accept it, the change appears for everyone and in your history as “Change made by…”.</translation>
+    </message>
+    <message>
+        <source>Vista</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <source>Mostrar los punteros de los demás</source>
+        <translation>Show the other participants' pointers</translation>
+    </message>
+    <message>
+        <source>Un triángulo del color de cada participante, con su nombre y el icono de su herramienta.</source>
+        <translation>A triangle in each participant's color, with their name and the icon of their tool.</translation>
     </message>
 </context>
 <context>
@@ -7123,6 +7919,44 @@ Do you want to replace them?</translation>
     <message>
         <source>Zalgo: marcas apiladas encima y debajo de cada letra (la flecha elige el tipo)</source>
         <translation>Zalgo: marks stacked above and below each letter (the arrow picks the type)</translation>
+    </message>
+</context>
+<context>
+    <name>WebSocket</name>
+    <message>
+        <source>Se cortó la conexión.</source>
+        <translation>The connection was cut.</translation>
+    </message>
+    <message>
+        <source>No se pudo conectar.</source>
+        <translation>Couldn't connect.</translation>
+    </message>
+    <message>
+        <source>No respondió a tiempo.</source>
+        <translation>It didn't answer in time.</translation>
+    </message>
+    <message>
+        <source>Respuesta no válida.</source>
+        <translation>Invalid response.</translation>
+    </message>
+    <message>
+        <source>No es una sesión de Kaint.</source>
+        <translation>It is not a Kaint session.</translation>
+    </message>
+    <message>
+        <source>Mensaje demasiado grande.</source>
+        <translation>Message too large.</translation>
+    </message>
+    <message>
+        <source>Mensaje no válido.</source>
+        <translation>Invalid message.</translation>
+    </message>
+</context>
+<context>
+    <name>WebSocketServer</name>
+    <message>
+        <source>Esta sesión de Kaint no sirve la versión web. Ábrela desde tu copia de Kaint para la web.</source>
+        <translation>This Kaint session doesn't serve the web version. Open it from your copy of Kaint for the web.</translation>
     </message>
 </context>
 <context>

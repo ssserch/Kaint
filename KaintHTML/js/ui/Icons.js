@@ -959,7 +959,29 @@ function drawPlay(ctx, pause) {
     ctx.fill();
 }
 
+function drawCollab(ctx) {
+    // Dos personas, una detrás de otra: el modo colaborativo.
+    const person = (hx, hy, r, x, y, w, h, fill, edge) => {
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = edge;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y + h);
+        ctx.ellipse(x + w / 2, y + h, w / 2, h, 0, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(hx, hy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+    };
+    person(10.6, 4.6, 2.6, 6.6, 8.4, 8.4, 6.6, rgb(245, 152, 42), rgb(150, 88, 18));
+    person(5.8, 6.2, 2.9, 0.8, 10.2, 10, 5.3, rgb(58, 132, 216), rgb(30, 76, 130));
+}
+
 const drawn = {
+    collab: [16, drawCollab],
     "eye-open": [16, (ctx) => drawEye(ctx, true)], "eye-closed": [16, (ctx) => drawEye(ctx, false)],
     "media-playback-start": [16, (ctx) => drawPlay(ctx, false)], "media-playback-pause": [16, (ctx) => drawPlay(ctx, true)],
     "opt-accumulate:1": [16, (ctx) => drawAccumulate(ctx, true)], "opt-accumulate:0": [16, (ctx) => drawAccumulate(ctx, false)],

@@ -30,6 +30,28 @@ Chromium-based browsers get the most out of it: saving straight back to the open
 reading the clipboard from the menus use their File System Access and Clipboard APIs. Firefox and
 Safari download the saved file and paste with Ctrl+V instead.
 
+## Collaborative mode
+
+Edit the same image with other people on your local network, from browsers or from Kaint
+(**File → Collaboration**, settings in **Settings → Collaboration**):
+
+- **Join** a session hosted by Kaint by opening the `http://` address its session window shows (Kaint
+  serves this web version itself), or type the host's address in **Join a session…**. A page opened
+  over `https://` can't reach a session on the local network.
+- **Host** from the browser with the small server in `tools/` (Node.js 18 or newer, no
+  dependencies), then open the address it prints on the same computer and choose **Host this
+  image**:
+
+  ```bash
+  node tools/collab-server.mjs        # http://localhost:47913/ — others use http://<your-ip>:47913/
+  ```
+
+  It also announces the session so Kaint finds it, and prints a key to host from another computer.
+
+Between browsers (and between copies of Kaint) changes are live; between Kaint and the web, guests
+edit a draft with its own history and suggest it to the host, who accepts it. The protocol is
+described in [docs/collaboration.md](../docs/collaboration.md).
+
 ## What's in it
 
 - **The Kaint interface**: menus, the main toolbar and the tool options bar, Kaint's drawn tool

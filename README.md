@@ -100,6 +100,21 @@ runs on Windows 10 and 11.
     </td>
   </tr>
   <tr>
+    <td colspan="2" valign="top">
+      <h4>Collaborative mode</h4>
+      Host the current image on your local network (<b>File → Collaboration</b>) and edit it
+      together with other copies of Kaint or with browsers running the web version. Between copies
+      of Kaint changes appear in real time; guests can also (and between Kaint and the web, always)
+      edit a private draft with its own history and suggest it, and the host accepts it (or accepts
+      everything automatically): the change then shows up for everyone and in the host's history
+      as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
+      colored triangle with their name and tool, and only the host saves the image (guests export a
+      copy). Sessions can be open, approved one by one, password protected or limited to the
+      computers whose ID the host added; nearby sessions are found automatically and you can also
+      join by IP. Everything is in its own <b>Settings → Collaboration</b> section.
+    </td>
+  </tr>
+  <tr>
     <td valign="top">
       <h4>Recovery copies</h4>
       Unsaved images are kept safe in case Kaint closes unexpectedly.
@@ -194,7 +209,9 @@ bars. Effect dialogs have a **Preview** box to compare with the original image.
 
 [**KaintHTML**](KaintHTML/README.md) is Kaint ported to the web: the same interface, tools,
 windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
-`KaintHTML` folder with any static web server (`python3 -m http.server`) and open it.
+`KaintHTML` folder with any static web server (`python3 -m http.server`) and open it. Browsers on
+the network can also join a collaborative session hosted by Kaint by opening the address its
+session window shows.
 
 ## 📦 Install
 

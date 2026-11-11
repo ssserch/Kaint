@@ -14,6 +14,7 @@
 #include <QWindow>
 
 #ifdef KAINT_HAVE_KWINDOWSHADOW
+#include <KWindowEffects>
 #include <KWindowShadow>
 #endif
 
@@ -22,7 +23,10 @@
 
 #ifdef Q_OS_WIN
 #include <QAbstractNativeEventFilter>
+#include <QOperatingSystemVersion>
+#include <QTimer>
 #include <windows.h>
+#include <windowsx.h>
 #include <dwmapi.h>
 #endif
 
@@ -580,6 +584,8 @@ KWindowShadow* makeShadow(QObject* parent)
 // Aero Snap, las animaciones de minimizar y maximizar, minimizarla desde la barra de tareas y su
 // menú), pero sin la barra de título ni los bordes del sistema: WM_NCCALCSIZE deja toda la ventana
 // para su contenido, como espera Qt con una ventana sin marco (Qt::FramelessWindowHint).
+bool handleNativeMessage(QWidget* window, const MSG* msg, qintptr* result);
+
 class NativeFrame : public QAbstractNativeEventFilter {
 public:
     bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override
@@ -587,15 +593,22 @@ public:
         if (type != "windows_generic_MSG")
             return false;
         const MSG* msg = static_cast<const MSG*>(message);
-        if (msg->message != WM_NCCALCSIZE)
+        if (msg->message != WM_NCCALCSIZE && msg->message != WM_NCACTIVATE && msg->message != WM_NCHITTEST)
             return false;
         QWidget* w = QWidget::find(WId(msg->hwnd));
         if (!w || !w->isWindow() || !isDecorated(w))
             return false;
-        *result = 0;
-        return true;
+        return handleNativeMessage(w, msg, result);
     }
 };
+
+// Windows 11 redondea las esquinas él mismo (DWMWA_WINDOW_CORNER_PREFERENCE); Windows 10 no sabe:
+// allí las recorta Kaint con la región de la ventana.
+bool isWindows11()
+{
+    static const bool eleven = QOperatingSystemVersion::current() >= QOperatingSystemVersion(QOperatingSystemVersion::Windows, 10, 0, 22000);
+    return eleven;
+}
 
 void applyNativeFrame(QWidget* window)
 {
@@ -607,6 +620,10 @@ void applyNativeFrame(QWidget* window)
     LONG_PTR wanted = WS_THICKFRAME | WS_SYSMENU;
     if (window->inherits("QMainWindow"))
         wanted |= WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    // Los diálogos que cambian de tamaño se maximizan con un doble clic en el título (lo hace
+    // Windows, que ahora sabe dónde está la barra de título: WM_NCHITTEST).
+    else if (window->minimumSize() != window->maximumSize())
+        wanted |= WS_MAXIMIZEBOX;
     if ((style & wanted) != wanted) {
         SetWindowLongPtrW(hwnd, GWL_STYLE, style | wanted);
         SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
@@ -640,15 +657,60 @@ QMargins maximizedOverhang(QWidget* window)
 }
 #endif
 
+// Lo de detrás de una ventana translúcida, difuminado como el cristal de Aero: en Windows 10 y 11
+// con el «acento» de la composición de ventanas (lo que usa la barra de tareas) y en KDE Plasma con
+// el difuminado de KWin. Donde no se puede, solo translúcido.
+void enableBlurBehind(QWidget* window)
+{
+#ifdef Q_OS_WIN
+    struct AccentPolicy {
+        int state;
+        int flags;
+        DWORD color;
+        int animation;
+    };
+    struct CompositionData {
+        int attribute;
+        void* data;
+        SIZE_T size;
+    };
+    using SetCompositionAttribute = BOOL(WINAPI*)(HWND, CompositionData*);
+    static const auto set = reinterpret_cast<SetCompositionAttribute>(
+        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")));
+    if (!set)
+        return;
+    AccentPolicy accent{3 /* ACCENT_ENABLE_BLURBEHIND */, 0, 0, 0};
+    CompositionData data{19 /* WCA_ACCENT_POLICY */, &accent, sizeof accent};
+    set(reinterpret_cast<HWND>(window->winId()), &data);
+#elif defined(KAINT_HAVE_KWINDOWSHADOW)
+    if (QWindow* handle = window->windowHandle())
+        KWindowEffects::enableBlurBehind(handle, true);
+#else
+    Q_UNUSED(window);
+#endif
+}
+
+// Esquinas redondeadas que pone Kaint: las de Linux (ventana translúcida) o, en Windows 10, la
+// región de la ventana (Windows 11 las redondea él solo).
+bool ownCorners()
+{
+#ifdef Q_OS_WIN
+    return g_winRound && !isWindows11();
+#else
+    return g_rounded;
+#endif
+}
+
 // El marco de una ventana: pinta el borde y (en los diálogos) la barra de título, y se ocupa de
 // moverla, de cambiarle el tamaño desde los bordes y del botón de cerrar. La ventana es opaca: la
 // sombra, si el escritorio la ofrece (KWin), la pone él.
 class Frame : public QObject {
 public:
-    Frame(QWidget* window, bool titleBar)
+    Frame(QWidget* window, bool titleBar, bool glass = false)
         : QObject(window)
         , m_window(window)
         , m_titleBar(titleBar)
+        , m_glass(glass)
     {
         setObjectName(QStringLiteral("kaintWindowFrame"));
         window->setMouseTracking(true);
@@ -696,6 +758,9 @@ public:
             // abrirse maximizada, aún no hay ventana: los pone el Show).
             if (m_window->testAttribute(Qt::WA_WState_Created))
                 applyNativeFrame(m_window);
+            // Windows termina de colocar la ventana (maximizada o no) después de avisar del cambio:
+            // los márgenes y las esquinas se vuelven a mirar entonces.
+            QTimer::singleShot(0, this, [this] { refresh(); });
 #endif
             updateMargins();
             updateMask();
@@ -748,12 +813,53 @@ public:
         return false;
     }
 
+    // Lo que depende del estado y de las opciones (al cambiarlas en Configuración).
+    void refresh()
+    {
+        updateMargins();
+        updateMask();
+        m_window->update();
+    }
+
+#ifdef Q_OS_WIN
+    // WM_NCHITTEST: qué hay en 'pos' (en coordenadas de la ventana) para Windows. Los bordes y la
+    // barra de título los maneja él (cambiar el tamaño, mover, Aero Snap, el doble clic que maximiza
+    // o restaura y el menú de la ventana con el clic derecho); el resto es de Kaint.
+    LRESULT hitTest(const QPoint& pos) const
+    {
+        const Qt::Edges e = edgesAt(pos);
+        if (e == (Qt::LeftEdge | Qt::TopEdge))
+            return HTTOPLEFT;
+        if (e == (Qt::RightEdge | Qt::TopEdge))
+            return HTTOPRIGHT;
+        if (e == (Qt::LeftEdge | Qt::BottomEdge))
+            return HTBOTTOMLEFT;
+        if (e == (Qt::RightEdge | Qt::BottomEdge))
+            return HTBOTTOMRIGHT;
+        if (e & Qt::LeftEdge)
+            return HTLEFT;
+        if (e & Qt::RightEdge)
+            return HTRIGHT;
+        if (e & Qt::TopEdge)
+            return HTTOP;
+        if (e & Qt::BottomEdge)
+            return HTBOTTOM;
+        if (m_titleBar)
+            return titleRect().contains(pos) && !closeRect().contains(pos) ? HTCAPTION : HTCLIENT;
+        // La ventana principal: su fila del título y los huecos de la franja de los menús.
+        const QWidget* child = m_window->childAt(pos);
+        return child && child->property("kaintCaption").toBool() ? HTCAPTION : HTCLIENT;
+    }
+#endif
+
 private:
     void installShadow()
     {
 #ifdef Q_OS_WIN
         applyNativeFrame(m_window);
 #endif
+        if (m_glass)
+            enableBlurBehind(m_window);
 #ifdef KAINT_HAVE_KWINDOWSHADOW
         if (!m_window->windowHandle())
             return;
@@ -797,7 +903,7 @@ private:
     // Windows 11 en modo ventana: las esquinas redondeadas (lo de fuera no se pinta ni recibe clics).
     bool rounded() const
     {
-        return g_rounded && !m_window->isMaximized() && !m_window->isFullScreen();
+        return ownCorners() && !m_window->isMaximized() && !m_window->isFullScreen();
     }
 
     QRegion roundedRegion() const
@@ -809,10 +915,12 @@ private:
 
     void updateMask()
     {
-        if (!g_rounded)
+        if (!ownCorners() && !m_masked)
             return;
         if (!rounded()) {
-            m_window->clearMask();
+            if (m_masked)
+                m_window->clearMask();
+            m_masked = false;
             for (QWidget* child : m_window->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))
                 if (child->property("kaintCornerMask").toBool()) {
                     child->clearMask();
@@ -820,12 +928,16 @@ private:
                 }
             return;
         }
-        // La ventana (para los clics) y, como en Wayland el compositor no recorta la ventana con su
-        // máscara, también las barras que llegan a las esquinas: lo de fuera de la curva queda sin
-        // pintar (transparente).
+        // La ventana (para los clics; en Windows es la región de la ventana, que recorta también lo
+        // de dentro) y, como en Wayland el compositor no recorta la ventana con su máscara, también
+        // las barras que llegan a las esquinas: lo de fuera de la curva queda sin pintar
+        // (transparente).
         m_window->setMask(roundedRegion());
+        m_masked = true;
+#ifndef Q_OS_WIN
         for (QWidget* child : m_window->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))
             maskChild(child);
+#endif
     }
 
     // Una barra o panel de la ventana que llega a una esquina: recortada por la curva.
@@ -875,9 +987,18 @@ private:
         const QRectF r = shape.boundingRect();
         p.save();
         p.setRenderHint(QPainter::Antialiasing);
-        // El azul del cristal de las ventanas flotantes sobre un fondo claro (la ventana no es
-        // translúcida); sin el foco, más apagado.
-        p.fillPath(shape, active ? QColor(0x7e, 0xa7, 0xd6) : QColor(0xb4, 0xc8, 0xe0));
+        // El azul del cristal de las ventanas flotantes; con «Habilitar transparencia», translúcido
+        // sobre lo que haya detrás (la ventana lo es), y si no sobre un fondo claro. Con el tema
+        // oscuro, ahumado. Sin el foco, más apagado.
+        const bool dark = Theme::active().dark;
+        QColor glass;
+        if (m_glass)
+            glass = dark ? (active ? QColor(30, 38, 50, 185) : QColor(40, 44, 50, 150))
+                         : (active ? QColor(69, 128, 196, 158) : QColor(150, 175, 205, 120));
+        else
+            glass = dark ? (active ? QColor(0x3a, 0x44, 0x52) : QColor(0x44, 0x48, 0x4e))
+                         : (active ? QColor(0x7e, 0xa7, 0xd6) : QColor(0xb4, 0xc8, 0xe0));
+        p.fillPath(shape, glass);
         QLinearGradient across(r.topLeft(), r.topRight());
         across.setColorAt(0, QColor(255, 255, 255, 102));
         across.setColorAt(0.5, QColor(0, 0, 0, 26));
@@ -1021,7 +1142,18 @@ private:
         QPainter p(m_window);
         const bool active = m_window->isActiveWindow();
         const QRect f = m_window->rect();
-        if (rounded()) {
+        if (m_glass && aero()) {
+            // Windows 7 con transparencia: el cristal sobre lo que haya detrás de la ventana.
+            p.setCompositionMode(QPainter::CompositionMode_Source);
+            p.fillRect(f, Qt::transparent);
+            p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            QPainterPath path;
+            if (rounded())
+                path.addRoundedRect(QRectF(f).adjusted(0.5, 0.5, -0.5, -0.5), kRadius, kRadius);
+            else
+                path.addRect(QRectF(f).adjusted(0.5, 0.5, -0.5, -0.5));
+            paintAero(p, path, active);
+        } else if (rounded()) {
             // Windows 11: el fondo y el borde siguen las esquinas redondeadas.
             p.setCompositionMode(QPainter::CompositionMode_Source);
             p.fillRect(f, Qt::transparent);
@@ -1099,13 +1231,50 @@ private:
 
     QWidget* m_window;
     bool m_titleBar;
+    // Ventana translúcida para el cristal de Windows 7 («Habilitar transparencia»).
+    bool m_glass = false;
     bool m_hover = false;
     bool m_pressed = false;
     bool m_cursorSet = false;
+    bool m_masked = false;
 #ifdef KAINT_HAVE_KWINDOWSHADOW
     KWindowShadow* m_shadow = nullptr;
 #endif
 };
+
+#ifdef Q_OS_WIN
+Frame* frameOf(const QWidget* window)
+{
+    return static_cast<Frame*>(window->findChild<QObject*>(QStringLiteral("kaintWindowFrame"), Qt::FindDirectChildrenOnly));
+}
+
+bool handleNativeMessage(QWidget* window, const MSG* msg, qintptr* result)
+{
+    switch (msg->message) {
+    case WM_NCCALCSIZE:
+        // Toda la ventana para el contenido (sin barra de título ni bordes del sistema).
+        *result = 0;
+        return true;
+    case WM_NCACTIVATE:
+        // Sin repintar el marco del sistema (lParam -1): al activarse otra ventana (al abrir
+        // Configuración, por ejemplo) Windows dibujaba un instante su borde, blanco, encima.
+        *result = DefWindowProcW(msg->hwnd, WM_NCACTIVATE, msg->wParam, -1);
+        return true;
+    case WM_NCHITTEST: {
+        const Frame* frame = frameOf(window);
+        if (!frame)
+            return false;
+        POINT pt{GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam)};
+        ScreenToClient(msg->hwnd, &pt);
+        const qreal dpr = std::max<qreal>(1, window->devicePixelRatioF());
+        *result = frame->hitTest(QPoint(int(std::floor(pt.x / dpr)), int(std::floor(pt.y / dpr))));
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+#endif
 
 // Los diálogos (también los de Qt: avisos, preguntas, progreso...) se preparan cuando reciben su
 // título, antes de crearse su ventana: después ya no se puede quitar la decoración del sistema.
@@ -1164,10 +1333,13 @@ void decorate(QWidget* window, bool titleBar)
         return;
     window->setProperty("kaintWindowFrame", true);
     window->setWindowFlags(window->windowFlags() | Qt::FramelessWindowHint);
+    // Windows 7 con «Habilitar transparencia»: el cristal del marco de los diálogos deja ver lo de
+    // detrás (la ventana principal sigue opaca: dibujarla translúcida costaría mucho).
+    const bool glass = titleBar && Theme::aeroTransparency() && !classic();
     // Windows 11: las esquinas redondeadas necesitan el fondo translúcido (se pinta todo menos ellas).
-    if (g_rounded)
+    if (g_rounded || glass)
         window->setAttribute(Qt::WA_TranslucentBackground);
-    new Frame(window, titleBar);
+    new Frame(window, titleBar, glass);
 }
 
 void setButtons(Buttons style)
@@ -1227,6 +1399,9 @@ void refreshAll()
 #ifdef Q_OS_WIN
             if (w->testAttribute(Qt::WA_WState_Created))
                 applyNativeFrame(w);
+            // Las esquinas de Windows 10 (la región de la ventana) cambian al momento.
+            if (Frame* frame = frameOf(w))
+                frame->refresh();
 #endif
             w->update();
             for (QWidget* child : w->findChildren<QWidget*>())
@@ -1413,6 +1588,9 @@ void paintPanelClose(QPainter& p, const QRect& box, Buttons style, bool hot, boo
 CaptionTitle::CaptionTitle(QWidget* parent)
     : QWidget(parent)
 {
+    // En Windows es la barra de título para el propio Windows (WM_NCHITTEST): mover, Aero Snap,
+    // doble clic para maximizar o restaurar y su menú con el clic derecho.
+    setProperty("kaintCaption", true);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 }
 

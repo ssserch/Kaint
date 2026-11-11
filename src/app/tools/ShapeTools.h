@@ -38,6 +38,7 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_edit.isActive(); }
+    const Layer* editingLayer() const override { return m_edit.isActive() ? m_edit.layer().get() : nullptr; }
     void beforeHistoryJump() override;
     void historyChanged() override;
 
@@ -86,6 +87,7 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_edit.isActive(); }
+    const Layer* editingLayer() const override { return m_edit.isActive() ? m_edit.layer().get() : nullptr; }
     void beforeHistoryJump() override;
     void historyChanged() override;
 

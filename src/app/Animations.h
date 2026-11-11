@@ -34,6 +34,13 @@ QVariantAnimation* run(QObject* owner, qreal from, qreal to, int ms, const QEasi
 // Aparición con fundido de una ventana emergente (menús, listas desplegables y ayudas).
 void fadeIn(QWidget* widget, int ms);
 
+// Al abrir una ventana con el marco de Kaint (Configuración, un ajuste, un aviso...), como en
+// Windows: aparece desde un poco más pequeña y transparente hasta su tamaño, rápido al principio y
+// despacio al final, en 'ms' milisegundos. Las que llevan el marco del sistema ya las anima él.
+// Con las animaciones desactivadas, no.
+void setWindowAnimation(bool on, int ms);
+bool windowAnimation();
+
 // Filtro de toda la aplicación: fundido de menús, listas desplegables y ayudas emergentes, y
 // el aviso de la ventana modal (parpadea si se pulsa la ventana que bloquea, donde la plataforma
 // lo permite: X11 y Windows).

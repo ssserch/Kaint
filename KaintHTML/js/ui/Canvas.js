@@ -3,7 +3,7 @@
 // píxeles, la selección con hormigas y lo que dibuje la herramienta; reparte el ratón a la
 // herramienta y se desplaza con la rueda, el botón central o la barra espaciadora.
 import { checkerPattern, clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
-import { handCursor, outlineCursor, paintMini, pdnCursors } from "./Icons.js";
+import { handCursor, icon, outlineCursor, paintMini, pdnCursors } from "./Icons.js";
 import { Settings } from "../Settings.js";
 import { pixelsPerUnit } from "./Units.js";
 import { isSrgb, transformPixels } from "../core/ColorProfiles.js";
@@ -101,6 +101,9 @@ export class CanvasView extends EventTarget {
         on("pixels", (e) => this.invalidate(e.detail.rect));
         on("layers", () => this.invalidate(null));
         on("selection", () => this.update());
+        // Deshacer y rehacer cambian lo que hay bajo el puntero (el cuadro de la selección, la forma
+        // que se edita): la herramienta vuelve a elegir su cursor sin esperar a que se mueva el ratón.
+        on("history", () => setTimeout(() => this.refreshToolCursor(), 0));
         on("size", () => {
             doc.compositeCanvas = null;
             this.clampOrigin();
@@ -455,7 +458,78 @@ export class CanvasView extends EventTarget {
                 }
             }
         }
+        this.drawRemotePointers(ctx);
         this.updateScrollbars();
+    }
+
+    // Punteros de los demás participantes de la sesión colaborativa: un triángulo de su color y, al
+    // lado, su nombre con el icono de su herramienta.
+    drawRemotePointers(ctx) {
+        const list = this.remotePointers;
+        if (!list?.length)
+            return;
+        this.pointerIcons ??= new Map();
+        const iconFor = (name) => {
+            if (!name)
+                return null;
+            if (!this.pointerIcons.has(name)) {
+                const element = icon(name, 16);
+                if (element.tagName === "IMG" && !element.complete)
+                    element.addEventListener("load", () => this.update(), { once: true });
+                this.pointerIcons.set(name, element);
+            }
+            const element = this.pointerIcons.get(name);
+            return element.tagName === "SPAN" || (element.tagName === "IMG" && !element.complete) ? null : element;
+        };
+        ctx.save();
+        const font = getComputedStyle(document.documentElement).getPropertyValue("--font").trim() || "sans-serif";
+        ctx.font = `12px ${font}`;
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
+        for (const p of list) {
+            const v = this.imageToView(p.x, p.y);
+            const arrow = new Path2D();
+            arrow.moveTo(v.x, v.y);
+            arrow.lineTo(v.x, v.y + 16);
+            arrow.lineTo(v.x + 4.4, v.y + 12.2);
+            arrow.lineTo(v.x + 11.5, v.y + 11.5);
+            arrow.closePath();
+            ctx.save();
+            ctx.translate(1, 1);
+            ctx.strokeStyle = "rgba(0,0,0,0.25)";
+            ctx.lineWidth = 3;
+            ctx.stroke(arrow);
+            ctx.restore();
+            ctx.fillStyle = p.color;
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.5;
+            ctx.fill(arrow);
+            ctx.stroke(arrow);
+            const image = iconFor(p.tool);
+            const h = 18, w = 4 + (image ? 19 : 0) + ctx.measureText(p.name).width + 6;
+            const x = v.x + 10, y = v.y + 16;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x, y, w, h, 4); else ctx.rect(x, y, w, h);
+            ctx.fillStyle = p.color;
+            ctx.fill();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            let tx = x + 4;
+            if (image) {
+                ctx.fillStyle = "rgba(255,255,255,0.92)";
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(tx - 1, y, 18, 18, 3); else ctx.rect(tx - 1, y, 18, 18);
+                ctx.fill();
+                ctx.drawImage(image, tx, y + 1, 16, 16);
+                tx += 19;
+            }
+            const c = p.color.replace("#", "");
+            const gray = (parseInt(c.slice(0, 2), 16) * 11 + parseInt(c.slice(2, 4), 16) * 16 + parseInt(c.slice(4, 6), 16) * 5) / 32;
+            ctx.fillStyle = gray > 165 ? "#000000" : "#ffffff";
+            ctx.fillText(p.name, tx, y + h / 2 + 0.5);
+        }
+        ctx.restore();
     }
 
     // --- Desplazamiento automático ------------------------------------------------------------
@@ -1118,6 +1192,13 @@ export class CanvasView extends EventTarget {
         this.dragEvent = te;
         this.tool?.onPointerDown?.(te);
         this.update();
+    }
+
+    refreshToolCursor() {
+        if (!this.doc || !this.tool || !this.mouse || this.dragEvent || this.panning)
+            return;
+        this.setCursor(this.tool.cursor?.() ?? "default");
+        this.tool.onPointerMove?.({ ...this.mouse, buttons: 0 });
     }
 
     pointerMove(e) {

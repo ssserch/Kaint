@@ -4,7 +4,7 @@
 // en el título, valores vinculados, Ctrl+Z / Ctrl+Y para los cambios del diálogo y la vista previa
 // calculada en segundo plano (EffectRunner).
 import { AppState } from "../AppState.js";
-import { automaticLevels, curveLut, defaultCurves, defaultLevels, defaultValues, histogram, isReadOnly, levelsLut } from "../core/Effects.js";
+import { automaticLevels, curveSpline, defaultCurves, defaultLevels, defaultValues, histogram, isReadOnly, levelsLut } from "../core/Effects.js";
 import { startEffect } from "../core/EffectRunner.js";
 import { checkerPattern, clampRect, cloneCanvas, context, createCanvas, thumbnail } from "../core/Raster.js";
 import { colorDialog } from "./ColorDialog.js";
@@ -124,8 +124,8 @@ function numberBox(min, max, decimals, value, onChange) {
     return box;
 }
 
-// Fila "deslizador + caja numérica + restablecer" (con la franja de degradado debajo si el
-// parámetro la tiene: Matiz, Temperatura...).
+// Fila "deslizador + caja numérica + restablecer". Si el parámetro tiene degradado (Matiz,
+// Saturación, Temperatura...), el riel del deslizador lleva sus colores, como en Paint.NET.
 function sliderRow(min, max, decimals, def, current, tip, onChange, gradient = null) {
     const scale = 10 ** decimals;
     const range = el("input", { type: "range", min: Math.round(min * scale), max: Math.round(max * scale), step: 1, value: Math.round(current * scale) });
@@ -149,9 +149,10 @@ function sliderRow(min, max, decimals, def, current, tip, onChange, gradient = n
         onChange(def);
     });
     const column = el("div", { className: "fx-slider" }, [range]);
-    if (gradient?.length)
-        column.appendChild(el("div", { className: "fx-gradient",
-                                       style: { background: `linear-gradient(to right, ${gradient.map(([r, g, b]) => `rgb(${r},${g},${b})`).join(", ")})` } }));
+    if (gradient?.length) {
+        range.classList.add("gradient");
+        range.style.setProperty("--fx-gradient", `linear-gradient(to right, ${gradient.map(([r, g, b]) => `rgb(${r},${g},${b})`).join(", ")})`);
+    }
     return { row: el("div", { className: "fx-row" }, [column, box, reset]), set };
 }
 
@@ -437,7 +438,7 @@ const CHANNEL_COLORS = [null, "rgb(220,40,40)", "rgb(40,170,40)", "rgb(40,80,230
 // quitarlos.
 function curvesEditor(value, onChange) {
     let v = clone(value);
-    let channel = 0, followers = [], dragIndex = -1;
+    let channel = 0, followers = [], dragIndex = -1, hoverIndex = -1;
     const mode = el("select", {}, [el("option", { value: 0, textContent: tr("Luminosidad") }), el("option", { value: 1, textContent: tr("RGB") })]);
     const checks = [tr("Rojo"), tr("Verde"), tr("Azul")].map((t) => checkbox(t, true, () => updateChannel()));
     const coords = el("span", { className: "coords" });
@@ -489,10 +490,12 @@ function curvesEditor(value, onChange) {
         p.setLineDash([]);
         p.strokeRect(a.x + 0.5, a.y + 0.5, a.side - 1, a.side - 1);
         const drawCurve = (ch, active) => {
-            const lut = curveLut(v.points[ch]);
+            // Un punto por píxel (o más) y sin redondear a enteros: la curva se ve suave.
+            const spline = curveSpline(v.points[ch]), samples = Math.max(256, Math.ceil(a.side) + 1);
             p.beginPath();
-            for (let i = 0; i < 256; ++i) {
-                const [x, y] = toWidget([i, lut[i]]);
+            for (let i = 0; i < samples; ++i) {
+                const xv = (255 * i) / (samples - 1);
+                const [x, y] = toWidget([xv, clamp(spline(xv), 0, 255)]);
                 i ? p.lineTo(x, y) : p.moveTo(x, y);
             }
             p.strokeStyle = ch === 0 ? theme("--text") : CHANNEL_COLORS[ch];
@@ -510,14 +513,25 @@ function curvesEditor(value, onChange) {
                     drawCurve(ch, true);
         }
         drawCurve(channel, true);
-        p.strokeStyle = theme("--text");
-        p.fillStyle = theme("--base");
-        p.lineWidth = 1;
-        for (const pt of points()) {
+        // Los puntos de control, círculos rellenos como en Paint.NET (el que se arrastra o está bajo
+        // el puntero, con un aro).
+        const pointColor = channel === 0 ? theme("--text") : CHANNEL_COLORS[channel];
+        points().forEach((pt, i) => {
             const [x, y] = toWidget(pt);
-            p.fillRect(x - 4, y - 4, 8, 8);
-            p.strokeRect(x - 3.5, y - 3.5, 7, 7);
-        }
+            if (i === dragIndex || i === hoverIndex) {
+                p.beginPath();
+                p.arc(x, y, 5, 0, Math.PI * 2);
+                p.fillStyle = theme("--base");
+                p.fill();
+                p.strokeStyle = pointColor;
+                p.lineWidth = 1.5;
+                p.stroke();
+            }
+            p.beginPath();
+            p.arc(x, y, 3.5, 0, Math.PI * 2);
+            p.fillStyle = pointColor;
+            p.fill();
+        });
     };
     const hit = (x, y) => points().findIndex((pt) => {
         const [px, py] = toWidget(pt);
@@ -556,14 +570,28 @@ function curvesEditor(value, onChange) {
         const pt = toValue(x, y).map((n) => Math.round(n));
         pts[dragIndex] = [clamp(pt[0], lo, hi), pt[1]];
         edited();
-    }, () => (dragIndex = -1));
+    }, () => {
+        dragIndex = -1;
+        paint();
+    });
     canvas.addEventListener("pointermove", (e) => {
         const { x, y } = localPos(canvas, e), a = area();
         const inside = x >= a.x && y >= a.y && x <= a.x + a.side && y <= a.y + a.side;
         const [vx, vy] = toValue(x, y);
         coords.textContent = inside ? `(${Math.round(vx)}, ${Math.round(vy)})` : "";
+        const hover = dragIndex < 0 ? hit(x, y) : -1;
+        if (hover !== hoverIndex) {
+            hoverIndex = hover;
+            paint();
+        }
     });
-    canvas.addEventListener("pointerleave", () => (coords.textContent = ""));
+    canvas.addEventListener("pointerleave", () => {
+        coords.textContent = "";
+        if (hoverIndex >= 0) {
+            hoverIndex = -1;
+            paint();
+        }
+    });
     const updateChannel = () => {
         const rgb = v.mode === 1;
         checks.forEach((c) => (c.element.style.display = rgb ? "" : "none"));

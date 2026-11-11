@@ -7,6 +7,7 @@ import { StepRecorder } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
 import { Settings } from "../Settings.js";
+import { zalgo } from "../core/Zalgo.js";
 import { miniCursor, toolPixelCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
@@ -332,6 +333,7 @@ export class TextTool extends Tool {
         const s = this.settings;
         return { pos: { ...this.pos }, text: this.input.value, primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { fontFamily: s.fontFamily, fontSize: s.fontSize, bold: s.bold, italic: s.italic, underline: s.underline,
+                             zalgo: s.zalgo, zalgoType: s.zalgoType,
                              textAlign: s.textAlign, antialias: s.antialias, blend: s.blend, strikeout: !!s.strikeout,
                              fontMetric: s.fontMetric, textRendering: s.textRendering } };
     }
@@ -394,6 +396,9 @@ export class TextTool extends Tool {
         // Kaint (compositeTool): así funcionan "Sobrescribir" y los colores translúcidos sin suavizado.
         if (this.real?.width !== doc.width || this.real?.height !== doc.height)
             this.real = createCanvas(doc.width, doc.height);
+        // Zalgo: las mismas letras con sus marcas (no ocupan ancho: el cursor y la alineación son los
+        // de siempre); cada letra lleva siempre las mismas, según su sitio.
+        const drawn = s.zalgo ? l.lines.map((line, i) => zalgo(line, s.zalgoType ?? 1, Math.imul(i, 7919) >>> 0)) : l.lines;
         for (const [canvas, alpha] of [[this.temp, 255], [this.real, c.a ?? 255]]) {
             const ctx = context(canvas);
             ctx.clearRect(0, 0, doc.width, doc.height);
@@ -405,14 +410,39 @@ export class TextTool extends Tool {
             l.lines.forEach((line, i) => {
                 const x = s.textAlign === "center" ? this.pos.x + (l.w - l.widths[i]) / 2 : s.textAlign === "right" ? this.pos.x + l.w - l.widths[i] : this.pos.x;
                 const y = this.pos.y + i * f.line;
-                ctx.fillText(line, x, y);
+                ctx.fillText(drawn[i], x, y);
                 if (s.underline && line)
                     ctx.fillRect(x, y + f.px * 1.05, l.widths[i], Math.max(1, f.px / 14));
                 if (s.strikeout && line)
                     ctx.fillRect(x, y + f.px * 0.55, l.widths[i], Math.max(1, f.px / 14));
             });
         }
-        const box = this.clampBox({ x: this.pos.x - 4, y: this.pos.y - 4, w: l.w + f.px + 8, h: l.h + 8 });
+        let area = { x: this.pos.x - 4, y: this.pos.y - 4, w: l.w + f.px + 8, h: l.h + 8 };
+        if (s.zalgo) {
+            // Las marcas suben y bajan mucho más que la línea (y el navegador no las cuenta al medir
+            // el texto): se mira dónde quedó tinta en lo ya dibujado, con margen de sobra.
+            const extra = Math.ceil(f.px * 3);
+            const scan = this.clampBox({ x: this.pos.x - f.px - 4, y: this.pos.y - extra, w: l.w + 2 * f.px + 8, h: l.h + 2 * extra });
+            if (scan) {
+                const d = context(this.temp).getImageData(scan.x, scan.y, scan.w, scan.h).data;
+                let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+                for (let y = 0; y < scan.h; ++y)
+                    for (let x = 0; x < scan.w; ++x)
+                        if (d[(y * scan.w + x) * 4 + 3]) {
+                            if (x < x0) x0 = x;
+                            if (x > x1) x1 = x;
+                            if (y < y0) y0 = y;
+                            if (y > y1) y1 = y;
+                        }
+                if (x1 >= 0) {
+                    this.zalgoInk = { x: scan.x + x0, y: scan.y + y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+                    area = unionRect(area, { x: scan.x + x0 - 2, y: scan.y + y0 - 2, w: x1 - x0 + 5, h: y1 - y0 + 5 });
+                }
+            }
+        }
+        if (!s.zalgo)
+            this.zalgoInk = null;
+        const box = this.clampBox(area);
         const pctx = context(this.preview), dirty = unionRect(this.bounds, box);
         if (dirty) {
             pctx.clearRect(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -437,7 +467,16 @@ export class TextTool extends Tool {
         if (!this.editing)
             return;
         const l = this.layout(), f = l.f;
-        const a = view.imageToView(this.pos.x - 2, this.pos.y - 2), b = view.imageToView(this.pos.x + l.w + 2, this.pos.y + l.h + 2);
+        let left = this.pos.x - 2, right = this.pos.x + l.w + 2, top = this.pos.y - 2, bottom = this.pos.y + l.h + 2;
+        // La caja de líneas de puntos abarca también las marcas del zalgo.
+        if (this.settings.zalgo && this.zalgoInk) {
+            const z = this.zalgoInk;
+            left = Math.min(left, z.x - 2);
+            right = Math.max(right, z.x + z.w + 2);
+            top = Math.min(top, z.y - 2);
+            bottom = Math.max(bottom, z.y + z.h + 2);
+        }
+        const a = view.imageToView(left, top), b = view.imageToView(right, bottom);
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = "rgba(0,0,0,0.6)";
         ctx.lineWidth = 1;

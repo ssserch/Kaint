@@ -9,7 +9,9 @@
 #include "app/widgets/FontChooser.h"
 #include "core/CustomShapes.h"
 #include "core/FillPattern.h"
+#include "core/Zalgo.h"
 
+#include <QActionGroup>
 #include <QButtonGroup>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -452,13 +454,40 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
             [update](bool on) { update([on](ToolSettings& s) { s.underline = on; }); });
     connect(m_strikeout, &QToolButton::toggled, this,
             [update](bool on) { update([on](ToolSettings& s) { s.strikeout = on; }); });
+    // Zalgo: el botón lo activa y la flecha elige cuánto y hacia dónde.
+    m_zalgo = new QToolButton(m_parent);
+    m_zalgo->setText(QStringLiteral("Z\u0334\u0359"));
+    m_zalgo->setToolTip(tr("Zalgo: marcas apiladas encima y debajo de cada letra (la flecha elige el tipo)"));
+    m_zalgo->setCheckable(true);
+    m_zalgo->setAutoRaise(true);
+    m_zalgo->setPopupMode(QToolButton::MenuButtonPopup);
+    auto* zalgoMenu = new QMenu(m_zalgo);
+    m_zalgoTypes = new QActionGroup(zalgoMenu);
+    m_zalgoTypes->setExclusive(true);
+    const QStringList zalgoNames = Zalgo::typeNames();
+    for (int i = 0; i < zalgoNames.size(); ++i) {
+        QAction* a = zalgoMenu->addAction(zalgoNames[i]);
+        a->setCheckable(true);
+        a->setData(i);
+        m_zalgoTypes->addAction(a);
+    }
+    m_zalgo->setMenu(zalgoMenu);
+    connect(m_zalgo, &QToolButton::toggled, this, [update](bool on) { update([on](ToolSettings& s) { s.zalgo = on; }); });
+    connect(m_zalgoTypes, &QActionGroup::triggered, this, [update](QAction* a) {
+        const int type = a->data().toInt();
+        // Elegir un tipo también lo activa.
+        update([type](ToolSettings& s) {
+            s.zalgoType = type;
+            s.zalgo = true;
+        });
+    });
     m_textRendering = new ChoiceButton(tr("Modo de representación del texto"), parent);
     m_textRendering->addChoice(QIcon(), tr("Suave"), int(TextRendering::Smooth));
     m_textRendering->addChoice(QIcon(), tr("Nítido (moderno)"), int(TextRendering::SharpModern));
     m_textRendering->addChoice(QIcon(), tr("Nítido (clásico)"), int(TextRendering::SharpClassic));
     m_textRendering->setShowText(true);
     m_textRendering->onChosen = [update](int v) { update([v](ToolSettings& s) { s.textRendering = TextRendering(v); }); };
-    add(QStringLiteral("text.style"), Tool::OptText, Text, {m_bold, m_italic, m_underline, m_strikeout, m_textRendering});
+    add(QStringLiteral("text.style"), Tool::OptText, Text, {m_bold, m_italic, m_underline, m_zalgo, m_strikeout, m_textRendering});
 
     auto [alignBox, alignLayout] = buttonRow();
     m_align = new QButtonGroup(this);
@@ -672,12 +701,15 @@ void ToolOptionsEditor::sync()
         m_fixedHeight->setValue(s.fixedHeight);
     }
     {
-        const QSignalBlocker b1(m_pressure), b2(m_bold), b3(m_italic), b4(m_underline), b5(m_strikeout);
+        const QSignalBlocker b1(m_pressure), b2(m_bold), b3(m_italic), b4(m_underline), b5(m_strikeout), b6(m_zalgo);
         m_pressure->setChecked(s.pressure);
         m_bold->setChecked(s.bold);
         m_italic->setChecked(s.italic);
         m_underline->setChecked(s.underline);
         m_strikeout->setChecked(s.strikeout);
+        m_zalgo->setChecked(s.zalgo);
+        for (QAction* a : m_zalgoTypes->actions())
+            a->setChecked(a->data().toInt() == s.zalgoType);
     }
     m_smoothing->setCurrent(s.smoothing ? 1 : 0);
     int shapeChoice = int(s.shape);

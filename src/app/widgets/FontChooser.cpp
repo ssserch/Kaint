@@ -7,7 +7,9 @@
 #include <QFocusEvent>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QFrame>
 #include <QPainter>
+#include <QScreen>
 #include <QStyledItemDelegate>
 
 namespace {
@@ -157,7 +159,11 @@ FontChooser::FontChooser(QWidget* parent)
     view()->setMinimumWidth(460);
     setMaxVisibleItems(24);
     // La lista lleva barra de desplazamiento (el estilo la cambiaba por flechas arriba y abajo).
+    // QComboBox la apaga al crear la lista si en ese momento se abre como menú, y la crea
+    // QFontComboBox antes de tener la propiedad: se vuelve a encender.
     setProperty("kaintScrollableList", true);
+    view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    view()->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     lineEdit()->setReadOnly(true);
     lineEdit()->installEventFilter(this);
     completer()->setCaseSensitivity(Qt::CaseInsensitive);
@@ -181,6 +187,26 @@ FontChooser::FontChooser(QWidget* parent)
         if (m_editing)
             stopEditing(true);
     });
+}
+
+void FontChooser::showPopup()
+{
+    // La ventana de la lista sale del ancho del cuadro, pero la lista es más ancha (cada fuente lleva
+    // su frase de ejemplo): la cortaba y la barra de desplazamiento quedaba fuera, sin verse. Que
+    // la ventana tenga el ancho de la lista.
+    if (QWidget* popup = view()->parentWidget(); popup && popup->isWindow()) {
+        const auto* frame = qobject_cast<const QFrame*>(popup);
+        popup->setMinimumWidth(view()->minimumWidth() + 2 * (frame ? frame->frameWidth() : 0));
+    }
+    QFontComboBox::showPopup();
+    // Sin salirse de la pantalla por la derecha.
+    QWidget* popup = view()->window();
+    if (popup && popup != window())
+        if (const QScreen* screen = popup->screen()) {
+            const QRect available = screen->availableGeometry();
+            if (popup->geometry().right() > available.right())
+                popup->move(std::max(available.left(), available.right() - popup->width() + 1), popup->y());
+        }
 }
 
 void FontChooser::startEditing()

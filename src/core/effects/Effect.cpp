@@ -148,66 +148,86 @@ CurvesValue::CurvesValue()
         list = {QPointF(0, 0), QPointF(255, 255)};
 }
 
+namespace {
+
+// SplineInterpolator de Paint.NET: spline cúbica natural (segunda derivada nula en los extremos)
+// que pasa por todos los puntos. Al contrario que una interpolación monótona, entre dos puntos
+// casi a la misma altura la curva se arquea en vez de quedarse plana, como en Paint.NET.
+class CurveSpline {
+public:
+    explicit CurveSpline(QList<QPointF> pts)
+    {
+        std::sort(pts.begin(), pts.end(), [](const QPointF& a, const QPointF& b) { return a.x() < b.x(); });
+        pts.erase(std::unique(pts.begin(), pts.end(), [](const QPointF& a, const QPointF& b) { return qFuzzyCompare(a.x(), b.x()); }),
+                  pts.end());
+        for (const QPointF& p : std::as_const(pts)) {
+            m_x.push_back(p.x());
+            m_y.push_back(p.y());
+        }
+        const size_t n = m_x.size();
+        m_y2.assign(n, 0.0);
+        if (n < 3)
+            return;
+        // Algoritmo de la matriz tridiagonal: descomposición y sustitución hacia atrás.
+        std::vector<double> u(n, 0.0);
+        for (size_t i = 1; i + 1 < n; ++i) {
+            const double wx = m_x[i + 1] - m_x[i - 1];
+            const double sig = (m_x[i] - m_x[i - 1]) / wx;
+            const double p = sig * m_y2[i - 1] + 2.0;
+            m_y2[i] = (sig - 1.0) / p;
+            const double ddydx = (m_y[i + 1] - m_y[i]) / (m_x[i + 1] - m_x[i]) - (m_y[i] - m_y[i - 1]) / (m_x[i] - m_x[i - 1]);
+            u[i] = (6.0 * ddydx / wx - sig * u[i - 1]) / p;
+        }
+        m_y2[n - 1] = 0;
+        for (size_t i = n - 1; i-- > 0;)
+            m_y2[i] = m_y2[i] * m_y2[i + 1] + u[i];
+    }
+
+    size_t size() const { return m_x.size(); }
+
+    // Fuera de los puntos sigue el tramo del extremo, como en Paint.NET (luego se recorta a 0..255).
+    double operator()(double x) const
+    {
+        const size_t n = m_x.size();
+        if (n == 0)
+            return x;
+        if (n == 1)
+            return m_y[0];
+        size_t lo = 0, hi = n - 1;
+        while (hi - lo > 1) {
+            const size_t k = (hi + lo) / 2;
+            if (m_x[k] > x)
+                hi = k;
+            else
+                lo = k;
+        }
+        const double h = m_x[hi] - m_x[lo];
+        const double a = (m_x[hi] - x) / h;
+        const double b = (x - m_x[lo]) / h;
+        return a * m_y[lo] + b * m_y[hi] + ((a * a * a - a) * m_y2[lo] + (b * b * b - b) * m_y2[hi]) * (h * h) / 6.0;
+    }
+
+private:
+    std::vector<double> m_x, m_y, m_y2;
+};
+
+} // namespace
+
 std::array<uint8_t, 256> CurvesValue::lut(int channel) const
 {
-    QList<QPointF> pts = points[size_t(std::clamp(channel, 0, 3))];
-    std::sort(pts.begin(), pts.end(), [](const QPointF& a, const QPointF& b) { return a.x() < b.x(); });
-    pts.erase(std::unique(pts.begin(), pts.end(), [](const QPointF& a, const QPointF& b) { return qFuzzyCompare(a.x(), b.x()); }),
-              pts.end());
-
+    const CurveSpline spline(points[size_t(std::clamp(channel, 0, 3))]);
     std::array<uint8_t, 256> out{};
-    const int n = int(pts.size());
-    if (n == 0) {
-        for (int i = 0; i < 256; ++i)
-            out[size_t(i)] = uint8_t(i);
-        return out;
-    }
-    if (n == 1) {
-        out.fill(uint8_t(clamp255f(float(pts[0].y()))));
-        return out;
-    }
+    for (int i = 0; i < 256; ++i)
+        out[size_t(i)] = uint8_t(clamp255f(float(spline(i))));
+    return out;
+}
 
-    std::vector<double> d(static_cast<size_t>(n - 1)), m(static_cast<size_t>(n));
-    for (int k = 0; k < n - 1; ++k)
-        d[size_t(k)] = (pts[k + 1].y() - pts[k].y()) / (pts[k + 1].x() - pts[k].x());
-    m[0] = d[0];
-    m[size_t(n - 1)] = d[size_t(n - 2)];
-    for (int k = 1; k < n - 1; ++k)
-        m[size_t(k)] = (d[size_t(k - 1)] * d[size_t(k)] <= 0) ? 0.0 : (d[size_t(k - 1)] + d[size_t(k)]) / 2.0;
-    for (int k = 0; k < n - 1; ++k) {
-        if (d[size_t(k)] == 0) {
-            m[size_t(k)] = m[size_t(k + 1)] = 0;
-            continue;
-        }
-        const double a = m[size_t(k)] / d[size_t(k)];
-        const double b = m[size_t(k + 1)] / d[size_t(k)];
-        const double s = a * a + b * b;
-        if (s > 9) {
-            const double t = 3.0 / std::sqrt(s);
-            m[size_t(k)] = t * a * d[size_t(k)];
-            m[size_t(k + 1)] = t * b * d[size_t(k)];
-        }
-    }
-
-    int k = 0;
-    for (int i = 0; i < 256; ++i) {
-        const double x = i;
-        double y;
-        if (x <= pts.front().x()) {
-            y = pts.front().y();
-        } else if (x >= pts.back().x()) {
-            y = pts.back().y();
-        } else {
-            while (k < n - 2 && x > pts[k + 1].x())
-                ++k;
-            const double h = pts[k + 1].x() - pts[k].x();
-            const double t = (x - pts[k].x()) / h;
-            const double t2 = t * t, t3 = t2 * t;
-            y = (2 * t3 - 3 * t2 + 1) * pts[k].y() + (t3 - 2 * t2 + t) * h * m[size_t(k)]
-              + (-2 * t3 + 3 * t2) * pts[k + 1].y() + (t3 - t2) * h * m[size_t(k + 1)];
-        }
-        out[size_t(i)] = uint8_t(clamp255f(float(y)));
-    }
+std::vector<double> CurvesValue::sample(int channel, int samples) const
+{
+    const CurveSpline spline(points[size_t(std::clamp(channel, 0, 3))]);
+    std::vector<double> out(size_t(std::max(samples, 2)));
+    for (size_t i = 0; i < out.size(); ++i)
+        out[i] = std::clamp(spline(255.0 * double(i) / double(out.size() - 1)), 0.0, 255.0);
     return out;
 }
 

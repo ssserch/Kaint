@@ -7,6 +7,7 @@ import { el } from "./Dialogs.js";
 import { dashIcon, icon, ShapeGroups, shapeName } from "./Icons.js";
 import { CustomShapes } from "../core/CustomShapes.js";
 import { popupMenu } from "./Menu.js";
+import { ZalgoTypes } from "../core/Zalgo.js";
 import { tr } from "../i18n.js";
 import { UserFonts } from "../UserFonts.js";
 
@@ -391,6 +392,18 @@ export class ToolOptions {
                 b.refresh = () => b.classList.toggle("checked", !!tools()[key]);
                 return b;
             });
+            // Zalgo, junto a Subrayado: el botón lo activa y la flecha elige el tipo (elegir uno también
+            // lo activa).
+            const zalgoButton = button([el("span", { textContent: "Z\u0334\u0359" })], tr("Zalgo: marcas apiladas encima y debajo de cada letra (la flecha elige el tipo)"),
+                                       () => set({ zalgo: !tools().zalgo }));
+            zalgoButton.refresh = () => zalgoButton.classList.toggle("checked", !!tools().zalgo);
+            const zalgoArrow = el("button", { className: "tbutton choice zalgo-type", title: tr("Tipo de zalgo") }, [el("span", { className: "arrow", textContent: "▼" })]);
+            zalgoArrow.addEventListener("click", () => {
+                const r = zalgoArrow.getBoundingClientRect();
+                popupMenu(ZalgoTypes.map((name, i) => ({ text: tr(name), checked: (tools().zalgoType ?? 1) === i, run: () => set({ zalgoType: i, zalgo: true }) })),
+                          r.left, r.bottom);
+            });
+            style.splice(3, 0, zalgoButton, zalgoArrow);
             const metric = choice(tr("Unidad del tamaño de letra"), "fontMetric", [["points", "opt-fontmetric:points", tr("Puntos (PPP de imagen)")],
                                                                                     ["fixed96", "opt-fontmetric:fixed96", tr("Fijo (96 PPP)")]]);
             const rendering = choice(tr("Modo de representación del texto"), "textRendering", [["smooth", null, tr("Suave")],

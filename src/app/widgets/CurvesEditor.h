@@ -28,6 +28,7 @@ protected:
     void mousePressEvent(QMouseEvent* e) override;
     void mouseMoveEvent(QMouseEvent* e) override;
     void mouseReleaseEvent(QMouseEvent* e) override;
+    void leaveEvent(QEvent* e) override;
 
 private:
     QRectF area() const;
@@ -40,6 +41,7 @@ private:
     int m_channel = 0;
     QList<int> m_followers;
     int m_drag = -1;
+    int m_hover = -1;
 };
 
 // Editor de curvas de Paint.NET: luminosidad o RGB, con casillas para editar a la vez los

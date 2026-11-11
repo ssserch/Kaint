@@ -119,6 +119,8 @@ ToolSettings AppState::toolDefaults() const
     t.bold = num("bold", t.bold);
     t.italic = num("italic", t.italic);
     t.underline = num("underline", t.underline);
+    t.zalgo = num("zalgo", t.zalgo);
+    t.zalgoType = std::clamp(num("zalgoType", t.zalgoType), 0, 5);
     t.strikeout = num("strikeout", t.strikeout);
     t.textAlign = TextAlign(num("textAlign", int(t.textAlign)));
     t.fill = std::clamp(num("fillPattern", t.fill), 0, FillPattern::count() - 1);
@@ -176,6 +178,8 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.setValue(QStringLiteral("bold"), t.bold);
     s.setValue(QStringLiteral("italic"), t.italic);
     s.setValue(QStringLiteral("underline"), t.underline);
+    s.setValue(QStringLiteral("zalgo"), t.zalgo);
+    s.setValue(QStringLiteral("zalgoType"), t.zalgoType);
     s.setValue(QStringLiteral("strikeout"), t.strikeout);
     s.setValue(QStringLiteral("textAlign"), int(t.textAlign));
     s.setValue(QStringLiteral("fillPattern"), t.fill);

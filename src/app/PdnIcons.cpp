@@ -662,6 +662,24 @@ void drawDeselect(QPainter& p)
     p.drawPath(x);
 }
 
+void drawCollab(QPainter& p)
+{
+    // Dos personas, una detrás de otra: el modo colaborativo.
+    aa(p);
+    auto person = [&p](QPointF head, qreal r, const QRectF& body, const QColor& fill) {
+        p.setPen(QPen(fill.darker(165), 1));
+        p.setBrush(fill);
+        QPainterPath shoulders;
+        shoulders.moveTo(body.left(), body.bottom());
+        shoulders.arcTo(QRectF(body.left(), body.top(), body.width(), body.height() * 2), 180, -180);
+        shoulders.closeSubpath();
+        p.drawPath(shoulders);
+        p.drawEllipse(head, r, r);
+    };
+    person(QPointF(10.6, 4.6), 2.6, QRectF(6.6, 8.4, 8.4, 6.6), QColor(245, 152, 42));
+    person(QPointF(5.8, 6.2), 2.9, QRectF(0.8, 10.2, 10, 5.3), QColor(58, 132, 216));
+}
+
 // Nombre de Kaint → dibujo, rejilla en la que se dibuja y archivo de paint.js con el que lo puede
 // sustituir un paquete de iconos.
 struct Entry {
@@ -698,6 +716,8 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("toolbar-paste"), {BS, drawPaste, "menu_edit_paste_icon"}},
         {QStringLiteral("toolbar-crop"), {BS, drawCrop, "menu_image_crop_icon"}},
         {QStringLiteral("toolbar-deselect"), {BS, drawDeselect, "menu_edit_deselect_icon"}},
+        {QStringLiteral("collab"), {BS, drawCollab, ""}},
+        {QStringLiteral("settings-collab"), {BS, drawCollab, ""}},
     };
     return icons;
 }
@@ -1034,33 +1054,45 @@ QCursor miniToolCursor(const QString& name, bool ibeam)
     }, ibeam);
 }
 
-QCursor rotateCursor(qreal angle)
+QCursor rotateCursor(qreal angle, bool grabbing)
 {
-    // La flecha de girar de paint.js: un trozo de circunferencia de 32° con una punta en cada
-    // extremo, que pasa por el puntero y se curva alrededor del centro del giro.
+    // Como en Paint.NET: detrás, la flecha doble curva de girar y, delante, la mano (la misma de los
+    // tiradores, agarrando mientras se gira). La flecha es un trozo de circunferencia alrededor del
+    // centro del giro que pasa un poco por fuera del puntero: sus puntas asoman a los lados de la
+    // mano y siguen al puntero al girar.
     const int steps = 72;
     const int index = ((int(std::lround(angle / (2 * M_PI) * steps)) % steps) + steps) % steps;
-    static QHash<int, QCursor> cache;
-    if (const auto it = cache.constFind(index); it != cache.cend())
+    const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
+    const QString key = QStringLiteral("%1/%2/%3/%4/%5/%6")
+                            .arg(index)
+                            .arg(grabbing)
+                            .arg(int(g_cursorStyle))
+                            .arg(drawnCursorSize())
+                            .arg(dpr)
+                            .arg(IconPacks::generation());
+    static QHash<QString, QCursor> cache;
+    if (const auto it = cache.constFind(key); it != cache.cend())
         return *it;
     const qreal a = index * 2 * M_PI / steps;
     const qreal scale = drawnCursorSize() / 24.0;
     const int side = int(std::ceil(40 * scale));
-    const qreal dpr = std::max<qreal>(1.0, qApp ? qApp->devicePixelRatio() : 1.0);
     QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
     image.setDevicePixelRatio(dpr);
     image.fill(Qt::transparent);
     {
         QPainter p(&image);
         p.setRenderHint(QPainter::Antialiasing);
+        p.save();
         p.translate(side / 2.0, side / 2.0);
         p.scale(scale, scale);
-        const qreal radius = 50, halfArc = qDegreesToRadians(16.0);
-        const QPointF center(std::cos(a) * radius, std::sin(a) * radius);
+        // 'a' apunta del puntero al centro del giro; la mitad del arco queda 'offset' más allá del
+        // puntero, por el otro lado.
+        const qreal radius = 26, offset = 6, halfArc = qDegreesToRadians(34.0);
+        const QPointF center = QPointF(std::cos(a), std::sin(a)) * (radius - offset);
         const qreal middle = a + M_PI, start = middle - halfArc, end = middle + halfArc;
         auto onArc = [&](qreal t) { return center + QPointF(std::cos(t), std::sin(t)) * radius; };
         QPainterPath path;
-        const int segments = 12;
+        const int segments = 16;
         for (int i = 0; i <= segments; ++i) {
             const QPointF q = onArc(start + (end - start) * i / segments);
             i ? path.lineTo(q) : path.moveTo(q);
@@ -1070,20 +1102,29 @@ QCursor rotateCursor(qreal angle)
             const QPointF tangent(direction * -std::sin(t), direction * std::cos(t));
             const QPointF normal(-tangent.y(), tangent.x());
             const QPointF base = tip - tangent * 4;
-            path.moveTo(base + normal * 2.25);
+            path.moveTo(base + normal * 2.75);
             path.lineTo(tip);
-            path.lineTo(base - normal * 2.25);
+            path.lineTo(base - normal * 2.75);
         };
         arrow(start, -1);
         arrow(end, 1);
         p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(Qt::white, 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setPen(QPen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawPath(path);
         p.setPen(QPen(Qt::black, 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawPath(path);
+        p.restore();
+        // La mano encima, con su punto activo en el del cursor.
+        const QCursor hand = handCursor(grabbing);
+        const QPixmap pm = hand.pixmap();
+        p.setRenderHint(QPainter::SmoothPixmapTransform, g_cursorStyle != CursorStyle::PaintNet);
+        p.drawPixmap(QRectF(QPointF(side / 2.0, side / 2.0) - QPointF(hand.hotSpot()), pm.deviceIndependentSize()), pm,
+                     QRectF(pm.rect()));
     }
     const QCursor cursor(QPixmap::fromImage(image), side / 2, side / 2);
-    cache.insert(index, cursor);
+    if (cache.size() > 512)
+        cache.clear();
+    cache.insert(key, cursor);
     return cursor;
 }
 

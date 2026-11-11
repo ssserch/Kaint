@@ -1780,9 +1780,42 @@ body.busy, body.busy * {
     --track-fill: #9a9a9a;
 }
 
-.fx-gradient {
-    height: 5px;
-    margin: 0 6px 2px;
+/* Deslizadores con degradado (Matiz, Saturación, Claridad, Temperatura...): el riel lleva los
+   colores, desde donde queda el centro del tirador en el mínimo hasta donde queda en el máximo. */
+.fx-slider input[type="range"].gradient {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 22px;
+    background: transparent;
+}
+.fx-slider input[type="range"].gradient::-webkit-slider-runnable-track {
+    height: 19px;
+    background: var(--fx-gradient) center / calc(100% - 11px) 6px no-repeat,
+                linear-gradient(var(--border), var(--border)) center / calc(100% - 9px) 8px no-repeat !important;
+}
+.fx-slider input[type="range"].gradient::-moz-range-track {
+    height: 19px;
+    background: var(--fx-gradient) center / calc(100% - 11px) 6px no-repeat,
+                linear-gradient(var(--border), var(--border)) center / calc(100% - 9px) 8px no-repeat !important;
+}
+.fx-slider input[type="range"].gradient::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 11px;
+    height: 19px;
+    border: none;
+    background: var(--thumb, var(--accent));
+    clip-path: polygon(0 0, 100% 0, 100% 14px, 50% 100%, 0 14px);
+}
+.fx-slider input[type="range"].gradient::-moz-range-thumb {
+    width: 11px;
+    height: 19px;
+    border: none;
+    border-radius: 0;
+    background: var(--thumb, var(--accent));
+    clip-path: polygon(0 0, 100% 0, 100% 14px, 50% 100%, 0 14px);
+}
+.fx-slider input[type="range"].gradient:disabled {
+    opacity: 0.45;
 }
 
 .fx-row input[type="number"] {
@@ -3751,4 +3784,240 @@ fieldset.group > legend {
 
 :root.phone .settings .page select {
     max-width: 100%;
+}
+
+/* Guardar todos (SaveAllDialog): una fila por imagen con los puntos para moverla (solo bajo el
+   puntero), si se guarda, la miniatura, el nombre con la extensión en su color y el formato. */
+.dialog.save-all .body {
+    width: min(720px, 92vw);
+}
+.save-all .intro {
+    margin: 0 0 8px;
+    max-width: 680px;
+}
+.save-all-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px 3px 2px;
+    border-radius: 4px;
+}
+.save-all-list .save-all-row:hover, .save-all-row.dragging {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.save-all-row.dragging {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.save-all-row .dots {
+    width: 12px;
+    align-self: stretch;
+    flex: none;
+    cursor: grab;
+    touch-action: none;
+}
+.save-all-list .save-all-row:hover .dots, .save-all-row.dragging .dots {
+    background: radial-gradient(circle, var(--text) 1.5px, transparent 1.7px) 1px center / 5px 5px repeat-y,
+                radial-gradient(circle, var(--text) 1.5px, transparent 1.7px) 6px center / 5px 5px repeat-y;
+    background-size: 5px 5px;
+    background-clip: content-box;
+    padding: 18px 0;
+}
+.save-all-row.dragging .dots {
+    cursor: grabbing;
+}
+.save-all-row .thumb {
+    width: 60px;
+    height: 60px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+}
+.save-all-row.head .thumb {
+    height: auto;
+    border: none;
+    background: none;
+}
+.save-all-row .thumb canvas, .save-all-row .thumb img {
+    max-width: 56px;
+    max-height: 56px;
+}
+.save-all-row select {
+    min-width: 84px;
+}
+.save-all-name {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+.save-all-name input {
+    width: 100%;
+    box-sizing: border-box;
+}
+.save-all-name .overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    padding: 0 0 0 5px;
+    overflow: hidden;
+    white-space: pre;
+    font: inherit;
+}
+.save-all-name .sizer {
+    visibility: hidden;
+}
+.save-all-numbers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0;
+}
+.save-all-numbers input[type="number"] {
+    width: 64px;
+}
+.save-all-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    padding: 2px;
+}
+.save-all .buttons .count {
+    margin-right: auto;
+    align-self: center;
+}
+/* La flecha de Guardar con sus opciones (Guardar como, Guardar todos...). */
+.tbutton.menu-arrow {
+    min-width: 0;
+    padding-left: 1px;
+    padding-right: 1px;
+}
+
+/* La flecha de los tipos de zalgo, pegada a su botón. */
+.tbutton.zalgo-type {
+    min-width: 0;
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-left: -2px;
+}
+
+/* --- Modo colaborativo (js/collab/CollabUI.js) --------------------------------------------------- */
+
+#status-bar .collab-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+#status-bar .collab-bar[hidden] {
+    display: none;
+}
+
+#status-bar .collab-bar .tbutton {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    padding: 0 6px;
+}
+
+#status-bar .collab-bar .tbutton[hidden] {
+    display: none;
+}
+
+.collab-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 520px;
+}
+
+.collab-form label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.collab-note {
+    opacity: 0.75;
+}
+
+.collab-status-text.error {
+    color: #c62828;
+}
+
+.collab-code {
+    font-family: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
+    letter-spacing: 0.04em;
+}
+
+.collab-session {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(560px, 86vw);
+}
+
+.collab-session .collab-title {
+    font-weight: 600;
+    margin: 0;
+}
+
+.collab-session .list,
+.settings .collab-ids {
+    max-height: 220px;
+    overflow: auto;
+}
+
+.collab-session .list .row,
+.settings .collab-ids .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.collab-session .list .row > span:not(.collab-swatch):not(.collab-thumb) {
+    flex: 1;
+}
+
+.collab-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    flex: none;
+}
+
+.collab-thumb canvas {
+    display: block;
+    border: 1px solid var(--border);
+    background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+}
+
+.settings .disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.collab-toast {
+    position: fixed;
+    right: 16px;
+    bottom: 40px;
+    z-index: 1000;
+    max-width: min(380px, calc(100vw - 32px));
+    padding: 10px 12px;
+    background: var(--window);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }

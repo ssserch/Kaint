@@ -34,6 +34,7 @@ class FontChooser : public QFontComboBox {
 public:
     explicit FontChooser(QWidget* parent = nullptr);
     bool isEditingName() const { return m_editing; }
+    void showPopup() override;
 
 signals:
     // Se eligió una fuente (de la lista o escrita): el teclado vuelve al lienzo.

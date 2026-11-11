@@ -15,7 +15,9 @@ public:
     void deactivate() override;
     void finish() override;
     bool isBusy() const override { return m_engine.isActive(); }
+    const Layer* editingLayer() const override { return m_engine.isActive() ? m_engine.layer().get() : nullptr; }
     qreal brushOutlineDiameter() const override;
+    bool arrowKeysMovePointer() const override { return true; }
 
 protected:
     virtual StrokeParams params(const ToolEvent& e) const = 0;

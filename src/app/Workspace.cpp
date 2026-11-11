@@ -472,7 +472,11 @@ void FloatingPanel::paintFrame(QPainter& p, bool luna)
     // blanco por dentro y el contenido gris claro en su recuadro.
     QPainterPath shape;
     shape.addRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 6, 6);
-    p.fillPath(shape, QColor(69, 128, 196, 158));
+    // «Habilitar transparencia» (Configuración): el cristal deja ver la imagen de debajo; con el
+    // tema oscuro, ahumado.
+    const bool glass = Theme::aeroTransparency();
+    p.fillPath(shape, s.dark ? (glass ? QColor(30, 38, 50, 175) : QColor(0x3a, 0x44, 0x52))
+                             : (glass ? QColor(69, 128, 196, 158) : QColor(0x7e, 0xa7, 0xd6)));
     QLinearGradient across(r.topLeft(), r.topRight());
     across.setColorAt(0, QColor(255, 255, 255, 102));
     across.setColorAt(0.5, QColor(0, 0, 0, 26));

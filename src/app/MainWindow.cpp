@@ -5,6 +5,7 @@
 #include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Canvas.h"
+#include "app/collab/CollabController.h"
 #include "app/Icons.h"
 #include "app/Recovery.h"
 #include "app/Shortcuts.h"
@@ -19,6 +20,7 @@
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/ImageDialogs.h"
+#include "app/dialogs/SaveAllDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/WelcomeDialog.h"
@@ -446,7 +448,12 @@ protected:
     }
 
 public:
-    void setCaption(QWidget* caption) { m_caption = caption; }
+    void setCaption(QWidget* caption)
+    {
+        m_caption = caption;
+        // Los huecos de la franja mueven la ventana (en Windows, como su barra de título).
+        setProperty("kaintCaption", caption != nullptr);
+    }
 
 protected:
     // Como en Windows, la ventana se mueve arrastrando cualquier hueco de la barra de título
@@ -588,6 +595,19 @@ QString zoomText(qreal z)
     return (pct < 10 ? QString::number(pct, 'f', 1) : QString::number(std::round(pct))) + QStringLiteral(" %");
 }
 
+// La imagen de un archivo para agregarla como capa: también de los formatos con capas (.pdn, .ora,
+// los de los complementos), acoplada.
+QImage readLayerImage(const QString& path, QString* error)
+{
+    QImage image = ImageIO::readImage(path, error);
+    if (!image.isNull())
+        return image;
+    QString loadError;
+    if (const std::unique_ptr<Document> doc(ImageIO::load(path, &loadError)); doc)
+        return doc->flattened();
+    return {};
+}
+
 } // namespace
 
 MainWindow::MainWindow()
@@ -602,6 +622,12 @@ MainWindow::MainWindow()
 
     m_tools = new ToolManager(m_canvas, this);
     m_workspace = new Workspace(m_canvas, this);
+    // Modo colaborativo: la imagen que llega al unirse se abre en una pestaña.
+    m_collab = new CollabController(this, m_canvas, m_tools);
+    m_collab->setDocumentProvider([this] { return m_doc; });
+    connect(m_collab, &CollabController::documentReady, this, [this](Document* doc) { addDocument(doc); });
+    connect(m_collab, &CollabController::message, this, [this](const QString& text) { statusBar()->showMessage(text, 6000); });
+    connect(m_collab, &CollabController::changed, this, &MainWindow::updateCollabActions);
     setCentralWidget(m_workspace);
     // Linux con el estilo de Paint.NET: sin la barra de título del escritorio, con la de Windows 10.
     WindowFrame::decorate(this, false);
@@ -743,7 +769,16 @@ void MainWindow::createActions()
                              [this] { saveAs(m_doc); }, doc);
     A["saveAll"] = makeAction(tr("Guardar &todo"), {"document-save-all"}, QKeySequence(QStringLiteral("Ctrl+Alt+S")),
                               [this] { saveAll(); }, doc);
+    A["saveAllAs"] = makeAction(tr("Guardar to&dos..."), {"document-save-all", "document-save-as"}, {},
+                                [this] { saveAllAs(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
+    A["collabHost"] = makeAction(tr("&Hospedar esta imagen"), {"collab"}, {}, [this] { m_collab->host(m_doc); });
+    A["collabJoin"] = makeAction(tr("&Unirse a una sesión..."), {"network-connect", "collab"}, {}, [this] { m_collab->showJoinDialog(); });
+    A["collabWindow"] = makeAction(tr("&Ventana de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionWindow(); });
+    A["collabLeave"] = makeAction(tr("&Salir de la sesión"), {"network-disconnect", "application-exit"}, {},
+                                  [this] { m_collab->leave(true); });
+    A["collabSettings"] = makeAction(tr("&Configuración de colaboración..."), {"configure", "settings-configure"}, {},
+                                     [this] { showSettings(SettingsDialog::Page::Collaboration); });
     A["close"] = makeAction(tr("&Cerrar"), {"document-close"}, QKeySequence(QStringLiteral("Ctrl+W")),
                             [this] { closeDocument(m_doc); }, doc);
     A["close"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+W")), QKeySequence(QStringLiteral("Ctrl+F4"))});
@@ -1002,9 +1037,15 @@ void MainWindow::createMenus()
     QMenu* acquire = file->addMenu(Icons::theme({"scanner", "document-import"}), tr("A&dquirir"));
     acquire->addAction(A["acquire"]);
     file->addSeparator();
-    file->addActions({A["save"], A["saveAs"], A["saveAll"]});
+    file->addActions({A["save"], A["saveAs"], A["saveAll"], A["saveAllAs"]});
     file->addSeparator();
     file->addAction(A["print"]);
+    file->addSeparator();
+    // Modo colaborativo: editar la imagen con otras personas de la red local.
+    QMenu* collab = file->addMenu(Icons::theme(QStringLiteral("collab")), tr("C&olaboración"));
+    collab->addActions({A["collabHost"], A["collabJoin"], A["collabWindow"], A["collabLeave"]});
+    collab->addSeparator();
+    collab->addAction(A["collabSettings"]);
     file->addSeparator();
     file->addAction(A["close"]);
     file->addSeparator();
@@ -1156,6 +1197,15 @@ void MainWindow::createToolBars()
     main->setMovable(false);
     main->setIconSize(QSize(16, 16));
     main->addActions({A["new"], A["open"], A["save"]});
+    // Guardar lleva una flecha con las opciones de guardado (Guardar como, Guardar todos...).
+    if (auto* saveButton = qobject_cast<QToolButton*>(main->widgetForAction(A["save"]))) {
+        auto* saveMenu = new QMenu(saveButton);
+        saveMenu->addActions({A["save"], A["saveAs"]});
+        saveMenu->addSeparator();
+        saveMenu->addActions({A["saveAll"], A["saveAllAs"]});
+        saveButton->setMenu(saveMenu);
+        saveButton->setPopupMode(QToolButton::MenuButtonPopup);
+    }
     main->addSeparator();
     main->addAction(A["print"]);
     main->addSeparator();
@@ -1408,6 +1458,7 @@ void MainWindow::createStatusBar()
     m_progress->setTextVisible(false);
     m_progress->hide();
     bar->addPermanentWidget(m_progress);
+    bar->addPermanentWidget(m_collab->statusWidget());
     m_selLabel = item({"status-selection", "select-rectangular"}, tr("Tamaño de la selección"));
     m_posLabel = item({"status-cursor", "tool-pointer", "edit-select"}, tr("Posición del cursor"));
 
@@ -1603,8 +1654,16 @@ bool MainWindow::closeDocument(Document* doc, bool ask)
     if (!doc)
         return true;
     finishTool();
-    if (ask && !maybeSave(doc))
-        return false;
+    // La imagen de una sesión colaborativa: cerrarla es salir de ella (el invitado no la guarda).
+    if (m_collab->isGuestDocument(doc)) {
+        if (!m_collab->leave(ask))
+            return false;
+    } else {
+        if (ask && !maybeSave(doc))
+            return false;
+        if (m_collab->isSessionDocument(doc) && !m_collab->leave(ask))
+            return false;
+    }
     const int index = int(m_docs.indexOf(doc));
     Document* next = doc == m_doc ? m_docs.value(index + 1, m_docs.value(index - 1)) : m_doc;
     m_canvas->forgetDocument(doc);
@@ -1624,7 +1683,7 @@ bool MainWindow::closeDocument(Document* doc, bool ask)
 
 bool MainWindow::maybeSave(Document* doc)
 {
-    if (!doc->isModified())
+    if (!doc->isModified() || m_collab->isGuestDocument(doc))
         return true;
     setCurrentDocument(doc);
     // Con los iconos del tema del sistema, como siempre tuvo este diálogo.
@@ -1645,7 +1704,7 @@ bool MainWindow::maybeSaveAll(const QList<Document*>& docs, bool quitting)
 {
     QList<Document*> modified;
     for (Document* d : docs)
-        if (d->isModified())
+        if (d->isModified() && !m_collab->isGuestDocument(d))
             modified << d;
     if (modified.size() < 2 || !m_settings.askOnceOnClose) {
         for (Document* d : std::as_const(modified))
@@ -1812,6 +1871,7 @@ void MainWindow::updateActions()
     const bool sel = has && !m_doc->selection().isEmpty();
     for (QAction* a : std::as_const(m_docActions))
         a->setEnabled(has);
+    updateCollabActions();
     for (QAction* a : std::as_const(m_selActions))
         a->setEnabled(sel);
     const int count = has ? m_doc->layerCount() : 0;
@@ -2139,7 +2199,9 @@ bool MainWindow::saveAs(Document* doc)
                 if (f.contains(QStringLiteral("*.ora")))
                     selected = f;
     }
-    QString path = QFileDialog::getSaveFileName(this, tr("Guardar como"), suggestion, filters, &selected);
+    // Invitado de una sesión colaborativa: solo una copia (la imagen la guarda el anfitrión).
+    const QString title = m_collab->isGuestDocument(doc) ? tr("Exportar una copia") : tr("Guardar como");
+    QString path = QFileDialog::getSaveFileName(this, title, suggestion, filters, &selected);
     if (path.isEmpty())
         return false;
     if (QFileInfo(path).suffix().isEmpty()) {
@@ -2162,6 +2224,76 @@ bool MainWindow::saveAll()
             return false;
     }
     return true;
+}
+
+void MainWindow::saveAllAs()
+{
+    if (m_docs.isEmpty())
+        return;
+    finishTool();
+    // Los formatos de Guardar como, por su primera extensión.
+    QStringList suffixes, labels;
+    for (const QString& filter : ImageIO::saveFilter().split(QStringLiteral(";;"))) {
+        const QRegularExpressionMatch m = QRegularExpression(QStringLiteral("\\*\\.([A-Za-z0-9]+)")).match(filter);
+        if (!m.hasMatch() || suffixes.contains(m.captured(1).toLower()))
+            continue;
+        suffixes << m.captured(1).toLower();
+        labels << filter;
+    }
+    QList<SaveAllDialog::Entry> entries;
+    QString folder = m_lastDir;
+    for (Document* d : std::as_const(m_docs)) {
+        SaveAllDialog::Entry e;
+        e.filePath = d->filePath();
+        e.image = d == m_doc ? m_canvas->composite() : d->flattened();
+        if (e.filePath.isEmpty()) {
+            e.name = d->untitledName().isEmpty() ? tr("Sin título") : d->untitledName();
+            e.suffix = d->layerCount() > 1 ? QStringLiteral("ora") : QStringLiteral("png");
+            e.checked = true;
+        } else {
+            const QFileInfo info(e.filePath);
+            e.name = info.completeBaseName();
+            e.suffix = ImageIO::isWritable(e.filePath) ? info.suffix().toLower()
+                                                        : (d->layerCount() > 1 ? QStringLiteral("ora") : QStringLiteral("png"));
+            // Las que ya están guardadas, sin marcar.
+            e.checked = d->isModified() || !ImageIO::isWritable(e.filePath);
+            if (folder.isEmpty())
+                folder = info.absolutePath();
+        }
+        entries << e;
+    }
+    if (folder.isEmpty())
+        folder = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    SaveAllDialog dlg(entries, suffixes, labels, folder, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    const QList<Document*> docs = m_docs;
+    QStringList errors;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    for (const SaveAllDialog::Result& r : dlg.results()) {
+        Document* doc = docs.value(r.index);
+        if (!doc || !m_docs.contains(doc))
+            continue;
+        const QString suffix = QFileInfo(r.path).suffix().toLower();
+        ImageIO::SaveOptions options = m_saveOptions.value(suffix);
+        if (ImageIO::isAnimation(r.path) && !m_saveOptions.contains(suffix))
+            options.loops = doc->gifLoops();
+        QString error;
+        // Los formatos sin capas guardan la imagen acoplada (sin tocar las capas del documento).
+        if (!ImageIO::save(doc, r.path, options, &error)) {
+            errors << tr("«%1»: %2").arg(QFileInfo(r.path).fileName(), error);
+            continue;
+        }
+        doc->setFilePath(r.path);
+        doc->markSaved();
+        AppState::instance()->addRecentFile(r.path, doc == m_doc ? m_canvas->composite() : doc->flattened());
+        m_lastDir = QFileInfo(r.path).absolutePath();
+        updateTab(doc);
+    }
+    QApplication::restoreOverrideCursor();
+    updateTitle();
+    if (!errors.isEmpty())
+        QMessageBox::critical(this, tr("No se pudo guardar"), tr("No se pudieron guardar:\n\n%1").arg(errors.join(QLatin1Char('\n'))));
 }
 
 bool MainWindow::closeAll(Document* except)
@@ -2303,6 +2435,11 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
         QMessageBox::critical(this, tr("No se pudo guardar"), tr("No se pudo guardar «%1»:\n%2").arg(path, error));
         return false;
     }
+    if (m_collab->isGuestDocument(doc)) {
+        statusBar()->showMessage(tr("Copia exportada en %1. La imagen de la sesión la guarda el anfitrión.").arg(QDir::toNativeSeparators(path)),
+                                 8000);
+        return true;
+    }
     doc->setFilePath(path);
     doc->markSaved();
     AppState::instance()->addRecentFile(path, doc == m_doc ? m_canvas->composite() : doc->flattened());
@@ -2388,7 +2525,7 @@ void MainWindow::print()
 void MainWindow::closeEvent(QCloseEvent* e)
 {
     finishTool();
-    if (!maybeSaveAll(m_docs, true)) {
+    if (!maybeSaveAll(m_docs, true) || !m_collab->leave(true)) {
         e->ignore();
         return;
     }
@@ -2431,14 +2568,62 @@ void MainWindow::dropEvent(QDropEvent* e)
             files.removeAll(f);
         installDroppedPlugins(plugins);
     }
-    if (!files.isEmpty()) {
-        openFiles(files);
-    } else if (e->mimeData()->hasImage()) {
-        const QImage img = qvariant_cast<QImage>(e->mimeData()->imageData());
-        if (!img.isNull())
-            addDocument(Document::createFromImage(img, tr("Fondo")));
-    }
+    QImage image;
+    if (files.isEmpty() && e->mimeData()->hasImage())
+        image = qvariant_cast<QImage>(e->mimeData()->imageData());
     e->acceptProposedAction();
+    // La pregunta se hace después de terminar el arrastre: con un diálogo modal dentro de dropEvent,
+    // la aplicación de origen se quedaría esperando.
+    if (!files.isEmpty() || !image.isNull())
+        QTimer::singleShot(0, this, [this, files, image] { handleDroppedImages(files, image); });
+}
+
+void MainWindow::handleDroppedImages(const QStringList& files, const QImage& image)
+{
+    if (!m_doc) {
+        if (!files.isEmpty())
+            openFiles(files);
+        else
+            addDocument(Document::createFromImage(image, tr("Fondo")));
+        return;
+    }
+    const bool several = files.size() > 1;
+    TaskDialog dlg(tr("Arrastrar y soltar"), Icons::theme({"insert-image", "document-import"}), QImage(),
+                   several ? tr("¿Qué quiere hacer con los archivos?") : tr("¿Qué quiere hacer con el archivo?"), this);
+    const int open = dlg.addChoice(Icons::theme({"document-open", "folder-open"}),
+                                   several ? tr("Abrir los archivos") : tr("Abrir el archivo"),
+                                   several ? tr("Abre las imágenes.") : tr("Abre la imagen."), true);
+    const int layer = dlg.addChoice(Icons::theme({"layer-import", "document-import", "insert-image"}),
+                                    several ? tr("Agregar capas") : tr("Agregar capa"),
+                                    several ? tr("Carga las imágenes y las agrega como capas nuevas en la imagen actual.")
+                                            : tr("Carga la imagen y la agrega como una nueva capa en la imagen actual."));
+    dlg.addChoice(Icons::theme({"dialog-cancel", "edit-undo"}), tr("Cancelar"), QString());
+    const int answer = dlg.choose();
+    if (answer == open) {
+        if (!files.isEmpty())
+            openFiles(files);
+        else
+            addDocument(Document::createFromImage(image, tr("Fondo")));
+    } else if (answer == layer) {
+        finishTool();
+        if (files.isEmpty()) {
+            importImageAsLayer(image, m_doc->nextLayerName());
+            return;
+        }
+        for (const QString& path : files) {
+            QString error;
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            const QImage img = readLayerImage(path, &error);
+            QApplication::restoreOverrideCursor();
+            if (img.isNull()) {
+                QMessageBox::critical(this, tr("No se pudo importar"), tr("No se pudo abrir «%1»:\n%2").arg(path, error));
+                continue;
+            }
+            if (!importImageAsLayer(img, QFileInfo(path).completeBaseName()))
+                break;
+            m_lastDir = QFileInfo(path).absolutePath();
+        }
+    }
 }
 
 void MainWindow::installDroppedPlugins(const QStringList& files)
@@ -2526,6 +2711,18 @@ void MainWindow::redo()
     m_undoGroup->redo();
 }
 
+void MainWindow::updateCollabActions()
+{
+    if (!m_act.contains(QStringLiteral("collabHost")))
+        return;
+    const bool active = m_collab->isActive();
+    m_act["collabHost"]->setEnabled(m_doc && !active);
+    m_act["collabJoin"]->setEnabled(!active);
+    m_act["collabWindow"]->setEnabled(active);
+    m_act["collabLeave"]->setEnabled(active);
+    m_act["collabLeave"]->setText(m_collab->isHosting() ? tr("&Terminar la sesión") : tr("&Salir de la sesión"));
+}
+
 void MainWindow::prepareHistoryJump()
 {
     if (m_tools && m_tools->current())
@@ -2542,7 +2739,8 @@ void MainWindow::syncLayerWithHistory()
     const int now = stack->index();
     const int before = m_historyIndex.value(stack, now);
     m_historyIndex.insert(stack, now);
-    if (now == before)
+    // Lo que llega de la sesión colaborativa no cambia la capa en la que se está.
+    if (now == before || m_collab->applyingRemote())
         return;
     const QUndoCommand* step = now < before ? stack->command(now) : stack->command(now - 1);
     const int index = m_doc->indexOf(History::layerOf(step));
@@ -2554,7 +2752,7 @@ void MainWindow::syncToolWithHistory()
 {
     // Al volver a un paso que su herramienta puede retomar (degradado), se activa esa
     // herramienta para seguir editándolo.
-    if (m_syncingHistory || !m_doc || !m_tools)
+    if (m_syncingHistory || !m_doc || !m_tools || m_collab->applyingRemote())
         return;
     m_syncingHistory = true;
     const QUndoStack* stack = m_doc->undoStack();
@@ -3075,17 +3273,25 @@ void MainWindow::importLayer()
     if (path.isEmpty())
         return;
     QString error;
-    const QImage img = ImageIO::readImage(path, &error);
+    const QImage img = readLayerImage(path, &error);
     if (img.isNull()) {
         QMessageBox::critical(this, tr("No se pudo importar"), error);
         return;
     }
-    if (!ensureCanvasFits(img, tr("Importar desde archivo"), true))
-        return;
-    auto layer = std::make_shared<Layer>(QFileInfo(path).completeBaseName(), m_doc->size());
-    Raster::blit(layer->image, img.convertToFormat(kLayerFormat), QPoint(0, 0));
+    importImageAsLayer(img, QFileInfo(path).completeBaseName());
+}
+
+bool MainWindow::importImageAsLayer(const QImage& image, const QString& name)
+{
+    if (!m_doc || image.isNull())
+        return false;
+    if (!ensureCanvasFits(image, tr("Importar desde archivo"), true))
+        return false;
+    auto layer = std::make_shared<Layer>(name, m_doc->size());
+    Raster::blit(layer->image, image.convertToFormat(kLayerFormat), QPoint(0, 0));
     push(new InsertLayerCommand(m_doc, m_doc->activeIndex() + 1, layer, tr("Importar desde archivo")),
          QStringLiteral("document-import"));
+    return true;
 }
 
 void MainWindow::flipLayer(bool horizontal)
@@ -3524,15 +3730,18 @@ void MainWindow::applySettings()
     // La fuente de la interfaz y (Linux) el color de la barra superior se ven al volver a aplicar
     // el tema.
     const bool fontChanged = Theme::uiFontFamily() != m_settings.uiFontFamily || Theme::uiFontSize() != m_settings.uiFontSize;
+    // El color propio de la barra superior (en Windows, solo con la barra de título de Kaint).
 #ifdef Q_OS_WIN
-    const bool titleChanged = false;
+    const QColor ownTitle = WindowFrame::enabled() ? m_settings.titleBarColor : QColor();
 #else
-    const bool titleChanged = Theme::titleBarColor() != (m_settings.titleBarColor.isValid() ? QColor(m_settings.titleBarColor.rgb()) : QColor());
+    const QColor ownTitle = m_settings.titleBarColor;
 #endif
+    const bool titleChanged = Theme::customTitleBarColor() != (ownTitle.isValid() ? QColor(ownTitle.rgb()) : QColor());
     Theme::setUiFont(m_settings.uiFontFamily, m_settings.uiFontSize);
-    Theme::setCustomTitleBarColor(m_settings.titleBarColor);
+    Theme::setCustomTitleBarColor(ownTitle);
+    const bool glassChanged = Theme::setAeroTransparency(m_settings.aeroTransparency);
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)
-        || fontChanged || titleChanged) {
+        || fontChanged || titleChanged || glassChanged) {
         Theme::setLook(Theme::Look(m_settings.uiStyle));
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
     }
@@ -3543,6 +3752,7 @@ void MainWindow::applySettings()
         QApplication::setEffectEnabled(effect, false);
     QApplication::setEffectEnabled(Qt::UI_AnimateToolBox, m_settings.animations);
     Animations::setEnabled(m_settings.animations);
+    Animations::setWindowAnimation(m_settings.windowAnimation, m_settings.windowAnimationMs);
     if (m_settings.autosaveMinutes > 0)
         m_autosaveTimer.start(m_settings.autosaveMinutes * 60 * 1000);
     else

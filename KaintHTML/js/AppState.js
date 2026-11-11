@@ -38,6 +38,9 @@ export const defaultTools = () => ({
     bold: false,
     italic: false,
     underline: false,
+    // Zalgo: marcas apiladas encima y debajo de cada letra (zalgoType: core/Zalgo.js).
+    zalgo: false,
+    zalgoType: 1,
     strikeout: false,
     // Unidad del tamaño de letra ("points": según los PPP de la imagen; "fixed96") y modo de
     // representación ("smooth", "sharpModern", "sharpClassic").

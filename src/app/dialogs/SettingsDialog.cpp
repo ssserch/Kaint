@@ -11,6 +11,7 @@
 #include "app/ToolOptionsBar.h"
 #include "app/UserFonts.h"
 #include "app/WindowFrame.h"
+#include "app/collab/CollabController.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/ThemeDialog.h"
@@ -102,6 +103,9 @@ AppSettings AppSettings::load()
     AppSettings a;
     auto get = [&](const char* key, auto def) { return s.value(QLatin1String(key), def).template value<decltype(def)>(); };
     a.animations = get("animations", a.animations);
+    a.windowAnimation = get("windowAnimation", a.windowAnimation);
+    a.windowAnimationMs = std::clamp(get("windowAnimationMs", a.windowAnimationMs), 50, 2000);
+    a.aeroTransparency = get("aeroTransparency", a.aeroTransparency);
     a.translucentPanels = get("translucentPanels", a.translucentPanels);
     a.translucentOverImage = get("translucentOverImage", a.translucentOverImage);
     a.overscroll = get("overscroll", a.overscroll);
@@ -138,7 +142,7 @@ AppSettings AppSettings::load()
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
     a.menuMnemonics = get("menuMnemonics", a.menuMnemonics);
-    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, 9);
+    a.colorScheme = std::clamp(get("colorScheme", a.colorScheme), 0, Theme::kLastScheme);
 #ifdef Q_OS_WIN
     if (a.colorScheme == int(Theme::Scheme::Kde))
         a.colorScheme = int(Theme::Scheme::System);
@@ -184,6 +188,9 @@ void AppSettings::save() const
     QSettings s;
     s.beginGroup(QStringLiteral("settings"));
     s.setValue(QStringLiteral("animations"), animations);
+    s.setValue(QStringLiteral("windowAnimation"), windowAnimation);
+    s.setValue(QStringLiteral("windowAnimationMs"), windowAnimationMs);
+    s.setValue(QStringLiteral("aeroTransparency"), aeroTransparency);
     s.setValue(QStringLiteral("translucentPanels"), translucentPanels);
     s.setValue(QStringLiteral("translucentOverImage"), translucentOverImage);
     s.setValue(QStringLiteral("overscroll"), overscroll);
@@ -315,6 +322,7 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
     addPage(tr("Rendimiento"), {"settings-performance", "speedometer", "preferences-system-performance", "cpu"}, createPerformancePage());
     addPage(tr("Complementos"), {"settings-plugins", "preferences-plugin", "application-x-addon"}, createPluginsPage());
     addPage(tr("Discord"), {"discord", "im-user-online", "user-online", "network-connect"}, createDiscordPage());
+    addPage(tr("Colaboración"), {"settings-collab", "collab"}, createCollabPage());
     addPage(tr("Actualizaciones"), {"settings-updates", "update-none", "system-software-update"}, createUpdatesPage());
     addPage(tr("Diagnósticos"), {"settings-diagnostics", "tools-report-bug", "dialog-information"}, createDiagnosticsPage());
     // Como el grupo propio de paint.js: paquetes de iconos, fuentes, formas y atajos de teclado.
@@ -376,8 +384,40 @@ QWidget* SettingsDialog::createInterfacePage()
         page.layout->addWidget(c);
         return c;
     };
-    check(tr("Animaciones"), &AppSettings::animations,
+    QCheckBox* animations = check(tr("Animaciones"), &AppSettings::animations,
           tr("Menús y ventanas que aparecen con un fundido, capas que se deslizan al reordenarlas y otras transiciones."));
+    {
+        // Debajo, con sangría: la de abrir ventanas, como en Windows, y cuánto dura.
+        QCheckBox* windowAnimation = check(tr("Animar las ventanas al abrirse"), &AppSettings::windowAnimation,
+                                           tr("Como en Windows: la ventana (Configuración, un ajuste...) aparece desde un "
+                                              "poco más pequeña y transparente, rápido al principio y despacio al final."));
+        page.layout->removeWidget(windowAnimation);
+        auto* duration = new QSpinBox(page.widget);
+        duration->setRange(50, 2000);
+        duration->setSingleStep(50);
+        duration->setValue(m_settings.windowAnimationMs);
+        duration->setToolTip(tr("Duración de la animación."));
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(windowAnimation);
+        indent->addWidget(withUnit(duration, tr("ms"), {}, page.widget));
+        indent->addStretch();
+        page.layout->addLayout(indent);
+        const bool wayland = QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
+        auto sync = [animations, windowAnimation, duration, wayland] {
+            windowAnimation->setEnabled(animations->isChecked() && !wayland);
+            duration->setEnabled(windowAnimation->isEnabled() && windowAnimation->isChecked());
+        };
+        if (wayland)
+            windowAnimation->setToolTip(tr("En Wayland las ventanas las anima el escritorio."));
+        sync();
+        connect(animations, &QCheckBox::toggled, this, sync);
+        connect(windowAnimation, &QCheckBox::toggled, this, sync);
+        connect(duration, &QSpinBox::valueChanged, this, [this](int v) {
+            m_settings.windowAnimationMs = v;
+            changed();
+        });
+    }
     QCheckBox* translucent = check(tr("Ventanas translúcidas"), &AppSettings::translucentPanels,
                                    tr("Las ventanas flotantes se vuelven translúcidas cuando el puntero no está encima."));
     {
@@ -439,6 +479,8 @@ QWidget* SettingsDialog::createInterfacePage()
     addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
     addScheme(tr("Windows 7"), Theme::Scheme::Windows7, tr("Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css."));
+    addScheme(tr("Windows 7 oscuro"), Theme::Scheme::Windows7Dark,
+              tr("El de Windows 7 en grises oscuros, con el cristal ahumado."));
     addScheme(tr("Windows XP"), Theme::Scheme::WindowsXP, tr("El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css."));
     addScheme(tr("Windows 98"), Theme::Scheme::Windows98, tr("El clásico gris con relieve. También es una plantilla del personalizado."));
     addScheme(tr("Windows 98 ALT"), Theme::Scheme::Windows98Alt,
@@ -452,6 +494,29 @@ QWidget* SettingsDialog::createInterfacePage()
     schemeRow->addWidget(customize);
     schemeRow->addStretch();
     page.layout->addLayout(schemeRow);
+    // Windows 7: «Habilitar transparencia», como en Windows 7 (solo con sus temas).
+    auto* aeroGlass = new QCheckBox(tr("Habilitar transparencia"), page.widget);
+    aeroGlass->setChecked(m_settings.aeroTransparency);
+    aeroGlass->setToolTip(tr("Como en Windows 7: el cristal de los marcos de las ventanas deja ver lo que hay detrás. "
+                             "Solo con los temas Windows 7."));
+    {
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(aeroGlass);
+        page.layout->addLayout(indent);
+    }
+    connect(aeroGlass, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.aeroTransparency = on;
+        changed();
+    });
+    auto syncAeroGlass = [this, aeroGlass] {
+        const bool win7 = m_settings.colorScheme == int(Theme::Scheme::Windows7)
+                          || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark);
+        aeroGlass->setEnabled(win7);
+        aeroGlass->setVisible(win7);
+    };
+    syncAeroGlass();
+    connect(this, &SettingsDialog::settingsChanged, this, syncAeroGlass);
 
     // Aspecto: el de Kaint o la recreación de Paint.NET (solo lo visual).
     auto* lookRow = new QHBoxLayout;
@@ -543,10 +608,12 @@ QWidget* SettingsDialog::createInterfacePage()
         changed();
     });
 
-#ifndef Q_OS_WIN
-    // Linux: el color de la barra superior (y de las cabeceras de las ventanas), como el color de
-    // énfasis en las barras de título de Windows.
-    auto* titleRow = new QHBoxLayout;
+    // El color de la barra superior (y de las cabeceras de las ventanas), como el color de énfasis
+    // en las barras de título de Windows. En Windows, con la barra de título de Kaint (sin ella, la
+    // de Windows lleva su color de énfasis).
+    auto* titleRowWidget = new QWidget(page.widget);
+    auto* titleRow = new QHBoxLayout(titleRowWidget);
+    titleRow->setContentsMargins(0, 0, 0, 0);
     auto* ownTitle = new QCheckBox(tr("Color propio en la barra superior:"), page.widget);
     ownTitle->setToolTip(tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los "
                             "menús y las cabeceras de las ventanas llevan este color."));
@@ -557,7 +624,7 @@ QWidget* SettingsDialog::createInterfacePage()
     titleRow->addWidget(ownTitle);
     titleRow->addWidget(titleColor);
     titleRow->addStretch();
-    page.layout->addLayout(titleRow);
+    page.layout->addWidget(titleRowWidget);
     auto applyTitle = [this, ownTitle, titleColor] {
         titleColor->setEnabled(ownTitle->isChecked());
         m_settings.titleBarColor = ownTitle->isChecked() ? titleColor->color() : QColor();
@@ -565,7 +632,6 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     connect(ownTitle, &QCheckBox::toggled, this, applyTitle);
     connect(titleColor, &ColorButton::colorChanged, this, applyTitle);
-#endif
 
     // Paquete de iconos (como en paint.js; se administran en su página).
     auto* packRow = new QHBoxLayout;
@@ -732,6 +798,19 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     syncTitle();
     connect(this, &SettingsDialog::settingsChanged, this, syncTitle);
+#ifdef Q_OS_WIN
+    // En Windows, el color propio va con la barra de título de Kaint.
+    auto syncTitleColor = [this, titleRowWidget] {
+        const bool own = m_settings.customFrame && m_settings.colorScheme != int(Theme::Scheme::Kde);
+        titleRowWidget->setEnabled(own);
+        titleRowWidget->setToolTip(own ? QString() : tr("Se desbloquea con la barra de título de Kaint."));
+    };
+    syncTitleColor();
+    connect(this, &SettingsDialog::settingsChanged, this, syncTitleColor);
+    connect(customFrame, &QCheckBox::toggled, this, syncTitleColor);
+#else
+    Q_UNUSED(titleRowWidget);
+#endif
     // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
     // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
     // interfaz, a su vez, no se aplica con el tema KDE.
@@ -1751,6 +1830,262 @@ void SettingsDialog::refreshToolOrder()
         if (id == current)
             m_toolOrder->setCurrentItem(item);
     }
+}
+
+QWidget* SettingsDialog::createCollabPage()
+{
+    // Configuración y sesión del modo colaborativo (se guarda aparte: Collab::Settings).
+    PageBox page = makePage(this);
+    CollabController* collab = CollabController::instance();
+    auto settings = std::make_shared<Collab::Settings>(collab ? collab->settings() : Collab::Settings::load());
+    auto apply = [collab, settings] {
+        if (collab)
+            collab->applySettings(*settings);
+        else
+            settings->save();
+    };
+    // Lo que se cambie en otro sitio (la ventana de la sesión) no se pisa.
+    if (collab)
+        connect(collab, &CollabController::changed, page.widget, [collab, settings] { *settings = collab->settings(); });
+
+    page.layout->addWidget(wrapped(tr("Edita la imagen actual con otras personas de tu red local: tú la hospedas y los demás se "
+                                      "unen desde Kaint o desde Kaint para la web. Solo tú guardas la imagen; los invitados "
+                                      "pueden exportar una copia."),
+                                   page.widget));
+
+    // Sesión actual.
+    page.layout->addWidget(sectionHeader(tr("Sesión"), page.widget));
+    auto* status = wrapped(QString(), page.widget);
+    page.layout->addWidget(status);
+    auto* sessionRow = new QHBoxLayout;
+    auto* hostButton = new QPushButton(Icons::theme(QStringLiteral("collab")), tr("Hospedar la imagen actual"), page.widget);
+    auto* joinButton = new QPushButton(Icons::theme({"network-connect", "go-next"}), tr("Unirse a una sesión…"), page.widget);
+    auto* windowButton = new QPushButton(tr("Ventana de la sesión"), page.widget);
+    auto* leaveButton = new QPushButton(page.widget);
+    sessionRow->addWidget(hostButton);
+    sessionRow->addWidget(joinButton);
+    sessionRow->addWidget(windowButton);
+    sessionRow->addWidget(leaveButton);
+    sessionRow->addStretch();
+    page.layout->addLayout(sessionRow);
+    auto refreshSession = [=] {
+        const bool active = collab && collab->isActive();
+        status->setText(collab ? collab->statusText() : tr("No disponible."));
+        hostButton->setEnabled(collab && !active);
+        joinButton->setEnabled(collab && !active);
+        windowButton->setEnabled(active);
+        leaveButton->setEnabled(active);
+        leaveButton->setText(active && collab->isHosting() ? tr("Terminar la sesión") : tr("Salir de la sesión"));
+    };
+    if (collab) {
+        connect(hostButton, &QPushButton::clicked, this, [collab] { collab->hostCurrent(); });
+        connect(joinButton, &QPushButton::clicked, this, [collab] { collab->showJoinDialog(); });
+        connect(windowButton, &QPushButton::clicked, this, [collab] { collab->showSessionWindow(); });
+        connect(leaveButton, &QPushButton::clicked, this, [collab] { collab->leave(true); });
+        connect(collab, &CollabController::changed, status, refreshSession);
+    }
+    refreshSession();
+
+    // Perfil.
+    page.layout->addWidget(sectionHeader(tr("Tú"), page.widget));
+    auto* profile = new QFormLayout;
+    auto* name = new QLineEdit(settings->name, page.widget);
+    name->setPlaceholderText(Collab::Settings().displayName());
+    name->setMaxLength(40);
+    profile->addRow(tr("Nombre en pantalla:"), name);
+    connect(name, &QLineEdit::editingFinished, this, [=] {
+        if (settings->name == name->text().trimmed())
+            return;
+        settings->name = name->text().trimmed();
+        apply();
+    });
+    auto* colorRow = new QHBoxLayout;
+    auto* ownColor = new QCheckBox(tr("Color propio"), page.widget);
+    ownColor->setToolTip(tr("Sin marcar, el anfitrión te da uno que no use nadie más."));
+    auto* color = new ColorButton(page.widget);
+    color->setColor(settings->color.isValid() ? settings->color : Collab::peerColor(1));
+    ownColor->setChecked(settings->color.isValid());
+    color->setEnabled(ownColor->isChecked());
+    colorRow->addWidget(ownColor);
+    colorRow->addWidget(color);
+    colorRow->addStretch();
+    profile->addRow(tr("Color del puntero:"), colorRow);
+    auto applyColor = [=] {
+        color->setEnabled(ownColor->isChecked());
+        settings->color = ownColor->isChecked() ? color->color() : QColor();
+        apply();
+    };
+    connect(ownColor, &QCheckBox::toggled, this, applyColor);
+    connect(color, &ColorButton::colorChanged, this, applyColor);
+
+    auto* idRow = new QHBoxLayout;
+    auto* idLabel = new QLabel(Collab::deviceCode(), page.widget);
+    QFont mono = idLabel->font();
+    mono.setFamily(QStringLiteral("monospace"));
+    mono.setStyleHint(QFont::Monospace);
+    mono.setBold(true);
+    idLabel->setFont(mono);
+    idLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto* copyId = new QPushButton(Icons::theme({"edit-copy"}), tr("Copiar"), page.widget);
+    auto* newId = new QPushButton(Icons::theme({"view-refresh"}), tr("Generar otro"), page.widget);
+    idRow->addWidget(idLabel);
+    idRow->addWidget(copyId);
+    idRow->addWidget(newId);
+    idRow->addStretch();
+    profile->addRow(tr("ID de este equipo:"), idRow);
+    page.layout->addLayout(profile);
+    page.layout->addWidget(wrapped(tr("Para entrar en una sesión que solo admite equipos autorizados, dale este ID al anfitrión. "
+                                      "El ID no viaja por la red: el equipo demuestra que lo tiene sin enviarlo."),
+                                   page.widget));
+    connect(copyId, &QPushButton::clicked, this, [] { QApplication::clipboard()->setText(Collab::deviceCode()); });
+    connect(newId, &QPushButton::clicked, this, [this, idLabel] {
+        TaskDialog ask(tr("Generar otro ID"), Icons::theme({"view-refresh"}), QImage(),
+                       tr("Los anfitriones que tengan el ID actual en su lista dejarán de reconocer este equipo."), this);
+        const int yes = ask.addChoice(Icons::theme({"view-refresh"}), tr("Generar otro"), tr("Cambiar el ID de este equipo."));
+        ask.addChoice(Icons::theme({"dialog-cancel"}), tr("Cancelar"), tr("Conservar el ID actual."), true);
+        if (ask.choose() == yes)
+            idLabel->setText(Collab::regenerateDeviceCode());
+    });
+
+    // Al hospedar.
+    page.layout->addWidget(sectionHeader(tr("Al hospedar"), page.widget));
+    auto* hostForm = new QFormLayout;
+    auto* sessionName = new QLineEdit(settings->sessionName, page.widget);
+    sessionName->setPlaceholderText(tr("Sesión de %1").arg(settings->displayName()));
+    sessionName->setMaxLength(60);
+    hostForm->addRow(tr("Nombre de la sesión:"), sessionName);
+    connect(sessionName, &QLineEdit::editingFinished, this, [=] {
+        settings->sessionName = sessionName->text().trimmed();
+        apply();
+    });
+    auto* port = new QSpinBox(page.widget);
+    port->setRange(1024, 65535);
+    port->setValue(settings->port);
+    port->setToolTip(tr("Puerto TCP de la sesión (por defecto %1). Se aplica a la próxima sesión.").arg(Collab::kDefaultPort));
+    hostForm->addRow(tr("Puerto:"), port);
+    connect(port, &QSpinBox::valueChanged, this, [=](int v) {
+        settings->port = v;
+        apply();
+    });
+    auto* access = new QComboBox(page.widget);
+    access->addItem(tr("Libre: cualquiera de la red puede entrar"), int(Collab::Access::Free));
+    access->addItem(tr("Con permiso: apruebas a cada persona"), int(Collab::Access::Approve));
+    access->addItem(tr("Con contraseña"), int(Collab::Access::Password));
+    access->addItem(tr("Solo equipos autorizados (por su ID)"), int(Collab::Access::Ids));
+    access->setCurrentIndex(access->findData(int(settings->access)));
+    hostForm->addRow(tr("Quién puede entrar:"), access);
+    auto* password = new QLineEdit(settings->password, page.widget);
+    password->setEchoMode(QLineEdit::Password);
+    password->setPlaceholderText(tr("Contraseña de la sesión"));
+    auto* showPassword = password->addAction(Icons::theme({"visibility", "view-visible", "layer-visible-on"}), QLineEdit::TrailingPosition);
+    showPassword->setCheckable(true);
+    showPassword->setToolTip(tr("Mostrar"));
+    connect(showPassword, &QAction::toggled, password,
+            [password](bool on) { password->setEchoMode(on ? QLineEdit::Normal : QLineEdit::Password); });
+    hostForm->addRow(tr("Contraseña:"), password);
+    connect(password, &QLineEdit::editingFinished, this, [=] {
+        settings->password = password->text();
+        apply();
+    });
+    page.layout->addLayout(hostForm);
+
+    // Equipos autorizados: ID y un nombre para reconocerlo.
+    auto* idsBox = new QWidget(page.widget);
+    auto* idsLayout = new QVBoxLayout(idsBox);
+    idsLayout->setContentsMargins(0, 0, 0, 0);
+    idsLayout->addWidget(new QLabel(tr("Equipos autorizados (también entran sin esperar con «Con permiso»):"), idsBox));
+    auto* ids = new QTreeWidget(idsBox);
+    ids->setRootIsDecorated(false);
+    ids->setHeaderLabels({tr("ID"), tr("Nombre")});
+    ids->setMinimumHeight(90);
+    idsLayout->addWidget(ids);
+    auto* idButtons = new QHBoxLayout;
+    auto* addId = new QPushButton(Icons::theme({"list-add"}), tr("Agregar…"), idsBox);
+    auto* removeId = new QPushButton(Icons::theme({"list-remove"}), tr("Quitar"), idsBox);
+    idButtons->addWidget(addId);
+    idButtons->addWidget(removeId);
+    idButtons->addStretch();
+    idsLayout->addLayout(idButtons);
+    page.layout->addWidget(idsBox);
+    auto fillIds = [=] {
+        ids->clear();
+        for (const QString& line : std::as_const(settings->allowedIds)) {
+            auto* item = new QTreeWidgetItem(ids);
+            item->setText(0, line.section(QLatin1Char(' '), 0, 0));
+            item->setText(1, line.section(QLatin1Char(' '), 1).trimmed());
+        }
+    };
+    fillIds();
+    connect(addId, &QPushButton::clicked, this, [=] {
+        bool ok = false;
+        const QString code = QInputDialog::getText(this, tr("Agregar equipo"), tr("ID del equipo (lo ve en Configuración > Colaboración):"),
+                                                   QLineEdit::Normal, QString(), &ok)
+                                 .trimmed()
+                                 .toUpper();
+        if (!ok || code.isEmpty())
+            return;
+        if (Collab::normalizedCode(code).size() != 12) {
+            QMessageBox::warning(this, tr("Agregar equipo"), tr("El ID tiene 12 letras y números, como ABCD-EFGH-JKLM."));
+            return;
+        }
+        const QString who = QInputDialog::getText(this, tr("Agregar equipo"), tr("Nombre para reconocerlo (opcional):")).trimmed();
+        const QString n = Collab::normalizedCode(code);
+        const QString pretty = n.left(4) + QLatin1Char('-') + n.mid(4, 4) + QLatin1Char('-') + n.mid(8, 4);
+        settings->allowedIds.append(who.isEmpty() ? pretty : pretty + QLatin1Char(' ') + who);
+        fillIds();
+        apply();
+    });
+    connect(removeId, &QPushButton::clicked, this, [=] {
+        const int row = ids->currentItem() ? ids->indexOfTopLevelItem(ids->currentItem()) : -1;
+        if (row < 0)
+            return;
+        settings->allowedIds.removeAt(row);
+        fillIds();
+        apply();
+    });
+    auto syncAccess = [=] {
+        const auto a = Collab::Access(access->currentData().toInt());
+        password->setEnabled(a == Collab::Access::Password);
+        idsBox->setEnabled(a == Collab::Access::Ids || a == Collab::Access::Approve);
+    };
+    connect(access, &QComboBox::currentIndexChanged, this, [=] {
+        settings->access = Collab::Access(access->currentData().toInt());
+        syncAccess();
+        apply();
+    });
+    syncAccess();
+
+    auto option = [&](const QString& text, bool Collab::Settings::*member, const QString& tip) {
+        auto* c = new QCheckBox(text, page.widget);
+        c->setChecked((*settings).*member);
+        c->setToolTip(tip);
+        connect(c, &QCheckBox::toggled, this, [=](bool on) {
+            (*settings).*member = on;
+            apply();
+        });
+        page.layout->addWidget(c);
+        return c;
+    };
+    option(tr("Edición en tiempo real entre copias de Kaint"), &Collab::Settings::realtime,
+           tr("Los invitados con Kaint (escritorio) cambian la imagen al momento. Sin marcar, también ellos sugieren sus "
+              "cambios para que los aceptes."));
+    option(tr("Aceptar automáticamente los cambios sugeridos"), &Collab::Settings::autoAccept,
+           tr("Lo que sugieran los invitados se aplica a la imagen sin preguntar."));
+    option(tr("Anunciar la sesión en la red local"), &Collab::Settings::announce,
+           tr("Aparece al buscar sesiones cercanas. Sin marcar, solo se puede entrar escribiendo la dirección."));
+    option(tr("Permitir unirse desde el navegador"), &Collab::Settings::serveWeb,
+           tr("Los navegadores de la red abren Kaint para la web desde la dirección de la sesión (si está instalado junto "
+              "a Kaint)."));
+    page.layout->addWidget(wrapped(tr("Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado "
+                                      "edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece "
+                                      "para todos y en tu historial como «Cambio hecho por…»."),
+                                   page.widget));
+
+    page.layout->addWidget(sectionHeader(tr("Vista"), page.widget));
+    option(tr("Mostrar los punteros de los demás"), &Collab::Settings::showCursors,
+           tr("Un triángulo del color de cada participante, con su nombre y el icono de su herramienta."));
+    page.layout->addStretch();
+    return page.widget;
 }
 
 QWidget* SettingsDialog::createDiscordPage()

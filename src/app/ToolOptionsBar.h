@@ -10,6 +10,7 @@
 class BarSlider;
 class ChoiceButton;
 class FontChooser;
+class QActionGroup;
 class QButtonGroup;
 class QComboBox;
 class QDoubleSpinBox;
@@ -132,6 +133,9 @@ private:
     QToolButton* m_bold;
     QToolButton* m_italic;
     QToolButton* m_underline;
+    // Zalgo, con la flecha de sus tipos.
+    QToolButton* m_zalgo;
+    QActionGroup* m_zalgoTypes;
     QToolButton* m_strikeout;
     QButtonGroup* m_align;
     ChoiceButton* m_textRendering;

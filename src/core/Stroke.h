@@ -39,6 +39,7 @@ class StrokeEngine {
 public:
     void begin(Document* doc, LayerPtr layer, const StrokeParams& params);
     bool isActive() const { return m_doc != nullptr; }
+    const LayerPtr& layer() const { return m_layer; }
     void moveTo(QPointF pos, qreal pressure);
     void lineTo(QPointF pos, qreal pressure);
     bool end(const QString& text, const QString& icon = {});

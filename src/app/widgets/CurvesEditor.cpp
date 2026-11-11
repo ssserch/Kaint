@@ -87,10 +87,12 @@ void CurveGraph::paintEvent(QPaintEvent*)
     p.setRenderHint(QPainter::Antialiasing);
     static const QColor channelColors[4] = {QColor(), QColor(220, 40, 40), QColor(40, 170, 40), QColor(40, 80, 230)};
     auto drawCurve = [&](int channel, bool active) {
-        const auto lut = m_value.lut(channel);
+        // Un punto por píxel (o más) y sin redondear a enteros: la curva se ve suave.
+        const int samples = std::max(256, int(a.width()) + 1);
+        const std::vector<double> ys = m_value.sample(channel, samples);
         QPainterPath path;
-        for (int i = 0; i < 256; ++i) {
-            const QPointF pt = toWidget(QPointF(i, lut[i]));
+        for (int i = 0; i < samples; ++i) {
+            const QPointF pt = toWidget(QPointF(255.0 * i / (samples - 1), ys[size_t(i)]));
             if (i == 0)
                 path.moveTo(pt);
             else
@@ -113,10 +115,20 @@ void CurveGraph::paintEvent(QPaintEvent*)
     }
     drawCurve(m_channel, true);
 
-    p.setPen(QPen(palette().color(QPalette::Text), 1));
-    p.setBrush(palette().color(QPalette::Base));
-    for (const QPointF& pt : m_value.points[size_t(m_channel)])
-        p.drawRect(QRectF(toWidget(pt) - QPointF(4, 4), QSizeF(8, 8)));
+    // Los puntos de control, círculos rellenos como en Paint.NET (el que se arrastra, con borde).
+    const QColor pointColor = m_channel == 0 ? palette().color(QPalette::Text) : channelColors[m_channel];
+    const auto& pts = m_value.points[size_t(m_channel)];
+    for (int i = 0; i < pts.size(); ++i) {
+        const QPointF c = toWidget(pts[i]);
+        if (i == m_drag || i == m_hover) {
+            p.setPen(QPen(pointColor, 1.5));
+            p.setBrush(palette().color(QPalette::Base));
+            p.drawEllipse(c, 5, 5);
+        }
+        p.setPen(Qt::NoPen);
+        p.setBrush(pointColor);
+        p.drawEllipse(c, 3.5, 3.5);
+    }
 }
 
 void CurveGraph::mousePressEvent(QMouseEvent* e)
@@ -126,6 +138,7 @@ void CurveGraph::mousePressEvent(QMouseEvent* e)
     if (e->button() == Qt::RightButton) {
         if (index >= 0 && pts.size() > 2) {
             pts.removeAt(index);
+            m_hover = -1;
             propagate();
             update();
             emit edited();
@@ -150,8 +163,14 @@ void CurveGraph::mousePressEvent(QMouseEvent* e)
 void CurveGraph::mouseMoveEvent(QMouseEvent* e)
 {
     emit hovered(toValue(e->position()), area().contains(e->position()));
-    if (m_drag < 0)
+    if (m_drag < 0) {
+        const int hover = hit(e->position());
+        if (hover != m_hover) {
+            m_hover = hover;
+            update();
+        }
         return;
+    }
     auto& pts = m_value.points[size_t(m_channel)];
     QPointF v = toValue(e->position());
     const qreal lo = m_drag > 0 ? pts[m_drag - 1].x() + 1 : 0;
@@ -166,6 +185,15 @@ void CurveGraph::mouseMoveEvent(QMouseEvent* e)
 void CurveGraph::mouseReleaseEvent(QMouseEvent*)
 {
     m_drag = -1;
+    update();
+}
+
+void CurveGraph::leaveEvent(QEvent*)
+{
+    if (m_hover >= 0) {
+        m_hover = -1;
+        update();
+    }
 }
 
 // ---------------------------------------------------------------------------

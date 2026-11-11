@@ -19,6 +19,7 @@ class QPrinter;
 #include <initializer_list>
 
 class Canvas;
+class CollabController;
 class ColorsPanel;
 class Document;
 class FloatingPanel;
@@ -105,6 +106,8 @@ private:
     bool save(Document* doc);
     bool saveAs(Document* doc);
     bool saveAll();
+    // "Guardar todos": nombre, formato y orden de todas las imágenes abiertas en un diálogo.
+    void saveAllAs();
     bool writeFile(Document* doc, const QString& requestedPath);
     void print();
     bool closeAll(Document* except = nullptr);
@@ -153,6 +156,8 @@ private:
     void duplicateLayer();
     void mergeLayerDown();
     void importLayer();
+    // Agrega la imagen como capa nueva sobre la activa (Importar desde archivo, soltar como capa).
+    bool importImageAsLayer(const QImage& image, const QString& name);
     void flipLayer(bool horizontal);
     void rotateLayer180();
     void moveLayer(int delta);
@@ -194,13 +199,18 @@ private:
     void syncTitleBarActivation();
     // Copia a la carpeta de complementos los filtros, looks y ajustes soltados en la ventana.
     void installDroppedPlugins(const QStringList& files);
+    // Imágenes soltadas en la ventana: con una imagen abierta se pregunta, como en Paint.NET, si se
+    // abren o se agregan como capas.
+    void handleDroppedImages(const QStringList& files, const QImage& image);
     // Con el estilo de Paint.NET, la barra principal tan ancha como la fila de menús.
     void alignMainToolBar();
     PresenceInfo presenceInfo() const;
     void updatePresence();
+    void updateCollabActions();
 
     Canvas* m_canvas;
     Workspace* m_workspace;
+    CollabController* m_collab = nullptr;
     ToolManager* m_tools;
     ToolOptionsBar* m_options = nullptr;
     QTabBar* m_tabs = nullptr;

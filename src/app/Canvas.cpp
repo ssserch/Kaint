@@ -12,10 +12,13 @@
 #include <QNativeGestureEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPointingDevice>
 #include <QScopedValueRollback>
 #include <QScrollBar>
 #include <QTabletEvent>
+#include <QTimer>
+#include <QUndoStack>
 
 #include <cmath>
 
@@ -87,6 +90,7 @@ void Canvas::setDocument(Document* doc)
     if (m_doc) {
         m_views.insert(m_doc, {m_zoom, m_origin});
         disconnect(m_doc, nullptr, this, nullptr);
+        disconnect(m_doc->undoStack(), nullptr, this, nullptr);
     }
     m_doc = doc;
     m_toolButton = Qt::NoButton;
@@ -96,6 +100,10 @@ void Canvas::setDocument(Document* doc)
         connect(m_doc, &Document::sizeChanged, this, &Canvas::onSizeChanged);
         connect(m_doc, &Document::selectionChanged, this, &Canvas::onSelectionChanged);
         connect(m_doc, &Document::colorSpaceChanged, this, &Canvas::onColorSpaceChanged);
+        // Deshacer y rehacer cambian lo que hay bajo el puntero (el cuadro de la selección, la
+        // forma que se edita): el cursor se vuelve a elegir sin esperar a que se mueva el ratón.
+        connect(m_doc->undoStack(), &QUndoStack::indexChanged, this,
+                [this] { QTimer::singleShot(0, this, &Canvas::refreshToolCursor); });
         m_composite = QImage(m_doc->size(), QImage::Format_ARGB32_Premultiplied);
         onColorSpaceChanged();
 
@@ -479,6 +487,23 @@ void Canvas::setToolCursor(const QCursor& cursor)
         applyCursor(cursor);
 }
 
+void Canvas::refreshToolCursor()
+{
+    if (!m_doc || !m_tool || m_panning || m_spaceDown || m_toolButton != Qt::NoButton)
+        return;
+    // Primero el de la herramienta; si el puntero está sobre el lienzo, la herramienta lo cambia
+    // por el que toca ahí, como al pasar el ratón.
+    applyCursor(m_tool->cursor());
+    if (!m_mouseInside || !viewport()->underMouse())
+        return;
+    ToolEvent ev;
+    ev.viewPos = m_mouseView;
+    ev.pos = viewToImage(m_mouseView);
+    ev.buttons = Qt::NoButton;
+    ev.modifiers = QGuiApplication::keyboardModifiers();
+    m_tool->mouseMove(ev);
+}
+
 void Canvas::applyCursor(const QCursor& cursor)
 {
     // Las herramientas vuelven a poner su cursor al mover el ratón: si es el animado que ya se ve,
@@ -648,6 +673,75 @@ void Canvas::paintEvent(QPaintEvent* e)
             }
         }
     }
+    drawRemotePointers(p);
+}
+
+QRect Canvas::remotePointerRect(const RemotePointer& r) const
+{
+    const QPointF v = imageToView(r.pos);
+    const QFontMetrics fm(font());
+    const qreal width = 10 + 8 + (r.tool.isNull() ? 0 : 19) + fm.horizontalAdvance(r.name) + 4;
+    const qreal height = 16 + std::max(18, fm.height() + 4) + 2;
+    return QRectF(v.x() - 3, v.y() - 3, width + 6, height + 6).toAlignedRect();
+}
+
+void Canvas::setRemotePointers(const QList<RemotePointer>& pointers)
+{
+    QRegion dirty;
+    for (const RemotePointer& r : std::as_const(m_remotePointers))
+        dirty += remotePointerRect(r);
+    m_remotePointers = pointers;
+    for (const RemotePointer& r : std::as_const(m_remotePointers))
+        dirty += remotePointerRect(r);
+    if (!dirty.isEmpty())
+        viewport()->update(dirty);
+}
+
+void Canvas::drawRemotePointers(QPainter& p) const
+{
+    if (m_remotePointers.isEmpty())
+        return;
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const QFontMetrics fm(font());
+    for (const RemotePointer& r : m_remotePointers) {
+        const QPointF v = imageToView(r.pos);
+        // El puntero: un triángulo de su color con borde blanco y una sombra suave.
+        QPainterPath arrow;
+        arrow.moveTo(v);
+        arrow.lineTo(v + QPointF(0, 16));
+        arrow.lineTo(v + QPointF(4.4, 12.2));
+        arrow.lineTo(v + QPointF(11.5, 11.5));
+        arrow.closeSubpath();
+        p.setPen(QPen(QColor(0, 0, 0, 60), 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(arrow.translated(1, 1));
+        p.setPen(QPen(Qt::white, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(r.color);
+        p.drawPath(arrow);
+
+        // Debajo, su nombre en una etiqueta de su color con el icono de la herramienta.
+        const bool light = qGray(r.color.rgb()) > 165;
+        const int iconSide = r.tool.isNull() ? 0 : 16;
+        const qreal h = std::max(18, fm.height() + 4);
+        const qreal w = 4 + (iconSide ? iconSide + 3 : 0) + fm.horizontalAdvance(r.name) + 6;
+        const QRectF label(v.x() + 10, v.y() + 16, w, h);
+        p.setPen(QPen(Qt::white, 1));
+        p.setBrush(r.color);
+        p.drawRoundedRect(label, 4, 4);
+        qreal x = label.left() + 4;
+        if (iconSide) {
+            const QRectF iconBox(x - 1, label.center().y() - iconSide / 2.0 - 1, iconSide + 2, iconSide + 2);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(255, 255, 255, 235));
+            p.drawRoundedRect(iconBox, 3, 3);
+            r.tool.paint(&p, QRect(int(x), int(label.center().y() - iconSide / 2.0), iconSide, iconSide));
+            x += iconSide + 3;
+        }
+        p.setPen(light ? Qt::black : Qt::white);
+        p.drawText(QRectF(x, label.top(), label.right() - x, label.height()), Qt::AlignVCenter | Qt::AlignLeft, r.name);
+    }
+    p.restore();
 }
 
 void Canvas::drawSelection(QPainter& p) const
@@ -805,11 +899,58 @@ void Canvas::scrollContentsBy(int, int)
 // Entrada
 // ---------------------------------------------------------------------------
 
+bool Canvas::nudgePointer(QKeyEvent* e)
+{
+    QPoint d;
+    switch (e->key()) {
+    case Qt::Key_Left: d = QPoint(-1, 0); break;
+    case Qt::Key_Right: d = QPoint(1, 0); break;
+    case Qt::Key_Up: d = QPoint(0, -1); break;
+    case Qt::Key_Down: d = QPoint(0, 1); break;
+    default: return false;
+    }
+    if (e->modifiers() & ~(Qt::ControlModifier | Qt::KeypadModifier))
+        return false;
+    if (e->modifiers() & Qt::ControlModifier)
+        d *= 10;
+    const QPointF from = m_nudged ? m_nudgeView : m_mouseInside ? m_mouseView : QPointF(viewport()->mapFromGlobal(QCursor::pos()));
+    // Del centro de un píxel al centro del siguiente.
+    const QPointF img = viewToImage(from);
+    const QPointF target = QPointF(std::floor(img.x()) + 0.5 + d.x(), std::floor(img.y()) + 0.5 + d.y());
+    const QPointF previous = m_mouseView;
+    m_nudgeView = imageToView(target);
+    m_nudgeGlobal = viewport()->mapToGlobal(m_nudgeView).toPoint();
+    m_nudged = true;
+    m_mouseView = m_nudgeView;
+    m_mouseInside = true;
+    // El puntero del sistema va también (Wayland no deja moverlo: entonces solo lo sigue el pincel).
+    QCursor::setPos(m_nudgeGlobal);
+    emit cursorMoved(QPoint(int(std::floor(target.x())), int(std::floor(target.y()))), true);
+    updateRulers();
+    ToolEvent ev;
+    ev.viewPos = m_nudgeView;
+    ev.pos = target;
+    ev.buttons = m_toolButton != Qt::NoButton ? m_lastButtons : Qt::NoButton;
+    ev.modifiers = e->modifiers() & ~Qt::ControlModifier;
+    ev.pressure = m_tabletDown ? m_pressure : 1.0;
+    m_tool->mouseMove(ev);
+    if (m_toolButton != Qt::NoButton)
+        m_lastToolPos = m_nudgeView;
+    if (m_tool->brushOutlineDiameter() > 0) {
+        viewport()->update(brushOutlineRect(previous));
+        viewport()->update(brushOutlineRect(m_mouseView));
+    }
+    return true;
+}
+
 ToolEvent Canvas::makeEvent(QMouseEvent* e) const
 {
     ToolEvent ev;
-    ev.viewPos = e->position();
-    ev.pos = viewToImage(e->position());
+    // El movimiento que llega de la posición en que dejaron el puntero las flechas: en la exacta
+    // (la de la pantalla está redondeada a píxeles de la pantalla).
+    const bool nudged = m_nudged && e->globalPosition().toPoint() == m_nudgeGlobal;
+    ev.viewPos = nudged ? m_nudgeView : e->position();
+    ev.pos = viewToImage(ev.viewPos);
     ev.button = e->button();
     ev.buttons = e->buttons();
     ev.modifiers = e->modifiers();
@@ -924,12 +1065,15 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent* e)
 void Canvas::mouseMoveEvent(QMouseEvent* e)
 {
     const QPointF previous = m_mouseView;
-    m_mouseView = e->position();
+    // El ratón de verdad se movió: las flechas vuelven a partir de donde esté.
+    if (m_nudged && e->globalPosition().toPoint() != m_nudgeGlobal)
+        m_nudged = false;
+    m_mouseView = m_nudged ? m_nudgeView : e->position();
     m_mouseInside = true;
     m_mouseSeen = true;
     if (!m_doc)
         return;
-    const QPointF img = viewToImage(e->position());
+    const QPointF img = viewToImage(m_mouseView);
     const QPoint px(int(std::floor(img.x())), int(std::floor(img.y())));
     emit cursorMoved(px, true);
     updateRulers();
@@ -1064,6 +1208,8 @@ void Canvas::keyPressEvent(QKeyEvent* e)
 {
     m_fitPending = false;
     if (m_spaceDown && keyboardScroll(e))
+        return;
+    if (m_tool && m_doc && m_tool->arrowKeysMovePointer() && nudgePointer(e))
         return;
     if (m_tool && m_doc && m_tool->keyPress(e))
         return;

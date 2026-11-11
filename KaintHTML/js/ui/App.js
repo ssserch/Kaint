@@ -32,8 +32,10 @@ import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } fro
 import { isPhone, MobilePanels } from "./Mobile.js";
 import { ToolOptions } from "./ToolOptions.js";
 import { saveConfigDialog } from "./SaveDialog.js";
+import { saveAllDialog } from "./SaveAllDialog.js";
 import { formatLength, pixelsPerUnit, unitSuffix } from "./Units.js";
 import { ToolManager } from "../tools/Tool.js";
+import { CollabController } from "../collab/CollabUI.js";
 import { EllipseSelectTool, LassoSelectTool, MagicWandTool, RectSelectTool } from "../tools/SelectionTools.js";
 import { MoveSelectedTool, MoveSelectionTool } from "../tools/MoveTools.js";
 import { ColorPickerTool, PanTool, ZoomTool } from "../tools/ViewTools.js";
@@ -84,6 +86,8 @@ export class App extends EventTarget {
         this.createCornerButtons();
         this.createImageList();
         this.createStatusBar();
+        // Modo colaborativo (Archivo > Colaboración y Configuración > Colaboración).
+        this.collab = new CollabController(this);
         this.toolOptions = new ToolOptions(document.getElementById("tool-options"), this);
         this.tools.addEventListener("changed", () => {
             this.view.tool = this.tools.current;
@@ -127,7 +131,7 @@ export class App extends EventTarget {
             this.refreshHint();
         });
         window.addEventListener("beforeunload", (e) => {
-            if (this.docs.some((d) => d.isModified())) {
+            if (this.collab?.active || this.docs.some((d) => d.isModified() && !this.collab?.isGuestDocument(d))) {
                 e.preventDefault();
                 e.returnValue = "";
             }
@@ -259,7 +263,11 @@ export class App extends EventTarget {
         if (!doc)
             return true;
         this.tools.finishCurrent();
-        if (ask && doc.isModified()) {
+        // La imagen de una sesión colaborativa: cerrarla es salir de ella (el invitado no la guarda).
+        const guest = this.collab?.isGuestDocument(doc);
+        if (guest && !(await this.collab.leave(ask)))
+            return false;
+        if (ask && !guest && doc.isModified()) {
             const dlg = new TaskDialog(tr("Cambios no guardados"), "dialog-warning",
                                        tr("«%1» tiene cambios sin guardar.\n¿Qué quiere hacer?", doc.displayName()),
                                        thumbnail(doc.flattened(), 96, 96));
@@ -274,6 +282,8 @@ export class App extends EventTarget {
                 return false;
             }
         }
+        if (!guest && this.collab?.isSessionDocument(doc) && !(await this.collab.leave(ask)))
+            return false;
         const i = this.docs.indexOf(doc);
         this.docs.splice(i, 1);
         if (doc === this.doc) {
@@ -403,6 +413,74 @@ export class App extends EventTarget {
         for (const doc of [...this.docs])
             if (doc.isModified() && !(await this.save(doc)))
                 return;
+    }
+
+    // "Guardar todos": nombre, formato y orden de todas las imágenes abiertas en un diálogo. Con el
+    // acceso a archivos del navegador se elige la carpeta; si no, se descargan.
+    async saveAllAs() {
+        if (!this.docs.length)
+            return;
+        this.tools.finishCurrent();
+        const formats = [...new Set(this.saveFormats().map((f) => f.ext))];
+        const entries = this.docs.map((d) => {
+            const format = d.fileName ? this.formatOf(d.fileName) : null;
+            return {
+                name: d.fileName ? baseName(d.fileName) : d.displayName(),
+                ext: format ? format.ext : d.layers.length > 1 ? "ora" : "png",
+                image: thumbnail(d.flattened(), 56, 56),
+                saved: !!d.fileName && !d.isModified(),
+            };
+        });
+        const chosen = await saveAllDialog(entries, formats);
+        if (!chosen)
+            return;
+        let dir = null;
+        if (window.showDirectoryPicker) {
+            try {
+                dir = await window.showDirectoryPicker({ id: "kaint-save-all", mode: "readwrite" });
+            } catch (e) {
+                if (e.name === "AbortError")
+                    return;
+            }
+        }
+        const docs = [...this.docs], errors = [];
+        document.body.classList.add("busy");
+        try {
+            for (const { index, name } of chosen) {
+                const doc = docs[index];
+                if (!doc || !this.docs.includes(doc))
+                    continue;
+                const format = this.formatOf(name);
+                const options = this.saveOptions?.[format.ext] ? structuredClone(this.saveOptions[format.ext]) : defaultSaveOptions();
+                if (format.animation && !this.saveOptions?.[format.ext])
+                    options.loops = doc.gifLoops ?? 0;
+                try {
+                    // Los formatos sin capas guardan la imagen acoplada (sin tocar sus capas).
+                    const blob = await encode(doc, format, options);
+                    let handle = null;
+                    if (dir) {
+                        handle = await dir.getFileHandle(name, { create: true });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                    } else {
+                        download(blob, name);
+                    }
+                    doc.fileHandle = handle;
+                    doc.fileName = name;
+                    doc.markSaved();
+                } catch (e) {
+                    errors.push(tr("«%1»: %2", name, String(e?.message || e)));
+                }
+            }
+        } finally {
+            document.body.classList.remove("busy");
+        }
+        this.rebuildTabs();
+        this.rememberSession();
+        updateActions();
+        if (errors.length)
+            await message(tr("No se pudo guardar"), tr("No se pudieron guardar:\n\n%1", errors.join("\n")), "dialog-warning");
     }
 
     async closeAll() {
@@ -624,8 +702,15 @@ export class App extends EventTarget {
         A("save", tr("&Guardar"), "document-save", "Ctrl+S", c(() => this.save(this.doc)), has);
         A("saveAs", tr("Guardar &como..."), "document-save-as", "Ctrl+Shift+S", c(() => this.save(this.doc, true)), has);
         A("saveAll", tr("Guardar &todo"), "document-save-all", "Ctrl+Alt+S", c(() => this.saveAll()), has);
+        A("saveAllAs", tr("Guardar to&dos..."), "document-save-all", null, c(() => this.saveAllAs()), has);
         A("print", tr("&Imprimir..."), "document-print", "Ctrl+P", c(() => this.print()), has);
         A("close", tr("&Cerrar"), "document-close", "Ctrl+W", () => this.closeDocument(this.doc), has);
+        const collabActive = () => !!this.collab?.active;
+        A("collabHost", tr("&Hospedar esta imagen..."), "collab", null, c(() => this.collab.hostDialog()), () => has() && !collabActive());
+        A("collabJoin", tr("&Unirse a una sesión..."), "collab", null, () => this.collab.joinDialog(), () => !collabActive());
+        A("collabWindow", tr("&Ventana de la sesión..."), "collab", null, () => this.collab.sessionDialog(), collabActive);
+        A("collabLeave", tr("&Salir de la sesión"), "application-exit", null, () => this.collab.leave(true), collabActive);
+        A("collabSettings", tr("&Configuración de colaboración..."), "configure", null, () => settingsDialog(this, "collab"));
         A("closeAll", tr("Cerrar t&odas"), "document-close", "Ctrl+Shift+W", () => this.closeAll(), has);
         // Edición
         A("undo", tr("&Deshacer"), "edit-undo", "Ctrl+Z", () => this.undo(), () => this.doc?.history.canUndo() || this.tools.current?.isBusy());
@@ -791,7 +876,9 @@ export class App extends EventTarget {
     // El menú Archivo (también el del botón de guardar con flecha del teléfono).
     fileEntries() {
         const a = (id) => this.actions.get(id);
-        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), "-", a("print"), "-", a("close"), a("closeAll")];
+        const collab = { text: tr("C&olaboración"), icon: "collab",
+                         submenu: () => [a("collabHost"), a("collabJoin"), a("collabWindow"), a("collabLeave"), "-", a("collabSettings")] };
+        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("print"), "-", collab, "-", a("close"), a("closeAll")];
     }
 
     createToolBar() {
@@ -817,6 +904,20 @@ export class App extends EventTarget {
                 const b = toolButton(this.actions.get(id), barIcons[id] || this.actions.get(id).icon, 16);
                 b.dataset.action = id;
                 bar.appendChild(b);
+                // Guardar lleva una flecha con las opciones de guardado (Guardar como, Guardar todos...).
+                if (id === "save") {
+                    const arrow = el("button", { className: "tbutton menu-arrow desktop-only", type: "button", title: tr("Opciones de guardado") },
+                                     [el("span", { className: "arrow", textContent: "▾" })]);
+                    arrow.addEventListener("click", () => {
+                        const r = b.getBoundingClientRect();
+                        popupMenu([this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("saveAll"), this.actions.get("saveAllAs")],
+                                  r.left, r.bottom + 1);
+                    });
+                    const sync = () => (arrow.disabled = !this.actions.get("save").isEnabled());
+                    window.addEventListener("kaint-update", sync);
+                    sync();
+                    bar.appendChild(arrow);
+                }
                 // En el teléfono, junto a Anular la selección, la papelera: borra la selección como
                 // Supr, que el teléfono no tiene (ocupa el sitio de Reglas, que ahí no se ve).
                 if (id === "deselect") {
@@ -1136,7 +1237,8 @@ export class App extends EventTarget {
     // se activa esa herramienta para seguir editándolo.
     syncToolWithHistory() {
         const doc = this.doc;
-        if (this.syncingHistory || !doc)
+        // Lo que llega de la sesión colaborativa no cambia de herramienta ni retoma pasos.
+        if (this.syncingHistory || !doc || this.collab?.applyingRemote)
             return;
         this.syncingHistory = true;
         try {
@@ -1445,6 +1547,11 @@ export class App extends EventTarget {
             return false;
         } finally {
             document.body.classList.remove("busy");
+        }
+        // Invitado de una sesión colaborativa: solo una copia (la imagen la guarda el anfitrión).
+        if (this.collab?.isGuestDocument(doc)) {
+            this.showMessage(tr("Copia exportada como «%1». La imagen de la sesión la guarda el anfitrión.", name));
+            return true;
         }
         doc.fileHandle = handle;
         doc.fileName = name;
@@ -1974,8 +2081,13 @@ export class App extends EventTarget {
 
     async importLayer() {
         const [file] = await this.pickFiles(false);
-        if (!file)
-            return;
+        if (file)
+            await this.importLayerFile(file);
+    }
+
+    // La imagen de un archivo como capa nueva sobre la activa (Importar desde archivo, soltar como
+    // capa); los de varias capas, acoplados.
+    async importLayerFile(file) {
         try {
             const imported = await openFile(file);
             this.paste(imported.flattened(), "newLayer");
@@ -2077,7 +2189,33 @@ export class App extends EventTarget {
             e.preventDefault();
             depth = 0;
             app.classList.remove("dragging-file");
-            for (const file of e.dataTransfer.files)
+            const files = [...e.dataTransfer.files];
+            // Los complementos se instalan; las imágenes, con una abierta, como en Paint.NET: ¿se
+            // abren o se agregan como capas?
+            const plugins = files.filter((f) => /\.paintjs$/i.test(f.name) || isCraftFile(f.name));
+            const images = files.filter((f) => !plugins.includes(f));
+            for (const file of plugins)
+                await this.openFile(file);
+            if (images.length && this.doc) {
+                const several = images.length > 1;
+                const ask = new TaskDialog(tr("Arrastrar y soltar"), null,
+                                           several ? tr("¿Qué quiere hacer con los archivos?") : tr("¿Qué quiere hacer con el archivo?"));
+                const open = ask.addChoice("document-open", several ? tr("Abrir los archivos") : tr("Abrir el archivo"),
+                                           several ? tr("Abre las imágenes.") : tr("Abre la imagen."), true);
+                const layer = ask.addChoice("layer-import", several ? tr("Agregar capas") : tr("Agregar capa"),
+                                            several ? tr("Carga las imágenes y las agrega como capas nuevas en la imagen actual.")
+                                                    : tr("Carga la imagen y la agrega como una nueva capa en la imagen actual."));
+                ask.addChoice("dialog-cancel", tr("Cancelar"), "");
+                const choice = await ask.exec();
+                if (choice === layer) {
+                    for (const file of images)
+                        await this.importLayerFile(file);
+                    return;
+                }
+                if (choice !== open)
+                    return;
+            }
+            for (const file of images)
                 await this.openFile(file);
         });
     }

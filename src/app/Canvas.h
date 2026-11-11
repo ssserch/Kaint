@@ -60,6 +60,9 @@ public:
     void setOverlayAnts(bool on);
     void updateCursor();
     void setToolCursor(const QCursor& cursor);
+    // Con el puntero quieto sobre el lienzo, la herramienta vuelve a elegir su cursor (después de
+    // deshacer, por ejemplo: la flecha de girar no se queda si ya no hay nada que girar).
+    void refreshToolCursor();
 
     // Reglas y unidades de medida
     void setRulersVisible(bool on);
@@ -71,6 +74,16 @@ public:
     bool cursorInside() const { return m_mouseInside; }
     // El puntero pasó alguna vez por el lienzo (su última posición sigue valiendo al salir).
     bool cursorSeen() const { return m_mouseSeen; }
+
+    // Punteros de los demás participantes de la sesión colaborativa (en coordenadas de la imagen):
+    // un triángulo de su color y, al lado, su nombre con el icono de su herramienta.
+    struct RemotePointer {
+        QPointF pos;
+        QColor color;
+        QString name;
+        QIcon tool;
+    };
+    void setRemotePointers(const QList<RemotePointer>& pointers);
 
     // Ajustes del lienzo (diálogo Configuración)
     void setAppearance(bool dropShadow, const QColor& border, int checkerBrightness);
@@ -120,6 +133,8 @@ private:
     void centerOn(const QPointF& imagePoint);
     qreal edgeOrigin(Qt::Orientation axis, bool start) const;
     ToolEvent makeEvent(QMouseEvent* e) const;
+    // Pincel y demás herramientas de trazos: una flecha mueve el puntero un píxel de la imagen.
+    bool nudgePointer(QKeyEvent* e);
     void onPixelsChanged(const QRect& r);
     void onSizeChanged();
     void onSelectionChanged();
@@ -128,6 +143,8 @@ private:
     void applyCursor(const QCursor& cursor);
     void nextCursorFrame();
     void drawSelection(QPainter& p) const;
+    void drawRemotePointers(QPainter& p) const;
+    QRect remotePointerRect(const RemotePointer& r) const;
     void drawPixelGrid(QPainter& p, const QRect& src) const;
     QRect brushOutlineRect(const QPointF& center) const;
     void layoutRulers();
@@ -163,6 +180,11 @@ private:
     QTimer m_autoScrollTimer;
     QPointF m_autoScrollDelta;
     QPointF m_lastToolPos;
+    // Dónde dejaron las flechas el puntero: la posición exacta en la vista y la redondeada en la
+    // pantalla (el movimiento que llega de ella se toma en la exacta).
+    QPointF m_nudgeView;
+    QPoint m_nudgeGlobal;
+    bool m_nudged = false;
     Qt::MouseButtons m_lastButtons;
     Qt::KeyboardModifiers m_lastModifiers;
     QPointF m_mouseView;
@@ -193,4 +215,5 @@ private:
     QColor m_border;
     mutable QImage m_tint;
     mutable const void* m_tintKey = nullptr;
+    QList<RemotePointer> m_remotePointers;
 };

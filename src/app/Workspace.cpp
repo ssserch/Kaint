@@ -74,7 +74,13 @@ public:
         // Windows 7, el rojo de cristal, más ancho.
         switch (panelFrame()) {
         case PanelFrame::Luna: return {19, 19};
-        case PanelFrame::Aero: return {28, 17};
+        case PanelFrame::Aero:
+            switch (WindowFrame::panelClose7()) {
+            case WindowFrame::PanelClose7::Hanging: return {30, 18};
+            case WindowFrame::PanelClose7::Square: return {17, 17};
+            case WindowFrame::PanelClose7::Rectangle: break;
+            }
+            return {28, 17};
         case PanelFrame::Plain: break;
         }
         const int side = windows10Chrome() ? std::max(19, fontMetrics().height() + 4) : fontMetrics().height() + 2;
@@ -306,6 +312,9 @@ void FloatingPanel::applyChrome()
     auto* titleLayout = static_cast<QBoxLayout*>(m_titleBar->layout());
     if (panelFrame() == PanelFrame::Luna)
         titleLayout->setContentsMargins(6, 3, 4, 3);
+    else if (panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging)
+        // La X unida al borde de arriba: cuelga del contorno (el título, igual de centrado).
+        titleLayout->setContentsMargins(8, 1, 6, 3);
     else if (panelFrame() == PanelFrame::Aero)
         titleLayout->setContentsMargins(8, 4, 6, 3);
     else if (Theme::paintNetLook())
@@ -314,6 +323,9 @@ void FloatingPanel::applyChrome()
         titleLayout->setContentsMargins(6, 5, 2, 5);
     else
         titleLayout->setContentsMargins(7, 1, 1, 1);
+    const bool hangingClose = panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging;
+    titleLayout->setAlignment(m_close, hangingClose ? Qt::AlignTop : Qt::Alignment());
+    m_title->setContentsMargins(0, hangingClose ? 3 : 0, 0, 0);
     m_close->updateGeometry();
     titleLayout->invalidate();
     QEvent relayout(QEvent::StyleChange);

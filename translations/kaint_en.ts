@@ -7225,32 +7225,36 @@ Do you want to replace them?</translation>
         <translation>TCP port of the session on the local network (%1 by default). Applies to the next session.</translation>
     </message>
     <message>
-        <source>Colgando del borde</source>
-        <translation>Hanging from the edge</translation>
+        <source>Botón de cerrar de las ventanas:</source>
+        <translation>Close button of the windows:</translation>
     </message>
     <message>
-        <source>Como siempre: cuelgan del borde de arriba de la ventana.</source>
-        <translation>As always: they hang from the top edge of the window.</translation>
+        <source>Unido al borde de arriba</source>
+        <translation>Joined to the top edge</translation>
     </message>
     <message>
-        <source>Unidos al marco</source>
-        <translation>Joined to the frame</translation>
+        <source>El de Windows 7: cuelga del borde de arriba de la ventana, como el de cerrar de los diálogos.</source>
+        <translation>The Windows 7 one: it hangs from the top edge of the window, like the close button of dialogs.</translation>
     </message>
     <message>
-        <source>Como el de cerrar de los diálogos (Configuración): cuelgan del contorno oscuro de la ventana, algo separados del borde.</source>
-        <translation>Like the close button of dialogs (Settings): they hang from the window's dark outline, a little away from the edge.</translation>
+        <source>Rectángulo</source>
+        <translation>Rectangle</translation>
     </message>
     <message>
-        <source>Cuadrados</source>
+        <source>Un rectángulo suelto con la X, con las cuatro esquinas redondeadas.</source>
+        <translation>A loose rectangle with the X, with all four corners rounded.</translation>
+    </message>
+    <message>
+        <source>Cuadrado</source>
         <translation>Square</translation>
     </message>
     <message>
-        <source>Sueltos, con las cuatro esquinas redondeadas, como las X de las ventanas de Paint.NET en Windows 7.</source>
-        <translation>Loose, with all four corners rounded, like the X of Paint.NET's windows on Windows 7.</translation>
+        <source>Un cuadrado suelto con la X, como el de las ventanas de Paint.NET en Windows 7.</source>
+        <translation>A loose square with the X, like the one of Paint.NET's windows on Windows 7.</translation>
     </message>
     <message>
-        <source>La forma de los botones de Windows 7.</source>
-        <translation>The shape of the Windows 7 buttons.</translation>
+        <source>La X de las ventanas Herramientas, Historial, Capas y Colores con los temas Windows 7.</source>
+        <translation>The X of the Tools, History, Layers and Colors windows with the Windows 7 themes.</translation>
     </message>
 </context>
 <context>

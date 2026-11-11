@@ -780,17 +780,18 @@ export async function settingsDialog(app = null, startPage = "interface") {
                                         Settings.get("titleButtons") || 0);
             buttonsStyle.title = tr("El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, Windows XP y Windows 98, «Windows 10» usa el del tema.");
             buttonsStyle.addEventListener("change", () => Settings.set("titleButtons", Number(buttonsStyle.value)));
-            // Con los de Windows 7 (elegidos o, con el tema Windows 7, los predeterminados), su forma.
-            const win7Shape = select([[0, tr("Colgando del borde")], [1, tr("Unidos al marco")], [2, tr("Cuadrados")]],
-                                     Number(Settings.get("win7ButtonShape")) || 0);
-            win7Shape.title = tr("La forma de los botones de Windows 7.");
+            // Con los de Windows 7 (elegidos o, con el tema Windows 7, los predeterminados), la forma de
+            // la X de las ventanas.
+            const win7Shape = select([[0, tr("Unido al borde de arriba")], [1, tr("Rectángulo")], [2, tr("Cuadrado")]],
+                                     Number(Settings.get("win7PanelClose") ?? 1));
+            win7Shape.title = tr("La X de las ventanas Herramientas, Historial, Capas y Colores con los temas Windows 7.");
             const syncWin7Shape = () => {
                 const style = Number(buttonsStyle.value);
                 win7Shape.style.display = style === 3 || (style === 0 && Settings.get("colorScheme") === 7) ? "" : "none";
             };
             syncWin7Shape();
             buttonsStyle.addEventListener("change", syncWin7Shape);
-            win7Shape.addEventListener("change", () => Settings.set("win7ButtonShape", Number(win7Shape.value)));
+            win7Shape.addEventListener("change", () => Settings.set("win7PanelClose", Number(win7Shape.value)));
             const buttonsSide = select([[0, tr("A la derecha")], [1, tr("A la izquierda")]], Settings.get("titleButtonsLeft") ? 1 : 0);
             buttonsSide.addEventListener("change", () => Settings.set("titleButtonsLeft", buttonsSide.value === "1"));
             const border = numberInput(Settings.get("panelBorder"), 1, 12);

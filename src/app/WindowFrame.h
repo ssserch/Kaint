@@ -34,12 +34,6 @@ Buttons buttons();
 // El que se dibuja: con el tema Windows 98, «Windows 10» (el predeterminado) son los de Windows 98.
 Buttons effectiveButtons();
 // Los botones a la izquierda de la barra (en el orden cerrar, minimizar, maximizar) o a la derecha.
-// Forma de los botones de Windows 7: colgando del borde de arriba (como siempre), unidos al marco
-// como el de cerrar de los diálogos (con su contorno oscuro encima y algo separados del borde) o
-// sueltos y cuadrados, con las cuatro esquinas redondeadas (como las X de Paint.NET).
-enum class Win7Shape { Hanging = 0, Attached = 1, Square = 2 };
-void setWin7Shape(Win7Shape shape);
-Win7Shape win7Shape();
 void setButtonsOnLeft(bool on);
 bool buttonsOnLeft();
 // Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana. En Linux se
@@ -69,6 +63,12 @@ bool classicTitle();
 bool lunaTitle();
 void paintClassicTitle(QPainter& p, const QRect& r, bool active);
 // El botón de cerrar de las ventanas flotantes con el estilo de 'style' (Windows 98, XP o 7, suelto).
+// La X de las ventanas flotantes (Herramientas, Colores...) con los temas Windows 7: unida al borde
+// de arriba (cuelga de él, como la de cerrar de los diálogos), un rectángulo suelto o un cuadrado
+// suelto (como las de Paint.NET en Windows 7).
+enum class PanelClose7 { Hanging = 0, Rectangle = 1, Square = 2 };
+void setPanelClose7(PanelClose7 shape);
+PanelClose7 panelClose7();
 void paintPanelClose(QPainter& p, const QRect& box, Buttons style, bool hot, bool down);
 
 } // namespace WindowFrame

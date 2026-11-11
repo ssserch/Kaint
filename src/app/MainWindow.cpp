@@ -3729,6 +3729,7 @@ void MainWindow::applySettings()
     }
     m_workspace->setTranslucentOverImageOnly(m_settings.translucentOverImage);
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
+    WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(m_settings.win7PanelClose, 0, 2)));
     m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder);
     m_canvas->setRulerStyle(Ruler::Style(m_settings.rulerStyle));
     m_canvas->setRulersVisible(m_settings.rulers);
@@ -3755,7 +3756,6 @@ void MainWindow::applySettings()
     WindowFrame::setRoundedCorners(m_settings.uiStyle == 1 && m_settings.windowsVersion == 11);
 #endif
     WindowFrame::setButtonsOnLeft(m_settings.titleButtonsLeft);
-    WindowFrame::setWin7Shape(WindowFrame::Win7Shape(std::clamp(m_settings.win7ButtonShape, 0, 2)));
     placeCaptionButtons();
     WindowFrame::refreshAll();
     // La fuente de la interfaz y (Linux) el color de la barra superior se ven al volver a aplicar

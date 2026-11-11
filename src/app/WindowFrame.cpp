@@ -36,7 +36,6 @@ namespace {
 
 bool g_enabled = false;
 Buttons g_buttons = Buttons::Windows10;
-Win7Shape g_win7Shape = Win7Shape::Hanging;
 bool g_left = false;
 bool g_rounded = false;
 #ifdef Q_OS_WIN
@@ -1372,16 +1371,6 @@ Buttons effectiveButtons()
     return g_buttons;
 }
 
-void setWin7Shape(Win7Shape shape)
-{
-    g_win7Shape = shape;
-}
-
-Win7Shape win7Shape()
-{
-    return g_win7Shape;
-}
-
 void setButtonsOnLeft(bool on)
 {
     g_left = on;
@@ -1449,11 +1438,6 @@ Metrics metricsFor(Buttons style, int h)
         return {d, d, d, 8, 0, 9, false};
     }
     case Buttons::Windows7: {
-        // Sueltos: más bajos, centrados y con un poco de aire entre ellos.
-        if (g_win7Shape == Win7Shape::Square) {
-            const int bh = std::min(18, h - 9);
-            return {26, 40, bh, 3, 0, 7, false};
-        }
         // Las medidas de 7.css: 29 x 19 y cerrar de 48.
         const int bh = std::min(19, h - 2);
         return {29, 48, bh, 0, 0, 6, true};
@@ -1477,13 +1461,9 @@ QList<QRect> buttonRects(const QRect& area, bool closeOnly)
     // de macOS, siempre rojo, amarillo y verde.
     const bool macOrder = g_left || effectiveButtons() == Buttons::MacOS;
     const QList<int> order = closeOnly ? QList<int>{2} : macOrder ? QList<int>{2, 0, 1} : QList<int>{0, 1, 2};
-    // Unidos al marco (la ventana principal): bajo su contorno, separados del borde como en los
-    // diálogos (que ya tienen su marco alrededor).
-    const bool attached = !closeOnly && effectiveButtons() == Buttons::Windows7 && g_win7Shape == Win7Shape::Attached;
-    const int y = m.hang ? area.top() + (attached ? 1 : 0) : area.top() + (area.height() - m.h) / 2;
-    const int margin = m.margin + (attached ? kAeroBorder : 0);
+    const int y = m.hang ? area.top() : area.top() + (area.height() - m.h) / 2;
     if (g_left) {
-        int x = area.left() + margin;
+        int x = area.left() + m.margin;
         for (int k = 0; k < order.size(); ++k) {
             const int i = order[k];
             const int w = i == 2 ? m.closeW : m.w;
@@ -1491,7 +1471,7 @@ QList<QRect> buttonRects(const QRect& area, bool closeOnly)
             x += w + m.gap + (i == 2 ? m.closeGap : 0);
         }
     } else {
-        int x = area.right() + 1 - margin;
+        int x = area.right() + 1 - m.margin;
         for (int k = int(order.size()) - 1; k >= 0; --k) {
             const int i = order[k];
             const int w = i == 2 ? m.closeW : m.w;
@@ -1508,8 +1488,7 @@ int buttonsWidth(int rowHeight, bool closeOnly)
     const Metrics m = metricsFor(effectiveButtons(), rowHeight);
     if (closeOnly)
         return m.closeW + 2 * m.margin;
-    const int margin = m.margin + (effectiveButtons() == Buttons::Windows7 && g_win7Shape == Win7Shape::Attached ? kAeroBorder : 0);
-    return 2 * m.w + m.closeW + 2 * m.gap + m.closeGap + 2 * margin;
+    return 2 * m.w + m.closeW + 2 * m.gap + m.closeGap + 2 * m.margin;
 }
 
 void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool hot, bool down, bool active, bool groupHot,
@@ -1521,11 +1500,6 @@ void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool 
     case Buttons::MacOS: paintMac(p, box, which, hot, down, active, groupHot); return;
     case Buttons::WindowsXP: paintLuna(p, box, which, maximized, hot, down, active); return;
     case Buttons::Windows7: {
-        // Sueltos: cada uno con sus cuatro esquinas redondeadas y su contorno.
-        if (g_win7Shape == Win7Shape::Square) {
-            paintGlass7(p, box, which, maximized, hot, down, active, false, false, true);
-            return;
-        }
         // Las esquinas de abajo de fuera del grupo, redondeadas.
         // Solo (el de cerrar de los diálogos), con las dos esquinas redondeadas.
         const bool first = alone || (g_left ? which == 2 : which == 0);
@@ -1603,12 +1577,30 @@ void paintClassicTitle(QPainter& p, const QRect& r, bool active)
         paintTitle98(p, r, active);
 }
 
+namespace {
+PanelClose7 g_panelClose7 = PanelClose7::Rectangle;
+} // namespace
+
+void setPanelClose7(PanelClose7 shape)
+{
+    g_panelClose7 = shape;
+}
+
+PanelClose7 panelClose7()
+{
+    return g_panelClose7;
+}
+
 void paintPanelClose(QPainter& p, const QRect& box, Buttons style, bool hot, bool down)
 {
     switch (style) {
     case Buttons::Windows98: paintButton98(p, box, 2, false, down); return;
     case Buttons::WindowsXP: paintLuna(p, box, 2, false, hot, down, true); return;
-    case Buttons::Windows7: paintGlass7(p, box, 2, false, hot, down, true, true, true, true); return;
+    // Unida al borde: sin contorno arriba y con las esquinas de abajo redondeadas; suelta (rectángulo
+    // o cuadrado): con las cuatro.
+    case Buttons::Windows7:
+        paintGlass7(p, box, 2, false, hot, down, true, true, true, g_panelClose7 != PanelClose7::Hanging);
+        return;
     default: paintButton(p, box, 2, false, hot, down, true, hot, true); return;
     }
 }
@@ -1774,13 +1766,6 @@ void CaptionButtons::paintEvent(QPaintEvent*)
     QPainter p(this);
     const bool active = window()->isActiveWindow();
     const bool maximized = window()->isMaximized();
-    // Windows 7 unidos al marco: cuelgan del contorno oscuro de arriba, como el de los diálogos.
-    if (WindowFrame::effectiveButtons() == WindowFrame::Buttons::Windows7 && WindowFrame::win7Shape() == WindowFrame::Win7Shape::Attached) {
-        // Hasta el borde de la ventana del lado de los botones (el del marco de los diálogos).
-        const QRect group = buttonRect(0).united(buttonRect(1)).united(buttonRect(2));
-        const QRect line = WindowFrame::buttonsOnLeft() ? QRect(0, 0, group.right() + 7, 1) : QRect(group.left() - 6, 0, width() - group.left() + 6, 1);
-        p.fillRect(line, QColor(0, 0, 0, active ? 179 : 110));
-    }
     for (int i = 0; i < 3; ++i) {
         const QRect box = buttonRect(i);
         const bool hot = m_hover == i, down = m_pressed == i && hot;

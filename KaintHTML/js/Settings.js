@@ -102,8 +102,9 @@ const defaults = {
     // 1 Windows 11, 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98; y a la izquierda.
     titleButtons: 0,
     titleButtonsLeft: false,
-    // Forma de los botones de Windows 7: 0 colgando del borde, 1 unidos al marco, 2 cuadrados.
-    win7ButtonShape: 0,
+    // La X de las ventanas con los botones de Windows 7: 0 unida al borde de arriba, 1 rectángulo,
+    // 2 cuadrado.
+    win7PanelClose: 1,
     // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), si al
     // sacar una se esconden las que tape (en las esquinas) y el tamaño de cada una en el modo
     // Ventanas (en %).

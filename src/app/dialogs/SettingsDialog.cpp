@@ -144,7 +144,7 @@ AppSettings AppSettings::load()
         a.customFrame = false;
     a.titleButtons = buttons < 0 ? defaultButtons : buttons;
     a.titleButtonsLeft = get("titleButtonsLeft", a.titleButtonsLeft);
-    a.win7ButtonShape = std::clamp(get("win7ButtonShape", a.win7ButtonShape), 0, 2);
+    a.win7PanelClose = std::clamp(get("win7PanelClose", a.win7PanelClose), 0, 2);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
@@ -222,7 +222,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("windows10Frame"), customFrame);
     s.setValue(QStringLiteral("titleButtons"), titleButtons);
     s.setValue(QStringLiteral("titleButtonsLeft"), titleButtonsLeft);
-    s.setValue(QStringLiteral("win7ButtonShape"), win7ButtonShape);
+    s.setValue(QStringLiteral("win7PanelClose"), win7PanelClose);
     s.setValue(QStringLiteral("windowsVersion"), windowsVersion);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
     s.setValue(QStringLiteral("cursorStyle"), cursorStyle);
@@ -551,11 +551,36 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.aeroTransparency = on;
         changed();
     });
-    auto syncAeroGlass = [this, aeroGlass] {
+    // Windows 7: la forma de la X de las ventanas flotantes (Herramientas, Colores...).
+    auto* panelCloseRow = new QWidget(page.widget);
+    auto* panelClose = new QComboBox(panelCloseRow);
+    {
+        auto* l = new QHBoxLayout(panelCloseRow);
+        l->setContentsMargins(20, 0, 0, 0);
+        l->addWidget(new QLabel(tr("Botón de cerrar de las ventanas:"), panelCloseRow));
+        l->addWidget(panelClose);
+        l->addStretch();
+        page.layout->addWidget(panelCloseRow);
+    }
+    panelClose->addItem(tr("Unido al borde de arriba"), 0);
+    panelClose->setItemData(0, tr("El de Windows 7: cuelga del borde de arriba de la ventana, como el de cerrar de los diálogos."),
+                            Qt::ToolTipRole);
+    panelClose->addItem(tr("Rectángulo"), 1);
+    panelClose->setItemData(1, tr("Un rectángulo suelto con la X, con las cuatro esquinas redondeadas."), Qt::ToolTipRole);
+    panelClose->addItem(tr("Cuadrado"), 2);
+    panelClose->setItemData(2, tr("Un cuadrado suelto con la X, como el de las ventanas de Paint.NET en Windows 7."), Qt::ToolTipRole);
+    panelClose->setCurrentIndex(std::max(0, panelClose->findData(m_settings.win7PanelClose)));
+    panelClose->setToolTip(tr("La X de las ventanas Herramientas, Historial, Capas y Colores con los temas Windows 7."));
+    connect(panelClose, &QComboBox::activated, this, [this, panelClose](int i) {
+        m_settings.win7PanelClose = panelClose->itemData(i).toInt();
+        changed();
+    });
+    auto syncAeroGlass = [this, aeroGlass, panelCloseRow] {
         const bool win7 = m_settings.colorScheme == int(Theme::Scheme::Windows7)
                           || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark);
         aeroGlass->setEnabled(win7);
         aeroGlass->setVisible(win7);
+        panelCloseRow->setVisible(win7);
     };
     syncAeroGlass();
     connect(this, &SettingsDialog::settingsChanged, this, syncAeroGlass);
@@ -757,41 +782,7 @@ QWidget* SettingsDialog::createInterfacePage()
                                   "Windows 11."),
                             Qt::ToolTipRole);
     recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
-    // Windows 7 (elegidos o, con los temas Windows 7, los predeterminados): al lado, su forma.
-    auto* win7Shape = new QComboBox(page.widget);
-    win7Shape->addItem(tr("Colgando del borde"), 0);
-    win7Shape->setItemData(0, tr("Como siempre: cuelgan del borde de arriba de la ventana."), Qt::ToolTipRole);
-    win7Shape->addItem(tr("Unidos al marco"), 1);
-    win7Shape->setItemData(1, tr("Como el de cerrar de los diálogos (Configuración): cuelgan del contorno oscuro de la ventana, "
-                                 "algo separados del borde."),
-                           Qt::ToolTipRole);
-    win7Shape->addItem(tr("Cuadrados"), 2);
-    win7Shape->setItemData(2, tr("Sueltos, con las cuatro esquinas redondeadas, como las X de las ventanas de Paint.NET en Windows 7."),
-                           Qt::ToolTipRole);
-    win7Shape->setCurrentIndex(std::max(0, win7Shape->findData(m_settings.win7ButtonShape)));
-    win7Shape->setToolTip(tr("La forma de los botones de Windows 7."));
-    auto* buttonsRow = new QWidget(page.widget);
-    {
-        auto* l = new QHBoxLayout(buttonsRow);
-        l->setContentsMargins(0, 0, 0, 0);
-        buttonsStyle->setParent(buttonsRow);
-        win7Shape->setParent(buttonsRow);
-        l->addWidget(buttonsStyle);
-        l->addWidget(win7Shape);
-        l->addStretch();
-    }
-    auto syncWin7Shape = [this, win7Shape] {
-        const bool win7Theme = m_settings.colorScheme == int(Theme::Scheme::Windows7)
-                               || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark);
-        win7Shape->setVisible(m_settings.titleButtons == 3 || (m_settings.titleButtons == 0 && win7Theme));
-    };
-    syncWin7Shape();
-    connect(this, &SettingsDialog::settingsChanged, win7Shape, syncWin7Shape);
-    connect(win7Shape, &QComboBox::activated, this, [this, win7Shape](int i) {
-        m_settings.win7ButtonShape = win7Shape->itemData(i).toInt();
-        changed();
-    });
-    titleForm->addRow(tr("Botones de la barra de título:"), buttonsRow);
+    titleForm->addRow(tr("Botones de la barra de título:"), buttonsStyle);
     titleForm->addRow(tr("Posición de los botones:"), buttonsSide);
     titleForm->addRow(tr("Recreación de Windows:"), recreation);
     page.layout->addLayout(titleForm);

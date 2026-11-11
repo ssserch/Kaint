@@ -103,11 +103,13 @@ protected:
     void mouseMoveEvent(QMouseEvent* e) override;
     void mousePressEvent(QMouseEvent* e) override;
     void mouseReleaseEvent(QMouseEvent* e) override;
+    void mouseDoubleClickEvent(QMouseEvent* e) override;
     void leaveEvent(QEvent* e) override;
     bool event(QEvent* e) override;
     bool eventFilter(QObject* watched, QEvent* e) override;
 
 private:
+    void resetState();
     QRect buttonRect(int i) const;
     int buttonAt(const QPoint& pos) const;
     bool groupHot() const;

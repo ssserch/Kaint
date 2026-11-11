@@ -23,7 +23,9 @@ export class FloatingPanel {
         // la escala de Colores. Se guarda eso y la ventana mide lo que su contenido.
         this.fit = content.fit || null;
         this.element = el("div", { className: "floating-panel", dataset: { panel: id } });
-        const head = el("div", { className: "title" }, [el("span", { textContent: title })]);
+        this.fullTitle = title;
+        this.titleText = el("span", { textContent: title });
+        const head = el("div", { className: "title" }, [this.titleText]);
         const close = el("button", { className: "close", title: tr("Cerrar"), style: { border: "none", padding: 0 } });
         close.addEventListener("click", () => {
             // En el teléfono, con las ventanas en las esquinas, la × la vuelve a esconder.
@@ -65,6 +67,25 @@ export class FloatingPanel {
             this.reposition();
             this.save();
         });
+        if (id === "tools") {
+            new ResizeObserver(() => this.updateTitle()).observe(this.element);
+            window.addEventListener("kaint-settings", (e) => {
+                if (["colorScheme", "uiStyle", "language"].includes(e.detail?.key))
+                    setTimeout(() => this.updateTitle(), 0);
+            });
+            this.updateTitle();
+        }
+    }
+
+    // Como Paint.NET con sus temas claro y oscuro: la ventana Herramientas de dos columnas se titula
+    // con las dos primeras letras («To...», «He...»), aunque quepa más; más ancha, el título entero.
+    // Con los temas de Windows 7, XP y 98, el título tal cual.
+    updateTitle() {
+        const scheme = Settings.get("colorScheme");
+        const narrow = this.id === "tools" && document.documentElement.classList.contains("pdn") && [0, 1, 2].includes(scheme)
+                       && (this.fit?.state?.() ?? 2) <= 2 && this.fullTitle.length > 3;
+        this.titleText.textContent = narrow ? `${this.fullTitle.slice(0, 2)}...` : this.fullTitle;
+        this.titleText.title = narrow ? this.fullTitle : "";
     }
 
     // Tamaño de la ventana (modo Ventanas del teléfono): se escala desde su esquina.

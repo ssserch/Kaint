@@ -11,6 +11,7 @@
 #include <QPainterPathStroker>
 #include <QRadialGradient>
 #include <QPointer>
+#include <QTimer>
 #include <QWindow>
 
 #ifdef KAINT_HAVE_KWINDOWSHADOW
@@ -24,7 +25,6 @@
 #ifdef Q_OS_WIN
 #include <QAbstractNativeEventFilter>
 #include <QOperatingSystemVersion>
-#include <QTimer>
 #include <windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
@@ -1033,6 +1033,12 @@ private:
     {
         if (!resizable() || m_window->isMaximized())
             return {};
+        // Encima de los botones de la ventana no se cambia el tamaño (en Windows, un clic en su parte
+        // de arriba o en el borde de cerrar empezaba a cambiar el tamaño en vez de pulsar el botón).
+        if (closeRect().contains(pos))
+            return {};
+        if (const QWidget* child = m_window->childAt(pos); child && dynamic_cast<const CaptionButtons*>(child))
+            return {};
         const QRect f = m_window->rect();
         constexpr int corner = 16;
         Qt::Edges e;
@@ -1692,10 +1698,31 @@ bool CaptionButtons::event(QEvent* e)
 
 bool CaptionButtons::eventFilter(QObject* watched, QEvent* e)
 {
-    // Maximizar pasa a restaurar al cambiar el estado; inactiva, los iconos se apagan.
-    if (watched == window() && (e->type() == QEvent::WindowStateChange || e->type() == QEvent::ActivationChange))
+    // Maximizar pasa a restaurar al cambiar el estado; inactiva, los iconos se apagan. Al cambiar de
+    // estado, ocultarse o perder el ratón (minimizar, otra ventana encima...), ninguno queda
+    // resaltado ni pulsado: en Windows se quedaban así y el siguiente clic no hacía nada.
+    if (watched != window())
+        return false;
+    switch (e->type()) {
+    case QEvent::WindowStateChange:
+    case QEvent::Hide:
+    case QEvent::WindowDeactivate:
+        resetState();
+        break;
+    case QEvent::ActivationChange:
         update();
+        break;
+    default:
+        break;
+    }
     return false;
+}
+
+void CaptionButtons::resetState()
+{
+    m_hover = -1;
+    m_pressed = -1;
+    update();
 }
 
 QRect CaptionButtons::buttonRect(int i) const
@@ -1748,6 +1775,7 @@ void CaptionButtons::mousePressEvent(QMouseEvent* e)
     if (e->button() != Qt::LeftButton)
         return;
     m_pressed = buttonAt(e->position().toPoint());
+    m_hover = m_pressed;
     // Fuera de los botones (el hueco entre ellos), se arrastra la ventana.
     if (m_pressed < 0 && window()->windowHandle()) {
         window()->windowHandle()->startSystemMove();
@@ -1765,11 +1793,30 @@ void CaptionButtons::mouseReleaseEvent(QMouseEvent* e)
     update();
     if (b < 0 || b != buttonAt(e->position().toPoint()))
         return;
+    // La ventana cambia de tamaño o de estado (o pregunta antes de cerrar): el botón ya no está
+    // bajo el puntero; se vuelve a resaltar en cuanto se mueva encima.
+    m_hover = -1;
     QWidget* w = window();
-    if (b == 0)
-        w->showMinimized();
-    else if (b == 1)
+    // Después de que Qt termine con el clic (en Windows, maximizar o minimizar dentro del evento
+    // dejaba el ratón capturado por los botones).
+    QTimer::singleShot(0, w, [w, b] {
+        if (b == 0)
+            w->showMinimized();
+        else if (b == 1)
+            w->isMaximized() ? w->showNormal() : w->showMaximized();
+        else
+            w->close();
+    });
+}
+
+void CaptionButtons::mouseDoubleClickEvent(QMouseEvent* e)
+{
+    // El segundo clic de un doble clic cuenta como uno más (maximizar y restaurar seguidos), como
+    // los botones de Windows; fuera de los botones, maximiza o restaura como la barra de título.
+    if (e->button() == Qt::LeftButton && buttonAt(e->position().toPoint()) < 0) {
+        QWidget* w = window();
         w->isMaximized() ? w->showNormal() : w->showMaximized();
-    else
-        w->close();
+        return;
+    }
+    mousePressEvent(e);
 }

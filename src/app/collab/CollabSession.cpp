@@ -1070,17 +1070,36 @@ QJsonArray Session::apply(const QJsonArray& ops, const QString& historyText)
     }
     QUndoStack* stack = m_doc->undoStack();
     HistoryIcons::registerIcon(historyText, kHistoryIcon);
+    // ¿Cambia algo de verdad? (el eco de lo propio, por ejemplo, no)
+    auto sameState = [&] {
+        if (before.size != work.size || before.layers != work.layers || before.props != work.props || std::abs(before.dpi - work.dpi) > 1e-9)
+            return false;
+        for (int i = 0; i < before.images.size(); ++i)
+            if (before.images[i].constBits() != work.images[i].constBits() && before.images[i] != work.images[i])
+                return false;
+        return true;
+    };
     if (structural) {
-        stack->push(new DocumentStateCommand(m_doc, before, work, historyText));
+        if (!sameState())
+            stack->push(new DocumentStateCommand(m_doc, before, work, historyText));
+        else
+            for (int i = 0; i < work.layers.size(); ++i)
+                work.layers[i]->image = work.images[i];
     } else if (!changed.isEmpty()) {
         auto* macro = new QUndoCommand(historyText);
+        int steps = 0;
         for (auto it = changed.cbegin(); it != changed.cend(); ++it) {
             const LayerPtr& layer = work.layers[it.key()];
             const QImage old = layer->image;
             layer->image = work.images[it.key()];
-            new PixelPatchCommand(m_doc, layer, old, it.value(), historyText, macro);
+            auto* patch = new PixelPatchCommand(m_doc, layer, old, it.value(), historyText, macro);
+            if (!patch->isEmpty())
+                ++steps;
         }
-        stack->push(macro);
+        if (steps > 0)
+            stack->push(macro);
+        else
+            delete macro;
     }
     m_lastIndex = stack->index();
     m_applying = false;
@@ -1198,9 +1217,14 @@ void Session::applyToWork(const Canon& before, const Canon& after, const QJsonOb
         if (w.size() != oldC.size())
             return;
         if (w.constBits() == oldC.constBits()) {
-            // Sin cambios propios en esta capa: queda igual que la canónica.
+            // Sin cambios propios en esta capa: queda igual que la canónica (y solo hay paso en el
+            // historial si de verdad cambia algo; el eco de lo propio no cambia nada).
+            bool differs = false;
+            for (int y = r.top(); y <= r.bottom() && !differs; ++y)
+                differs = std::memcmp(oldC.constScanLine(y) + r.left() * 4, newC.constScanLine(y) + r.left() * 4, size_t(r.width()) * 4) != 0;
             w = newC;
-            changed[wi] |= r;
+            if (differs)
+                changed[wi] |= r;
             return;
         }
         // Solo donde el documento sigue como estaba (lo propio sin enviar se respeta).

@@ -5,6 +5,7 @@
 #include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Canvas.h"
+#include "app/collab/CollabController.h"
 #include "app/Icons.h"
 #include "app/Recovery.h"
 #include "app/Shortcuts.h"
@@ -621,6 +622,12 @@ MainWindow::MainWindow()
 
     m_tools = new ToolManager(m_canvas, this);
     m_workspace = new Workspace(m_canvas, this);
+    // Modo colaborativo: la imagen que llega al unirse se abre en una pestaña.
+    m_collab = new CollabController(this, m_canvas, m_tools);
+    m_collab->setDocumentProvider([this] { return m_doc; });
+    connect(m_collab, &CollabController::documentReady, this, [this](Document* doc) { addDocument(doc); });
+    connect(m_collab, &CollabController::message, this, [this](const QString& text) { statusBar()->showMessage(text, 6000); });
+    connect(m_collab, &CollabController::changed, this, &MainWindow::updateCollabActions);
     setCentralWidget(m_workspace);
     // Linux con el estilo de Paint.NET: sin la barra de título del escritorio, con la de Windows 10.
     WindowFrame::decorate(this, false);
@@ -765,6 +772,13 @@ void MainWindow::createActions()
     A["saveAllAs"] = makeAction(tr("Guardar to&dos..."), {"document-save-all", "document-save-as"}, {},
                                 [this] { saveAllAs(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
+    A["collabHost"] = makeAction(tr("&Hospedar esta imagen"), {"collab"}, {}, [this] { m_collab->host(m_doc); });
+    A["collabJoin"] = makeAction(tr("&Unirse a una sesión..."), {"network-connect", "collab"}, {}, [this] { m_collab->showJoinDialog(); });
+    A["collabWindow"] = makeAction(tr("&Ventana de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionWindow(); });
+    A["collabLeave"] = makeAction(tr("&Salir de la sesión"), {"network-disconnect", "application-exit"}, {},
+                                  [this] { m_collab->leave(true); });
+    A["collabSettings"] = makeAction(tr("&Configuración de colaboración..."), {"configure", "settings-configure"}, {},
+                                     [this] { showSettings(SettingsDialog::Page::Collaboration); });
     A["close"] = makeAction(tr("&Cerrar"), {"document-close"}, QKeySequence(QStringLiteral("Ctrl+W")),
                             [this] { closeDocument(m_doc); }, doc);
     A["close"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+W")), QKeySequence(QStringLiteral("Ctrl+F4"))});
@@ -1026,6 +1040,12 @@ void MainWindow::createMenus()
     file->addActions({A["save"], A["saveAs"], A["saveAll"], A["saveAllAs"]});
     file->addSeparator();
     file->addAction(A["print"]);
+    file->addSeparator();
+    // Modo colaborativo: editar la imagen con otras personas de la red local.
+    QMenu* collab = file->addMenu(Icons::theme(QStringLiteral("collab")), tr("C&olaboración"));
+    collab->addActions({A["collabHost"], A["collabJoin"], A["collabWindow"], A["collabLeave"]});
+    collab->addSeparator();
+    collab->addAction(A["collabSettings"]);
     file->addSeparator();
     file->addAction(A["close"]);
     file->addSeparator();
@@ -1438,6 +1458,7 @@ void MainWindow::createStatusBar()
     m_progress->setTextVisible(false);
     m_progress->hide();
     bar->addPermanentWidget(m_progress);
+    bar->addPermanentWidget(m_collab->statusWidget());
     m_selLabel = item({"status-selection", "select-rectangular"}, tr("Tamaño de la selección"));
     m_posLabel = item({"status-cursor", "tool-pointer", "edit-select"}, tr("Posición del cursor"));
 
@@ -1633,8 +1654,16 @@ bool MainWindow::closeDocument(Document* doc, bool ask)
     if (!doc)
         return true;
     finishTool();
-    if (ask && !maybeSave(doc))
-        return false;
+    // La imagen de una sesión colaborativa: cerrarla es salir de ella (el invitado no la guarda).
+    if (m_collab->isGuestDocument(doc)) {
+        if (!m_collab->leave(ask))
+            return false;
+    } else {
+        if (ask && !maybeSave(doc))
+            return false;
+        if (m_collab->isSessionDocument(doc) && !m_collab->leave(ask))
+            return false;
+    }
     const int index = int(m_docs.indexOf(doc));
     Document* next = doc == m_doc ? m_docs.value(index + 1, m_docs.value(index - 1)) : m_doc;
     m_canvas->forgetDocument(doc);
@@ -1654,7 +1683,7 @@ bool MainWindow::closeDocument(Document* doc, bool ask)
 
 bool MainWindow::maybeSave(Document* doc)
 {
-    if (!doc->isModified())
+    if (!doc->isModified() || m_collab->isGuestDocument(doc))
         return true;
     setCurrentDocument(doc);
     // Con los iconos del tema del sistema, como siempre tuvo este diálogo.
@@ -1675,7 +1704,7 @@ bool MainWindow::maybeSaveAll(const QList<Document*>& docs, bool quitting)
 {
     QList<Document*> modified;
     for (Document* d : docs)
-        if (d->isModified())
+        if (d->isModified() && !m_collab->isGuestDocument(d))
             modified << d;
     if (modified.size() < 2 || !m_settings.askOnceOnClose) {
         for (Document* d : std::as_const(modified))
@@ -1842,6 +1871,7 @@ void MainWindow::updateActions()
     const bool sel = has && !m_doc->selection().isEmpty();
     for (QAction* a : std::as_const(m_docActions))
         a->setEnabled(has);
+    updateCollabActions();
     for (QAction* a : std::as_const(m_selActions))
         a->setEnabled(sel);
     const int count = has ? m_doc->layerCount() : 0;
@@ -2169,7 +2199,9 @@ bool MainWindow::saveAs(Document* doc)
                 if (f.contains(QStringLiteral("*.ora")))
                     selected = f;
     }
-    QString path = QFileDialog::getSaveFileName(this, tr("Guardar como"), suggestion, filters, &selected);
+    // Invitado de una sesión colaborativa: solo una copia (la imagen la guarda el anfitrión).
+    const QString title = m_collab->isGuestDocument(doc) ? tr("Exportar una copia") : tr("Guardar como");
+    QString path = QFileDialog::getSaveFileName(this, title, suggestion, filters, &selected);
     if (path.isEmpty())
         return false;
     if (QFileInfo(path).suffix().isEmpty()) {
@@ -2403,6 +2435,11 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
         QMessageBox::critical(this, tr("No se pudo guardar"), tr("No se pudo guardar «%1»:\n%2").arg(path, error));
         return false;
     }
+    if (m_collab->isGuestDocument(doc)) {
+        statusBar()->showMessage(tr("Copia exportada en %1. La imagen de la sesión la guarda el anfitrión.").arg(QDir::toNativeSeparators(path)),
+                                 8000);
+        return true;
+    }
     doc->setFilePath(path);
     doc->markSaved();
     AppState::instance()->addRecentFile(path, doc == m_doc ? m_canvas->composite() : doc->flattened());
@@ -2488,7 +2525,7 @@ void MainWindow::print()
 void MainWindow::closeEvent(QCloseEvent* e)
 {
     finishTool();
-    if (!maybeSaveAll(m_docs, true)) {
+    if (!maybeSaveAll(m_docs, true) || !m_collab->leave(true)) {
         e->ignore();
         return;
     }
@@ -2674,6 +2711,18 @@ void MainWindow::redo()
     m_undoGroup->redo();
 }
 
+void MainWindow::updateCollabActions()
+{
+    if (!m_act.contains(QStringLiteral("collabHost")))
+        return;
+    const bool active = m_collab->isActive();
+    m_act["collabHost"]->setEnabled(m_doc && !active);
+    m_act["collabJoin"]->setEnabled(!active);
+    m_act["collabWindow"]->setEnabled(active);
+    m_act["collabLeave"]->setEnabled(active);
+    m_act["collabLeave"]->setText(m_collab->isHosting() ? tr("&Terminar la sesión") : tr("&Salir de la sesión"));
+}
+
 void MainWindow::prepareHistoryJump()
 {
     if (m_tools && m_tools->current())
@@ -2690,7 +2739,8 @@ void MainWindow::syncLayerWithHistory()
     const int now = stack->index();
     const int before = m_historyIndex.value(stack, now);
     m_historyIndex.insert(stack, now);
-    if (now == before)
+    // Lo que llega de la sesión colaborativa no cambia la capa en la que se está.
+    if (now == before || m_collab->applyingRemote())
         return;
     const QUndoCommand* step = now < before ? stack->command(now) : stack->command(now - 1);
     const int index = m_doc->indexOf(History::layerOf(step));
@@ -2702,7 +2752,7 @@ void MainWindow::syncToolWithHistory()
 {
     // Al volver a un paso que su herramienta puede retomar (degradado), se activa esa
     // herramienta para seguir editándolo.
-    if (m_syncingHistory || !m_doc || !m_tools)
+    if (m_syncingHistory || !m_doc || !m_tools || m_collab->applyingRemote())
         return;
     m_syncingHistory = true;
     const QUndoStack* stack = m_doc->undoStack();

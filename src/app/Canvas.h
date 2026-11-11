@@ -75,6 +75,16 @@ public:
     // El puntero pasó alguna vez por el lienzo (su última posición sigue valiendo al salir).
     bool cursorSeen() const { return m_mouseSeen; }
 
+    // Punteros de los demás participantes de la sesión colaborativa (en coordenadas de la imagen):
+    // un triángulo de su color y, al lado, su nombre con el icono de su herramienta.
+    struct RemotePointer {
+        QPointF pos;
+        QColor color;
+        QString name;
+        QIcon tool;
+    };
+    void setRemotePointers(const QList<RemotePointer>& pointers);
+
     // Ajustes del lienzo (diálogo Configuración)
     void setAppearance(bool dropShadow, const QColor& border, int checkerBrightness);
     void setOverscroll(bool on);
@@ -133,6 +143,8 @@ private:
     void applyCursor(const QCursor& cursor);
     void nextCursorFrame();
     void drawSelection(QPainter& p) const;
+    void drawRemotePointers(QPainter& p) const;
+    QRect remotePointerRect(const RemotePointer& r) const;
     void drawPixelGrid(QPainter& p, const QRect& src) const;
     QRect brushOutlineRect(const QPointF& center) const;
     void layoutRulers();
@@ -203,4 +215,5 @@ private:
     QColor m_border;
     mutable QImage m_tint;
     mutable const void* m_tintKey = nullptr;
+    QList<RemotePointer> m_remotePointers;
 };

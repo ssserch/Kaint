@@ -19,6 +19,7 @@ class QPrinter;
 #include <initializer_list>
 
 class Canvas;
+class CollabController;
 class ColorsPanel;
 class Document;
 class FloatingPanel;
@@ -205,9 +206,11 @@ private:
     void alignMainToolBar();
     PresenceInfo presenceInfo() const;
     void updatePresence();
+    void updateCollabActions();
 
     Canvas* m_canvas;
     Workspace* m_workspace;
+    CollabController* m_collab = nullptr;
     ToolManager* m_tools;
     ToolOptionsBar* m_options = nullptr;
     QTabBar* m_tabs = nullptr;

@@ -161,6 +161,7 @@ public:
         Performance,
         Plugins,
         Discord,
+        Collaboration,
         Updates,
         Diagnostics,
         IconPacks,
@@ -194,6 +195,7 @@ private:
     QWidget* createPerformancePage();
     QWidget* createPluginsPage();
     QWidget* createDiscordPage();
+    QWidget* createCollabPage();
     QWidget* createUpdatesPage();
     QWidget* createDiagnosticsPage();
     QWidget* createIconPacksPage();

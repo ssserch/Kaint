@@ -181,6 +181,8 @@ add_library(kaintui STATIC
     src/app/collab/CollabServer.cpp
     src/app/collab/CollabSession.cpp
     src/app/collab/Discovery.cpp
+    src/app/collab/CollabController.cpp
+    src/app/collab/CollabDialogs.cpp
     src/app/dialogs/SaveConfigDialog.cpp
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp

@@ -2,6 +2,7 @@
 
 #include "app/collab/CollabProtocol.h"
 #include "app/collab/CollabServer.h"
+#include "core/Document.h"
 #include "core/Layer.h"
 
 #include <QDateTime>
@@ -15,7 +16,6 @@
 
 #include <functional>
 
-class Document;
 class WebSocket;
 struct DocumentState;
 

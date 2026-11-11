@@ -12,6 +12,7 @@
 #include <QNativeGestureEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPointingDevice>
 #include <QScopedValueRollback>
 #include <QScrollBar>
@@ -672,6 +673,75 @@ void Canvas::paintEvent(QPaintEvent* e)
             }
         }
     }
+    drawRemotePointers(p);
+}
+
+QRect Canvas::remotePointerRect(const RemotePointer& r) const
+{
+    const QPointF v = imageToView(r.pos);
+    const QFontMetrics fm(font());
+    const qreal width = 10 + 8 + (r.tool.isNull() ? 0 : 19) + fm.horizontalAdvance(r.name) + 4;
+    const qreal height = 16 + std::max(18, fm.height() + 4) + 2;
+    return QRectF(v.x() - 3, v.y() - 3, width + 6, height + 6).toAlignedRect();
+}
+
+void Canvas::setRemotePointers(const QList<RemotePointer>& pointers)
+{
+    QRegion dirty;
+    for (const RemotePointer& r : std::as_const(m_remotePointers))
+        dirty += remotePointerRect(r);
+    m_remotePointers = pointers;
+    for (const RemotePointer& r : std::as_const(m_remotePointers))
+        dirty += remotePointerRect(r);
+    if (!dirty.isEmpty())
+        viewport()->update(dirty);
+}
+
+void Canvas::drawRemotePointers(QPainter& p) const
+{
+    if (m_remotePointers.isEmpty())
+        return;
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const QFontMetrics fm(font());
+    for (const RemotePointer& r : m_remotePointers) {
+        const QPointF v = imageToView(r.pos);
+        // El puntero: un triángulo de su color con borde blanco y una sombra suave.
+        QPainterPath arrow;
+        arrow.moveTo(v);
+        arrow.lineTo(v + QPointF(0, 16));
+        arrow.lineTo(v + QPointF(4.4, 12.2));
+        arrow.lineTo(v + QPointF(11.5, 11.5));
+        arrow.closeSubpath();
+        p.setPen(QPen(QColor(0, 0, 0, 60), 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(arrow.translated(1, 1));
+        p.setPen(QPen(Qt::white, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(r.color);
+        p.drawPath(arrow);
+
+        // Debajo, su nombre en una etiqueta de su color con el icono de la herramienta.
+        const bool light = qGray(r.color.rgb()) > 165;
+        const int iconSide = r.tool.isNull() ? 0 : 16;
+        const qreal h = std::max(18, fm.height() + 4);
+        const qreal w = 4 + (iconSide ? iconSide + 3 : 0) + fm.horizontalAdvance(r.name) + 6;
+        const QRectF label(v.x() + 10, v.y() + 16, w, h);
+        p.setPen(QPen(Qt::white, 1));
+        p.setBrush(r.color);
+        p.drawRoundedRect(label, 4, 4);
+        qreal x = label.left() + 4;
+        if (iconSide) {
+            const QRectF iconBox(x - 1, label.center().y() - iconSide / 2.0 - 1, iconSide + 2, iconSide + 2);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(255, 255, 255, 235));
+            p.drawRoundedRect(iconBox, 3, 3);
+            r.tool.paint(&p, QRect(int(x), int(label.center().y() - iconSide / 2.0), iconSide, iconSide));
+            x += iconSide + 3;
+        }
+        p.setPen(light ? Qt::black : Qt::white);
+        p.drawText(QRectF(x, label.top(), label.right() - x, label.height()), Qt::AlignVCenter | Qt::AlignLeft, r.name);
+    }
+    p.restore();
 }
 
 void Canvas::drawSelection(QPainter& p) const

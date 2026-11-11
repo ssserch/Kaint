@@ -662,6 +662,24 @@ void drawDeselect(QPainter& p)
     p.drawPath(x);
 }
 
+void drawCollab(QPainter& p)
+{
+    // Dos personas, una detrás de otra: el modo colaborativo.
+    aa(p);
+    auto person = [&p](QPointF head, qreal r, const QRectF& body, const QColor& fill) {
+        p.setPen(QPen(fill.darker(165), 1));
+        p.setBrush(fill);
+        QPainterPath shoulders;
+        shoulders.moveTo(body.left(), body.bottom());
+        shoulders.arcTo(QRectF(body.left(), body.top(), body.width(), body.height() * 2), 180, -180);
+        shoulders.closeSubpath();
+        p.drawPath(shoulders);
+        p.drawEllipse(head, r, r);
+    };
+    person(QPointF(10.6, 4.6), 2.6, QRectF(6.6, 8.4, 8.4, 6.6), QColor(245, 152, 42));
+    person(QPointF(5.8, 6.2), 2.9, QRectF(0.8, 10.2, 10, 5.3), QColor(58, 132, 216));
+}
+
 // Nombre de Kaint → dibujo, rejilla en la que se dibuja y archivo de paint.js con el que lo puede
 // sustituir un paquete de iconos.
 struct Entry {
@@ -698,6 +716,8 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("toolbar-paste"), {BS, drawPaste, "menu_edit_paste_icon"}},
         {QStringLiteral("toolbar-crop"), {BS, drawCrop, "menu_image_crop_icon"}},
         {QStringLiteral("toolbar-deselect"), {BS, drawDeselect, "menu_edit_deselect_icon"}},
+        {QStringLiteral("collab"), {BS, drawCollab, ""}},
+        {QStringLiteral("settings-collab"), {BS, drawCollab, ""}},
     };
     return icons;
 }

@@ -2,7 +2,7 @@
 // asset-pack.json y las imágenes que sustituye (icons/<archivo>.png, cursors/...). Se guardan en el
 // navegador (IndexedDB) y el activo reemplaza los iconos que trae; los demás siguen siendo los de
 // Kaint.
-import { unzip } from "./core/Zip.js";
+import { unzip, zip } from "./core/Zip.js";
 import { Settings } from "./Settings.js";
 import { tr } from "./i18n.js";
 
@@ -30,7 +30,7 @@ async function request(mode, fn) {
     });
 }
 
-const validId = (id) => typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id) && !id.includes("..");
+export const validId = (id) => typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id) && !id.includes("..");
 
 function builtin() {
     return { id: DEFAULT_PACK, name: tr("Kaint (predeterminado)"), author: "SSSerch", version: "",
@@ -143,5 +143,61 @@ export const IconPacks = {
 
     file(folder, name) {
         return this.urls.get(`${folder}/${name}`) || null;
+    },
+
+    // --- Editor de paquetes (Configuración > Paquetes de iconos > Editor) ---
+
+    // Un identificador a partir del nombre ("Mis iconos" → "mis-iconos").
+    idFromName(name) {
+        const id = String(name || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+            .replace(/[^a-z0-9._-]+/g, "-").replace(/^[-._]+|[-._]+$/g, "").slice(0, 64);
+        return validId(id) && id !== DEFAULT_PACK ? id : "mis-iconos";
+    },
+
+    // Un paquete instalado con sus imágenes ("icons/archivo" → Blob), o null.
+    async get(id) {
+        if (!validId(id) || id === DEFAULT_PACK)
+            return null;
+        try {
+            return (await request("readonly", (s) => s.get(id))) || null;
+        } catch {
+            return null;
+        }
+    },
+
+    // Guarda (instala) un paquete hecho con el editor. Si 'previousId' es otro (se cambió el
+    // identificador), el anterior se quita. Si el paquete estaba en uso, se vuelve a cargar.
+    async save(info, files, previousId = "") {
+        if (!validId(info.id) || info.id === DEFAULT_PACK)
+            throw new Error(tr("El identificador del paquete no es válido."));
+        const clean = {};
+        for (const [key, blob] of Object.entries(files))
+            if (/^(icons|cursors|images)\/[A-Za-z0-9._-]+$/.test(key) && blob?.size)
+                clean[key] = blob;
+        const pack = { id: info.id, name: String(info.name || info.id), author: String(info.author || ""),
+                       version: String(info.version || ""), description: String(info.description || ""), files: clean };
+        await request("readwrite", (s) => {
+            s.put(pack);
+            if (previousId && previousId !== info.id && validId(previousId) && previousId !== DEFAULT_PACK)
+                s.delete(previousId);
+        });
+        const active = this.activeId();
+        if (active === info.id || (previousId && active === previousId))
+            await this.activate(info.id);
+    },
+
+    // El ZIP del paquete (asset-pack.json y las imágenes), para compartirlo.
+    async zip(info, files) {
+        const manifest = { formatVersion: 1, id: info.id, name: info.name || info.id };
+        for (const k of ["author", "version", "description"])
+            if (info[k])
+                manifest[k] = info[k];
+        const entries = [{ name: MANIFEST, data: new TextEncoder().encode(JSON.stringify(manifest, null, 4)) }];
+        for (const key of Object.keys(files).sort()) {
+            const blob = files[key];
+            const ext = blob.type === "image/webp" ? "webp" : "png";
+            entries.push({ name: `${key}.${ext}`, data: new Uint8Array(await blob.arrayBuffer()) });
+        }
+        return zip(entries);
     },
 };

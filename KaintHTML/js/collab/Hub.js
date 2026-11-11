@@ -116,7 +116,7 @@ export class Hub {
             return this.deny(client, "nohost");
         const peer = client.peer = {
             id: this.nextId++, name: cleanName(m.name, 0), color: m.color, platform: m.platform === "web" ? "web" : "desktop",
-            app: String(m.app || "").slice(0, 60), host: false, mode: "",
+            app: String(m.app || "").slice(0, 60), host: false, mode: "", history: false,
         };
         peer.name = cleanName(m.name, peer.id);
         const device = String(m.device || "").slice(0, 64);
@@ -185,6 +185,17 @@ export class Hub {
             }
             return;
         }
+        case "permit": {
+            // Quién más puede volver a versiones anteriores de la imagen.
+            const c = target(m.peer);
+            if (c?.joined) {
+                c.peer.history = !!m.history;
+                const update = { t: "peer", op: "update", peer: c.peer };
+                this.broadcast(update);
+                this.toHost(update);
+            }
+            return;
+        }
         case "end":
             return this.end("closed");
         case "cursor":
@@ -218,6 +229,11 @@ export class Hub {
             this.broadcast(update);
             return this.toHost(update);
         }
+        case "revert":
+            // Solo con el permiso del anfitrión.
+            if (client.peer.history && Number.isInteger(m.index))
+                this.toHost({ t: "revert", from: id, index: m.index });
+            return;
         case "leave":
             return client.link.close();
         }

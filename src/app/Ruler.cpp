@@ -196,14 +196,36 @@ void Ruler::paintEvent(QPaintEvent*)
 
     // Posición del cursor: como en Paint.NET, la marca se queda en la última posición aunque el
     // puntero salga del lienzo o de la ventana.
+    // Con zum, la marca ocupa lo que mide en pantalla el píxel bajo el puntero (a 100 %, una línea).
     const QPointF cursor = m_canvas->cursorImagePos();
     if (m_canvas->cursorSeen()) {
-        const double c = toRuler(horiz ? cursor.x() : cursor.y());
-        p.setPen(QPen(pal.color(QPalette::Highlight), 1));
-        if (horiz)
-            p.drawLine(QPointF(c, 0), QPointF(c, height()));
-        else
-            p.drawLine(QPointF(0, c), QPointF(width(), c));
+        const double pixel = std::floor(horiz ? cursor.x() : cursor.y());
+        const double a = toRuler(pixel), b = toRuler(pixel + 1);
+        const double from = std::min(a, b), size = std::abs(b - a);
+        QColor mark = pal.color(QPalette::Highlight);
+        if (size <= 1.5) {
+            p.setPen(QPen(mark, 1));
+            const double c = toRuler(horiz ? cursor.x() : cursor.y());
+            if (horiz)
+                p.drawLine(QPointF(c, 0), QPointF(c, height()));
+            else
+                p.drawLine(QPointF(0, c), QPointF(width(), c));
+        } else {
+            // Una franja del ancho del píxel, algo transparente para que se lean los números, con
+            // sus bordes enteros.
+            const QRectF band = horiz ? QRectF(from, 0, size, height()) : QRectF(0, from, width(), size);
+            QColor fill = mark;
+            fill.setAlpha(110);
+            p.fillRect(band, fill);
+            p.setPen(QPen(mark, 1));
+            if (horiz) {
+                p.drawLine(QPointF(band.left() + 0.5, 0), QPointF(band.left() + 0.5, height()));
+                p.drawLine(QPointF(band.right() - 0.5, 0), QPointF(band.right() - 0.5, height()));
+            } else {
+                p.drawLine(QPointF(0, band.top() + 0.5), QPointF(width(), band.top() + 0.5));
+                p.drawLine(QPointF(0, band.bottom() - 0.5), QPointF(width(), band.bottom() - 0.5));
+            }
+        }
     }
     p.setPen(paintJs ? kPaintJsEdge : blue ? QColor(0x82, 0x90, 0xa3) : pal.color(QPalette::Mid));
     if (horiz)

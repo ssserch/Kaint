@@ -49,7 +49,8 @@ QJsonObject Peer::toJson() const
                        {QStringLiteral("platform"), platform},
                        {QStringLiteral("app"), app},
                        {QStringLiteral("host"), host},
-                       {QStringLiteral("mode"), mode}};
+                       {QStringLiteral("mode"), mode},
+                       {QStringLiteral("history"), history}};
 }
 
 Peer Peer::fromJson(const QJsonObject& o)
@@ -64,6 +65,7 @@ Peer Peer::fromJson(const QJsonObject& o)
     p.app = o.value(QStringLiteral("app")).toString().left(60);
     p.host = o.value(QStringLiteral("host")).toBool();
     p.mode = o.value(QStringLiteral("mode")).toString();
+    p.history = o.value(QStringLiteral("history")).toBool();
     return p;
 }
 
@@ -286,6 +288,18 @@ void Server::setPeerMode(int id, const QString& mode)
     }
 }
 
+void Server::setPeerHistory(int id, bool allowed)
+{
+    Client* c = clientFor(id);
+    if (!c || !c->joined || c->peer.history == allowed)
+        return;
+    c->peer.history = allowed;
+    broadcast(QJsonObject{{QStringLiteral("t"), QStringLiteral("peer")},
+                          {QStringLiteral("op"), QStringLiteral("update")},
+                          {QStringLiteral("peer"), c->peer.toJson()}});
+    emit peerUpdated(c->peer);
+}
+
 void Server::renameHost(const QString& name)
 {
     m_host.name = cleanName(name, 0);
@@ -353,6 +367,12 @@ void Server::onText(Link* socket, const QByteArray& text)
                               {QStringLiteral("op"), QStringLiteral("update")},
                               {QStringLiteral("peer"), client.peer.toJson()}});
         emit peerUpdated(client.peer);
+    } else if (t == QLatin1String("revert")) {
+        // Volver a una versión anterior: solo con el permiso del anfitrión.
+        if (client.peer.history)
+            emit hostMessage(QJsonObject{{QStringLiteral("t"), t},
+                                         {QStringLiteral("from"), id},
+                                         {QStringLiteral("index"), m.value(QStringLiteral("index")).toInt(-1)}});
     } else if (t == QLatin1String("leave")) {
         socket->close();
     }

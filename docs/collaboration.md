@@ -75,7 +75,8 @@ on is common.
 4. host → new guest: `welcome {mode, autoAccept, peers, doc}` (the full image).
 
 `peer {op: "add"|"update"|"remove", peer}` keeps everybody's list up to date. A peer is
-`{id, name, color, platform, app, host, mode}`.
+`{id, name, color, platform, app, host, mode, history}` (`history`: whether the host lets that guest go
+back to earlier versions; off by default).
 
 ## Editing
 
@@ -115,6 +116,21 @@ guest the pixels it changed itself and hasn't sent yet are kept.
 - host → server: `admit {peer, ok}`, `kick {peer}`; host → guests: `settings {mode, autoAccept}`.
 - server → all: `end {reason}` when the session finishes (`closed`, or `kicked` for one guest).
 
+## The host's history
+
+- host → guests: `history {steps, index, saved}`: the names of the host's history steps (without the
+  original image), how many are applied (`index`; 0 is the original image) and whether the host's image
+  is saved. Sent after `welcome` and a moment (250 ms) after the history or the saved state changes.
+  Guests show it in the session history window and use `saved` for the crown on the image's tab (yellow:
+  unsaved changes, green: saved). The computer on a guest's tab is its own exported copy (gray: none,
+  yellow: the image changed since, green: up to date) and never travels.
+- guest → host: `revert {index}`: go back (or forward) to that point of the host's history, for
+  everybody. The server forwards it (with `from`) only for guests whose `history` permission is on; the
+  host undoes or redoes to `index` and the result reaches everybody as usual.
+- The host turns a guest's permission on or off from the session history window: a desktop host sets it
+  on its server; a web host sends `permit {peer, history}` to the relay. Either way everybody gets the
+  `peer` update.
+
 ## The relay (`KaintHTML/tools/collab-server.mjs` and `js/collab/Hub.js`)
 
 - Routes between the web host and the guests (on the local network through the Node server, over P2P
@@ -123,8 +139,10 @@ guest the pixels it changed itself and hasn't sent yet are kept.
   autoAccept, announce`).
 - relay → host: the guests' `change`, `propose`, `cursor` (with `from`), `peer` events and
   `request {peer}` for guests waiting for approval (answered with `admit`).
-- host → relay: a message with `to: id` goes to that guest only (`welcome`, `proposal`); `admit`, `kick`,
-  `config` and `end` are for the relay; anything else (`commit`, `cursor`) goes to every guest.
+- host → relay: a message with `to: id` goes to that guest only (`welcome`, `proposal`, the first
+  `history`); `admit`, `kick`, `permit`, `config` and `end` are for the relay; anything else (`commit`,
+  `cursor`, `history`) goes to every guest.
+- guest → relay: `revert` goes to the host (with `from`) only if that guest has the `history` permission.
 - Guests on the same platform as the host (web) are `live` when `realtime` is on; desktop guests of a
   web host use confirmations.
 

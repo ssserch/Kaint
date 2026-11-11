@@ -1030,6 +1030,47 @@ export function setCustomIcon(name, url) {
         customIcons.delete(name);
 }
 
+// Lo que puede cambiar un paquete de iconos (el editor de paquetes): carpeta, archivo (sin
+// extensión) y los nombres de Kaint que lo usan.
+export function packSlots() {
+    const slots = new Map();
+    const add = (file, name) => {
+        if (!file || file.endsWith(".svg"))
+            return;
+        const slot = slots.get(file) || { folder: "icons", file, names: [] };
+        if (!slot.names.includes(name))
+            slot.names.push(name);
+        slots.set(file, slot);
+    };
+    for (const [name, file] of Object.entries(files))
+        add(file, name);
+    for (const [name, file] of Object.entries(toolFiles))
+        add(file, name);
+    const list = [...slots.values()].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+    list.push({ folder: "cursors", file: "hand_open_cursor", names: ["pan"] }, { folder: "cursors", file: "hand_closed_cursor", names: ["pan-grab"] });
+    return list;
+}
+
+// El icono de Kaint de un archivo de paquete (sin el paquete activo): la URL de su PNG o su dibujo.
+export function originalPackUrl(folder, file, size = 48) {
+    if (folder === "icons") {
+        const name = Object.keys(files).find((k) => files[k] === file);
+        if (name)
+            return `assets/icons/${file}.png`;
+    }
+    const name = folder === "cursors" ? (file === "hand_closed_cursor" ? "pan-grab" : "pan")
+                                      : Object.keys(toolFiles).find((k) => toolFiles[k] === file);
+    const painter = name && painterFor(name);
+    if (!painter)
+        return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(size / painter.design, size / painter.design);
+    painter.paint(ctx);
+    return canvas.toDataURL("image/png");
+}
+
 export function hasIcon(name) {
     return !!(files[name] || painterFor(name) || customIcons.has(name));
 }
@@ -1442,4 +1483,90 @@ export function unsavedStar(size = 12) {
     ctx.arc(c, c, 3 * scale, 0, Math.PI * 2);
     ctx.fill();
     return canvas;
+}
+
+// Marcas de la pestaña de una imagen de la sesión colaborativa: las dos personas (en lugar de la
+// estrella), la corona (la imagen del anfitrión) y el equipo (la copia propia del invitado), con
+// contorno blanco para que se vean sobre cualquier miniatura. state: 0 gris (sin copia), 1 amarillo
+// (sin guardar o atrasada), 2 verde (guardada o al día).
+export const collabMarkColor = (state) => ["#9a9a9a", "#f2b800", "#2ea843"][state] || "#9a9a9a";
+
+function markCanvas(size, paint) {
+    const dpr = window.devicePixelRatio || 1, canvas = document.createElement("canvas");
+    canvas.width = canvas.height = Math.round(size * dpr);
+    canvas.style.width = canvas.style.height = `${size}px`;
+    const ctx = canvas.getContext("2d");
+    ctx.scale((size * dpr) / 16, (size * dpr) / 16);
+    paint(ctx);
+    return canvas;
+}
+
+// Un color más oscuro (el borde de las marcas).
+function darker(hex, f = 0.6) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgb(${Math.round((n >> 16) * f)}, ${Math.round(((n >> 8) & 255) * f)}, ${Math.round((n & 255) * f)})`;
+}
+
+export function collabMark(size = 12) {
+    return markCanvas(size, (ctx) => {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.beginPath();
+        ctx.roundRect(-0.5, 0.5, 17, 16, 3);
+        ctx.fill();
+        drawCollab(ctx);
+    });
+}
+
+export function crownMark(state, size = 12) {
+    const fill = collabMarkColor(state);
+    return markCanvas(size, (ctx) => {
+        const path = new Path2D();
+        path.moveTo(1.5, 5);
+        path.lineTo(4.8, 8.4);
+        path.lineTo(8, 2.5);
+        path.lineTo(11.2, 8.4);
+        path.lineTo(14.5, 5);
+        path.lineTo(13.2, 12.2);
+        path.lineTo(2.8, 12.2);
+        path.closePath();
+        path.rect(2.8, 12.6, 10.4, 1.9);
+        ctx.lineJoin = ctx.lineCap = "round";
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.stroke(path);
+        ctx.fillStyle = fill;
+        ctx.fill(path);
+        ctx.strokeStyle = darker(fill);
+        ctx.lineWidth = 1;
+        ctx.stroke(path);
+    });
+}
+
+export function computerMark(state, size = 12) {
+    const fill = collabMarkColor(state);
+    return markCanvas(size, (ctx) => {
+        const path = new Path2D();
+        path.roundRect(1.5, 2, 13, 9, 1.2);
+        path.moveTo(6.4, 11);
+        path.lineTo(9.6, 11);
+        path.lineTo(10.2, 13.2);
+        path.lineTo(11.8, 13.2);
+        path.lineTo(11.8, 14.5);
+        path.lineTo(4.2, 14.5);
+        path.lineTo(4.2, 13.2);
+        path.lineTo(5.8, 13.2);
+        path.closePath();
+        ctx.lineJoin = ctx.lineCap = "round";
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.stroke(path);
+        ctx.fillStyle = fill;
+        ctx.fill(path);
+        ctx.strokeStyle = darker(fill);
+        ctx.lineWidth = 1;
+        ctx.stroke(path);
+        // La pantalla, un poco más clara.
+        ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+        ctx.fillRect(3, 3.5, 10, 6);
+    });
 }

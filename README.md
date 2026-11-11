@@ -84,8 +84,9 @@ runs on Windows 10 and 11.
   <tr>
     <td valign="top">
       <h4>Icon packs, fonts and shortcuts</h4>
-      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview,
-      add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
+      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview, or
+      make your own with the icon pack <b>Editor</b> (every icon side by side with Kaint's; save it
+      or export it as a .zip), add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
       and change any keyboard shortcut in <b>Settings</b>.
     </td>
     <td valign="top">
@@ -111,7 +112,10 @@ runs on Windows 10 and 11.
       everything automatically): the change then shows up for everyone and in the host's history
       as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
       colored triangle with their name and tool, and only the host saves the image (guests export a
-      copy). Sessions can be open, approved one by one, password protected or limited to the
+      copy). The session image's tab turns yellow and shows whether the host's image is saved (the
+      crown) and whether a guest's exported copy is up to date (the computer); from the History
+      window everyone can see the host's history, and the host (and the guests it allows) can go
+      back to an earlier version for everyone. Sessions can be open, approved one by one, password protected or limited to the
       computers whose ID the host added; on the local network nearby sessions are found
       automatically and you can also join by IP (addresses and codes stay blurred until you click
       them). Everything is in its own <b>Settings → Collaboration</b> section, with a simplified and
@@ -154,7 +158,8 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   accent color.
 - **Cursors**: Kaint's tool icons or Paint.NET's pixel-art cursors (the default), with the system
   pointer or Kaint's own beside the small tool icon.
-- **Icons and fonts**: install **icon packs** (.zip files with a preview), pick the **interface
+- **Icons and fonts**: install **icon packs** (.zip files with a preview) or create your own with
+  the **Editor**, pick the **interface
   font** and its size, and add fonts for the Text tool without installing them system-wide.
 - **Floating windows**: a Windows 10 inspired frame or Kaint's compact one, the border width,
   translucency when the pointer leaves them (only while they cover the image, like Paint.NET, or

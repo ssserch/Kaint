@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QByteArray>
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -36,6 +38,20 @@ void activate(const QString& id);
 // motivo en error.
 QString install(const QString& zipPath, QString* error);
 bool remove(const QString& id);
+
+// --- Editor de paquetes (Configuración > Paquetes de iconos > Editor) ---
+// Un identificador válido (letras, números, «.», «_» y «-»).
+bool isValidId(const QString& id);
+// Un identificador a partir del nombre ("Mis iconos" → "mis-iconos").
+QString idFromName(const QString& name);
+// Las imágenes de un paquete instalado ("icons/archivo" → ruta del archivo).
+QHash<QString, QString> images(const QString& id);
+// Guarda (instala) un paquete hecho con el editor: sus datos y sus imágenes ("icons/archivo" →
+// PNG o WebP). Si 'previousId' es otro (se cambió el identificador), el anterior se quita. Si el
+// paquete estaba en uso, se vuelve a cargar. Devuelve false con el motivo en error.
+bool save(const Pack& info, const QHash<QString, QByteArray>& images, const QString& previousId, QString* error);
+// El ZIP del paquete (asset-pack.json y las imágenes), para compartirlo.
+QByteArray zip(const Pack& info, const QHash<QString, QByteArray>& images);
 
 // Ruta de <carpeta>/<nombre>.png (o .webp) en el paquete activo, o vacío si no la trae.
 QString file(const QString& folder, const QString& name);

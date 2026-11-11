@@ -16,6 +16,8 @@ public:
     void setDocument(Document* doc);
     // Ir al principio y al final, junto a deshacer y rehacer (Configuración > Interfaz de usuario).
     void setJumpButtonsVisible(bool on);
+    // El botón de la colaboración (a la derecha), visible mientras lo esté la acción.
+    void setCollabAction(QAction* action);
 
 signals:
     void aboutToJump();
@@ -28,4 +30,5 @@ private:
     QUndoView* m_view;
     // Ir al principio y al final.
     QList<QWidget*> m_jumps;
+    QWidget* m_strip = nullptr;
 };

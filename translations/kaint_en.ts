@@ -191,6 +191,49 @@
     </message>
 </context>
 <context>
+    <name>Collab::HistoryDialog</name>
+    <message>
+        <source>Historial de la sesión</source>
+        <translation>Session history</translation>
+    </message>
+    <message>
+        <source>Volver a esta versión</source>
+        <translation>Go back to this version</translation>
+    </message>
+    <message>
+        <source>La imagen vuelve a como estaba en ese paso, para todos. Se puede rehacer desde el mismo historial.</source>
+        <translation>The image goes back to how it was at that step, for everyone. It can be redone from the same history.</translation>
+    </message>
+    <message>
+        <source>Pueden volver a versiones anteriores</source>
+        <translation>Can go back to earlier versions</translation>
+    </message>
+    <message>
+        <source>No estás en ninguna sesión.</source>
+        <translation>You are not in a session.</translation>
+    </message>
+    <message>
+        <source>Tu historial, el de la imagen de la sesión. Volver a un paso cambia la imagen para todos.</source>
+        <translation>Your history, the one of the session image. Going back to a step changes the image for everyone.</translation>
+    </message>
+    <message>
+        <source>El historial de %1, el anfitrión. Volver a un paso cambia la imagen para todos.</source>
+        <translation>The history of %1, the host. Going back to a step changes the image for everyone.</translation>
+    </message>
+    <message>
+        <source>Imagen original</source>
+        <translation>Original image</translation>
+    </message>
+    <message>
+        <source>Solo el anfitrión y quienes tengan su permiso pueden volver a una versión anterior.</source>
+        <translation>Only the host and those with their permission can go back to an earlier version.</translation>
+    </message>
+    <message>
+        <source>Todavía no hay invitados.</source>
+        <translation>No guests yet.</translation>
+    </message>
+</context>
+<context>
     <name>Collab::JoinDialog</name>
     <message>
         <source>Sesiones en la red local:</source>
@@ -432,6 +475,10 @@
     <message>
         <source>Conectado; entrando en la sesión…</source>
         <translation>Connected; joining the session…</translation>
+    </message>
+    <message>
+        <source>%1 volvió a una versión anterior de la imagen.</source>
+        <translation>%1 went back to an earlier version of the image.</translation>
     </message>
 </context>
 <context>
@@ -1298,6 +1345,219 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Avanzar hasta el final</source>
         <translation>Go to the end</translation>
+    </message>
+</context>
+<context>
+    <name>IconPackEditor</name>
+    <message>
+        <source>Editor de paquetes de iconos</source>
+        <translation>Icon pack editor</translation>
+    </message>
+    <message>
+        <source>Paquete:</source>
+        <translation>Pack:</translation>
+    </message>
+    <message>
+        <source>Nuevo paquete</source>
+        <translation>New pack</translation>
+    </message>
+    <message>
+        <source>Mis iconos</source>
+        <translation>My icons</translation>
+    </message>
+    <message>
+        <source>Lo distingue de los demás paquetes: letras, números, «.», «_» y «-». Si se instala otro paquete con el mismo identificador, sustituye a este.</source>
+        <translation>Tells it apart from other packs: letters, numbers, “.”, “_” and “-”. If another pack with the same ID is installed, it replaces this one.</translation>
+    </message>
+    <message>
+        <source>Nombre:</source>
+        <translation>Name:</translation>
+    </message>
+    <message>
+        <source>Identificador:</source>
+        <translation>ID:</translation>
+    </message>
+    <message>
+        <source>Autor:</source>
+        <translation>Author:</translation>
+    </message>
+    <message>
+        <source>Versión:</source>
+        <translation>Version:</translation>
+    </message>
+    <message>
+        <source>Descripción:</source>
+        <translation>Description:</translation>
+    </message>
+    <message>
+        <source>Buscar un icono…</source>
+        <translation>Search for an icon…</translation>
+    </message>
+    <message>
+        <source>Todos</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Cambiados</source>
+        <translation>Changed</translation>
+    </message>
+    <message>
+        <source>Sin cambiar</source>
+        <translation>Unchanged</translation>
+    </message>
+    <message>
+        <source>Kaint</source>
+        <translation>Kaint</translation>
+    </message>
+    <message>
+        <source>Paquete</source>
+        <translation>Pack</translation>
+    </message>
+    <message>
+        <source>Archivo</source>
+        <translation>File</translation>
+    </message>
+    <message>
+        <source>Se usa en</source>
+        <translation>Used in</translation>
+    </message>
+    <message>
+        <source>Arrastra imágenes aquí: sobre un icono para cambiarlo, o varias a la vez con el nombre de archivo de cada icono.</source>
+        <translation>Drag images here: onto an icon to change it, or several at once named after each icon’s file.</translation>
+    </message>
+    <message>
+        <source>Elegir imagen…</source>
+        <translation>Choose image…</translation>
+    </message>
+    <message>
+        <source>Cambia el icono elegido por una imagen (PNG, WebP…). Las de más de 256 px se reducen.</source>
+        <translation>Replaces the chosen icon with an image (PNG, WebP…). Images larger than 256 px are scaled down.</translation>
+    </message>
+    <message>
+        <source>Pegar</source>
+        <translation>Paste</translation>
+    </message>
+    <message>
+        <source>Usa la imagen del portapapeles para los iconos elegidos.</source>
+        <translation>Uses the clipboard image for the chosen icons.</translation>
+    </message>
+    <message>
+        <source>Usar el de Kaint</source>
+        <translation>Use Kaint’s</translation>
+    </message>
+    <message>
+        <source>Quita la imagen del paquete: vuelve a verse el icono de Kaint.</source>
+        <translation>Removes the pack image: Kaint’s icon is shown again.</translation>
+    </message>
+    <message>
+        <source>Guardar el de Kaint…</source>
+        <translation>Save Kaint’s…</translation>
+    </message>
+    <message>
+        <source>Guarda el icono de Kaint como PNG para dibujar el tuyo encima (en Kaint o en otro programa).</source>
+        <translation>Saves Kaint’s icon as a PNG so you can draw yours over it (in Kaint or another program).</translation>
+    </message>
+    <message>
+        <source>Importar imágenes…</source>
+        <translation>Import images…</translation>
+    </message>
+    <message>
+        <source>Varias imágenes a la vez: cada una cambia el icono que tiene su mismo nombre de archivo (por ejemplo, menu_file_save_icon.png).</source>
+        <translation>Several images at once: each one changes the icon with the same file name (for example, menu_file_save_icon.png).</translation>
+    </message>
+    <message>
+        <source>Importar imágenes</source>
+        <translation>Import images</translation>
+    </message>
+    <message>
+        <source>Imágenes (%1)</source>
+        <translation>Images (%1)</translation>
+    </message>
+    <message>
+        <source>Usar este paquete al guardarlo</source>
+        <translation>Use this pack when saving it</translation>
+    </message>
+    <message>
+        <source>Exportar ZIP…</source>
+        <translation>Export ZIP…</translation>
+    </message>
+    <message>
+        <source>Guarda el paquete como un archivo .zip para compartirlo (se instala con Paquetes de iconos &gt; Añadir).</source>
+        <translation>Saves the pack as a .zip file to share it (it is installed with Icon packs &gt; Add).</translation>
+    </message>
+    <message>
+        <source>Sin imagen: se ve el de Kaint.</source>
+        <translation>No image: Kaint’s is shown.</translation>
+    </message>
+    <message>
+        <source>%1 × %2 px</source>
+        <translation>%1 × %2 px</translation>
+    </message>
+    <message>
+        <source>%1 de %2 · %3 cambiados</source>
+        <translation>%1 of %2 · %3 changed</translation>
+    </message>
+    <message>
+        <source>Elegir imagen</source>
+        <translation>Choose image</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir «%1».</source>
+        <translation>Could not open “%1”.</translation>
+    </message>
+    <message>
+        <source>Se usaron %1 imágenes. Estas no tienen el nombre de ningún icono (o no se pudieron abrir):
+%2</source>
+        <translation>%1 images were used. These don’t have the name of any icon (or could not be opened):
+%2</translation>
+    </message>
+    <message>
+        <source>El portapapeles no tiene ninguna imagen.</source>
+        <translation>The clipboard has no image.</translation>
+    </message>
+    <message>
+        <source>Guardar el icono de Kaint</source>
+        <translation>Save Kaint’s icon</translation>
+    </message>
+    <message>
+        <source>Imagen PNG (*.png)</source>
+        <translation>PNG image (*.png)</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar «%1».</source>
+        <translation>Could not save “%1”.</translation>
+    </message>
+    <message>
+        <source>Exportar ZIP</source>
+        <translation>Export ZIP</translation>
+    </message>
+    <message>
+        <source>El identificador del paquete no es válido.</source>
+        <translation>The pack ID is not valid.</translation>
+    </message>
+    <message>
+        <source>Exportar el paquete de iconos</source>
+        <translation>Export the icon pack</translation>
+    </message>
+    <message>
+        <source>Paquetes de iconos (*.zip)</source>
+        <translation>Icon packs (*.zip)</translation>
+    </message>
+    <message>
+        <source>Ponle un nombre al paquete.</source>
+        <translation>Give the pack a name.</translation>
+    </message>
+    <message>
+        <source>El identificador del paquete no es válido: usa letras, números, «.», «_» y «-».</source>
+        <translation>The pack ID is not valid: use letters, numbers, “.”, “_” and “-”.</translation>
+    </message>
+    <message>
+        <source>Ya hay un paquete instalado con el identificador «%1» («%2»). ¿Quieres sustituirlo?</source>
+        <translation>A pack with the ID “%1” (“%2”) is already installed. Do you want to replace it?</translation>
+    </message>
+    <message>
+        <source>El paquete tiene cambios sin guardar. ¿Quieres guardarlos?</source>
+        <translation>The pack has unsaved changes. Do you want to save them?</translation>
     </message>
 </context>
 <context>
@@ -2627,6 +2887,14 @@ Do you want to replace them?</translation>
     <message>
         <source>&amp;Red local (LAN)</source>
         <translation>&amp;Local network (LAN)</translation>
+    </message>
+    <message>
+        <source>&amp;Historial de la sesión...</source>
+        <translation>Session &amp;history...</translation>
+    </message>
+    <message>
+        <source>El historial del anfitrión: volver a una versión anterior para todos</source>
+        <translation>The host’s history: go back to an earlier version for everyone</translation>
     </message>
 </context>
 <context>
@@ -7255,6 +7523,14 @@ Do you want to replace them?</translation>
     <message>
         <source>La X de las ventanas Herramientas, Historial, Capas y Colores con los temas Windows 7.</source>
         <translation>The X of the Tools, History, Layers and Colors windows with the Windows 7 themes.</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Crea tu propio paquete de iconos o cambia el elegido (si no es el de Kaint)</source>
+        <translation>Create your own icon pack or change the chosen one (if it isn’t Kaint’s)</translation>
     </message>
 </context>
 <context>

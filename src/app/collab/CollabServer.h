@@ -27,6 +27,7 @@ struct Peer {
     bool host = false;
     QString mode;     // "live" o "confirm"
     QString device;   // huella de su ID
+    bool history = false; // puede volver a versiones anteriores (lo da el anfitrión)
 
     QJsonObject toJson() const;
     static Peer fromJson(const QJsonObject& o);
@@ -58,6 +59,8 @@ public:
     Peer peer(int id) const;
     void setSettings(const Settings& settings);
     void setPeerMode(int id, const QString& mode);
+    // Permiso para volver a versiones anteriores del historial del anfitrión.
+    void setPeerHistory(int id, bool allowed);
     void renameHost(const QString& name);
 
     // Del anfitrión a un invitado o a todos.

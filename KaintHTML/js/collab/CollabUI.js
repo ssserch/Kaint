@@ -140,6 +140,22 @@ export class CollabController extends EventTarget {
         return !!doc && this.active && this.session.doc === doc;
     }
 
+    // Lo que se muestra en la pestaña de una imagen de la sesión: amarilla, con el icono de la
+    // colaboración, la corona (la imagen del anfitrión: guardada o no) y, en los invitados, el equipo
+    // (su copia propia: "none", "behind" o "current").
+    tabState(doc) {
+        const s = this.session;
+        if (!doc || !this.active || s.doc !== doc || s.state !== "joined")
+            return { collab: false };
+        return { collab: true, hostSaved: s.savedByHost(), guest: !s.isHost, copy: s.isHost ? "" : s.localCopy() };
+    }
+
+    // Invitado: se exportó una copia de la imagen de la sesión.
+    markExported(doc) {
+        if (this.isGuestDocument(doc))
+            this.session.markExported();
+    }
+
     get applyingRemote() {
         return !!this.session?.applying;
     }
@@ -262,6 +278,22 @@ export class CollabController extends EventTarget {
         for (const type of ["state", "peers", "proposals", "draft"])
             session.addEventListener(type, refresh);
         session.addEventListener("cursors", () => this.refreshPointers());
+        // La pestaña de la imagen (corona, copia propia) y el historial del anfitrión.
+        const tab = () => {
+            if (session.doc && this.app.docs.includes(session.doc))
+                this.app.updateTab(session.doc, true);
+            this.emit("history");
+        };
+        for (const type of ["indicators", "hosthistory", "state", "peers"])
+            session.addEventListener(type, tab);
+        session.addEventListener("revert", (e) => {
+            const doc = session.doc, app = this.app;
+            if (!doc || !app.docs.includes(doc))
+                return;
+            if (app.doc === doc)
+                app.prepareHistoryJump();
+            doc.goTo(Math.min(e.detail.index, doc.history.steps.length - 1));
+        });
         session.addEventListener("notice", (e) => this.app.showMessage(e.detail.text));
         session.addEventListener("request", (e) => this.askAdmission(e.detail.peer));
         session.addEventListener("document", (e) => {
@@ -274,6 +306,7 @@ export class CollabController extends EventTarget {
             this.requests.clear();
             const reason = e.detail.reason;
             this.app.showMessage(reason || tr("La sesión colaborativa terminó."));
+            tab();
             if (reason && session.doc && !session.isHost && session.state === "ended" && this.app.docs.includes(session.doc))
                 this.notify(`${reason}\n\n${tr("La imagen sigue abierta: puedes guardarla como una copia.")}`);
             refresh();
@@ -820,6 +853,95 @@ export class CollabController extends EventTarget {
         await render();
         dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
         await dlg.exec();
+        this.removeEventListener("changed", refresh);
+    }
+
+    // El historial del anfitrión (Historial > el botón de la colaboración): sus pasos, el actual
+    // resaltado, y volver a uno para todos (el anfitrión y los invitados con su permiso). El anfitrión
+    // elige aquí quién más puede.
+    async historyDialog() {
+        if (!this.active)
+            return;
+        const dlg = new Dialog(tr("Historial de la sesión"), { iconName: "collab" });
+        const body = el("div", { className: "collab-history" });
+        dlg.body.appendChild(body);
+        let selected = -1, followCurrent = true;
+        const info = el("p");
+        const list = el("div", { className: "list collab-history-steps", tabIndex: 0 });
+        const revert = el("button", { className: "pushbutton" }, [icon("edit-undo", 16), el("span", { textContent: tr("Volver a esta versión") })]);
+        revert.title = tr("La imagen vuelve a como estaba en ese paso, para todos. Se puede rehacer desde el mismo historial.");
+        const note = el("small", { className: "collab-note" });
+        const permissions = el("div", { className: "collab-history-permissions" });
+        body.append(info, list, el("div", { className: "row-buttons" }, [revert, note]), permissions);
+        const go = () => {
+            const s = this.session;
+            if (s && s.canRevert && selected >= 0 && selected !== s.historyIndex())
+                s.revertTo(selected);
+        };
+        revert.addEventListener("click", go);
+        const render = () => {
+            const s = this.session;
+            if (!this.active || s.state !== "joined") {
+                info.textContent = tr("No estás en ninguna sesión.");
+                list.replaceChildren();
+                revert.disabled = true;
+                permissions.replaceChildren();
+                return;
+            }
+            info.textContent = s.isHost ? tr("Tu historial, el de la imagen de la sesión. Volver a un paso cambia la imagen para todos.")
+                                        : tr("El historial de %1, el anfitrión. Volver a un paso cambia la imagen para todos.", s.peer(0)?.name || "?");
+            const names = [tr("Imagen original"), ...s.historySteps()];
+            const current = s.historyIndex();
+            if (followCurrent || selected >= names.length)
+                selected = current;
+            followCurrent = selected === current;
+            list.replaceChildren(...names.map((name, i) => {
+                const row = el("div", { className: `row${i === current ? " current" : ""}${i > current ? " undone" : ""}${i === selected ? " selected" : ""}`,
+                                        textContent: name });
+                row.addEventListener("click", () => {
+                    selected = i;
+                    followCurrent = i === s.historyIndex();
+                    render();
+                });
+                row.addEventListener("dblclick", go);
+                return row;
+            }));
+            list.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
+            revert.disabled = !s.canRevert || selected === current;
+            note.textContent = s.canRevert ? "" : tr("Solo el anfitrión y quienes tengan su permiso pueden volver a una versión anterior.");
+            permissions.replaceChildren();
+            if (s.isHost) {
+                const guests = s.peerList().filter((p) => !p.host);
+                const box = el("div", { className: "list collab-permission-list" });
+                for (const p of guests) {
+                    // El nombre tal cual (checkbox() quitaría los «&»).
+                    const input = el("input", { type: "checkbox", checked: !!p.history });
+                    input.addEventListener("change", () => s.setHistoryPermission(p.id, input.checked));
+                    box.appendChild(el("div", { className: "row" }, [el("label", {}, [input, el("span", { textContent: p.name })]), swatch(p.color)]));
+                }
+                if (!guests.length)
+                    box.appendChild(el("div", { className: "row", textContent: tr("Todavía no hay invitados.") }));
+                permissions.append(el("h4", { className: "section", textContent: tr("Pueden volver a versiones anteriores") }), box);
+            }
+        };
+        list.addEventListener("keydown", (e) => {
+            const n = list.children.length;
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                e.preventDefault();
+                selected = Math.max(0, Math.min(n - 1, selected + (e.key === "ArrowUp" ? -1 : 1)));
+                followCurrent = selected === this.session?.historyIndex();
+                render();
+            } else if (e.key === "Enter") {
+                go();
+            }
+        });
+        const refresh = () => render();
+        this.addEventListener("history", refresh);
+        this.addEventListener("changed", refresh);
+        render();
+        dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
+        await dlg.exec();
+        this.removeEventListener("history", refresh);
         this.removeEventListener("changed", refresh);
     }
 }

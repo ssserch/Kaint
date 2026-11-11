@@ -252,6 +252,16 @@ export class CollabSession extends EventTarget {
         this.cursorDirty = false;
         this.busyCheck = null;
         this.listeners = [];
+        // El historial del anfitrión (los invitados lo reciben; el anfitrión lo envía un momento
+        // después de cada cambio) y si su imagen está guardada.
+        this.hostHistory = [];
+        this.hostHistoryIndex = 0;
+        this.hostSaved = false;
+        this.historyTimer = null;
+        // Invitado: su copia propia (exportada) y si sigue al día con la imagen de la sesión.
+        this.historyGeneration = 0;
+        this.exported = false;
+        this.exportStamp = null;
     }
 
     get isHost() {
@@ -317,6 +327,7 @@ export class CollabSession extends EventTarget {
             return;
         this.setState("ended");
         clearTimeout(this.cursorTimer);
+        clearTimeout(this.historyTimer);
         this.queue = [];
         this.detachDocument();
         try {
@@ -473,6 +484,26 @@ export class CollabSession extends EventTarget {
         case "change":
         case "propose":
             return this.isHost && this.onGuestChange(m);
+        case "history":
+            if (this.isHost)
+                return;
+            this.hostHistory = (Array.isArray(m.steps) ? m.steps : []).slice(0, 10000).map((x) => String(x).slice(0, 200));
+            this.hostHistoryIndex = Math.max(0, Math.min(this.hostHistory.length, m.index | 0));
+            this.hostSaved = !!m.saved;
+            this.emit("hosthistory");
+            this.emit("indicators");
+            return;
+        case "revert": {
+            if (!this.isHost || this.state !== "joined")
+                return;
+            const p = this.peer(m.from);
+            const steps = this.doc ? this.doc.history.steps.length - 1 : 0;
+            if (!p?.history || !Number.isInteger(m.index) || m.index < 0 || m.index > steps || m.index === this.doc.history.index)
+                return;
+            this.emit("notice", { text: tr("%1 volvió a una versión anterior de la imagen.", p.name) });
+            this.emit("revert", { index: m.index });
+            return;
+        }
         case "end":
             return this.finish(reasonText(m.reason));
         }
@@ -502,9 +533,81 @@ export class CollabSession extends EventTarget {
         this.queueSend(async () => {
             const doc = await this.snapshotJson(this.canon);
             this.send({ t: "welcome", to: peer.id, mode: peer.mode, autoAccept: this.autoAccept, peers: this.peerList(), doc });
+            this.send({ ...this.historyMessage(), to: peer.id });
             if (this.cursorOut)
                 this.send({ ...this.cursorOut, to: peer.id, from: 0 });
         });
+    }
+
+    // --- Historial de la sesión -------------------------------------------------------------------
+
+    historyMessage() {
+        const h = this.doc?.history;
+        return { t: "history", steps: h ? h.steps.slice(1).map((x) => String(x.name || "")) : [], index: h ? h.index : 0,
+                 saved: !!this.doc && !this.doc.isModified() };
+    }
+
+    // Anfitriona: varios pasos seguidos salen una sola vez.
+    scheduleHistory() {
+        clearTimeout(this.historyTimer);
+        this.historyTimer = setTimeout(() => {
+            if (this.isHost && this.state === "joined")
+                this.queueSend(() => this.send(this.historyMessage()));
+            this.emit("hosthistory");
+            this.emit("indicators");
+        }, 250);
+    }
+
+    // Los pasos del historial del anfitrión (sin el de la imagen original), el actual y si la
+    // imagen del anfitrión está guardada.
+    historySteps() {
+        return this.isHost ? this.historyMessage().steps : this.hostHistory;
+    }
+
+    historyIndex() {
+        return this.isHost ? this.doc?.history.index ?? 0 : this.hostHistoryIndex;
+    }
+
+    savedByHost() {
+        return this.isHost ? !!this.doc && !this.doc.isModified() : this.hostSaved;
+    }
+
+    get canRevert() {
+        return this.isHost || (this.state === "joined" && !!this.peer(this.myId)?.history);
+    }
+
+    // Volver a un paso del historial del anfitrión, para todos.
+    revertTo(index) {
+        if (this.isHost) {
+            if (this.doc && index >= 0 && index < this.doc.history.steps.length)
+                this.emit("revert", { index });
+        } else if (this.canRevert) {
+            this.send({ t: "revert", index });
+        }
+    }
+
+    setHistoryPermission(id, allowed) {
+        if (this.isHost)
+            this.send({ t: "permit", peer: id, history: !!allowed });
+    }
+
+    // Invitado: su copia propia está al día si la imagen no cambió desde que la exportó.
+    stamp() {
+        const h = this.doc?.history;
+        return { generation: this.historyGeneration, top: h ? h.steps[h.index] : null };
+    }
+
+    localCopy() {
+        if (!this.exported)
+            return "none";
+        const now = this.stamp();
+        return now.generation === this.exportStamp.generation && now.top === this.exportStamp.top ? "current" : "behind";
+    }
+
+    markExported() {
+        this.exported = true;
+        this.exportStamp = this.stamp();
+        this.emit("indicators");
     }
 
     // Todo lo que cambia la imagen sale en el mismo orden en que se aplicó.
@@ -701,6 +804,7 @@ export class CollabSession extends EventTarget {
         doc.history = new History(tr("Unirse a la sesión"), HISTORY_ICON);
         doc.cleanIndex = 0;
         this.draftStart = 0;
+        this.historyGeneration++;
         doc.emit("history");
         doc.emit("modified");
     }
@@ -730,7 +834,15 @@ export class CollabSession extends EventTarget {
             for (const l of layer ? [layer] : doc.layers)
                 this.dirty.set(l, unionRect(this.dirty.get(l) || null, rect));
         });
-        on("history", () => this.onLocalStep());
+        on("history", () => {
+            this.onLocalStep();
+            if (this.isHost)
+                this.scheduleHistory();
+            else
+                this.emit("indicators");
+        });
+        // Guardar (o volver al punto guardado) cambia la corona.
+        on("modified", () => this.isHost && this.scheduleHistory());
         on("size", () => {
             if (!this.applying)
                 for (const l of doc.layers)

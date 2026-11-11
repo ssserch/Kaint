@@ -1,6 +1,6 @@
 // Diálogos de Kaint: la base modal (con el parpadeo de atención de paint.js al pulsar fuera),
 // las tareas con opciones (TaskDialog) y los de Imagen y Capas, Configuración y Acerca de.
-import { icon } from "./Icons.js";
+import { icon, originalPackUrl, packSlots } from "./Icons.js";
 import { shortcutLabel } from "./Actions.js";
 import { BlendModes, BlendNames, checkerPattern, thumbnail } from "../core/Raster.js";
 import { delayFromName, MIN_DELAY, nameWithDelay } from "../core/Codecs.js";
@@ -9,7 +9,8 @@ import { remember, Settings } from "../Settings.js";
 import { AppState, defaultTools, LocalToolSettings, setToolDefaults, toolDefaults } from "../AppState.js";
 import { ToolOptionsPanel } from "./ToolOptions.js";
 import { CustomShapes } from "../core/CustomShapes.js";
-import { DEFAULT_PACK, IconPacks } from "../IconPacks.js";
+import { DEFAULT_PACK, IconPacks, validId } from "../IconPacks.js";
+import { download } from "../core/ImageIO.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
@@ -954,8 +955,8 @@ export async function settingsDialog(app = null, startPage = "interface") {
         }],
         ["tools", "settings-tools", tr("Herramientas"), () => {
             const tools = app ? app.tools.tools : [];
-            const start = select([["", tr("La última que se usó")], ...tools.map((t) => [t.id, t.name])], Settings.get("startTool") || "");
-            start.addEventListener("change", () => Settings.set("startTool", start.value));
+            const start = select([["", tr("La última que se usó")], ...tools.map((t) => [t.id, t.name])], Settings.get("startupTool") ?? "paintbrush");
+            start.addEventListener("change", () => Settings.set("startupTool", start.value));
             // Opciones predeterminadas de la barra de herramientas (con ellas empieza cada sesión).
             const defaults = new LocalToolSettings(toolDefaults());
             defaults.addEventListener("tools", () => setToolDefaults(defaults.tools));
@@ -1506,6 +1507,15 @@ async function iconPacksPage(refresh) {
     const use = el("button", { className: "pushbutton", textContent: tr("Usar"), title: tr("Usar el paquete elegido") });
     const add = el("button", { className: "pushbutton", textContent: plain(tr("Añadir…")), title: tr("Instalar un paquete de iconos (.zip)") });
     const remove = el("button", { className: "pushbutton", textContent: tr("Quitar"), title: tr("Desinstalar el paquete elegido") });
+    // Crear un paquete propio o cambiar el elegido.
+    const editor = el("button", { className: "pushbutton icon-pack-editor-button", title: tr("Crea tu propio paquete de iconos o cambia el elegido (si no es el de Kaint)") },
+                      [icon("paintbrush", 16), el("span", { textContent: tr("Editor") })]);
+    editor.addEventListener("click", async () => {
+        const saved = await iconPackEditor(selected);
+        await refresh();
+        if (saved)
+            status.textContent = tr("Paquete guardado.");
+    });
     const file = el("input", { type: "file", accept: ".zip,application/zip", hidden: true });
     const status = el("p", { className: "pack-status", style: { minHeight: "1.2em" } });
     const sync = () => {
@@ -1558,8 +1568,311 @@ async function iconPacksPage(refresh) {
     sync();
     return [
         el("p", { textContent: tr("Los paquetes de iconos (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.") }),
-        list, details, el("div", { className: "row-buttons" }, [use, add, remove, file]), status,
+        list, details, el("div", { className: "row-buttons" }, [use, add, remove, editor, file]), status,
     ];
+}
+
+// Configuración > Paquetes de iconos > Editor (IconPackEditor.cpp de Kaint): crear un paquete de
+// iconos propio o cambiar uno instalado. Arriba, sus datos; debajo, todos los iconos que un
+// paquete puede cambiar, cada uno con el de Kaint y el del paquete. A cada uno se le pone una
+// imagen (un archivo, el portapapeles o arrastrándola), se le quita (vuelve el de Kaint) o se
+// descarga el de Kaint para dibujar encima. «Importar imágenes» toma varias a la vez por su nombre
+// de archivo. Se guarda como un paquete instalado y se puede exportar el ZIP.
+const PACK_MAX_SIDE = 256;
+
+async function packImage(blob) {
+    // PNG de 256 px como mucho.
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, PACK_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = el("canvas", { width: Math.max(1, Math.round(bitmap.width * scale)), height: Math.max(1, Math.round(bitmap.height * scale)) });
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+export async function iconPackEditor(packId = "") {
+    const slots = packSlots();
+    const installed = (await IconPacks.list()).filter((p) => p.id !== DEFAULT_PACK);
+    const dlg = new Dialog(tr("Editor de paquetes de iconos"), { iconName: "paintbrush" });
+    const body = el("div", { className: "icon-pack-editor" });
+    dlg.body.appendChild(body);
+
+    let loadedId = "", idTouched = false, dirty = false, images = {}, selected = new Set(), urls = [];
+    const pack = select([["", tr("Nuevo paquete")], ...installed.map((p) => [p.id, p.name])], "");
+    const field = (placeholder = "") => el("input", { type: "text", placeholder });
+    const name = field(tr("Mis iconos")), id = field(), author = field(), version = field("1.0"), description = field();
+    id.title = tr("Lo distingue de los demás paquetes: letras, números, «.», «_» y «-». Si se instala otro paquete con el mismo identificador, sustituye a este.");
+    const grid = el("div", { className: "form-grid" });
+    for (const [label, input] of [[tr("Nombre:"), name], [tr("Identificador:"), id], [tr("Autor:"), author], [tr("Versión:"), version], [tr("Descripción:"), description]])
+        grid.append(el("label", { textContent: label }), input);
+    name.addEventListener("input", () => {
+        // El identificador sigue al nombre hasta que se escribe uno.
+        if (!idTouched && !loadedId)
+            id.value = name.value.trim() ? IconPacks.idFromName(name.value) : "";
+        dirty = true;
+    });
+    id.addEventListener("input", () => {
+        idTouched = true;
+        dirty = true;
+    });
+    for (const input of [author, version, description])
+        input.addEventListener("input", () => (dirty = true));
+
+    const search = el("input", { type: "search", placeholder: tr("Buscar un icono…") });
+    const filter = select([["all", tr("Todos")], ["changed", tr("Cambiados")], ["same", tr("Sin cambiar")]], "all");
+    const count = el("span", { className: "count" });
+    const list = el("div", { className: "list icon-pack-slots", tabIndex: 0,
+                             title: tr("Arrastra imágenes aquí: sobre un icono para cambiarlo, o varias a la vez con el nombre de archivo de cada icono.") });
+    const button = (iconName, text, tip) => el("button", { className: "pushbutton", title: tip }, [icon(iconName, 16), el("span", { textContent: text })]);
+    const choose = button("document-open", tr("Elegir imagen…"), tr("Cambia el icono elegido por una imagen (PNG, WebP…). Las de más de 256 px se reducen."));
+    const paste = button("edit-paste", tr("Pegar"), tr("Usa la imagen del portapapeles para los iconos elegidos."));
+    const reset = button("edit-undo", tr("Usar el de Kaint"), tr("Quita la imagen del paquete: vuelve a verse el icono de Kaint."));
+    const original = button("document-save-as", tr("Guardar el de Kaint…"), tr("Guarda el icono de Kaint como PNG para dibujar el tuyo encima (en Kaint o en otro programa)."));
+    const importButton = button("document-open", tr("Importar imágenes…"), tr("Varias imágenes a la vez: cada una cambia el icono que tiene su mismo nombre de archivo (por ejemplo, menu_file_save_icon.png)."));
+    const one = el("input", { type: "file", accept: "image/*", hidden: true });
+    const many = el("input", { type: "file", accept: "image/*", multiple: true, hidden: true });
+    const use = checkbox(tr("Usar este paquete al guardarlo"), true);
+    const status = el("p", { className: "pack-status", style: { minHeight: "1.2em" } });
+    body.append(el("div", { className: "row-buttons" }, [el("span", { textContent: tr("Paquete:") }), pack]), grid,
+                el("div", { className: "row-buttons" }, [search, filter, count]), list,
+                el("div", { className: "row-buttons" }, [choose, paste, reset, original, el("span", { style: { flex: "1" } }), importButton, one, many]),
+                use, status);
+
+    const keyOf = (slot) => `${slot.folder}/${slot.file}`;
+    const rows = new Map();
+    const render = () => {
+        for (const url of urls)
+            URL.revokeObjectURL(url);
+        urls = [];
+        const text = search.value.trim().toLowerCase();
+        let shown = 0;
+        list.replaceChildren();
+        for (const slot of slots) {
+            const key = keyOf(slot), mine = images[key];
+            const label = slot.folder === "icons" ? slot.file : key;
+            if (text && !label.toLowerCase().includes(text) && !slot.names.join(" ").toLowerCase().includes(text))
+                continue;
+            if ((filter.value === "changed" && !mine) || (filter.value === "same" && mine))
+                continue;
+            ++shown;
+            let row = rows.get(key);
+            if (!row) {
+                row = el("div", { className: "row", dataset: { key } });
+                row.addEventListener("click", (e) => {
+                    if (!(e.ctrlKey || e.metaKey))
+                        selected.clear();
+                    selected.has(key) && (e.ctrlKey || e.metaKey) ? selected.delete(key) : selected.add(key);
+                    sync();
+                });
+                row.addEventListener("dblclick", () => {
+                    selected = new Set([key]);
+                    sync();
+                    one.click();
+                });
+                row.addEventListener("dragover", (e) => e.preventDefault());
+                row.addEventListener("drop", async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+                    if (files.length === 1)
+                        await setImage(key, files[0]);
+                    else if (files.length)
+                        await importFiles(files);
+                    render();
+                });
+                rows.set(key, row);
+            }
+            const src = originalPackUrl(slot.folder, slot.file);
+            const own = mine ? URL.createObjectURL(mine) : "";
+            if (own)
+                urls.push(own);
+            row.replaceChildren(el("img", { src, width: 24, height: 24, alt: "" }),
+                                own ? el("img", { src: own, width: 24, height: 24, alt: "" }) : el("span", { className: "none", textContent: "—" }),
+                                el("span", { className: "file", textContent: label }), el("small", { textContent: slot.names.join(", ") }));
+            row.classList.toggle("changed", !!mine);
+            list.appendChild(row);
+        }
+        count.textContent = tr("%1 de %2 · %3 cambiados", shown, slots.length, Object.keys(images).length);
+        sync();
+    };
+    const sync = () => {
+        for (const row of list.children)
+            row.classList.toggle("selected", selected.has(row.dataset.key));
+        const keys = [...selected];
+        choose.disabled = paste.disabled = !keys.length;
+        reset.disabled = !keys.some((k) => images[k]);
+        original.disabled = keys.length !== 1;
+    };
+    const setImage = async (key, blob) => {
+        try {
+            const png = await packImage(blob);
+            if (png) {
+                images[key] = png;
+                dirty = true;
+            }
+        } catch {
+            status.textContent = tr("No se pudo abrir «%1».", blob.name || tr("la imagen"));
+        }
+    };
+    const importFiles = async (files) => {
+        const byFile = new Map(slots.map((s) => [s.file, keyOf(s)]));
+        const unknown = [];
+        let used = 0;
+        for (const f of files) {
+            const key = byFile.get(f.name.replace(/\.[^.]+$/, ""));
+            if (!key) {
+                unknown.push(f.name);
+                continue;
+            }
+            await setImage(key, f);
+            ++used;
+        }
+        status.textContent = unknown.length ? tr("Se usaron %1 imágenes. Estas no tienen el nombre de ningún icono (o no se pudieron abrir):\n%2", used, unknown.slice(0, 20).join(", ")) : "";
+    };
+    const load = async (packIdToLoad) => {
+        const p = packIdToLoad ? await IconPacks.get(packIdToLoad) : null;
+        loadedId = p ? p.id : "";
+        idTouched = false;
+        images = p ? { ...p.files } : {};
+        name.value = p?.name || "";
+        id.value = p?.id || "";
+        author.value = p ? p.author : (Settings.get("collabName") || "").trim();
+        version.value = p?.version || "";
+        description.value = p?.description || "";
+        pack.value = loadedId;
+        selected.clear();
+        dirty = false;
+        status.textContent = "";
+        render();
+    };
+    const info = () => {
+        const n = name.value.trim();
+        let i = id.value.trim();
+        if (!i)
+            i = IconPacks.idFromName(n);
+        return { id: i, name: n || i, author: author.value.trim(), version: version.value.trim(), description: description.value.trim() };
+    };
+
+    pack.addEventListener("change", async () => {
+        if (dirty && !confirm(tr("El paquete tiene cambios sin guardar. ¿Quieres descartarlos?"))) {
+            pack.value = loadedId;
+            return;
+        }
+        await load(pack.value);
+    });
+    search.addEventListener("input", render);
+    filter.addEventListener("change", render);
+    choose.addEventListener("click", () => one.click());
+    one.addEventListener("change", async () => {
+        const f = one.files?.[0];
+        one.value = "";
+        if (!f)
+            return;
+        for (const key of selected)
+            await setImage(key, f);
+        render();
+    });
+    importButton.addEventListener("click", () => many.click());
+    many.addEventListener("change", async () => {
+        const files = [...(many.files || [])];
+        many.value = "";
+        await importFiles(files);
+        render();
+    });
+    paste.addEventListener("click", async () => {
+        try {
+            for (const item of await navigator.clipboard.read()) {
+                const type = item.types.find((t) => t.startsWith("image/"));
+                if (type) {
+                    const blob = await item.getType(type);
+                    for (const key of selected)
+                        await setImage(key, blob);
+                    render();
+                    return;
+                }
+            }
+            status.textContent = tr("El portapapeles no tiene ninguna imagen.");
+        } catch {
+            status.textContent = tr("El portapapeles no tiene ninguna imagen.");
+        }
+    });
+    reset.addEventListener("click", () => {
+        for (const key of selected)
+            if (images[key]) {
+                delete images[key];
+                dirty = true;
+            }
+        render();
+    });
+    original.addEventListener("click", async () => {
+        const [key] = [...selected];
+        const [folder, file] = key.split("/");
+        const blob = await (await fetch(originalPackUrl(folder, file, 64))).blob();
+        download(blob, `${file}.png`);
+    });
+    list.addEventListener("dragover", (e) => e.preventDefault());
+    list.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        await importFiles([...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/")));
+        render();
+    });
+
+    // Exportar no cierra el diálogo.
+    const exportButton = el("button", { className: "pushbutton", textContent: plain(tr("Exportar ZIP…")),
+                                        title: tr("Guarda el paquete como un archivo .zip para compartirlo (se instala con Paquetes de iconos > Añadir).") });
+    dlg.buttons.appendChild(exportButton);
+    exportButton.addEventListener("click", async () => {
+        const p = info();
+        if (!validId(p.id) || p.id === DEFAULT_PACK) {
+            status.textContent = tr("El identificador del paquete no es válido.");
+            return;
+        }
+        download(await IconPacks.zip(p, images), `${p.id}.zip`);
+    });
+    const saveButton = el("button", { className: "pushbutton default", textContent: tr("Guardar") });
+    dlg.buttons.appendChild(saveButton);
+    dlg.addButton(tr("Cancelar"), null);
+    saveButton.addEventListener("click", async () => {
+        const p = info();
+        if (!name.value.trim() && !id.value.trim()) {
+            status.textContent = tr("Ponle un nombre al paquete.");
+            name.focus();
+            return;
+        }
+        if (!validId(p.id) || p.id === DEFAULT_PACK) {
+            status.textContent = tr("El identificador del paquete no es válido: usa letras, números, «.», «_» y «-».");
+            id.focus();
+            return;
+        }
+        // Otro paquete instalado con ese identificador se sustituye: se pregunta antes.
+        const other = p.id !== loadedId && installed.find((x) => x.id === p.id);
+        if (other && !confirm(tr("Ya hay un paquete instalado con el identificador «%1» («%2»). ¿Quieres sustituirlo?", p.id, other.name)))
+            return;
+        try {
+            await IconPacks.save(p, images, loadedId);
+            if (use.input.checked)
+                await IconPacks.activate(p.id);
+        } catch (error) {
+            status.textContent = error.message || tr("No se pudo guardar el paquete.");
+            return;
+        }
+        dirty = false;
+        dlg.close(p.id);
+    });
+    // Cerrar con cambios sin guardar pregunta antes.
+    const close = dlg.close.bind(dlg);
+    dlg.close = (value) => {
+        if (value === null && dirty && !confirm(tr("El paquete tiene cambios sin guardar. ¿Quieres descartarlos?")))
+            return;
+        close(value);
+    };
+    await load(installed.some((p) => p.id === packId) ? packId : "");
+    const result = await dlg.exec();
+    for (const url of urls)
+        URL.revokeObjectURL(url);
+    return result || null;
 }
 
 // Atajos de teclado editables: pulsa en un atajo y escribe la combinación nueva.

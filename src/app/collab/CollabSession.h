@@ -119,6 +119,23 @@ public:
     void admit(int id, bool ok);
     void kick(int id);
 
+    // Historial del anfitrión (el de su imagen): los pasos, en cuál está y si está guardada. Al
+    // anfitrión le sirve el suyo; los invitados lo reciben.
+    QStringList hostHistory() const;
+    int hostHistoryIndex() const;
+    bool hostSaved() const;
+    // Si puede volver a una versión anterior para todos: el anfitrión, y los invitados a los que
+    // les dio permiso.
+    bool canRevert() const;
+    void revertTo(int index);
+    // Anfitrión: el permiso de un invitado para volver a versiones anteriores.
+    void setHistoryPermission(int id, bool allowed);
+
+    // Invitado: la copia de la imagen guardada en su equipo (exportada).
+    enum class LocalCopy { None, Behind, Current };
+    LocalCopy localCopy() const;
+    void markExported();
+
     // Sale de la sesión (el anfitrión la termina para todos).
     void leave();
 
@@ -136,6 +153,12 @@ signals:
     void joinRequested(const Collab::Peer& peer);
     void notice(const QString& text);
     void ended(const QString& reason);
+    // Cambió el historial del anfitrión (o si está guardada).
+    void historyChanged();
+    // Cambió algo de lo que se muestra en la pestaña (guardada, copia propia).
+    void indicatorsChanged();
+    // Anfitrión: volver a ese punto del historial (él mismo o un invitado con permiso).
+    void revertRequested(int index);
 
 private:
     struct CanonLayer {
@@ -198,6 +221,15 @@ private:
     void applyToWork(const Canon& before, const Canon& after, const QJsonObject& op, DocumentState& work,
                      QHash<int, QRect>& changed, bool& structural);
     void broadcastCommit(const QJsonArray& ops, int from, const QString& name, const QString& label, int pid);
+    QJsonObject historyMessage() const;
+
+    struct CopyStamp {
+        int generation = -1;
+        int index = -1;
+        const void* top = nullptr;
+        bool operator==(const CopyStamp& o) const { return generation == o.generation && index == o.index && top == o.top; }
+    };
+    CopyStamp stamp() const;
 
     Role m_role;
     State m_state = State::Connecting;
@@ -229,6 +261,16 @@ private:
     int m_rev = 0;
     int m_lastIndex = 0;
     mutable QHash<qint64, QString> m_pngCache;
+
+    // Historial del anfitrión (invitado: el que llegó; anfitrión: se manda al cambiar).
+    QStringList m_hostHistory;
+    int m_hostHistoryIndex = 0;
+    bool m_hostSaved = false;
+    QTimer m_historyTimer;
+    // Veces que la sesión vació el historial (para reconocer el estado de la copia propia).
+    int m_historyGeneration = 0;
+    bool m_exported = false;
+    CopyStamp m_exportStamp;
 
     QList<Incoming> m_queue;
     QTimer m_queueTimer;

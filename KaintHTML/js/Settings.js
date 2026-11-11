@@ -85,8 +85,9 @@ const defaults = {
     unit: 0,
     // Atajos cambiados en Configuración > Atajos de teclado (id de la acción → combinación).
     shortcuts: {},
-    // Herramienta al abrir Kaint ("" = la última que se usó).
-    startTool: "",
+    // Herramienta al abrir Kaint ("": la última que se usó); por defecto, el pincel. Con otro nombre
+    // desde la 1.1.7 (antes la predeterminada era la última usada).
+    startupTool: "paintbrush",
     lastTool: "paintbrush",
     // Lápiz y tableta: la presión cambia el tamaño; el extremo borrador activa la Goma.
     penPressure: true,

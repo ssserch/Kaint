@@ -127,7 +127,8 @@ struct AppSettings {
     QColor canvasBorderLight;
     QColor canvasBorderDark;
     int checkerBrightness = 191;
-    int startTool = -1;
+    // Herramienta al abrir Kaint (-1: la última que se usó); por defecto, el pincel.
+    int startTool = 10; // ToolId::Paintbrush
     // Herramientas Mover: ocultar contorno y tiradores al arrastrar; pegar y mover reemplazando
     // los píxeles de debajo (también los transparentes). Ambas como Paint.NET.
     bool hideMoveBox = true;

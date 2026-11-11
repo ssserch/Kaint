@@ -248,6 +248,7 @@ add_library(kaintui STATIC
     src/app/dialogs/AboutDialog.cpp
     src/app/dialogs/DialogExec.cpp
     src/app/dialogs/EffectDialog.cpp
+    src/app/dialogs/IconPackEditor.cpp
     src/app/dialogs/ImageDialogs.cpp
     src/app/dialogs/PluginCatalogDialog.cpp
     src/app/dialogs/SaveAllDialog.cpp

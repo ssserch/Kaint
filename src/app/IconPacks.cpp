@@ -32,6 +32,31 @@ bool validId(const QString& id)
     return re.match(id).hasMatch() && !id.contains(QLatin1String(".."));
 }
 
+QByteArray manifestJson(const Pack& info)
+{
+    QJsonObject o{{QStringLiteral("formatVersion"), 1},
+                  {QStringLiteral("id"), info.id},
+                  {QStringLiteral("name"), info.name.isEmpty() ? info.id : info.name}};
+    if (!info.author.isEmpty())
+        o.insert(QStringLiteral("author"), info.author);
+    if (!info.version.isEmpty())
+        o.insert(QStringLiteral("version"), info.version);
+    if (!info.description.isEmpty())
+        o.insert(QStringLiteral("description"), info.description);
+    return QJsonDocument(o).toJson(QJsonDocument::Indented);
+}
+
+// "icons/archivo" → "icons/archivo.png" (o .webp si lo es), solo con las carpetas y nombres que
+// Kaint acepta al instalar.
+QString imagePath(const QString& key, const QByteArray& data)
+{
+    static const QRegularExpression safe(QStringLiteral("^(icons|cursors|images)/[A-Za-z0-9._-]+$"));
+    if (!safe.match(key).hasMatch() || key.contains(QLatin1String("..")))
+        return {};
+    const bool webp = data.startsWith("RIFF") && data.mid(8, 4) == "WEBP";
+    return key + (webp ? QStringLiteral(".webp") : QStringLiteral(".png"));
+}
+
 Pack readManifest(const QString& folder)
 {
     QFile f(folder + QLatin1Char('/') + kManifest);
@@ -237,6 +262,94 @@ bool remove(const QString& id)
     if (activeId() == id)
         activate(defaultId());
     return QDir(root() + QLatin1Char('/') + id).removeRecursively();
+}
+
+bool isValidId(const QString& id)
+{
+    return validId(id) && id != defaultId();
+}
+
+QString idFromName(const QString& name)
+{
+    QString id = name.normalized(QString::NormalizationForm_KD).toLower();
+    id.remove(QRegularExpression(QStringLiteral("[\\x{0300}-\\x{036f}]")));
+    id.replace(QRegularExpression(QStringLiteral("[^a-z0-9._-]+")), QStringLiteral("-"));
+    id.remove(QRegularExpression(QStringLiteral("^[-._]+|[-._]+$")));
+    id = id.left(64);
+    if (id.isEmpty() || !validId(id) || id == defaultId())
+        id = QStringLiteral("mis-iconos");
+    return id;
+}
+
+QHash<QString, QString> images(const QString& id)
+{
+    QHash<QString, QString> out;
+    if (!validId(id) || id == defaultId())
+        return out;
+    const QString folder = root() + QLatin1Char('/') + id;
+    for (const QString& sub : kFolders) {
+        const QDir dir(folder + QLatin1Char('/') + sub);
+        for (const QFileInfo& info : dir.entryInfoList({QStringLiteral("*.png"), QStringLiteral("*.webp")}, QDir::Files))
+            out.insert(sub + QLatin1Char('/') + info.completeBaseName(), info.absoluteFilePath());
+    }
+    return out;
+}
+
+bool save(const Pack& info, const QHash<QString, QByteArray>& images, const QString& previousId, QString* error)
+{
+    auto fail = [error](const QString& why) {
+        if (error)
+            *error = why;
+        return false;
+    };
+    if (!isValidId(info.id))
+        return fail(QCoreApplication::translate("IconPacks", "El identificador del paquete no es válido."));
+    const QString target = root() + QLatin1Char('/') + info.id;
+    const QString temp = target + QStringLiteral(".saving");
+    QDir(temp).removeRecursively();
+    if (!QDir().mkpath(temp))
+        return fail(QCoreApplication::translate("IconPacks", "No se pudo crear la carpeta del paquete."));
+    auto write = [](const QString& path, const QByteArray& data) {
+        QSaveFile out(path);
+        return out.open(QIODevice::WriteOnly) && out.write(data) == data.size() && out.commit();
+    };
+    bool ok = write(temp + QLatin1Char('/') + kManifest, manifestJson(info));
+    for (auto it = images.cbegin(); ok && it != images.cend(); ++it) {
+        const QString path = imagePath(it.key(), *it);
+        if (path.isEmpty() || it->isEmpty() || it->size() > kMaxImage)
+            continue;
+        QDir().mkpath(temp + QLatin1Char('/') + path.section(QLatin1Char('/'), 0, 0));
+        ok = write(temp + QLatin1Char('/') + path, *it);
+    }
+    if (!ok) {
+        QDir(temp).removeRecursively();
+        return fail(QCoreApplication::translate("IconPacks", "No se pudo guardar el paquete."));
+    }
+    const QString active = activeId();
+    QDir(target).removeRecursively();
+    if (!QDir().rename(temp, target)) {
+        QDir(temp).removeRecursively();
+        return fail(QCoreApplication::translate("IconPacks", "No se pudo guardar el paquete."));
+    }
+    if (!previousId.isEmpty() && previousId != info.id && isValidId(previousId))
+        QDir(root() + QLatin1Char('/') + previousId).removeRecursively();
+    if (active == info.id || (!previousId.isEmpty() && active == previousId))
+        activate(info.id);
+    return true;
+}
+
+QByteArray zip(const Pack& info, const QHash<QString, QByteArray>& images)
+{
+    ZipWriter out;
+    out.add(kManifest, manifestJson(info));
+    QStringList keys = images.keys();
+    keys.sort();
+    for (const QString& key : keys) {
+        const QString path = imagePath(key, images.value(key));
+        if (!path.isEmpty() && !images.value(key).isEmpty())
+            out.add(path, images.value(key));
+    }
+    return out.finish();
 }
 
 QString file(const QString& folder, const QString& name)

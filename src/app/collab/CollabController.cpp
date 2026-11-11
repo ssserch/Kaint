@@ -307,6 +307,22 @@ void CollabController::attach(Collab::Session* session)
             emit changed();
         });
     }
+    // La pestaña de la imagen (corona, copia propia) y el historial del anfitrión.
+    auto tab = [this] {
+        if (m_session && m_session->document())
+            emit tabStateChanged(m_session->document());
+    };
+    connect(session, &Collab::Session::indicatorsChanged, this, tab);
+    connect(session, &Collab::Session::stateChanged, this, tab);
+    connect(session, &Collab::Session::documentReady, this, tab);
+    connect(session, &Collab::Session::ended, this, [this, session] {
+        if (Document* doc = session->document())
+            emit tabStateChanged(doc);
+    });
+    connect(session, &Collab::Session::revertRequested, this, [this](int index) {
+        if (m_session && m_session->document() && m_historyJumper)
+            m_historyJumper(m_session->document(), index);
+    });
     connect(session, &Collab::Session::peersChanged, this, [this] {
         // Solicitudes de quien ya se fue.
         if (!m_session)
@@ -326,6 +342,36 @@ void CollabController::attach(Collab::Session* session)
     });
     updateStatusWidget();
     emit changed();
+}
+
+CollabController::TabState CollabController::tabState(const Document* doc) const
+{
+    TabState st;
+    if (!doc || !isActive() || m_session->document() != doc || m_session->state() != Collab::Session::State::Joined)
+        return st;
+    st.collab = true;
+    st.hostSaved = m_session->hostSaved();
+    st.guest = !m_session->isHost();
+    st.copy = st.guest ? m_session->localCopy() : Collab::Session::LocalCopy::None;
+    return st;
+}
+
+void CollabController::markExported(const Document* doc)
+{
+    if (isActive() && m_session->document() == doc && !m_session->isHost())
+        m_session->markExported();
+}
+
+void CollabController::showSessionHistory()
+{
+    if (!isActive())
+        return;
+    QWidget* parent = QApplication::activeModalWidget() ? QApplication::activeModalWidget() : m_window.data();
+    if (!m_historyDialog)
+        m_historyDialog = new Collab::HistoryDialog(this, parent);
+    m_historyDialog->show();
+    m_historyDialog->raise();
+    m_historyDialog->activateWindow();
 }
 
 void CollabController::onEnded(const QString& reason)

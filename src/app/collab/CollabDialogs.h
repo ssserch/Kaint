@@ -132,4 +132,26 @@ private:
     QStringList m_shownOthers;
 };
 
+// El historial del anfitrión (Historial > el botón de la colaboración): sus pasos, el actual
+// resaltado, y volver a uno para todos (el anfitrión y los invitados con su permiso). El anfitrión
+// elige aquí quién más puede.
+class HistoryDialog : public QDialog {
+    Q_OBJECT
+public:
+    HistoryDialog(CollabController* collab, QWidget* parent = nullptr);
+
+private:
+    void refresh();
+    void revert();
+
+    CollabController* m_collab;
+    QLabel* m_info;
+    QListWidget* m_steps;
+    QPushButton* m_revert;
+    QLabel* m_note;
+    QGroupBox* m_permissions;
+    QWidget* m_permissionList;
+    QList<int> m_shownGuests;
+};
+
 } // namespace Collab

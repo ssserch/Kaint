@@ -4,6 +4,7 @@
 #include "app/Customization.h"
 #include "app/DiscordPresence.h"
 #include "app/IconPacks.h"
+#include "app/dialogs/IconPackEditor.h"
 #include "app/Icons.h"
 #include "app/Ruler.h"
 #include "app/Shortcuts.h"
@@ -169,7 +170,10 @@ AppSettings AppSettings::load()
     if (old.isValid() && !s.contains(QStringLiteral("canvasBorderLight")) && !s.contains(QStringLiteral("canvasBorderDark")))
         (old.lightness() < 128 ? a.canvasBorderDark : a.canvasBorderLight) = old;
     a.checkerBrightness = std::clamp(get("checkerboardBrightness", a.checkerBrightness), 0, 255);
-    a.startTool = get("startTool", a.startTool);
+    // Se guarda con otro nombre desde la 1.1.7: antes la predeterminada era la última usada y ahora
+    // es el pincel (también para quien ya tenía guardada la de antes).
+    static_assert(int(ToolId::Paintbrush) == 10, "AppSettings::startTool: el pincel");
+    a.startTool = get("startupTool", a.startTool);
     a.hideMoveBox = get("hideMoveBox", a.hideMoveBox);
     a.replacePixels = get("replacePixels", a.replacePixels);
     a.askOnceOnClose = get("askOnceOnClose", a.askOnceOnClose);
@@ -241,7 +245,7 @@ void AppSettings::save() const
     s.remove(QStringLiteral("canvasBorder"));
     s.setValue(QStringLiteral("checkerboardBrightness"), checkerBrightness);
     s.remove(QStringLiteral("checkerBrightness"));
-    s.setValue(QStringLiteral("startTool"), startTool);
+    s.setValue(QStringLiteral("startupTool"), startTool);
     s.setValue(QStringLiteral("hideMoveBox"), hideMoveBox);
     s.setValue(QStringLiteral("replacePixels"), replacePixels);
     s.setValue(QStringLiteral("askOnceOnClose"), askOnceOnClose);
@@ -2841,7 +2845,11 @@ QWidget* SettingsDialog::createIconPacksPage()
                                 page.widget);
     auto* folder = actionButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), tr("Abre la carpeta de los paquetes de iconos"),
                                 page.widget);
-    for (QPushButton* b : {use, add, remove, folder})
+    // Crear un paquete propio o cambiar el elegido.
+    auto* editor = actionButton(Icons::pdn(QStringLiteral("paintbrush")), tr("Editor"),
+                                tr("Crea tu propio paquete de iconos o cambia el elegido (si no es el de Kaint)"), page.widget);
+    editor->setObjectName(QStringLiteral("IconPackEditorButton"));
+    for (QPushButton* b : {use, add, remove, editor, folder})
         row->addWidget(b);
     row->addStretch();
     page.layout->addLayout(row);
@@ -2902,6 +2910,16 @@ QWidget* SettingsDialog::createIconPacksPage()
         updateButtons();
     });
     connect(folder, &QPushButton::clicked, this, [] { openFolder(IconPacks::root()); });
+    connect(editor, &QPushButton::clicked, this, [this, selected, updateButtons] {
+        IconPackEditor dlg(selected(), this);
+        dlg.exec();
+        refreshIconPacks();
+        if (!dlg.savedId().isEmpty())
+            for (int i = 0; i < m_iconPacks->count(); ++i)
+                if (m_iconPacks->item(i)->data(Qt::UserRole).toString() == dlg.savedId())
+                    m_iconPacks->setCurrentRow(i);
+        updateButtons();
+    });
     refreshIconPacks();
     updateButtons();
     return page.widget;

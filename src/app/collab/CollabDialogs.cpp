@@ -24,6 +24,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTimer>
 #include <QToolButton>
@@ -793,6 +794,139 @@ void SessionDialog::refresh()
     }
     m_leave->setText(host ? tr("Terminar la sesión") : tr("Salir de la sesión"));
     m_leave->setEnabled(active);
+}
+
+// ---------------------------------------------------------------------------
+
+HistoryDialog::HistoryDialog(CollabController* collab, QWidget* parent)
+    : QDialog(parent)
+    , m_collab(collab)
+{
+    setWindowTitle(tr("Historial de la sesión"));
+    setWindowIcon(Icons::theme(QStringLiteral("collab")));
+    setAttribute(Qt::WA_DeleteOnClose);
+    auto* layout = new QVBoxLayout(this);
+    m_info = new QLabel(this);
+    m_info->setWordWrap(true);
+    layout->addWidget(m_info);
+    m_steps = new QListWidget(this);
+    m_steps->setMinimumHeight(220);
+    layout->addWidget(m_steps, 1);
+    connect(m_steps, &QListWidget::itemDoubleClicked, this, &HistoryDialog::revert);
+    connect(m_steps, &QListWidget::currentRowChanged, this, [this] {
+        Session* s = m_collab->session();
+        m_revert->setEnabled(s && s->canRevert() && m_steps->currentRow() >= 0 && m_steps->currentRow() != s->hostHistoryIndex());
+    });
+    m_revert = new QPushButton(Icons::theme({"edit-undo", "document-revert"}), tr("Volver a esta versión"), this);
+    m_revert->setToolTip(tr("La imagen vuelve a como estaba en ese paso, para todos. Se puede rehacer desde el mismo historial."));
+    connect(m_revert, &QPushButton::clicked, this, &HistoryDialog::revert);
+    m_note = new QLabel(this);
+    m_note->setWordWrap(true);
+    m_note->setForegroundRole(QPalette::PlaceholderText);
+    auto* row = new QHBoxLayout;
+    row->addWidget(m_revert);
+    row->addWidget(m_note, 1);
+    layout->addLayout(row);
+
+    // Anfitrión: quién más puede volver a versiones anteriores.
+    m_permissions = new QGroupBox(tr("Pueden volver a versiones anteriores"), this);
+    auto* permissions = new QVBoxLayout(m_permissions);
+    m_permissionList = new QWidget(m_permissions);
+    auto* list = new QVBoxLayout(m_permissionList);
+    list->setContentsMargins(0, 0, 0, 0);
+    permissions->addWidget(m_permissionList);
+    layout->addWidget(m_permissions);
+
+    auto* box = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    connect(box, &QDialogButtonBox::rejected, this, &QDialog::close);
+    layout->addWidget(box);
+
+    connect(collab, &CollabController::changed, this, &HistoryDialog::refresh);
+    connect(collab, &CollabController::tabStateChanged, this, &HistoryDialog::refresh);
+    resize(420, 520);
+    refresh();
+}
+
+void HistoryDialog::refresh()
+{
+    Session* s = m_collab->session();
+    const bool active = m_collab->isActive() && s && s->state() == Session::State::Joined;
+    if (!active) {
+        m_info->setText(tr("No estás en ninguna sesión."));
+        m_steps->clear();
+        m_revert->setEnabled(false);
+        m_permissions->hide();
+        return;
+    }
+    const bool host = s->isHost();
+    m_info->setText(host ? tr("Tu historial, el de la imagen de la sesión. Volver a un paso cambia la imagen para todos.")
+                         : tr("El historial de %1, el anfitrión. Volver a un paso cambia la imagen para todos.").arg(s->peer(0).name));
+    const QStringList steps = s->hostHistory();
+    const int current = s->hostHistoryIndex();
+    const int selected = m_steps->currentRow();
+    const bool followCurrent = selected < 0 || selected == m_steps->property("current").toInt();
+    {
+        const QSignalBlocker block(m_steps);
+        m_steps->clear();
+        QStringList names{tr("Imagen original")};
+        names += steps;
+        for (int i = 0; i < names.size(); ++i) {
+            auto* item = new QListWidgetItem(names[i], m_steps);
+            QFont f = item->font();
+            if (i == current)
+                f.setBold(true);
+            // Lo que está deshecho (se puede rehacer), en cursiva y apagado.
+            if (i > current) {
+                f.setItalic(true);
+                item->setForeground(palette().color(QPalette::PlaceholderText));
+            }
+            item->setFont(f);
+        }
+        m_steps->setProperty("current", current);
+        m_steps->setCurrentRow(followCurrent ? current : std::min(selected, int(m_steps->count()) - 1));
+    }
+    m_revert->setEnabled(s->canRevert() && m_steps->currentRow() >= 0 && m_steps->currentRow() != current);
+    m_note->setText(s->canRevert() ? QString()
+                                   : tr("Solo el anfitrión y quienes tengan su permiso pueden volver a una versión anterior."));
+
+    m_permissions->setVisible(host);
+    if (!host)
+        return;
+    QList<int> guests;
+    for (const Peer& p : s->peers())
+        if (!p.host)
+            guests.append(p.id);
+    if (guests != m_shownGuests) {
+        m_shownGuests = guests;
+        for (QWidget* w : m_permissionList->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+            w->deleteLater();
+        for (int id : guests) {
+            auto* check = new QCheckBox(m_permissionList);
+            check->setProperty("peer", id);
+            m_permissionList->layout()->addWidget(check);
+            connect(check, &QCheckBox::toggled, this, [this, id](bool on) {
+                if (Session* session = m_collab->session())
+                    session->setHistoryPermission(id, on);
+            });
+        }
+        if (guests.isEmpty())
+            m_permissionList->layout()->addWidget(new QLabel(tr("Todavía no hay invitados."), m_permissionList));
+    }
+    for (QCheckBox* check : m_permissionList->findChildren<QCheckBox*>()) {
+        const Peer p = s->peer(check->property("peer").toInt());
+        const QSignalBlocker block(check);
+        check->setText(p.name);
+        check->setChecked(p.history);
+    }
+}
+
+void HistoryDialog::revert()
+{
+    Session* s = m_collab->session();
+    const int row = m_steps->currentRow();
+    if (!s || !s->canRevert() || row < 0 || row == s->hostHistoryIndex())
+        return;
+    s->revertTo(row);
 }
 
 } // namespace Collab

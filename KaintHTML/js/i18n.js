@@ -147,6 +147,9 @@ const extra = {
     "Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se guardan en este navegador.":
         "Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom shapes” group. They're saved in this browser.",
     "No hay formas personalizadas.": "There are no custom shapes.",
+    "El paquete tiene cambios sin guardar. ¿Quieres descartarlos?": "The pack has unsaved changes. Do you want to discard them?",
+    "Paquete guardado.": "Pack saved.",
+    "la imagen": "the image",
     // Modo colaborativo (js/collab/).
     "&Hospedar la imagen actual...":
         "&Host the current image...",
@@ -168,6 +171,10 @@ const extra = {
         "Edit the current image with other people: you host it and the others join from Kaint or Kaint for the web. Only the host saves the image; guests can export a copy.",
     "Ej.: 192.168.1.20 o 192.168.1.20:47913":
         "E.g. 192.168.1.20 or 192.168.1.20:47913",
+    "El anfitrión guardó la imagen.":
+        "The host saved the image.",
+    "El anfitrión tiene cambios sin guardar.":
+        "The host has unsaved changes.",
     "El servidor la muestra al arrancar; no hace falta en el mismo equipo.":
         "The server shows it when it starts; it isn't needed on the same computer.",
     "Elige una sesión de la lista o escribe la dirección del equipo que la hospeda (lo dice su ventana de la sesión).":
@@ -194,6 +201,8 @@ const extra = {
         "Host on the local network",
     "Hospedar la imagen actual…":
         "Host the current image…",
+    "Imagen de la sesión colaborativa":
+        "Collaborative session image",
     "Kaint (escritorio) la encuentra al buscar sesiones cercanas.":
         "Kaint (desktop) finds it when looking for nearby sessions.",
     "La clave para hospedar no es correcta.":
@@ -222,8 +231,14 @@ const extra = {
         "No suggestions for now.",
     "Solo desde otro equipo":
         "Only from another computer",
+    "Todavía no exportaste una copia a tu equipo.":
+        "You haven't exported a copy to your computer yet.",
     "Todavía no hay ninguna sesión en ese servidor.":
         "That server has no session yet.",
+    "Tu copia exportada está al día con la imagen del anfitrión.":
+        "Your exported copy is up to date with the host's image.",
+    "Tu copia exportada no está al día con la imagen del anfitrión.":
+        "Your exported copy isn't up to date with the host's image.",
     "Un navegador no puede abrir un servidor en la red local. Para hospedar así, ejecuta en este equipo el servidor de Kaint para la web (con Node.js): «node tools/collab-server.mjs» en la carpeta de Kaint para la web, y abre la dirección que muestra (http://localhost:47913/). Por P2P no hace falta: el navegador hospeda solo.":
         "A browser can't open a server on the local network. To host that way, run the Kaint for the web server on this computer (with Node.js): “node tools/collab-server.mjs” in the Kaint for the web folder, and open the address it shows (http://localhost:47913/). P2P doesn't need it: the browser hosts on its own.",
     "Un navegador no puede buscar en la red por sí solo: la lista aparece al abrir Kaint para la web desde la dirección de una sesión o con tools/collab-server.mjs en este equipo. Abajo, las que ya usaste.":

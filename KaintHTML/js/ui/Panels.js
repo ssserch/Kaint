@@ -491,6 +491,17 @@ export function historyPanel(app) {
     jump("", "edit-undo", () => app.undo(), plain(tr("&Deshacer")));
     jump("", "edit-redo", () => app.redo(), plain(tr("&Rehacer")));
     jump("⏭", null, () => app.jumpHistory(Infinity), tr("Avanzar hasta el final"));
+    // Solo en el modo colaborativo: el historial del anfitrión (y volver a una versión para todos).
+    const collab = el("button", { className: "tbutton history-collab", title: tr("El historial del anfitrión: volver a una versión anterior para todos"), hidden: true },
+                      [icon("collab", 16)]);
+    collab.addEventListener("click", () => app.collab?.historyDialog());
+    buttons.append(el("span", { style: { flex: "1" } }), collab);
+    const syncCollab = () => (collab.hidden = !app.collab?.active);
+    // El controlador de la colaboración se crea después de los paneles.
+    queueMicrotask(() => {
+        app.collab?.addEventListener("changed", syncCollab);
+        syncCollab();
+    });
     return el("div", { style: { display: "flex", flexDirection: "column", flex: "1", minHeight: "0" } }, [list, buttons]);
 }
 
@@ -533,7 +544,7 @@ export function layersPanel(app, actionIds) {
     const updateThumb = (layer) => {
         const box = thumbs.get(layer);
         if (box)
-            box.replaceChildren(thumbnail(layer.canvas, 40, 40));
+            box.replaceChildren(thumbnail(layer.canvas, 40, 40, true, true));
     };
     let pending = new Set(), timer = 0;
     app.addEventListener("pixels", (e) => {

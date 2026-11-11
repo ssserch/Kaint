@@ -156,6 +156,16 @@ Session::Session(Role role, const Settings& settings, QObject* parent)
             send(m_cursorOut);
         m_cursorTimer.start();
     });
+    // El historial del anfitrión sale a los invitados un momento después de cambiar (varios pasos
+    // seguidos, una sola vez).
+    m_historyTimer.setSingleShot(true);
+    m_historyTimer.setInterval(250);
+    connect(&m_historyTimer, &QTimer::timeout, this, [this] {
+        if (isHost() && m_server && m_state == State::Joined)
+            m_server->broadcast(historyMessage());
+        emit historyChanged();
+        emit indicatorsChanged();
+    });
 }
 
 Session::~Session()
@@ -320,6 +330,91 @@ Peer Session::peer(int id) const
     return m_peers.value(id);
 }
 
+QJsonObject Session::historyMessage() const
+{
+    QJsonArray steps;
+    const QUndoStack* stack = m_doc ? m_doc->undoStack() : nullptr;
+    if (stack)
+        for (int i = 0; i < stack->count(); ++i)
+            steps.append(stack->text(i));
+    return QJsonObject{{QStringLiteral("t"), QStringLiteral("history")},
+                       {QStringLiteral("steps"), steps},
+                       {QStringLiteral("index"), stack ? stack->index() : 0},
+                       {QStringLiteral("saved"), m_doc && !m_doc->isModified()}};
+}
+
+QStringList Session::hostHistory() const
+{
+    if (!isHost())
+        return m_hostHistory;
+    QStringList out;
+    if (m_doc)
+        for (int i = 0; i < m_doc->undoStack()->count(); ++i)
+            out.append(m_doc->undoStack()->text(i));
+    return out;
+}
+
+int Session::hostHistoryIndex() const
+{
+    if (!isHost())
+        return m_hostHistoryIndex;
+    return m_doc ? m_doc->undoStack()->index() : 0;
+}
+
+bool Session::hostSaved() const
+{
+    if (!isHost())
+        return m_hostSaved;
+    return m_doc && !m_doc->isModified();
+}
+
+bool Session::canRevert() const
+{
+    if (isHost())
+        return true;
+    return m_state == State::Joined && m_peers.value(m_myId).history;
+}
+
+void Session::revertTo(int index)
+{
+    if (isHost()) {
+        if (m_doc && index >= 0 && index <= m_doc->undoStack()->count())
+            emit revertRequested(index);
+        return;
+    }
+    if (canRevert())
+        send(QJsonObject{{QStringLiteral("t"), QStringLiteral("revert")}, {QStringLiteral("index"), index}});
+}
+
+void Session::setHistoryPermission(int id, bool allowed)
+{
+    if (m_server)
+        m_server->setPeerHistory(id, allowed);
+}
+
+Session::CopyStamp Session::stamp() const
+{
+    if (!m_doc)
+        return {};
+    const QUndoStack* stack = m_doc->undoStack();
+    const int index = stack->index();
+    return {m_historyGeneration, index, index > 0 ? static_cast<const void*>(stack->command(index - 1)) : nullptr};
+}
+
+Session::LocalCopy Session::localCopy() const
+{
+    if (!m_exported)
+        return LocalCopy::None;
+    return stamp() == m_exportStamp ? LocalCopy::Current : LocalCopy::Behind;
+}
+
+void Session::markExported()
+{
+    m_exported = true;
+    m_exportStamp = stamp();
+    emit indicatorsChanged();
+}
+
 QString Session::reasonText(const QString& reason)
 {
     if (reason == QLatin1String("closed"))
@@ -397,6 +492,17 @@ void Session::onHostMessage(const QJsonObject& m)
         emit cursorsChanged();
         return;
     }
+    if (t == QLatin1String("revert")) {
+        // Volver a una versión anterior: solo los invitados con permiso.
+        if (!p.history)
+            return;
+        const int index = m.value(QStringLiteral("index")).toInt(-1);
+        if (m_doc && index >= 0 && index <= m_doc->undoStack()->count() && index != m_doc->undoStack()->index()) {
+            emit notice(tr("%1 volvió a una versión anterior de la imagen.").arg(p.name));
+            emit revertRequested(index);
+        }
+        return;
+    }
     const QJsonArray ops = m.value(QStringLiteral("ops")).toArray();
     const QString label = m.value(QStringLiteral("label")).toString().left(200);
     if (t == QLatin1String("change") && p.mode == QLatin1String("live")) {
@@ -442,6 +548,7 @@ void Session::onPeerJoined(const Peer& p)
                                        {QStringLiteral("autoAccept"), m_autoAccept},
                                        {QStringLiteral("peers"), peers},
                                        {QStringLiteral("doc"), snapshot(m_canon)}});
+    m_server->sendTo(p.id, historyMessage());
     // Los punteros que ya se conocen.
     for (auto it = m_cursors.cbegin(); it != m_cursors.cend(); ++it) {
         if (it.key() == p.id)
@@ -687,6 +794,14 @@ void Session::onGuestText(const QByteArray& text)
             }
         }
         emit stateChanged();
+    } else if (t == QLatin1String("history")) {
+        m_hostHistory.clear();
+        for (const QJsonValue& v : m.value(QStringLiteral("steps")).toArray())
+            m_hostHistory.append(v.toString().left(200));
+        m_hostHistoryIndex = std::clamp(m.value(QStringLiteral("index")).toInt(), 0, int(m_hostHistory.size()));
+        m_hostSaved = m.value(QStringLiteral("saved")).toBool();
+        emit historyChanged();
+        emit indicatorsChanged();
     } else if (t == QLatin1String("end")) {
         finish(reasonText(m.value(QStringLiteral("reason")).toString()));
     }
@@ -798,6 +913,7 @@ void Session::discardDraft()
     work.active = activeIndex >= 0 ? activeIndex : int(layers.size()) - 1;
     work.apply(m_doc);
     m_doc->undoStack()->clear();
+    ++m_historyGeneration;
     m_lastIndex = 0;
     m_draftStart = 0;
     m_applying = false;
@@ -830,6 +946,18 @@ void Session::attachDocument(Document* doc)
     m_doc = doc;
     m_lastIndex = doc->undoStack()->index();
     connect(doc->undoStack(), &QUndoStack::indexChanged, this, &Session::onLocalStep);
+    // Anfitrión: su historial y si está guardada, para los invitados (y su pestaña). Invitado: si su
+    // copia propia sigue al día.
+    connect(doc->undoStack(), &QUndoStack::indexChanged, this, [this] {
+        if (isHost())
+            m_historyTimer.start();
+        else
+            emit indicatorsChanged();
+    });
+    connect(doc->undoStack(), &QUndoStack::cleanChanged, this, [this] {
+        if (isHost())
+            m_historyTimer.start();
+    });
     connect(doc, &QObject::destroyed, this, [this] {
         if (m_state != State::Ended)
             leave();
@@ -1102,6 +1230,7 @@ void Session::processQueue()
             // El borrador ya es de todos: su historial temporal se borra.
             m_applying = true;
             m_doc->undoStack()->clear();
+            ++m_historyGeneration;
             m_lastIndex = 0;
             m_draftStart = 0;
             m_applying = false;

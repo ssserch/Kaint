@@ -23,7 +23,9 @@ export class FloatingPanel {
         // la escala de Colores. Se guarda eso y la ventana mide lo que su contenido.
         this.fit = content.fit || null;
         this.element = el("div", { className: "floating-panel", dataset: { panel: id } });
-        const head = el("div", { className: "title" }, [el("span", { textContent: title })]);
+        this.fullTitle = title;
+        this.titleText = el("span", { textContent: title });
+        const head = el("div", { className: "title" }, [this.titleText]);
         const close = el("button", { className: "close", title: tr("Cerrar"), style: { border: "none", padding: 0 } });
         close.addEventListener("click", () => {
             // En el teléfono, con las ventanas en las esquinas, la × la vuelve a esconder.
@@ -65,6 +67,25 @@ export class FloatingPanel {
             this.reposition();
             this.save();
         });
+        if (id === "tools") {
+            new ResizeObserver(() => this.updateTitle()).observe(this.element);
+            window.addEventListener("kaint-settings", (e) => {
+                if (["colorScheme", "uiStyle", "language"].includes(e.detail?.key))
+                    setTimeout(() => this.updateTitle(), 0);
+            });
+            this.updateTitle();
+        }
+    }
+
+    // Como Paint.NET con sus temas claro y oscuro: la ventana Herramientas de dos columnas se titula
+    // con las dos primeras letras («To...», «He...»), aunque quepa más; más ancha, el título entero.
+    // Con los temas de Windows 7, XP y 98, el título tal cual.
+    updateTitle() {
+        const scheme = Settings.get("colorScheme");
+        const narrow = this.id === "tools" && document.documentElement.classList.contains("pdn") && [0, 1, 2].includes(scheme)
+                       && (this.fit?.state?.() ?? 2) <= 2 && this.fullTitle.length > 3;
+        this.titleText.textContent = narrow ? `${this.fullTitle.slice(0, 2)}...` : this.fullTitle;
+        this.titleText.title = narrow ? this.fullTitle : "";
     }
 
     // Tamaño de la ventana (modo Ventanas del teléfono): se escala desde su esquina.
@@ -470,6 +491,17 @@ export function historyPanel(app) {
     jump("", "edit-undo", () => app.undo(), plain(tr("&Deshacer")));
     jump("", "edit-redo", () => app.redo(), plain(tr("&Rehacer")));
     jump("⏭", null, () => app.jumpHistory(Infinity), tr("Avanzar hasta el final"));
+    // Solo en el modo colaborativo: el historial del anfitrión (y volver a una versión para todos).
+    const collab = el("button", { className: "tbutton history-collab", title: tr("El historial del anfitrión: volver a una versión anterior para todos"), hidden: true },
+                      [icon("collab", 16)]);
+    collab.addEventListener("click", () => app.collab?.historyDialog());
+    buttons.append(el("span", { style: { flex: "1" } }), collab);
+    const syncCollab = () => (collab.hidden = !app.collab?.active);
+    // El controlador de la colaboración se crea después de los paneles.
+    queueMicrotask(() => {
+        app.collab?.addEventListener("changed", syncCollab);
+        syncCollab();
+    });
     return el("div", { style: { display: "flex", flexDirection: "column", flex: "1", minHeight: "0" } }, [list, buttons]);
 }
 
@@ -512,7 +544,7 @@ export function layersPanel(app, actionIds) {
     const updateThumb = (layer) => {
         const box = thumbs.get(layer);
         if (box)
-            box.replaceChildren(thumbnail(layer.canvas, 40, 40));
+            box.replaceChildren(thumbnail(layer.canvas, 40, 40, true, true));
     };
     let pending = new Set(), timer = 0;
     app.addEventListener("pixels", (e) => {

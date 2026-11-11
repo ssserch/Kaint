@@ -6,6 +6,7 @@
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/collab/CollabController.h"
+#include "app/collab/CollabProtocol.h"
 #include "app/Icons.h"
 #include "app/Recovery.h"
 #include "app/Shortcuts.h"
@@ -222,11 +223,21 @@ public:
     }
     void setUnsaved(int index, bool unsaved)
     {
-        if (tabData(index).toBool() == unsaved)
-            return;
-        setTabData(index, unsaved);
-        update(unsavedRect(index));
+        setMarks(index, (marks(index) & ~kUnsaved) | (unsaved ? kUnsaved : 0));
     }
+    // Imagen de la sesión colaborativa: la pestaña amarilla, las personas en lugar de la estrella
+    // y, debajo, la corona (0 no, 1 sin guardar, 2 guardada) y el equipo (0 no, 1 sin copia,
+    // 2 copia atrasada, 3 copia al día).
+    void setCollab(int index, bool collab, int crown, int computer)
+    {
+        int m = marks(index) & kUnsaved;
+        if (collab)
+            m |= kCollab | (crown << 2) | (computer << 4);
+        setMarks(index, m);
+    }
+
+    // Marcas debajo de la de arriba a la izquierda (la corona y el equipo).
+    QRect markRect(int index, int row) const { return unsavedRect(index).translated(0, row * (kDot + 3)); }
 
 protected:
     void tabInserted(int index) override
@@ -254,13 +265,31 @@ protected:
     {
         QTabBar::paintEvent(e);
         QPainter p(this);
+        // Las imágenes de la sesión colaborativa, en amarillo.
+        for (int i = 0; i < count(); ++i) {
+            if (!(marks(i) & kCollab))
+                continue;
+            const QRectF r = QRectF(tabRect(i)).adjusted(1.5, 1.5, -1.5, 0);
+            p.fillRect(r, QColor(255, 206, 40, i == currentIndex() ? 150 : 105));
+            p.setPen(QPen(QColor(226, 168, 0), 2));
+            p.setBrush(Qt::NoBrush);
+            p.drawRect(r.adjusted(0.5, 0.5, -0.5, -1));
+        }
         for (int i = 0; i < count(); ++i)
             tabIcon(i).paint(&p, thumbRect(i));
         p.setRenderHint(QPainter::Antialiasing);
         for (int i = 0; i < count(); ++i) {
-            if (!tabData(i).toBool())
-                continue;
-            Icons::paintUnsavedStar(p, QRectF(unsavedRect(i)));
+            const int m = marks(i);
+            if (m & kCollab) {
+                Icons::paintCollabMark(p, QRectF(unsavedRect(i)));
+                int row = 1;
+                if (const int crown = (m >> 2) & 3)
+                    Icons::paintCrownMark(p, QRectF(markRect(i, row++)), Icons::collabMarkColor(crown));
+                if (const int computer = (m >> 4) & 3)
+                    Icons::paintComputerMark(p, QRectF(markRect(i, row++)), Icons::collabMarkColor(computer - 1));
+            } else if (m & kUnsaved) {
+                Icons::paintUnsavedStar(p, QRectF(unsavedRect(i)));
+            }
         }
         for (int i = 0; i < count(); ++i) {
             const qreal level = closeLevel(i);
@@ -389,6 +418,17 @@ private:
         update();
     }
 
+    int marks(int index) const { return tabData(index).toInt(); }
+    void setMarks(int index, int m)
+    {
+        if (marks(index) == m)
+            return;
+        setTabData(index, m);
+        update(tabRect(index));
+    }
+
+    static constexpr int kUnsaved = 1;
+    static constexpr int kCollab = 2;
     static constexpr int kClose = 14;
     static constexpr int kDot = 12;
     // Margen, borde y relleno de la pestaña (los de la hoja de estilo) alrededor de la miniatura.
@@ -628,6 +668,18 @@ MainWindow::MainWindow()
     connect(m_collab, &CollabController::documentReady, this, [this](Document* doc) { addDocument(doc); });
     connect(m_collab, &CollabController::message, this, [this](const QString& text) { statusBar()->showMessage(text, 6000); });
     connect(m_collab, &CollabController::changed, this, &MainWindow::updateCollabActions);
+    connect(m_collab, &CollabController::tabStateChanged, this, [this](Document* doc) {
+        if (m_docs.contains(doc))
+            updateTab(doc);
+    });
+    // Volver a un paso del historial de la sesión (el anfitrión, o el permiso de un invitado).
+    m_collab->setHistoryJumper([this](Document* doc, int index) {
+        if (!m_docs.contains(doc) || index < 0 || index > doc->undoStack()->count())
+            return;
+        if (doc == m_doc)
+            prepareHistoryJump();
+        doc->undoStack()->setIndex(index);
+    });
     setCentralWidget(m_workspace);
     // Linux con el estilo de Paint.NET: sin la barra de título del escritorio, con la de Windows 10.
     WindowFrame::decorate(this, false);
@@ -684,6 +736,7 @@ MainWindow::MainWindow()
     m_settings = AppSettings::load();
     QSettings ts;
     const int lastTool = ts.value(QStringLiteral("tools/current"), int(ToolId::Paintbrush)).toInt();
+    // Por defecto, el pincel (en Configuración > Herramientas se puede elegir otra o la última usada).
     m_tools->select(ToolId(m_settings.startTool >= 0 ? m_settings.startTool : lastTool));
     if (!m_tools->current())
         m_tools->select(ToolId::Paintbrush);
@@ -731,6 +784,13 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
+    // Una sesión colaborativa que siga abierta (si se cierra sin pasar por closeEvent) termina
+    // ahora, mientras la ventana existe: sus avisos ya no llegan a una ventana a medio destruir.
+    if (m_collab) {
+        m_collab->disconnect(this);
+        delete m_collab;
+        m_collab = nullptr;
+    }
     // El lienzo deja de observar los documentos antes de destruirlos.
     m_canvas->setDocument(nullptr);
     m_canvas->setTool(nullptr);
@@ -772,9 +832,21 @@ void MainWindow::createActions()
     A["saveAllAs"] = makeAction(tr("Guardar to&dos..."), {"document-save-all", "document-save-as"}, {},
                                 [this] { saveAllAs(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
-    A["collabHost"] = makeAction(tr("&Hospedar esta imagen"), {"collab"}, {}, [this] { m_collab->host(m_doc); });
-    A["collabJoin"] = makeAction(tr("&Unirse a una sesión..."), {"network-connect", "collab"}, {}, [this] { m_collab->showJoinDialog(); });
+    // Colaboración: por P2P (la predeterminada) o en la red local, cada una con su configuración.
+    A["collabHost"] = makeAction(tr("&Hospedar la imagen actual"), {"collab"}, {}, [this] { m_collab->host(m_doc, Collab::Mode::P2P); });
+    A["collabJoin"] = makeAction(tr("&Unirse con un código..."), {"network-connect", "collab"}, {},
+                                 [this] { m_collab->showJoinDialog(Collab::Mode::P2P); });
+    A["collabSettingsP2P"] = makeAction(tr("&Configuración P2P..."), {"configure", "settings-configure"}, {},
+                                        [this] { showSettings(SettingsDialog::Page::Collaboration, QStringLiteral("collabP2PSection")); });
+    A["collabHostLan"] = makeAction(tr("&Hospedar la imagen actual"), {"collab"}, {}, [this] { m_collab->host(m_doc, Collab::Mode::Lan); });
+    A["collabJoinLan"] = makeAction(tr("&Unirse a una sesión..."), {"network-connect", "collab"}, {},
+                                    [this] { m_collab->showJoinDialog(Collab::Mode::Lan); });
+    A["collabSettingsLan"] = makeAction(tr("C&onfiguración LAN..."), {"configure", "settings-configure"}, {},
+                                        [this] { showSettings(SettingsDialog::Page::Collaboration, QStringLiteral("collabLanSection")); });
     A["collabWindow"] = makeAction(tr("&Ventana de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionWindow(); });
+    A["collabHistory"] = makeAction(tr("&Historial de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionHistory(); });
+    A["collabHistory"]->setToolTip(tr("El historial del anfitrión: volver a una versión anterior para todos"));
+    A["collabHistory"]->setVisible(false);
     A["collabLeave"] = makeAction(tr("&Salir de la sesión"), {"network-disconnect", "application-exit"}, {},
                                   [this] { m_collab->leave(true); });
     A["collabSettings"] = makeAction(tr("&Configuración de colaboración..."), {"configure", "settings-configure"}, {},
@@ -1043,7 +1115,16 @@ void MainWindow::createMenus()
     file->addSeparator();
     // Modo colaborativo: editar la imagen con otras personas de la red local.
     QMenu* collab = file->addMenu(Icons::theme(QStringLiteral("collab")), tr("C&olaboración"));
-    collab->addActions({A["collabHost"], A["collabJoin"], A["collabWindow"], A["collabLeave"]});
+    QMenu* p2p = collab->addMenu(Icons::theme({"network-wireless", "internet-services", "collab"}), tr("&P2P (por Internet)"));
+    p2p->addActions({A["collabHost"], A["collabJoin"]});
+    p2p->addSeparator();
+    p2p->addAction(A["collabSettingsP2P"]);
+    QMenu* lan = collab->addMenu(Icons::theme({"network-wired", "network-workgroup", "collab"}), tr("&Red local (LAN)"));
+    lan->addActions({A["collabHostLan"], A["collabJoinLan"]});
+    lan->addSeparator();
+    lan->addAction(A["collabSettingsLan"]);
+    collab->addSeparator();
+    collab->addActions({A["collabWindow"], A["collabHistory"], A["collabLeave"]});
     collab->addSeparator();
     collab->addAction(A["collabSettings"]);
     file->addSeparator();
@@ -1344,6 +1425,8 @@ void MainWindow::createPanels()
 
     m_history = new HistoryPanel(m_undoGroup, m_act["undo"], m_act["redo"]);
     connect(m_history, &HistoryPanel::aboutToJump, this, &MainWindow::prepareHistoryJump);
+    // Solo en el modo colaborativo: el historial del anfitrión.
+    m_history->setCollabAction(m_act["collabHistory"]);
     m_historyPanel = m_workspace->addPanel(QStringLiteral("history"), tr("Historial"), m_history, Corner::TopRight,
                                            QPoint(8, 8), QSize(210, 240));
 
@@ -1779,7 +1862,15 @@ void MainWindow::updateTab(Document* doc)
     }
     thumb.setDevicePixelRatio(dpr);
     m_tabs->setTabIcon(i, QIcon(QPixmap::fromImage(thumb)));
-    static_cast<ImageStrip*>(m_tabs)->setUnsaved(i, doc->isModified());
+    auto* strip = static_cast<ImageStrip*>(m_tabs);
+    strip->setUnsaved(i, doc->isModified());
+    // Sesión colaborativa: la corona (la imagen del anfitrión guardada o no) y, en los invitados,
+    // el equipo (su copia propia: ninguna, atrasada o al día).
+    const CollabController::TabState collab = m_collab ? m_collab->tabState(doc) : CollabController::TabState();
+    int computer = 0;
+    if (collab.guest)
+        computer = collab.copy == Collab::Session::LocalCopy::Current ? 3 : collab.copy == Collab::Session::LocalCopy::Behind ? 2 : 1;
+    strip->setCollab(i, collab.collab, collab.collab ? (collab.hostSaved ? 2 : 1) : 0, computer);
     m_tabs->setTabToolTip(i, QStringLiteral("%1%2\n%3 × %4")
                                  .arg(doc->isModified() ? QStringLiteral("*") : QString(), doc->displayName())
                                  .arg(doc->size().width())
@@ -2438,6 +2529,7 @@ bool MainWindow::writeFile(Document* doc, const QString& requestedPath)
     if (m_collab->isGuestDocument(doc)) {
         statusBar()->showMessage(tr("Copia exportada en %1. La imagen de la sesión la guarda el anfitrión.").arg(QDir::toNativeSeparators(path)),
                                  8000);
+        m_collab->markExported(doc);
         return true;
     }
     doc->setFilePath(path);
@@ -2716,9 +2808,13 @@ void MainWindow::updateCollabActions()
     if (!m_act.contains(QStringLiteral("collabHost")))
         return;
     const bool active = m_collab->isActive();
-    m_act["collabHost"]->setEnabled(m_doc && !active);
-    m_act["collabJoin"]->setEnabled(!active);
+    for (const char* id : {"collabHost", "collabHostLan"})
+        m_act[QLatin1String(id)]->setEnabled(m_doc && !active);
+    for (const char* id : {"collabJoin", "collabJoinLan"})
+        m_act[QLatin1String(id)]->setEnabled(!active);
     m_act["collabWindow"]->setEnabled(active);
+    m_act["collabHistory"]->setEnabled(active);
+    m_act["collabHistory"]->setVisible(active);
     m_act["collabLeave"]->setEnabled(active);
     m_act["collabLeave"]->setText(m_collab->isHosting() ? tr("&Terminar la sesión") : tr("&Salir de la sesión"));
 }
@@ -3519,11 +3615,13 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
 // Configuración
 // ---------------------------------------------------------------------------
 
-void MainWindow::showSettings(SettingsDialog::Page page)
+void MainWindow::showSettings(SettingsDialog::Page page, const QString& section)
 {
     finishTool();
     SettingsDialog dlg(m_settings, m_tools, this);
     dlg.showPage(page);
+    if (!section.isEmpty())
+        dlg.revealSection(section);
     dlg.setDiscordStatus(m_discord->statusText());
     connect(m_discord, &DiscordPresence::statusChanged, &dlg, [this, &dlg] { dlg.setDiscordStatus(m_discord->statusText()); });
     connect(&dlg, &SettingsDialog::checkUpdatesRequested, this, [this] { checkForUpdates(true); });
@@ -3699,6 +3797,7 @@ void MainWindow::applySettings()
     }
     m_workspace->setTranslucentOverImageOnly(m_settings.translucentOverImage);
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
+    WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(m_settings.win7PanelClose, 0, 2)));
     m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder);
     m_canvas->setRulerStyle(Ruler::Style(m_settings.rulerStyle));
     m_canvas->setRulersVisible(m_settings.rulers);

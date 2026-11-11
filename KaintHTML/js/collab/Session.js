@@ -6,13 +6,14 @@
 // como operaciones (píxeles de una región con su máscara, la lista de capas o la imagen entera).
 // Lo que llega de los demás se aplica a las dos copias; en el documento solo donde no hay cambios
 // propios sin enviar, y lo que toca una capa en la que una herramienta está trabajando espera.
+import { P2PGuest, P2PHost } from "./P2P.js";
 import { Document, History, Layer } from "../core/Document.js";
 import { Selection } from "../core/Selection.js";
 import { clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
 import { tr } from "../i18n.js";
 import { VERSION as APP_VERSION } from "../version.js";
 import {
-    VERSION, base64ToBytes, bytesToBase64, decodeMask, deviceTag, encodeMask, mergeOrder, normalizedCode, proof,
+    VERSION, base64ToBytes, bytesToBase64, decodeMask, deviceTag, encodeMask, mergeOrder, newSessionCode, normalizedCode, proof,
 } from "./Protocol.js";
 
 const DEVICE_KEY = "kaint.collab.deviceCode";
@@ -168,6 +169,45 @@ export class CollabSession extends EventTarget {
         return s;
     }
 
+    // P2P: el navegador hospeda (con el centro de la sesión dentro) y los invitados llegan por los
+    // servidores de señalización con el código.
+    static hostP2P(app, doc, settings) {
+        const s = new CollabSession(app, "host", settings);
+        s.connection = "p2p";
+        s.hostDoc = doc;
+        s.code = newSessionCode();
+        s.p2p = new P2PHost(settings, s.code);
+        s.p2p.addEventListener("changed", () => s.emit("state"));
+        s.connect(s.p2p.start(), "P2P");
+        return s;
+    }
+
+    static joinP2P(app, code, settings, password = "") {
+        const s = new CollabSession(app, "guest", settings);
+        s.connection = "p2p";
+        s.code = code;
+        s.password = password;
+        s.url = "P2P";
+        s.progress = tr("Buscando la sesión…");
+        s.p2p = new P2PGuest(settings, code);
+        s.p2p.addEventListener("progress", () => {
+            s.progress = tr("Conectando con el anfitrión…");
+            s.emit("state");
+        });
+        s.p2p.connect().then((link) => {
+            if (s.state === "ended")
+                return link.close();
+            s.progress = tr("Conectado; entrando en la sesión…");
+            s.p2p = null;
+            s.connect(link, "P2P");
+            s.emit("state");
+        }).catch((e) => s.finish(e.message === "nohost"
+            ? tr("No se encontró la sesión. Revisa el código y que el anfitrión siga hospedándola (y que los dos usen algún servidor de señalización en común).")
+            : e.message === "noservers" ? tr("No hay servidores de señalización en la configuración.")
+            : tr("No se pudo conectar con ningún servidor de señalización.")));
+        return s;
+    }
+
     constructor(app, role, settings) {
         super();
         this.app = app;
@@ -176,6 +216,11 @@ export class CollabSession extends EventTarget {
         this.state = "connecting";
         this.url = "";
         this.socket = null;
+        // "lan" o "p2p"; el código de la sesión P2P y lo que se está haciendo al conectar.
+        this.connection = "lan";
+        this.code = "";
+        this.progress = "";
+        this.p2p = null;
         this.myId = role === "host" ? 0 : -1;
         this.peers = new Map();
         this.waiting = new Map();
@@ -207,6 +252,16 @@ export class CollabSession extends EventTarget {
         this.cursorDirty = false;
         this.busyCheck = null;
         this.listeners = [];
+        // El historial del anfitrión (los invitados lo reciben; el anfitrión lo envía un momento
+        // después de cada cambio) y si su imagen está guardada.
+        this.hostHistory = [];
+        this.hostHistoryIndex = 0;
+        this.hostSaved = false;
+        this.historyTimer = null;
+        // Invitado: su copia propia (exportada) y si sigue al día con la imagen de la sesión.
+        this.historyGeneration = 0;
+        this.exported = false;
+        this.exportStamp = null;
     }
 
     get isHost() {
@@ -233,15 +288,19 @@ export class CollabSession extends EventTarget {
             this.socket.send(JSON.stringify(message));
     }
 
-    connect(url) {
-        this.url = url;
-        let socket;
-        try {
-            socket = new WebSocket(url);
-        } catch (e) {
-            setTimeout(() => this.finish(tr("No se pudo conectar: %1", e.message)), 0);
-            return;
+    // 'target': la dirección ws:// o un canal ya abierto que se usa como un WebSocket (P2P).
+    connect(target, label = "") {
+        this.url = label || target;
+        let socket = target;
+        if (typeof target === "string") {
+            try {
+                socket = new WebSocket(target);
+            } catch (e) {
+                setTimeout(() => this.finish(tr("No se pudo conectar: %1", e.message)), 0);
+                return;
+            }
         }
+        const url = this.url;
         this.socket = socket;
         const timeout = setTimeout(() => {
             if (this.state === "connecting" && socket.readyState !== WebSocket.OPEN)
@@ -268,6 +327,7 @@ export class CollabSession extends EventTarget {
             return;
         this.setState("ended");
         clearTimeout(this.cursorTimer);
+        clearTimeout(this.historyTimer);
         this.queue = [];
         this.detachDocument();
         try {
@@ -275,6 +335,8 @@ export class CollabSession extends EventTarget {
         } catch {
             // ignore
         }
+        this.p2p?.stop();
+        this.p2p = null;
         this.cursors.clear();
         this.emit("cursors");
         this.emit("ended", { reason });
@@ -422,6 +484,26 @@ export class CollabSession extends EventTarget {
         case "change":
         case "propose":
             return this.isHost && this.onGuestChange(m);
+        case "history":
+            if (this.isHost)
+                return;
+            this.hostHistory = (Array.isArray(m.steps) ? m.steps : []).slice(0, 10000).map((x) => String(x).slice(0, 200));
+            this.hostHistoryIndex = Math.max(0, Math.min(this.hostHistory.length, m.index | 0));
+            this.hostSaved = !!m.saved;
+            this.emit("hosthistory");
+            this.emit("indicators");
+            return;
+        case "revert": {
+            if (!this.isHost || this.state !== "joined")
+                return;
+            const p = this.peer(m.from);
+            const steps = this.doc ? this.doc.history.steps.length - 1 : 0;
+            if (!p?.history || !Number.isInteger(m.index) || m.index < 0 || m.index > steps || m.index === this.doc.history.index)
+                return;
+            this.emit("notice", { text: tr("%1 volvió a una versión anterior de la imagen.", p.name) });
+            this.emit("revert", { index: m.index });
+            return;
+        }
         case "end":
             return this.finish(reasonText(m.reason));
         }
@@ -451,9 +533,81 @@ export class CollabSession extends EventTarget {
         this.queueSend(async () => {
             const doc = await this.snapshotJson(this.canon);
             this.send({ t: "welcome", to: peer.id, mode: peer.mode, autoAccept: this.autoAccept, peers: this.peerList(), doc });
+            this.send({ ...this.historyMessage(), to: peer.id });
             if (this.cursorOut)
                 this.send({ ...this.cursorOut, to: peer.id, from: 0 });
         });
+    }
+
+    // --- Historial de la sesión -------------------------------------------------------------------
+
+    historyMessage() {
+        const h = this.doc?.history;
+        return { t: "history", steps: h ? h.steps.slice(1).map((x) => String(x.name || "")) : [], index: h ? h.index : 0,
+                 saved: !!this.doc && !this.doc.isModified() };
+    }
+
+    // Anfitriona: varios pasos seguidos salen una sola vez.
+    scheduleHistory() {
+        clearTimeout(this.historyTimer);
+        this.historyTimer = setTimeout(() => {
+            if (this.isHost && this.state === "joined")
+                this.queueSend(() => this.send(this.historyMessage()));
+            this.emit("hosthistory");
+            this.emit("indicators");
+        }, 250);
+    }
+
+    // Los pasos del historial del anfitrión (sin el de la imagen original), el actual y si la
+    // imagen del anfitrión está guardada.
+    historySteps() {
+        return this.isHost ? this.historyMessage().steps : this.hostHistory;
+    }
+
+    historyIndex() {
+        return this.isHost ? this.doc?.history.index ?? 0 : this.hostHistoryIndex;
+    }
+
+    savedByHost() {
+        return this.isHost ? !!this.doc && !this.doc.isModified() : this.hostSaved;
+    }
+
+    get canRevert() {
+        return this.isHost || (this.state === "joined" && !!this.peer(this.myId)?.history);
+    }
+
+    // Volver a un paso del historial del anfitrión, para todos.
+    revertTo(index) {
+        if (this.isHost) {
+            if (this.doc && index >= 0 && index < this.doc.history.steps.length)
+                this.emit("revert", { index });
+        } else if (this.canRevert) {
+            this.send({ t: "revert", index });
+        }
+    }
+
+    setHistoryPermission(id, allowed) {
+        if (this.isHost)
+            this.send({ t: "permit", peer: id, history: !!allowed });
+    }
+
+    // Invitado: su copia propia está al día si la imagen no cambió desde que la exportó.
+    stamp() {
+        const h = this.doc?.history;
+        return { generation: this.historyGeneration, top: h ? h.steps[h.index] : null };
+    }
+
+    localCopy() {
+        if (!this.exported)
+            return "none";
+        const now = this.stamp();
+        return now.generation === this.exportStamp.generation && now.top === this.exportStamp.top ? "current" : "behind";
+    }
+
+    markExported() {
+        this.exported = true;
+        this.exportStamp = this.stamp();
+        this.emit("indicators");
     }
 
     // Todo lo que cambia la imagen sale en el mismo orden en que se aplicó.
@@ -650,6 +804,7 @@ export class CollabSession extends EventTarget {
         doc.history = new History(tr("Unirse a la sesión"), HISTORY_ICON);
         doc.cleanIndex = 0;
         this.draftStart = 0;
+        this.historyGeneration++;
         doc.emit("history");
         doc.emit("modified");
     }
@@ -679,7 +834,15 @@ export class CollabSession extends EventTarget {
             for (const l of layer ? [layer] : doc.layers)
                 this.dirty.set(l, unionRect(this.dirty.get(l) || null, rect));
         });
-        on("history", () => this.onLocalStep());
+        on("history", () => {
+            this.onLocalStep();
+            if (this.isHost)
+                this.scheduleHistory();
+            else
+                this.emit("indicators");
+        });
+        // Guardar (o volver al punto guardado) cambia la corona.
+        on("modified", () => this.isHost && this.scheduleHistory());
         on("size", () => {
             if (!this.applying)
                 for (const l of doc.layers)

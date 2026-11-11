@@ -57,6 +57,81 @@ if(NOT ZLIB_FOUND)
     add_library(ZLIB::ZLIB ALIAS zlibstatic)
 endif()
 
+# Colaboración P2P por Internet (WebRTC): libdatachannel del sistema o descargada (con sus
+# dependencias: plog, usrsctp y libjuice). Para el cifrado usa OpenSSL si lo hay y, si no (Windows
+# con MinGW), descarga Mbed TLS. Con KAINT_DATACHANNEL_SOURCE se usa una copia local (sin red).
+option(KAINT_P2P "Colaboración P2P por Internet (WebRTC, con libdatachannel)" ON)
+option(KAINT_P2P_MBEDTLS "Compilar libdatachannel con Mbed TLS aunque haya OpenSSL" OFF)
+set(KAINT_DATACHANNEL_SOURCE "" CACHE PATH "Código de libdatachannel (con deps/) para no descargarlo")
+set(KAINT_DATACHANNEL "")
+if(KAINT_P2P)
+    find_package(LibDataChannel CONFIG QUIET)
+    if(TARGET LibDataChannel::LibDataChannel AND NOT KAINT_DATACHANNEL_SOURCE)
+        set(KAINT_DATACHANNEL LibDataChannel::LibDataChannel)
+        message(STATUS "Kaint: libdatachannel del sistema")
+    else()
+        include(FetchContent)
+        if(KAINT_DATACHANNEL_SOURCE)
+            set(_kaint_dc "${KAINT_DATACHANNEL_SOURCE}")
+        else()
+            set(_kaint_dc "${CMAKE_BINARY_DIR}/_deps/kaint-libdatachannel-src")
+        endif()
+        # Las descargas de GitHub no traen los submódulos: se ponen uno a uno en deps/.
+        function(kaint_fetch_archive name url dir)
+            if(NOT EXISTS "${dir}/CMakeLists.txt")
+                message(STATUS "Kaint: se descarga ${name}")
+                FetchContent_Populate(kaint_${name} URL "${url}" SOURCE_DIR "${dir}"
+                    SUBBUILD_DIR "${CMAKE_BINARY_DIR}/_deps/kaint-${name}-subbuild"
+                    BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/kaint-${name}-unused" QUIET)
+            endif()
+        endfunction()
+        kaint_fetch_archive(libdatachannel
+            https://github.com/paullouisageneau/libdatachannel/archive/refs/tags/v0.24.6.tar.gz "${_kaint_dc}")
+        kaint_fetch_archive(plog
+            https://github.com/SergiusTheBest/plog/archive/94899e0b926ac1b0f4750bfbd495167b4a6ae9ef.tar.gz "${_kaint_dc}/deps/plog")
+        kaint_fetch_archive(usrsctp
+            https://github.com/paullouisageneau/usrsctp/archive/fec583d54493f879d2ae44a743423bf8a04371ab.tar.gz "${_kaint_dc}/deps/usrsctp")
+        kaint_fetch_archive(libjuice
+            https://github.com/paullouisageneau/libjuice/archive/b89c792e3612faf2f12cf35bcc56857313a06be3.tar.gz "${_kaint_dc}/deps/libjuice")
+        find_package(OpenSSL QUIET)
+        if(NOT OPENSSL_FOUND OR KAINT_P2P_MBEDTLS)
+            message(STATUS "Kaint: libdatachannel con Mbed TLS 3.6.4 (descargado)")
+            FetchContent_Declare(kaint_mbedtls
+                URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.4/mbedtls-3.6.4.tar.bz2
+                URL_HASH SHA256=ec35b18a6c593cf98c3e30db8b98ff93e8940a8c4e690e66b41dfc011d678110
+                DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+            set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+            set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+            set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+            set(GEN_FILES OFF CACHE BOOL "" FORCE)
+            set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
+            set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+            set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
+            FetchContent_GetProperties(kaint_mbedtls)
+            if(NOT kaint_mbedtls_POPULATED)
+                FetchContent_Populate(kaint_mbedtls)
+                add_subdirectory("${kaint_mbedtls_SOURCE_DIR}" "${kaint_mbedtls_BINARY_DIR}" EXCLUDE_FROM_ALL)
+                # libdatachannel usa DTLS-SRTP de Mbed TLS (no viene activado por defecto).
+                foreach(_kaint_mbed mbedtls mbedx509 mbedcrypto)
+                    target_compile_definitions(${_kaint_mbed} PUBLIC MBEDTLS_SSL_DTLS_SRTP)
+                endforeach()
+            endif()
+            add_library(MbedTLS::MbedTLS INTERFACE IMPORTED)
+            set_target_properties(MbedTLS::MbedTLS PROPERTIES INTERFACE_LINK_LIBRARIES "mbedtls;mbedx509;mbedcrypto")
+            set(USE_MBEDTLS ON)
+        endif()
+        set(NO_MEDIA ON)
+        set(NO_WEBSOCKET ON)
+        set(NO_EXAMPLES ON)
+        set(NO_TESTS ON)
+        set(BUILD_SHARED_LIBS OFF)
+        set(sctp_werror OFF CACHE BOOL "" FORCE)
+        add_subdirectory("${_kaint_dc}" "${CMAKE_BINARY_DIR}/_deps/kaint-libdatachannel-build" EXCLUDE_FROM_ALL)
+        unset(BUILD_SHARED_LIBS)
+        set(KAINT_DATACHANNEL datachannel-static)
+    endif()
+endif()
+
 # Windows y MSVC
 if(WIN32)
     add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
@@ -173,6 +248,7 @@ add_library(kaintui STATIC
     src/app/dialogs/AboutDialog.cpp
     src/app/dialogs/DialogExec.cpp
     src/app/dialogs/EffectDialog.cpp
+    src/app/dialogs/IconPackEditor.cpp
     src/app/dialogs/ImageDialogs.cpp
     src/app/dialogs/PluginCatalogDialog.cpp
     src/app/dialogs/SaveAllDialog.cpp
@@ -183,6 +259,7 @@ add_library(kaintui STATIC
     src/app/collab/Discovery.cpp
     src/app/collab/CollabController.cpp
     src/app/collab/CollabDialogs.cpp
+    src/app/collab/P2P.cpp
     src/app/dialogs/SaveConfigDialog.cpp
     src/app/dialogs/SettingsDialog.cpp
     src/app/dialogs/TaskDialog.cpp
@@ -202,6 +279,10 @@ add_library(kaintui STATIC
     src/app/tools/TextTool.cpp
 )
 target_link_libraries(kaintui PUBLIC kaintcore Qt6::Widgets Qt6::PrintSupport Qt6::Network)
+if(KAINT_DATACHANNEL)
+    target_link_libraries(kaintui PRIVATE ${KAINT_DATACHANNEL})
+    target_compile_definitions(kaintui PUBLIC KAINT_HAVE_P2P)
+endif()
 # Modo oscuro del sistema (portal de freedesktop)
 find_package(Qt6 QUIET COMPONENTS DBus)
 if(TARGET Qt6::DBus)

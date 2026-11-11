@@ -62,21 +62,40 @@ export function checkerPattern(ctx, brightness = 191) {
 }
 
 // Miniatura que cabe en w × h conservando la proporción (con el damero debajo si se pide).
-export function thumbnail(source, w, h, checker = true) {
+// Miniatura de w × h como mucho: se reduce a la mitad una y otra vez (cada paso promedia los
+// píxeles), así no se ve pixelada. Con 'hidpi', para ponerla en la página, se dibuja con los
+// píxeles reales de la pantalla (y mide w × h en píxeles de CSS).
+export function thumbnail(source, w, h, checker = true, hidpi = false) {
+    const dpr = hidpi && typeof window !== "undefined" ? Math.max(1, Math.min(3, window.devicePixelRatio || 1)) : 1;
     const scale = Math.min(w / source.width, h / source.height);
-    const tw = Math.max(1, Math.round(source.width * scale));
-    const th = Math.max(1, Math.round(source.height * scale));
+    const cssW = Math.max(1, Math.round(source.width * scale));
+    const cssH = Math.max(1, Math.round(source.height * scale));
+    const tw = Math.max(1, Math.round(cssW * dpr)), th = Math.max(1, Math.round(cssH * dpr));
     const canvas = createCanvas(tw, th);
+    if (hidpi && canvas.style) {
+        canvas.style.width = `${cssW}px`;
+        canvas.style.height = `${cssH}px`;
+    }
     const c = canvas.getContext("2d");
     if (checker) {
         c.fillStyle = checkerPattern(c);
         c.save();
-        c.scale(0.5, 0.5);
-        c.fillRect(0, 0, tw * 2, th * 2);
+        c.scale(dpr / 2, dpr / 2);
+        c.fillRect(0, 0, cssW * 2, cssH * 2);
         c.restore();
     }
+    let step = source, sw = source.width, sh = source.height;
+    while (sw >= tw * 2 && sh >= th * 2) {
+        const half = createCanvas(Math.max(1, Math.round(sw / 2)), Math.max(1, Math.round(sh / 2)));
+        const hc = half.getContext("2d");
+        hc.imageSmoothingQuality = "high";
+        hc.drawImage(step, 0, 0, sw, sh, 0, 0, half.width, half.height);
+        step = half;
+        sw = half.width;
+        sh = half.height;
+    }
     c.imageSmoothingQuality = "high";
-    c.drawImage(source, 0, 0, tw, th);
+    c.drawImage(step, 0, 0, sw, sh, 0, 0, tw, th);
     return canvas;
 }
 

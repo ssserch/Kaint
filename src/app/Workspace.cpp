@@ -2,6 +2,7 @@
 
 #include "app/Animations.h"
 #include "app/Canvas.h"
+#include "app/panels/ToolsPanel.h"
 #include "app/Icons.h"
 #include "app/Theme.h"
 #include "app/WindowFrame.h"
@@ -73,7 +74,13 @@ public:
         // Windows 7, el rojo de cristal, más ancho.
         switch (panelFrame()) {
         case PanelFrame::Luna: return {19, 19};
-        case PanelFrame::Aero: return {28, 17};
+        case PanelFrame::Aero:
+            switch (WindowFrame::panelClose7()) {
+            case WindowFrame::PanelClose7::Hanging: return {30, 18};
+            case WindowFrame::PanelClose7::Square: return {17, 17};
+            case WindowFrame::PanelClose7::Rectangle: break;
+            }
+            return {28, 17};
         case PanelFrame::Plain: break;
         }
         const int side = windows10Chrome() ? std::max(19, fontMetrics().height() + 4) : fontMetrics().height() + 2;
@@ -305,6 +312,9 @@ void FloatingPanel::applyChrome()
     auto* titleLayout = static_cast<QBoxLayout*>(m_titleBar->layout());
     if (panelFrame() == PanelFrame::Luna)
         titleLayout->setContentsMargins(6, 3, 4, 3);
+    else if (panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging)
+        // La X unida al borde de arriba: cuelga del contorno (el título, igual de centrado).
+        titleLayout->setContentsMargins(8, 1, 6, 3);
     else if (panelFrame() == PanelFrame::Aero)
         titleLayout->setContentsMargins(8, 4, 6, 3);
     else if (Theme::paintNetLook())
@@ -313,6 +323,9 @@ void FloatingPanel::applyChrome()
         titleLayout->setContentsMargins(6, 5, 2, 5);
     else
         titleLayout->setContentsMargins(7, 1, 1, 1);
+    const bool hangingClose = panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging;
+    titleLayout->setAlignment(m_close, hangingClose ? Qt::AlignTop : Qt::Alignment());
+    m_title->setContentsMargins(0, hangingClose ? 3 : 0, 0, 0);
     m_close->updateGeometry();
     titleLayout->invalidate();
     QEvent relayout(QEvent::StyleChange);
@@ -423,7 +436,11 @@ void FloatingPanel::paintFrame(QPainter& p, bool luna)
     const Theme::Spec s = Theme::active();
     const QRectF r = QRectF(rect());
     const int titleBottom = m_titleBar->geometry().bottom() + 1;
-    QRect body = layout()->contentsRect();
+    // El recuadro del contenido con las medidas de la ventana, no con layout()->contentsRect(): un
+    // cambio en lo de dentro (el color en Colores) invalida el diseño y, hasta que se recoloca, ese
+    // rectángulo está vacío; si se pinta justo entonces, detrás de la rueda y de las muestras
+    // quedaba el cristal del marco sin el fondo del contenido.
+    QRect body = contentsRect().marginsRemoved(layout()->contentsMargins());
     p.setRenderHint(QPainter::Antialiasing);
     if (luna) {
         // XP.css: la cabecera de Luna con las esquinas de arriba redondeadas y el borde azul.
@@ -524,7 +541,16 @@ QSize FloatingPanel::chromeSize() const
 
 void FloatingPanel::updateTitleText()
 {
-    m_title->setText(m_title->fontMetrics().elidedText(m_fullTitle, Qt::ElideRight, std::max(0, m_title->width())));
+    QString text = m_title->fontMetrics().elidedText(m_fullTitle, Qt::ElideRight, std::max(0, m_title->width()));
+    // Como Paint.NET con sus temas claro y oscuro: la ventana Herramientas de dos columnas se titula
+    // con las dos primeras letras («To...», «He...»), aunque quepa más; más ancha, el título entero.
+    // Con los temas de Windows 7, XP y 98, el título tal cual.
+    const Theme::Scheme scheme = Theme::current();
+    if (m_id == QLatin1String("tools") && Theme::paintNetLook() && m_fullTitle.size() > 3
+        && (scheme == Theme::Scheme::System || scheme == Theme::Scheme::Light || scheme == Theme::Scheme::Dark))
+        if (auto* tools = qobject_cast<ToolsPanel*>(m_content); tools && tools->columns() <= 2)
+            text = m_fullTitle.left(2) + QStringLiteral("...");
+    m_title->setText(text);
     m_title->setToolTip(m_title->text() == m_fullTitle ? QString() : m_fullTitle);
 }
 

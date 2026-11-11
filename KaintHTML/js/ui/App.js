@@ -26,7 +26,7 @@ import {
 } from "./Dialogs.js";
 import { delayFromName } from "../core/Codecs.js";
 import { computeEffect, effectDialog, effectInput, renderEffect } from "./EffectDialog.js";
-import { icon, iconUrl, refreshIcons, setActiveColors, unsavedStar } from "./Icons.js";
+import { collabMark, computerMark, crownMark, icon, iconUrl, refreshIcons, setActiveColors, unsavedStar } from "./Icons.js";
 import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
 import { isPhone, MobilePanels } from "./Mobile.js";
@@ -137,7 +137,7 @@ export class App extends EventTarget {
             }
         });
         this.applySettings();
-        this.tools.select(Settings.get("startTool") || Settings.get("lastTool") || "paintbrush");
+        this.tools.select(Settings.get("startupTool") || Settings.get("lastTool") || "paintbrush");
         if (!this.tools.current)
             this.tools.select("paintbrush");
         AppState.currentTool = this.tools.current.id;
@@ -550,7 +550,7 @@ export class App extends EventTarget {
             popup = el("div", { className: "image-list-popup" });
             for (const doc of this.docs) {
                 // Como en la tira: el sol de los cambios sin guardar arriba a la izquierda de la miniatura.
-                const thumb = el("span", { className: "thumb" }, [thumbnail(doc.flattened(), 64, 48)]);
+                const thumb = el("span", { className: "thumb" }, [thumbnail(doc.flattened(), 64, 48, true, true)]);
                 if (doc.isModified())
                     thumb.appendChild(el("span", { className: "unsaved", title: tr("Cambios no guardados") }, [unsavedStar(12)]));
                 const row = el("div", { className: "row" + (doc === this.doc ? " selected" : "") },
@@ -610,9 +610,26 @@ export class App extends EventTarget {
         const paint = () => {
             tab.querySelector(":scope > canvas")?.remove();
             tab.querySelector(".unsaved")?.remove();
-            tab.insertBefore(thumbnail(doc.flattened(), 64, 48), tab.firstChild);
-            if (doc.isModified())
+            tab.querySelector(".collab-marks")?.remove();
+            tab.insertBefore(thumbnail(doc.flattened(), 64, 48, true, true), tab.firstChild);
+            // Sesión colaborativa: pestaña amarilla, las personas en lugar de la estrella, la corona
+            // (la imagen del anfitrión guardada o no) y, en los invitados, el equipo (su copia propia).
+            const collab = this.collab?.tabState(doc) || { collab: false };
+            tab.classList.toggle("collab", collab.collab);
+            if (collab.collab) {
+                const marks = [el("span", { title: tr("Imagen de la sesión colaborativa") }, [collabMark(12)]),
+                               el("span", { title: collab.hostSaved ? tr("El anfitrión guardó la imagen.") : tr("El anfitrión tiene cambios sin guardar.") },
+                                  [crownMark(collab.hostSaved ? 2 : 1, 12)])];
+                if (collab.guest) {
+                    const state = collab.copy === "current" ? 2 : collab.copy === "behind" ? 1 : 0;
+                    const tips = [tr("Todavía no exportaste una copia a tu equipo."), tr("Tu copia exportada no está al día con la imagen del anfitrión."),
+                                  tr("Tu copia exportada está al día con la imagen del anfitrión.")];
+                    marks.push(el("span", { title: tips[state] }, [computerMark(state, 12)]));
+                }
+                tab.appendChild(el("div", { className: "collab-marks" }, marks));
+            } else if (doc.isModified()) {
                 tab.appendChild(el("div", { className: "unsaved", title: tr("Cambios no guardados") }, [unsavedStar(12)]));
+            }
             tab.title = doc.displayName();
             if (doc === this.doc)
                 document.title = `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint`;
@@ -706,9 +723,19 @@ export class App extends EventTarget {
         A("print", tr("&Imprimir..."), "document-print", "Ctrl+P", c(() => this.print()), has);
         A("close", tr("&Cerrar"), "document-close", "Ctrl+W", () => this.closeDocument(this.doc), has);
         const collabActive = () => !!this.collab?.active;
-        A("collabHost", tr("&Hospedar esta imagen..."), "collab", null, c(() => this.collab.hostDialog()), () => has() && !collabActive());
-        A("collabJoin", tr("&Unirse a una sesión..."), "collab", null, () => this.collab.joinDialog(), () => !collabActive());
+        // Colaboración: por P2P (la predeterminada) o en la red local, cada una con su configuración.
+        const collabSettingsAt = (section) => {
+            this.collab.revealSection = section;
+            settingsDialog(this, "collab");
+        };
+        A("collabHost", tr("&Hospedar la imagen actual"), "collab", null, c(() => this.collab.hostCurrent("p2p")), () => has() && !collabActive());
+        A("collabJoin", tr("&Unirse con un código..."), "collab", null, () => this.collab.joinDialog("p2p"), () => !collabActive());
+        A("collabSettingsP2P", tr("&Configuración P2P..."), "configure", null, () => collabSettingsAt("p2p"));
+        A("collabHostLan", tr("&Hospedar la imagen actual..."), "collab", null, c(() => this.collab.hostCurrent("lan")), () => has() && !collabActive());
+        A("collabJoinLan", tr("&Unirse a una sesión..."), "collab", null, () => this.collab.joinDialog("lan"), () => !collabActive());
+        A("collabSettingsLan", tr("C&onfiguración LAN..."), "configure", null, () => collabSettingsAt("lan"));
         A("collabWindow", tr("&Ventana de la sesión..."), "collab", null, () => this.collab.sessionDialog(), collabActive);
+        A("collabHistory", tr("&Historial de la sesión..."), "collab", null, () => this.collab.historyDialog(), collabActive);
         A("collabLeave", tr("&Salir de la sesión"), "application-exit", null, () => this.collab.leave(true), collabActive);
         A("collabSettings", tr("&Configuración de colaboración..."), "configure", null, () => settingsDialog(this, "collab"));
         A("closeAll", tr("Cerrar t&odas"), "document-close", "Ctrl+Shift+W", () => this.closeAll(), has);
@@ -877,7 +904,9 @@ export class App extends EventTarget {
     fileEntries() {
         const a = (id) => this.actions.get(id);
         const collab = { text: tr("C&olaboración"), icon: "collab",
-                         submenu: () => [a("collabHost"), a("collabJoin"), a("collabWindow"), a("collabLeave"), "-", a("collabSettings")] };
+                         submenu: () => [{ text: tr("&P2P (por Internet)"), icon: "collab", submenu: () => [a("collabHost"), a("collabJoin"), "-", a("collabSettingsP2P")] },
+                                         { text: tr("&Red local (LAN)"), icon: "collab", submenu: () => [a("collabHostLan"), a("collabJoinLan"), "-", a("collabSettingsLan")] },
+                                         "-", a("collabWindow"), a("collabHistory"), a("collabLeave"), "-", a("collabSettings")] };
         return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("print"), "-", collab, "-", a("close"), a("closeAll")];
     }
 
@@ -1551,6 +1580,7 @@ export class App extends EventTarget {
         // Invitado de una sesión colaborativa: solo una copia (la imagen la guarda el anfitrión).
         if (this.collab?.isGuestDocument(doc)) {
             this.showMessage(tr("Copia exportada como «%1». La imagen de la sesión la guarda el anfitrión.", name));
+            this.collab.markExported(doc);
             return true;
         }
         doc.fileHandle = handle;

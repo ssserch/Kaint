@@ -63,6 +63,12 @@ bool classicTitle();
 bool lunaTitle();
 void paintClassicTitle(QPainter& p, const QRect& r, bool active);
 // El botón de cerrar de las ventanas flotantes con el estilo de 'style' (Windows 98, XP o 7, suelto).
+// La X de las ventanas flotantes (Herramientas, Colores...) con los temas Windows 7: unida al borde
+// de arriba (cuelga de él, como la de cerrar de los diálogos), un rectángulo suelto o un cuadrado
+// suelto (como las de Paint.NET en Windows 7).
+enum class PanelClose7 { Hanging = 0, Rectangle = 1, Square = 2 };
+void setPanelClose7(PanelClose7 shape);
+PanelClose7 panelClose7();
 void paintPanelClose(QPainter& p, const QRect& box, Buttons style, bool hot, bool down);
 
 } // namespace WindowFrame
@@ -103,11 +109,13 @@ protected:
     void mouseMoveEvent(QMouseEvent* e) override;
     void mousePressEvent(QMouseEvent* e) override;
     void mouseReleaseEvent(QMouseEvent* e) override;
+    void mouseDoubleClickEvent(QMouseEvent* e) override;
     void leaveEvent(QEvent* e) override;
     bool event(QEvent* e) override;
     bool eventFilter(QObject* watched, QEvent* e) override;
 
 private:
+    void resetState();
     QRect buttonRect(int i) const;
     int buttonAt(const QPoint& pos) const;
     bool groupHot() const;

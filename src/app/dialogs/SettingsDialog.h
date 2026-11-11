@@ -5,6 +5,13 @@
 #include <QDialog>
 #include <QSet>
 
+#include <functional>
+#include <memory>
+
+namespace Collab {
+struct Settings;
+}
+
 class ColorButton;
 class QCheckBox;
 class QComboBox;
@@ -88,6 +95,9 @@ struct AppSettings {
     // 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98. (Antes, -1 era «la del escritorio»: ahora es
     // customFrame.)
     int titleButtons = 0;
+    // La X de las ventanas flotantes con los temas Windows 7 (WindowFrame::PanelClose7): unida al
+    // borde de arriba, rectángulo o cuadrado.
+    int win7PanelClose = 1;
     // Los botones a la izquierda de la barra de título.
     bool titleButtonsLeft = false;
     // Recreación de Windows (solo con el estilo Paint.NET): 10 u 11 (esquinas redondeadas en modo
@@ -117,7 +127,8 @@ struct AppSettings {
     QColor canvasBorderLight;
     QColor canvasBorderDark;
     int checkerBrightness = 191;
-    int startTool = -1;
+    // Herramienta al abrir Kaint (-1: la última que se usó); por defecto, el pincel.
+    int startTool = 10; // ToolId::Paintbrush
     // Herramientas Mover: ocultar contorno y tiradores al arrastrar; pegar y mover reemplazando
     // los píxeles de debajo (también los transparentes). Ambas como Paint.NET.
     bool hideMoveBox = true;
@@ -174,6 +185,8 @@ public:
     SettingsDialog(const AppSettings& current, ToolManager* tools, QWidget* parent = nullptr);
     AppSettings settings() const { return m_settings; }
     void showPage(Page page);
+    // Despliega y lleva a la vista una sección de la página actual (objectName; la de P2P o LAN).
+    void revealSection(const QString& name);
 
     // Se aceptó reiniciar Kaint para aplicar el tema KDE (o salir de él) o el idioma; settings()
     // tiene los valores nuevos.
@@ -196,6 +209,9 @@ private:
     QWidget* createPluginsPage();
     QWidget* createDiscordPage();
     QWidget* createCollabPage();
+    // La vista de la página Colaboración (simplificada o compacta, según la configuración).
+    QWidget* createCollabView(QWidget* parent, const std::shared_ptr<Collab::Settings>& settings,
+                              const std::function<void()>& apply);
     QWidget* createUpdatesPage();
     QWidget* createDiagnosticsPage();
     QWidget* createIconPacksPage();

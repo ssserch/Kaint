@@ -694,13 +694,32 @@ export class CanvasView extends EventTarget {
                     }
                 }
                 // Como en Paint.NET, la marca se queda en la última posición del puntero aunque salga.
+                // Con zum, la marca ocupa lo que mide en pantalla el píxel bajo el puntero (a 100 %,
+                // una línea): una franja algo transparente, para que se lean los números, con sus bordes.
                 if (this.lastMouse) {
-                    const m = this.imageToView(this.lastMouse.x, this.lastMouse.y);
-                    const c = Math.round(vertical ? m.y : m.x) + 0.5;
+                    const px = Math.floor(vertical ? this.lastMouse.y : this.lastMouse.x);
+                    const p0 = this.imageToView(px, px), p1 = this.imageToView(px + 1, px + 1);
+                    const a = vertical ? p0.y : p0.x, b = vertical ? p1.y : p1.x;
+                    const from = Math.min(a, b), size = Math.abs(b - a);
                     ctx.strokeStyle = accent;
-                    ctx.beginPath();
-                    vertical ? (ctx.moveTo(0, c), ctx.lineTo(t, c)) : (ctx.moveTo(c, 0), ctx.lineTo(c, t));
-                    ctx.stroke();
+                    if (size <= 1.5) {
+                        const m = this.imageToView(this.lastMouse.x, this.lastMouse.y);
+                        const c = Math.round(vertical ? m.y : m.x) + 0.5;
+                        ctx.beginPath();
+                        vertical ? (ctx.moveTo(0, c), ctx.lineTo(t, c)) : (ctx.moveTo(c, 0), ctx.lineTo(c, t));
+                        ctx.stroke();
+                    } else {
+                        ctx.save();
+                        ctx.globalAlpha = 0.43;
+                        ctx.fillStyle = accent;
+                        vertical ? ctx.fillRect(0, from, t, size) : ctx.fillRect(from, 0, size, t);
+                        ctx.restore();
+                        const e0 = Math.round(from) + 0.5, e1 = Math.round(from + size) - 0.5;
+                        ctx.beginPath();
+                        for (const e of [e0, e1])
+                            vertical ? (ctx.moveTo(0, e), ctx.lineTo(t, e)) : (ctx.moveTo(e, 0), ctx.lineTo(e, t));
+                        ctx.stroke();
+                    }
                 }
             }
             ctx.strokeStyle = colors.edge;

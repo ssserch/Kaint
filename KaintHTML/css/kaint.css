@@ -433,6 +433,30 @@ u {
     line-height: 0;
 }
 
+/* Imagen de la sesión colaborativa: amarilla, con las personas, la corona y el equipo. */
+.image-tab.collab,
+:root.pdn .image-tab.collab {
+    background: rgba(255, 206, 40, 0.42);
+    border: 2px solid #e2a800;
+}
+
+.image-tab.collab.current,
+:root.pdn .image-tab.collab.current,
+:root.pdn:not(.dark) .image-tab.collab.current {
+    background: rgba(255, 206, 40, 0.62);
+    border-color: #e2a800;
+}
+
+.image-tab .collab-marks {
+    position: absolute;
+    top: 3px;
+    left: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    line-height: 0;
+}
+
 .corner-buttons {
     display: flex;
     align-items: center;
@@ -3985,6 +4009,121 @@ fieldset.group > legend {
     flex: 1;
 }
 
+/* Editor de paquetes de iconos. */
+.icon-pack-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(720px, 90vw);
+}
+
+.icon-pack-editor .form-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 8px;
+    align-items: center;
+}
+
+.icon-pack-editor input[type="search"] {
+    flex: 1;
+}
+
+.icon-pack-editor .count {
+    white-space: nowrap;
+}
+
+.icon-pack-editor .icon-pack-slots {
+    height: min(320px, 40vh);
+    overflow: auto;
+}
+
+.icon-pack-editor .icon-pack-slots .row {
+    display: grid;
+    grid-template-columns: 24px 24px minmax(0, auto) 1fr;
+    gap: 8px;
+    align-items: center;
+    cursor: default;
+}
+
+.icon-pack-editor .icon-pack-slots .row .none {
+    text-align: center;
+    opacity: 0.6;
+}
+
+.icon-pack-editor .icon-pack-slots .row.changed .file {
+    font-weight: 600;
+}
+
+.icon-pack-editor .icon-pack-slots .row small {
+    opacity: 0.75;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.icon-pack-editor .icon-pack-slots .row.selected {
+    background: var(--selection);
+    outline: 1px solid var(--selection-border);
+}
+
+.icon-pack-editor .pack-status {
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+.icon-pack-editor-button .kicon {
+    vertical-align: middle;
+}
+
+/* Historial de la sesión. */
+.collab-history {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(420px, 86vw);
+}
+
+.collab-history p {
+    margin: 0;
+}
+
+.collab-history .collab-history-steps {
+    height: 240px;
+    overflow: auto;
+}
+
+.collab-history .collab-history-steps .row {
+    cursor: default;
+}
+
+.collab-history .collab-history-steps .row.current {
+    font-weight: 600;
+}
+
+.collab-history .collab-history-steps .row.undone {
+    font-style: italic;
+    opacity: 0.6;
+}
+
+.collab-history .collab-history-steps .row.selected {
+    background: var(--selection);
+    outline: 1px solid var(--selection-border);
+}
+
+.collab-history .row-buttons .collab-note {
+    flex: 1;
+}
+
+.collab-history .collab-permission-list label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.panel-buttons .history-collab[hidden] {
+    display: none;
+}
+
 .collab-swatch {
     display: inline-block;
     width: 14px;
@@ -4020,4 +4159,213 @@ fieldset.group > legend {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+/* Direcciones y códigos difuminados (clic para mostrar u ocultar), con su botón de copiar. */
+.collab-secret-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.collab-secret {
+    display: inline-block;
+    padding: 2px 6px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 3px;
+    transition: filter 0.15s;
+}
+
+.collab-secret.hidden {
+    filter: blur(5px);
+}
+
+.collab-secret:focus-visible {
+    outline: 1px dotted currentColor;
+}
+
+.collab-secret-row .pushbutton {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Configuración > Colaboración: la vista simplificada (recuadros y explicaciones a la vista) y la compacta. */
+.collab-page {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.collab-page.simple {
+    gap: 12px;
+}
+
+.collab-view .pushbutton.checked {
+    background: var(--button-pressed);
+    border-color: var(--accent);
+}
+
+.collab-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.collab-card > legend {
+    padding: 0 4px;
+    font-weight: 600;
+}
+
+.collab-field {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.collab-field input[type="text"],
+.collab-field input[type="password"] {
+    width: min(360px, 100%);
+}
+
+.collab-option {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.collab-explain {
+    display: block;
+    margin-left: 22px;
+    opacity: 0.8;
+    line-height: 1.35;
+}
+
+.collab-field > .collab-explain {
+    margin-left: 0;
+}
+
+.collab-indent {
+    margin-left: 22px;
+}
+
+.collab-indent[hidden],
+.collab-ids-box[hidden] {
+    display: none;
+}
+
+.collab-page .collab-title {
+    font-weight: 600;
+    margin: 4px 0;
+}
+
+.collab-big .pushbutton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 4px 14px;
+}
+
+.collab-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 560px;
+}
+
+.collab-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    align-self: flex-start;
+    padding: 2px 8px;
+}
+
+.collab-more-box {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.collab-more-box[hidden] {
+    display: none;
+}
+
+.collab-servers-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: min(420px, 100%);
+}
+
+.collab-servers {
+    width: 100%;
+    font-family: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
+    white-space: pre;
+    resize: vertical;
+}
+
+/* Unirse en la red local: la lista de sesiones cercanas. */
+.collab-join {
+    max-width: 620px;
+}
+
+.collab-found-box {
+    max-height: 180px;
+    min-height: 110px;
+    overflow: auto;
+    border: 1px solid var(--field);
+    background: var(--base);
+}
+
+.collab-found {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.collab-found th {
+    position: sticky;
+    top: 0;
+    text-align: left;
+    font-weight: normal;
+    padding: 3px 6px;
+    background: var(--window);
+    border-bottom: 1px solid var(--line);
+}
+
+.collab-found td {
+    padding: 3px 6px;
+    white-space: nowrap;
+}
+
+.collab-found td .icon {
+    vertical-align: middle;
+}
+
+.collab-found tbody tr:not(.empty) {
+    cursor: pointer;
+}
+
+.collab-found tbody tr:not(.empty):hover {
+    background: var(--hover);
+}
+
+.collab-found tbody tr.selected {
+    background: var(--selection);
+}
+
+.collab-found tbody tr.empty td {
+    opacity: 0.7;
 }

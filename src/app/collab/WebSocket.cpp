@@ -8,6 +8,9 @@
 #include <QRandomGenerator>
 #include <QTcpServer>
 #include <QTcpSocket>
+#if QT_CONFIG(ssl)
+#include <QSslSocket>
+#endif
 #include <QTimer>
 #include <QUrl>
 
@@ -48,7 +51,7 @@ QByteArray randomBytes(int n)
 // ---------------------------------------------------------------------------
 
 WebSocket::WebSocket(QTcpSocket* socket, bool client, QObject* parent)
-    : QObject(parent)
+    : Link(parent)
     , m_socket(socket)
     , m_client(client)
 {
@@ -94,6 +97,52 @@ WebSocket* WebSocket::connectTo(const QString& host, quint16 port, QObject* pare
             ws->fail(tr("No respondió a tiempo."));
     });
     socket->connectToHost(host, port);
+    return ws;
+}
+
+WebSocket* WebSocket::connectToUrl(const QUrl& url, QObject* parent)
+{
+    const bool secure = url.scheme() == QLatin1String("wss");
+    const QString host = url.host();
+    const quint16 port = quint16(url.port(secure ? 443 : 80));
+    QString path = url.path(QUrl::FullyEncoded);
+    if (path.isEmpty())
+        path = QStringLiteral("/");
+    if (url.hasQuery())
+        path += QLatin1Char('?') + url.query(QUrl::FullyEncoded);
+#if QT_CONFIG(ssl)
+    QTcpSocket* socket = secure ? new QSslSocket : new QTcpSocket;
+#else
+    QTcpSocket* socket = new QTcpSocket;
+#endif
+    auto* ws = new WebSocket(socket, true, parent);
+    ws->m_key = randomBytes(16).toBase64();
+    const QByteArray hostHeader = host.toUtf8() + (url.port() > 0 ? ':' + QByteArray::number(port) : QByteArray());
+    auto handshake = [ws, socket, hostHeader, path] {
+        socket->write("GET " + path.toUtf8() + " HTTP/1.1\r\nHost: " + hostHeader
+                      + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + ws->m_key
+                      + "\r\nSec-WebSocket-Version: 13\r\nUser-Agent: Kaint\r\n\r\n");
+    };
+    QTimer::singleShot(10000, ws, [ws] {
+        if (!ws->m_open && !ws->m_closing)
+            ws->fail(tr("No respondió a tiempo."));
+    });
+    if (!secure) {
+        connect(socket, &QTcpSocket::connected, ws, handshake);
+        socket->connectToHost(host, port);
+        return ws;
+    }
+#if QT_CONFIG(ssl)
+    auto* ssl = static_cast<QSslSocket*>(socket);
+    if (!QSslSocket::supportsSsl()) {
+        QTimer::singleShot(0, ws, [ws] { ws->fail(tr("Este Kaint no puede usar conexiones cifradas (TLS).")); });
+        return ws;
+    }
+    connect(ssl, &QSslSocket::encrypted, ws, handshake);
+    ssl->connectToHostEncrypted(host, port);
+#else
+    QTimer::singleShot(0, ws, [ws] { ws->fail(tr("Este Kaint no puede usar conexiones cifradas (TLS).")); });
+#endif
     return ws;
 }
 
@@ -394,9 +443,12 @@ void WebSocketServer::handleRequest(QTcpSocket* socket)
         return;
     }
     QString path = QUrl::fromPercentEncoding(target.split('?').value(0));
-    if (path == QLatin1String("/kaint-collab.json")) {
-        socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: "
-                      + QByteArray::number(m_info.size()) + "\r\nConnection: close\r\n\r\n" + m_info);
+    // Kaint para la web abierta desde otra dirección también puede preguntar (CORS).
+    if (path == QLatin1String("/kaint-collab.json") || path == QLatin1String("/kaint-collab-sessions.json")) {
+        const QByteArray body = path == QLatin1String("/kaint-collab.json") ? m_info : (m_sessions ? m_sessions() : QByteArray("[]"));
+        socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n"
+                      "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\nContent-Length: "
+                      + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
         socket->disconnectFromHost();
         return;
     }

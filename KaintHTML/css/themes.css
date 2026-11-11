@@ -460,6 +460,22 @@
     box-shadow: 0 0 6px 2px #e68e75, inset 0 0 0 1px #fffa;
 }
 
+/* La X de las ventanas: unida al borde de arriba (cuelga del contorno, con las esquinas de abajo
+   redondeadas) o en un cuadrado suelto; el rectángulo es el de arriba. */
+:root.btn-win7.btn-win7-hanging:not(#k) .floating-panel > .title .close {
+    align-self: flex-start;
+    width: 30px;
+    height: 18px;
+    margin-top: -4px;
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+}
+
+:root.btn-win7.btn-win7-square:not(#k) .floating-panel > .title .close {
+    width: 17px;
+    height: 17px;
+}
+
 /* Windows XP: el botón rojo de Luna de XP.css. */
 :root.btn-xp:not(#k) .floating-panel > .title .close,
 :root.btn-xp:not(#k) .dialog > .title .close {

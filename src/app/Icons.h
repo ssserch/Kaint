@@ -3,7 +3,11 @@
 #include "app/AppState.h"
 
 #include <QCursor>
+#include <QHash>
 #include <QIcon>
+#include <QImage>
+#include <QList>
+#include <QStringList>
 #include <QPainterPath>
 
 #include <functional>
@@ -48,10 +52,30 @@ QString pngFile(const QString& name);
 QImage disabledImage(QImage image);
 // Nombres de la tabla de PNG cuyo archivo no está entre los recursos (para las pruebas).
 QStringList missingNamedIcons();
+// Archivo de paint.js → los nombres de Kaint que lo usan (la tabla de los PNG).
+QHash<QString, QStringList> pngFileNames();
+// Lo que puede cambiar un paquete de iconos (el editor de paquetes): carpeta ("icons" o
+// "cursors"), archivo sin extensión y los nombres de Kaint que lo usan.
+struct PackSlot {
+    QString folder;
+    QString file;
+    QStringList names;
+};
+QList<PackSlot> packSlots();
+// El icono de Kaint de un archivo de paquete (sin el paquete activo), de side × side píxeles.
+QImage originalPackImage(const QString& folder, const QString& file, int side);
 // Nombre del icono de un ajuste o efecto ("effect-" + su identificador) si hay PNG; si no, fallback.
 QString effectIcon(const QString& id, const QString& fallback);
 // Estrella naranja de ocho rayos que marca las imágenes con cambios sin guardar (como Paint.NET).
 void paintUnsavedStar(QPainter& p, const QRectF& r);
+// Marcas de la pestaña de una imagen de la sesión colaborativa: las dos personas (en lugar de la
+// estrella), la corona (la imagen del anfitrión) y el equipo (la copia propia del invitado), con
+// contorno blanco para que se vean sobre cualquier miniatura.
+void paintCollabMark(QPainter& p, const QRectF& r);
+void paintCrownMark(QPainter& p, const QRectF& r, const QColor& fill);
+void paintComputerMark(QPainter& p, const QRectF& r, const QColor& fill);
+// Colores de esas marcas: amarillo (cambios sin guardar), verde (guardado) y gris (sin copia).
+QColor collabMarkColor(int state);
 // Cursores de la mano (Mano, botón central, barra espaciadora y cambiar el tamaño de lo que se
 // mueve desde su borde): abierta o agarrando.
 QCursor handCursor(bool grabbing);

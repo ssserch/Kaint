@@ -4,6 +4,7 @@
 #include "app/SystemCursors.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QHash>
 #include <QIconEngine>
 #include <QLinearGradient>
@@ -794,6 +795,69 @@ QIcon pdn(const QString& name)
     return named(name);
 }
 
+namespace {
+
+QImage renderEntry(const Entry& entry, int side)
+{
+    QImage image(side, side, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter p(&image);
+    p.scale(qreal(side) / entry.design, qreal(side) / entry.design);
+    entry.paint(p);
+    return image;
+}
+
+} // namespace
+
+QList<PackSlot> packSlots()
+{
+    QHash<QString, PackSlot> icons;
+    // Los PNG de Kaint (data/ui-icons) y los dibujos que un paquete puede sustituir.
+    const QHash<QString, QStringList> pngNames = pngFileNames();
+    for (const QString& f : QDir(QStringLiteral(":/kaint/ui-icons")).entryList({QStringLiteral("*.png")}, QDir::Files)) {
+        const QString file = f.chopped(4);
+        icons.insert(file, PackSlot{QStringLiteral("icons"), file, pngNames.value(file)});
+    }
+    for (auto it = table().constBegin(); it != table().constEnd(); ++it) {
+        const QString file = QLatin1String(it->packFile);
+        if (file.isEmpty())
+            continue;
+        PackSlot& slot = icons[file];
+        slot.folder = QStringLiteral("icons");
+        slot.file = file;
+        if (!slot.names.contains(it.key()))
+            slot.names.append(it.key());
+    }
+    QList<PackSlot> out = icons.values();
+    std::sort(out.begin(), out.end(), [](const PackSlot& a, const PackSlot& b) { return a.file < b.file; });
+    // Los cursores de la mano.
+    out.append(PackSlot{QStringLiteral("cursors"), QStringLiteral("hand_open_cursor"), {QStringLiteral("pan")}});
+    out.append(PackSlot{QStringLiteral("cursors"), QStringLiteral("hand_closed_cursor"), {QStringLiteral("pan-grab")}});
+    return out;
+}
+
+QImage originalPackImage(const QString& folder, const QString& file, int side)
+{
+    if (folder == QLatin1String("cursors")) {
+        const auto it = table().constFind(file == QLatin1String("hand_closed_cursor") ? QStringLiteral("pan-grab") : QStringLiteral("pan"));
+        return it == table().constEnd() ? QImage() : renderEntry(*it, side);
+    }
+    // El PNG de Kaint o, si no lo hay (las herramientas), su dibujo.
+    const QImage png(QStringLiteral(":/kaint/ui-icons/%1.png").arg(file));
+    if (png.isNull()) {
+        for (auto it = table().constBegin(); it != table().constEnd(); ++it)
+            if (QLatin1String(it->packFile) == file)
+                return renderEntry(*it, side);
+        return {};
+    }
+    QImage out(side, side, QImage::Format_ARGB32_Premultiplied);
+    out.fill(Qt::transparent);
+    const QImage scaled = png.scaled(side, side, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPainter p(&out);
+    p.drawImage((side - scaled.width()) / 2, (side - scaled.height()) / 2, scaled);
+    return out;
+}
+
 void paintUnsavedStar(QPainter& p, const QRectF& r)
 {
     // Ocho rayos desde el centro con un contorno blanco y un punto blanco en medio, dibujados en
@@ -818,6 +882,95 @@ void paintUnsavedStar(QPainter& p, const QRectF& r)
     p.setBrush(Qt::white);
     p.drawEllipse(c, 3 * scale, 3 * scale);
     p.restore();
+}
+
+void paintCollabMark(QPainter& p, const QRectF& r)
+{
+    // El icono de la colaboración (rejilla de 16 px) con un halo blanco.
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const qreal scale = std::min(r.width(), r.height()) / 16.0;
+    p.translate(r.center() - QPointF(8, 8) * scale);
+    p.scale(scale, scale);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 215));
+    p.drawRoundedRect(QRectF(-0.5, 0.5, 17, 16), 3, 3);
+    drawCollab(p);
+    p.restore();
+}
+
+void paintCrownMark(QPainter& p, const QRectF& r, const QColor& fill)
+{
+    // Corona de tres puntas en una rejilla de 16 px.
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const qreal scale = std::min(r.width(), r.height()) / 16.0;
+    p.translate(r.center() - QPointF(8, 8) * scale);
+    p.scale(scale, scale);
+    QPainterPath crown;
+    crown.moveTo(1.5, 5);
+    crown.lineTo(4.8, 8.4);
+    crown.lineTo(8, 2.5);
+    crown.lineTo(11.2, 8.4);
+    crown.lineTo(14.5, 5);
+    crown.lineTo(13.2, 12.2);
+    crown.lineTo(2.8, 12.2);
+    crown.closeSubpath();
+    crown.addRect(QRectF(2.8, 12.6, 10.4, 1.9));
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawPath(crown);
+    p.setPen(QPen(fill.darker(170), 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(fill);
+    p.drawPath(crown);
+    p.restore();
+}
+
+void paintComputerMark(QPainter& p, const QRectF& r, const QColor& fill)
+{
+    // Monitor con su pie, en una rejilla de 16 px.
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const qreal scale = std::min(r.width(), r.height()) / 16.0;
+    p.translate(r.center() - QPointF(8, 8) * scale);
+    p.scale(scale, scale);
+    QPainterPath screen;
+    screen.addRoundedRect(QRectF(1.5, 2, 13, 9), 1.2, 1.2);
+    QPainterPath stand;
+    stand.moveTo(6.4, 11);
+    stand.lineTo(9.6, 11);
+    stand.lineTo(10.2, 13.2);
+    stand.lineTo(11.8, 13.2);
+    stand.lineTo(11.8, 14.5);
+    stand.lineTo(4.2, 14.5);
+    stand.lineTo(4.2, 13.2);
+    stand.lineTo(5.8, 13.2);
+    stand.closeSubpath();
+    const QPainterPath all = screen.united(stand);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawPath(all);
+    const QColor edge = fill.darker(170);
+    p.setPen(QPen(edge, 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(fill);
+    p.drawPath(all);
+    // La pantalla, un poco más clara.
+    p.setPen(Qt::NoPen);
+    p.setBrush(fill.lighter(135));
+    p.drawRoundedRect(QRectF(3, 3.5, 10, 6), 0.6, 0.6);
+    p.restore();
+}
+
+QColor collabMarkColor(int state)
+{
+    switch (state) {
+    case 1:
+        return QColor(0xf2, 0xb8, 0x00); // amarillo: cambios sin guardar / copia atrasada
+    case 2:
+        return QColor(0x2e, 0xa8, 0x43); // verde: guardado / copia al día
+    default:
+        return QColor(0x9a, 0x9a, 0x9a); // gris: sin copia propia
+    }
 }
 
 int cursorSize()

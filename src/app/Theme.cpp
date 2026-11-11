@@ -26,6 +26,7 @@
 #include <QStyleFactory>
 #include <QStyleHints>
 #include <QTimer>
+#include <QToolTip>
 #include <QWidget>
 #ifdef KAINT_HAVE_DBUS
 #include <QDBusConnection>
@@ -281,6 +282,47 @@ public:
 };
 #endif
 
+// La paleta del tema para toda la aplicación. Qt también pone paletas propias del sistema a
+// algunas clases (botones, casillas, menús, etiquetas...), que mandan sobre la de la aplicación: con
+// Windows en modo oscuro son oscuras, y las casillas y los botones de opción salían con el texto
+// blanco sobre los temas claros (Windows 7, por ejemplo). Esas clases llevan también la del tema.
+void setAppPalette(const QPalette& pal)
+{
+    QApplication::setPalette(pal);
+    static const char* const kThemedClasses[] = {"QToolButton", "QAbstractButton", "QCheckBox", "QRadioButton",
+                                                 "QHeaderView", "QAbstractItemView", "QMessageBoxLabel", "QTabBar",
+                                                 "QLabel", "QGroupBox", "QMenu", "QMenuBar", "QTextEdit",
+                                                 "QTextControl", "QLineEdit", "QComboBox", "QAbstractSpinBox"};
+    for (const char* name : kThemedClasses)
+        if (QApplication::palette(name) != pal)
+            QApplication::setPalette(pal, name);
+    if (QToolTip::palette() != pal)
+        QToolTip::setPalette(pal);
+}
+
+// Cuando cambia el tema del escritorio (el modo oscuro de Windows, por ejemplo), Qt vuelve a poner
+// las paletas del sistema a esas clases: se repone la del tema de Kaint.
+class PaletteGuard : public QObject {
+public:
+    using QObject::QObject;
+
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (event->type() == QEvent::ThemeChange && !m_pending && g_current != Scheme::Kde && g_fusion) {
+            m_pending = true;
+            QTimer::singleShot(0, this, [this] {
+                m_pending = false;
+                if (g_current != Scheme::Kde)
+                    setAppPalette(palette(g_active));
+            });
+        }
+        return false;
+    }
+
+private:
+    bool m_pending = false;
+};
+
 // Pulsar Alt muestra el subrayado de las letras de acceso (como en Windows); un clic o cerrar los
 // menús lo vuelve a quitar.
 class AltShortcuts : public QObject {
@@ -336,6 +378,7 @@ void installAltShortcuts()
         return;
     installed = true;
     qApp->installEventFilter(new AltShortcuts(notifier()));
+    qApp->installEventFilter(new PaletteGuard(notifier()));
 }
 
 void watchSystem()
@@ -1829,7 +1872,7 @@ void apply(Scheme scheme)
         if (font != QApplication::font())
             QApplication::setFont(font);
     }
-    QApplication::setPalette(palette(g_active));
+    setAppPalette(palette(g_active));
     QIcon::setThemeName(iconThemeFor(g_active));
     const QString qss = styleSheet(g_active);
     if (qApp->styleSheet() != qss)

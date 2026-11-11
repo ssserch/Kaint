@@ -16,10 +16,12 @@
 
 #include <functional>
 
-class WebSocket;
+class Link;
 struct DocumentState;
 
 namespace Collab {
+
+class P2PGuest;
 
 // Puntero de otro participante (en coordenadas de la imagen).
 struct RemoteCursor {
@@ -56,6 +58,8 @@ public:
     static Session* host(Document* doc, const Settings& settings, QString* error, QObject* parent = nullptr);
     static Session* join(const QString& address, quint16 port, const Settings& settings, const QString& password,
                          QObject* parent = nullptr);
+    // P2P: con el código de la sesión.
+    static Session* joinP2P(const QString& code, const Settings& settings, const QString& password, QObject* parent = nullptr);
     ~Session() override;
 
     Role role() const { return m_role; }
@@ -67,6 +71,15 @@ public:
     QStringList addresses() const;
     bool servesWeb() const;
     QString sessionName() const { return m_sessionName; }
+    // P2P o red local.
+    Mode connection() const { return m_connection; }
+    // P2P: el código de la sesión (el anfitrión lo comparte; el invitado entró con él).
+    QString sessionCode() const;
+    // P2P (anfitrión): cuántos servidores de señalización responden y cuántos hay.
+    int signalingReady() const;
+    int signalingTotal() const;
+    // Mientras se conecta (P2P: buscando la sesión, conectando con el anfitrión).
+    QString progressText() const { return m_progress; }
 
     QList<Peer> peers() const;
     QList<Peer> waitingPeers() const { return m_waiting.values(); }
@@ -106,6 +119,23 @@ public:
     void admit(int id, bool ok);
     void kick(int id);
 
+    // Historial del anfitrión (el de su imagen): los pasos, en cuál está y si está guardada. Al
+    // anfitrión le sirve el suyo; los invitados lo reciben.
+    QStringList hostHistory() const;
+    int hostHistoryIndex() const;
+    bool hostSaved() const;
+    // Si puede volver a una versión anterior para todos: el anfitrión, y los invitados a los que
+    // les dio permiso.
+    bool canRevert() const;
+    void revertTo(int index);
+    // Anfitrión: el permiso de un invitado para volver a versiones anteriores.
+    void setHistoryPermission(int id, bool allowed);
+
+    // Invitado: la copia de la imagen guardada en su equipo (exportada).
+    enum class LocalCopy { None, Behind, Current };
+    LocalCopy localCopy() const;
+    void markExported();
+
     // Sale de la sesión (el anfitrión la termina para todos).
     void leave();
 
@@ -123,6 +153,12 @@ signals:
     void joinRequested(const Collab::Peer& peer);
     void notice(const QString& text);
     void ended(const QString& reason);
+    // Cambió el historial del anfitrión (o si está guardada).
+    void historyChanged();
+    // Cambió algo de lo que se muestra en la pestaña (guardada, copia propia).
+    void indicatorsChanged();
+    // Anfitrión: volver a ese punto del historial (él mismo o un invitado con permiso).
+    void revertRequested(int index);
 
 private:
     struct CanonLayer {
@@ -157,6 +193,7 @@ private:
     void onHostMessage(const QJsonObject& m);
     void onPeerJoined(const Peer& peer);
     // Invitado.
+    void attachLink(Link* link);
     void onGuestText(const QByteArray& text);
     void onWelcome(const QJsonObject& m);
 
@@ -184,13 +221,26 @@ private:
     void applyToWork(const Canon& before, const Canon& after, const QJsonObject& op, DocumentState& work,
                      QHash<int, QRect>& changed, bool& structural);
     void broadcastCommit(const QJsonArray& ops, int from, const QString& name, const QString& label, int pid);
+    QJsonObject historyMessage() const;
+
+    struct CopyStamp {
+        int generation = -1;
+        int index = -1;
+        const void* top = nullptr;
+        bool operator==(const CopyStamp& o) const { return generation == o.generation && index == o.index && top == o.top; }
+    };
+    CopyStamp stamp() const;
 
     Role m_role;
     State m_state = State::Connecting;
     Settings m_settings;
     QPointer<Document> m_doc;
     Server* m_server = nullptr;
-    QPointer<WebSocket> m_socket;
+    QPointer<Link> m_socket;
+    P2PGuest* m_p2p = nullptr;
+    Mode m_connection = Mode::Lan;
+    QString m_code;
+    QString m_progress;
     QString m_address;
     quint16 m_port = 0;
     QString m_password;
@@ -211,6 +261,16 @@ private:
     int m_rev = 0;
     int m_lastIndex = 0;
     mutable QHash<qint64, QString> m_pngCache;
+
+    // Historial del anfitrión (invitado: el que llegó; anfitrión: se manda al cambiar).
+    QStringList m_hostHistory;
+    int m_hostHistoryIndex = 0;
+    bool m_hostSaved = false;
+    QTimer m_historyTimer;
+    // Veces que la sesión vació el historial (para reconocer el estado de la copia propia).
+    int m_historyGeneration = 0;
+    bool m_exported = false;
+    CopyStamp m_exportStamp;
 
     QList<Incoming> m_queue;
     QTimer m_queueTimer;

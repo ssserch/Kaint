@@ -63,6 +63,7 @@ HistoryPanel::HistoryPanel(QUndoGroup* group, QAction* undo, QAction* redo, QWid
 
     // Franja de botones de abajo (con el aspecto de Paint.NET, de otro color y con una línea).
     auto* strip = new QWidget(this);
+    m_strip = strip;
     strip->setObjectName(QStringLiteral("PanelButtons"));
     auto* buttons = new QHBoxLayout(strip);
     buttons->setContentsMargins(2, 2, 2, 2);
@@ -105,6 +106,19 @@ void HistoryPanel::setJumpButtonsVisible(bool on)
 {
     for (QWidget* b : std::as_const(m_jumps))
         b->setVisible(on);
+}
+
+void HistoryPanel::setCollabAction(QAction* action)
+{
+    auto* b = new QToolButton(m_strip);
+    b->setObjectName(QStringLiteral("HistoryCollabButton"));
+    b->setDefaultAction(action);
+    b->setAutoRaise(true);
+    b->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    m_strip->layout()->addWidget(b);
+    auto sync = [b, action] { b->setVisible(action->isVisible()); };
+    connect(action, &QAction::changed, b, sync);
+    sync();
 }
 
 void HistoryPanel::setDocument(Document* doc)

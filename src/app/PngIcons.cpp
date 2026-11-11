@@ -302,6 +302,14 @@ QString pngFile(const QString& name)
     return files().value(name);
 }
 
+QHash<QString, QStringList> pngFileNames()
+{
+    QHash<QString, QStringList> out;
+    for (auto it = files().constBegin(); it != files().constEnd(); ++it)
+        out[*it].append(it.key());
+    return out;
+}
+
 QStringList missingNamedIcons()
 {
     QStringList missing;

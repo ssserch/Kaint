@@ -84,8 +84,9 @@ runs on Windows 10 and 11.
   <tr>
     <td valign="top">
       <h4>Icon packs, fonts and shortcuts</h4>
-      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview,
-      add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
+      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview, or
+      make your own with the icon pack <b>Editor</b> (every icon side by side with Kaint's; save it
+      or export it as a .zip), add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
       and change any keyboard shortcut in <b>Settings</b>.
     </td>
     <td valign="top">
@@ -102,16 +103,23 @@ runs on Windows 10 and 11.
   <tr>
     <td colspan="2" valign="top">
       <h4>Collaborative mode</h4>
-      Host the current image on your local network (<b>File → Collaboration</b>) and edit it
-      together with other copies of Kaint or with browsers running the web version. Between copies
+      Host the current image and edit it together with other copies of Kaint or with browsers
+      running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
+      default: share the session code and the image goes straight from one computer to the other,
+      with WebRTC) or on your local network. Between copies
       of Kaint changes appear in real time; guests can also (and between Kaint and the web, always)
       edit a private draft with its own history and suggest it, and the host accepts it (or accepts
       everything automatically): the change then shows up for everyone and in the host's history
       as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
       colored triangle with their name and tool, and only the host saves the image (guests export a
-      copy). Sessions can be open, approved one by one, password protected or limited to the
-      computers whose ID the host added; nearby sessions are found automatically and you can also
-      join by IP. Everything is in its own <b>Settings → Collaboration</b> section.
+      copy). The session image's tab turns yellow and shows whether the host's image is saved (the
+      crown) and whether a guest's exported copy is up to date (the computer); from the History
+      window everyone can see the host's history, and the host (and the guests it allows) can go
+      back to an earlier version for everyone. Sessions can be open, approved one by one, password protected or limited to the
+      computers whose ID the host added; on the local network nearby sessions are found
+      automatically and you can also join by IP (addresses and codes stay blurred until you click
+      them). Everything is in its own <b>Settings → Collaboration</b> section, with a simplified and
+      a compact view.
     </td>
   </tr>
   <tr>
@@ -150,7 +158,8 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   accent color.
 - **Cursors**: Kaint's tool icons or Paint.NET's pixel-art cursors (the default), with the system
   pointer or Kaint's own beside the small tool icon.
-- **Icons and fonts**: install **icon packs** (.zip files with a preview), pick the **interface
+- **Icons and fonts**: install **icon packs** (.zip files with a preview) or create your own with
+  the **Editor**, pick the **interface
   font** and its size, and add fonts for the Text tool without installing them system-wide.
 - **Floating windows**: a Windows 10 inspired frame or Kaint's compact one, the border width,
   translucency when the pointer leaves them (only while they cover the image, like Paint.NET, or
@@ -211,7 +220,7 @@ bars. Effect dialogs have a **Preview** box to compare with the original image.
 windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
 `KaintHTML` folder with any static web server (`python3 -m http.server`) and open it. Browsers on
 the network can also join a collaborative session hosted by Kaint by opening the address its
-session window shows.
+session window shows, and any browser can host or join a P2P session with just its code.
 
 ## 📦 Install
 
@@ -256,7 +265,7 @@ system's mono if it's installed, and the KDE theme option needs the native build
 <summary><b>🐧 Arch Linux</b></summary>
 
 ```bash
-sudo pacman -S --needed gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons
+sudo pacman -S --needed gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons libdatachannel
 ./build.sh --install        # installs to ~/.local (shows up in the app menu)
 ```
 
@@ -274,7 +283,7 @@ sudo pacman -U build-pkg/kaint-*.pkg.tar.zst
 
 ```bash
 sudo apt install build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev \
-    qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev breeze-icon-theme file
+    qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev libssl-dev breeze-icon-theme file
 ./build.sh --deb            # builds build-deb/kaint_<version>_amd64.deb
 sudo apt install ./build-deb/kaint_*_amd64.deb
 ```
@@ -348,15 +357,15 @@ buttons use colors, gradients and drawings from [7.css](https://khang-nd.github.
 Nguyen Duy, [XP.css](https://botoxparty.github.io/XP.css/) by Adam Hammad and Jordan Scales and
 [98.css](https://jdan.github.io/98.css/) by Jordan Scales (all MIT, see `data/licenses/`).
 `third_party/quickjs-ng/` is [QuickJS-ng](https://github.com/quickjs-ng/quickjs) (MIT), the
-JavaScript engine that runs paint.js plugins.
+JavaScript engine that runs paint.js plugins. Kaint supports the plugins of
+[paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio (.paintjs packages and their
+JavaScript API); it doesn't use paint.js's own plugin system. The P2P collaboration uses
+[libdatachannel](https://github.com/paullouisageneau/libdatachannel) (MPL-2.0) with usrsctp
+(BSD-3-Clause), libjuice (MPL-2.0) and plog (MIT), and Mbed TLS (Apache-2.0) where there is no
+OpenSSL.
 
 ## Disclaimer
 
 Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
 LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the
 software Kaint is inspired by.
-
----
-
-<sub>Kaint supports the plugins of [paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio
-(.paintjs packages and their JavaScript API); it doesn't use paint.js's own plugin system.</sub>

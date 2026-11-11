@@ -6,6 +6,7 @@
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/collab/CollabController.h"
+#include "app/collab/CollabProtocol.h"
 #include "app/Icons.h"
 #include "app/Recovery.h"
 #include "app/Shortcuts.h"
@@ -731,6 +732,13 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
+    // Una sesión colaborativa que siga abierta (si se cierra sin pasar por closeEvent) termina
+    // ahora, mientras la ventana existe: sus avisos ya no llegan a una ventana a medio destruir.
+    if (m_collab) {
+        m_collab->disconnect(this);
+        delete m_collab;
+        m_collab = nullptr;
+    }
     // El lienzo deja de observar los documentos antes de destruirlos.
     m_canvas->setDocument(nullptr);
     m_canvas->setTool(nullptr);
@@ -772,8 +780,17 @@ void MainWindow::createActions()
     A["saveAllAs"] = makeAction(tr("Guardar to&dos..."), {"document-save-all", "document-save-as"}, {},
                                 [this] { saveAllAs(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
-    A["collabHost"] = makeAction(tr("&Hospedar esta imagen"), {"collab"}, {}, [this] { m_collab->host(m_doc); });
-    A["collabJoin"] = makeAction(tr("&Unirse a una sesión..."), {"network-connect", "collab"}, {}, [this] { m_collab->showJoinDialog(); });
+    // Colaboración: por P2P (la predeterminada) o en la red local, cada una con su configuración.
+    A["collabHost"] = makeAction(tr("&Hospedar la imagen actual"), {"collab"}, {}, [this] { m_collab->host(m_doc, Collab::Mode::P2P); });
+    A["collabJoin"] = makeAction(tr("&Unirse con un código..."), {"network-connect", "collab"}, {},
+                                 [this] { m_collab->showJoinDialog(Collab::Mode::P2P); });
+    A["collabSettingsP2P"] = makeAction(tr("&Configuración P2P..."), {"configure", "settings-configure"}, {},
+                                        [this] { showSettings(SettingsDialog::Page::Collaboration, QStringLiteral("collabP2PSection")); });
+    A["collabHostLan"] = makeAction(tr("&Hospedar la imagen actual"), {"collab"}, {}, [this] { m_collab->host(m_doc, Collab::Mode::Lan); });
+    A["collabJoinLan"] = makeAction(tr("&Unirse a una sesión..."), {"network-connect", "collab"}, {},
+                                    [this] { m_collab->showJoinDialog(Collab::Mode::Lan); });
+    A["collabSettingsLan"] = makeAction(tr("C&onfiguración LAN..."), {"configure", "settings-configure"}, {},
+                                        [this] { showSettings(SettingsDialog::Page::Collaboration, QStringLiteral("collabLanSection")); });
     A["collabWindow"] = makeAction(tr("&Ventana de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionWindow(); });
     A["collabLeave"] = makeAction(tr("&Salir de la sesión"), {"network-disconnect", "application-exit"}, {},
                                   [this] { m_collab->leave(true); });
@@ -1043,7 +1060,16 @@ void MainWindow::createMenus()
     file->addSeparator();
     // Modo colaborativo: editar la imagen con otras personas de la red local.
     QMenu* collab = file->addMenu(Icons::theme(QStringLiteral("collab")), tr("C&olaboración"));
-    collab->addActions({A["collabHost"], A["collabJoin"], A["collabWindow"], A["collabLeave"]});
+    QMenu* p2p = collab->addMenu(Icons::theme({"network-wireless", "internet-services", "collab"}), tr("&P2P (por Internet)"));
+    p2p->addActions({A["collabHost"], A["collabJoin"]});
+    p2p->addSeparator();
+    p2p->addAction(A["collabSettingsP2P"]);
+    QMenu* lan = collab->addMenu(Icons::theme({"network-wired", "network-workgroup", "collab"}), tr("&Red local (LAN)"));
+    lan->addActions({A["collabHostLan"], A["collabJoinLan"]});
+    lan->addSeparator();
+    lan->addAction(A["collabSettingsLan"]);
+    collab->addSeparator();
+    collab->addActions({A["collabWindow"], A["collabLeave"]});
     collab->addSeparator();
     collab->addAction(A["collabSettings"]);
     file->addSeparator();
@@ -2716,8 +2742,10 @@ void MainWindow::updateCollabActions()
     if (!m_act.contains(QStringLiteral("collabHost")))
         return;
     const bool active = m_collab->isActive();
-    m_act["collabHost"]->setEnabled(m_doc && !active);
-    m_act["collabJoin"]->setEnabled(!active);
+    for (const char* id : {"collabHost", "collabHostLan"})
+        m_act[QLatin1String(id)]->setEnabled(m_doc && !active);
+    for (const char* id : {"collabJoin", "collabJoinLan"})
+        m_act[QLatin1String(id)]->setEnabled(!active);
     m_act["collabWindow"]->setEnabled(active);
     m_act["collabLeave"]->setEnabled(active);
     m_act["collabLeave"]->setText(m_collab->isHosting() ? tr("&Terminar la sesión") : tr("&Salir de la sesión"));
@@ -3519,11 +3547,13 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
 // Configuración
 // ---------------------------------------------------------------------------
 
-void MainWindow::showSettings(SettingsDialog::Page page)
+void MainWindow::showSettings(SettingsDialog::Page page, const QString& section)
 {
     finishTool();
     SettingsDialog dlg(m_settings, m_tools, this);
     dlg.showPage(page);
+    if (!section.isEmpty())
+        dlg.revealSection(section);
     dlg.setDiscordStatus(m_discord->statusText());
     connect(m_discord, &DiscordPresence::statusChanged, &dlg, [this, &dlg] { dlg.setDiscordStatus(m_discord->statusText()); });
     connect(&dlg, &SettingsDialog::checkUpdatesRequested, this, [this] { checkForUpdates(true); });

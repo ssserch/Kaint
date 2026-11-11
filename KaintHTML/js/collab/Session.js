@@ -6,13 +6,14 @@
 // como operaciones (píxeles de una región con su máscara, la lista de capas o la imagen entera).
 // Lo que llega de los demás se aplica a las dos copias; en el documento solo donde no hay cambios
 // propios sin enviar, y lo que toca una capa en la que una herramienta está trabajando espera.
+import { P2PGuest, P2PHost } from "./P2P.js";
 import { Document, History, Layer } from "../core/Document.js";
 import { Selection } from "../core/Selection.js";
 import { clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
 import { tr } from "../i18n.js";
 import { VERSION as APP_VERSION } from "../version.js";
 import {
-    VERSION, base64ToBytes, bytesToBase64, decodeMask, deviceTag, encodeMask, mergeOrder, normalizedCode, proof,
+    VERSION, base64ToBytes, bytesToBase64, decodeMask, deviceTag, encodeMask, mergeOrder, newSessionCode, normalizedCode, proof,
 } from "./Protocol.js";
 
 const DEVICE_KEY = "kaint.collab.deviceCode";
@@ -168,6 +169,45 @@ export class CollabSession extends EventTarget {
         return s;
     }
 
+    // P2P: el navegador hospeda (con el centro de la sesión dentro) y los invitados llegan por los
+    // servidores de señalización con el código.
+    static hostP2P(app, doc, settings) {
+        const s = new CollabSession(app, "host", settings);
+        s.connection = "p2p";
+        s.hostDoc = doc;
+        s.code = newSessionCode();
+        s.p2p = new P2PHost(settings, s.code);
+        s.p2p.addEventListener("changed", () => s.emit("state"));
+        s.connect(s.p2p.start(), "P2P");
+        return s;
+    }
+
+    static joinP2P(app, code, settings, password = "") {
+        const s = new CollabSession(app, "guest", settings);
+        s.connection = "p2p";
+        s.code = code;
+        s.password = password;
+        s.url = "P2P";
+        s.progress = tr("Buscando la sesión…");
+        s.p2p = new P2PGuest(settings, code);
+        s.p2p.addEventListener("progress", () => {
+            s.progress = tr("Conectando con el anfitrión…");
+            s.emit("state");
+        });
+        s.p2p.connect().then((link) => {
+            if (s.state === "ended")
+                return link.close();
+            s.progress = tr("Conectado; entrando en la sesión…");
+            s.p2p = null;
+            s.connect(link, "P2P");
+            s.emit("state");
+        }).catch((e) => s.finish(e.message === "nohost"
+            ? tr("No se encontró la sesión. Revisa el código y que el anfitrión siga hospedándola (y que los dos usen algún servidor de señalización en común).")
+            : e.message === "noservers" ? tr("No hay servidores de señalización en la configuración.")
+            : tr("No se pudo conectar con ningún servidor de señalización.")));
+        return s;
+    }
+
     constructor(app, role, settings) {
         super();
         this.app = app;
@@ -176,6 +216,11 @@ export class CollabSession extends EventTarget {
         this.state = "connecting";
         this.url = "";
         this.socket = null;
+        // "lan" o "p2p"; el código de la sesión P2P y lo que se está haciendo al conectar.
+        this.connection = "lan";
+        this.code = "";
+        this.progress = "";
+        this.p2p = null;
         this.myId = role === "host" ? 0 : -1;
         this.peers = new Map();
         this.waiting = new Map();
@@ -233,15 +278,19 @@ export class CollabSession extends EventTarget {
             this.socket.send(JSON.stringify(message));
     }
 
-    connect(url) {
-        this.url = url;
-        let socket;
-        try {
-            socket = new WebSocket(url);
-        } catch (e) {
-            setTimeout(() => this.finish(tr("No se pudo conectar: %1", e.message)), 0);
-            return;
+    // 'target': la dirección ws:// o un canal ya abierto que se usa como un WebSocket (P2P).
+    connect(target, label = "") {
+        this.url = label || target;
+        let socket = target;
+        if (typeof target === "string") {
+            try {
+                socket = new WebSocket(target);
+            } catch (e) {
+                setTimeout(() => this.finish(tr("No se pudo conectar: %1", e.message)), 0);
+                return;
+            }
         }
+        const url = this.url;
         this.socket = socket;
         const timeout = setTimeout(() => {
             if (this.state === "connecting" && socket.readyState !== WebSocket.OPEN)
@@ -275,6 +324,8 @@ export class CollabSession extends EventTarget {
         } catch {
             // ignore
         }
+        this.p2p?.stop();
+        this.p2p = null;
         this.cursors.clear();
         this.emit("cursors");
         this.emit("ended", { reason });

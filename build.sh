@@ -18,11 +18,11 @@ DO_APPIMAGE=0
 APP_ID=io.github.ssserch.Kaint
 
 # --- Paquetes (necesarios y recomendados) -----------------------------------
-ARCH_REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons)
+ARCH_REQUIRED=(gcc cmake ninja qt6-base qt6-tools qt6-wayland qt6-svg zlib breeze-icons libdatachannel)
 ARCH_OPTIONAL=(qt6-imageformats kimageformats qt6-translations mono libgdiplus)
 DEB_REQUIRED=(build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev
               qt6-tools-dev-tools qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev
-              breeze-icon-theme)
+              libssl-dev breeze-icon-theme)
 DEB_OPTIONAL=(qt6-image-formats-plugins kimageformat6-plugins qt6-translations-l10n mono-devel libgdiplus)
 # --deb: CPack calcula las dependencias del paquete con file y dpkg-shlibdeps
 ARCH_DEB_TOOLS=(file dpkg)

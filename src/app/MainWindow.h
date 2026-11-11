@@ -176,7 +176,8 @@ private:
     void finishTool();
 
     // Configuración
-    void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface);
+    // 'section': el nombre de una sección de la página que se muestra a la vista (P2P, LAN).
+    void showSettings(SettingsDialog::Page page = SettingsDialog::Page::Interface, const QString& section = {});
     void applySettings();
     void updateToolIconColors();
     void applyCanvasAppearance();

@@ -44,12 +44,14 @@ public:
     // Guarda la configuración y la aplica a la sesión en marcha.
     void applySettings(const Collab::Settings& settings);
 
-    bool host(Document* doc);
+    // Hospeda la imagen por P2P o en la red local.
+    bool host(Document* doc, Collab::Mode mode);
     // La imagen actual de la ventana principal (la que se hospeda desde Configuración).
     void setDocumentProvider(std::function<Document*()> provider) { m_currentDocument = std::move(provider); }
-    bool hostCurrent();
+    bool hostCurrent(Collab::Mode mode);
     void join(const QString& address, quint16 port, const QString& password);
-    void showJoinDialog();
+    void joinP2P(const QString& code, const QString& password);
+    void showJoinDialog(Collab::Mode mode);
     // Pregunta antes si 'ask'; falso si se canceló.
     bool leave(bool ask);
     void showSessionWindow();

@@ -15,6 +15,12 @@ const defaults = {
     collabAnnounce: true,
     collabShowCursors: true,
     collabServer: "",
+    // P2P (la predeterminada) o la red local; servidores de señalización y STUN/TURN (vacío: los
+    // predeterminados); la vista compacta de su página de Configuración.
+    collabMode: "p2p",
+    collabSignalServers: null,
+    collabIceServers: null,
+    collabCompactView: false,
     translucentPanels: true,
     // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar su
     // borde o encima de ella); fuera de la imagen, opacas.

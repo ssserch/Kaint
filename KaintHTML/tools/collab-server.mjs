@@ -6,20 +6,22 @@
 //
 //     node tools/collab-server.mjs [--port 47913] [--no-announce]
 //
+// También es un servidor de señalización para el modo P2P (ws://…/signal, el protocolo de los
+// rastreadores de WebTorrent), por si se prefiere no usar los públicos.
+//
 // y se abre http://localhost:47913/ en ese equipo: la página se une como anfitriona. Los demás
 // abren http://<ip-del-anfitrión>:47913/ o, desde Kaint (escritorio), Archivo > Colaboración >
 // Unirse (también encuentra la sesión en la red local). Además sirve los archivos de Kaint para la
 // web, porque una página cargada con https no puede conectarse a ws:// de la red local.
 import { createServer } from "node:http";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createSocket } from "node:dgram";
 import { readFile, stat } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-    BEACON_PORT, DEFAULT_PORT, VERSION, cleanName, deviceTag, newDeviceCode, normalizedCode, peerColor, proof,
-} from "../js/collab/Protocol.js";
+import { Hub } from "../js/collab/Hub.js";
+import { BEACON_PORT, DEFAULT_PORT, VERSION, newDeviceCode } from "../js/collab/Protocol.js";
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -151,226 +153,36 @@ class Socket {
     }
 }
 
-// --- Sesión ------------------------------------------------------------------------------------
-
-const clients = new Map(); // Socket → { id, nonce, peer, joined, waiting, isHost }
-let host = null;
-let config = {};
-let nextId = 1;
+// --- Sesión (js/collab/Hub.js, la misma que usa el navegador que hospeda por P2P) ----------------
 
 const isLoopback = (address) => address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
-const sessionName = () => (config.session || "").trim() || `Sesión de ${host?.peer.name || "Kaint"}`;
-const authName = () => (host ? config.access || "approve" : "approve");
-const guests = () => [...clients.values()].filter((c) => c.joined && !c.isHost);
-const peers = () => [...(host ? [host.peer] : []), ...guests().map((c) => c.peer).sort((a, b) => a.id - b.id)];
-const modeFor = (peer) => (peer.platform === "web" && config.realtime !== false ? "live" : "confirm");
+const hub = new Hub({ trustHost: (link) => isLoopback(link.address), hostKey: HOST_KEY, log, server: "relay", app: "Kaint relay",
+                      port: PORT });
+// Para el anuncio en la red local.
+const sessionName = () => hub.sessionName();
+const authName = () => hub.authName();
+const peers = () => hub.peers();
+const info = () => ({ ...hub.info(), addresses: localAddresses().map((a) => a.address) });
 
-function info() {
-    return { "kaint-collab": VERSION, server: "relay", hosted: !!host, session: host ? sessionName() : "", host: host?.peer.name || "",
-             auth: authName(), port: PORT };
-}
+// --- Señalización P2P (/signal): lo mínimo del protocolo de los rastreadores de WebTorrent ------
+// Cada sala ("info_hash") tiene sus participantes ("peer_id"); las ofertas de uno se reparten
+// entre otros de la sala y las respuestas vuelven al que hizo la oferta. Kaint y Kaint para la web
+// lo usan para encontrarse por P2P (el código de la sesión no viaja: solo su huella).
 
-function colorFor(wanted, self = null) {
-    const used = peers().filter((p) => p !== self && p.color).map((p) => p.color.toLowerCase());
-    const hexColor = /^#[0-9a-f]{6}$/i.test(wanted || "") ? wanted.toLowerCase() : null;
-    const near = (a, b) => {
-        const d = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16));
-        return Math.hypot(...d) < 60;
+const rooms = new Map(); // info_hash → Map(peer_id → socket)
+
+function onSignalConnection(socket) {
+    socket.maxMessage = 256 * 1024;
+    const joined = new Set(); // "info_hash\npeer_id"
+    const leave = (room, peer) => {
+        const members = rooms.get(room);
+        if (members?.get(peer) === socket) {
+            members.delete(peer);
+            if (!members.size)
+                rooms.delete(room);
+        }
+        joined.delete(`${room}\n${peer}`);
     };
-    if (hexColor && !used.some((u) => near(u, hexColor)))
-        return hexColor;
-    for (let i = 0; i < 10; ++i)
-        if (!used.some((u) => near(u, peerColor(i))))
-            return peerColor(i);
-    return peerColor(used.length);
-}
-
-function toHost(message) {
-    host?.socket.send(message);
-}
-
-function broadcast(message, except = null) {
-    for (const c of guests())
-        if (c !== except)
-            c.socket.send(message);
-}
-
-function peerMessage(op, peer) {
-    return { t: "peer", op, peer };
-}
-
-function deny(client, reason) {
-    client.socket.send({ t: "denied", reason });
-    clients.delete(client.socket);
-    client.socket.close();
-}
-
-function accept(client) {
-    client.peer.color = colorFor(client.peer.color, client.peer);
-    client.waiting = false;
-    client.joined = true;
-    client.socket.maxMessage = MAX_MESSAGE;
-    client.peer.mode = modeFor(client.peer);
-    client.socket.send({ t: "joined", you: client.peer.id, color: client.peer.color, mode: client.peer.mode });
-    broadcast(peerMessage("add", client.peer), client);
-    toHost(peerMessage("add", client.peer));
-    log(`${client.peer.name} se unió (${client.peer.app || client.peer.platform}).`);
-}
-
-function onJoin(client, m) {
-    if (m.v !== VERSION)
-        return deny(client, "version");
-    const address = client.socket.address;
-    if (m.role === "host") {
-        if (host)
-            return deny(client, "busy");
-        if (!isLoopback(address) && m.proof !== proof(normalizedCode(HOST_KEY), client.nonce))
-            return deny(client, "hostkey");
-        client.isHost = true;
-        client.joined = true;
-        client.socket.maxMessage = MAX_MESSAGE;
-        client.peer = { id: 0, name: cleanName(m.name, 0), color: /^#[0-9a-f]{6}$/i.test(m.color || "") ? m.color : peerColor(0),
-                        platform: "web", app: String(m.app || "").slice(0, 60), host: true, mode: "" };
-        config = m.config || {};
-        host = client;
-        client.socket.send({ t: "joined", you: 0, color: client.peer.color, mode: "host", peers: peers() });
-        log(`Hospeda ${client.peer.name}: «${sessionName()}» (${authName()}).`);
-        return;
-    }
-    if (!host)
-        return deny(client, "nohost");
-    const peer = client.peer = {
-        id: nextId++, name: cleanName(m.name, 0), color: m.color, platform: m.platform === "web" ? "web" : "desktop",
-        app: String(m.app || "").slice(0, 60), host: false, mode: "",
-    };
-    peer.name = cleanName(m.name, peer.id);
-    const device = String(m.device || "").slice(0, 64);
-    const listed = !!m.proof && (config.allowedIds || []).some((line) => {
-        const code = normalizedCode(String(line).trim().split(" ")[0]);
-        return code.length === 12 && deviceTag(code) === device && proof(code, client.nonce) === m.proof;
-    });
-    switch (authName()) {
-    case "free":
-        return accept(client);
-    case "password":
-        if (config.password && proof(config.password, client.nonce) === m.proof)
-            return accept(client);
-        client.waiting = true;
-        return setTimeout(() => clients.has(client.socket) && deny(client, "password"), 1000);
-    case "ids":
-        return listed ? accept(client) : deny(client, "device");
-    default:
-        if (listed)
-            return accept(client);
-        client.waiting = true;
-        peer.color = colorFor(peer.color, peer);
-        client.socket.send({ t: "waiting" });
-        toHost({ t: "request", peer });
-    }
-}
-
-function onHostMessage(m) {
-    const target = (id) => [...clients.values()].find((c) => c.peer?.id === id && !c.isHost);
-    switch (m.t) {
-    case "admit": {
-        const c = target(m.peer);
-        if (c?.waiting)
-            m.ok ? accept(c) : deny(c, "rejected");
-        return;
-    }
-    case "kick": {
-        const c = target(m.peer);
-        if (c) {
-            c.socket.send({ t: "end", reason: "kicked" });
-            c.socket.close();
-        }
-        return;
-    }
-    case "config": {
-        const before = { ...config };
-        config = m.config || {};
-        if (m.config?.name) {
-            host.peer.name = cleanName(m.config.name, 0);
-            const update = peerMessage("update", host.peer);
-            broadcast(update);
-            toHost(update);
-        }
-        for (const c of guests()) {
-            const mode = modeFor(c.peer);
-            if (mode !== c.peer.mode || before.autoAccept !== config.autoAccept) {
-                const changed = mode !== c.peer.mode;
-                c.peer.mode = mode;
-                c.socket.send({ t: "settings", mode, autoAccept: !!config.autoAccept });
-                if (changed) {
-                    broadcast(peerMessage("update", c.peer));
-                    toHost(peerMessage("update", c.peer));
-                }
-            }
-        }
-        return;
-    }
-    case "end":
-        return endSession("closed");
-    case "cursor":
-        return broadcast({ t: "cursor", from: 0, x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || "").slice(0, 32), inside: !!m.inside });
-    default:
-        if (m.to !== undefined) {
-            const c = target(m.to);
-            const { to, ...rest } = m;
-            if (c?.joined)
-                c.socket.send(rest);
-        } else {
-            broadcast(m);
-        }
-    }
-}
-
-function onGuestMessage(client, m) {
-    const id = client.peer.id;
-    switch (m.t) {
-    case "change":
-    case "propose":
-        return toHost({ ...m, from: id });
-    case "cursor": {
-        const out = { t: "cursor", from: id, x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || "").slice(0, 32), inside: !!m.inside };
-        broadcast(out, client);
-        return toHost(out);
-    }
-    case "rename": {
-        client.peer.name = cleanName(m.name, id);
-        const update = peerMessage("update", client.peer);
-        broadcast(update);
-        return toHost(update);
-    }
-    case "leave":
-        return client.socket.close();
-    }
-}
-
-function endSession(reason) {
-    // Cerrar un socket avisa enseguida (onclose): se quita antes de la lista.
-    const ending = host;
-    host = null;
-    config = {};
-    for (const c of [...clients.values()]) {
-        if (c === ending)
-            continue;
-        clients.delete(c.socket);
-        c.socket.send({ t: "end", reason });
-        c.socket.close();
-    }
-    if (ending) {
-        log(`Terminó la sesión de ${ending.peer.name}.`);
-        clients.delete(ending.socket);
-        ending.socket.close();
-    }
-}
-
-function onConnection(socket) {
-    if (clients.size >= 64)
-        return socket.close();
-    const client = { socket, nonce: new Uint8Array(randomBytes(16)), peer: null, joined: false, waiting: false, isHost: false };
-    clients.set(socket, client);
     socket.onmessage = (text) => {
         let m;
         try {
@@ -378,38 +190,71 @@ function onConnection(socket) {
         } catch {
             return;
         }
-        if (!m || typeof m !== "object")
+        if (m?.action !== "announce" || typeof m.info_hash !== "string" || typeof m.peer_id !== "string"
+            || m.info_hash.length > 64 || m.peer_id.length > 64)
             return;
-        try {
-            if (!client.joined) {
-                if (m.t === "join" && !client.waiting)
-                    onJoin(client, m);
+        const room = m.info_hash, peer = m.peer_id;
+        if (m.event === "stopped")
+            return leave(room, peer);
+        if (!rooms.has(room)) {
+            if (rooms.size > 10000)
                 return;
-            }
-            if (client.isHost)
-                onHostMessage(m);
-            else
-                onGuestMessage(client, m);
-        } catch (e) {
-            log(`Error: ${e.stack || e}`);
+            rooms.set(room, new Map());
+        }
+        const members = rooms.get(room);
+        if (members.size >= 200 && !members.has(peer))
+            return;
+        members.set(peer, socket);
+        joined.add(`${room}\n${peer}`);
+        if (m.answer && typeof m.to_peer_id === "string") {
+            members.get(m.to_peer_id)?.send({ action: "announce", info_hash: room, peer_id: peer, offer_id: m.offer_id, answer: m.answer });
+            return;
+        }
+        socket.send({ action: "announce", info_hash: room, interval: 120, complete: 0, incomplete: members.size });
+        if (Array.isArray(m.offers) && m.offers.length) {
+            const others = [...members.entries()].filter(([id]) => id !== peer).sort(() => Math.random() - 0.5);
+            m.offers.slice(0, Math.min(others.length, 10)).forEach((o, i) => {
+                if (o && typeof o.offer_id === "string" && o.offer && typeof o.offer === "object")
+                    others[i][1].send({ action: "announce", info_hash: room, peer_id: peer, offer_id: o.offer_id, offer: o.offer });
+            });
         }
     };
     socket.onclose = () => {
-        if (!clients.has(socket))
-            return;
-        clients.delete(socket);
-        if (client.isHost) {
-            endSession("closed");
-        } else if (client.joined) {
-            broadcast(peerMessage("remove", client.peer));
-            toHost(peerMessage("remove", client.peer));
-            log(`${client.peer.name} salió.`);
-        } else if (client.waiting && client.peer) {
-            toHost(peerMessage("remove", client.peer));
+        for (const key of [...joined]) {
+            const [room, peer] = key.split("\n");
+            leave(room, peer);
         }
     };
-    socket.send({ t: "hello", v: VERSION, session: host ? sessionName() : "", host: host?.peer.name || "", auth: authName(),
-                  nonce: Buffer.from(client.nonce).toString("base64"), server: "relay", app: "Kaint relay" });
+}
+
+// --- Sesiones cercanas (para la lista de Kaint para la web) ---------------------------------------
+// Las que se anuncian en la red local (los avisos UDP que mandan Kaint y este servidor).
+
+const nearby = new Map(); // "dirección:puerto" → { ...aviso, address, seen }
+const listener = createSocket({ type: "udp4", reuseAddr: true });
+listener.on("error", () => {});
+listener.on("message", (data, rinfo) => {
+    try {
+        const b = JSON.parse(data.toString("utf8"));
+        if (b?.["kaint-collab"] !== VERSION || !b.port)
+            return;
+        const address = rinfo.address === "127.0.0.1" ? (localAddresses()[0]?.address || "127.0.0.1") : rinfo.address;
+        nearby.set(`${address}:${b.port}`, {
+            name: String(b.name || "").slice(0, 80), host: String(b.host || "").slice(0, 60), address, port: Number(b.port) || 0,
+            auth: String(b.auth || ""), app: String(b.app || "").slice(0, 60), web: !!b.web, peers: Number(b.peers) || 0, seen: Date.now(),
+        });
+    } catch {
+        // ignore
+    }
+});
+listener.bind(BEACON_PORT);
+
+function nearbySessions() {
+    const now = Date.now();
+    for (const [key, s] of nearby)
+        if (now - s.seen > 7000)
+            nearby.delete(key);
+    return [...nearby.values()].map(({ seen, ...s }) => s);
 }
 
 // --- HTTP: Kaint para la web, /kaint-collab.json y el saludo de WebSocket ----------------------
@@ -423,9 +268,11 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
-    if (url.pathname === "/kaint-collab.json") {
-        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-        res.end(JSON.stringify(info()));
+    // Kaint para la web abierta desde otra dirección también puede preguntar (CORS).
+    if (url.pathname === "/kaint-collab.json" || url.pathname === "/kaint-collab-sessions.json") {
+        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*",
+                             "Access-Control-Allow-Private-Network": "true" });
+        res.end(JSON.stringify(url.pathname === "/kaint-collab.json" ? info() : nearbySessions()));
         return;
     }
     let path = decodeURIComponent(url.pathname);
@@ -458,7 +305,11 @@ server.on("upgrade", (req, socket, head) => {
     }
     const accept = createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-    onConnection(new Socket(socket, head));
+    const link = new Socket(socket, head);
+    if (new URL(req.url, "http://x").pathname.startsWith("/signal"))
+        onSignalConnection(link);
+    else
+        hub.connect(link);
 });
 
 // --- Anuncio en la red local -------------------------------------------------------------------
@@ -481,10 +332,10 @@ const beacon = createSocket({ type: "udp4", reuseAddr: true });
 beacon.on("error", () => {});
 beacon.bind(() => beacon.setBroadcast(true));
 setInterval(() => {
-    if (!host || !ANNOUNCE || config.announce === false)
+    if (!hub.host || !ANNOUNCE || hub.config.announce === false)
         return;
-    const data = Buffer.from(JSON.stringify({ "kaint-collab": VERSION, name: sessionName(), host: host.peer.name, port: PORT,
-                                              auth: authName(), app: host.peer.app || "Kaint web", web: true, peers: peers().length }));
+    const data = Buffer.from(JSON.stringify({ "kaint-collab": VERSION, name: sessionName(), host: hub.host.peer.name, port: PORT,
+                                              auth: authName(), app: hub.host.peer.app || "Kaint web", web: true, peers: peers().length }));
     const targets = new Set([...localAddresses().map(broadcastAddress), "127.0.0.1"]);
     for (const t of targets)
         beacon.send(data, BEACON_PORT, t, () => {});
@@ -500,6 +351,7 @@ server.listen(PORT, () => {
     for (const a of localAddresses())
         console.log(`  Para los demás de la red:       http://${a.address}:${PORT}/`);
     console.log(`  Clave para hospedar desde otro equipo: ${HOST_KEY}`);
+    console.log(`  Señalización P2P (Configuración > Colaboración > P2P): ws://<esta-dirección>:${PORT}/signal`);
 });
 server.on("error", (e) => {
     console.error(`No se pudo abrir el puerto ${PORT}: ${e.message}`);

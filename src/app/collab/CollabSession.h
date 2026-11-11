@@ -16,10 +16,12 @@
 
 #include <functional>
 
-class WebSocket;
+class Link;
 struct DocumentState;
 
 namespace Collab {
+
+class P2PGuest;
 
 // Puntero de otro participante (en coordenadas de la imagen).
 struct RemoteCursor {
@@ -56,6 +58,8 @@ public:
     static Session* host(Document* doc, const Settings& settings, QString* error, QObject* parent = nullptr);
     static Session* join(const QString& address, quint16 port, const Settings& settings, const QString& password,
                          QObject* parent = nullptr);
+    // P2P: con el código de la sesión.
+    static Session* joinP2P(const QString& code, const Settings& settings, const QString& password, QObject* parent = nullptr);
     ~Session() override;
 
     Role role() const { return m_role; }
@@ -67,6 +71,15 @@ public:
     QStringList addresses() const;
     bool servesWeb() const;
     QString sessionName() const { return m_sessionName; }
+    // P2P o red local.
+    Mode connection() const { return m_connection; }
+    // P2P: el código de la sesión (el anfitrión lo comparte; el invitado entró con él).
+    QString sessionCode() const;
+    // P2P (anfitrión): cuántos servidores de señalización responden y cuántos hay.
+    int signalingReady() const;
+    int signalingTotal() const;
+    // Mientras se conecta (P2P: buscando la sesión, conectando con el anfitrión).
+    QString progressText() const { return m_progress; }
 
     QList<Peer> peers() const;
     QList<Peer> waitingPeers() const { return m_waiting.values(); }
@@ -157,6 +170,7 @@ private:
     void onHostMessage(const QJsonObject& m);
     void onPeerJoined(const Peer& peer);
     // Invitado.
+    void attachLink(Link* link);
     void onGuestText(const QByteArray& text);
     void onWelcome(const QJsonObject& m);
 
@@ -190,7 +204,11 @@ private:
     Settings m_settings;
     QPointer<Document> m_doc;
     Server* m_server = nullptr;
-    QPointer<WebSocket> m_socket;
+    QPointer<Link> m_socket;
+    P2PGuest* m_p2p = nullptr;
+    Mode m_connection = Mode::Lan;
+    QString m_code;
+    QString m_progress;
     QString m_address;
     quint16 m_port = 0;
     QString m_password;

@@ -5,6 +5,13 @@
 #include <QDialog>
 #include <QSet>
 
+#include <functional>
+#include <memory>
+
+namespace Collab {
+struct Settings;
+}
+
 class ColorButton;
 class QCheckBox;
 class QComboBox;
@@ -174,6 +181,8 @@ public:
     SettingsDialog(const AppSettings& current, ToolManager* tools, QWidget* parent = nullptr);
     AppSettings settings() const { return m_settings; }
     void showPage(Page page);
+    // Despliega y lleva a la vista una sección de la página actual (objectName; la de P2P o LAN).
+    void revealSection(const QString& name);
 
     // Se aceptó reiniciar Kaint para aplicar el tema KDE (o salir de él) o el idioma; settings()
     // tiene los valores nuevos.
@@ -196,6 +205,9 @@ private:
     QWidget* createPluginsPage();
     QWidget* createDiscordPage();
     QWidget* createCollabPage();
+    // La vista de la página Colaboración (simplificada o compacta, según la configuración).
+    QWidget* createCollabView(QWidget* parent, const std::shared_ptr<Collab::Settings>& settings,
+                              const std::function<void()>& apply);
     QWidget* createUpdatesPage();
     QWidget* createDiagnosticsPage();
     QWidget* createIconPacksPage();

@@ -24,6 +24,21 @@ enum class Access { Free = 0, Approve = 1, Password = 2, Ids = 3 };
 QString accessName(Access a);
 Access accessFromName(const QString& name);
 
+// Cómo se conectan: P2P por Internet (WebRTC, con un código de sesión; la predeterminada) o en la
+// red local (el anfitrión abre un servidor y los demás entran por su dirección).
+enum class Mode { P2P = 0, Lan = 1 };
+QString modeName(Mode m);
+Mode modeFromName(const QString& name);
+
+// Servidores de señalización (rastreadores de WebTorrent: solo presentan a los equipos; la imagen
+// va directa de uno a otro) y de STUN/TURN predeterminados.
+QStringList defaultSignalServers();
+QStringList defaultIceServers();
+// Código de una sesión P2P: "ABCD-EFGH-JKLM-NPQR" (lo que se comparte para entrar).
+QString newSessionCode();
+// Sin guiones ni espacios, en mayúsculas; vacío si no tiene la forma de un código.
+QString normalizedSessionCode(const QString& code);
+
 // Configuración > Colaboración (se guarda aparte, en el grupo "collab").
 struct Settings {
     QString name;               // nombre en pantalla (vacío: el del usuario del sistema)
@@ -43,6 +58,13 @@ struct Settings {
     // Los navegadores de la red pueden abrir Kaint para la web desde esta sesión.
     bool serveWeb = true;
     bool showCursors = true;
+    // Configuración > Colaboración: la vista compacta (todo en un formulario) en vez de la simplificada.
+    bool compactView = false;
+    // P2P o red local (lo que usan «Hospedar» y «Unirse» sin más).
+    Mode mode = Mode::P2P;
+    QStringList signalServers = defaultSignalServers();
+    // "stun:servidor:puerto" o "turn:usuario:contraseña@servidor:puerto".
+    QStringList iceServers = defaultIceServers();
 
     static Settings load();
     void save() const;

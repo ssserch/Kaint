@@ -191,3 +191,53 @@ export function mergeOrder(current, listed, removed) {
     });
     return result;
 }
+
+// --- P2P (WebRTC, docs/collaboration.md «P2P») ---------------------------------------------------
+
+// Rastreadores de WebTorrent (solo presentan a los equipos) y servidores STUN predeterminados.
+export const DefaultSignalServers = ["wss://tracker.openwebtorrent.com", "wss://tracker.webtorrent.dev",
+                                     "wss://tracker.files.fm:7073/announce"];
+export const DefaultIceServers = ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"];
+
+// Código de una sesión P2P: "ABCD-EFGH-JKLM-NPQR".
+export function newSessionCode() {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const s = [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+    return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}`;
+}
+
+// Sin guiones y en mayúsculas; vacío si no tiene la forma de un código.
+export function normalizedSessionCode(code) {
+    const n = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return n.length === 16 && [...n].every((c) => CODE_ALPHABET.includes(c)) ? n : "";
+}
+
+// La «sala» en el rastreador (20 caracteres) y la firma de las ofertas y respuestas de WebRTC.
+export function p2pRoom(code) {
+    return hex(sha256(utf8(`kaint-p2p-room:${normalizedSessionCode(code)}`))).slice(0, 20);
+}
+
+function descriptionMac(code, kind, base) {
+    return bytesToBase64(hmacSha256(utf8(`kaint-p2p:${normalizedSessionCode(code)}`), utf8(`${kind}\n${base}`)));
+}
+
+export function signDescription(code, kind, sdp) {
+    const base = String(sdp || "").replace(/\r/g, "").trim();
+    return `${base}\na=kaint-sig:${descriptionMac(code, kind, base)}`.replace(/\n/g, "\r\n") + "\r\n";
+}
+
+// La descripción sin la firma, o "" si la firma no es válida.
+export function verifyDescription(code, kind, sdp) {
+    const lines = String(sdp || "").replace(/\r/g, "").trim().split("\n");
+    let signature = "";
+    for (let i = lines.length - 1; i >= 0; --i)
+        if (lines[i].startsWith("a=kaint-sig:")) {
+            signature = lines.splice(i, 1)[0].slice(12).trim();
+            break;
+        }
+    const base = lines.join("\n").trim();
+    if (!signature || !base || signature !== descriptionMac(code, kind, base))
+        return "";
+    return base.replace(/\n/g, "\r\n") + "\r\n";
+}

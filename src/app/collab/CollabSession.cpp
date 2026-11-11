@@ -1,5 +1,6 @@
 #include "app/collab/CollabSession.h"
 
+#include "app/collab/P2P.h"
 #include "app/collab/WebSocket.h"
 #include "core/Commands.h"
 #include "core/Document.h"
@@ -165,6 +166,8 @@ Session::~Session()
         else if (m_socket)
             m_socket->close();
     }
+    if (m_p2p)
+        m_p2p->stop();
 }
 
 Session* Session::host(Document* doc, const Settings& settings, QString* error, QObject* parent)
@@ -176,7 +179,9 @@ Session* Session::host(Document* doc, const Settings& settings, QString* error, 
     me.platform = QStringLiteral("desktop");
     me.app = appName();
     me.host = true;
+    s->m_connection = settings.mode;
     s->m_server = new Server(settings, me, s);
+    connect(s->m_server, &Server::signalingChanged, s, &Session::stateChanged);
     if (!s->m_server->start(error)) {
         delete s;
         return nullptr;
@@ -229,13 +234,61 @@ Session* Session::join(const QString& address, quint16 port, const Settings& set
     s->m_address = address;
     s->m_port = port;
     s->m_password = password;
-    s->m_socket = WebSocket::connectTo(address, port, s);
-    connect(s->m_socket, &WebSocket::textReceived, s, &Session::onGuestText);
-    connect(s->m_socket, &WebSocket::failed, s, [s](const QString& reason) {
-        s->finish(s->m_state == State::Connecting ? tr("No se pudo conectar: %1").arg(reason) : reasonText(QStringLiteral("lost")));
-    });
-    connect(s->m_socket, &WebSocket::closed, s, [s] { s->finish(reasonText(QStringLiteral("lost"))); });
+    s->attachLink(WebSocket::connectTo(address, port, s));
     return s;
+}
+
+Session* Session::joinP2P(const QString& code, const Settings& settings, const QString& password, QObject* parent)
+{
+    auto* s = new Session(Role::Guest, settings, parent);
+    s->m_connection = Mode::P2P;
+    s->m_code = code;
+    s->m_address = QStringLiteral("P2P");
+    s->m_password = password;
+    s->m_p2p = new P2PGuest(settings, code, s);
+    connect(s->m_p2p, &P2PGuest::progress, s, [s](const QString& text) {
+        s->m_progress = text;
+        emit s->stateChanged();
+    });
+    connect(s->m_p2p, &P2PGuest::connected, s, [s](Link* link) {
+        link->setParent(s);
+        s->m_p2p->deleteLater();
+        s->m_p2p = nullptr;
+        s->m_progress = tr("Conectado; entrando en la sesión…");
+        s->attachLink(link);
+        emit s->stateChanged();
+    });
+    connect(s->m_p2p, &P2PGuest::failed, s, [s](const QString& reason) { s->finish(reason); });
+    QTimer::singleShot(0, s, [s] {
+        if (s->m_p2p)
+            s->m_p2p->start();
+    });
+    return s;
+}
+
+void Session::attachLink(Link* link)
+{
+    m_socket = link;
+    connect(link, &Link::textReceived, this, &Session::onGuestText);
+    connect(link, &Link::failed, this, [this](const QString& reason) {
+        finish(m_state == State::Connecting ? tr("No se pudo conectar: %1").arg(reason) : reasonText(QStringLiteral("lost")));
+    });
+    connect(link, &Link::closed, this, [this] { finish(reasonText(QStringLiteral("lost"))); });
+}
+
+QString Session::sessionCode() const
+{
+    return m_server ? m_server->sessionCode() : m_code;
+}
+
+int Session::signalingReady() const
+{
+    return m_server ? m_server->signalingReady() : 0;
+}
+
+int Session::signalingTotal() const
+{
+    return m_server ? m_server->signalingTotal() : 0;
 }
 
 quint16 Session::port() const
@@ -245,6 +298,8 @@ quint16 Session::port() const
 
 QStringList Session::addresses() const
 {
+    if (m_connection == Mode::P2P)
+        return {};
     return m_server ? Server::localAddresses() : QStringList{m_address};
 }
 

@@ -18,6 +18,8 @@ finish-args:
   - --filesystem=home
   # Colors and font of the KDE theme
   - --filesystem=xdg-config/kdeglobals:ro
+  # Collaborative mode: P2P over the Internet (WebRTC) and sessions on the local network
+  - --share=network
   # Optional Discord Rich Presence (native and Flatpak Discord)
   - --filesystem=xdg-run/discord-ipc-0
   - --filesystem=xdg-run/app/com.discordapp.Discord:create
@@ -52,6 +54,24 @@ modules:
           version-pattern: libgdiplus-([\d.]+)\.tar\.gz
           url-template: https://dl.winehq.org/mono/sources/libgdiplus/libgdiplus-$version.tar.gz
 
+  # WebRTC data channels for the P2P collaboration (with the runtime's OpenSSL)
+  - name: libdatachannel
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DNO_MEDIA=ON
+      - -DNO_WEBSOCKET=ON
+      - -DNO_EXAMPLES=ON
+      - -DNO_TESTS=ON
+    sources:
+      - type: git
+        url: https://github.com/paullouisageneau/libdatachannel.git
+        tag: v0.24.6
+        commit: 6b1e2e620f1e37f0eafeee702eaea0043cb305fd
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([\d.]+)$
+
   # Keep kaint as the last module: ./build.sh --flatpak replaces its sources with the working tree
   - name: kaint
     buildsystem: cmake-ninja
@@ -66,7 +86,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/ssserch/Kaint.git
-        tag: v1.1.6
+        tag: v1.1.7
         x-checker-data:
           type: git
           tag-pattern: ^v([\d.]+)$

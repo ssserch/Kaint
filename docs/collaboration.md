@@ -4,6 +4,12 @@ Kaint (desktop) and KaintHTML (web) share one protocol so that both can join the
 
 ## Roles and transport
 
+Two ways to connect, with the same messages: **P2P** over the Internet (WebRTC data channels; the
+default) and the **local network** (WebSocket). Both are described below; everything from *Joining*
+on is common.
+
+### Local network
+
 - One **server** per session, reachable on the local network over **WebSocket** (`ws://address:47913/`).
   - Kaint (desktop) is a server itself when it hosts: its user is the **host** (participant `0`).
   - A browser can't open a server, so web hosts run the small relay in
@@ -17,8 +23,37 @@ Kaint (desktop) and KaintHTML (web) share one protocol so that both can join the
 - The **host** owns the canonical image (only the host saves it; guests can export a copy).
 - Desktop hosts announce themselves on the LAN with a UDP beacon to port **47914** every 2 s:
   `{"kaint-collab":1,"name":…,"host":…,"port":…,"auth":…,"app":…}`.
+- Servers that serve the web app also answer `/kaint-collab-sessions.json` (the sessions whose beacons
+  they hear: `[{name, host, address, port, auth, app, web, peers}]`), the list of nearby sessions of
+  KaintHTML (a browser can't listen to UDP). Both JSON endpoints allow any origin (CORS).
 - All messages are JSON text frames with a type field `t`. Images travel as base64 PNG (straight alpha,
   the layers' own format on both sides).
+
+### P2P (WebRTC)
+
+- The host creates a **session code** (16 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, shown as
+  `ABCD-EFGH-JKLM-NPQR`) and shares it. Guests connect **directly to the host** with a reliable, ordered
+  WebRTC data channel labelled `kaint` (libdatachannel on the desktop, `RTCPeerConnection` in the
+  browser) and speak exactly the protocol below over it. The host is the hub, as on the local network;
+  a browser can host too: it runs the relay's logic (`KaintHTML/js/collab/Hub.js`) inside the page.
+- **Signaling** uses the WebSocket protocol of WebTorrent trackers (public ones by default; the relay
+  answers it at `ws://address:47913/signal`):
+  - room: `info_hash` = the first 20 hex digits of SHA-256(`"kaint-p2p-room:" + code`) (the code
+    without dashes); every peer picks a random 20-character `peer_id`.
+  - the host announces `{action: "announce", info_hash, peer_id, numwant: 0, offers: []}` every 30 s.
+  - a guest announces offers `{offer_id, offer: {type: "offer", sdp}}` (two new ones every 9 s while it
+    looks; it gives up after 45 s); the tracker forwards each to another peer of the room, and the host
+    replies `{action: "announce", info_hash, peer_id, to_peer_id, offer_id, answer: {type: "answer", sdp}}`.
+  - Descriptions are complete (no trickle ICE: candidates are gathered first, at most 5 s) and **signed**
+    with the code: the last line is `a=kaint-sig:` + base64 HMAC-SHA256(key `"kaint-p2p:" + code`,
+    `kind + "\n" + sdp`), where `kind` is `offer` or `answer` and `sdp` has its `\r` removed and is
+    trimmed. Unsigned or badly signed descriptions are ignored, so only those who know the code can
+    connect (the tracker sees the room, not the code). The line is removed before the description is used.
+- ICE servers: `stun:host:port` or `turn:user:password@host:port` (defaults: Google's and Cloudflare's
+  STUN). Without TURN, some networks (symmetric NAT on both sides) can't connect.
+- Data channel messages are text. A message longer than 16 KiB is sent in pieces: every piece but the
+  last starts with `+`, the last with `=`; the receiver joins them (JSON messages start with `{`).
+  Browsers pace the pieces with `bufferedAmount`.
 
 ## Joining
 
@@ -80,9 +115,10 @@ guest the pixels it changed itself and hasn't sent yet are kept.
 - host → server: `admit {peer, ok}`, `kick {peer}`; host → guests: `settings {mode, autoAccept}`.
 - server → all: `end {reason}` when the session finishes (`closed`, or `kicked` for one guest).
 
-## The relay (`KaintHTML/tools/collab-server.mjs`)
+## The relay (`KaintHTML/tools/collab-server.mjs` and `js/collab/Hub.js`)
 
-- Routes between the web host and the guests; it applies the access rules itself (the host sends them
+- Routes between the web host and the guests (on the local network through the Node server, over P2P
+  inside the hosting page); it applies the access rules itself (the host sends them
   in `join.config` and later `config {config}`: `name, session, access, password, allowedIds, realtime,
   autoAccept, announce`).
 - relay → host: the guests' `change`, `propose`, `cursor` (with `from`), `peer` events and

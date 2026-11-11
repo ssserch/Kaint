@@ -12,6 +12,8 @@
 #include "app/UserFonts.h"
 #include "app/WindowFrame.h"
 #include "app/collab/CollabController.h"
+#include "app/collab/CollabDialogs.h"
+#include "app/collab/CollabSession.h"
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/ThemeDialog.h"
@@ -19,12 +21,14 @@
 #include "core/effects/Effect.h"
 #include "app/widgets/ColorWidgets.h"
 #include "app/widgets/EffectControls.h"
+#include "app/widgets/FlowLayout.h"
 #include "app/widgets/UnitField.h"
 #include "core/CustomShapes.h"
 #include "app/dialogs/PluginCatalogDialog.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
@@ -38,6 +42,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -57,6 +62,7 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QScreen>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -276,6 +282,26 @@ PageBox makePage(QWidget* parent)
     return {scroll, layout};
 }
 
+// Llama a 'done' cuando el campo pierde el foco (QPlainTextEdit no tiene editingFinished).
+class FocusOutFilter : public QObject {
+public:
+    FocusOutFilter(QObject* parent, std::function<void()> done)
+        : QObject(parent)
+        , m_done(std::move(done))
+    {
+    }
+
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (event->type() == QEvent::FocusOut)
+            m_done();
+        return false;
+    }
+
+private:
+    std::function<void()> m_done;
+};
+
 QLabel* wrapped(const QString& text, QWidget* parent)
 {
     auto* l = new QLabel(text, parent);
@@ -355,6 +381,20 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
 void SettingsDialog::showPage(Page page)
 {
     m_sections->setCurrentRow(int(page));
+}
+
+void SettingsDialog::revealSection(const QString& name)
+{
+    auto* scroll = qobject_cast<QScrollArea*>(m_pages->currentWidget());
+    if (!scroll)
+        return;
+    if (auto* more = scroll->findChild<QToolButton*>(QStringLiteral("collabMoreToggle")))
+        more->setChecked(true);
+    // Cuando ya está colocada (al mostrarse el diálogo).
+    QTimer::singleShot(50, scroll, [scroll, name] {
+        if (QWidget* target = scroll->findChild<QWidget*>(name); target && scroll->widget())
+            scroll->verticalScrollBar()->setValue(target->mapTo(scroll->widget(), QPoint(0, 0)).y() - 8);
+    });
 }
 
 void SettingsDialog::changed()
@@ -1834,11 +1874,13 @@ void SettingsDialog::refreshToolOrder()
 
 QWidget* SettingsDialog::createCollabPage()
 {
-    // Configuración y sesión del modo colaborativo (se guarda aparte: Collab::Settings).
+    // Configuración y sesión del modo colaborativo (se guarda aparte: Collab::Settings). Dos vistas
+    // con las mismas opciones: la simplificada (por secciones, con las explicaciones a la vista) y la
+    // compacta (todo junto en formularios, con las explicaciones en las descripciones emergentes).
     PageBox page = makePage(this);
     CollabController* collab = CollabController::instance();
     auto settings = std::make_shared<Collab::Settings>(collab ? collab->settings() : Collab::Settings::load());
-    auto apply = [collab, settings] {
+    const std::function<void()> apply = [collab, settings] {
         if (collab)
             collab->applySettings(*settings);
         else
@@ -1848,97 +1890,336 @@ QWidget* SettingsDialog::createCollabPage()
     if (collab)
         connect(collab, &CollabController::changed, page.widget, [collab, settings] { *settings = collab->settings(); });
 
-    page.layout->addWidget(wrapped(tr("Edita la imagen actual con otras personas de tu red local: tú la hospedas y los demás se "
-                                      "unen desde Kaint o desde Kaint para la web. Solo tú guardas la imagen; los invitados "
-                                      "pueden exportar una copia."),
-                                   page.widget));
+    auto* viewRow = new QHBoxLayout;
+    viewRow->setSpacing(0);
+    viewRow->addWidget(new QLabel(tr("Vista:"), page.widget));
+    viewRow->addSpacing(8);
+    auto* simple = new QPushButton(tr("Simplificada"), page.widget);
+    simple->setToolTip(tr("Por secciones, con las explicaciones a la vista y lo que menos se cambia en «Más opciones»."));
+    auto* compact = new QPushButton(tr("Compacta"), page.widget);
+    compact->setToolTip(tr("Todas las opciones juntas en formularios; las explicaciones, en las descripciones emergentes."));
+    for (QPushButton* b : {simple, compact}) {
+        b->setCheckable(true);
+        b->setAutoExclusive(true);
+        viewRow->addWidget(b);
+    }
+    simple->setChecked(!settings->compactView);
+    compact->setChecked(settings->compactView);
+    viewRow->addStretch();
+    page.layout->addLayout(viewRow);
 
-    // Sesión actual.
-    page.layout->addWidget(sectionHeader(tr("Sesión"), page.widget));
-    auto* status = wrapped(QString(), page.widget);
-    page.layout->addWidget(status);
-    auto* sessionRow = new QHBoxLayout;
-    auto* hostButton = new QPushButton(Icons::theme(QStringLiteral("collab")), tr("Hospedar la imagen actual"), page.widget);
-    auto* joinButton = new QPushButton(Icons::theme({"network-connect", "go-next"}), tr("Unirse a una sesión…"), page.widget);
-    auto* windowButton = new QPushButton(tr("Ventana de la sesión"), page.widget);
-    auto* leaveButton = new QPushButton(page.widget);
-    sessionRow->addWidget(hostButton);
-    sessionRow->addWidget(joinButton);
-    sessionRow->addWidget(windowButton);
-    sessionRow->addWidget(leaveButton);
-    sessionRow->addStretch();
-    page.layout->addLayout(sessionRow);
+    auto* holder = new QWidget(page.widget);
+    auto* holderLayout = new QVBoxLayout(holder);
+    holderLayout->setContentsMargins(0, 0, 0, 0);
+    page.layout->addWidget(holder);
+    page.layout->addStretch();
+    auto shown = std::make_shared<QPointer<QWidget>>();
+    const std::function<void()> build = [this, holder, holderLayout, shown, settings, apply] {
+        if (*shown) {
+            (*shown)->hide();
+            (*shown)->deleteLater();
+        }
+        QWidget* view = createCollabView(holder, settings, apply);
+        holderLayout->addWidget(view);
+        *shown = view;
+    };
+    auto choose = [settings, apply, build](bool compactView) {
+        if (settings->compactView == compactView)
+            return;
+        settings->compactView = compactView;
+        apply();
+        build();
+    };
+    connect(simple, &QPushButton::toggled, this, [choose](bool on) {
+        if (on)
+            choose(false);
+    });
+    connect(compact, &QPushButton::toggled, this, [choose](bool on) {
+        if (on)
+            choose(true);
+    });
+    build();
+    return page.widget;
+}
+
+QWidget* SettingsDialog::createCollabView(QWidget* parent, const std::shared_ptr<Collab::Settings>& settings,
+                                          const std::function<void()>& apply)
+{
+    using Collab::Access;
+    using Collab::Mode;
+    CollabController* collab = CollabController::instance();
+    const bool compact = settings->compactView;
+    auto* view = new QWidget(parent);
+    auto* layout = new QVBoxLayout(view);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(compact ? 4 : 12);
+
+    // Una sección: en la compacta, un título con una línea; en la simplificada, un recuadro.
+    auto section = [&](const QString& title) -> QVBoxLayout* {
+        if (compact) {
+            layout->addWidget(sectionHeader(title, view));
+            auto* l = new QVBoxLayout;
+            l->setSpacing(6);
+            layout->addLayout(l);
+            return l;
+        }
+        auto* box = new QGroupBox(title, view);
+        auto* l = new QVBoxLayout(box);
+        l->setContentsMargins(12, 12, 12, 12);
+        l->setSpacing(6);
+        layout->addWidget(box);
+        return l;
+    };
+    // El nombre de un campo en la simplificada (encima, en negrita).
+    auto heading = [](const QString& text, QWidget* parentWidget) {
+        auto* l = new QLabel(text, parentWidget);
+        QFont f = l->font();
+        f.setBold(true);
+        l->setFont(f);
+        return l;
+    };
+    // Una explicación: a la vista en la simplificada; en la compacta, solo si se pide.
+    auto note = [](const QString& text, QWidget* parentWidget, int indent = 0) {
+        QLabel* l = wrapped(text, parentWidget);
+        l->setContentsMargins(indent, 0, 0, 4);
+        return l;
+    };
+    // Varios widgets en una fila.
+    auto row = [](QWidget* parentWidget, std::initializer_list<QWidget*> widgets, bool stretch = true) {
+        auto* w = new QWidget(parentWidget);
+        auto* l = new QHBoxLayout(w);
+        l->setContentsMargins(0, 0, 0, 0);
+        for (QWidget* x : widgets) {
+            x->setParent(w);
+            l->addWidget(x);
+        }
+        if (stretch)
+            l->addStretch();
+        return w;
+    };
+    // En la simplificada: nombre encima, el campo y su explicación; en la compacta, una fila del
+    // formulario (y la explicación como descripción emergente).
+    auto field = [&](QVBoxLayout* into, QFormLayout*& form, const QString& label, QWidget* w, const QString& help) {
+        if (compact) {
+            if (!form) {
+                form = new QFormLayout;
+                into->addLayout(form);
+            }
+            if (!help.isEmpty())
+                w->setToolTip(help);
+            form->addRow(label, w);
+            return;
+        }
+        form = nullptr;
+        into->addWidget(heading(label.endsWith(QLatin1Char(':')) ? label.chopped(1) : label, view));
+        into->addWidget(w);
+        if (!help.isEmpty())
+            into->addWidget(note(help, view));
+    };
+    // Una casilla de la configuración.
+    auto option = [&](QVBoxLayout* into, const QString& text, bool Collab::Settings::*member, const QString& help) {
+        auto* c = new QCheckBox(text, view);
+        c->setChecked((*settings).*member);
+        connect(c, &QCheckBox::toggled, view, [settings, apply, member](bool on) {
+            (*settings).*member = on;
+            apply();
+        });
+        into->addWidget(c);
+        if (compact)
+            c->setToolTip(help);
+        else if (!help.isEmpty())
+            into->addWidget(note(help, view, 22));
+        return c;
+    };
+    auto bigger = [compact](QPushButton* b) {
+        if (!compact) {
+            b->setIconSize(QSize(20, 20));
+            b->setMinimumHeight(b->sizeHint().height() + 6);
+        }
+        return b;
+    };
+    const QString modeText[] = {tr("P2P (por Internet)"), tr("Red local (LAN)")};
+
+    // --- Sesión -----------------------------------------------------------------------------
+    QVBoxLayout* sessionBox = section(tr("Sesión"));
+    if (!compact)
+        sessionBox->addWidget(note(tr("Edita la imagen actual con otras personas: tú la hospedas y los demás se unen desde Kaint "
+                                      "o desde Kaint para la web. Solo tú guardas la imagen; los invitados pueden exportar una "
+                                      "copia."),
+                                   view));
+    // Conexión: P2P (la predeterminada) o red local.
+    auto* modeP2P = new QRadioButton(modeText[0], view);
+    auto* modeLan = new QRadioButton(modeText[1], view);
+    modeP2P->setToolTip(tr("Con cualquiera, esté donde esté: le das el código de la sesión y la imagen va directa de un "
+                           "equipo a otro."));
+    modeLan->setToolTip(tr("Con los equipos de tu misma red (casa, oficina, clase): te encuentran en la lista de sesiones "
+                           "cercanas o por tu dirección IP."));
+    auto* modeGroup = new QButtonGroup(view);
+    modeGroup->addButton(modeP2P, int(Mode::P2P));
+    modeGroup->addButton(modeLan, int(Mode::Lan));
+    (settings->mode == Mode::Lan ? modeLan : modeP2P)->setChecked(true);
+    if (compact) {
+        auto* form = new QFormLayout;
+        form->addRow(tr("Conexión:"), row(view, {modeP2P, modeLan}));
+        sessionBox->addLayout(form);
+    } else {
+        sessionBox->addWidget(heading(tr("Conexión"), view));
+        sessionBox->addWidget(modeP2P);
+        sessionBox->addWidget(note(modeP2P->toolTip(), view, 22));
+        sessionBox->addWidget(modeLan);
+        sessionBox->addWidget(note(modeLan->toolTip(), view, 22));
+    }
+
+    auto* statusRow = new QHBoxLayout;
+    if (!compact) {
+        auto* icon = new QLabel(view);
+        icon->setPixmap(Icons::theme(QStringLiteral("collab")).pixmap(32, 32));
+        icon->setAlignment(Qt::AlignTop);
+        statusRow->addWidget(icon);
+    }
+    auto* status = wrapped(QString(), view);
+    QFont statusFont = status->font();
+    statusFont.setBold(true);
+    status->setFont(statusFont);
+    statusRow->addWidget(status, 1);
+    sessionBox->addLayout(statusRow);
+
+    auto* buttons = new QWidget(view);
+    auto* flow = new FlowLayout(buttons, 6, 6);
+    flow->setContentsMargins(0, 0, 0, 0);
+    auto* hostButton = bigger(new QPushButton(Icons::theme(QStringLiteral("collab")), tr("Hospedar la imagen actual"), buttons));
+    auto* joinButton = bigger(new QPushButton(Icons::theme({"network-connect", "go-next"}), tr("Unirse a una sesión…"), buttons));
+    auto* windowButton = bigger(new QPushButton(tr("Ventana de la sesión"), buttons));
+    auto* leaveButton = bigger(new QPushButton(buttons));
+    for (QPushButton* b : {hostButton, joinButton, windowButton, leaveButton})
+        flow->addWidget(b);
+    sessionBox->addWidget(buttons);
+
+    // El código de la sesión P2P (al hospedar) y las direcciones de la red local.
+    auto* codeBox = new QWidget(view);
+    {
+        auto* l = new QVBoxLayout(codeBox);
+        l->setContentsMargins(0, compact ? 0 : 6, 0, 0);
+        l->addWidget(compact ? new QLabel(tr("Código de la sesión:"), codeBox) : heading(tr("Código de la sesión"), codeBox));
+    }
+    auto* code = new Collab::AddressView(Collab::AddressView::Kind::Code, codeBox);
+    codeBox->layout()->addWidget(code);
+    codeBox->layout()->addWidget(note(tr("Dáselo a quien quieras invitar: lo escribe en Archivo > Colaboración > P2P > Unirse "
+                                         "con un código."),
+                                      codeBox));
+    sessionBox->addWidget(codeBox);
+
+    auto* lanBox = new QWidget(view);
+    auto* lanGrid = new QGridLayout(lanBox);
+    lanGrid->setContentsMargins(0, compact ? 0 : 6, 0, 0);
+    auto* ownLabel = compact ? new QLabel(tr("Tu dirección:"), lanBox) : heading(tr("Tu dirección en la red local"), lanBox);
+    auto* own = new Collab::AddressView(Collab::AddressView::Kind::Address, lanBox);
+    auto* webLabel = compact ? new QLabel(tr("Desde un navegador:"), lanBox) : heading(tr("Desde un navegador"), lanBox);
+    auto* web = new Collab::AddressView(Collab::AddressView::Kind::Address, lanBox);
+    if (compact) {
+        lanGrid->addWidget(ownLabel, 0, 0);
+        lanGrid->addWidget(own, 0, 1);
+        lanGrid->addWidget(webLabel, 1, 0);
+        lanGrid->addWidget(web, 1, 1);
+        lanGrid->setColumnStretch(1, 1);
+    } else {
+        lanGrid->addWidget(ownLabel, 0, 0);
+        lanGrid->addWidget(own, 1, 0);
+        lanGrid->addWidget(webLabel, 2, 0);
+        lanGrid->addWidget(web, 3, 0);
+        lanGrid->addWidget(note(tr("Los demás te encuentran en Archivo > Colaboración > Red local > Unirse a una sesión (en la "
+                                   "lista de sesiones cercanas) o escribiendo esta dirección."),
+                                lanBox),
+                           4, 0);
+    }
+    sessionBox->addWidget(lanBox);
+    auto* hint = note(Collab::AddressView::hint(), view);
+    hint->setForegroundRole(QPalette::PlaceholderText);
+    sessionBox->addWidget(hint);
+
     auto refreshSession = [=] {
         const bool active = collab && collab->isActive();
+        const Collab::Session* s = active ? collab->session() : nullptr;
+        const bool hosting = active && collab->isHosting();
         status->setText(collab ? collab->statusText() : tr("No disponible."));
+        const Mode mode = s ? s->connection() : settings->mode;
         hostButton->setEnabled(collab && !active);
         joinButton->setEnabled(collab && !active);
-        windowButton->setEnabled(active);
-        leaveButton->setEnabled(active);
-        leaveButton->setText(active && collab->isHosting() ? tr("Terminar la sesión") : tr("Salir de la sesión"));
+        joinButton->setText(settings->mode == Mode::P2P ? tr("Unirse con un código…") : tr("Unirse a una sesión…"));
+        windowButton->setVisible(active);
+        leaveButton->setVisible(active);
+        leaveButton->setText(hosting ? tr("Terminar la sesión") : tr("Salir de la sesión"));
+        modeP2P->setEnabled(!active);
+        modeLan->setEnabled(!active);
+        // P2P: el código, mientras se hospeda. Red local: la dirección de este equipo.
+        codeBox->setVisible(hosting && mode == Mode::P2P);
+        code->setAddress(hosting ? s->sessionCode() : QString());
+        lanBox->setVisible(mode == Mode::Lan);
+        const QString first = Collab::lanAddresses().value(0);
+        const int port = hosting ? s->port() : settings->port;
+        const bool serveWeb = hosting ? s->servesWeb() : settings->serveWeb;
+        own->setAddress(first.isEmpty() ? QString() : QStringLiteral("%1:%2").arg(first).arg(port));
+        web->setAddress(first.isEmpty() ? QString() : QStringLiteral("http://%1:%2/").arg(first).arg(port));
+        webLabel->setVisible(serveWeb && !first.isEmpty());
+        web->setVisible(serveWeb && !first.isEmpty());
+        hint->setVisible(codeBox->isVisibleTo(view) || lanBox->isVisibleTo(view));
     };
     if (collab) {
-        connect(hostButton, &QPushButton::clicked, this, [collab] { collab->hostCurrent(); });
-        connect(joinButton, &QPushButton::clicked, this, [collab] { collab->showJoinDialog(); });
-        connect(windowButton, &QPushButton::clicked, this, [collab] { collab->showSessionWindow(); });
-        connect(leaveButton, &QPushButton::clicked, this, [collab] { collab->leave(true); });
-        connect(collab, &CollabController::changed, status, refreshSession);
+        connect(hostButton, &QPushButton::clicked, view, [collab, settings] { collab->hostCurrent(settings->mode); });
+        connect(joinButton, &QPushButton::clicked, view, [collab, settings] { collab->showJoinDialog(settings->mode); });
+        connect(windowButton, &QPushButton::clicked, view, [collab] { collab->showSessionWindow(); });
+        connect(leaveButton, &QPushButton::clicked, view, [collab] { collab->leave(true); });
+        connect(collab, &CollabController::changed, view, refreshSession);
     }
-    refreshSession();
 
-    // Perfil.
-    page.layout->addWidget(sectionHeader(tr("Tú"), page.widget));
-    auto* profile = new QFormLayout;
-    auto* name = new QLineEdit(settings->name, page.widget);
+    // --- Tú ---------------------------------------------------------------------------------
+    QVBoxLayout* profileBox = section(tr("Tú"));
+    QFormLayout* form = nullptr;
+    auto* name = new QLineEdit(settings->name, view);
     name->setPlaceholderText(Collab::Settings().displayName());
     name->setMaxLength(40);
-    profile->addRow(tr("Nombre en pantalla:"), name);
-    connect(name, &QLineEdit::editingFinished, this, [=] {
+    field(profileBox, form, tr("Nombre en pantalla:"), name, tr("Así te ven los demás: junto a tu puntero y en la lista de participantes."));
+    connect(name, &QLineEdit::editingFinished, view, [=] {
         if (settings->name == name->text().trimmed())
             return;
         settings->name = name->text().trimmed();
         apply();
     });
-    auto* colorRow = new QHBoxLayout;
-    auto* ownColor = new QCheckBox(tr("Color propio"), page.widget);
-    ownColor->setToolTip(tr("Sin marcar, el anfitrión te da uno que no use nadie más."));
-    auto* color = new ColorButton(page.widget);
+    auto* ownColor = new QCheckBox(tr("Color propio"), view);
+    auto* color = new ColorButton(view);
     color->setColor(settings->color.isValid() ? settings->color : Collab::peerColor(1));
     ownColor->setChecked(settings->color.isValid());
     color->setEnabled(ownColor->isChecked());
-    colorRow->addWidget(ownColor);
-    colorRow->addWidget(color);
-    colorRow->addStretch();
-    profile->addRow(tr("Color del puntero:"), colorRow);
+    field(profileBox, form, tr("Color del puntero:"), row(view, {ownColor, color}),
+          tr("Sin marcar, el anfitrión te da uno que no use nadie más."));
     auto applyColor = [=] {
         color->setEnabled(ownColor->isChecked());
         settings->color = ownColor->isChecked() ? color->color() : QColor();
         apply();
     };
-    connect(ownColor, &QCheckBox::toggled, this, applyColor);
-    connect(color, &ColorButton::colorChanged, this, applyColor);
+    connect(ownColor, &QCheckBox::toggled, view, applyColor);
+    connect(color, &ColorButton::colorChanged, view, applyColor);
 
-    auto* idRow = new QHBoxLayout;
-    auto* idLabel = new QLabel(Collab::deviceCode(), page.widget);
+    auto* idLabel = new QLabel(Collab::deviceCode(), view);
     QFont mono = idLabel->font();
     mono.setFamily(QStringLiteral("monospace"));
     mono.setStyleHint(QFont::Monospace);
     mono.setBold(true);
     idLabel->setFont(mono);
     idLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    auto* copyId = new QPushButton(Icons::theme({"edit-copy"}), tr("Copiar"), page.widget);
-    auto* newId = new QPushButton(Icons::theme({"view-refresh"}), tr("Generar otro"), page.widget);
-    idRow->addWidget(idLabel);
-    idRow->addWidget(copyId);
-    idRow->addWidget(newId);
-    idRow->addStretch();
-    profile->addRow(tr("ID de este equipo:"), idRow);
-    page.layout->addLayout(profile);
-    page.layout->addWidget(wrapped(tr("Para entrar en una sesión que solo admite equipos autorizados, dale este ID al anfitrión. "
-                                      "El ID no viaja por la red: el equipo demuestra que lo tiene sin enviarlo."),
-                                   page.widget));
-    connect(copyId, &QPushButton::clicked, this, [] { QApplication::clipboard()->setText(Collab::deviceCode()); });
-    connect(newId, &QPushButton::clicked, this, [this, idLabel] {
+    auto* copyId = new QPushButton(Icons::theme({"edit-copy"}), tr("Copiar"), view);
+    auto* newId = new QPushButton(Icons::theme({"view-refresh"}), tr("Generar otro"), view);
+    const QString idHelp = tr("Para entrar en una sesión que solo admite equipos autorizados, dale este ID al anfitrión. El ID no "
+                              "viaja por la red: el equipo demuestra que lo tiene sin enviarlo.");
+    field(profileBox, form, tr("ID de este equipo:"), row(view, {idLabel, copyId, newId}), idHelp);
+    if (compact)
+        profileBox->addWidget(note(idHelp, view));
+    connect(copyId, &QPushButton::clicked, view, [copyId] {
+        QApplication::clipboard()->setText(Collab::deviceCode());
+        copyId->setText(tr("Copiado"));
+        QTimer::singleShot(1500, copyId, [copyId] { copyId->setText(tr("Copiar")); });
+    });
+    connect(newId, &QPushButton::clicked, view, [this, idLabel] {
         TaskDialog ask(tr("Generar otro ID"), Icons::theme({"view-refresh"}), QImage(),
                        tr("Los anfitriones que tengan el ID actual en su lista dejarán de reconocer este equipo."), this);
         const int yes = ask.addChoice(Icons::theme({"view-refresh"}), tr("Generar otro"), tr("Cambiar el ID de este equipo."));
@@ -1947,34 +2228,31 @@ QWidget* SettingsDialog::createCollabPage()
             idLabel->setText(Collab::regenerateDeviceCode());
     });
 
-    // Al hospedar.
-    page.layout->addWidget(sectionHeader(tr("Al hospedar"), page.widget));
-    auto* hostForm = new QFormLayout;
-    auto* sessionName = new QLineEdit(settings->sessionName, page.widget);
+    // --- Al hospedar --------------------------------------------------------------------------
+    QVBoxLayout* hostBox = section(tr("Al hospedar"));
+    form = nullptr;
+    auto* sessionName = new QLineEdit(settings->sessionName, view);
     sessionName->setPlaceholderText(tr("Sesión de %1").arg(settings->displayName()));
     sessionName->setMaxLength(60);
-    hostForm->addRow(tr("Nombre de la sesión:"), sessionName);
-    connect(sessionName, &QLineEdit::editingFinished, this, [=] {
+    field(hostBox, form, tr("Nombre de la sesión:"), sessionName, tr("El que ven los demás al unirse y en la lista de sesiones cercanas."));
+    connect(sessionName, &QLineEdit::editingFinished, view, [=] {
         settings->sessionName = sessionName->text().trimmed();
         apply();
     });
-    auto* port = new QSpinBox(page.widget);
-    port->setRange(1024, 65535);
-    port->setValue(settings->port);
-    port->setToolTip(tr("Puerto TCP de la sesión (por defecto %1). Se aplica a la próxima sesión.").arg(Collab::kDefaultPort));
-    hostForm->addRow(tr("Puerto:"), port);
-    connect(port, &QSpinBox::valueChanged, this, [=](int v) {
-        settings->port = v;
-        apply();
-    });
-    auto* access = new QComboBox(page.widget);
-    access->addItem(tr("Libre: cualquiera de la red puede entrar"), int(Collab::Access::Free));
-    access->addItem(tr("Con permiso: apruebas a cada persona"), int(Collab::Access::Approve));
-    access->addItem(tr("Con contraseña"), int(Collab::Access::Password));
-    access->addItem(tr("Solo equipos autorizados (por su ID)"), int(Collab::Access::Ids));
-    access->setCurrentIndex(access->findData(int(settings->access)));
-    hostForm->addRow(tr("Quién puede entrar:"), access);
-    auto* password = new QLineEdit(settings->password, page.widget);
+
+    // Quién puede entrar: una lista en la compacta; opciones con su explicación en la simplificada.
+    struct AccessChoice {
+        Access access;
+        QString title;
+        QString help;
+    };
+    const AccessChoice accessChoices[] = {
+        {Access::Free, tr("Libre"), tr("Cualquiera que tenga el código o esté en tu red puede entrar.")},
+        {Access::Approve, tr("Con permiso"), tr("Te avisa cuando alguien quiere entrar y tú decides si pasa.")},
+        {Access::Password, tr("Con contraseña"), tr("Solo entra quien sepa la contraseña.")},
+        {Access::Ids, tr("Solo equipos autorizados"), tr("Solo entran los equipos cuyo ID agregues a la lista.")},
+    };
+    auto* password = new QLineEdit(settings->password, view);
     password->setEchoMode(QLineEdit::Password);
     password->setPlaceholderText(tr("Contraseña de la sesión"));
     auto* showPassword = password->addAction(Icons::theme({"visibility", "view-visible", "layer-visible-on"}), QLineEdit::TrailingPosition);
@@ -1982,31 +2260,30 @@ QWidget* SettingsDialog::createCollabPage()
     showPassword->setToolTip(tr("Mostrar"));
     connect(showPassword, &QAction::toggled, password,
             [password](bool on) { password->setEchoMode(on ? QLineEdit::Normal : QLineEdit::Password); });
-    hostForm->addRow(tr("Contraseña:"), password);
-    connect(password, &QLineEdit::editingFinished, this, [=] {
+    connect(password, &QLineEdit::editingFinished, view, [=] {
         settings->password = password->text();
         apply();
     });
-    page.layout->addLayout(hostForm);
 
     // Equipos autorizados: ID y un nombre para reconocerlo.
-    auto* idsBox = new QWidget(page.widget);
+    auto* idsBox = new QWidget(view);
     auto* idsLayout = new QVBoxLayout(idsBox);
-    idsLayout->setContentsMargins(0, 0, 0, 0);
-    idsLayout->addWidget(new QLabel(tr("Equipos autorizados (también entran sin esperar con «Con permiso»):"), idsBox));
+    idsLayout->setContentsMargins(compact ? 0 : 22, 0, 0, 0);
+    auto* idsTitle = compact ? new QLabel(tr("Equipos autorizados (también entran sin esperar con «Con permiso»):"), idsBox)
+                             : heading(tr("Equipos autorizados"), idsBox);
+    idsLayout->addWidget(idsTitle);
+    QLabel* idsNote = compact ? nullptr : note(QString(), idsBox);
+    if (idsNote)
+        idsLayout->addWidget(idsNote);
     auto* ids = new QTreeWidget(idsBox);
     ids->setRootIsDecorated(false);
     ids->setHeaderLabels({tr("ID"), tr("Nombre")});
-    ids->setMinimumHeight(90);
+    ids->setMinimumHeight(compact ? 90 : 110);
+    ids->setMaximumHeight(160);
     idsLayout->addWidget(ids);
-    auto* idButtons = new QHBoxLayout;
     auto* addId = new QPushButton(Icons::theme({"list-add"}), tr("Agregar…"), idsBox);
     auto* removeId = new QPushButton(Icons::theme({"list-remove"}), tr("Quitar"), idsBox);
-    idButtons->addWidget(addId);
-    idButtons->addWidget(removeId);
-    idButtons->addStretch();
-    idsLayout->addLayout(idButtons);
-    page.layout->addWidget(idsBox);
+    idsLayout->addWidget(row(idsBox, {addId, removeId}));
     auto fillIds = [=] {
         ids->clear();
         for (const QString& line : std::as_const(settings->allowedIds)) {
@@ -2016,76 +2293,226 @@ QWidget* SettingsDialog::createCollabPage()
         }
     };
     fillIds();
-    connect(addId, &QPushButton::clicked, this, [=] {
+    connect(addId, &QPushButton::clicked, view, [=] {
         bool ok = false;
-        const QString code = QInputDialog::getText(this, tr("Agregar equipo"), tr("ID del equipo (lo ve en Configuración > Colaboración):"),
-                                                   QLineEdit::Normal, QString(), &ok)
-                                 .trimmed()
-                                 .toUpper();
-        if (!ok || code.isEmpty())
+        const QString idCode = QInputDialog::getText(this, tr("Agregar equipo"), tr("ID del equipo (lo ve en Configuración > Colaboración):"),
+                                                     QLineEdit::Normal, QString(), &ok)
+                                   .trimmed()
+                                   .toUpper();
+        if (!ok || idCode.isEmpty())
             return;
-        if (Collab::normalizedCode(code).size() != 12) {
+        if (Collab::normalizedCode(idCode).size() != 12) {
             QMessageBox::warning(this, tr("Agregar equipo"), tr("El ID tiene 12 letras y números, como ABCD-EFGH-JKLM."));
             return;
         }
         const QString who = QInputDialog::getText(this, tr("Agregar equipo"), tr("Nombre para reconocerlo (opcional):")).trimmed();
-        const QString n = Collab::normalizedCode(code);
+        const QString n = Collab::normalizedCode(idCode);
         const QString pretty = n.left(4) + QLatin1Char('-') + n.mid(4, 4) + QLatin1Char('-') + n.mid(8, 4);
         settings->allowedIds.append(who.isEmpty() ? pretty : pretty + QLatin1Char(' ') + who);
         fillIds();
         apply();
     });
-    connect(removeId, &QPushButton::clicked, this, [=] {
-        const int row = ids->currentItem() ? ids->indexOfTopLevelItem(ids->currentItem()) : -1;
-        if (row < 0)
+    connect(removeId, &QPushButton::clicked, view, [=] {
+        const int index = ids->currentItem() ? ids->indexOfTopLevelItem(ids->currentItem()) : -1;
+        if (index < 0)
             return;
-        settings->allowedIds.removeAt(row);
+        settings->allowedIds.removeAt(index);
         fillIds();
         apply();
     });
-    auto syncAccess = [=] {
-        const auto a = Collab::Access(access->currentData().toInt());
-        password->setEnabled(a == Collab::Access::Password);
-        idsBox->setEnabled(a == Collab::Access::Ids || a == Collab::Access::Approve);
-    };
-    connect(access, &QComboBox::currentIndexChanged, this, [=] {
-        settings->access = Collab::Access(access->currentData().toInt());
-        syncAccess();
-        apply();
-    });
-    syncAccess();
 
-    auto option = [&](const QString& text, bool Collab::Settings::*member, const QString& tip) {
-        auto* c = new QCheckBox(text, page.widget);
-        c->setChecked((*settings).*member);
-        c->setToolTip(tip);
-        connect(c, &QCheckBox::toggled, this, [=](bool on) {
-            (*settings).*member = on;
+    QComboBox* accessCombo = nullptr;
+    QWidget* passwordWrap = nullptr;
+    // Lo que depende de quién puede entrar (se completa más abajo).
+    auto syncAccess = std::make_shared<std::function<void()>>();
+    if (compact) {
+        accessCombo = new QComboBox(view);
+        for (const AccessChoice& c : accessChoices) {
+            accessCombo->addItem(c.title, int(c.access));
+            accessCombo->setItemData(accessCombo->count() - 1, c.help, Qt::ToolTipRole);
+        }
+        accessCombo->setCurrentIndex(accessCombo->findData(int(settings->access)));
+        field(hostBox, form, tr("Quién puede entrar:"), accessCombo, QString());
+        field(hostBox, form, tr("Contraseña:"), password, QString());
+        hostBox->addWidget(idsBox);
+    } else {
+        hostBox->addWidget(heading(tr("¿Quién puede entrar?"), view));
+        auto* group = new QButtonGroup(view);
+        for (const AccessChoice& c : accessChoices) {
+            auto* radio = new QRadioButton(c.title, view);
+            group->addButton(radio, int(c.access));
+            radio->setChecked(settings->access == c.access);
+            hostBox->addWidget(radio);
+            hostBox->addWidget(note(c.help, view, 22));
+            if (c.access == Access::Password) {
+                passwordWrap = new QWidget(view);
+                auto* l = new QHBoxLayout(passwordWrap);
+                l->setContentsMargins(22, 0, 0, 6);
+                password->setParent(passwordWrap);
+                password->setMaximumWidth(320);
+                l->addWidget(password);
+                l->addStretch();
+                hostBox->addWidget(passwordWrap);
+            }
+        }
+        hostBox->addWidget(idsBox);
+        connect(group, &QButtonGroup::idClicked, view, [settings, apply, syncAccess](int id) {
+            settings->access = Access(id);
             apply();
+            (*syncAccess)();
         });
-        page.layout->addWidget(c);
-        return c;
+    }
+    *syncAccess = [=] {
+        const Access a = settings->access;
+        const bool listUsed = a == Access::Ids || a == Access::Approve;
+        if (compact) {
+            password->setEnabled(a == Access::Password);
+            idsBox->setEnabled(listUsed);
+        } else {
+            passwordWrap->setVisible(a == Access::Password);
+            idsBox->setVisible(listUsed);
+            idsNote->setText(a == Access::Ids ? tr("Solo entran estos equipos. Cada persona ve el ID de su equipo en Configuración > "
+                                                   "Colaboración.")
+                                              : tr("Estos equipos entran sin esperar a que los apruebes."));
+        }
     };
-    option(tr("Edición en tiempo real entre copias de Kaint"), &Collab::Settings::realtime,
-           tr("Los invitados con Kaint (escritorio) cambian la imagen al momento. Sin marcar, también ellos sugieren sus "
-              "cambios para que los aceptes."));
-    option(tr("Aceptar automáticamente los cambios sugeridos"), &Collab::Settings::autoAccept,
-           tr("Lo que sugieran los invitados se aplica a la imagen sin preguntar."));
-    option(tr("Anunciar la sesión en la red local"), &Collab::Settings::announce,
-           tr("Aparece al buscar sesiones cercanas. Sin marcar, solo se puede entrar escribiendo la dirección."));
-    option(tr("Permitir unirse desde el navegador"), &Collab::Settings::serveWeb,
-           tr("Los navegadores de la red abren Kaint para la web desde la dirección de la sesión (si está instalado junto "
-              "a Kaint)."));
-    page.layout->addWidget(wrapped(tr("Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado "
-                                      "edita un borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece "
-                                      "para todos y en tu historial como «Cambio hecho por…»."),
-                                   page.widget));
+    if (accessCombo)
+        connect(accessCombo, &QComboBox::currentIndexChanged, view, [=] {
+            settings->access = Access(accessCombo->currentData().toInt());
+            apply();
+            (*syncAccess)();
+        });
+    (*syncAccess)();
 
-    page.layout->addWidget(sectionHeader(tr("Vista"), page.widget));
-    option(tr("Mostrar los punteros de los demás"), &Collab::Settings::showCursors,
+    // Cómo llegan los cambios de los invitados.
+    QVBoxLayout* changesBox = compact ? hostBox : section(tr("Cambios de los invitados"));
+    option(changesBox, tr("Edición en tiempo real entre copias de Kaint"), &Collab::Settings::realtime,
+           tr("Los invitados con Kaint (escritorio) cambian la imagen al momento. Sin marcar, también ellos sugieren sus cambios "
+              "para que los aceptes."));
+    option(changesBox, tr("Aceptar automáticamente los cambios sugeridos"), &Collab::Settings::autoAccept,
+           tr("Lo que sugieran los invitados se aplica a la imagen sin preguntar."));
+    changesBox->addWidget(note(tr("Entre Kaint y Kaint para la web la edición siempre es con confirmaciones: el invitado edita un "
+                                  "borrador con su propio historial y lo sugiere; al aceptarlo, el cambio aparece para todos y en "
+                                  "tu historial como «Cambio hecho por…»."),
+                               view));
+
+    // --- Más opciones: P2P, red local y la vista -----------------------------------------------
+    QVBoxLayout* moreBox = layout;
+    QWidget* more = nullptr;
+    if (!compact) {
+        auto* toggle = new QToolButton(view);
+        toggle->setText(tr("Más opciones"));
+        toggle->setCheckable(true);
+        toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        toggle->setArrowType(Qt::RightArrow);
+        toggle->setAutoRaise(true);
+        toggle->setObjectName(QStringLiteral("collabMoreToggle"));
+        layout->addWidget(toggle);
+        more = new QWidget(view);
+        moreBox = new QVBoxLayout(more);
+        moreBox->setContentsMargins(0, 0, 0, 0);
+        moreBox->setSpacing(12);
+        more->setVisible(false);
+        layout->addWidget(more);
+        connect(toggle, &QToolButton::toggled, more, [toggle, more](bool on) {
+            toggle->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
+            more->setVisible(on);
+        });
+    }
+    // «Configuración P2P…» y «Configuración LAN…» (Archivo > Colaboración) llevan a su sección.
+    auto moreSection = [&](const QString& title, const QString& id = QString()) -> QVBoxLayout* {
+        if (compact) {
+            QVBoxLayout* l = section(title);
+            if (!id.isEmpty() && layout->count() > 1)
+                if (QWidget* header = layout->itemAt(layout->count() - 2)->widget())
+                    header->setObjectName(id);
+            return l;
+        }
+        auto* box = new QGroupBox(title, more);
+        box->setObjectName(id);
+        auto* l = new QVBoxLayout(box);
+        l->setContentsMargins(12, 12, 12, 12);
+        l->setSpacing(6);
+        moreBox->addWidget(box);
+        return l;
+    };
+    // Listas de servidores: uno por línea, con un botón para volver a los predeterminados.
+    auto serverList = [&](QVBoxLayout* into, const QString& label, QStringList Collab::Settings::*member,
+                          const QStringList& defaults, const QString& help) {
+        auto* edit = new QPlainTextEdit(((*settings).*member).join(QLatin1Char('\n')), view);
+        edit->setMaximumHeight(edit->fontMetrics().lineSpacing() * 4 + 12);
+        edit->setLineWrapMode(QPlainTextEdit::NoWrap);
+        auto* reset = new QPushButton(tr("Restablecer"), view);
+        reset->setToolTip(tr("Volver a los predeterminados."));
+        into->addWidget(compact ? new QLabel(label, view) : heading(label.endsWith(QLatin1Char(':')) ? label.chopped(1) : label, view));
+        into->addWidget(edit);
+        into->addWidget(row(view, {reset}));
+        if (compact)
+            edit->setToolTip(help);
+        else
+            into->addWidget(note(help, view));
+        auto store = [=] {
+            QStringList lines;
+            for (const QString& line : edit->toPlainText().split(QLatin1Char('\n')))
+                if (!line.trimmed().isEmpty())
+                    lines << line.trimmed();
+            if (lines == (*settings).*member)
+                return;
+            (*settings).*member = lines;
+            apply();
+        };
+        // Al salir del campo (QPlainTextEdit no tiene editingFinished).
+        edit->installEventFilter(new FocusOutFilter(edit, store));
+        connect(reset, &QPushButton::clicked, view, [=] {
+            edit->setPlainText(defaults.join(QLatin1Char('\n')));
+            store();
+        });
+    };
+
+    QVBoxLayout* p2pBox = moreSection(tr("P2P (por Internet)"), QStringLiteral("collabP2PSection"));
+    p2pBox->addWidget(note(tr("Los servidores de señalización solo presentan a los equipos (como los rastreadores de WebTorrent): "
+                              "la imagen va directa de un equipo a otro, cifrada. El código de la sesión no viaja: solo su "
+                              "huella."),
+                           view));
+    serverList(p2pBox, tr("Servidores de señalización:"), &Collab::Settings::signalServers, Collab::defaultSignalServers(),
+               tr("Direcciones wss:// de rastreadores de WebTorrent o de tools/collab-server.mjs (ws://equipo:47913/signal), una "
+                  "por línea. Todos los de una sesión tienen que usar al menos uno en común."));
+    serverList(p2pBox, tr("Servidores STUN y TURN:"), &Collab::Settings::iceServers, Collab::defaultIceServers(),
+               tr("Ayudan a atravesar los routers. «stun:servidor:puerto» o, si una red no deja conectar directamente, un TURN: "
+                  "«turn:usuario:contraseña@servidor:puerto»."));
+
+    QVBoxLayout* lanSection = moreSection(tr("Red local (LAN)"), QStringLiteral("collabLanSection"));
+    form = nullptr;
+    auto* port = new QSpinBox(view);
+    port->setRange(1024, 65535);
+    port->setValue(settings->port);
+    field(lanSection, form, tr("Puerto:"), port,
+          tr("Puerto TCP de la sesión en la red local (por defecto %1). Se aplica a la próxima sesión.").arg(Collab::kDefaultPort));
+    if (!compact)
+        port->setMaximumWidth(120);
+    connect(port, &QSpinBox::valueChanged, view, [=](int v) {
+        settings->port = v;
+        apply();
+        refreshSession();
+    });
+    option(lanSection, tr("Anunciar la sesión en la red local"), &Collab::Settings::announce,
+           tr("Aparece al buscar sesiones cercanas. Sin marcar, solo se puede entrar escribiendo la dirección."));
+    QCheckBox* serveWeb = option(lanSection, tr("Permitir unirse desde el navegador"), &Collab::Settings::serveWeb,
+                                 tr("Los navegadores de la red abren Kaint para la web desde la dirección de la sesión (si está "
+                                    "instalado junto a Kaint)."));
+    connect(serveWeb, &QCheckBox::toggled, view, refreshSession);
+
+    QVBoxLayout* viewSection = moreSection(tr("Vista"));
+    option(viewSection, tr("Mostrar los punteros de los demás"), &Collab::Settings::showCursors,
            tr("Un triángulo del color de cada participante, con su nombre y el icono de su herramienta."));
-    page.layout->addStretch();
-    return page.widget;
+
+    connect(modeGroup, &QButtonGroup::idClicked, view, [settings, apply, refreshSession](int id) {
+        settings->mode = Mode(id);
+        apply();
+        refreshSession();
+    });
+    refreshSession();
+    return view;
 }
 
 QWidget* SettingsDialog::createDiscordPage()

@@ -152,6 +152,8 @@ QString CollabController::statusText() const
     const Collab::Session* s = m_session;
     switch (s->state()) {
     case Collab::Session::State::Connecting:
+        if (s->connection() == Collab::Mode::P2P)
+            return s->progressText().isEmpty() ? tr("Buscando la sesión…") : s->progressText();
         return tr("Conectando con %1…").arg(s->address());
     case Collab::Session::State::Waiting:
         return tr("Esperando a que el anfitrión te deje entrar…");
@@ -159,32 +161,40 @@ QString CollabController::statusText() const
         break;
     }
     const int people = int(s->peers().size());
-    if (s->isHost()) {
-        const QStringList addresses = s->addresses();
-        return tr("Hospedando «%1» en %2 (puerto %3) · %4")
-            .arg(s->sessionName(), addresses.isEmpty() ? tr("este equipo") : addresses.join(QStringLiteral(", ")))
-            .arg(s->port())
-            .arg(people == 1 ? tr("1 participante") : tr("%1 participantes").arg(people));
+    // Sin la dirección: se muestra aparte, difuminada (Configuración y la ventana de la sesión).
+    const QString count = people == 1 ? tr("1 participante") : tr("%1 participantes").arg(people);
+    if (s->isHost() && s->connection() == Collab::Mode::P2P) {
+        // Sin servidores de señalización nadie más puede encontrar la sesión.
+        if (s->signalingReady() == 0)
+            return tr("Hospedando «%1» por P2P · %2 · sin conexión con los servidores de señalización (se sigue intentando)")
+                .arg(s->sessionName(), count);
+        return tr("Hospedando «%1» por P2P · %2").arg(s->sessionName(), count);
     }
+    if (s->isHost())
+        return tr("Hospedando «%1» en la red local (puerto %2) · %3").arg(s->sessionName()).arg(s->port()).arg(count);
     return tr("En «%1» de %2 · %3 · %4")
-        .arg(s->sessionName(), s->peer(0).name, s->isLive() ? tr("en tiempo real") : tr("con confirmaciones"),
-             people == 1 ? tr("1 participante") : tr("%1 participantes").arg(people));
+        .arg(s->sessionName(), s->peer(0).name, s->isLive() ? tr("en tiempo real") : tr("con confirmaciones"), count);
 }
 
-bool CollabController::host(Document* doc)
+bool CollabController::host(Document* doc, Collab::Mode mode)
 {
     if (!doc)
         return false;
     if (isActive() && !leave(true))
         return false;
     QString error;
-    Collab::Session* s = Collab::Session::host(doc, m_settings, &error, this);
+    Collab::Settings settings = m_settings;
+    settings.mode = mode;
+    Collab::Session* s = Collab::Session::host(doc, settings, &error, this);
     if (!s) {
-        QMessageBox::warning(m_window, tr("Sesión colaborativa"),
-                             tr("No se pudo abrir la sesión en el puerto %1:\n%2\n\nPrueba con otro puerto en Configuración > "
-                                "Colaboración.")
-                                 .arg(m_settings.port)
-                                 .arg(error));
+        if (mode == Collab::Mode::Lan)
+            QMessageBox::warning(m_window, tr("Sesión colaborativa"),
+                                 tr("No se pudo abrir la sesión en el puerto %1:\n%2\n\nPrueba con otro puerto en Configuración > "
+                                    "Colaboración.")
+                                     .arg(m_settings.port)
+                                     .arg(error));
+        else
+            QMessageBox::warning(m_window, tr("Sesión colaborativa"), tr("No se pudo abrir la sesión P2P:\n%1").arg(error));
         return false;
     }
     attach(s);
@@ -193,14 +203,14 @@ bool CollabController::host(Document* doc)
     return true;
 }
 
-bool CollabController::hostCurrent()
+bool CollabController::hostCurrent(Collab::Mode mode)
 {
     Document* doc = m_currentDocument ? m_currentDocument() : nullptr;
     if (!doc) {
         QMessageBox::information(m_window, tr("Sesión colaborativa"), tr("Abre o crea una imagen para compartirla."));
         return false;
     }
-    return host(doc);
+    return host(doc, mode);
 }
 
 void CollabController::join(const QString& address, quint16 port, const QString& password)
@@ -210,11 +220,18 @@ void CollabController::join(const QString& address, quint16 port, const QString&
     attach(Collab::Session::join(address, port, m_settings, password, this));
 }
 
-void CollabController::showJoinDialog()
+void CollabController::joinP2P(const QString& code, const QString& password)
+{
+    if (isActive())
+        m_session->leave();
+    attach(Collab::Session::joinP2P(code, m_settings, password, this));
+}
+
+void CollabController::showJoinDialog(Collab::Mode mode)
 {
     if (isActive() && !leave(true))
         return;
-    Collab::JoinDialog dlg(this, m_window);
+    Collab::JoinDialog dlg(this, mode, m_window);
     dlg.exec();
 }
 

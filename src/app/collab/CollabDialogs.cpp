@@ -2,7 +2,10 @@
 
 #include "app/Icons.h"
 #include "app/collab/CollabController.h"
+#include "app/collab/CollabServer.h"
 #include "app/collab/Discovery.h"
+#include "app/collab/P2P.h"
+#include "app/collab/CollabSession.h"
 #include "app/dialogs/TaskDialog.h"
 
 #include <QApplication>
@@ -10,15 +13,19 @@
 #include <QClipboard>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QGraphicsBlurEffect>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QTimer>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -106,41 +113,67 @@ QWidget* deviceIdRow(QWidget* parent)
 
 // ---------------------------------------------------------------------------
 
-JoinDialog::JoinDialog(CollabController* collab, QWidget* parent)
+JoinDialog::JoinDialog(CollabController* collab, Mode mode, QWidget* parent)
     : QDialog(parent)
     , m_collab(collab)
-    , m_discovery(new Discovery(this))
+    , m_mode(mode)
 {
-    setWindowTitle(tr("Unirse a una sesión colaborativa"));
+    const bool p2p = mode == Mode::P2P;
+    setWindowTitle(p2p ? tr("Unirse a una sesión P2P") : tr("Unirse a una sesión de la red local"));
     setWindowIcon(Icons::theme(QStringLiteral("collab")));
     const Settings settings = collab->settings();
 
     auto* layout = new QVBoxLayout(this);
-    layout->addWidget(new QLabel(tr("Sesiones en la red local:"), this));
-    m_found = new QTreeWidget(this);
-    m_found->setRootIsDecorated(false);
-    m_found->setHeaderLabels({tr("Sesión"), tr("Anfitrión"), tr("Dirección"), tr("Acceso"), tr("Personas")});
-    m_found->header()->setStretchLastSection(false);
-    m_found->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_found->setMinimumHeight(140);
-    layout->addWidget(m_found, 1);
-    connect(m_found, &QTreeWidget::itemSelectionChanged, this, &JoinDialog::pick);
-    connect(m_found, &QTreeWidget::itemDoubleClicked, this, [this] {
-        pick();
-        start();
-    });
-
     auto* form = new QFormLayout;
-    auto* addressRow = new QHBoxLayout;
-    m_address = new QLineEdit(this);
-    m_address->setPlaceholderText(tr("Ej.: 192.168.1.20"));
-    m_port = new QSpinBox(this);
-    m_port->setRange(1, 65535);
-    m_port->setValue(kDefaultPort);
-    addressRow->addWidget(m_address, 1);
-    addressRow->addWidget(new QLabel(tr("Puerto:"), this));
-    addressRow->addWidget(m_port);
-    form->addRow(tr("Dirección IP:"), addressRow);
+    if (p2p) {
+        auto* intro = new QLabel(tr("Escribe el código que te dio el anfitrión. Los dos equipos se encuentran por Internet y la "
+                                    "imagen va directa de uno a otro."),
+                                 this);
+        intro->setWordWrap(true);
+        layout->addWidget(intro);
+        auto* codeRow = new QHBoxLayout;
+        m_code = new QLineEdit(this);
+        m_code->setPlaceholderText(tr("Ej.: ABCD-EFGH-JKLM-NPQR"));
+        QFont mono = m_code->font();
+        mono.setFamily(QStringLiteral("monospace"));
+        mono.setStyleHint(QFont::Monospace);
+        mono.setBold(true);
+        m_code->setFont(mono);
+        m_code->setMaxLength(32);
+        auto* paste = new QToolButton(this);
+        paste->setIcon(Icons::theme({"edit-paste"}));
+        paste->setToolTip(tr("Pegar"));
+        paste->setAutoRaise(true);
+        connect(paste, &QToolButton::clicked, this, [this] { m_code->setText(QApplication::clipboard()->text().trimmed()); });
+        codeRow->addWidget(m_code, 1);
+        codeRow->addWidget(paste);
+        form->addRow(tr("Código de la sesión:"), codeRow);
+    } else {
+        m_discovery = new Discovery(this);
+        layout->addWidget(new QLabel(tr("Sesiones en la red local:"), this));
+        m_found = new QTreeWidget(this);
+        m_found->setRootIsDecorated(false);
+        m_found->setHeaderLabels({tr("Sesión"), tr("Anfitrión"), tr("Dirección"), tr("Acceso"), tr("Personas")});
+        m_found->header()->setStretchLastSection(false);
+        m_found->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+        m_found->setMinimumHeight(140);
+        layout->addWidget(m_found, 1);
+        connect(m_found, &QTreeWidget::itemSelectionChanged, this, &JoinDialog::pick);
+        connect(m_found, &QTreeWidget::itemDoubleClicked, this, [this] {
+            pick();
+            start();
+        });
+        auto* addressRow = new QHBoxLayout;
+        m_address = new QLineEdit(this);
+        m_address->setPlaceholderText(tr("Ej.: 192.168.1.20"));
+        m_port = new QSpinBox(this);
+        m_port->setRange(1, 65535);
+        m_port->setValue(kDefaultPort);
+        addressRow->addWidget(m_address, 1);
+        addressRow->addWidget(new QLabel(tr("Puerto:"), this));
+        addressRow->addWidget(m_port);
+        form->addRow(tr("Dirección IP:"), addressRow);
+    }
     m_password = new QLineEdit(this);
     m_password->setEchoMode(QLineEdit::Password);
     m_password->setPlaceholderText(tr("Solo si la sesión pide contraseña"));
@@ -155,6 +188,8 @@ JoinDialog::JoinDialog(CollabController* collab, QWidget* parent)
     idHint->setWordWrap(true);
     idHint->setEnabled(false);
     layout->addWidget(idHint);
+    if (p2p)
+        layout->addStretch();
 
     m_status = new QLabel(this);
     m_status->setWordWrap(true);
@@ -169,16 +204,26 @@ JoinDialog::JoinDialog(CollabController* collab, QWidget* parent)
     connect(box, &QDialogButtonBox::rejected, this, &JoinDialog::reject);
     layout->addWidget(box);
 
-    connect(m_discovery, &Discovery::changed, this, &JoinDialog::refreshFound);
-    if (!m_discovery->start())
-        m_status->setText(tr("No se pueden buscar sesiones (el puerto %1 está ocupado). Escribe la dirección del anfitrión.")
-                              .arg(kBeaconPort));
-    refreshFound();
+    if (m_discovery) {
+        connect(m_discovery, &Discovery::changed, this, &JoinDialog::refreshFound);
+        if (!m_discovery->start())
+            m_status->setText(tr("No se pueden buscar sesiones (el puerto %1 está ocupado). Escribe la dirección del anfitrión.")
+                                  .arg(kBeaconPort));
+        refreshFound();
+    } else if (!p2pAvailable()) {
+        setBusy(false, tr("Este Kaint se compiló sin la conexión P2P. Usa la red local (LAN)."), true);
+        m_join->setEnabled(false);
+    }
     connect(collab, &CollabController::documentReady, this, [this] {
         m_connecting = false;
         accept();
     });
-    resize(620, 480);
+    if (p2p) {
+        resize(520, 300);
+        m_code->setFocus();
+    } else {
+        resize(620, 480);
+    }
 }
 
 void JoinDialog::refreshFound()
@@ -225,6 +270,34 @@ void JoinDialog::start()
 {
     if (m_connecting)
         return;
+    if (m_mode == Mode::P2P) {
+        const QString code = normalizedSessionCode(m_code->text());
+        if (code.isEmpty()) {
+            setBusy(false, tr("El código tiene 16 letras y números, como ABCD-EFGH-JKLM-NPQR."), true);
+            return;
+        }
+        Settings s = m_collab->settings();
+        if (s.name != m_name->text().trimmed()) {
+            s.name = m_name->text().trimmed();
+            m_collab->applySettings(s);
+        }
+        m_collab->joinP2P(code, m_password->text());
+        Session* session = m_collab->session();
+        if (!session)
+            return;
+        setBusy(true, tr("Buscando la sesión…"));
+        connect(session, &Session::stateChanged, this, [this, session] {
+            if (session->state() == Session::State::Waiting)
+                setBusy(true, tr("Esperando a que el anfitrión te deje entrar…"));
+            else if (session->state() == Session::State::Connecting && !session->progressText().isEmpty())
+                setBusy(true, session->progressText());
+        });
+        connect(session, &Session::ended, this, [this](const QString& reason) {
+            if (m_connecting)
+                setBusy(false, reason.isEmpty() ? tr("No se pudo entrar.") : reason, true);
+        });
+        return;
+    }
     QString host;
     int port = 0;
     splitAddress(m_address->text(), &host, &port);
@@ -272,6 +345,110 @@ void JoinDialog::reject()
 
 // ---------------------------------------------------------------------------
 
+AddressView::AddressView(Kind kind, QWidget* parent)
+    : QWidget(parent)
+    , m_kind(kind)
+{
+    auto* row = new QHBoxLayout(this);
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(4);
+    m_text = new QLabel(this);
+    QFont bold = m_text->font();
+    bold.setBold(true);
+    m_text->setFont(bold);
+    // Un margen para que el difuminado no se corte en los bordes.
+    m_text->setContentsMargins(4, 2, 4, 2);
+    m_text->setCursor(Qt::PointingHandCursor);
+    m_text->installEventFilter(this);
+    m_blur = new QGraphicsBlurEffect(m_text);
+    m_blur->setBlurRadius(9);
+    m_blur->setBlurHints(QGraphicsBlurEffect::QualityHint);
+    m_text->setGraphicsEffect(m_blur);
+    m_eye = new QToolButton(this);
+    m_eye->setAutoRaise(true);
+    m_eye->setCursor(Qt::PointingHandCursor);
+    connect(m_eye, &QToolButton::clicked, this, [this] { setRevealed(!m_revealed); });
+    m_copy = new QPushButton(Icons::theme({"edit-copy", "edit-paste"}), tr("Copiar"), this);
+    m_copy->setToolTip(kind == Kind::Code ? tr("Copiar el código al portapapeles.") : tr("Copiar la dirección al portapapeles."));
+    connect(m_copy, &QPushButton::clicked, this, [this] {
+        if (m_address.isEmpty())
+            return;
+        QApplication::clipboard()->setText(m_address);
+        m_copy->setText(m_kind == Kind::Code ? tr("Copiado") : tr("Copiada"));
+        QTimer::singleShot(1500, m_copy, [this] { m_copy->setText(tr("Copiar")); });
+    });
+    row->addWidget(m_text);
+    row->addWidget(m_eye);
+    row->addWidget(m_copy);
+    row->addStretch();
+    refresh();
+}
+
+void AddressView::setAddress(const QString& text)
+{
+    if (text == m_address)
+        return;
+    m_address = text;
+    refresh();
+}
+
+void AddressView::setRevealed(bool on)
+{
+    if (on == m_revealed)
+        return;
+    m_revealed = on;
+    refresh();
+}
+
+QString AddressView::hint()
+{
+    return tr("Las direcciones y los códigos están difuminados para que no se vean en capturas ni transmisiones: haz clic "
+              "en ellos (o en el ojo) para mostrarlos u ocultarlos.");
+}
+
+bool AddressView::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_text && event->type() == QEvent::MouseButtonRelease
+        && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton && !m_address.isEmpty()) {
+        setRevealed(!m_revealed);
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void AddressView::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::StyleChange)
+        refresh();
+}
+
+void AddressView::refresh()
+{
+    const bool empty = m_address.isEmpty();
+    const bool code = m_kind == Kind::Code;
+    m_text->setText(empty ? (code ? QString() : tr("Sin conexión a la red")) : m_address);
+    m_blur->setEnabled(!m_revealed && !empty);
+    if (code)
+        m_text->setToolTip(empty ? QString() : m_revealed ? tr("Haz clic para ocultar el código.") : tr("Haz clic para mostrar el código."));
+    else
+        m_text->setToolTip(empty ? QString() : m_revealed ? tr("Haz clic para ocultar la dirección.") : tr("Haz clic para mostrar la dirección."));
+    m_eye->setIcon(Icons::eye(!m_revealed));
+    if (code)
+        m_eye->setToolTip(m_revealed ? tr("Ocultar el código") : tr("Mostrar el código"));
+    else
+        m_eye->setToolTip(m_revealed ? tr("Ocultar la dirección") : tr("Mostrar la dirección"));
+    m_eye->setVisible(!empty);
+    m_copy->setEnabled(!empty);
+}
+
+QStringList lanAddresses()
+{
+    return Server::localAddresses();
+}
+
+// ---------------------------------------------------------------------------
+
 SessionDialog::SessionDialog(CollabController* collab, QWidget* parent)
     : QDialog(parent)
     , m_collab(collab)
@@ -291,6 +468,37 @@ SessionDialog::SessionDialog(CollabController* collab, QWidget* parent)
     m_addresses->setWordWrap(true);
     m_addresses->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(m_addresses);
+    // Anfitrión: las direcciones para entrar, difuminadas y con su botón de copiar.
+    m_hostInfo = new QWidget(this);
+    auto* hostGrid = new QGridLayout(m_hostInfo);
+    hostGrid->setContentsMargins(0, 0, 0, 0);
+    m_joinHelp = new QLabel(m_hostInfo);
+    m_joinHelp->setWordWrap(true);
+    hostGrid->addWidget(m_joinHelp, 0, 0, 1, 2);
+    m_codeLabel = new QLabel(tr("Código de la sesión:"), m_hostInfo);
+    hostGrid->addWidget(m_codeLabel, 1, 0);
+    m_codeView = new AddressView(AddressView::Kind::Code, m_hostInfo);
+    hostGrid->addWidget(m_codeView, 1, 1);
+    m_addressLabel = new QLabel(tr("Dirección:"), m_hostInfo);
+    hostGrid->addWidget(m_addressLabel, 1, 0);
+    m_hostAddress = new AddressView(AddressView::Kind::Address, m_hostInfo);
+    hostGrid->addWidget(m_hostAddress, 1, 1);
+    m_webLabel = new QLabel(tr("Desde un navegador:"), m_hostInfo);
+    hostGrid->addWidget(m_webLabel, 2, 0);
+    m_webAddress = new AddressView(AddressView::Kind::Address, m_hostInfo);
+    hostGrid->addWidget(m_webAddress, 2, 1);
+    m_otherLabel = new QLabel(tr("Otras direcciones:"), m_hostInfo);
+    hostGrid->addWidget(m_otherLabel, 3, 0, Qt::AlignTop);
+    m_otherAddresses = new QWidget(m_hostInfo);
+    auto* others = new QVBoxLayout(m_otherAddresses);
+    others->setContentsMargins(0, 0, 0, 0);
+    hostGrid->addWidget(m_otherAddresses, 3, 1);
+    auto* hint = new QLabel(AddressView::hint(), m_hostInfo);
+    hint->setWordWrap(true);
+    hint->setForegroundRole(QPalette::PlaceholderText);
+    hostGrid->addWidget(hint, 4, 0, 1, 2);
+    hostGrid->setColumnStretch(1, 1);
+    layout->addWidget(m_hostInfo);
 
     // Participantes.
     auto* peersBox = new QGroupBox(tr("Participantes"), this);
@@ -477,16 +685,46 @@ void SessionDialog::refresh()
     const bool host = active && s->isHost();
     const bool joined = active && s->state() == Session::State::Joined;
 
-    if (host) {
-        QStringList lines;
+    m_hostInfo->setVisible(host);
+    m_addresses->setVisible(!host && joined);
+    const bool p2p = host && s->connection() == Mode::P2P;
+    m_codeLabel->setVisible(p2p);
+    m_codeView->setVisible(p2p);
+    m_addressLabel->setVisible(host && !p2p);
+    m_hostAddress->setVisible(host && !p2p);
+    if (p2p) {
+        m_joinHelp->setText(tr("Para unirse: Archivo > Colaboración > P2P > Unirse con un código, y este código (en Kaint o en Kaint "
+                               "para la web, desde cualquier lugar)."));
+        m_codeView->setAddress(s->sessionCode());
+        for (QWidget* w : {static_cast<QWidget*>(m_webLabel), static_cast<QWidget*>(m_webAddress), static_cast<QWidget*>(m_otherLabel),
+                           m_otherAddresses})
+            w->setVisible(false);
+    } else if (host) {
+        m_joinHelp->setText(tr("Para unirse desde Kaint: Archivo > Colaboración > Red local > Unirse a una sesión. Aparece en la "
+                               "lista de sesiones cercanas; si no, se escribe esta dirección."));
         const QStringList addresses = s->addresses();
-        const QString first = addresses.value(0, QStringLiteral("127.0.0.1"));
-        lines << tr("Para unirse desde Kaint: Archivo > Colaboración > Unirse, dirección %1, puerto %2.").arg(first).arg(s->port());
-        if (s->servesWeb())
-            lines << tr("Desde un navegador de la red: http://%1:%2/").arg(first).arg(s->port());
-        if (addresses.size() > 1)
-            lines << tr("Otras direcciones de este equipo: %1").arg(addresses.mid(1).join(QStringLiteral(", ")));
-        m_addresses->setText(lines.join(QLatin1Char('\n')));
+        const QString first = addresses.value(0);
+        m_hostAddress->setAddress(first.isEmpty() ? QString() : QStringLiteral("%1:%2").arg(first).arg(s->port()));
+        m_webLabel->setVisible(s->servesWeb() && !first.isEmpty());
+        m_webAddress->setVisible(s->servesWeb() && !first.isEmpty());
+        m_webAddress->setAddress(QStringLiteral("http://%1:%2/").arg(first).arg(s->port()));
+        // Las demás (otra tarjeta de red, una VPN...), cada una con su botón; solo se rehacen si cambian.
+        const QStringList rest = addresses.mid(1);
+        QStringList withPort;
+        for (const QString& a : rest)
+            withPort << QStringLiteral("%1:%2").arg(a).arg(s->port());
+        if (withPort != m_shownOthers) {
+            m_shownOthers = withPort;
+            for (QWidget* old : m_otherAddresses->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly))
+                old->deleteLater();
+            for (const QString& a : withPort) {
+                auto* view = new AddressView(AddressView::Kind::Address, m_otherAddresses);
+                view->setAddress(a);
+                m_otherAddresses->layout()->addWidget(view);
+            }
+        }
+        m_otherLabel->setVisible(!withPort.isEmpty());
+        m_otherAddresses->setVisible(!withPort.isEmpty());
     } else {
         m_addresses->setText(joined ? tr("Lo que exportes es una copia: la imagen la guarda el anfitrión.") : QString());
     }

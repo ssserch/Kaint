@@ -128,11 +128,70 @@
     </message>
 </context>
 <context>
-    <name>Collab::JoinDialog</name>
+    <name>Collab::AddressView</name>
     <message>
-        <source>Unirse a una sesión colaborativa</source>
-        <translation>Join a collaborative session</translation>
+        <source>Copiar</source>
+        <translation>Copy</translation>
     </message>
+    <message>
+        <source>Copiar el código al portapapeles.</source>
+        <translation>Copy the code to the clipboard.</translation>
+    </message>
+    <message>
+        <source>Copiar la dirección al portapapeles.</source>
+        <translation>Copy the address to the clipboard.</translation>
+    </message>
+    <message>
+        <source>Copiado</source>
+        <translation>Copied</translation>
+    </message>
+    <message>
+        <source>Copiada</source>
+        <translation>Copied</translation>
+    </message>
+    <message>
+        <source>Las direcciones y los códigos están difuminados para que no se vean en capturas ni transmisiones: haz clic en ellos (o en el ojo) para mostrarlos u ocultarlos.</source>
+        <translation>Addresses and codes are blurred so they don't show up in screenshots or streams: click them (or the eye) to show or hide them.</translation>
+    </message>
+    <message>
+        <source>Sin conexión a la red</source>
+        <translation>No network connection</translation>
+    </message>
+    <message>
+        <source>Haz clic para ocultar el código.</source>
+        <translation>Click to hide the code.</translation>
+    </message>
+    <message>
+        <source>Haz clic para mostrar el código.</source>
+        <translation>Click to show the code.</translation>
+    </message>
+    <message>
+        <source>Haz clic para ocultar la dirección.</source>
+        <translation>Click to hide the address.</translation>
+    </message>
+    <message>
+        <source>Haz clic para mostrar la dirección.</source>
+        <translation>Click to show the address.</translation>
+    </message>
+    <message>
+        <source>Ocultar el código</source>
+        <translation>Hide the code</translation>
+    </message>
+    <message>
+        <source>Mostrar el código</source>
+        <translation>Show the code</translation>
+    </message>
+    <message>
+        <source>Ocultar la dirección</source>
+        <translation>Hide the address</translation>
+    </message>
+    <message>
+        <source>Mostrar la dirección</source>
+        <translation>Show the address</translation>
+    </message>
+</context>
+<context>
+    <name>Collab::JoinDialog</name>
     <message>
         <source>Sesiones en la red local:</source>
         <translation>Sessions on the local network:</translation>
@@ -216,6 +275,68 @@
     <message>
         <source>No se pudo entrar.</source>
         <translation>Couldn't join.</translation>
+    </message>
+    <message>
+        <source>Unirse a una sesión P2P</source>
+        <translation>Join a P2P session</translation>
+    </message>
+    <message>
+        <source>Unirse a una sesión de la red local</source>
+        <translation>Join a session on the local network</translation>
+    </message>
+    <message>
+        <source>Escribe el código que te dio el anfitrión. Los dos equipos se encuentran por Internet y la imagen va directa de uno a otro.</source>
+        <translation>Type the code the host gave you. Both computers find each other over the Internet and the image goes straight from one to the other.</translation>
+    </message>
+    <message>
+        <source>Ej.: ABCD-EFGH-JKLM-NPQR</source>
+        <translation>E.g. ABCD-EFGH-JKLM-NPQR</translation>
+    </message>
+    <message>
+        <source>Pegar</source>
+        <translation>Paste</translation>
+    </message>
+    <message>
+        <source>Código de la sesión:</source>
+        <translation>Session code:</translation>
+    </message>
+    <message>
+        <source>Este Kaint se compiló sin la conexión P2P. Usa la red local (LAN).</source>
+        <translation>This Kaint was built without the P2P connection. Use the local network (LAN).</translation>
+    </message>
+    <message>
+        <source>El código tiene 16 letras y números, como ABCD-EFGH-JKLM-NPQR.</source>
+        <translation>The code has 16 letters and digits, like ABCD-EFGH-JKLM-NPQR.</translation>
+    </message>
+    <message>
+        <source>Buscando la sesión…</source>
+        <translation>Looking for the session…</translation>
+    </message>
+</context>
+<context>
+    <name>Collab::P2PGuest</name>
+    <message>
+        <source>No se encontró la sesión. Revisa el código y que el anfitrión siga hospedándola (y que los dos usen algún servidor de señalización en común).</source>
+        <translation>The session wasn't found. Check the code and that the host is still hosting it (and that both of you use at least one signaling server in common).</translation>
+    </message>
+    <message>
+        <source>Este Kaint se compiló sin la conexión P2P.</source>
+        <translation>This Kaint was built without the P2P connection.</translation>
+    </message>
+    <message>
+        <source>Buscando la sesión…</source>
+        <translation>Looking for the session…</translation>
+    </message>
+    <message>
+        <source>Conectando con el anfitrión…</source>
+        <translation>Connecting to the host…</translation>
+    </message>
+</context>
+<context>
+    <name>Collab::Server</name>
+    <message>
+        <source>Este Kaint se compiló sin la conexión P2P. Usa la red local (LAN).</source>
+        <translation>This Kaint was built without the P2P connection. Use the local network (LAN).</translation>
     </message>
 </context>
 <context>
@@ -308,6 +429,10 @@
         <source>El anfitrión aceptó tus cambios.</source>
         <translation>The host accepted your changes.</translation>
     </message>
+    <message>
+        <source>Conectado; entrando en la sesión…</source>
+        <translation>Connected; joining the session…</translation>
+    </message>
 </context>
 <context>
     <name>Collab::SessionDialog</name>
@@ -398,18 +523,6 @@
         <translation>Changes</translation>
     </message>
     <message>
-        <source>Para unirse desde Kaint: Archivo &gt; Colaboración &gt; Unirse, dirección %1, puerto %2.</source>
-        <translation>To join from Kaint: File &gt; Collaboration &gt; Join, address %1, port %2.</translation>
-    </message>
-    <message>
-        <source>Desde un navegador de la red: http://%1:%2/</source>
-        <translation>From a browser on the network: http://%1:%2/</translation>
-    </message>
-    <message>
-        <source>Otras direcciones de este equipo: %1</source>
-        <translation>Other addresses of this computer: %1</translation>
-    </message>
-    <message>
         <source>Lo que exportes es una copia: la imagen la guarda el anfitrión.</source>
         <translation>What you export is a copy: the host saves the image.</translation>
     </message>
@@ -448,6 +561,49 @@
     <message>
         <source>Terminar la sesión</source>
         <translation>End session</translation>
+    </message>
+    <message>
+        <source>Código de la sesión:</source>
+        <translation>Session code:</translation>
+    </message>
+    <message>
+        <source>Dirección:</source>
+        <translation>Address:</translation>
+    </message>
+    <message>
+        <source>Desde un navegador:</source>
+        <translation>From a browser:</translation>
+    </message>
+    <message>
+        <source>Otras direcciones:</source>
+        <translation>Other addresses:</translation>
+    </message>
+    <message>
+        <source>Para unirse: Archivo &gt; Colaboración &gt; P2P &gt; Unirse con un código, y este código (en Kaint o en Kaint para la web, desde cualquier lugar).</source>
+        <translation>To join: File &gt; Collaboration &gt; P2P &gt; Join with a code, and this code (in Kaint or Kaint for the web, from anywhere).</translation>
+    </message>
+    <message>
+        <source>Para unirse desde Kaint: Archivo &gt; Colaboración &gt; Red local &gt; Unirse a una sesión. Aparece en la lista de sesiones cercanas; si no, se escribe esta dirección.</source>
+        <translation>To join from Kaint: File &gt; Collaboration &gt; Local network &gt; Join a session. It shows up in the list of nearby sessions; if not, type this address.</translation>
+    </message>
+</context>
+<context>
+    <name>Collab::Signaling</name>
+    <message>
+        <source>No hay servidores de señalización en la configuración.</source>
+        <translation>There are no signaling servers in the settings.</translation>
+    </message>
+    <message>
+        <source>Dirección no válida: %1</source>
+        <translation>Invalid address: %1</translation>
+    </message>
+    <message>
+        <source>Se cerró la conexión.</source>
+        <translation>The connection was closed.</translation>
+    </message>
+    <message>
+        <source>No se pudo conectar con ningún servidor de señalización (%1).</source>
+        <translation>Couldn't connect to any signaling server (%1).</translation>
     </message>
 </context>
 <context>
@@ -503,14 +659,6 @@
     <message>
         <source>Esperando a que el anfitrión te deje entrar…</source>
         <translation>Waiting for the host to let you in…</translation>
-    </message>
-    <message>
-        <source>Hospedando «%1» en %2 (puerto %3) · %4</source>
-        <translation>Hosting “%1” on %2 (port %3) · %4</translation>
-    </message>
-    <message>
-        <source>este equipo</source>
-        <translation>this computer</translation>
     </message>
     <message>
         <source>1 participante</source>
@@ -633,6 +781,28 @@ Try another port in Settings &gt; Collaboration.</translation>
     <message>
         <source>Esperando al anfitrión…</source>
         <translation>Waiting for the host…</translation>
+    </message>
+    <message>
+        <source>Buscando la sesión…</source>
+        <translation>Looking for the session…</translation>
+    </message>
+    <message>
+        <source>Hospedando «%1» por P2P · %2 · sin conexión con los servidores de señalización (se sigue intentando)</source>
+        <translation>Hosting “%1” over P2P · %2 · no connection to the signaling servers (still trying)</translation>
+    </message>
+    <message>
+        <source>Hospedando «%1» por P2P · %2</source>
+        <translation>Hosting “%1” over P2P · %2</translation>
+    </message>
+    <message>
+        <source>Hospedando «%1» en la red local (puerto %2) · %3</source>
+        <translation>Hosting “%1” on the local network (port %2) · %3</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir la sesión P2P:
+%1</source>
+        <translation>Couldn't open the P2P session:
+%1</translation>
     </message>
 </context>
 <context>
@@ -1138,7 +1308,7 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
     <message>
         <source>Los iconos de siempre de Kaint.</source>
-        <translation>Kaint&apos;s own icons.</translation>
+        <translation>Kaint's own icons.</translation>
     </message>
     <message>
         <source>No se pudo abrir el archivo.</source>
@@ -1158,7 +1328,7 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
     <message>
         <source>El paquete usa una versión del formato que Kaint no conoce.</source>
-        <translation>The pack uses a format version Kaint doesn&apos;t know.</translation>
+        <translation>The pack uses a format version Kaint doesn't know.</translation>
     </message>
     <message>
         <source>El identificador del paquete no es válido.</source>
@@ -1300,6 +1470,13 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Línea/Curva</source>
         <translation>Line/Curve</translation>
+    </message>
+</context>
+<context>
+    <name>Link</name>
+    <message>
+        <source>No se pudo establecer la conexión directa.</source>
+        <translation>The direct connection couldn't be established.</translation>
     </message>
 </context>
 <context>
@@ -1817,7 +1994,7 @@ What do you want to do?</translation>
     </message>
     <message>
         <source>No guardar</source>
-        <translation>Don&apos;t Save</translation>
+        <translation>Don't Save</translation>
     </message>
     <message>
         <source>Descartar los cambios no guardados.</source>
@@ -1992,7 +2169,7 @@ What do you want to do?</translation>
     </message>
     <message>
         <source>No acoplar (guardar como .ora)</source>
-        <translation>Don&apos;t flatten (save as .ora)</translation>
+        <translation>Don't flatten (save as .ora)</translation>
     </message>
     <message>
         <source>Se guarda con todas sus capas en «%1».</source>
@@ -2396,10 +2573,6 @@ Do you want to replace them?</translation>
 %1</translation>
     </message>
     <message>
-        <source>&amp;Hospedar esta imagen</source>
-        <translation>&amp;Host this image</translation>
-    </message>
-    <message>
         <source>&amp;Unirse a una sesión...</source>
         <translation>&amp;Join a session...</translation>
     </message>
@@ -2430,6 +2603,30 @@ Do you want to replace them?</translation>
     <message>
         <source>&amp;Terminar la sesión</source>
         <translation>&amp;End session</translation>
+    </message>
+    <message>
+        <source>&amp;Hospedar la imagen actual</source>
+        <translation>&amp;Host the current image</translation>
+    </message>
+    <message>
+        <source>&amp;Unirse con un código...</source>
+        <translation>&amp;Join with a code...</translation>
+    </message>
+    <message>
+        <source>&amp;Configuración P2P...</source>
+        <translation>P2P &amp;settings...</translation>
+    </message>
+    <message>
+        <source>C&amp;onfiguración LAN...</source>
+        <translation>LAN s&amp;ettings...</translation>
+    </message>
+    <message>
+        <source>&amp;P2P (por Internet)</source>
+        <translation>&amp;P2P (over the Internet)</translation>
+    </message>
+    <message>
+        <source>&amp;Red local (LAN)</source>
+        <translation>&amp;Local network (LAN)</translation>
     </message>
 </context>
 <context>
@@ -4550,7 +4747,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Este tipo de archivo TGA no se puede abrir.</source>
-        <translation>This kind of TGA file can&apos;t be opened.</translation>
+        <translation>This kind of TGA file can't be opened.</translation>
     </message>
     <message>
         <source>La imagen es demasiado grande.</source>
@@ -4562,7 +4759,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Este tipo de archivo DDS no se puede abrir.</source>
-        <translation>This kind of DDS file can&apos;t be opened.</translation>
+        <translation>This kind of DDS file can't be opened.</translation>
     </message>
     <message>
         <source>El archivo QOI no es válido o está dañado.</source>
@@ -5054,7 +5251,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La capa de abajo es el primer fotograma. La duración de cada uno va en el nombre de la capa, p. ej. «Fotograma 1 (100ms)» (Imagen &gt; Animación).</source>
-        <translation>The bottom layer is the first frame. Each frame&apos;s duration goes in the layer name, e.g. “Frame 1 (100ms)” (Image &gt; Animation).</translation>
+        <translation>The bottom layer is the first frame. Each frame's duration goes in the layer name, e.g. “Frame 1 (100ms)” (Image &gt; Animation).</translation>
     </message>
     <message>
         <source>Para las capas que no indican su duración en el nombre</source>
@@ -5253,7 +5450,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No fundir el último fotograma con el primero</source>
-        <translation>Don&apos;t fade the last frame into the first</translation>
+        <translation>Don't fade the last frame into the first</translation>
     </message>
     <message>
         <source>Duración del fundido:</source>
@@ -5265,7 +5462,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No apilar los fotogramas</source>
-        <translation>Don&apos;t stack frames</translation>
+        <translation>Don't stack frames</translation>
     </message>
     <message>
         <source>(cada fotograma se borra al mostrar el siguiente; para imágenes con fondo transparente)</source>
@@ -5277,7 +5474,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Duración 0 para el primer fotograma (no mostrarlo solo)</source>
-        <translation>0 duration for the first frame (don&apos;t show it alone)</translation>
+        <translation>0 duration for the first frame (don't show it alone)</translation>
     </message>
     <message>
         <source>No se muestra: clic para mostrarlo</source>
@@ -5527,7 +5724,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores del escritorio con su icono al lado. Desactivado, la flecha de Kaint.</source>
-        <translation>The selection tools, Gradient, Line, Text and Shapes show the arrow (or I-beam) of the desktop cursor theme with their icon beside it. When off, Kaint&apos;s own arrow.</translation>
+        <translation>The selection tools, Gradient, Line, Text and Shapes show the arrow (or I-beam) of the desktop cursor theme with their icon beside it. When off, Kaint's own arrow.</translation>
     </message>
     <message>
         <source>Usar el diálogo de archivos del sistema para abrir y guardar</source>
@@ -5551,7 +5748,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css.</source>
-        <translation>Luna&apos;s beige with the blue windows and the XP buttons, with XP.css&apos;s colors.</translation>
+        <translation>Luna's beige with the blue windows and the XP buttons, with XP.css's colors.</translation>
     </message>
     <message>
         <source>Windows 98</source>
@@ -5571,7 +5768,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>El aspecto propio de Kaint.</source>
-        <translation>Kaint&apos;s own look.</translation>
+        <translation>Kaint's own look.</translation>
     </message>
     <message>
         <source>Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.</source>
@@ -5651,7 +5848,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La cabecera fina de siempre de Kaint.</source>
-        <translation>Kaint&apos;s usual thin title bar.</translation>
+        <translation>Kaint's usual thin title bar.</translation>
     </message>
     <message>
         <source>Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.</source>
@@ -5763,7 +5960,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.</source>
-        <translation>Like Paint.NET: “Don&apos;t Save” discards all of them at once. When off, Kaint asks image by image.</translation>
+        <translation>Like Paint.NET: “Don't Save” discards all of them at once. When off, Kaint asks image by image.</translation>
     </message>
     <message>
         <source>Recuperación</source>
@@ -5815,15 +6012,15 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Usar la barra de título y el marco de ventana de Kaint</source>
-        <translation>Use Kaint&apos;s title bar and window frame</translation>
+        <translation>Use Kaint's title bar and window frame</translation>
     </message>
     <message>
         <source>Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, llevan la de Windows.</source>
-        <translation>Windows get Kaint&apos;s title bar, with the chosen buttons. When it&apos;s off, they get the Windows one.</translation>
+        <translation>Windows get Kaint's title bar, with the chosen buttons. When it's off, they get the Windows one.</translation>
     </message>
     <message>
         <source>Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, llevan la del escritorio (en KDE, la de Plasma).</source>
-        <translation>Windows get Kaint&apos;s title bar, with the chosen buttons. When it&apos;s off, they get the desktop&apos;s (on KDE, Plasma&apos;s).</translation>
+        <translation>Windows get Kaint's title bar, with the chosen buttons. When it's off, they get the desktop's (on KDE, Plasma's).</translation>
     </message>
     <message>
         <source>Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin guardar, te lo preguntará antes.</source>
@@ -5835,7 +6032,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Con el tema KDE, las ventanas llevan la barra de título de Plasma.</source>
-        <translation>With the KDE theme, windows get Plasma&apos;s title bar.</translation>
+        <translation>With the KDE theme, windows get Plasma's title bar.</translation>
     </message>
     <message>
         <source>Se desbloquea con el estilo de interfaz Paint.NET.</source>
@@ -5919,7 +6116,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Usar la Goma con el extremo borrador del lápiz</source>
-        <translation>Use the Eraser with the pen&apos;s eraser end</translation>
+        <translation>Use the Eraser with the pen's eraser end</translation>
     </message>
     <message>
         <source>Al dar la vuelta al lápiz se activa la herramienta Goma de borrar, y al volver a la punta, la herramienta anterior. La sensibilidad a la presión se activa en la barra de opciones del pincel, la goma y el lápiz.</source>
@@ -5961,7 +6158,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Si el historial de una imagen ocupa más, se descartan los pasos más antiguos (y se avisa en la barra de estado).</source>
-        <translation>If an image&apos;s history takes more, the oldest steps are discarded (and the status bar says so).</translation>
+        <translation>If an image's history takes more, the oldest steps are discarded (and the status bar says so).</translation>
     </message>
     <message>
         <source>De Kaint</source>
@@ -6005,7 +6202,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de puzle de los complementos.</source>
-        <translation>In Adjustments and Effects, effects that come from plugins show the plugins&apos; puzzle piece on the right.</translation>
+        <translation>In Adjustments and Effects, effects that come from plugins show the plugins' puzzle piece on the right.</translation>
     </message>
     <message>
         <source>Mostrar el botón «Complementos de Kaint.HTML»</source>
@@ -6250,7 +6447,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Quita la casilla de las herramientas que no uses y cambia su orden. Sus atajos de teclado siguen funcionando aunque estén ocultas.</source>
-        <translation>Uncheck the tools you don&apos;t use and change their order. Their keyboard shortcuts keep working even when hidden.</translation>
+        <translation>Uncheck the tools you don't use and change their order. Their keyboard shortcuts keep working even when hidden.</translation>
     </message>
     <message>
         <source>Subir</source>
@@ -6322,7 +6519,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los paquetes de iconos (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.</source>
-        <translation>Icon packs (.zip files with an asset-pack.json) change Kaint&apos;s icons, the tool icons too. Icons a pack doesn&apos;t include stay as Kaint&apos;s. Packs are stored on this computer.</translation>
+        <translation>Icon packs (.zip files with an asset-pack.json) change Kaint's icons, the tool icons too. Icons a pack doesn't include stay as Kaint's. Packs are stored on this computer.</translation>
     </message>
     <message>
         <source>Usar</source>
@@ -6377,7 +6574,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Añade fuentes para la herramienta Texto (.ttf, .otf, .ttc, .woff). Se copian a la carpeta de Kaint y solo las usa Kaint: no se instalan en el sistema.</source>
-        <translation>Add fonts for the Text tool (.ttf, .otf, .ttc, .woff). They are copied to Kaint&apos;s folder and only Kaint uses them: they aren&apos;t installed on the system.</translation>
+        <translation>Add fonts for the Text tool (.ttf, .otf, .ttc, .woff). They are copied to Kaint's folder and only Kaint uses them: they aren't installed on the system.</translation>
     </message>
     <message>
         <source>Añadir fuentes…</source>
@@ -6409,11 +6606,11 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Todavía no has añadido ninguna fuente.</source>
-        <translation>You haven&apos;t added any fonts yet.</translation>
+        <translation>You haven't added any fonts yet.</translation>
     </message>
     <message>
         <source>Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se copian a la carpeta de formas de Kaint.</source>
-        <translation>Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom Shapes” group. They are copied to Kaint&apos;s shapes folder.</translation>
+        <translation>Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom Shapes” group. They are copied to Kaint's shapes folder.</translation>
     </message>
     <message>
         <source>Añadir formas…</source>
@@ -6653,15 +6850,11 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Se desbloquea con la barra de título de Kaint.</source>
-        <translation>Unlocked with Kaint&apos;s title bar.</translation>
+        <translation>Unlocked with Kaint's title bar.</translation>
     </message>
     <message>
         <source>Colaboración</source>
         <translation>Collaboration</translation>
-    </message>
-    <message>
-        <source>Edita la imagen actual con otras personas de tu red local: tú la hospedas y los demás se unen desde Kaint o desde Kaint para la web. Solo tú guardas la imagen; los invitados pueden exportar una copia.</source>
-        <translation>Edit the current image with other people on your local network: you host it and the others join from Kaint or Kaint for the web. Only you save the image; guests can export a copy.</translation>
     </message>
     <message>
         <source>Sesión</source>
@@ -6756,28 +6949,12 @@ Do you want to replace them?</translation>
         <translation>Session name:</translation>
     </message>
     <message>
-        <source>Puerto TCP de la sesión (por defecto %1). Se aplica a la próxima sesión.</source>
-        <translation>TCP port of the session (%1 by default). Applies to the next session.</translation>
-    </message>
-    <message>
         <source>Puerto:</source>
         <translation>Port:</translation>
     </message>
     <message>
-        <source>Libre: cualquiera de la red puede entrar</source>
-        <translation>Open: anyone on the network can join</translation>
-    </message>
-    <message>
-        <source>Con permiso: apruebas a cada persona</source>
-        <translation>With permission: you approve each person</translation>
-    </message>
-    <message>
         <source>Con contraseña</source>
         <translation>With password</translation>
-    </message>
-    <message>
-        <source>Solo equipos autorizados (por su ID)</source>
-        <translation>Authorized computers only (by their ID)</translation>
     </message>
     <message>
         <source>Quién puede entrar:</source>
@@ -6870,6 +7047,182 @@ Do you want to replace them?</translation>
     <message>
         <source>Un triángulo del color de cada participante, con su nombre y el icono de su herramienta.</source>
         <translation>A triangle in each participant's color, with their name and the icon of their tool.</translation>
+    </message>
+    <message>
+        <source>Vista:</source>
+        <translation>View:</translation>
+    </message>
+    <message>
+        <source>Simplificada</source>
+        <translation>Simplified</translation>
+    </message>
+    <message>
+        <source>Por secciones, con las explicaciones a la vista y lo que menos se cambia en «Más opciones».</source>
+        <translation>By sections, with the explanations in sight and what is changed least under “More options”.</translation>
+    </message>
+    <message>
+        <source>Compacta</source>
+        <translation>Compact</translation>
+    </message>
+    <message>
+        <source>Todas las opciones juntas en formularios; las explicaciones, en las descripciones emergentes.</source>
+        <translation>All the options together in forms; the explanations, in the tooltips.</translation>
+    </message>
+    <message>
+        <source>P2P (por Internet)</source>
+        <translation>P2P (over the Internet)</translation>
+    </message>
+    <message>
+        <source>Red local (LAN)</source>
+        <translation>Local network (LAN)</translation>
+    </message>
+    <message>
+        <source>Edita la imagen actual con otras personas: tú la hospedas y los demás se unen desde Kaint o desde Kaint para la web. Solo tú guardas la imagen; los invitados pueden exportar una copia.</source>
+        <translation>Edit the current image with other people: you host it and the others join from Kaint or Kaint for the web. Only you save the image; guests can export a copy.</translation>
+    </message>
+    <message>
+        <source>Con cualquiera, esté donde esté: le das el código de la sesión y la imagen va directa de un equipo a otro.</source>
+        <translation>With anyone, wherever they are: you give them the session code and the image goes straight from one computer to the other.</translation>
+    </message>
+    <message>
+        <source>Con los equipos de tu misma red (casa, oficina, clase): te encuentran en la lista de sesiones cercanas o por tu dirección IP.</source>
+        <translation>With the computers on your own network (home, office, classroom): they find you in the list of nearby sessions or by your IP address.</translation>
+    </message>
+    <message>
+        <source>Conexión:</source>
+        <translation>Connection:</translation>
+    </message>
+    <message>
+        <source>Conexión</source>
+        <translation>Connection</translation>
+    </message>
+    <message>
+        <source>Código de la sesión:</source>
+        <translation>Session code:</translation>
+    </message>
+    <message>
+        <source>Código de la sesión</source>
+        <translation>Session code</translation>
+    </message>
+    <message>
+        <source>Dáselo a quien quieras invitar: lo escribe en Archivo &gt; Colaboración &gt; P2P &gt; Unirse con un código.</source>
+        <translation>Give it to whoever you want to invite: they type it in File &gt; Collaboration &gt; P2P &gt; Join with a code.</translation>
+    </message>
+    <message>
+        <source>Tu dirección:</source>
+        <translation>Your address:</translation>
+    </message>
+    <message>
+        <source>Tu dirección en la red local</source>
+        <translation>Your address on the local network</translation>
+    </message>
+    <message>
+        <source>Desde un navegador:</source>
+        <translation>From a browser:</translation>
+    </message>
+    <message>
+        <source>Desde un navegador</source>
+        <translation>From a browser</translation>
+    </message>
+    <message>
+        <source>Los demás te encuentran en Archivo &gt; Colaboración &gt; Red local &gt; Unirse a una sesión (en la lista de sesiones cercanas) o escribiendo esta dirección.</source>
+        <translation>The others find you in File &gt; Collaboration &gt; Local network &gt; Join a session (in the list of nearby sessions) or by typing this address.</translation>
+    </message>
+    <message>
+        <source>Unirse con un código…</source>
+        <translation>Join with a code…</translation>
+    </message>
+    <message>
+        <source>Así te ven los demás: junto a tu puntero y en la lista de participantes.</source>
+        <translation>How the others see you: next to your pointer and in the list of participants.</translation>
+    </message>
+    <message>
+        <source>Copiado</source>
+        <translation>Copied</translation>
+    </message>
+    <message>
+        <source>El que ven los demás al unirse y en la lista de sesiones cercanas.</source>
+        <translation>The one the others see when joining and in the list of nearby sessions.</translation>
+    </message>
+    <message>
+        <source>Libre</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Cualquiera que tenga el código o esté en tu red puede entrar.</source>
+        <translation>Anyone who has the code or is on your network can join.</translation>
+    </message>
+    <message>
+        <source>Con permiso</source>
+        <translation>With permission</translation>
+    </message>
+    <message>
+        <source>Te avisa cuando alguien quiere entrar y tú decides si pasa.</source>
+        <translation>You're told when someone wants to join and you decide whether they get in.</translation>
+    </message>
+    <message>
+        <source>Solo entra quien sepa la contraseña.</source>
+        <translation>Only those who know the password can join.</translation>
+    </message>
+    <message>
+        <source>Solo equipos autorizados</source>
+        <translation>Authorized computers only</translation>
+    </message>
+    <message>
+        <source>Solo entran los equipos cuyo ID agregues a la lista.</source>
+        <translation>Only the computers whose ID you add to the list can join.</translation>
+    </message>
+    <message>
+        <source>Equipos autorizados</source>
+        <translation>Authorized computers</translation>
+    </message>
+    <message>
+        <source>¿Quién puede entrar?</source>
+        <translation>Who can join?</translation>
+    </message>
+    <message>
+        <source>Solo entran estos equipos. Cada persona ve el ID de su equipo en Configuración &gt; Colaboración.</source>
+        <translation>Only these computers can join. Each person sees their computer's ID in Settings &gt; Collaboration.</translation>
+    </message>
+    <message>
+        <source>Estos equipos entran sin esperar a que los apruebes.</source>
+        <translation>These computers join without waiting for your approval.</translation>
+    </message>
+    <message>
+        <source>Cambios de los invitados</source>
+        <translation>Guests' changes</translation>
+    </message>
+    <message>
+        <source>Más opciones</source>
+        <translation>More options</translation>
+    </message>
+    <message>
+        <source>Volver a los predeterminados.</source>
+        <translation>Go back to the defaults.</translation>
+    </message>
+    <message>
+        <source>Los servidores de señalización solo presentan a los equipos (como los rastreadores de WebTorrent): la imagen va directa de un equipo a otro, cifrada. El código de la sesión no viaja: solo su huella.</source>
+        <translation>Signaling servers only introduce the computers to each other (like WebTorrent trackers): the image goes straight from one computer to the other, encrypted. The session code isn't sent: only its fingerprint.</translation>
+    </message>
+    <message>
+        <source>Servidores de señalización:</source>
+        <translation>Signaling servers:</translation>
+    </message>
+    <message>
+        <source>Direcciones wss:// de rastreadores de WebTorrent o de tools/collab-server.mjs (ws://equipo:47913/signal), una por línea. Todos los de una sesión tienen que usar al menos uno en común.</source>
+        <translation>wss:// addresses of WebTorrent trackers or of tools/collab-server.mjs (ws://computer:47913/signal), one per line. Everyone in a session must use at least one in common.</translation>
+    </message>
+    <message>
+        <source>Servidores STUN y TURN:</source>
+        <translation>STUN and TURN servers:</translation>
+    </message>
+    <message>
+        <source>Ayudan a atravesar los routers. «stun:servidor:puerto» o, si una red no deja conectar directamente, un TURN: «turn:usuario:contraseña@servidor:puerto».</source>
+        <translation>They help get through routers. “stun:server:port” or, if a network doesn't allow direct connections, a TURN server: “turn:user:password@server:port”.</translation>
+    </message>
+    <message>
+        <source>Puerto TCP de la sesión en la red local (por defecto %1). Se aplica a la próxima sesión.</source>
+        <translation>TCP port of the session on the local network (%1 by default). Applies to the next session.</translation>
     </message>
 </context>
 <context>
@@ -7092,7 +7445,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los colores que no cambies siguen al modo elegido. Los cambiados aparecen en negrita.</source>
-        <translation>Colors you don&apos;t change follow the chosen mode. Changed ones are shown in bold.</translation>
+        <translation>Colors you don't change follow the chosen mode. Changed ones are shown in bold.</translation>
     </message>
     <message>
         <source>Colores</source>
@@ -7626,7 +7979,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La conversión del tamaño de letra a píxeles utiliza puntos estándar de la industria definidos por los metadatos de resolución (PPP) de la imagen.</source>
-        <translation>Font size is converted to pixels using industry-standard points defined by the image&apos;s resolution (DPI) metadata.</translation>
+        <translation>Font size is converted to pixels using industry-standard points defined by the image's resolution (DPI) metadata.</translation>
     </message>
     <message>
         <source>Fijo (96 PPP)</source>
@@ -7886,7 +8239,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No acumular rellenos</source>
-        <translation>Don&apos;t accumulate fills</translation>
+        <translation>Don't accumulate fills</translation>
     </message>
     <message>
         <source>Modo de fusión</source>
@@ -7951,6 +8304,10 @@ Do you want to replace them?</translation>
         <source>Mensaje no válido.</source>
         <translation>Invalid message.</translation>
     </message>
+    <message>
+        <source>Este Kaint no puede usar conexiones cifradas (TLS).</source>
+        <translation>This Kaint can't use encrypted connections (TLS).</translation>
+    </message>
 </context>
 <context>
     <name>WebSocketServer</name>
@@ -7975,7 +8332,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Apoyar el desarrollo de Kaint en Ko-fi</source>
-        <translation>Support Kaint&apos;s development on Ko-fi</translation>
+        <translation>Support Kaint's development on Ko-fi</translation>
     </message>
     <message>
         <source>Elige cómo quieres que se vea Kaint. Todo se puede cambiar más tarde en Configuración.</source>

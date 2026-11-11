@@ -32,6 +32,49 @@ QString newCode()
 
 } // namespace
 
+QString modeName(Mode m)
+{
+    return m == Mode::Lan ? QStringLiteral("lan") : QStringLiteral("p2p");
+}
+
+Mode modeFromName(const QString& name)
+{
+    return name == QLatin1String("lan") ? Mode::Lan : Mode::P2P;
+}
+
+QStringList defaultSignalServers()
+{
+    return {QStringLiteral("wss://tracker.openwebtorrent.com"), QStringLiteral("wss://tracker.webtorrent.dev"),
+            QStringLiteral("wss://tracker.files.fm:7073/announce")};
+}
+
+QStringList defaultIceServers()
+{
+    return {QStringLiteral("stun:stun.l.google.com:19302"), QStringLiteral("stun:stun.cloudflare.com:3478")};
+}
+
+QString newSessionCode()
+{
+    QString code;
+    for (int i = 0; i < 16; ++i)
+        code += QLatin1Char(kCodeAlphabet[QRandomGenerator::system()->bounded(int(sizeof kCodeAlphabet) - 1)]);
+    return code.left(4) + QLatin1Char('-') + code.mid(4, 4) + QLatin1Char('-') + code.mid(8, 4) + QLatin1Char('-') + code.mid(12, 4);
+}
+
+QString normalizedSessionCode(const QString& code)
+{
+    QString out;
+    for (const QChar c : code.toUpper())
+        if (c.isLetterOrNumber())
+            out += c;
+    if (out.size() != 16)
+        return {};
+    for (const QChar c : out)
+        if (!QByteArray(kCodeAlphabet).contains(char(c.toLatin1())))
+            return {};
+    return out;
+}
+
 QString accessName(Access a)
 {
     switch (a) {
@@ -71,6 +114,12 @@ Settings Settings::load()
     c.announce = s.value(QStringLiteral("announce"), true).toBool();
     c.serveWeb = s.value(QStringLiteral("serveWeb"), true).toBool();
     c.showCursors = s.value(QStringLiteral("showCursors"), true).toBool();
+    c.compactView = s.value(QStringLiteral("compactView"), false).toBool();
+    c.mode = modeFromName(s.value(QStringLiteral("mode"), QStringLiteral("p2p")).toString());
+    if (s.contains(QStringLiteral("signalServers")))
+        c.signalServers = s.value(QStringLiteral("signalServers")).toStringList();
+    if (s.contains(QStringLiteral("iceServers")))
+        c.iceServers = s.value(QStringLiteral("iceServers")).toStringList();
     return c;
 }
 
@@ -90,6 +139,17 @@ void Settings::save() const
     s.setValue(QStringLiteral("announce"), announce);
     s.setValue(QStringLiteral("serveWeb"), serveWeb);
     s.setValue(QStringLiteral("showCursors"), showCursors);
+    s.setValue(QStringLiteral("compactView"), compactView);
+    s.setValue(QStringLiteral("mode"), modeName(mode));
+    // Solo si se cambiaron: así, si cambian los predeterminados, los demás los reciben.
+    if (signalServers == defaultSignalServers())
+        s.remove(QStringLiteral("signalServers"));
+    else
+        s.setValue(QStringLiteral("signalServers"), signalServers);
+    if (iceServers == defaultIceServers())
+        s.remove(QStringLiteral("iceServers"));
+    else
+        s.setValue(QStringLiteral("iceServers"), iceServers);
 }
 
 QString Settings::displayName() const

@@ -32,25 +32,31 @@ Safari download the saved file and paste with Ctrl+V instead.
 
 ## Collaborative mode
 
-Edit the same image with other people on your local network, from browsers or from Kaint
-(**File → Collaboration**, settings in **Settings → Collaboration**):
+Edit the same image with other people, from browsers or from Kaint (**File → Collaboration**,
+settings in **Settings → Collaboration**, with a simplified and a compact view):
 
-- **Join** a session hosted by Kaint by opening the `http://` address its session window shows (Kaint
-  serves this web version itself), or type the host's address in **Join a session…**. A page opened
-  over `https://` can't reach a session on the local network.
-- **Host** from the browser with the small server in `tools/` (Node.js 18 or newer, no
-  dependencies), then open the address it prints on the same computer and choose **Host this
-  image**:
+- **P2P (over the Internet, the default)**: **Host the current image** and share the session code;
+  the others choose **Join with a code…**. The browser hosts on its own: the computers find each other
+  through public WebTorrent trackers (only the WebRTC offers and answers, signed with the code, go
+  through them) and the image goes straight from one to the other. Works from `https://` too.
+- **Local network**: **Join a session…** lists the nearby sessions (when the page was opened from a
+  session's address or with the server below running on this computer) or takes the host's address.
+  Kaint serves this web version itself: open the `http://` address its session window shows. A page
+  opened over `https://` can't reach a session on the local network. To **host** on the local network
+  from the browser, run the small server in `tools/` (Node.js 18 or newer, no dependencies) and open
+  the address it prints on the same computer:
 
   ```bash
   node tools/collab-server.mjs        # http://localhost:47913/ — others use http://<your-ip>:47913/
   ```
 
-  It also announces the session so Kaint finds it, and prints a key to host from another computer.
+  It also announces the session so Kaint finds it, prints a key to host from another computer, and
+  is a P2P signaling server at `ws://<your-ip>:47913/signal` if you'd rather not use the public ones.
 
-Between browsers (and between copies of Kaint) changes are live; between Kaint and the web, guests
-edit a draft with its own history and suggest it to the host, who accepts it. The protocol is
-described in [docs/collaboration.md](../docs/collaboration.md).
+Addresses and session codes stay blurred until clicked (they don't leak into screenshots or
+streams), with a button to copy them. Between browsers (and between copies of Kaint) changes are
+live; between Kaint and the web, guests edit a draft with its own history and suggest it to the
+host, who accepts it. The protocol is described in [docs/collaboration.md](../docs/collaboration.md).
 
 ## What's in it
 

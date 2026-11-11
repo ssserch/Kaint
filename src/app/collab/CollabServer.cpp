@@ -1,5 +1,7 @@
 #include "app/collab/CollabServer.h"
 
+#include "app/collab/Discovery.h"
+#include "app/collab/P2P.h"
 #include "app/collab/WebSocket.h"
 
 #include <QCoreApplication>
@@ -10,6 +12,7 @@
 #include <QNetworkInterface>
 #include <QUdpSocket>
 
+#include <algorithm>
 #include <cmath>
 
 namespace Collab {
@@ -76,7 +79,7 @@ Server::Server(const Settings& settings, const Peer& host, QObject* parent)
     m_host.host = true;
     if (!m_host.color.isValid())
         m_host.color = peerColor(0);
-    connect(m_server, &WebSocketServer::newConnection, this, &Server::onConnection);
+    connect(m_server, &WebSocketServer::newConnection, this, [this](WebSocket* socket) { onConnection(socket); });
     m_beaconTimer.setInterval(2000);
     connect(&m_beaconTimer, &QTimer::timeout, this, &Server::sendBeacon);
 }
@@ -90,9 +93,42 @@ Server::~Server()
 
 bool Server::start(QString* error)
 {
+    if (m_settings.mode == Mode::P2P) {
+        // P2P: sin servidor en la red local; los invitados llegan por los servidores de señalización.
+        if (!p2pAvailable()) {
+            if (error)
+                *error = tr("Este Kaint se compiló sin la conexión P2P. Usa la red local (LAN).");
+            return false;
+        }
+        m_code = newSessionCode();
+        m_p2p = new P2PHost(m_settings, m_code, this);
+        connect(m_p2p, &P2PHost::linkReady, this, [this](Link* link) {
+            link->setParent(this);
+            onConnection(link);
+        });
+        connect(m_p2p, &P2PHost::signalingChanged, this, &Server::signalingChanged);
+        m_p2p->start();
+        setSettings(m_settings);
+        return true;
+    }
     if (!m_server->listen(quint16(m_settings.port), error))
         return false;
     m_server->setWebRoot(m_settings.serveWeb ? findWebRoot() : QString());
+    // La lista de sesiones cercanas de Kaint para la web servida desde aquí (un navegador no puede
+    // escuchar los anuncios de la red).
+    if (servesWeb()) {
+        auto* discovery = new Discovery(this);
+        discovery->start();
+        m_server->setSessionsProvider([discovery] {
+            QJsonArray list;
+            for (const FoundSession& f : discovery->sessions())
+                list.append(QJsonObject{{QStringLiteral("name"), f.name}, {QStringLiteral("host"), f.host},
+                                        {QStringLiteral("address"), f.address}, {QStringLiteral("port"), int(f.port)},
+                                        {QStringLiteral("auth"), f.auth}, {QStringLiteral("app"), f.app},
+                                        {QStringLiteral("web"), f.web}, {QStringLiteral("peers"), f.peers}});
+            return QJsonDocument(list).toJson(QJsonDocument::Compact);
+        });
+    }
     setSettings(m_settings);
     return true;
 }
@@ -100,8 +136,8 @@ bool Server::start(QString* error)
 void Server::stop(const QString& reason)
 {
     const QJsonObject end{{QStringLiteral("t"), QStringLiteral("end")}, {QStringLiteral("reason"), reason}};
-    const QList<WebSocket*> sockets = m_clients.keys();
-    for (WebSocket* s : sockets) {
+    const QList<Link*> sockets = m_clients.keys();
+    for (Link* s : sockets) {
         send(s, end);
         s->disconnect(this);
         s->dispose();
@@ -112,7 +148,19 @@ void Server::stop(const QString& reason)
         m_beacon->deleteLater();
         m_beacon = nullptr;
     }
+    if (m_p2p)
+        m_p2p->stop();
     m_server->close();
+}
+
+int Server::signalingReady() const
+{
+    return m_p2p ? m_p2p->signalingReady() : 0;
+}
+
+int Server::signalingTotal() const
+{
+    return m_p2p ? m_p2p->signalingTotal() : 0;
 }
 
 quint16 Server::port() const
@@ -127,17 +175,40 @@ bool Server::servesWeb() const
 
 QStringList Server::localAddresses()
 {
-    QStringList out;
+    // Primero las de las tarjetas de red de verdad (Ethernet, Wi-Fi) con direcciones de red local;
+    // después las de máquinas virtuales, contenedores y VPN; al final las que no son de red local.
+    struct Found {
+        QString ip;
+        int rank;
+    };
+    QList<Found> found;
+    static const char* const kVirtual[] = {"virtual", "vmware", "vbox", "vethernet", "hyper-v", "docker", "br-", "virbr",
+                                           "veth", "wsl", "tailscale", "zerotier", "hamachi", "vpn", "tun", "tap", "utun"};
     for (const QNetworkInterface& iface : QNetworkInterface::allInterfaces()) {
         const auto flags = iface.flags();
         if (!(flags & QNetworkInterface::IsUp) || !(flags & QNetworkInterface::IsRunning) || (flags & QNetworkInterface::IsLoopBack))
             continue;
+        const QString names = (iface.name() + QLatin1Char(' ') + iface.humanReadableName()).toLower();
+        bool virtualIface = iface.type() == QNetworkInterface::Virtual;
+        for (const char* word : kVirtual)
+            virtualIface = virtualIface || names.contains(QLatin1String(word));
         for (const QNetworkAddressEntry& e : iface.addressEntries()) {
             const QHostAddress a = e.ip();
-            if (a.protocol() == QAbstractSocket::IPv4Protocol && !a.isLoopback() && !out.contains(a.toString()))
-                out.append(a.toString());
+            if (a.protocol() != QAbstractSocket::IPv4Protocol || a.isLoopback())
+                continue;
+            const bool lan = a.isInSubnet(QHostAddress(QStringLiteral("192.168.0.0")), 16)
+                             || a.isInSubnet(QHostAddress(QStringLiteral("10.0.0.0")), 8)
+                             || a.isInSubnet(QHostAddress(QStringLiteral("172.16.0.0")), 12);
+            const int rank = (lan ? 0 : 4) + (virtualIface ? 2 : 0)
+                             + (iface.type() == QNetworkInterface::Ethernet || iface.type() == QNetworkInterface::Wifi ? 0 : 1);
+            if (std::none_of(found.cbegin(), found.cend(), [&](const Found& f) { return f.ip == a.toString(); }))
+                found.append({a.toString(), rank});
         }
     }
+    std::stable_sort(found.begin(), found.end(), [](const Found& x, const Found& y) { return x.rank < y.rank; });
+    QStringList out;
+    for (const Found& f : found)
+        out.append(f.ip);
     return out;
 }
 
@@ -186,7 +257,8 @@ void Server::setSettings(const Settings& settings)
                            {QStringLiteral("session"), m_settings.effectiveSessionName()},
                            {QStringLiteral("host"), m_host.name},
                            {QStringLiteral("auth"), accessName(m_settings.access)},
-                           {QStringLiteral("port"), int(port())}};
+                           {QStringLiteral("port"), int(port())},
+                           {QStringLiteral("addresses"), QJsonArray::fromStringList(localAddresses())}};
     m_server->setInfo(QJsonDocument(info).toJson(QJsonDocument::Compact));
     if (m_settings.announce && m_server->isListening()) {
         if (!m_beacon)
@@ -224,7 +296,7 @@ void Server::renameHost(const QString& name)
     setSettings(m_settings);
 }
 
-void Server::onConnection(WebSocket* socket)
+void Server::onConnection(Link* socket)
 {
     if (m_clients.size() >= kMaxClients) {
         socket->dispose();
@@ -235,9 +307,9 @@ void Server::onConnection(WebSocket* socket)
     c.socket = socket;
     c.nonce = randomNonce();
     m_clients.insert(socket, c);
-    connect(socket, &WebSocket::textReceived, this, [this, socket](const QByteArray& text) { onText(socket, text); });
-    connect(socket, &WebSocket::closed, this, [this, socket] { dropClient(socket); });
-    connect(socket, &WebSocket::failed, this, [this, socket] { dropClient(socket); });
+    connect(socket, &Link::textReceived, this, [this, socket](const QByteArray& text) { onText(socket, text); });
+    connect(socket, &Link::closed, this, [this, socket] { dropClient(socket); });
+    connect(socket, &Link::failed, this, [this, socket] { dropClient(socket); });
     send(socket, QJsonObject{{QStringLiteral("t"), QStringLiteral("hello")},
                              {QStringLiteral("v"), kVersion},
                              {QStringLiteral("session"), m_settings.effectiveSessionName()},
@@ -248,7 +320,7 @@ void Server::onConnection(WebSocket* socket)
                              {QStringLiteral("app"), m_host.app}});
 }
 
-void Server::onText(WebSocket* socket, const QByteArray& text)
+void Server::onText(Link* socket, const QByteArray& text)
 {
     auto it = m_clients.find(socket);
     if (it == m_clients.end())
@@ -323,7 +395,7 @@ void Server::onJoin(Client& client, const QJsonObject& m)
             accept(client);
         } else {
             // Un segundo de espera ante cada contraseña errónea: probar muchas lleva tiempo.
-            QPointer<WebSocket> s = client.socket;
+            QPointer<Link> s = client.socket;
             client.waiting = true;
             QTimer::singleShot(1000, this, [this, s] {
                 if (!s)
@@ -360,7 +432,7 @@ void Server::accept(Client& client)
     Peer& p = client.peer;
     p.color = colorFor(p.color);
     p.mode = (p.platform == QLatin1String("desktop") && m_settings.realtime) ? QStringLiteral("live") : QStringLiteral("confirm");
-    client.socket->setMaxMessage(WebSocket::kMaxMessage);
+    client.socket->setMaxMessage(Link::kMaxMessage);
     send(client.socket, QJsonObject{{QStringLiteral("t"), QStringLiteral("joined")},
                                     {QStringLiteral("you"), p.id},
                                     {QStringLiteral("color"), p.color.name()},
@@ -374,7 +446,7 @@ void Server::accept(Client& client)
 
 void Server::deny(Client& client, const QString& reason)
 {
-    QPointer<WebSocket> s = client.socket;
+    QPointer<Link> s = client.socket;
     const int id = client.peer.id;
     const bool wasWaiting = client.waiting;
     send(s, QJsonObject{{QStringLiteral("t"), QStringLiteral("denied")}, {QStringLiteral("reason"), reason}});
@@ -387,7 +459,7 @@ void Server::deny(Client& client, const QString& reason)
         emit peerLeft(id);
 }
 
-void Server::dropClient(WebSocket* socket)
+void Server::dropClient(Link* socket)
 {
     auto it = m_clients.find(socket);
     if (it == m_clients.end())
@@ -414,7 +486,7 @@ Server::Client* Server::clientFor(int id)
     return nullptr;
 }
 
-void Server::send(WebSocket* socket, const QJsonObject& message)
+void Server::send(Link* socket, const QJsonObject& message)
 {
     if (socket)
         socket->sendText(QJsonDocument(message).toJson(QJsonDocument::Compact));
@@ -463,7 +535,7 @@ void Server::kick(int id)
     Client* c = clientFor(id);
     if (!c)
         return;
-    QPointer<WebSocket> s = c->socket;
+    QPointer<Link> s = c->socket;
     send(s, QJsonObject{{QStringLiteral("t"), QStringLiteral("end")}, {QStringLiteral("reason"), QStringLiteral("kicked")}});
     if (s)
         dropClient(s);

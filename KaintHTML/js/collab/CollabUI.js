@@ -3,7 +3,7 @@
 // (a través de tools/collab-server.mjs), la ventana de la sesión, los punteros de los demás y la
 // sección Colaboración de Configuración.
 import { Settings } from "../Settings.js";
-import { checkbox, Dialog, el, select, TaskDialog } from "../ui/Dialogs.js";
+import { checkbox, closeSettingsDialog, Dialog, el, select, TaskDialog } from "../ui/Dialogs.js";
 import { icon } from "../ui/Icons.js";
 import { updateActions } from "../ui/Actions.js";
 import { plain, tr } from "../i18n.js";
@@ -751,14 +751,25 @@ export class CollabController extends EventTarget {
         }
     }
 
+    // La ventana de la sesión no bloquea nada (como en Kaint): se puede mover y seguir editando la
+    // imagen con ella abierta. Desde Configuración (al hospedar o con su botón), Configuración se cierra
+    // antes, porque esa sí bloquea; sus cambios ya están aplicados. Si ya está abierta, se trae delante.
     async sessionDialog() {
-        const s = this.session;
-        const dlg = new Dialog(tr("Sesión colaborativa"), { iconName: "collab" });
+        closeSettingsDialog();
+        if (this.sessionWindow) {
+            document.body.appendChild(this.sessionWindow.backdrop);
+            this.sessionWindow.element.querySelector(".pushbutton.default")?.focus({ preventScroll: true });
+            return;
+        }
+        const dlg = new Dialog(tr("Sesión colaborativa"), { iconName: "collab", modeless: true });
+        this.sessionWindow = dlg;
         const body = el("div", { className: "collab-session" });
         dlg.body.appendChild(body);
         // Se conservan entre repintados (así no se vuelven a difuminar solos).
         const codeView = secretView("", "code"), addressView = secretView(""), webView = secretView("");
         const render = async () => {
+            // La sesión de ahora (con la ventana abierta se puede salir de una y empezar otra).
+            const s = this.session;
             const items = [el("p", { className: "collab-title", textContent: this.statusText() })];
             if (this.active && s.isHost && s.state === "joined" && s.connection === "p2p") {
                 items.push(el("p", { textContent: tr("Para unirse: Archivo > Colaboración > P2P > Unirse con un código, y este código (en Kaint o en Kaint para la web, desde cualquier lugar).") }),
@@ -853,6 +864,7 @@ export class CollabController extends EventTarget {
         await render();
         dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
         await dlg.exec();
+        this.sessionWindow = null;
         this.removeEventListener("changed", refresh);
     }
 

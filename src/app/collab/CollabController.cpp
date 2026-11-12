@@ -3,6 +3,7 @@
 #include "app/Canvas.h"
 #include "app/Icons.h"
 #include "app/collab/CollabDialogs.h"
+#include "app/dialogs/SettingsDialog.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/tools/ToolManager.h"
 #include "core/Document.h"
@@ -11,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTimer>
 #include <QToolButton>
 
 namespace {
@@ -258,7 +260,16 @@ bool CollabController::leave(bool ask)
 
 void CollabController::showSessionWindow()
 {
-    // Encima de Configuración si está abierta (si no, quedaría bloqueada por ella).
+    // Desde Configuración (al hospedar o con su botón «Ventana de la sesión»): Configuración es modal y,
+    // con la ventana de la sesión encima, seguía bloqueando la imagen. Se cierra antes (sus cambios ya
+    // están aplicados) y la ventana de la sesión se abre sobre la principal sin bloquear nada, como
+    // desde «N participantes» en la barra de estado: se puede mover y seguir editando con ella abierta.
+    if (auto* settings = qobject_cast<SettingsDialog*>(QApplication::activeModalWidget())) {
+        settings->accept();
+        QTimer::singleShot(0, this, &CollabController::showSessionWindow);
+        return;
+    }
+    // Encima de otra ventana modal si la hay (si no, quedaría bloqueada por ella).
     QWidget* parent = QApplication::activeModalWidget() ? QApplication::activeModalWidget() : m_window.data();
     if (m_dialog && m_dialog->parentWidget() != parent) {
         m_dialog->close();

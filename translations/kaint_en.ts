@@ -2967,6 +2967,10 @@ Do you want to replace them?</translation>
         <source>Elige qué fotogramas abrir y si se abren como capas o como imágenes.</source>
         <translation>Choose which frames to open and whether they open as layers or as images.</translation>
     </message>
+    <message>
+        <source>Abrir «%1»</source>
+        <translation>Open “%1”</translation>
+    </message>
 </context>
 <context>
     <name>MoveSelectedTool</name>
@@ -5284,6 +5288,214 @@ Left click: active slot · right click: inactive slot</translation>
         <source>Invitado %1</source>
         <translation>Guest %1</translation>
     </message>
+    <message>
+        <source>El archivo está incompleto o dañado.</source>
+        <translation>The file is incomplete or damaged.</translation>
+    </message>
+    <message>
+        <source>Una capa es demasiado grande.</source>
+        <translation>A layer is too large.</translation>
+    </message>
+    <message>
+        <source>El archivo usa una compresión desconocida.</source>
+        <translation>The file uses an unknown compression.</translation>
+    </message>
+    <message>
+        <source>Luz suave</source>
+        <translation>Soft Light</translation>
+    </message>
+    <message>
+        <source>Luz fuerte</source>
+        <translation>Hard Light</translation>
+    </message>
+    <message>
+        <source>Mezcla definida</source>
+        <translation>Hard Mix</translation>
+    </message>
+    <message>
+        <source>Dividir</source>
+        <translation>Divide</translation>
+    </message>
+    <message>
+        <source>Tono</source>
+        <translation>Hue</translation>
+    </message>
+    <message>
+        <source>No es un documento de Photoshop válido.</source>
+        <translation>It is not a valid Photoshop document.</translation>
+    </message>
+    <message>
+        <source>Versión de Photoshop desconocida.</source>
+        <translation>Unknown Photoshop version.</translation>
+    </message>
+    <message>
+        <source>La imagen es demasiado grande para Kaint (%1 × %2 píxeles).</source>
+        <translation>The image is too large for Kaint (%1 × %2 pixels).</translation>
+    </message>
+    <message>
+        <source>Profundidad de color no admitida (%1 bits).</source>
+        <translation>Unsupported color depth (%1 bits).</translation>
+    </message>
+    <message>
+        <source>Kaint no abre documentos de Photoshop en CMYK. Pásalo a RGB en Photoshop.</source>
+        <translation>Kaint does not open CMYK Photoshop documents. Convert it to RGB in Photoshop.</translation>
+    </message>
+    <message>
+        <source>Kaint no abre documentos de Photoshop en color Lab. Pásalo a RGB en Photoshop.</source>
+        <translation>Kaint does not open Lab color Photoshop documents. Convert it to RGB in Photoshop.</translation>
+    </message>
+    <message>
+        <source>Kaint no abre documentos de Photoshop multicanal. Pásalo a RGB en Photoshop.</source>
+        <translation>Kaint does not open multichannel Photoshop documents. Convert it to RGB in Photoshop.</translation>
+    </message>
+    <message>
+        <source>No hay memoria suficiente para abrir la imagen.</source>
+        <translation>There is not enough memory to open the image.</translation>
+    </message>
+    <message>
+        <source>es un documento de tamaño grande (PSB), que Kaint no guarda</source>
+        <translation>it is a large document (PSB), which Kaint does not save</translation>
+    </message>
+    <message>
+        <source>tiene %1 bits por canal y Kaint trabaja con 8</source>
+        <translation>it has %1 bits per channel and Kaint works with 8</translation>
+    </message>
+    <message>
+        <source>está en escala de grises y se pasó a RGB</source>
+        <translation>it is grayscale and was converted to RGB</translation>
+    </message>
+    <message>
+        <source>tiene una paleta de colores indexados y se pasó a RGB</source>
+        <translation>it has an indexed color palette and was converted to RGB</translation>
+    </message>
+    <message>
+        <source>es un mapa de bits en blanco y negro y se pasó a RGB</source>
+        <translation>it is a black and white bitmap and was converted to RGB</translation>
+    </message>
+    <message>
+        <source>grupos con opacidad, máscara, efectos o modo de fusión propios</source>
+        <translation>groups with their own opacity, mask, effects or blend mode</translation>
+    </message>
+    <message>
+        <source>tenía grupos de capas, que Kaint no tiene (sus capas se conservan)</source>
+        <translation>it had layer groups, which Kaint does not have (their layers are kept)</translation>
+    </message>
+    <message>
+        <source>capas ocultas con modos de fusión que Kaint no tiene pasaron a Normal</source>
+        <translation>hidden layers with blend modes that Kaint does not have were set to Normal</translation>
+    </message>
+    <message>
+        <source>máscaras de recorte</source>
+        <translation>clipping masks</translation>
+    </message>
+    <message>
+        <source>efectos de capa (sombras, trazos, resplandores…)</source>
+        <translation>layer effects (shadows, strokes, glows…)</translation>
+    </message>
+    <message>
+        <source>máscaras vectoriales o capas de forma</source>
+        <translation>vector masks or shape layers</translation>
+    </message>
+    <message>
+        <source>capas de ajuste o de relleno</source>
+        <translation>adjustment or fill layers</translation>
+    </message>
+    <message>
+        <source>capas que calan a las de debajo</source>
+        <translation>layers that knock out the ones below</translation>
+    </message>
+    <message>
+        <source>máscaras de capa difuminadas</source>
+        <translation>feathered layer masks</translation>
+    </message>
+    <message>
+        <source>el modo de fusión «%1»</source>
+        <translation>the “%1” blend mode</translation>
+    </message>
+    <message>
+        <source>tiene canales alfa o de tinta plana, que no se conservan</source>
+        <translation>it has alpha or spot color channels, which are not kept</translation>
+    </message>
+    <message>
+        <source>Este documento de Photoshop usa cosas que las capas de Kaint no pueden representar sin cambiar su aspecto:</source>
+        <translation>This Photoshop document uses things that Kaint's layers cannot represent without changing how it looks:</translation>
+    </message>
+    <message>
+        <source>Se abrió la imagen combinada que guarda el archivo, en una sola capa.</source>
+        <translation>The merged image stored in the file was opened, as a single layer.</translation>
+    </message>
+    <message>
+        <source>Además, el documento:</source>
+        <translation>Also, the document:</translation>
+    </message>
+    <message>
+        <source>Al abrir este documento de Photoshop, Kaint tuvo que convertirlo porque:</source>
+        <translation>When opening this Photoshop document, Kaint had to convert it because:</translation>
+    </message>
+    <message>
+        <source>Se abre como una imagen nueva: al guardar se pide un nombre y el archivo original no se pisa.</source>
+        <translation>It opens as a new image: saving asks for a name, so the original file is not overwritten.</translation>
+    </message>
+    <message>
+        <source>No se pudo leer la imagen combinada del documento.</source>
+        <translation>The merged image of the document could not be read.</translation>
+    </message>
+    <message>
+        <source>usa cosas de Photoshop que Kaint no tiene (%1), que se ignoraron</source>
+        <translation>it uses Photoshop features that Kaint does not have (%1), which were ignored</translation>
+    </message>
+    <message>
+        <source>tenía máscaras de capa, que se aplicaron a la transparencia</source>
+        <translation>it had layer masks, which were applied to the transparency</translation>
+    </message>
+    <message>
+        <source>tenía máscaras de capa desactivadas, que no se conservan</source>
+        <translation>it had disabled layer masks, which are not kept</translation>
+    </message>
+    <message>
+        <source>tenía partes de capas fuera del lienzo, que se recortaron</source>
+        <translation>it had parts of layers outside the canvas, which were cropped</translation>
+    </message>
+    <message>
+        <source>tenía texto u objetos inteligentes, que quedan como píxeles</source>
+        <translation>it had text or smart objects, which become pixels</translation>
+    </message>
+    <message>
+        <source>la opacidad de relleno se combinó con la opacidad de la capa</source>
+        <translation>the fill opacity was combined with the layer opacity</translation>
+    </message>
+    <message>
+        <source>PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PDN u ORA para conservar las capas.</source>
+        <translation>PSD supports images up to 30000 × 30000 pixels. Save it as PDN or ORA to keep the layers.</translation>
+    </message>
+    <message>
+        <source>La capa «%1» usa el modo de fusión «%2», que Photoshop no tiene. Cámbialo en sus propiedades o guarda la imagen como PDN u ORA.</source>
+        <translation>The “%1” layer uses the “%2” blend mode, which Photoshop does not have. Change it in its properties or save the image as PDN or ORA.</translation>
+    </message>
+    <message>
+        <source>Windows no tiene el códec de este formato. Instala la extensión de imagen correspondiente desde Microsoft Store (HEIF, HEVC, AV1 o JPEG XL).</source>
+        <translation>Windows does not have the codec for this format. Install the matching image extension from the Microsoft Store (HEIF, HEVC, AV1 or JPEG XL).</translation>
+    </message>
+    <message>
+        <source>Windows tiene el lector de HEIF, pero le falta el códec de vídeo de esta imagen: «Extensiones de vídeo HEVC» para HEIC o «Extensión de vídeo AV1» para AVIF, en Microsoft Store.</source>
+        <translation>Windows has the HEIF reader, but it lacks the video codec of this image: “HEVC Video Extensions” for HEIC or “AV1 Video Extension” for AVIF, in the Microsoft Store.</translation>
+    </message>
+    <message>
+        <source>Error de Windows %1.</source>
+        <translation>Windows error %1.</translation>
+    </message>
+    <message>
+        <source>Photoshop</source>
+        <translation>Photoshop</translation>
+    </message>
+    <message>
+        <source>Photoshop con capas</source>
+        <translation>Photoshop with layers</translation>
+    </message>
+    <message>
+        <source>Para abrir este formato hace falta kimageformats (el paquete de complementos de imagen de KDE para Qt 6).</source>
+        <translation>Opening this format needs kimageformats (KDE's image plugin package for Qt 6).</translation>
+    </message>
 </context>
 <context>
     <name>QPrintPreviewDialog</name>
@@ -6162,8 +6374,8 @@ Do you want to replace them?</translation>
         <translation>Custom color for the top bar:</translation>
     </message>
     <message>
-        <source>Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color.</source>
-        <translation>Like Windows’ “Show accent color on title bars”: the menu row and the window headers take this color.</translation>
+        <source>Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color (los temas Windows 98, XP y 7 tienen sus propias barras).</source>
+        <translation>Like Windows’ “Show accent color on title bars”: the menu row and the window headers take this color (the Windows 98, XP and 7 themes have their own bars).</translation>
     </message>
     <message>
         <source>Administrar…</source>

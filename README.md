@@ -72,10 +72,16 @@ runs on Windows 10 and 11.
     </td>
     <td valign="top">
       <h4>Formats</h4>
-      Paint.NET <b>.pdn</b> and OpenRaster (.ora), both with layers, PNG, JPEG, WebP, AVIF, JPEG XL,
-      HEIC, JPEG XR, BMP, TIFF, TGA, DDS, QOI, Netpbm (PPM, PGM, PBM), animated GIF and ICO. TGA, DDS
-      and QOI are read and written by Kaint itself, so they work everywhere; AVIF, JPEG XL, HEIC and
-      JPEG XR show up when Qt's image plugins can write them (kimageformats). Animated GIFs open as layers, as separate images, as a single image or with just the frames you pick, and
+      Paint.NET <b>.pdn</b>, OpenRaster (.ora) and <b>Photoshop (.psd)</b>, all with layers, Photoshop
+      large documents (.psb, open only), PNG, JPEG, WebP, AVIF, JPEG XL, HEIC, JPEG XR, BMP, TIFF, TGA,
+      DDS, QOI, Netpbm (PPM, PGM, PBM), animated GIF and ICO. PSD/PSB, TGA, DDS and QOI are read and
+      written by Kaint itself, so they work everywhere: Photoshop files keep their pixel layers with
+      names, visibility, opacity and the blend modes both programs share (8, 16 and 32 bits per
+      channel, RGB, grayscale, indexed or bitmap; masks are applied, and files with clipping masks,
+      layer effects or adjustment layers open as their merged image, with a note saying why). AVIF,
+      JPEG XL, HEIC and JPEG XR come from Qt's image plugins (kimageformats) on Linux and from the
+      Windows codecs on Windows (JPEG XR is built in; HEIC, AVIF and JPEG XL need their Microsoft Store
+      extensions). Animated GIFs open as layers, as separate images, as a single image or with just the frames you pick, and
       can be saved from the layers or from the open images you pick, with a playable preview and
       ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
       frames, global palette, crossfades and a background frame.

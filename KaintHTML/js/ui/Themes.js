@@ -115,9 +115,10 @@ export function applyThemeColors(root, scheme, systemDark) {
             root.style.removeProperty(cssVar);
     }
     // Como el color de énfasis en las barras de título de Windows (y el color propio de Kaint en
-    // Linux): con los temas de Paint.NET, la barra superior y las cabeceras de las ventanas lo llevan.
+    // Linux): con los temas de Paint.NET, la barra superior y las cabeceras de las ventanas lo llevan
+    // (Windows 98, XP y 7 tienen las suyas: con Windows 7, el título salía blanco sobre el cristal).
     const title = Settings.get("titleBarColor");
-    if (title && /^#[0-9a-f]{6}$/i.test(title) && (scheme === 0 || scheme === 1 || scheme === 2 || scheme === 6 || scheme === 7)) {
+    if (title && /^#[0-9a-f]{6}$/i.test(title) && (scheme === 0 || scheme === 1 || scheme === 2 || scheme === 6)) {
         const n = parseInt(title.slice(1), 16), light = Math.max(n >> 16, (n >> 8) & 255, n & 255) + Math.min(n >> 16, (n >> 8) & 255, n & 255);
         for (const cssVar of ["--menubar", "--panel-title", "--panel-title-end", "--win-title"])
             root.style.setProperty(cssVar, title);

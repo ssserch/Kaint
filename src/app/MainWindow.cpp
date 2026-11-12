@@ -471,17 +471,21 @@ protected:
     {
         QPainter p(this);
         const int split = m_menu ? m_menu->geometry().bottom() + 1 : height() / 2;
+        // Windows 7 con la barra de título simulada: su fila se deja sin pintar y se ve el cristal de
+        // Aero del marco de la ventana, seguido como en Windows 7.
+        const int top = m_caption && WindowFrame::aeroTitle() ? m_caption->geometry().bottom() + 1 : 0;
+        const QRect below = rect().adjusted(0, top, 0, 0);
         // Azul: bajo los menús empieza el degradado de casi blanco a azul claro que sigue en la
         // barra de opciones (la barra principal es transparente encima de él).
         if (Theme::active().blue) {
             QLinearGradient g(QPointF(0, split), QPointF(0, height()));
             g.setColorAt(0, QColor(0xfb, 0xfd, 0xff));
             g.setColorAt(1, QColor(0xeb, 0xf1, 0xf9));
-            p.fillRect(rect(), g);
+            p.fillRect(below, g);
         } else {
-            p.fillRect(rect(), Theme::active().toolBar);
+            p.fillRect(below, Theme::active().toolBar);
         }
-        p.fillRect(QRect(0, 0, width(), split), bandColor());
+        p.fillRect(QRect(0, top, width(), split - top), bandColor());
         // Con el tema Windows 98 y la barra de título simulada, su fila es la de Windows 98
         // (degradado azul) y debajo sigue la franja gris de los menús.
         if (m_caption && WindowFrame::classicTitle())
@@ -494,6 +498,8 @@ public:
         m_caption = caption;
         // Los huecos de la franja mueven la ventana (en Windows, como su barra de título).
         setProperty("kaintCaption", caption != nullptr);
+        if (caption)
+            WindowFrame::watchCaption(this);
     }
 
 protected:
@@ -511,8 +517,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* e) override
     {
         if (m_caption && e->button() == Qt::LeftButton) {
-            QWidget* w = window();
-            w->isMaximized() ? w->showNormal() : w->showMaximized();
+            WindowFrame::toggleMaximized(window());
             return;
         }
         QWidget::mouseDoubleClickEvent(e);
@@ -2270,7 +2275,11 @@ void MainWindow::openFiles(const QStringList& paths)
                 doc->setFilePath(QString());
                 doc->setUntitledName(QFileInfo(abs).completeBaseName());
             }
+            const QString warning = doc->property(ImageIO::kImportWarningProperty).toString();
             addDocument(doc);
+            // Lo que cambió al abrirlo (un PSD con grupos, de 16 bits...): se abre como imagen nueva.
+            if (!warning.isEmpty())
+                QMessageBox::information(this, tr("Abrir «%1»").arg(QFileInfo(abs).fileName()), warning);
         }
         AppState::instance()->addRecentFile(abs, m_canvas->composite());
         m_lastDir = QFileInfo(abs).absolutePath();

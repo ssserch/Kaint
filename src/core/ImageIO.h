@@ -61,6 +61,11 @@ bool hasBitDepth(const QString& path);
 bool supportsInterlace(const QString& path);
 int automaticBitDepth(const QImage& flattened);
 
+// Propiedad (QString) del documento abierto cuando hubo que convertirlo al abrirlo (un PSB, un PSD
+// de 16 bits o con grupos...): el aviso para el usuario. Ese documento se abre sin archivo, como una
+// imagen nueva, para que guardar no pise el original.
+inline constexpr char kImportWarningProperty[] = "kaintImportWarning";
+
 Document* load(const QString& path, QString* error);
 // Una imagen sola (acoplada) del archivo: con los lectores de Kaint (TGA, DDS, QOI) o los de Qt.
 QImage readImage(const QString& path, QString* error = nullptr);

@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QPainter>
 #include <QPointer>
+#include <QTimer>
 #include <QVariantAnimation>
 #include <QWidget>
 #include <QWindow>
@@ -89,19 +90,33 @@ public:
         if (!w->isWindow() || w->windowType() != Qt::Dialog || !w->property("kaintWindowFrame").toBool()
             || w->property("kaintOpenOverlay").toBool() || w->testAttribute(Qt::WA_DontShowOnScreen))
             return false;
-        start(w);
+        // Este filtro recibe el Show antes que la ventana, y QDialog se centra en su propio showEvent:
+        // tomada aquí, la animación salía un momento donde estaba la ventana antes de centrarse y
+        // luego la ventana aparecía en el centro. Se muestra invisible y la animación empieza cuando
+        // ya está en su sitio.
+        w->setWindowOpacity(0.0);
+        QPointer<QWidget> window(w);
+        QTimer::singleShot(0, w, [window] {
+            if (!window)
+                return;
+            if (window->isVisible())
+                start(window);
+            else
+                window->setWindowOpacity(1.0);
+        });
         return false;
     }
 
 private:
     static void start(QWidget* w)
     {
-        // La imagen de la ventana ya colocada (el Show llega antes de mostrarla en la pantalla).
+        // La imagen de la ventana ya colocada y pintada.
         const QPixmap shot = w->grab();
-        if (shot.isNull())
-            return;
         QPointer<QWidget> window(w);
-        w->setWindowOpacity(0.0);
+        if (shot.isNull()) {
+            w->setWindowOpacity(1.0);
+            return;
+        }
         QPointer<OpenOverlay> overlay = new OpenOverlay(shot, w->geometry());
         overlay->show();
         auto finish = [window, overlay] {

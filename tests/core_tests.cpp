@@ -10,10 +10,12 @@
 #include "core/Ora.h"
 #include "core/Palette.h"
 #include "core/Pdn.h"
+#include "core/Psd.h"
 #include "core/PngWriter.h"
 #include "core/Raster.h"
 #include "core/Resample.h"
 #include "core/Stroke.h"
+#include "core/WicCodec.h"
 #include "core/Zip.h"
 #include "core/effects/Effect.h"
 #include "core/effects/EffectUtils.h"
@@ -42,6 +44,8 @@
 #include <cstdio>
 #include <limits>
 #include <thread>
+
+#include <zlib.h>
 
 static int g_failures = 0;
 
@@ -1139,6 +1143,444 @@ static void testPdn()
     CHECK(!bad && !error.isEmpty());
 }
 
+// --- Photoshop (Psd.cpp) ---------------------------------------------------------------------
+
+// Escritor mínimo de PSD/PSB para las pruebas, aparte del de Kaint: capas con la profundidad y la
+// compresión que se pidan, grupos y la imagen combinada sin comprimir.
+struct PsdTestLayer {
+    QRect rect;
+    QString name;
+    QByteArray blend = "norm";
+    int opacity = 255;
+    int flags = 0;
+    int clipping = 0;
+    int section = 0;
+};
+
+static int psdTestPixel(int x, int y, int channel)
+{
+    switch (channel) {
+    case 0: return (x * 40) % 256;
+    case 1: return (y * 60 + 10) % 256;
+    case 2: return 128;
+    default: return (x + y) % 2 ? 255 : 128;
+    }
+}
+
+static float psdSrgbToLinear(float v)
+{
+    return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
+}
+
+class PsdTestWriter {
+public:
+    explicit PsdTestWriter(bool psb)
+        : m_psb(psb)
+    {
+    }
+    QByteArray data;
+    void u8(int v) { data.append(char(v)); }
+    void u16(int v)
+    {
+        u8(v >> 8);
+        u8(v);
+    }
+    void u32(quint32 v)
+    {
+        u16(int(v >> 16));
+        u16(int(v & 0xffff));
+    }
+    void len(quint64 v)
+    {
+        if (m_psb)
+            u32(quint32(v >> 32));
+        u32(quint32(v));
+    }
+    void raw(const QByteArray& d) { data.append(d); }
+
+private:
+    bool m_psb;
+};
+
+// Las filas de un canal en big endian (32 bits: coma flotante lineal en los de color).
+static QByteArray psdTestRows(const QRect& r, int channel, int depth, bool color)
+{
+    QByteArray out;
+    for (int y = r.top(); y <= r.bottom(); ++y)
+        for (int x = r.left(); x <= r.right(); ++x) {
+            const int v = psdTestPixel(x, y, channel);
+            if (depth == 8) {
+                out.append(char(v));
+            } else if (depth == 16) {
+                const int w = v * 257;
+                out.append(char(w >> 8));
+                out.append(char(w));
+            } else {
+                const float f = color ? psdSrgbToLinear(v / 255.0f) : v / 255.0f;
+                quint32 bits;
+                std::memcpy(&bits, &f, 4);
+                for (int k = 3; k >= 0; --k)
+                    out.append(char(bits >> (8 * k)));
+            }
+        }
+    return out;
+}
+
+static QByteArray psdTestZlib(const QByteArray& in)
+{
+    uLongf size = compressBound(uLong(in.size()));
+    QByteArray out(qsizetype(size), Qt::Uninitialized);
+    compress2(reinterpret_cast<Bytef*>(out.data()), &size, reinterpret_cast<const Bytef*>(in.constData()), uLong(in.size()), 6);
+    out.resize(qsizetype(size));
+    return out;
+}
+
+static QByteArray psdTestChannel(const QRect& r, int channel, int depth, int compression, bool psb, bool color)
+{
+    QByteArray rows = psdTestRows(r, channel, depth, color);
+    const int w = r.width(), h = r.height(), rowBytes = w * depth / 8;
+    PsdTestWriter out(psb);
+    out.u16(compression);
+    if (compression == 0) {
+        out.raw(rows);
+    } else if (compression == 1) {
+        QByteArray packed;
+        QList<int> counts;
+        for (int y = 0; y < h; ++y) {
+            const qsizetype before = packed.size();
+            for (int x = 0; x < rowBytes; x += 128) {
+                const int n = std::min(128, rowBytes - x);
+                packed.append(char(n - 1));
+                packed.append(rows.mid(qsizetype(y) * rowBytes + x, n));
+            }
+            counts << int(packed.size() - before);
+        }
+        for (int c : counts) {
+            if (psb)
+                out.u32(quint32(c));
+            else
+                out.u16(c);
+        }
+        out.raw(packed);
+    } else {
+        if (compression == 3) {
+            for (int y = 0; y < h; ++y) {
+                uchar* row = reinterpret_cast<uchar*>(rows.data()) + qsizetype(y) * rowBytes;
+                if (depth == 8) {
+                    for (int x = w - 1; x > 0; --x)
+                        row[x] = uchar(row[x] - row[x - 1]);
+                } else if (depth == 16) {
+                    for (int x = w - 1; x > 0; --x) {
+                        const int v = ((row[2 * x] << 8 | row[2 * x + 1]) - (row[2 * x - 2] << 8 | row[2 * x - 1])) & 0xffff;
+                        row[2 * x] = uchar(v >> 8);
+                        row[2 * x + 1] = uchar(v);
+                    }
+                } else {
+                    std::vector<uchar> planar(static_cast<size_t>(rowBytes));
+                    for (int x = 0; x < w; ++x)
+                        for (int k = 0; k < 4; ++k)
+                            planar[size_t(k * w + x)] = row[4 * x + k];
+                    for (int i = rowBytes - 1; i > 0; --i)
+                        planar[size_t(i)] = uchar(planar[size_t(i)] - planar[size_t(i - 1)]);
+                    std::memcpy(row, planar.data(), size_t(rowBytes));
+                }
+            }
+        }
+        out.raw(psdTestZlib(rows));
+    }
+    return out.data;
+}
+
+static QByteArray psdTestFile(bool psb, int depth, int compression, bool inBlock, QSize canvas, const QList<PsdTestLayer>& layers)
+{
+    PsdTestWriter f(psb);
+    f.raw("8BPS");
+    f.u16(psb ? 2 : 1);
+    f.raw(QByteArray(6, '\0'));
+    f.u16(4);
+    f.u32(quint32(canvas.height()));
+    f.u32(quint32(canvas.width()));
+    f.u16(depth);
+    f.u16(3);
+    f.u32(0);
+    f.u32(0);
+
+    PsdTestWriter info(psb);
+    info.u16(quint16(-int(layers.size())));
+    QList<QList<QByteArray>> channels;
+    const int ids[4] = {-1, 0, 1, 2};
+    for (const PsdTestLayer& l : layers) {
+        QList<QByteArray> chans;
+        for (int id : ids) {
+            if (l.rect.isEmpty() || l.section) {
+                PsdTestWriter empty(psb);
+                empty.u16(0);
+                chans << empty.data;
+            } else {
+                chans << psdTestChannel(l.rect, id < 0 ? 3 : id, depth, compression, psb, id >= 0);
+            }
+        }
+        channels << chans;
+        const QRect r = l.section ? QRect() : l.rect;
+        info.u32(quint32(r.isEmpty() ? 0 : r.top()));
+        info.u32(quint32(r.isEmpty() ? 0 : r.left()));
+        info.u32(quint32(r.isEmpty() ? 0 : r.bottom() + 1));
+        info.u32(quint32(r.isEmpty() ? 0 : r.right() + 1));
+        info.u16(4);
+        for (int k = 0; k < 4; ++k) {
+            info.u16(quint16(ids[k]));
+            info.len(quint64(chans[k].size()));
+        }
+        info.raw("8BIM");
+        info.raw(l.blend);
+        info.u8(l.opacity);
+        info.u8(l.clipping);
+        info.u8(l.flags);
+        info.u8(0);
+        PsdTestWriter extra(psb);
+        extra.u32(0);
+        extra.u32(0);
+        const QByteArray name = l.name.toLatin1();
+        extra.u8(int(name.size()));
+        extra.raw(name);
+        while ((extra.data.size() - 8) % 4)
+            extra.u8(0);
+        if (l.section) {
+            extra.raw("8BIMlsct");
+            extra.u32(12);
+            extra.u32(quint32(l.section));
+            extra.raw("8BIM");
+            extra.raw(l.blend);
+        }
+        info.u32(quint32(extra.data.size()));
+        info.raw(extra.data);
+    }
+    for (const QList<QByteArray>& chans : channels)
+        for (const QByteArray& c : chans)
+            info.raw(c);
+    while (info.data.size() % 4)
+        info.u8(0);
+
+    PsdTestWriter section(psb);
+    if (inBlock) {
+        section.len(0);
+        section.u32(0);
+        section.raw("8BIM");
+        section.raw(depth == 32 ? "Lr32" : "Lr16");
+        section.len(quint64(info.data.size()));
+        section.raw(info.data);
+    } else {
+        section.len(quint64(info.data.size()));
+        section.raw(info.data);
+        section.u32(0);
+    }
+    f.len(quint64(section.data.size()));
+    f.raw(section.data);
+
+    // Imagen combinada sin comprimir (el dibujo de prueba en todo el lienzo).
+    f.u16(0);
+    const QRect all(QPoint(0, 0), canvas);
+    for (int c = 0; c < 4; ++c)
+        f.raw(psdTestRows(all, c, depth, c < 3));
+    return f.data;
+}
+
+static void testPsd()
+{
+    QTemporaryDir dir;
+    QString error, warning;
+
+    // Ida y vuelta con el escritor de Kaint: capas, nombres, modos, opacidad, visibilidad, una capa
+    // vacía, la resolución y la imagen combinada.
+    {
+        std::unique_ptr<Document> doc(Document::createBlank(QSize(40, 24), QColor(250, 240, 230)));
+        auto mid = std::make_shared<Layer>(QStringLiteral("Arriba ñ 日本"), QSize(40, 24));
+        for (int y = 5; y < 15; ++y)
+            for (int x = 7; x < 30; ++x)
+                mid->image.setPixel(x, y, qRgba(x * 8, y * 10, 200, 60 + x * 6));
+        mid->props.opacity = 128;
+        mid->props.blend = BlendMode::Multiply;
+        doc->insertLayer(1, mid);
+        auto hidden = std::make_shared<Layer>(QStringLiteral("Oculta"), QSize(40, 24));
+        hidden->image.fill(qRgba(0, 255, 0, 255));
+        hidden->props.visible = false;
+        hidden->props.blend = BlendMode::Screen;
+        doc->insertLayer(2, hidden);
+        auto empty = std::make_shared<Layer>(QStringLiteral("Vacía"), QSize(40, 24));
+        empty->props.blend = BlendMode::ColorDodge;
+        doc->insertLayer(3, empty);
+        doc->setDpi(150);
+
+        const QString path = dir.filePath(QStringLiteral("capas.psd"));
+        CHECK(ImageIO::isLayered(path));
+        CHECK(ImageIO::isWritable(path));
+        CHECK(ImageIO::save(doc.get(), path, 95, &error));
+        std::unique_ptr<Document> loaded(ImageIO::load(path, &error));
+        CHECK(loaded != nullptr);
+        if (loaded) {
+            CHECK(loaded->size() == QSize(40, 24));
+            CHECK(loaded->layerCount() == 4);
+            CHECK(loaded->filePath() == path);
+            CHECK(loaded->property(ImageIO::kImportWarningProperty).toString().isEmpty());
+            CHECK(std::abs(loaded->dpi() - 150) < 0.01);
+            for (int i = 0; i < 4 && loaded->layerCount() == 4; ++i) {
+                CHECK(loaded->layer(i)->props == doc->layer(i)->props);
+                CHECK(sameImage(loaded->layer(i)->image, doc->layer(i)->image));
+            }
+        }
+        CHECK(sameImage(ImageIO::readImage(path), doc->flattened()));
+
+        // Un modo que Photoshop no tiene: no se guarda.
+        doc->layer(1)->props.blend = BlendMode::Reflect;
+        CHECK(!ImageIO::save(doc.get(), dir.filePath(QStringLiteral("reflejar.psd")), 95, &error));
+        CHECK(error.contains(QStringLiteral("Arriba")));
+        CHECK(!QFile::exists(dir.filePath(QStringLiteral("reflejar.psd"))));
+    }
+
+    // Archivos escritos aparte: 8, 16 y 32 bits, PSD y PSB, sin comprimir, PackBits y ZIP con y sin
+    // predicción; con 16 y 32 bits, las capas en el bloque 'Lr16' o 'Lr32' como hace Photoshop.
+    struct Case {
+        bool psb;
+        int depth, compression;
+        bool inBlock;
+    };
+    const Case cases[] = {{false, 8, 0, false}, {false, 8, 1, false}, {false, 8, 2, false}, {false, 8, 3, false},
+                          {false, 16, 3, true}, {false, 16, 1, true},  {false, 32, 3, true}, {false, 32, 0, true},
+                          {true, 8, 1, false},  {true, 16, 2, true}};
+    const QSize canvas(20, 12);
+    const QRect rect(3, 2, 14, 7);
+    for (const Case& c : cases) {
+        const QByteArray file = psdTestFile(c.psb, c.depth, c.compression, c.inBlock, canvas, {{rect, QStringLiteral("L1")}});
+        warning.clear();
+        std::unique_ptr<Document> doc(Psd::decode(file, &error, &warning));
+        CHECK(doc != nullptr);
+        if (!doc) {
+            std::fprintf(stderr, "  PSD %d bits, compresión %d, psb %d: %s\n", c.depth, c.compression, int(c.psb), qPrintable(error));
+            continue;
+        }
+        CHECK(doc->layerCount() == 1);
+        CHECK(doc->layer(0)->props.name == QStringLiteral("L1"));
+        // Más de 8 bits o PSB: convertido, con aviso.
+        CHECK(warning.isEmpty() == (c.depth == 8 && !c.psb));
+        const QImage& img = doc->layer(0)->image;
+        int worst = 0;
+        bool outsideClear = true;
+        for (int y = 0; y < canvas.height(); ++y)
+            for (int x = 0; x < canvas.width(); ++x) {
+                const QRgb p = img.pixel(x, y);
+                if (!rect.contains(x, y)) {
+                    outsideClear = outsideClear && qAlpha(p) == 0;
+                    continue;
+                }
+                worst = std::max({worst, std::abs(qRed(p) - psdTestPixel(x, y, 0)), std::abs(qGreen(p) - psdTestPixel(x, y, 1)),
+                                  std::abs(qBlue(p) - psdTestPixel(x, y, 2)), std::abs(qAlpha(p) - psdTestPixel(x, y, 3))});
+            }
+        CHECK(outsideClear);
+        CHECK(worst <= (c.depth == 32 ? 1 : 0));
+        if (worst > (c.depth == 32 ? 1 : 0))
+            std::fprintf(stderr, "  PSD %d bits, compresión %d: diferencia %d\n", c.depth, c.compression, worst);
+    }
+
+    // Un PSB se abre como imagen nueva (sin archivo) y con el aviso, y no se puede guardar como PSB.
+    {
+        const QString path = dir.filePath(QStringLiteral("grande.psb"));
+        QFile f(path);
+        CHECK(f.open(QIODevice::WriteOnly));
+        f.write(psdTestFile(true, 8, 1, false, canvas, {{rect, QStringLiteral("L1")}}));
+        f.close();
+        std::unique_ptr<Document> doc(ImageIO::load(path, &error));
+        CHECK(doc != nullptr);
+        if (doc) {
+            CHECK(doc->filePath().isEmpty());
+            CHECK(doc->untitledName() == QStringLiteral("grande"));
+            CHECK(!doc->property(ImageIO::kImportWarningProperty).toString().isEmpty());
+        }
+        CHECK(!ImageIO::isWritable(path));
+        CHECK(!ImageIO::readImage(path).isNull());
+    }
+
+    // Grupos: el oculto oculta sus capas y el grupo desaparece (con aviso).
+    {
+        PsdTestLayer end;
+        end.section = 3;
+        end.name = QStringLiteral("</Layer group>");
+        PsdTestLayer inside{rect, QStringLiteral("Dentro")};
+        PsdTestLayer group;
+        group.section = 1;
+        group.name = QStringLiteral("Grupo");
+        group.blend = "pass";
+        group.flags = 0x02;
+        warning.clear();
+        std::unique_ptr<Document> doc(Psd::decode(psdTestFile(false, 8, 1, false, canvas, {end, inside, group}), &error, &warning));
+        CHECK(doc && doc->layerCount() == 1);
+        if (doc && doc->layerCount() == 1) {
+            CHECK(doc->layer(0)->props.name == QStringLiteral("Dentro"));
+            CHECK(!doc->layer(0)->props.visible);
+        }
+        CHECK(!warning.isEmpty());
+    }
+
+    // Una máscara de recorte no se puede representar con capas de Kaint: la imagen combinada.
+    {
+        PsdTestLayer base{rect, QStringLiteral("Base")};
+        PsdTestLayer clipped{rect, QStringLiteral("Recortada")};
+        clipped.clipping = 1;
+        warning.clear();
+        std::unique_ptr<Document> doc(Psd::decode(psdTestFile(false, 8, 1, false, canvas, {base, clipped}), &error, &warning));
+        CHECK(doc && doc->layerCount() == 1);
+        CHECK(warning.contains(QStringLiteral("recorte")));
+        if (doc)
+            CHECK(doc->layer(0)->image.pixel(0, 0) == qRgba(psdTestPixel(0, 0, 0), psdTestPixel(0, 0, 1), 128, psdTestPixel(0, 0, 3)));
+    }
+
+    // Archivos cortados: error, sin colgarse.
+    {
+        const QByteArray good = psdTestFile(false, 8, 1, false, canvas, {{rect, QStringLiteral("L1")}});
+        for (int cut : {10, 30, 60, 120, int(good.size()) - 40}) {
+            std::unique_ptr<Document> doc(Psd::decode(good.left(cut), &error));
+            Q_UNUSED(doc);
+        }
+        CHECK(Psd::decode(QByteArray("8BPS"), &error) == nullptr && !error.isEmpty());
+    }
+}
+
+// JPEG XR (y HEIC, AVIF o JPEG XL si Windows tiene sus extensiones) con los códecs del sistema.
+static void testWicFormats()
+{
+#ifdef Q_OS_WIN
+    QImage image(33, 17, QImage::Format_ARGB32);
+    for (int y = 0; y < image.height(); ++y)
+        for (int x = 0; x < image.width(); ++x)
+            image.setPixel(x, y, qRgba(x * 7, y * 15, 90, 255));
+    for (const char* suffix : {"jxr", "heic", "avif", "jxl"}) {
+        const QString s = QLatin1String(suffix);
+        if (!Wic::canWrite(s)) {
+            std::printf("WIC %s: Windows no lo escribe\n", suffix);
+            continue;
+        }
+        QString error;
+        const QByteArray data = Wic::encode(image, s, 100, &error);
+        CHECK(!data.isEmpty());
+        if (!Wic::canRead(s))
+            continue;
+        const QImage back = Wic::decode(data, &error);
+        CHECK(back.size() == image.size());
+        int worst = 0;
+        for (int y = 0; y < image.height() && back.size() == image.size(); ++y)
+            for (int x = 0; x < image.width(); ++x) {
+                const QRgb a = image.pixel(x, y), b = back.pixel(x, y);
+                worst = std::max({worst, std::abs(qRed(a) - qRed(b)), std::abs(qGreen(a) - qGreen(b)), std::abs(qBlue(a) - qBlue(b))});
+            }
+        // Sin pérdida en JPEG XR; los demás, con poca.
+        CHECK(worst <= (s == QLatin1String("jxr") ? 1 : 40));
+        std::printf("WIC %s: ida y vuelta, diferencia máxima %d\n", suffix, worst);
+    }
+    // JPEG XR viene con Windows.
+    CHECK(Wic::canRead(QStringLiteral("jxr")) && Wic::canWrite(QStringLiteral("jxr")));
+    CHECK(ImageIO::isWritable(QStringLiteral("x.jxr")) && ImageIO::isWritable(QStringLiteral("x.hdp")));
+#endif
+}
+
 // Escritura de .pdn: capas con nombre, visibilidad, opacidad y fusión, la resolución y la
 // miniatura; se vuelve a leer igual. Con el ejemplo de Paint.NET 5.1 de evidencias/, también ida
 // y vuelta de un archivo real.
@@ -1820,6 +2262,8 @@ int main(int argc, char** argv)
     testGifAndIco();
     testPdn();
     testPdnWrite();
+    testPsd();
+    testWicFormats();
     testPlugins();
     testCraftPlugins();
     testPaintJs();

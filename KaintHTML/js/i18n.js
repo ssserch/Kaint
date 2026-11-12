@@ -5,6 +5,11 @@ import en from "./i18n/en.js";
 
 const extra = {
     "Archivo": "File",
+    "La imagen es demasiado grande (%1 × %2 píxeles).": "The image is too large (%1 × %2 pixels).",
+    "La capa «%1» usa un modo de fusión que Photoshop no tiene. Cámbialo en sus propiedades o guarda la imagen como PDN u ORA.":
+        "The “%1” layer uses a blend mode that Photoshop does not have. Change it in its properties or save the image as PDN or ORA.",
+    "Este navegador no puede abrir imágenes %1. Prueba con Safari o con Kaint para el escritorio.":
+        "This browser can't open %1 images. Try Safari or Kaint for the desktop.",
     "Opciones de guardado": "Save options",
     "Tipo de zalgo": "Zalgo type",
     "Botones de las ventanas:": "Window buttons:",

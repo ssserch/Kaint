@@ -51,6 +51,8 @@ constexpr int kTitleXP = 26;
 // Windows 7: el borde de cristal de los diálogos y el alto de su barra (desde el borde de arriba,
 // del que cuelgan los botones).
 constexpr int kAeroBorder = 6;
+// El de la ventana principal con Windows 7 (el cristal se ve entre sus dos contornos).
+constexpr int kMainAeroBorder = 8;
 constexpr int kTitleAero = 27;
 constexpr int kButton = 46;
 // Franja de los bordes (dentro de la ventana) desde la que se cambia el tamaño.
@@ -586,6 +588,17 @@ KWindowShadow* makeShadow(QObject* parent)
 // para su contenido, como espera Qt con una ventana sin marco (Qt::FramelessWindowHint).
 bool handleNativeMessage(QWidget* window, const MSG* msg, qintptr* result);
 
+// Si Qt cree otra cosa que Windows (maximizada o no) después de mover la ventana, se le corrige: lo
+// que Windows hace con la ventana (restaurarla al arrastrar su barra, Aero Snap) no siempre le llega.
+void syncWindowState(QWidget* window)
+{
+    if (!window->testAttribute(Qt::WA_WState_Created) || window->isFullScreen() || window->isMinimized())
+        return;
+    const bool zoomed = IsZoomed(reinterpret_cast<HWND>(window->winId()));
+    if (zoomed != window->isMaximized())
+        window->setWindowState(zoomed ? window->windowState() | Qt::WindowMaximized : window->windowState() & ~Qt::WindowMaximized);
+}
+
 class NativeFrame : public QAbstractNativeEventFilter {
 public:
     bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override
@@ -593,6 +606,17 @@ public:
         if (type != "windows_generic_MSG")
             return false;
         const MSG* msg = static_cast<const MSG*>(message);
+        if (msg->message == WM_EXITSIZEMOVE) {
+            QWidget* w = QWidget::find(WId(msg->hwnd));
+            if (w && w->isWindow() && isDecorated(w)) {
+                QPointer<QWidget> window(w);
+                QTimer::singleShot(0, w, [window] {
+                    if (window)
+                        syncWindowState(window);
+                });
+            }
+            return false;
+        }
         if (msg->message != WM_NCCALCSIZE && msg->message != WM_NCACTIVATE && msg->message != WM_NCHITTEST)
             return false;
         QWidget* w = QWidget::find(WId(msg->hwnd));
@@ -642,9 +666,11 @@ void applyNativeFrame(QWidget* window)
 // ocuparía el borde que ya no tiene): lo que sobresale por cada lado, en píxeles de la ventana.
 QMargins maximizedOverhang(QWidget* window)
 {
-    if (!window->isMaximized() || !window->testAttribute(Qt::WA_WState_Created))
+    if (!window->testAttribute(Qt::WA_WState_Created))
         return {};
     const auto hwnd = reinterpret_cast<HWND>(window->winId());
+    if (!IsZoomed(hwnd))
+        return {};
     RECT r;
     MONITORINFO monitor{};
     monitor.cbSize = sizeof monitor;
@@ -776,7 +802,11 @@ public:
         case QEvent::ActivationChange:
         case QEvent::WindowTitleChange:
         case QEvent::WindowIconChange:
-            m_window->update(QRect(0, 0, m_window->width(), titleRect().bottom() + 2));
+            // La principal con Windows 7: el cristal de todo el marco cambia con el foco.
+            if (mainAero())
+                m_window->update(QRegion(m_window->rect()) - QRegion(clientRect()));
+            else
+                m_window->update(QRect(0, 0, m_window->width(), titleRect().bottom() + 2));
             break;
         case QEvent::MouseMove:
             setHover(closeRect().contains(static_cast<QMouseEvent*>(event)->position().toPoint()));
@@ -802,7 +832,7 @@ public:
             auto* me = static_cast<QMouseEvent*>(event);
             if (me->button() == Qt::LeftButton && titleRect().contains(me->position().toPoint())
                 && !closeRect().contains(me->position().toPoint()) && resizable()) {
-                m_window->isMaximized() ? m_window->showNormal() : m_window->showMaximized();
+                toggleMaximized(m_window);
                 return true;
             }
             break;
@@ -844,6 +874,10 @@ public:
             return HTTOP;
         if (e & Qt::BottomEdge)
             return HTBOTTOM;
+        // A pantalla completa, Windows movería la ventana sin salir de ella (y Kaint seguiría
+        // creyéndola a pantalla completa): la barra la maneja Kaint (watchCaption).
+        if (m_window->isFullScreen())
+            return HTCLIENT;
         if (m_titleBar)
             return titleRect().contains(pos) && !closeRect().contains(pos) ? HTCAPTION : HTCLIENT;
         // La ventana principal: su fila del título y los huecos de la franja de los menús.
@@ -876,9 +910,22 @@ private:
         return m_titleBar && Theme::active().win7 && !classic();
     }
 
+    // La ventana principal con el tema Windows 7: su marco es de cristal y su fila de la barra de
+    // título (CaptionTitle y CaptionButtons, sin fondo) lo deja ver, como en Windows 7.
+    bool mainAero() const
+    {
+        return !m_titleBar && aeroTitle();
+    }
+
     int border() const
     {
-        return aero() ? kAeroBorder : borderWidth();
+        return aero() ? kAeroBorder : mainAero() ? kMainAeroBorder : borderWidth();
+    }
+
+    // Lo de la principal que no es cristal: lo que hay bajo la fila de la barra de título.
+    QRect clientRect() const
+    {
+        return m_window->contentsRect().adjusted(0, CaptionButtons::rowHeight(), 0, 0);
     }
 
     QRect titleRect() const
@@ -974,6 +1021,11 @@ private:
 #endif
         if (aero()) {
             m_window->setContentsMargins(QMargins(b, titleRect().bottom() + 2, b, b) + extra);
+            return;
+        }
+        // Windows 7: los botones cuelgan del borde de arriba y, maximizada, no hay marco.
+        if (mainAero()) {
+            m_window->setContentsMargins((isMaximized(m_window) ? QMargins() : QMargins(b, 1, b, b)) + extra);
             return;
         }
         m_window->setContentsMargins(QMargins(b, b + (m_titleBar ? (classic() ? kTitle98 + 1 : luna() ? kTitleXP : kTitle) : 0), b, b)
@@ -1170,6 +1222,8 @@ private:
             p.fillPath(path, m_window->palette().color(QPalette::Window));
             if (aero()) {
                 paintAero(p, path, active);
+            } else if (mainAero()) {
+                paintMainAero(p, path, active);
             } else if (m_titleBar) {
                 p.save();
                 p.setClipPath(path);
@@ -1179,17 +1233,17 @@ private:
                     p.fillRect(titleRect().adjusted(-1, -1, 1, 0), classic() ? QColor() : titleColor());
                 p.restore();
             }
-            if (!aero()) {
+            if (!aero() && !mainAero()) {
                 p.setPen(borderColor());
                 p.drawPath(path);
             }
             p.setRenderHint(QPainter::Antialiasing, false);
         } else {
             p.fillRect(f, m_window->palette().color(QPalette::Window));
-            if (aero()) {
+            if (aero() || mainAero()) {
                 QPainterPath path;
                 path.addRect(QRectF(f).adjusted(0.5, 0.5, -0.5, -0.5));
-                paintAero(p, path, active);
+                aero() ? paintAero(p, path, active) : paintMainAero(p, path, active);
             } else if (classic()) {
                 bevel98(p, f, true);
             } else if (luna()) {
@@ -1224,15 +1278,57 @@ private:
         font.setBold(classic() || luna());
         p.setFont(font);
         const QString title = p.fontMetrics().elidedText(m_window->windowTitle(), Qt::ElideRight, std::max(0, text.width()));
-        // Windows 7: el título negro con el halo blanco de Aero sobre el cristal.
+        // Windows 7: el título con el halo de Aero sobre el cristal.
         if (aero()) {
-            p.setPen(QColor(255, 255, 255, 110));
-            for (const QPoint& d : {QPoint(-1, 0), QPoint(1, 0), QPoint(0, -1), QPoint(0, 1), QPoint(-1, -1), QPoint(1, 1),
-                                    QPoint(-1, 1), QPoint(1, -1)})
-                p.drawText(text.translated(d), Qt::AlignVCenter | Qt::AlignLeft, title);
+            paintAeroTitleText(p, text, title, active);
+            return;
         }
         p.setPen(titleTextColor(active));
         p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, title);
+    }
+
+    // La ventana principal con Windows 7: el cristal de 7.css en todo el marco (la fila de la barra de
+    // título lo deja ver), con el brillo de la barra de título, el contorno oscuro con otro blanco
+    // por dentro y el borde del contenido. Maximizada, solo la barra.
+    void paintMainAero(QPainter& p, const QPainterPath& shape, bool active)
+    {
+        const QRectF r = shape.boundingRect();
+        const bool dark = Theme::active().dark;
+        const bool framed = !isMaximized(m_window);
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        p.fillPath(shape, dark ? (active ? QColor(0x3a, 0x44, 0x52) : QColor(0x44, 0x48, 0x4e))
+                               : (active ? QColor(0x7e, 0xa7, 0xd6) : QColor(0xb4, 0xc8, 0xe0)));
+        QLinearGradient across(r.topLeft(), r.topRight());
+        across.setColorAt(0, QColor(255, 255, 255, 102));
+        across.setColorAt(0.5, QColor(0, 0, 0, 26));
+        across.setColorAt(1, QColor(255, 255, 255, 51));
+        p.fillPath(shape, across);
+        // El brillo de la barra de título: más claro arriba, hasta la mitad.
+        const QRect client = clientRect();
+        QLinearGradient shine(QPointF(0, r.top()), QPointF(0, client.top()));
+        shine.setColorAt(0, QColor(255, 255, 255, dark ? 45 : 110));
+        shine.setColorAt(0.48, QColor(255, 255, 255, dark ? 20 : 50));
+        shine.setColorAt(0.5, QColor(255, 255, 255, 0));
+        shine.setColorAt(1, QColor(255, 255, 255, 0));
+        p.fillPath(shape, shine);
+        const QColor outline(0, 0, 0, active ? 179 : 110);
+        if (framed) {
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(outline, 1));
+            p.drawPath(shape);
+            p.setPen(QPen(QColor(255, 255, 255, 170), 1));
+            const qreal inner = rounded() ? kRadius - 1 : 0;
+            p.drawRoundedRect(r.adjusted(1, 1, -1, -1), inner, inner);
+        }
+        // El borde del contenido (bajo la barra de título): blanco y, por dentro, oscuro.
+        p.setRenderHint(QPainter::Antialiasing, false);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QColor(255, 255, 255, 153));
+        p.drawRect(client.adjusted(-2, -2, 1, 1));
+        p.setPen(outline);
+        p.drawRect(client.adjusted(-1, -1, 0, 0));
+        p.restore();
     }
 
     QWidget* m_window;
@@ -1418,6 +1514,117 @@ void refreshAll()
         }
 }
 
+bool isMaximized(const QWidget* window)
+{
+    if (window->isFullScreen())
+        return true;
+#ifdef Q_OS_WIN
+    if (window->testAttribute(Qt::WA_WState_Created))
+        return IsZoomed(reinterpret_cast<HWND>(window->winId()));
+#endif
+    return window->isMaximized();
+}
+
+void toggleMaximized(QWidget* window)
+{
+    if (window->isFullScreen()) {
+        window->setWindowState(window->windowState() & ~Qt::WindowFullScreen);
+        return;
+    }
+#ifdef Q_OS_WIN
+    // Con lo que diga Windows, como el doble clic en la barra de título o Win+↑: Qt puede creerla
+    // aún maximizada después de que Windows la restaurara al arrastrarla, y entonces su
+    // showMaximized() no hacía nada. El WM_SIZE que sigue pone a Qt al día.
+    if (window->testAttribute(Qt::WA_WState_Created)) {
+        const auto hwnd = reinterpret_cast<HWND>(window->winId());
+        ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+        return;
+    }
+#endif
+    window->isMaximized() ? window->showNormal() : window->showMaximized();
+}
+
+namespace {
+
+// Arrastrar la barra de título a pantalla completa: al pasar del umbral de arrastre sale de ella y
+// la ventana, con su tamaño normal, queda bajo el puntero en la misma proporción, y sigue moviéndose
+// con el gestor de ventanas.
+class CaptionDrag : public QObject {
+public:
+    using QObject::QObject;
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (!watched->isWidgetType())
+            return false;
+        QWidget* window = static_cast<QWidget*>(watched)->window();
+        switch (event->type()) {
+        case QEvent::MouseButtonPress: {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (me->button() != Qt::LeftButton || !window->isFullScreen())
+                return false;
+            m_pressed = true;
+            m_press = me->globalPosition().toPoint();
+            return true;
+        }
+        case QEvent::MouseMove: {
+            if (!m_pressed)
+                return false;
+            auto* me = static_cast<QMouseEvent*>(event);
+            const QPoint now = me->globalPosition().toPoint();
+            if (!(me->buttons() & Qt::LeftButton)) {
+                m_pressed = false;
+                return false;
+            }
+            if ((now - m_press).manhattanLength() < QApplication::startDragDistance())
+                return true;
+            m_pressed = false;
+            leaveFullScreen(window, now);
+            return true;
+        }
+        case QEvent::MouseButtonRelease:
+            if (!m_pressed)
+                return false;
+            m_pressed = false;
+            return true;
+        case QEvent::MouseButtonDblClick:
+            if (static_cast<QMouseEvent*>(event)->button() != Qt::LeftButton || !window->isFullScreen())
+                return false;
+            m_pressed = false;
+            toggleMaximized(window);
+            return true;
+        default: return false;
+        }
+    }
+
+private:
+    void leaveFullScreen(QWidget* window, const QPoint& cursor)
+    {
+        const QRect full = window->geometry();
+        const double fx = full.width() > 0 ? std::clamp(double(m_press.x() - full.x()) / full.width(), 0.0, 1.0) : 0.5;
+        const int dy = m_press.y() - full.y();
+        const QSize normal = window->normalGeometry().size();
+        window->setWindowState(window->windowState() & ~(Qt::WindowFullScreen | Qt::WindowMaximized));
+        if (normal.isValid() && !normal.isEmpty())
+            window->move(cursor.x() - int(std::lround(fx * normal.width())), cursor.y() - dy);
+        if (window->windowHandle())
+            window->windowHandle()->startSystemMove();
+    }
+
+    bool m_pressed = false;
+    QPoint m_press;
+};
+
+} // namespace
+
+void watchCaption(QWidget* caption)
+{
+    if (!caption || caption->property("kaintCaptionDrag").toBool())
+        return;
+    caption->setProperty("kaintCaptionDrag", true);
+    caption->installEventFilter(new CaptionDrag(caption));
+}
+
 namespace {
 
 // Medidas de cada estilo en una fila de alto 'h': ancho de minimizar y maximizar, de cerrar, alto,
@@ -1577,6 +1784,38 @@ void paintClassicTitle(QPainter& p, const QRect& r, bool active)
         paintTitle98(p, r, active);
 }
 
+bool aeroTitle()
+{
+    const Theme::Spec s = Theme::active();
+    return s.win7 && !s.classic;
+}
+
+void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool active)
+{
+    const QColor color = titleTextColor(active);
+    const QFontMetricsF fm(p.font());
+    const qreal width = fm.horizontalAdvance(text);
+    if (width > 0) {
+        // El halo de Windows 7: una mancha suave con la forma del texto, hecha de capas que se
+        // amplían (más opaca en el centro).
+        const QColor glow = color.lightness() < 128 ? QColor(255, 255, 255) : QColor(0, 0, 0);
+        const QRectF base(r.left(), r.center().y() + 0.5 - fm.height() / 2, width, fm.height());
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        for (int k = 6; k >= 1; --k) {
+            QColor c = glow;
+            c.setAlpha(glow == Qt::white ? (active ? 34 : 24) : 18);
+            p.setBrush(c);
+            const QRectF layer = base.adjusted(-1.6 * k, -0.7 * k, 1.6 * k, 0.7 * k);
+            p.drawRoundedRect(layer, layer.height() / 2, layer.height() / 2);
+        }
+        p.restore();
+    }
+    p.setPen(color);
+    p.drawText(r, Qt::AlignVCenter | Qt::AlignLeft, text);
+}
+
 namespace {
 PanelClose7 g_panelClose7 = PanelClose7::Rectangle;
 } // namespace
@@ -1616,6 +1855,7 @@ CaptionTitle::CaptionTitle(QWidget* parent)
     // doble clic para maximizar o restaurar y su menú con el clic derecho.
     setProperty("kaintCaption", true);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    WindowFrame::watchCaption(this);
 }
 
 QSize CaptionTitle::sizeHint() const
@@ -1658,9 +1898,14 @@ void CaptionTitle::paintEvent(QPaintEvent*)
     QFont font = this->font();
     font.setBold(classic);
     p.setFont(font);
+    const QString title = p.fontMetrics().elidedText(window()->windowTitle(), Qt::ElideRight, std::max(0, text.width()));
+    // Windows 7: sobre el cristal (lo pinta el marco), con el halo de Aero.
+    if (WindowFrame::aeroTitle()) {
+        WindowFrame::paintAeroTitleText(p, text, title, active);
+        return;
+    }
     p.setPen(WindowFrame::titleTextColor(active));
-    p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft,
-               p.fontMetrics().elidedText(window()->windowTitle(), Qt::ElideRight, std::max(0, text.width())));
+    p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, title);
 }
 
 void CaptionTitle::mousePressEvent(QMouseEvent* e)
@@ -1676,8 +1921,7 @@ void CaptionTitle::mouseDoubleClickEvent(QMouseEvent* e)
 {
     if (e->button() != Qt::LeftButton)
         return QWidget::mouseDoubleClickEvent(e);
-    QWidget* w = window();
-    w->isMaximized() ? w->showNormal() : w->showMaximized();
+    WindowFrame::toggleMaximized(window());
 }
 
 // ---------------------------------------------------------------------------
@@ -1728,6 +1972,9 @@ bool CaptionButtons::eventFilter(QObject* watched, QEvent* e)
         resetState();
         break;
     case QEvent::ActivationChange:
+    // El dibujo de maximizar o restaurar sigue al estado real de la ventana (en Windows, el del
+    // sistema), que cambia con su tamaño aunque Qt no se entere.
+    case QEvent::Resize:
         update();
         break;
     default:
@@ -1765,7 +2012,7 @@ void CaptionButtons::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     const bool active = window()->isActiveWindow();
-    const bool maximized = window()->isMaximized();
+    const bool maximized = WindowFrame::isMaximized(window());
     for (int i = 0; i < 3; ++i) {
         const QRect box = buttonRect(i);
         const bool hot = m_hover == i, down = m_pressed == i && hot;
@@ -1794,9 +2041,11 @@ void CaptionButtons::mousePressEvent(QMouseEvent* e)
         return;
     m_pressed = buttonAt(e->position().toPoint());
     m_hover = m_pressed;
-    // Fuera de los botones (el hueco entre ellos), se arrastra la ventana.
-    if (m_pressed < 0 && window()->windowHandle()) {
-        window()->windowHandle()->startSystemMove();
+    // Fuera de los botones (el hueco entre ellos), se arrastra la ventana (a pantalla completa no:
+    // se movería sin salir de ella).
+    if (m_pressed < 0) {
+        if (window()->windowHandle() && !window()->isFullScreen())
+            window()->windowHandle()->startSystemMove();
         return;
     }
     update();
@@ -1821,7 +2070,7 @@ void CaptionButtons::mouseReleaseEvent(QMouseEvent* e)
         if (b == 0)
             w->showMinimized();
         else if (b == 1)
-            w->isMaximized() ? w->showNormal() : w->showMaximized();
+            WindowFrame::toggleMaximized(w);
         else
             w->close();
     });
@@ -1832,8 +2081,7 @@ void CaptionButtons::mouseDoubleClickEvent(QMouseEvent* e)
     // El segundo clic de un doble clic cuenta como uno más (maximizar y restaurar seguidos), como
     // los botones de Windows; fuera de los botones, maximiza o restaura como la barra de título.
     if (e->button() == Qt::LeftButton && buttonAt(e->position().toPoint()) < 0) {
-        QWidget* w = window();
-        w->isMaximized() ? w->showNormal() : w->showMaximized();
+        WindowFrame::toggleMaximized(window());
         return;
     }
     mousePressEvent(e);

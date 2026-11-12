@@ -179,10 +179,12 @@ add_library(kaintcore STATIC
     src/core/PngWriter.cpp
     src/core/Palette.cpp
     src/core/Pdn.cpp
+    src/core/Psd.cpp
     src/core/Raster.cpp
     src/core/Resample.cpp
     src/core/Selection.cpp
     src/core/Stroke.cpp
+    src/core/WicCodec.cpp
     src/core/Zalgo.cpp
     src/core/Zip.cpp
     src/core/effects/Effect.cpp
@@ -207,6 +209,10 @@ add_library(kaintcore STATIC
 )
 target_include_directories(kaintcore PUBLIC src)
 target_link_libraries(kaintcore PUBLIC Qt6::Gui ZLIB::ZLIB Threads::Threads PRIVATE kaintquickjs)
+# Windows: JPEG XR, HEIC, AVIF y JPEG XL con los códecs del sistema (Windows Imaging Component).
+if(WIN32)
+    target_link_libraries(kaintcore PRIVATE windowscodecs ole32 oleaut32 shlwapi)
+endif()
 
 # ---------------------------------------------------------------------------
 # Aplicación (interfaz Qt Widgets)

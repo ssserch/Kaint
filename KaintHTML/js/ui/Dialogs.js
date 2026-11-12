@@ -24,9 +24,16 @@ import { installPinch, isPhone, mobileMode, PanelScaleRange } from "./Mobile.js"
 import { collabSettingsPage } from "../collab/CollabUI.js";
 
 let openDialogs = 0;
+// Configuración, mientras está abierta (se cierra al abrir desde ella la ventana de la sesión).
+let openSettings = null;
 
 export function dialogOpen() {
     return openDialogs > 0;
+}
+
+// Cierra Configuración si está abierta (sus cambios ya están aplicados).
+export function closeSettingsDialog() {
+    openSettings?.close(null);
 }
 
 export function el(tag, props = {}, children = []) {
@@ -46,8 +53,11 @@ export function el(tag, props = {}, children = []) {
 }
 
 export class Dialog {
-    constructor(title, { iconName = null } = {}) {
-        this.backdrop = el("div", { className: "backdrop" });
+    // 'modeless': no bloquea lo de detrás (se puede seguir editando la imagen con él abierto), como la
+    // ventana de la sesión de Kaint.
+    constructor(title, { iconName = null, modeless = false } = {}) {
+        this.modeless = modeless;
+        this.backdrop = el("div", { className: modeless ? "backdrop modeless" : "backdrop" });
         this.element = el("div", { className: "dialog", role: "dialog" });
         // Cabecera (se arrastra)
         const head = el("div", { className: "title" });
@@ -151,7 +161,8 @@ export class Dialog {
     }
 
     exec() {
-        openDialogs++;
+        if (!this.modeless)
+            openDialogs++;
         // Al cerrarse, el foco vuelve a donde estaba (por ejemplo, al diálogo de un efecto después
         // de elegir un color).
         this.returnFocus = document.activeElement;
@@ -168,7 +179,8 @@ export class Dialog {
     close(value) {
         if (!this.resolve)
             return;
-        openDialogs--;
+        if (!this.modeless)
+            openDialogs--;
         this.backdrop.remove();
         if (this.returnFocus?.isConnected)
             this.returnFocus.focus({ preventScroll: true });
@@ -876,7 +888,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
             uiFontSize.addEventListener("input", () => Settings.set("uiFontSize", uiFontSize.read()));
             // Como el color propio de la barra superior de Kaint en Linux (el de énfasis de Windows).
             const titleOn = checkbox(tr("Color propio en la barra superior:"), !!Settings.get("titleBarColor"));
-            titleOn.title = tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color.");
+            titleOn.title = tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color (los temas Windows 98, XP y 7 tienen sus propias barras).");
             const titleColor = el("input", { type: "color", value: Settings.get("titleBarColor") || "#744da9", disabled: !Settings.get("titleBarColor") });
             const applyTitle = () => {
                 titleColor.disabled = !titleOn.input.checked;
@@ -1140,7 +1152,11 @@ export async function settingsDialog(app = null, startPage = "interface") {
     dlg.body.appendChild(el("div", { className: "settings" }, [sections, page]));
     show(startPage);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
-    return dlg.exec();
+    openSettings = dlg;
+    const result = await dlg.exec();
+    if (openSettings === dlg)
+        openSettings = null;
+    return result;
 }
 
 // Personalización (SettingsDialog::createCustomizePage de Kaint): en qué menú sale cada efecto

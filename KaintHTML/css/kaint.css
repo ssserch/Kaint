@@ -1655,6 +1655,17 @@ input[type="checkbox"] {
     background: transparent;
 }
 
+/* Ventana que no bloquea (la de la sesión): lo de detrás se sigue usando; solo la ventana recibe los
+   clics. Los diálogos que se abren después van encima (el mismo z-index, más tarde en la página). */
+.backdrop.modeless {
+    background: transparent;
+    pointer-events: none;
+}
+
+.backdrop.modeless > .dialog {
+    pointer-events: auto;
+}
+
 body.busy, body.busy * {
     cursor: progress !important;
 }
@@ -2949,10 +2960,16 @@ fieldset.group > legend {
     border: none;
 }
 
+/* Los botones de las barras miden lo mismo que en Kaint: 24 px de un icono al siguiente, y los
+   separadores con 2 px a cada lado (QToolBar::separator de Kaint con el aspecto de Paint.NET). */
 :root.pdn .toolbar .tbutton {
-    min-width: 22px;
-    min-height: 22px;
-    padding: 1px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px;
+}
+
+:root.pdn .toolbar .sep {
+    margin: 3px 2px;
 }
 
 :root.pdn .tool-options {
@@ -3960,9 +3977,21 @@ fieldset.group > legend {
     margin-left: 0;
 }
 
+/* Su flecha es la de Kaint (la de los botones con menú de Qt): una uve fina de 8 px, del color del
+   texto un poco apagado, no el triángulo relleno de los demás menús. */
 .tbutton.menu-arrow .arrow {
-    font-size: 10px;
-    line-height: 1;
+    display: block;
+    width: 8px;
+    height: 8px;
+    font-size: 0;
+    opacity: 1;
+    background: color-mix(in srgb, var(--text) 75%, var(--window));
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 5.5l4.5 4.5 4.5-4.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 8px 8px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 5.5l4.5 4.5 4.5-4.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 8px 8px no-repeat;
+}
+
+.tbutton.menu-arrow:disabled .arrow {
+    background: var(--disabled);
 }
 
 /* La flecha de los tipos de zalgo, pegada a su botón. */

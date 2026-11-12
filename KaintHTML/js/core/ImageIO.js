@@ -1,34 +1,47 @@
-// Abrir y guardar: las imágenes que entiende el navegador (PNG, JPEG, WebP, GIF, BMP, AVIF...) y
-// OpenRaster (.ora) con sus capas, como src/core/Ora.cpp de Kaint.
+// Abrir y guardar: las imágenes que entiende el navegador (PNG, JPEG, WebP, GIF, BMP, AVIF... y, si
+// puede, HEIC y JPEG XL), OpenRaster (.ora) y Photoshop (.psd y .psb) con sus capas, como
+// src/core/Ora.cpp y Psd.cpp de Kaint.
 import { Document, Layer } from "./Document.js";
 import { OraNames } from "./Raster.js";
 import { unzip, zip } from "./Zip.js";
 import * as Codecs from "./Codecs.js";
 import { iccFromImage, isSrgb, readIcc } from "./ColorProfiles.js";
-import { defaultSaveOptions, encodeAnimation, encodeImage, prepare } from "./Encode.js";
+import { canvasEncodes, defaultSaveOptions, encodeAnimation, encodeImage, prepare } from "./Encode.js";
+import { decodePsd, encodePsd } from "./Psd.js";
 import { tr } from "../i18n.js";
 
 // Tipos de "Guardar como", en el orden de Kaint (ImageIO.cpp).
 export const SaveFormats = [
     { ext: "pdn", mime: "application/octet-stream", name: "Paint.NET con capas", layered: true },
     { ext: "ora", mime: "image/openraster", name: "OpenRaster con capas", layered: true },
+    { ext: "psd", mime: "image/vnd.adobe.photoshop", name: "Photoshop con capas", layered: true },
     { ext: "png", mime: "image/png", name: "PNG" },
-    { ext: "jpg", mime: "image/jpeg", name: "JPEG", quality: true, aliases: ["jpeg", "jpe", "jfif"] },
+    { ext: "jpg", mime: "image/jpeg", name: "JPEG", quality: true, aliases: ["jpeg", "jpe", "jfif", "exif"] },
     { ext: "webp", mime: "image/webp", name: "WebP", quality: true },
     { ext: "dds", mime: "image/vnd-ms.dds", name: "Superficie de DirectDraw (DDS)" },
     { ext: "tiff", mime: "image/tiff", name: "TIFF", aliases: ["tif"] },
     { ext: "gif", mime: "image/gif", name: "GIF", animation: true },
-    { ext: "bmp", mime: "image/bmp", name: "BMP" },
+    { ext: "bmp", mime: "image/bmp", name: "BMP", aliases: ["dib", "rle"] },
     { ext: "tga", mime: "image/x-tga", name: "TGA" },
     { ext: "ico", mime: "image/x-icon", name: "Icono de Windows" },
     { ext: "qoi", mime: "image/qoi", name: "QOI" },
     { ext: "ppm", mime: "image/x-portable-pixmap", name: "Netpbm" },
 ];
 
-// Lo que se puede abrir (además de lo que entienda el navegador).
-export const OpenAccept = "image/*,.ora,.pdn,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm";
-export const OpenExtensions = [".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".gif", ".bmp", ".avif", ".ico", ".ora", ".pdn", ".tga",
-                               ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm", ".pbm", ".pnm"];
+// AVIF (y JPEG XL), si el navegador sabe codificarlos (Chrome, por ahora, no): se miran al cargar.
+const browserFormats = [
+    { ext: "avif", mime: "image/avif", name: "AV1 (AVIF)", quality: true },
+    { ext: "jxl", mime: "image/jxl", name: "JPEG XL", quality: true },
+];
+for (const f of browserFormats)
+    canvasEncodes(f.mime).then((ok) => ok && SaveFormats.splice(SaveFormats.findIndex((s) => s.ext === "webp"), 0, f)).catch(() => {});
+
+// Lo que se puede abrir (además de lo que entienda el navegador). HEIC y JPEG XL, solo si el
+// navegador los entiende (Safari).
+export const OpenAccept = "image/*,.ora,.pdn,.psd,.psb,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm,.exif,.dib,.rle,.heic,.heif,.jxl";
+export const OpenExtensions = [".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".exif", ".webp", ".gif", ".bmp", ".dib", ".rle", ".avif", ".heic",
+                               ".heif", ".jxl", ".ico", ".ora", ".pdn", ".psd", ".psb", ".tga", ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm",
+                               ".pbm", ".pnm"];
 
 export function extensionOf(name) {
     return (name.split(".").pop() || "").toLowerCase();
@@ -82,7 +95,24 @@ export async function openFile(file) {
     let doc;
     if (ext === "ora") {
         doc = await openOra(file);
-    } else if (ext === "pdn" || magic === "PDN3") {
+    } else if (ext === "psd" || ext === "psb" || magic === "8BPS") {
+        const psd = await decodePsd(new Uint8Array(await file.arrayBuffer()));
+        doc = documentFrom(psd.width, psd.height, name, psd.layers);
+        doc.active = psd.active;
+        if (psd.dpi)
+            doc.dpi = psd.dpi;
+        try {
+            doc.colorProfile = psd.icc ? readIcc(psd.icc) : null;
+        } catch {
+            doc.colorProfile = null;
+        }
+        // Convertido al abrirlo (un PSB, de 16 bits, con grupos...): una imagen nueva, para que guardar
+        // no pise el original con menos cosas.
+        if (psd.warning) {
+            doc.importWarning = psd.warning;
+            doc.fileName = "";
+            return doc;
+        }
         const pdn = await Codecs.decodePdn(new Uint8Array(await file.arrayBuffer()));
         doc = documentFrom(pdn.width, pdn.height, name, pdn.layers.map((l, i) => ({ ...l, name: l.name || tr("Capa %1", i + 1) })));
         doc.active = doc.layers.length - 1;
@@ -109,7 +139,15 @@ export async function openFile(file) {
         doc.colorProfile = await profileOf(bytes);
     } else {
         const bytes = new Uint8Array(await file.arrayBuffer()), profile = await profileOf(bytes);
-        const image = await decodeImage(file, profile ? "none" : "default");
+        let image;
+        try {
+            image = await decodeImage(file, profile ? "none" : "default");
+        } catch (e) {
+            // HEIC y JPEG XL solo los abren algunos navegadores (Safari).
+            if (["heic", "heif", "jxl"].includes(ext))
+                throw new Error(tr("Este navegador no puede abrir imágenes %1. Prueba con Safari o con Kaint para el escritorio.", ext === "jxl" ? "JPEG XL" : "HEIC"));
+            throw e;
+        }
         doc = Document.fromImage(image, name);
         doc.dpi = readResolution(bytes) || 96;
         doc.colorProfile = profile;
@@ -216,6 +254,8 @@ export async function encode(doc, format, options = defaultSaveOptions(), frames
         options = { ...defaultSaveOptions(), quality: options };
     if (format.ext === "pdn")
         return encodePdnFile(doc);
+    if (format.ext === "psd")
+        return encodePsdFile(doc);
     if (format.layered)
         return encodeOra(doc);
     if (format.plugin)
@@ -246,6 +286,15 @@ async function encodePlugin(doc, format) {
     if (result instanceof ArrayBuffer || ArrayBuffer.isView(result))
         return new Blob([result], { type: format.mime });
     throw new Error(format.name);
+}
+
+// Photoshop con todas las capas y la imagen combinada (Psd.js).
+function encodePsdFile(doc) {
+    const layers = doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend,
+                                            data: l.ctx.getImageData(0, 0, doc.width, doc.height).data }));
+    const bytes = encodePsd({ width: doc.width, height: doc.height, dpi: doc.dpi, active: doc.active, icc: embeddedProfile(doc), layers,
+                              composite: flattenedImage(doc).data });
+    return new Blob([bytes], { type: "image/vnd.adobe.photoshop" });
 }
 
 // Paint.NET con todas las capas (Codecs.encodePdn) y la miniatura de la cabecera.

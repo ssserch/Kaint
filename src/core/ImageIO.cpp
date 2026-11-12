@@ -6,6 +6,8 @@
 #include "core/Ora.h"
 #include "core/PngWriter.h"
 #include "core/Pdn.h"
+#include "core/Psd.h"
+#include "core/WicCodec.h"
 #include "core/effects/Effect.h"
 #include "core/plugins/PaintJs.h"
 
@@ -34,7 +36,7 @@ QString suffixOf(const QString& path)
         {QStringLiteral("tif"), QStringLiteral("tiff")},  {QStringLiteral("heif"), QStringLiteral("heic")},
         {QStringLiteral("hif"), QStringLiteral("heic")},  {QStringLiteral("dib"), QStringLiteral("bmp")},
         {QStringLiteral("rle"), QStringLiteral("bmp")},   {QStringLiteral("wdp"), QStringLiteral("jxr")},
-        {QStringLiteral("wmp"), QStringLiteral("jxr")},
+        {QStringLiteral("wmp"), QStringLiteral("jxr")},   {QStringLiteral("hdp"), QStringLiteral("jxr")},
     };
     return aliases.value(s, s);
 }
@@ -60,6 +62,7 @@ struct FormatInfo {
 const FormatInfo kOpenFormats[] = {
     {"pdn", QT_TRANSLATE_NOOP("QObject", "Paint.NET"), "*.pdn"},
     {"ora", QT_TRANSLATE_NOOP("QObject", "OpenRaster"), "*.ora"},
+    {"psd", QT_TRANSLATE_NOOP("QObject", "Photoshop"), "*.psd *.psb"},
     {"png", QT_TRANSLATE_NOOP("QObject", "PNG"), "*.png"},
     {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif *.exif"},
     {"jxl", QT_TRANSLATE_NOOP("QObject", "JPEG XL"), "*.jxl"},
@@ -71,7 +74,7 @@ const FormatInfo kOpenFormats[] = {
     {"gif", QT_TRANSLATE_NOOP("QObject", "GIF"), "*.gif"},
     {"bmp", QT_TRANSLATE_NOOP("QObject", "BMP"), "*.bmp *.dib *.rle"},
     {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
-    {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.wmp"},
+    {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.hdp *.wmp"},
     {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
     {"qoi", QT_TRANSLATE_NOOP("QObject", "QOI"), "*.qoi"},
     {"ppm", QT_TRANSLATE_NOOP("QObject", "Netpbm"), "*.ppm *.pgm *.pbm"},
@@ -80,8 +83,9 @@ const FormatInfo kOpenFormats[] = {
 const FormatInfo kSaveFormats[] = {
     {"pdn", QT_TRANSLATE_NOOP("QObject", "Paint.NET con capas"), "*.pdn"},
     {"ora", QT_TRANSLATE_NOOP("QObject", "OpenRaster con capas"), "*.ora"},
+    {"psd", QT_TRANSLATE_NOOP("QObject", "Photoshop con capas"), "*.psd"},
     {"png", QT_TRANSLATE_NOOP("QObject", "PNG"), "*.png"},
-    {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif"},
+    {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif *.exif"},
     {"jxl", QT_TRANSLATE_NOOP("QObject", "JPEG XL"), "*.jxl"},
     {"avif", QT_TRANSLATE_NOOP("QObject", "AV1 (AVIF)"), "*.avif"},
     {"heic", QT_TRANSLATE_NOOP("QObject", "HEIC"), "*.heic *.heif"},
@@ -89,9 +93,9 @@ const FormatInfo kSaveFormats[] = {
     {"dds", QT_TRANSLATE_NOOP("QObject", "Superficie de DirectDraw (DDS)"), "*.dds"},
     {"tiff", QT_TRANSLATE_NOOP("QObject", "TIFF"), "*.tiff *.tif"},
     {"gif", QT_TRANSLATE_NOOP("QObject", "GIF"), "*.gif"},
-    {"bmp", QT_TRANSLATE_NOOP("QObject", "BMP"), "*.bmp"},
+    {"bmp", QT_TRANSLATE_NOOP("QObject", "BMP"), "*.bmp *.dib *.rle"},
     {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
-    {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp"},
+    {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.hdp"},
     {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
     {"qoi", QT_TRANSLATE_NOOP("QObject", "QOI"), "*.qoi"},
     {"ppm", QT_TRANSLATE_NOOP("QObject", "Netpbm"), "*.ppm *.pgm *.pbm"},
@@ -102,8 +106,37 @@ const FormatInfo kSaveFormats[] = {
 // (kimageformats).
 bool ownWriter(const QByteArray& suffix)
 {
-    return suffix == "ora" || suffix == "pdn" || suffix == "gif" || suffix == "ico" || suffix == "tga" || suffix == "dds"
-           || suffix == "qoi";
+    return suffix == "ora" || suffix == "pdn" || suffix == "psd" || suffix == "gif" || suffix == "ico" || suffix == "tga"
+           || suffix == "dds" || suffix == "qoi";
+}
+
+// Photoshop: el PSD se lee y se escribe; el PSB (documento grande), solo se lee.
+bool isPsd(const QString& suffix)
+{
+    return suffix == QLatin1String("psd") || suffix == QLatin1String("psb");
+}
+
+// Qt tiene un lector o un escritor para la extensión (los de kimageformats en Linux).
+bool qtReads(const QString& suffix)
+{
+    return QImageReader::supportedImageFormats().contains(writerFormat(suffix));
+}
+
+bool qtWrites(const QString& suffix)
+{
+    return QImageWriter::supportedImageFormats().contains(writerFormat(suffix));
+}
+
+// Windows: JPEG XR, HEIC, AVIF y JPEG XL con los códecs del sistema cuando Qt no los trae.
+bool wicReads(const QString& suffix)
+{
+    return !qtReads(suffix) && Wic::canRead(suffix);
+}
+
+bool wicWrites(const QString& suffix)
+{
+    static const QStringList formats{QStringLiteral("jxr"), QStringLiteral("heic"), QStringLiteral("avif"), QStringLiteral("jxl")};
+    return formats.contains(suffix) && !qtWrites(suffix) && Wic::canWrite(suffix);
 }
 
 // Formatos que Kaint también lee por su cuenta (ExtraFormats), aunque Qt no pueda.
@@ -127,6 +160,8 @@ QImage decodeOwn(const QString& suffix, const QByteArray& data, QString* error)
 std::optional<PaintJs::FileType> pluginType(const QString& path, bool writing)
 {
     const QString suffix = suffixOf(path);
+    if (isPsd(suffix))
+        return std::nullopt;
     for (const FormatInfo& f : kOpenFormats)
         if (suffix == QLatin1String(f.suffix))
             return std::nullopt;
@@ -154,13 +189,16 @@ namespace ImageIO {
 
 QStringList supportedReadSuffixes()
 {
-    QStringList list{QStringLiteral("ora"), QStringLiteral("pdn"), QStringLiteral("tga"), QStringLiteral("dds"),
-                     QStringLiteral("qoi")};
+    QStringList list{QStringLiteral("ora"), QStringLiteral("pdn"), QStringLiteral("psd"), QStringLiteral("psb"),
+                     QStringLiteral("tga"), QStringLiteral("dds"), QStringLiteral("qoi")};
     for (const QByteArray& f : QImageReader::supportedImageFormats()) {
         const QString s = suffixOf(QStringLiteral("x.") + QString::fromLatin1(f));
         if (!list.contains(s))
             list.append(s);
     }
+    for (const QString& s : Wic::readableSuffixes())
+        if (!list.contains(s))
+            list.append(s);
     for (const PaintJs::FileType& t : PaintJs::fileTypes())
         if (t.canRead)
             for (const QString& e : t.extensions)
@@ -208,7 +246,7 @@ QString saveFilter(QString* defaultFilter)
     QStringList filters;
     for (const FormatInfo& f : kSaveFormats) {
         const QByteArray suffix(f.suffix);
-        if (!ownWriter(suffix) && !writable.contains(writerFormat(QLatin1String(f.suffix))))
+        if (!ownWriter(suffix) && !writable.contains(writerFormat(QLatin1String(f.suffix))) && !wicWrites(QLatin1String(f.suffix)))
             continue;
         const QString filter = QStringLiteral("%1 (%2)").arg(QObject::tr(f.label), QLatin1String(f.patterns));
         if (suffix == "png" && defaultFilter)
@@ -226,7 +264,7 @@ bool isLayered(const QString& path)
     const QString suffix = suffixOf(path);
     if (const auto type = pluginType(path, true))
         return type->layers;
-    return suffix == QLatin1String("ora") || suffix == QLatin1String("pdn");
+    return suffix == QLatin1String("ora") || suffix == QLatin1String("pdn") || suffix == QLatin1String("psd");
 }
 
 bool isWritable(const QString& path)
@@ -234,7 +272,7 @@ bool isWritable(const QString& path)
     const QByteArray suffix = suffixOf(path).toLatin1();
     if (ownWriter(suffix) || pluginType(path, true))
         return true;
-    return QImageWriter::supportedImageFormats().contains(writerFormat(suffixOf(path)));
+    return qtWrites(suffixOf(path)) || wicWrites(suffixOf(path));
 }
 
 bool isAnimation(const QString& path)
@@ -251,7 +289,7 @@ bool supportsQuality(const QString& path)
 {
     static const QStringList lossy{QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("webp"),
                                    QStringLiteral("avif"), QStringLiteral("jxl"), QStringLiteral("heif"),
-                                   QStringLiteral("heic")};
+                                   QStringLiteral("heic"), QStringLiteral("jxr")};
     return lossy.contains(suffixOf(path));
 }
 
@@ -267,31 +305,66 @@ QImage readImage(const QString& path, QString* error)
     // TGA, DDS y QOI: primero con lo de Kaint; si no puede (un DDS con BC7, por ejemplo), con el
     // complemento de Qt si lo hay.
     const QString suffix = suffixOf(path);
+    // Photoshop: la imagen combinada.
+    if (isPsd(suffix))
+        return Psd::readComposite(path, error);
     QString ownError;
-    if (ownReader(suffix)) {
+    const bool wic = wicReads(suffix);
+    if (ownReader(suffix) || wic) {
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
             if (error)
                 *error = file.errorString();
             return {};
         }
-        const QImage image = decodeOwn(suffix, file.readAll(), &ownError);
+        const QByteArray data = file.readAll();
+        const QImage image = wic ? Wic::decode(data, &ownError) : decodeOwn(suffix, data, &ownError);
         if (!image.isNull())
             return image;
+        if (wic) {
+            if (error)
+                *error = ownError;
+            return {};
+        }
     }
     QImageReader reader(path);
     reader.setAutoTransform(true);
-    const QImage image = reader.read();
-    if (image.isNull() && error)
+    QImage image = reader.read();
+    // Lo que Qt no entiende (un HEIC llamado .jpg, por ejemplo): en Windows, con sus códecs, que
+    // miran el contenido y no la extensión.
+#ifdef Q_OS_WIN
+    if (image.isNull()) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly))
+            image = Wic::decode(file.readAll(), nullptr);
+    }
+#endif
+    if (image.isNull() && error) {
         *error = ownError.isEmpty() ? reader.errorString() : ownError;
+        // Los formatos nuevos que dependen de los complementos del sistema: qué falta.
+        static const QStringList modern{QStringLiteral("avif"), QStringLiteral("heic"), QStringLiteral("jxl"), QStringLiteral("jxr")};
+        if (modern.contains(suffix) && !qtReads(suffix) && !Wic::canRead(suffix)) {
+#ifdef Q_OS_WIN
+            *error = QObject::tr("Windows no tiene el códec de este formato. Instala la extensión de imagen correspondiente "
+                                 "desde Microsoft Store (HEIF, HEVC, AV1 o JPEG XL).");
+#else
+            *error = QObject::tr("Para abrir este formato hace falta kimageformats (el paquete de complementos de imagen de "
+                                 "KDE para Qt 6).");
+#endif
+        }
+    }
     return image;
 }
 
 QImage decode(const QByteArray& data, const QString& path)
 {
     const QString suffix = suffixOf(path);
+    if (isPsd(suffix))
+        return Psd::decodeComposite(data);
     if (ownReader(suffix))
         return decodeOwn(suffix, data, nullptr);
+    if (wicReads(suffix))
+        return Wic::decode(data, nullptr);
     QImage image;
     image.loadFromData(data, writerFormat(suffix).constData());
     if (image.isNull())
@@ -302,8 +375,11 @@ QImage decode(const QByteArray& data, const QString& path)
 Document* load(const QString& path, QString* error)
 {
     Document* doc = nullptr;
+    QString warning;
     if (const auto type = pluginType(path, false)) {
         doc = PaintJs::decode(*type, path, error);
+    } else if (isPsd(suffixOf(path))) {
+        doc = Psd::load(path, error, &warning);
     } else if (suffixOf(path) == QLatin1String("ora")) {
         doc = Ora::load(path, error);
     } else if (suffixOf(path) == QLatin1String("pdn")) {
@@ -342,6 +418,13 @@ Document* load(const QString& path, QString* error)
     if (doc) {
         doc->setFilePath(path);
         doc->undoStack()->setClean();
+        // Convertido al abrir (un PSB, uno de 16 bits, con grupos...): una imagen nueva, para que
+        // guardar no pise el original con menos cosas.
+        if (!warning.isEmpty()) {
+            doc->setFilePath(QString());
+            doc->setUntitledName(QFileInfo(path).completeBaseName());
+            doc->setProperty(kImportWarningProperty, warning);
+        }
     }
     return doc;
 }
@@ -449,6 +532,8 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
         return png;
     }
     const QString format = suffixOf(path);
+    if (wicWrites(format))
+        return Wic::encode(prepared, format, options.quality, error);
     if (ownReader(format)) {
         if (format == QLatin1String("tga") && (prepared.width() > 0xffff || prepared.height() > 0xffff)) {
             if (error)
@@ -484,6 +569,8 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
         return PaintJs::encode(*type, doc, path, error);
     if (suffixOf(path) == QLatin1String("pdn"))
         return Pdn::save(doc, path, error);
+    if (suffixOf(path) == QLatin1String("psd"))
+        return Psd::save(doc, path, error);
     if (isLayered(path))
         return Ora::save(doc, path, error);
 

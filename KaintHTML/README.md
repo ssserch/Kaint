@@ -100,10 +100,12 @@ own history and suggest it to the host, who accepts it. The protocol is describe
   modes) and Grow, Shrink and Feather Selection; **View** > Pixels, Inches and Centimeters for the
   rulers and the status bar.
 - **Files** like Kaint's: opens PNG, JPEG, WebP, GIF (animated GIFs as one layer per frame), BMP,
-  AVIF, ICO, TGA, TIFF, DDS, QOI and Netpbm (PPM, PGM, PBM) images, **OpenRaster (.ora)** and
-  **Paint.NET (.pdn)** with their layers; saves **Paint.NET (.pdn)** and OpenRaster with their
-  layers, PNG, JPEG, WebP, DDS, TIFF, GIF (animated, with Kaint's advanced options), BMP, TGA, ICO,
-  QOI and Netpbm (PPM). Animated GIFs open as layers or
+  AVIF, ICO, TGA, TIFF, DDS, QOI and Netpbm (PPM, PGM, PBM) images (HEIC and JPEG XL too, in the
+  browsers that read them, like Safari), **OpenRaster (.ora)**, **Paint.NET (.pdn)** and
+  **Photoshop (.psd, and .psb large documents)** with their layers; saves **Paint.NET (.pdn)**,
+  OpenRaster and **Photoshop (.psd)** with their layers, PNG, JPEG, WebP, DDS, TIFF, GIF (animated,
+  with Kaint's advanced options), BMP, TGA, ICO, QOI and Netpbm (PPM), plus AVIF when the browser
+  can encode it. Animated GIFs open as layers or
   as separate images, and save from the layers or from the open images you pick. **Save Configuration** shows the encoded file and its size, with the
   quality, bit depth, dithering and transparency threshold. **Image > Animation** edits the frame
   durations and **Image > Color Profile** converts or assigns sRGB, Adobe RGB, Display P3 or

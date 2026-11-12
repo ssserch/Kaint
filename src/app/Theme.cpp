@@ -1739,9 +1739,12 @@ QToolBar#ToolOptionsBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, st
 QStatusBar { border-top: 1px solid #a9bcd4; }
 QWidget#PanelButtons { background: #d5dde7; border-top: 1px solid #58769c; }
 )");
-    // Windows 7: lo último, para que sus degradados manden.
-    if (s.win7)
+    // Windows 7: lo último, para que sus degradados manden. La fila de arriba la pinta ella misma
+    // (con la barra de título simulada, deja ver el cristal de Aero del marco en la del título).
+    if (s.win7) {
         qss += s.dark ? win7DarkStyleSheet() : win7StyleSheet();
+        qss += QStringLiteral("QWidget#TopRow { background: transparent; }\n");
+    }
     // Windows XP: lo mismo, con los de Luna.
     if (s.xp)
         qss += xpStyleSheet();
@@ -1961,9 +1964,11 @@ Spec active()
 
 QColor titleBarColor()
 {
-    // Los temas de antes (Windows 98, 98 ALT y XP) no llevan el color de énfasis ni el propio: sus
-    // barras son las suyas (el color de énfasis sobre la franja de Luna se veía mal).
-    if (g_current == Scheme::Windows98 || g_current == Scheme::Windows98Alt || g_current == Scheme::WindowsXP)
+    // Los temas de antes (Windows 98, 98 ALT, XP y 7) no llevan el color de énfasis ni el propio: sus
+    // barras son las suyas (el color de énfasis sobre la franja de Luna se veía mal, y con Windows 7
+    // el título de las ventanas flotantes salía blanco sobre el cristal claro de Aero).
+    if (g_current == Scheme::Windows98 || g_current == Scheme::Windows98Alt || g_current == Scheme::WindowsXP
+        || g_current == Scheme::Windows7 || g_current == Scheme::Windows7Dark)
         return {};
     // El color propio de la barra superior (en Windows, con la barra de título de Kaint).
     if (g_customTitleBar.isValid())

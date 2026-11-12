@@ -11,6 +11,7 @@ export const FormatTraits = {
     jpg: { quality: true, opaque: true },
     webp: { quality: true },
     avif: { quality: true },
+    jxl: { quality: true },
     bmp: { depth: true, opaque: true },
     tga: { depth: true },
     gif: { animation: true },
@@ -56,7 +57,17 @@ export function prepare(image, ext, o) {
     return image;
 }
 
-const MIMES = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", avif: "image/avif" };
+const MIMES = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", avif: "image/avif", jxl: "image/jxl" };
+
+// Si el navegador sabe escribir 'mime' (si no, toBlob y convertToBlob dan un PNG).
+export async function canvasEncodes(mime) {
+    try {
+        await canvasEncode({ width: 2, height: 2, data: new Uint8ClampedArray(16).fill(255) }, mime, 0.9);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 // Codificación del navegador (JPEG, WebP, AVIF y PNG de 32 bits), también dentro de un worker.
 async function canvasEncode(image, mime, quality) {

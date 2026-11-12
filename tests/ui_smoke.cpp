@@ -17,6 +17,8 @@
 #include "app/ToolOptionsBar.h"
 #include "app/WindowFrame.h"
 #include "app/Workspace.h"
+#include "app/collab/CollabController.h"
+#include "app/collab/CollabDialogs.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/ImageDialogs.h"
@@ -49,6 +51,7 @@
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
+#include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -1613,6 +1616,68 @@ int main(int argc, char** argv)
             CHECK(!fade || fade->opacity() > 0.5);
             Animations::setEnabled(true);
             findAction(&w, QStringLiteral("Eliminar la capa"))->trigger();
+            settle();
+        }
+    }
+
+    // La animación de apertura de los diálogos con el marco de Kaint sale donde queda el diálogo:
+    // QDialog se centra en su showEvent, después del filtro de la animación, que antes tomaba la
+    // posición anterior (se veía un momento en otro sitio y luego el diálogo en el centro).
+    {
+        WindowFrame::setEnabled(true);
+        Animations::setWindowAnimation(true, 250);
+        QDialog dialog(&w);
+        dialog.setWindowTitle(QStringLiteral("Prueba de apertura"));
+        dialog.resize(320, 200);
+        CHECK(WindowFrame::isDecorated(&dialog));
+        dialog.show();
+        QWidget* overlay = nullptr;
+        QElapsedTimer clock;
+        clock.start();
+        while (!overlay && clock.elapsed() < 1000) {
+            QApplication::processEvents(QEventLoop::AllEvents, 10);
+            for (QWidget* top : QApplication::topLevelWidgets())
+                if (top->property("kaintOpenOverlay").toBool() && top->isVisible())
+                    overlay = top;
+        }
+        CHECK(overlay != nullptr);
+        if (overlay)
+            CHECK(overlay->geometry() == dialog.geometry());
+        dialog.close();
+        Animations::setWindowAnimation(false, 250);
+        WindowFrame::setEnabled(false);
+    }
+
+    // La ventana de la sesión abierta desde Configuración (al hospedar o con su botón): Configuración,
+    // que es modal, se cierra y la ventana de la sesión queda sobre la principal sin bloquearla, como
+    // al abrirla desde los participantes de la barra de estado.
+    if (auto* collab = w.findChild<CollabController*>()) {
+        QAction* settingsAction = findAction(&w, QStringLiteral("Configuración..."));
+        CHECK(settingsAction != nullptr);
+        bool settingsSeen = false;
+        QTimer::singleShot(300, &w, [collab, &settingsSeen] {
+            settingsSeen = qobject_cast<SettingsDialog*>(QApplication::activeModalWidget()) != nullptr;
+            collab->showSessionWindow();
+        });
+        // Por si no se cerrara: que la prueba no se quede esperando.
+        QTimer::singleShot(4000, &w, [] {
+            if (auto* modal = qobject_cast<QDialog*>(QApplication::activeModalWidget()))
+                modal->reject();
+        });
+        if (settingsAction)
+            settingsAction->trigger();
+        settle();
+        CHECK(settingsSeen);
+        CHECK(QApplication::activeModalWidget() == nullptr);
+        Collab::SessionDialog* session = nullptr;
+        for (QWidget* top : QApplication::topLevelWidgets())
+            if (auto* d = qobject_cast<Collab::SessionDialog*>(top); d && d->isVisible())
+                session = d;
+        CHECK(session != nullptr);
+        if (session) {
+            CHECK(!session->isModal() && session->windowModality() == Qt::NonModal);
+            CHECK(session->parentWidget() == &w);
+            session->close();
             settle();
         }
     }

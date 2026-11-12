@@ -374,7 +374,8 @@ export const Plugins = {
         this.deactivate(plugin.id);
         const off = this.disabledEffects(plugin.id);
         Effects.push(...plugin.effects.filter((e) => !off.has(e.id)));
-        SaveFormats.push(...plugin.fileTypes.filter((t) => t.encode));
+        // Los formatos que Kaint ya escribe (Photoshop) se quedan con el suyo.
+        SaveFormats.push(...plugin.fileTypes.filter((t) => t.encode && !SaveFormats.some((f) => !f.plugin && f.ext === t.ext)));
         this.active.set(plugin.id, plugin);
         // La lista de sus efectos se guarda con el registro: así se ve también con el complemento
         // desactivado (Configuración > Complementos).

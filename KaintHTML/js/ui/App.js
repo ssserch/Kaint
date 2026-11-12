@@ -1330,10 +1330,20 @@ export class App extends EventTarget {
         }
         let doc;
         try {
-            const type = Plugins.fileTypeFor(file.name);
+            // Photoshop lo abre Kaint (con sus capas) aunque haya un complemento que también lo haga.
+            const type = /\.ps[db]$/i.test(file.name) ? null : Plugins.fileTypeFor(file.name);
             doc = type ? await this.decodeWithPlugin(type, file) : await openFile(file);
-        } catch {
-            await message(tr("Abrir"), tr("No se pudo abrir «%1».", file.name));
+        } catch (e) {
+            // Los errores propios (Photoshop en CMYK, HEIC en un navegador que no lo abre...) explican qué pasó.
+            const why = e instanceof Error && e.name === "Error" && e.message ? `\n${e.message}` : "";
+            await message(tr("Abrir"), tr("No se pudo abrir «%1».", file.name) + why);
+            return;
+        }
+        // Convertido al abrirlo (un PSD con grupos, de 16 bits...): una imagen nueva, con el aviso.
+        if (doc.importWarning) {
+            doc.markSaved();
+            this.addDocument(doc);
+            await message(tr("Abrir «%1»", file.name), doc.importWarning);
             return;
         }
         // GIF animado: como capas (un fotograma por capa, como hasta ahora), cada fotograma como

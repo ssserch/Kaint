@@ -44,6 +44,17 @@ bool roundedCorners();
 // Las ventanas con el marco de Kaint se vuelven a dibujar (cambió el estilo o el lado de los botones).
 void refreshAll();
 
+// Maximizada (o a pantalla completa) de verdad: el botón de maximizar muestra entonces el de
+// restaurar. En Windows se pregunta al sistema: al arrastrar la barra de título de una ventana
+// maximizada, Windows la restaura él mismo.
+bool isMaximized(const QWidget* window);
+// Maximiza o restaura según el estado real (a pantalla completa, sale de ella).
+void toggleMaximized(QWidget* window);
+// La barra de título (o una franja que hace de ella) de 'window': a pantalla completa, arrastrarla
+// sale de pantalla completa y deja la ventana bajo el puntero, como Windows con las maximizadas, y
+// un doble clic sale de ella.
+void watchCaption(QWidget* caption);
+
 // Rectángulos de minimizar (0), maximizar (1) y cerrar (2) dentro de la fila 'area' de la barra de
 // título; con 'closeOnly' (los diálogos), solo el de cerrar.
 QList<QRect> buttonRects(const QRect& area, bool closeOnly);
@@ -62,6 +73,12 @@ QColor titleTextColor(bool active);
 bool classicTitle();
 bool lunaTitle();
 void paintClassicTitle(QPainter& p, const QRect& r, bool active);
+// Con el tema Windows 7 (claro u oscuro), la barra de título de Aero: en la ventana principal, el
+// cristal lo pinta el marco y su fila de arriba lo deja ver.
+bool aeroTitle();
+// El título sobre el cristal de Aero, con su halo (claro detrás del texto oscuro y al revés), alineado
+// a la izquierda y centrado en 'r'.
+void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool active);
 // El botón de cerrar de las ventanas flotantes con el estilo de 'style' (Windows 98, XP o 7, suelto).
 // La X de las ventanas flotantes (Herramientas, Colores...) con los temas Windows 7: unida al borde
 // de arriba (cuelga de él, como la de cerrar de los diálogos), un rectángulo suelto o un cuadrado

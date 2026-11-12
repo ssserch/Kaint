@@ -691,7 +691,8 @@ QWidget* SettingsDialog::createInterfacePage()
     titleRow->setContentsMargins(0, 0, 0, 0);
     auto* ownTitle = new QCheckBox(tr("Color propio en la barra superior:"), page.widget);
     ownTitle->setToolTip(tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los "
-                            "menús y las cabeceras de las ventanas llevan este color."));
+                            "menús y las cabeceras de las ventanas llevan este color (los temas Windows 98, XP y 7 tienen sus "
+                            "propias barras)."));
     auto* titleColor = new ColorButton(page.widget);
     titleColor->setColor(m_settings.titleBarColor.isValid() ? m_settings.titleBarColor : QColor(0x74, 0x4d, 0xa9));
     ownTitle->setChecked(m_settings.titleBarColor.isValid());

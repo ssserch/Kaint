@@ -26,6 +26,14 @@ namespace {
 constexpr int kMargin = 24;
 }
 
+namespace {
+// La selección como en Paint.NET 5: el interior lavanda translúcido (sobre blanco, #e4eaf7) y el
+// contorno con hormigas grises y casi blancas (no negras y blancas).
+const QColor kSelectionTint(30, 80, 188, 31);
+const QColor kAntsDark(0x7f, 0x82, 0x89);
+const QColor kAntsLight(0xf3, 0xf4, 0xf8);
+} // namespace
+
 Canvas::Canvas(QWidget* parent)
     : QAbstractScrollArea(parent)
 {
@@ -36,6 +44,13 @@ Canvas::Canvas(QWidget* parent)
     viewport()->setAttribute(Qt::WA_TabletTracking);
     viewport()->setAttribute(Qt::WA_AcceptTouchEvents, false);
     connect(Theme::notifier(), &Theme::Notifier::changed, viewport(), qOverload<>(&QWidget::update));
+    // Fondo animado (GIF o vídeo): solo alrededor de la imagen, que no cambia.
+    connect(Theme::notifier(), &Theme::Notifier::backgroundFrame, this, [this] {
+        QRegion area(viewport()->rect());
+        if (m_doc)
+            area -= imageToView(QRectF(m_doc->rect())).toAlignedRect().adjusted(1, 1, -1, -1);
+        viewport()->update(area);
+    });
     m_checker = QPixmap::fromImage(Raster::checkerboard(8, QColor(191, 191, 191), QColor(143, 143, 143)));
     m_hRuler = new Ruler(Qt::Horizontal, this, this);
     m_vRuler = new Ruler(Qt::Vertical, this, this);
@@ -593,7 +608,7 @@ void Canvas::setAppearance(bool dropShadow, const QColor& border, int checkerBri
 
 const QImage& Canvas::selectionTint() const
 {
-    // Interior de la selección en azul translúcido (como en Paint.NET).
+    // Interior de la selección en el lavanda translúcido de Paint.NET 5.
     const Selection& sel = m_doc->selection();
     const void* key = &sel.mask();
     if (m_tintKey != key || m_tint.isNull()) {
@@ -604,7 +619,8 @@ const QImage& Canvas::selectionTint() const
             QRgb* row = reinterpret_cast<QRgb*>(m_tint.scanLine(y));
             const uchar* m = mask.constScanLine(b.top() + y) + b.left();
             for (int x = 0; x < b.width(); ++x)
-                row[x] = qPremultiply(qRgba(0, 120, 215, m[x] * 45 / 255));
+                row[x] = qPremultiply(qRgba(kSelectionTint.red(), kSelectionTint.green(), kSelectionTint.blue(),
+                                            m[x] * kSelectionTint.alpha() / 255));
         }
         m_tintKey = key;
     }
@@ -760,8 +776,8 @@ void Canvas::drawSelection(QPainter& p) const
         p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1);
         p.drawImage(imageToView(QRectF(sel.bounds())), selectionTint());
     }
-    QPen white(Qt::white, 0);
-    QPen black(Qt::black, 0);
+    QPen white(kAntsLight, 0);
+    QPen black(kAntsDark, 0);
     black.setDashPattern({4, 4});
     black.setDashOffset(m_antsOffset);
     if (!box.isNull()) {
@@ -792,8 +808,8 @@ void Canvas::drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) c
 {
     p.save();
     const QTransform t = imageToViewTransform();
-    QPen white(Qt::white, 0);
-    QPen black(Qt::black, 0);
+    QPen white(kAntsLight, 0);
+    QPen black(kAntsDark, 0);
     black.setDashPattern({4, 4});
     black.setDashOffset(m_antsOffset);
     p.setBrush(Qt::NoBrush);
@@ -802,7 +818,7 @@ void Canvas::drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) c
         p.setRenderHint(QPainter::Antialiasing);
         if (tint) {
             p.setPen(Qt::NoPen);
-            p.setBrush(QColor(0, 120, 215, 45));
+            p.setBrush(kSelectionTint);
             p.drawPolygon(poly);
             p.setBrush(Qt::NoBrush);
         }
@@ -823,7 +839,7 @@ void Canvas::drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) c
     const QRect r(left, top, int(std::lround(v.right() * dpr)) - left, int(std::lround(v.bottom() * dpr)) - top);
     p.scale(1 / dpr, 1 / dpr);
     if (tint)
-        p.fillRect(r, QColor(0, 120, 215, 45));
+        p.fillRect(r, kSelectionTint);
     p.setRenderHint(QPainter::Antialiasing, false);
     p.setPen(white);
     p.drawRect(r);

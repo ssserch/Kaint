@@ -5,6 +5,8 @@
 #include <QDialog>
 #include <QSet>
 
+#include <QHash>
+
 #include <functional>
 #include <memory>
 
@@ -38,7 +40,8 @@ struct AppSettings {
 #else
     bool windowAnimation = false;
 #endif
-    int windowAnimationMs = 300;
+    // 180 ms, como la de Windows 11 (antes 300: la ventana tardaba en poder usarse).
+    int windowAnimationMs = 180;
     // Windows 7: «Habilitar transparencia» (el cristal de los marcos deja ver lo de detrás).
     bool aeroTransparency = true;
     bool translucentPanels = true;
@@ -231,8 +234,20 @@ private:
     void refreshShapes();
     void refreshShortcuts();
     void refreshPlugins();
+    // Vuelve a llenar las listas de complementos y de menús de efectos cuando cambian los
+    // complementos, pero al volver al bucle de eventos: PluginManager::changed llega mientras Qt
+    // aún está dentro del itemChanged de la casilla que se marcó, y vaciar la lista entonces
+    // borraba ese elemento debajo de Qt (cierre inesperado al activar o desactivar complementos).
+    void schedulePluginRefresh();
+    bool m_pluginRefreshQueued = false;
+    // Páginas que se crean al abrirlas por primera vez (su índice y cómo crearla).
+    QHash<int, std::function<QWidget*()>> m_lazyPages;
     void showPluginDetails();
     void addPlugins();
+    // Lo arrastrado a la página Complementos (archivos y carpetas): se copian los complementos que
+    // Kaint puede leer; los incompatibles o dañados, no.
+    void installDroppedPlugins(const QStringList& paths);
+    class QLabel* m_pluginDropStatus = nullptr;
     void changed();
     bool askRestart(const QString& question, const QString& restartText, const QString& cancelText);
 

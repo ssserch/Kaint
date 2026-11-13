@@ -59,6 +59,9 @@ struct Spec {
     QColor selectionBorder;
     QColor hover;
     QColor workspace;
+    // El cristal de las ventanas con el estilo de Windows 7 (su «Color de la ventana»); los demás
+    // temas no lo usan.
+    QColor glass;
 
     QString workspaceImage;
     ImageMode imageMode = ImageMode::Tile;
@@ -88,9 +91,10 @@ struct Spec {
     bool paintNet = false;
     // Tema Azul de Paint.NET: barras, reglas y menús en degradado azulado (no se guarda).
     bool blue = false;
-    // Tema Windows 7 (7.css): botones, menús y barras con los degradados de Aero (no se guarda).
+    // Estilo de Windows 7 (7.css): botones, menús y barras con los degradados y el cristal de Aero.
+    // Lo llevan sus temas y, si se elige, el personalizado (que lo guarda con sus colores).
     bool win7 = false;
-    // Tema Windows XP (XP.css): botones, campos, menús y ventanas de Luna (no se guarda).
+    // Estilo de Windows XP (XP.css): botones, campos, menús y ventanas de Luna. Como win7.
     bool xp = false;
     // Con el color de selección propio de los temas Claro y Oscuro (no se guarda): la pestaña de
     // la imagen y los botones de las ventanas también lo llevan.
@@ -105,25 +109,42 @@ struct ColorRole {
     QColor Spec::*color;
     const char* label;
 };
-extern const std::array<ColorRole, 19> kColorRoles;
+extern const std::array<ColorRole, 20> kColorRoles;
 
 // Temas de Paint.NET, Windows 98 y el personalizado con sus huecos rellenos.
 Spec preset(bool dark);
 Spec windows98();
-// Windows 7, con los colores y degradados de 7.css.
+// Windows 7, con los colores y degradados de 7.css, y su versión oscura (el cristal ahumado).
 Spec windows7();
+Spec windows7Dark();
 // Windows XP (Luna), con los colores y degradados de XP.css.
 Spec windowsXP();
 // Windows 98 ALT: el clásico de Windows 2000 y XP (gris #d4d0c8, cabeceras de azul oscuro a celeste).
 Spec windows98Alt();
 // El tema Azul de Paint.NET 5: el claro con las barras en degradado azulado.
 Spec blue();
+// El tema del que salen los colores sin cambiar del personalizado: el claro o el oscuro de
+// Paint.NET o, con su estilo, Windows 7 (claro u oscuro) o Windows XP.
+Spec customBase(const Spec& custom);
 Spec resolved(const Spec& custom);
 // 'embedImage' guarda también la imagen de fondo (para exportar el tema y compartirlo).
 QJsonObject toJson(const Spec& spec, bool embedImage = false);
 Spec fromJson(const QJsonObject& json);
-// Copia una imagen de fondo a la carpeta de Kaint (así no se pierde si se mueve el original).
+// Copia una imagen (o un GIF animado, o un vídeo) de fondo a la carpeta de Kaint (así no se pierde
+// si se mueve el original).
 QString storeBackground(const QString& file);
+// Lo mismo con los datos del fondo (al importar un tema); 'name', el nombre que tenía.
+QString storeBackgroundData(const QByteArray& data, const QString& name);
+// Exportar e importar el tema personalizado, también entre Kaint y Kaint.HTML: con fondo propio, un
+// .zip con theme.json y el archivo del fondo (background.png, .gif, .mp4...); sin él, el .json
+// solo. Importar acepta los dos (y los .json de antes, con la imagen dentro).
+bool themeHasBackground(const Spec& spec);
+bool exportTheme(const Spec& spec, const QString& path, QString* error);
+bool importTheme(const QString& path, Spec* spec, QString* error);
+// Si el fondo es animado: un GIF, WebP o PNG animado, o un vídeo (MP4, WebM...).
+bool isAnimatedBackground(const QString& file);
+// El filtro del diálogo para elegir el fondo (imágenes, animaciones y vídeos).
+QString backgroundFileFilter();
 Spec loadCustom();
 void saveCustom(const Spec& custom);
 
@@ -198,6 +219,10 @@ bool keepTitleBarActive(QWidget* window, const QByteArray& type, void* message, 
 // La pinta inactiva si la ventana activa ya no es de Kaint (también al pasar a otro programa).
 void syncTitleBarActivation(QWidget* window);
 
+// El cristal de Aero (Windows 7): el color de las ventanas del tema activo (Spec::glass), con o sin
+// «Habilitar transparencia» y con el foco o sin él. Con el color de siempre, los de 7.css.
+QColor glassColor(bool translucent, bool focused);
+
 // Fondo del área de trabajo (alrededor de la imagen): color e imagen del tema. 'color' no válido
 // usa el del tema.
 QColor workspaceColor();
@@ -213,6 +238,8 @@ public:
 
 signals:
     void changed();
+    // El fondo animado del lienzo (GIF o vídeo) tiene un fotograma nuevo: se vuelve a dibujar.
+    void backgroundFrame();
 
 public slots:
     // Vuelve a leer si el sistema usa modo oscuro.

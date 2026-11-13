@@ -55,8 +55,13 @@ namespace PaintDotNet.SystemLayer
 
         public static void SetToZero(IntPtr dst, ulong length)
         {
+            // De 8 en 8 bytes y el resto de uno en uno (los complementos lo usan con filas enteras).
             byte* p = (byte*)dst;
-            for (ulong i = 0; i < length; ++i)
+            ulong words = length / 8;
+            ulong* w = (ulong*)p;
+            for (ulong i = 0; i < words; ++i)
+                w[i] = 0;
+            for (ulong i = words * 8; i < length; ++i)
                 p[i] = 0;
         }
 

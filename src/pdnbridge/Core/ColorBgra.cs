@@ -700,6 +700,15 @@ namespace PaintDotNet
             }
         }
 
+        // Kaint: de Paint.NET 4 (la sombra interior de ObjectTools y SelectionTools la usa).
+        public static ColorBgra TransparentBlack
+        {
+            get
+            {
+                return ColorBgra.FromBgra(0, 0, 0, 0);
+            }
+        }
+
         public static ColorBgra AliceBlue
         {
             get

@@ -42,7 +42,7 @@ const defaults = {
     welcomed: false,
     // Subrayar siempre las letras de acceso de los menús (si no, como en Windows, solo con Alt).
     menuMnemonics: false,
-    colorScheme: 0, // 0: sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul · 7: Windows 7 · 8: XP · 9: 98 ALT
+    colorScheme: 0, // 0: sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul · 7: Windows 7 · 8: XP · 9: 98 ALT · 10: Windows 7 oscuro
     // Inglés por defecto (como Kaint); el español se elige en la bienvenida o en Configuración.
     language: "en",
     dropShadow: true,

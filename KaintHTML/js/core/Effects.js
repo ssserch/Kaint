@@ -449,13 +449,18 @@ function boxBlur(src, area, radius) {
 
 // --- Histograma local circular (LocalHistogramEffect de Paint.NET) ------------------------
 
-// apply(píxel directo, histograma { r, g, b, a, area }) → píxel directo.
+// apply(píxel directo, histograma { r, g, b, a, area }) → píxel directo. Con radios pequeños
+// el histograma lleva también las cuentas de 16 en 16 valores (cr, cg, cb, ca; coarse = true):
+// los percentiles se buscan saltando bloques enteros (histFirst, histAdvance) en vez de recorrer
+// los 256 valores en cada píxel. Con radios grandes mantenerlas costaría más de lo que ahorran.
+const COARSE_HISTOGRAM_RADIUS = 12;
 function localHistogram(a, radius, apply) {
     const rad = Math.max(0, radius);
     const region = intersected(adjusted(band(a), rad + 1), imageRect(a.src));
     const s = straightCopy(crop(a.src, region));
     const S = s.px, SW = s.w, d = a.dst.px, W = a.src.w;
     const ox = region.left, oy = region.top, width = a.src.w, height = a.src.h;
+    const coarse = rad <= COARSE_HISTOGRAM_RADIUS;
 
     // Semiancho horizontal del círculo en cada fila (aprox. (r + 0,5)^2).
     const cutoff = Math.floor(((rad * 2 + 1) * (rad * 2 + 1) + 2) / 4);
@@ -465,52 +470,126 @@ function localHistogram(a, radius, apply) {
             if (u * u + v * v <= cutoff)
                 edge[v] = u;
 
-    const h = { r: new Int32Array(256), g: new Int32Array(256), b: new Int32Array(256), a: new Int32Array(256), area: 0 };
-    const add = (x, yy, sign) => {
-        const p = S[(yy - oy) * SW + x - ox];
-        h.b[(p >>> 16) & 255] += sign;
-        h.g[(p >>> 8) & 255] += sign;
-        h.r[p & 255] += sign;
-        h.a[p >>> 24] += sign;
-        h.area += sign;
-    };
+    const h = { r: new Int32Array(256), g: new Int32Array(256), b: new Int32Array(256), a: new Int32Array(256), area: 0,
+                coarse, cr: new Int32Array(16), cg: new Int32Array(16), cb: new Int32Array(16), ca: new Int32Array(16) };
+    const HR = h.r, HG = h.g, HB = h.b, HA = h.a, CR = h.cr, CG = h.cg, CB = h.cb, CA = h.ca;
+    const rowStart = new Int32Array(2 * rad + 1), rowWidth = new Int32Array(2 * rad + 1);
+    // (Los bucles van escritos a mano, sin una función para sumar un píxel: en JavaScript es lo
+    // que más se nota.)
     for (let y = a.y0; y <= a.y1; ++y) {
-        h.r.fill(0); h.g.fill(0); h.b.fill(0); h.a.fill(0);
-        h.area = 0;
+        HR.fill(0); HG.fill(0); HB.fill(0); HA.fill(0);
+        CR.fill(0); CG.fill(0); CB.fill(0); CA.fill(0);
+        let area = 0;
         const top = -Math.min(rad, y), bottom = Math.min(rad, height - 1 - y), x0 = a.roi.left;
+        const rows = bottom - top + 1;
+        // Inicio de cada fila del vecindario en la copia (con x de la imagen) y su semiancho.
         for (let v = top; v <= bottom; ++v) {
-            const w = edge[Math.abs(v)];
-            for (let u = Math.max(-w, -x0); u <= Math.min(w, width - 1 - x0); ++u)
-                add(x0 + u, y + v, +1);
+            rowStart[v - top] = (y + v - oy) * SW - ox;
+            rowWidth[v - top] = edge[Math.abs(v)];
         }
+        for (let i = 0; i < rows; ++i) {
+            const w = rowWidth[i], start = rowStart[i];
+            for (let u = Math.max(-w, -x0); u <= Math.min(w, width - 1 - x0); ++u) {
+                const p = S[start + x0 + u];
+                const b = (p >>> 16) & 255, g = (p >>> 8) & 255, r = p & 255, al = p >>> 24;
+                HB[b]++; HG[g]++; HR[r]++; HA[al]++;
+                CB[b >> 4]++; CG[g >> 4]++; CR[r >> 4]++; CA[al >> 4]++;
+                ++area;
+            }
+        }
+        const center = (y - oy) * SW - ox;
         for (let x = a.roi.left; x <= a.roi.right; ++x) {
-            d[y * W + x] = qPremultiply(apply(S[(y - oy) * SW + x - ox], h));
+            h.area = area;
+            d[y * W + x] = qPremultiply(apply(S[center + x], h));
             if (x === a.roi.right)
                 break;
-            for (let v = top; v <= bottom; ++v) {
-                const w = edge[Math.abs(v)];
-                if (x - w >= 0)
-                    add(x - w, y + v, -1);
-                if (x + 1 + w < width)
-                    add(x + 1 + w, y + v, +1);
+            if (coarse) {
+                for (let i = 0; i < rows; ++i) {
+                    const w = rowWidth[i], start = rowStart[i];
+                    if (x - w >= 0) {
+                        const p = S[start + x - w];
+                        const b = (p >>> 16) & 255, g = (p >>> 8) & 255, r = p & 255, al = p >>> 24;
+                        HB[b]--; HG[g]--; HR[r]--; HA[al]--;
+                        CB[b >> 4]--; CG[g >> 4]--; CR[r >> 4]--; CA[al >> 4]--;
+                        --area;
+                    }
+                    if (x + 1 + w < width) {
+                        const p = S[start + x + 1 + w];
+                        const b = (p >>> 16) & 255, g = (p >>> 8) & 255, r = p & 255, al = p >>> 24;
+                        HB[b]++; HG[g]++; HR[r]++; HA[al]++;
+                        CB[b >> 4]++; CG[g >> 4]++; CR[r >> 4]++; CA[al >> 4]++;
+                        ++area;
+                    }
+                }
+            } else {
+                for (let i = 0; i < rows; ++i) {
+                    const w = rowWidth[i], start = rowStart[i];
+                    if (x - w >= 0) {
+                        const p = S[start + x - w];
+                        HB[(p >>> 16) & 255]--; HG[(p >>> 8) & 255]--; HR[p & 255]--; HA[p >>> 24]--;
+                        --area;
+                    }
+                    if (x + 1 + w < width) {
+                        const p = S[start + x + 1 + w];
+                        HB[(p >>> 16) & 255]++; HG[(p >>> 8) & 255]++; HR[p & 255]++; HA[p >>> 24]++;
+                        ++area;
+                    }
+                }
             }
         }
     }
 }
 
+// Los bucles de Paint.NET sobre un canal del histograma, saltando de 16 en 16 cuando hay cuentas
+// por bloques ('coarse'). El primer valor con cuenta (255 si no hay):
+function histFirst(hist, coarse) {
+    let v = 0;
+    if (coarse)
+        while (v < 240 && coarse[v >> 4] === 0)
+            v += 16;
+    while (v < 255 && hist[v] === 0)
+        ++v;
+    return v;
+}
+
+// Desde 'v', suma cuentas a acc.count mientras no llegue a 'target' y devuelve el valor siguiente
+// al que la alcanzó (como mucho 255).
+function histAdvance(hist, coarse, v, acc, target) {
+    let count = acc.count;
+    if (coarse) {
+        while (v < 255 && count < target && (v & 15) !== 0)
+            count += hist[v++];
+        while (v < 240 && count + coarse[v >> 4] < target) {
+            count += coarse[v >> 4];
+            v += 16;
+        }
+    }
+    while (v < 255 && count < target)
+        count += hist[v++];
+    acc.count = count;
+    return v;
+}
+
+// Cuántos píxeles tienen un valor menor que 'v'.
+function histCountBelow(hist, coarse, v) {
+    let sum = 0, i = 0;
+    if (coarse)
+        for (; i + 16 <= v; i += 16)
+            sum += coarse[i >> 4];
+    for (; i < v; ++i)
+        sum += hist[i];
+    return sum;
+}
+
+const histAcc = { count: 0 };
 function histogramPercentile(h, percentile) {
     const minCount = Math.trunc((h.area * percentile) / 100);
-    const channel = (hist) => {
-        let v = 0, count = 0;
-        while (v < 255 && hist[v] === 0)
-            ++v;
-        while (v < 255 && count < minCount) {
-            count += hist[v];
-            ++v;
-        }
-        return v;
+    const channel = (hist, coarse) => {
+        histAcc.count = 0;
+        return histAdvance(hist, coarse, histFirst(hist, coarse), histAcc, minCount);
     };
-    return qRgba(channel(h.r), channel(h.g), channel(h.b), channel(h.a));
+    return qRgba(channel(h.r, h.coarse ? h.cr : null), channel(h.g, h.coarse ? h.cg : null), channel(h.b, h.coarse ? h.cb : null),
+                 channel(h.a, h.coarse ? h.ca : null));
 }
 
 // "Calidad" (1–9) de Mediana y Contorno en Paint.NET 5: bits de precisión de la búsqueda del
@@ -2380,10 +2459,9 @@ const noise = [
         run(a) {
             const strength = a.values.strength;
             localHistogram(a, Math.round(a.values.radius), (c, h) => {
-                let rc = 0, gc = 0, bc = 0;
-                for (let i = 0; i < qRed(c); ++i) rc += h.r[i];
-                for (let i = 0; i < qGreen(c); ++i) gc += h.g[i];
-                for (let i = 0; i < qBlue(c); ++i) bc += h.b[i];
+                const k = h.coarse;
+                const rc = histCountBelow(h.r, k ? h.cr : null, qRed(c)), gc = histCountBelow(h.g, k ? h.cg : null, qGreen(c));
+                const bc = histCountBelow(h.b, k ? h.cb : null, qBlue(c));
                 const area = Math.max(1, h.area);
                 const normalized = qRgb(idiv(rc * 255, area), idiv(gc * 255, area), idiv(bc * 255, area));
                 const out = lerpColor(c, normalized, strength * (1 - 0.75 * intensityF(c)));
@@ -2783,24 +2861,22 @@ const stylize = [
         params: [P.int("thickness", "Grosor", 1, 200, 1), P.int("intensity", "Intensidad", 0, 100, 50), P.int("quality", "Calidad", 1, 9, 8)],
         run(a) {
             const strength = Math.round(a.values.intensity), bits = Math.round(a.values.quality);
+            const acc = { count: 0 };
             localHistogram(a, Math.round(a.values.thickness), (c, h) => {
                 const min1 = idiv(h.area * (100 - strength), 200), min2 = idiv(h.area * (100 + strength), 200);
-                const span = (hist) => {
-                    let count = 0, v1 = 0;
-                    while (v1 < 255 && hist[v1] === 0)
-                        ++v1;
-                    while (v1 < 255 && count < min1) {
-                        count += hist[v1];
-                        ++v1;
-                    }
-                    let v2 = v1;
-                    while (v2 < 255 && count < min2) {
-                        count += hist[v2];
-                        ++v2;
-                    }
-                    return [v1, v2];
+                // Los bucles de Paint.NET (desde el primer valor con cuenta hasta 'min1' y luego hasta
+                // 'min2'), de 16 en 16 donde se puede y sin crear listas en cada píxel.
+                const span = (hist, coarse) => {
+                    acc.count = 0;
+                    const v1 = histAdvance(hist, coarse, histFirst(hist, coarse), acc, min1);
+                    acc.v1 = v1;
+                    return histAdvance(hist, coarse, v1, acc, min2);
                 };
-                const [r1, r2] = span(h.r), [g1, g2] = span(h.g), [b1, b2] = span(h.b), [, a2] = span(h.a);
+                const k = h.coarse;
+                const r2 = span(h.r, k ? h.cr : null), r1 = acc.v1;
+                const g2 = span(h.g, k ? h.cg : null), g1 = acc.v1;
+                const b2 = span(h.b, k ? h.cb : null), b1 = acc.v1;
+                const a2 = span(h.a, k ? h.ca : null);
                 return quantizeBits(qRgba(255 - (r2 - r1), 255 - (g2 - g1), 255 - (b2 - b1), a2), bits);
             });
         },
@@ -2885,7 +2961,11 @@ const resolveColor = (c, info) => {
 // ([[primera, última], ...]) calcula solo esas franjas de filas y entrega cada una a onBand(y0,
 // y1, píxeles de todo el ancho): así varios Web Workers se reparten el trabajo como los hilos
 // de Kaint.
-function runBuiltin(effect, src, values, r, info = {}, bands = null, onBand = null) {
+// Prepara un efecto integrado para calcularlo por franjas: devuelve band(y0, y1), que calcula esas
+// filas y las da como píxeles RGBA. 'cache' (opcional) guarda entre llamadas con la misma imagen
+// sus píxeles y su copia premultiplicada: los hilos de los efectos la conservan mientras se mueve
+// un deslizador, y así no se rehacen en cada vista previa.
+function beginBuiltin(effect, src, values, r, info = {}, cache = null) {
     const w = src.width, h = src.height;
     const v = { ...values };
     for (const p of effect.params) {
@@ -2896,15 +2976,16 @@ function runBuiltin(effect, src, values, r, info = {}, bands = null, onBand = nu
     }
     const toPacked = (c, fallback) => (c ? qRgba(c.r, c.g, c.b, c.a ?? 255) : fallback);
     const ctx = { primary: toPacked(info.primary, qRgb(0, 0, 0)), secondary: toPacked(info.secondary, qRgb(255, 255, 255)) };
-    const orig = new Uint32Array(new Uint8ClampedArray(src.data).buffer);
+    const c = cache || {};
+    // (Los píxeles de la imagen no se tocan: se leen tal cual.)
+    const orig = c.orig || (c.orig = src.data.byteOffset % 4 === 0 ? new Uint32Array(src.data.buffer, src.data.byteOffset, (src.data.length / 4) | 0)
+                                                                   : new Uint32Array(new Uint8ClampedArray(src.data).buffer));
     const roi = intersected(rect(r.x, r.y, r.w, r.h), rect(0, 0, w, h));
-    const list = bands || [[0, h - 1]];
     const premul = !effect.straight;
-    const work = isEmpty(roi) ? orig : premul ? orig.map(qPremultiply) : orig.slice();
+    const work = isEmpty(roi) ? orig : premul ? c.premul || (c.premul = orig.map(qPremultiply)) : c.straight || (c.straight = orig.slice());
     const srcImg = { w, h, px: work, premul }, dstImg = { w, h, px: work.slice(), premul };
     const state = effect.prepare && !isEmpty(roi) ? effect.prepare(srcImg, roi, v, ctx) : null;
-    let full = null;
-    for (const [b0, b1] of list) {
+    return (b0, b1) => {
         const out = orig.slice(b0 * w, (b1 + 1) * w);
         const y0 = Math.max(roi.top, b0), y1 = Math.min(roi.bottom, b1);
         if (!isEmpty(roi) && y1 >= y0) {
@@ -2916,12 +2997,22 @@ function runBuiltin(effect, src, values, r, info = {}, bands = null, onBand = nu
                     else if (dstImg.px[i] !== work[i])
                         out[o] = qUnpremultiply(dstImg.px[i]);
         }
+        return new Uint8ClampedArray(out.buffer);
+    };
+}
+
+function runBuiltin(effect, src, values, r, info = {}, bands = null, onBand = null) {
+    const band = beginBuiltin(effect, src, values, r, info);
+    const list = bands || [[0, src.height - 1]];
+    let full = null;
+    for (const [b0, b1] of list) {
+        const out = band(b0, b1);
         if (onBand)
-            onBand(b0, b1, new Uint8ClampedArray(out.buffer));
+            onBand(b0, b1, out);
         else
             full = out;
     }
-    return full ? new ImageData(new Uint8ClampedArray(full.buffer), w, h) : null;
+    return full ? new ImageData(full, src.width, src.height) : null;
 }
 
 function cloneValue(v) {
@@ -2933,6 +3024,8 @@ export const Effects = [...adjustments, ...artistic, ...blurs, ...color, ...dist
         ...e, builtin: true,
         render(src, values, r, info) { return runBuiltin(this, src, values, r, info); },
         renderBands(src, values, r, info, bands, onBand) { runBuiltin(this, src, values, r, info, bands, onBand); },
+        // Para los hilos de los efectos: band(y0, y1) calcula esas filas (ver beginBuiltin).
+        beginBands(src, values, r, info, cache) { return beginBuiltin(this, src, values, r, info, cache); },
     }));
 
 export function findEffect(id) {

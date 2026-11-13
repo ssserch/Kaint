@@ -6788,6 +6788,10 @@ Do you want to replace them?</translation>
         <translation>Search for plugins again</translation>
     </message>
     <message>
+        <source>También puedes arrastrar aquí archivos o carpetas de complementos para añadirlos.</source>
+        <translation>You can also drag plugin files or folders here to add them.</translation>
+    </message>
+    <message>
         <source>Examinando…</source>
         <translation>Examining…</translation>
     </message>
@@ -6879,6 +6883,40 @@ Do you want to replace them?</translation>
         <translation>Could not copy:
 
 %1</translation>
+    </message>
+    <message>
+        <source>Comprobando los complementos…</source>
+        <translation>Checking the plugins…</translation>
+    </message>
+    <message>
+        <source>Comprobando los complementos de Paint.NET (%1 de %2)…</source>
+        <translation>Checking the Paint.NET plugins (%1 of %2)…</translation>
+    </message>
+    <message>
+        <source>No se leyeron (no son complementos compatibles o están dañados): %1.</source>
+        <translation>Not read (they are not compatible plugins or they are damaged): %1.</translation>
+    </message>
+    <message numerus="yes">
+        <source> y %n más</source>
+        <translation>
+            <numerusform> and %n more</numerusform>
+            <numerusform> and %n more</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>No había complementos que añadir.</source>
+        <translation>There were no plugins to add.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Añadidos: %n complemento(s).</source>
+        <translation>
+            <numerusform>Added: %n plugin.</numerusform>
+            <numerusform>Added: %n plugins.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>No se pudieron copiar: %1.</source>
+        <translation>Couldn't copy: %1.</translation>
     </message>
     <message>
         <source>No hay complementos instalados.</source>
@@ -8031,6 +8069,34 @@ Do you want to replace them?</translation>
         <source>Fondo del lienzo</source>
         <translation>Canvas background</translation>
     </message>
+    <message>
+        <source>Color de las ventanas (cristal)</source>
+        <translation>Window color (glass)</translation>
+    </message>
+    <message>
+        <source>No es un tema de Kaint (falta theme.json).</source>
+        <translation>It is not a Kaint theme (theme.json is missing).</translation>
+    </message>
+    <message>
+        <source>No es un tema de Kaint.</source>
+        <translation>It is not a Kaint theme.</translation>
+    </message>
+    <message>
+        <source>Imágenes, animaciones y vídeos (%1 %2)</source>
+        <translation>Images, animations and videos (%1 %2)</translation>
+    </message>
+    <message>
+        <source>Imágenes (%1)</source>
+        <translation>Images (%1)</translation>
+    </message>
+    <message>
+        <source>Animaciones (*.gif *.webp *.apng *.png)</source>
+        <translation>Animations (*.gif *.webp *.apng *.png)</translation>
+    </message>
+    <message>
+        <source>Vídeos (%1)</source>
+        <translation>Videos (%1)</translation>
+    </message>
 </context>
 <context>
     <name>ThemeDialog</name>
@@ -8045,6 +8111,26 @@ Do you want to replace them?</translation>
     <message>
         <source>Windows 98</source>
         <translation>Windows 98</translation>
+    </message>
+    <message>
+        <source>Windows 7</source>
+        <translation>Windows 7</translation>
+    </message>
+    <message>
+        <source>Windows 7 oscuro</source>
+        <translation>Windows 7 Dark</translation>
+    </message>
+    <message>
+        <source>Windows XP</source>
+        <translation>Windows XP</translation>
+    </message>
+    <message>
+        <source>Windows 98 ALT</source>
+        <translation>Windows 98 ALT</translation>
+    </message>
+    <message>
+        <source>Los temas de Windows 7 y XP traen su estilo de botones, menús y ventanas: así puedes, por ejemplo, poner una imagen o un vídeo de fondo con el tema de Windows 7.</source>
+        <translation>The Windows 7 and XP themes bring their own style of buttons, menus and windows: this way you can, for example, put a background image or video with the Windows 7 theme.</translation>
     </message>
     <message>
         <source>Aplicar</source>
@@ -8071,8 +8157,8 @@ Do you want to replace them?</translation>
         <translation>Mode:</translation>
     </message>
     <message>
-        <source>Los colores que no cambies siguen al modo elegido. Los cambiados aparecen en negrita.</source>
-        <translation>Colors you don't change follow the chosen mode. Changed ones are shown in bold.</translation>
+        <source>Los colores que no cambies siguen al modo elegido (y, con el estilo de Windows 7 o XP, a su tema: Windows 7 claro u oscuro). Los cambiados aparecen en negrita.</source>
+        <translation>Colors you don't change follow the chosen mode (and, with the Windows 7 or XP style, its theme: Windows 7 light or dark). Changed ones are shown in bold.</translation>
     </message>
     <message>
         <source>Colores</source>
@@ -8247,6 +8333,26 @@ Do you want to replace them?</translation>
         <translation>px</translation>
     </message>
     <message>
+        <source>Plano (Paint.NET)</source>
+        <translation>Flat (Paint.NET)</translation>
+    </message>
+    <message>
+        <source>Windows 7 (Aero)</source>
+        <translation>Windows 7 (Aero)</translation>
+    </message>
+    <message>
+        <source>Botones, menús y barras con los degradados y el cristal de Windows 7.</source>
+        <translation>Buttons, menus and bars with the gradients and glass of Windows 7.</translation>
+    </message>
+    <message>
+        <source>Windows XP (Luna)</source>
+        <translation>Windows XP (Luna)</translation>
+    </message>
+    <message>
+        <source>Botones, campos, menús y ventanas de Windows XP.</source>
+        <translation>Buttons, fields, menus and windows of Windows XP.</translation>
+    </message>
+    <message>
         <source>Bordes clásicos en relieve (como Windows 98)</source>
         <translation>Classic 3D borders (like Windows 98)</translation>
     </message>
@@ -8303,16 +8409,24 @@ Do you want to replace them?</translation>
         <translation>Reset</translation>
     </message>
     <message>
+        <source>El estilo de Windows XP solo tiene modo claro.</source>
+        <translation>The Windows XP style only has a light mode.</translation>
+    </message>
+    <message>
         <source>Imagen de fondo</source>
         <translation>Background Image</translation>
     </message>
     <message>
-        <source>Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl)</source>
-        <translation>Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl)</translation>
+        <source>Kaint no puede reproducir vídeos en este sistema (en Windows hace falta Media Foundation; en Linux, compilar Kaint con Qt Multimedia). Elige una imagen o un GIF animado.</source>
+        <translation>Kaint can't play videos on this system (on Windows it needs Media Foundation; on Linux, Kaint built with Qt Multimedia). Choose an image or an animated GIF.</translation>
     </message>
     <message>
         <source>Importar tema</source>
         <translation>Import Theme</translation>
+    </message>
+    <message>
+        <source>Temas de Kaint (*.zip *.json);;Temas con fondo (*.zip);;Temas (*.json)</source>
+        <translation>Kaint themes (*.zip *.json);;Themes with a background (*.zip);;Themes (*.json)</translation>
     </message>
     <message>
         <source>Temas de Kaint (*.json)</source>
@@ -8325,6 +8439,10 @@ Do you want to replace them?</translation>
     <message>
         <source>Exportar tema</source>
         <translation>Export Theme</translation>
+    </message>
+    <message>
+        <source>Tema con fondo (*.zip)</source>
+        <translation>Theme with a background (*.zip)</translation>
     </message>
     <message>
         <source>No se pudo guardar «%1».</source>
@@ -8899,6 +9017,17 @@ Do you want to replace them?</translation>
     <message>
         <source>Zalgo: marcas apiladas encima y debajo de cada letra (la flecha elige el tipo)</source>
         <translation>Zalgo: marks stacked above and below each letter (the arrow picks the type)</translation>
+    </message>
+</context>
+<context>
+    <name>VideoFrames</name>
+    <message>
+        <source>Windows no tiene Media Foundation (en las ediciones N se instala con el «Media Feature Pack»).</source>
+        <translation>Windows doesn't have Media Foundation (on N editions it comes with the “Media Feature Pack”).</translation>
+    </message>
+    <message>
+        <source>Esta compilación de Kaint no reproduce vídeos (falta Qt Multimedia).</source>
+        <translation>This build of Kaint doesn't play videos (Qt Multimedia is missing).</translation>
     </message>
 </context>
 <context>

@@ -63,6 +63,32 @@ public:
     QStringList install(const QStringList& files, bool replace, QStringList* errors = nullptr);
     QStringList installedAlready(const QStringList& files) const;
 
+    // --- Arrastrar archivos y carpetas a Configuración > Complementos ---
+    // Si un archivo es un complemento que Kaint puede cargar, sin instalarlo: Compatible, una
+    // biblioteca de apoyo de otro (Library) o no (no es de Kaint, no es compatible o está dañado).
+    // Los de Paint.NET los examina el proceso auxiliar y tardan (isSlowCheck): se llaman desde otro hilo.
+    enum class Check { Compatible, Library, Incompatible };
+    Check check(const QString& path) const;
+    static bool isSlowCheck(const QString& path);
+    // Los archivos con extensión de complemento entre lo arrastrado (también dentro de las carpetas).
+    static QStringList dropCandidates(const QStringList& paths);
+    // Qué copiar a la carpeta de complementos: los compatibles y, de una carpeta, sus bibliotecas y
+    // archivos de apoyo (cada grupo de complementos en su subcarpeta); los demás no se copian.
+    struct DropPlan {
+        struct Item {
+            QString source;
+            QString target; // relativo a la carpeta de complementos
+            bool plugin = false;
+        };
+        QList<Item> copy;
+        QStringList rejected; // nombres de lo que no se pudo leer
+    };
+    DropPlan planDrop(const QStringList& paths, const QHash<QString, Check>& checked) const;
+    // Lo que ya existe en la carpeta de complementos (para preguntar si se sustituye).
+    QStringList planConflicts(const DropPlan& plan) const;
+    // Copia el plan; devuelve las rutas de los complementos copiados.
+    QStringList installPlan(const DropPlan& plan, bool replace, QStringList* errors = nullptr);
+
     // Busca los complementos y carga los activados. Se puede volver a llamar.
     void scan();
     const QList<PluginInfo>& plugins() const { return m_plugins; }

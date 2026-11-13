@@ -85,13 +85,9 @@ void renderReduceNoise(const RenderArgs& a)
 {
     const double strength = dval(a.values, "strength");
     localHistogram(a, ival(a.values, "radius"), [&](QRgb c, const LocalHistogram& h) {
-        int rc = 0, gc = 0, bc = 0;
-        for (int i = 0; i < qRed(c); ++i)
-            rc += h.r[i];
-        for (int i = 0; i < qGreen(c); ++i)
-            gc += h.g[i];
-        for (int i = 0; i < qBlue(c); ++i)
-            bc += h.b[i];
+        const int rc = histogramCountBelow(h.r, h.coarseR(), qRed(c));
+        const int gc = histogramCountBelow(h.g, h.coarseG(), qGreen(c));
+        const int bc = histogramCountBelow(h.b, h.coarseB(), qBlue(c));
         const int area = std::max(1, h.area);
         const QRgb normalized = qRgb(rc * 255 / area, gc * 255 / area, bc * 255 / area);
         const double t = strength * (1 - 0.75 * intensityF(c));

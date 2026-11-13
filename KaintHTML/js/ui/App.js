@@ -20,6 +20,7 @@ import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
 import { applyThemeColors, applyWindowButtons } from "./Themes.js";
+import { applyBackground } from "./Background.js";
 import {
     aboutDialog, animationDialog, canvasSizeDialog, checkbox, colorProfileDialog, Dialog, dialogOpen, el, gifFramesDialog, layerPropertiesDialog, message, newImageDialog, promptNumber,
     resizeDialog, saveAsDialog, settingsDialog, TaskDialog,
@@ -163,6 +164,9 @@ export class App extends EventTarget {
         if (this.themeKey !== key) {
             this.themeKey = key;
             applyThemeColors(root, Settings.get("colorScheme"), matchMedia("(prefers-color-scheme: dark)").matches);
+            // La imagen, el GIF o el vídeo de fondo del personalizado (el lienzo se vuelve a dibujar
+            // cuando está puesto: alrededor de la imagen queda transparente).
+            applyBackground(document.getElementById("workspace"), Settings.get("colorScheme")).then(() => this.view?.update(), () => {});
             refreshIcons();
             this.view?.update();
         }

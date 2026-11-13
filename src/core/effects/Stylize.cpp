@@ -127,26 +127,18 @@ void renderOutline(const RenderArgs& a)
     localHistogram(a, ival(a.values, "thickness"), [&](QRgb, const LocalHistogram& h) {
         const int min1 = h.area * (100 - intensityParam) / 200;
         const int min2 = h.area * (100 + intensityParam) / 200;
-        auto span = [&](const int* hist, int& v1, int& v2) {
+        // Los bucles de Paint.NET (desde el primer valor con cuenta hasta 'min1' y luego hasta
+        // 'min2'), de 16 en 16 donde se puede: con el grosor pequeño eran casi todo el tiempo.
+        auto span = [&](const int* hist, const int* coarse, int& v1, int& v2) {
             int count = 0;
-            v1 = 0;
-            while (v1 < 255 && hist[v1] == 0)
-                ++v1;
-            while (v1 < 255 && count < min1) {
-                count += hist[v1];
-                ++v1;
-            }
-            v2 = v1;
-            while (v2 < 255 && count < min2) {
-                count += hist[v2];
-                ++v2;
-            }
+            v1 = histogramAdvance(hist, coarse, histogramFirst(hist, coarse), count, min1);
+            v2 = histogramAdvance(hist, coarse, v1, count, min2);
         };
         int r1, r2, g1, g2, b1, b2, a1, a2;
-        span(h.r, r1, r2);
-        span(h.g, g1, g2);
-        span(h.b, b1, b2);
-        span(h.a, a1, a2);
+        span(h.r, h.coarseR(), r1, r2);
+        span(h.g, h.coarseG(), g1, g2);
+        span(h.b, h.coarseB(), b1, b2);
+        span(h.a, h.coarseA(), a1, a2);
         return quantizeBits(qRgba(255 - (r2 - r1), 255 - (g2 - g1), 255 - (b2 - b1), a2), bits);
     });
 }

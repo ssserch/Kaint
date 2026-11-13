@@ -2,6 +2,7 @@
 
 #include "app/Icons.h"
 #include "app/Theme.h"
+#include "core/effects/EffectUtils.h"
 
 #include <QApplication>
 #include <QLinearGradient>
@@ -1042,15 +1043,8 @@ private:
         // El azul del cristal de las ventanas flotantes; con «Habilitar transparencia», translúcido
         // sobre lo que haya detrás (la ventana lo es), y si no sobre un fondo claro. Con el tema
         // oscuro, ahumado. Sin el foco, más apagado.
-        const bool dark = Theme::active().dark;
-        QColor glass;
-        if (m_glass)
-            glass = dark ? (active ? QColor(30, 38, 50, 185) : QColor(40, 44, 50, 150))
-                         : (active ? QColor(69, 128, 196, 158) : QColor(150, 175, 205, 120));
-        else
-            glass = dark ? (active ? QColor(0x3a, 0x44, 0x52) : QColor(0x44, 0x48, 0x4e))
-                         : (active ? QColor(0x7e, 0xa7, 0xd6) : QColor(0xb4, 0xc8, 0xe0));
-        p.fillPath(shape, glass);
+        // (El color de las ventanas del tema: el de Windows 7 o el propio del personalizado.)
+        p.fillPath(shape, Theme::glassColor(m_glass, active));
         QLinearGradient across(r.topLeft(), r.topRight());
         across.setColorAt(0, QColor(255, 255, 255, 102));
         across.setColorAt(0.5, QColor(0, 0, 0, 26));
@@ -1297,8 +1291,7 @@ private:
         const bool framed = !isMaximized(m_window);
         p.save();
         p.setRenderHint(QPainter::Antialiasing);
-        p.fillPath(shape, dark ? (active ? QColor(0x3a, 0x44, 0x52) : QColor(0x44, 0x48, 0x4e))
-                               : (active ? QColor(0x7e, 0xa7, 0xd6) : QColor(0xb4, 0xc8, 0xe0)));
+        p.fillPath(shape, Theme::glassColor(false, active));
         QLinearGradient across(r.topLeft(), r.topRight());
         across.setColorAt(0, QColor(255, 255, 255, 102));
         across.setColorAt(0.5, QColor(0, 0, 0, 26));
@@ -1793,24 +1786,39 @@ bool aeroTitle()
 void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool active)
 {
     const QColor color = titleTextColor(active);
-    const QFontMetricsF fm(p.font());
-    const qreal width = fm.horizontalAdvance(text);
-    if (width > 0) {
-        // El halo de Windows 7: una mancha suave con la forma del texto, hecha de capas que se
-        // amplían (más opaca en el centro).
-        const QColor glow = color.lightness() < 128 ? QColor(255, 255, 255) : QColor(0, 0, 0);
-        const QRectF base(r.left(), r.center().y() + 0.5 - fm.height() / 2, width, fm.height());
-        p.save();
-        p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(Qt::NoPen);
-        for (int k = 6; k >= 1; --k) {
-            QColor c = glow;
-            c.setAlpha(glow == Qt::white ? (active ? 34 : 24) : 18);
-            p.setBrush(c);
-            const QRectF layer = base.adjusted(-1.6 * k, -0.7 * k, 1.6 * k, 0.7 * k);
-            p.drawRoundedRect(layer, layer.height() / 2, layer.height() / 2);
+    if (!text.isEmpty() && r.width() > 0 && r.height() > 0) {
+        // El halo de Windows 7, con la forma de las letras (antes era una cápsula de capas que,
+        // con el texto blanco del tema oscuro, se veía como una mancha oscura): el texto engordado
+        // y difuminado detrás. Blanco y ancho detrás del texto oscuro, como el de Windows 7; con el
+        // texto claro, una sombra oscura suave y ceñida, solo para que se lea sobre el cristal.
+        const bool lightText = color.lightness() >= 128;
+        const qreal dpr = p.device() ? std::max<qreal>(1, p.device()->devicePixelRatioF()) : 1.0;
+        const int pad = lightText ? 5 : 8;
+        const QSize size = r.size() + QSize(2 * pad, 2 * pad);
+        QImage glyphs((QSizeF(size) * dpr).toSize(), QImage::Format_ARGB32_Premultiplied);
+        glyphs.setDevicePixelRatio(dpr);
+        glyphs.fill(Qt::transparent);
+        {
+            QPainter g(&glyphs);
+            g.setFont(p.font());
+            g.setPen(lightText ? QColor(0, 0, 0) : QColor(255, 255, 255));
+            const QRect box(pad, pad, r.width(), r.height());
+            // Engordado: el texto también desplazado un píxel alrededor.
+            for (const QPointF& d : {QPointF(0, 0), QPointF(-1, 0), QPointF(1, 0), QPointF(0, -1), QPointF(0, 1)})
+                g.drawText(QRectF(box).translated(d), Qt::AlignVCenter | Qt::AlignLeft, text);
         }
-        p.restore();
+        const std::atomic_bool cancel{false};
+        QImage halo = fx::tentBlur(glyphs, glyphs.rect(), int(std::lround((lightText ? 2.5 : 4.5) * dpr)), cancel);
+        if (!halo.isNull()) {
+            halo.setDevicePixelRatio(dpr);
+            p.save();
+            p.setOpacity(lightText ? (active ? 0.7 : 0.5) : (active ? 1.0 : 0.75));
+            p.drawImage(QPointF(r.left() - pad, r.top() - pad), halo);
+            // El de Windows 7 es intenso: otra pasada con el texto oscuro.
+            if (!lightText && active)
+                p.drawImage(QPointF(r.left() - pad, r.top() - pad), halo);
+            p.restore();
+        }
     }
     p.setPen(color);
     p.drawText(r, Qt::AlignVCenter | Qt::AlignLeft, text);

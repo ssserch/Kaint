@@ -398,8 +398,14 @@ export class CanvasView extends EventTarget {
         const ctx = this.ctx, dpr = this.dpr, v = this.viewSize();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const styles = getComputedStyle(document.documentElement);
-        ctx.fillStyle = styles.getPropertyValue("--workspace").trim() || "#cfcfcf";
-        ctx.fillRect(0, 0, v.w, v.h);
+        // Con una imagen o un vídeo de fondo (tema personalizado), alrededor de la imagen se ve la
+        // capa de detrás (Background.js).
+        if (document.documentElement.classList.contains("workspace-media")) {
+            ctx.clearRect(0, 0, v.w, v.h);
+        } else {
+            ctx.fillStyle = styles.getPropertyValue("--workspace").trim() || "#cfcfcf";
+            ctx.fillRect(0, 0, v.w, v.h);
+        }
         const doc = this.doc;
         if (!doc) {
             this.updateScrollbars();
@@ -764,7 +770,8 @@ export class CanvasView extends EventTarget {
                 for (let y = 0; y < b.h; ++y)
                     for (let x = 0; x < b.w; ++x) {
                         const m = sel.mask[(b.y + y) * sel.width + b.x + x], i = (y * b.w + x) * 4;
-                        img.data[i + 1] = 120; img.data[i + 2] = 215; img.data[i + 3] = (m * 45) / 255;
+                        // El lavanda translúcido de Paint.NET 5 (sobre blanco, #e4eaf7).
+                        img.data[i] = 30; img.data[i + 1] = 80; img.data[i + 2] = 188; img.data[i + 3] = (m * 31) / 255;
                     }
                 tc.putImageData(img, 0, 0);
                 sel.tintCanvas = tint;
@@ -787,15 +794,16 @@ export class CanvasView extends EventTarget {
             this.strokeOutline(ctx, sel.outline(), transform);
     }
 
-    // Blanco y, encima, negro a trazos que se mueven, de un píxel de la pantalla.
+    // Casi blanco y, encima, gris a trazos que se mueven (las hormigas de Paint.NET 5), de un píxel
+    // de la pantalla.
     strokeAnts(ctx, path) {
         ctx.save();
         ctx.lineWidth = 1 / this.dpr;
-        ctx.strokeStyle = "#fff";
+        ctx.strokeStyle = "#f3f4f8";
         ctx.stroke(path);
         ctx.setLineDash([4 / this.dpr, 4 / this.dpr]);
         ctx.lineDashOffset = -this.antsOffset / this.dpr;
-        ctx.strokeStyle = "#000";
+        ctx.strokeStyle = "#7f8289";
         ctx.stroke(path);
         ctx.restore();
     }
@@ -832,7 +840,7 @@ export class CanvasView extends EventTarget {
     drawMarchingRect(ctx, r, tint = true) {
         const a = this.imageToView(r.x, r.y), b = this.imageToView(r.x + r.w, r.y + r.h);
         if (tint) {
-            ctx.fillStyle = "rgba(0,120,215,0.18)";
+            ctx.fillStyle = "rgba(30,80,188,0.12)";
             ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
         }
         this.strokeOutline(ctx, [[r.x, r.y, r.x + r.w, r.y, r.x + r.w, r.y + r.h, r.x, r.y + r.h]]);

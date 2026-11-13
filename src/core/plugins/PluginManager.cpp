@@ -150,6 +150,228 @@ QStringList PluginManager::install(const QStringList& files, bool replace, QStri
     return copied;
 }
 
+// --- Arrastrar archivos y carpetas ----------------------------------------------
+
+namespace {
+
+bool hasPluginExtension(const QString& path)
+{
+    return QDir::match(QStringList{QStringLiteral("*.so"), QStringLiteral("*.dll"), QStringLiteral("*.paintjs")} + CraftPlugins::fileFilters(),
+                       QFileInfo(path).fileName());
+}
+
+// Los archivos de una carpeta arrastrada (con un límite, por si se suelta una carpeta enorme).
+QStringList filesUnder(const QString& dir)
+{
+    constexpr int kMaxDepth = 6, kMaxFiles = 5000;
+    QStringList out;
+    QList<QPair<QString, int>> pending{{dir, 0}};
+    while (!pending.isEmpty() && out.size() < kMaxFiles) {
+        const auto [path, depth] = pending.takeFirst();
+        const QDir d(path);
+        for (const QFileInfo& fi : d.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name)) {
+            if (fi.isDir()) {
+                if (depth + 1 < kMaxDepth)
+                    pending.append({fi.absoluteFilePath(), depth + 1});
+            } else if (out.size() < kMaxFiles) {
+                out << fi.absoluteFilePath();
+            }
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+bool PluginManager::isSlowCheck(const QString& path)
+{
+    return !CraftPlugins::isCraftFile(path) && !PaintJs::isPackage(path) && !isNativePlugin(path);
+}
+
+QStringList PluginManager::dropCandidates(const QStringList& paths)
+{
+    QStringList out;
+    for (const QString& p : paths) {
+        const QFileInfo fi(p);
+        if (fi.isDir()) {
+            for (const QString& f : filesUnder(fi.absoluteFilePath()))
+                if (hasPluginExtension(f))
+                    out << f;
+        } else if (fi.isFile() && hasPluginExtension(p)) {
+            out << fi.absoluteFilePath();
+        }
+    }
+    out.removeDuplicates();
+    return out;
+}
+
+PluginManager::Check PluginManager::check(const QString& path) const
+{
+    if (CraftPlugins::isCraftFile(path)) {
+        CraftPlugins::Info craft = CraftPlugins::load(path);
+        const bool ok = !craft.effects.isEmpty();
+        qDeleteAll(craft.effects);
+        return ok ? Check::Compatible : Check::Incompatible;
+    }
+    if (PaintJs::isPackage(path)) {
+        PaintJs::Info pj = PaintJs::load(path);
+        const bool ok = !pj.effects.isEmpty() || !pj.fileTypes.isEmpty() || !pj.browserOnly.isEmpty();
+        qDeleteAll(pj.effects);
+        return ok ? Check::Compatible : Check::Incompatible;
+    }
+    if (isNativePlugin(path)) {
+        QLibrary library(path);
+        if (!library.load())
+            return Check::Incompatible;
+        auto entry = reinterpret_cast<KaintPluginInfoFunction>(library.resolve(KAINT_PLUGIN_ENTRY));
+        // Sin la función de Kaint: una biblioteca que necesita otro complemento.
+        Check result = Check::Library;
+        if (entry) {
+            const KaintPluginInfo* pi = entry();
+            result = pi && pi->api_version >= 1 && pi->api_version <= KAINT_PLUGIN_API_VERSION && pi->effect_count > 0
+                         ? Check::Compatible
+                         : Check::Incompatible;
+        }
+        library.unload();
+        return result;
+    }
+    // Paint.NET: lo examina el proceso auxiliar.
+    if (!PdnBridge::available())
+        return Check::Incompatible;
+    QString error;
+    const QJsonObject reply = PdnBridge::instance().inspect(path, &error);
+    if (reply.isEmpty())
+        return Check::Incompatible;
+    if (reply.value(QStringLiteral("library")).toBool())
+        return Check::Library;
+    return reply.value(QStringLiteral("effects")).toArray().isEmpty() ? Check::Incompatible : Check::Compatible;
+}
+
+PluginManager::DropPlan PluginManager::planDrop(const QStringList& paths, const QHash<QString, Check>& checked) const
+{
+    DropPlan plan;
+    QSet<QString> targets;
+    auto add = [&](const QString& source, const QString& target, bool plugin) {
+        if (targets.contains(target.toLower()))
+            return;
+        targets.insert(target.toLower());
+        plan.copy.append({source, target, plugin});
+    };
+    auto result = [&](const QString& f) { return checked.value(QFileInfo(f).absoluteFilePath(), Check::Incompatible); };
+    // Archivos sueltos: los compatibles van a la carpeta de complementos; las bibliotecas, solo si
+    // llegan junto con algún complemento.
+    QStringList libraries;
+    bool anyLoose = false;
+    for (const QString& p : paths) {
+        const QFileInfo fi(p);
+        if (!fi.isFile())
+            continue;
+        if (!hasPluginExtension(p)) {
+            plan.rejected << fi.fileName();
+            continue;
+        }
+        switch (result(p)) {
+        case Check::Compatible:
+            add(fi.absoluteFilePath(), fi.fileName(), true);
+            anyLoose = true;
+            break;
+        case Check::Library: libraries << fi.absoluteFilePath(); break;
+        case Check::Incompatible: plan.rejected << fi.fileName(); break;
+        }
+    }
+    for (const QString& lib : std::as_const(libraries)) {
+        if (anyLoose)
+            add(lib, QFileInfo(lib).fileName(), false);
+        else
+            plan.rejected << QFileInfo(lib).fileName();
+    }
+    // Carpetas: cada carpeta con complementos compatibles va a su propia subcarpeta (así quedan a
+    // un nivel, donde Kaint los busca), con sus bibliotecas y archivos de apoyo y las subcarpetas
+    // que no son de otro grupo; los incompatibles no se copian.
+    for (const QString& p : paths) {
+        const QFileInfo fi(p);
+        if (!fi.isDir())
+            continue;
+        const QStringList files = filesUnder(fi.absoluteFilePath());
+        QStringList groups;
+        for (const QString& f : files)
+            if (hasPluginExtension(f) && result(f) == Check::Compatible) {
+                const QString dir = QFileInfo(f).absolutePath();
+                if (!groups.contains(dir))
+                    groups << dir;
+            }
+        for (const QString& f : files)
+            if (hasPluginExtension(f) && result(f) == Check::Incompatible)
+                plan.rejected << QFileInfo(f).fileName();
+        if (groups.isEmpty())
+            continue;
+        QSet<QString> used;
+        for (const QString& group : std::as_const(groups)) {
+            QString name = QFileInfo(group).fileName();
+            for (int n = 2; used.contains(name.toLower()); ++n)
+                name = QStringLiteral("%1 (%2)").arg(QFileInfo(group).fileName()).arg(n);
+            used.insert(name.toLower());
+            const QDir base(group);
+            for (const QString& f : files) {
+                if (!f.startsWith(group + QLatin1Char('/')))
+                    continue;
+                // Lo de una subcarpeta que es otro grupo va con ese grupo.
+                bool other = false;
+                for (const QString& g : std::as_const(groups))
+                    other = other || (g != group && g.startsWith(group + QLatin1Char('/')) && f.startsWith(g + QLatin1Char('/')));
+                if (other)
+                    continue;
+                const bool plugin = hasPluginExtension(f);
+                if (plugin && result(f) == Check::Incompatible)
+                    continue;
+                // Los complementos, solo los de la carpeta del grupo (los de más abajo no se buscan).
+                if (plugin && result(f) == Check::Compatible && QFileInfo(f).absolutePath() != group)
+                    continue;
+                add(f, name + QLatin1Char('/') + base.relativeFilePath(f), plugin && result(f) == Check::Compatible);
+            }
+        }
+    }
+    plan.rejected.removeDuplicates();
+    return plan;
+}
+
+QStringList PluginManager::planConflicts(const DropPlan& plan) const
+{
+    QStringList found;
+    for (const DropPlan::Item& item : plan.copy)
+        if (item.plugin && QFileInfo::exists(userPath() + QLatin1Char('/') + item.target))
+            found << item.target;
+    return found;
+}
+
+QStringList PluginManager::installPlan(const DropPlan& plan, bool replace, QStringList* errors)
+{
+    QStringList copied;
+    const QString root = userPath();
+    for (const DropPlan::Item& item : plan.copy) {
+        const QString dest = QDir(root).filePath(item.target);
+        if (QFileInfo(item.source).absoluteFilePath() == QFileInfo(dest).absoluteFilePath())
+            continue;
+        if (QFileInfo::exists(dest) && !replace) {
+            if (item.plugin)
+                copied << QFileInfo(dest).absoluteFilePath();
+            continue;
+        }
+        QDir().mkpath(QFileInfo(dest).absolutePath());
+        const QString tmp = dest + QStringLiteral(".part");
+        QFile::remove(tmp);
+        if (!QFile::copy(item.source, tmp) || (QFileInfo::exists(dest) && !QFile::remove(dest)) || !QFile::rename(tmp, dest)) {
+            QFile::remove(tmp);
+            if (errors)
+                *errors << item.target;
+            continue;
+        }
+        if (item.plugin)
+            copied << QFileInfo(dest).absoluteFilePath();
+    }
+    return copied;
+}
+
 void PluginManager::setPathsForTesting(const QStringList& userPaths, const QString& cacheFile)
 {
     m_testing = true;

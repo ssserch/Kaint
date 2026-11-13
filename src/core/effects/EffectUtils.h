@@ -11,9 +11,12 @@
 
 #include <QObject>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
+#include <vector>
 
 namespace fx {
 
@@ -196,10 +199,149 @@ QImage boxBlur(const QImage& src, const QRect& area, int radius, const std::atom
 struct LocalHistogram {
     int area = 0;
     int b[256], g[256], r[256], a[256];
+    // Con radios pequeños, también las cuentas de 16 en 16 valores (cr[k] = r[16k] + ... +
+    // r[16k + 15]): los percentiles se buscan saltando bloques enteros en vez de recorrer los 256
+    // valores en cada píxel. Con radios grandes mantenerlas costaría más de lo que ahorran y
+    // 'coarse' es falso (las cr... no valen).
+    bool coarse = false;
+    int cb[16], cg[16], cr[16], ca[16];
+
+    const int* coarseR() const { return coarse ? cr : nullptr; }
+    const int* coarseG() const { return coarse ? cg : nullptr; }
+    const int* coarseB() const { return coarse ? cb : nullptr; }
+    const int* coarseA() const { return coarse ? ca : nullptr; }
 };
-// apply(pixel directo, histograma) -> pixel directo
-using HistogramFn = std::function<QRgb(QRgb, const LocalHistogram&)>;
-void localHistogram(const RenderArgs& a, int radius, const HistogramFn& apply);
+
+// Hasta este radio el histograma lleva las cuentas de 16 en 16.
+constexpr int kCoarseHistogramRadius = 32;
+
+// Los bucles de Paint.NET sobre un canal del histograma, iguales pero saltando de 16 en 16 cuando
+// hay cuentas por bloques ('coarse' no nulo). El primer valor con cuenta (255 si no hay):
+inline int histogramFirst(const int* hist, const int* coarse)
+{
+    int v = 0;
+    if (coarse)
+        while (v < 240 && coarse[v >> 4] == 0)
+            v += 16;
+    while (v < 255 && hist[v] == 0)
+        ++v;
+    return v;
+}
+
+// Desde 'v', suma cuentas a 'count' mientras no llegue a 'target' y devuelve el valor siguiente
+// al que la alcanzó (como mucho 255).
+inline int histogramAdvance(const int* hist, const int* coarse, int v, int& count, int target)
+{
+    if (coarse) {
+        while (v < 255 && count < target && (v & 15) != 0)
+            count += hist[v++];
+        while (v < 240 && count + coarse[v >> 4] < target) {
+            count += coarse[v >> 4];
+            v += 16;
+        }
+    }
+    while (v < 255 && count < target)
+        count += hist[v++];
+    return v;
+}
+
+// Cuántos píxeles tienen un valor menor que 'v'.
+inline int histogramCountBelow(const int* hist, const int* coarse, int v)
+{
+    int sum = 0, i = 0;
+    if (coarse)
+        for (; i + 16 <= v; i += 16)
+            sum += coarse[i >> 4];
+    for (; i < v; ++i)
+        sum += hist[i];
+    return sum;
+}
+
+namespace detail {
+
+template <bool Coarse, typename Apply>
+void localHistogramRows(const RenderArgs& a, int rad, Apply& apply)
+{
+    const QRect region = a.roi.adjusted(-(rad + 1), -(rad + 1), rad + 1, rad + 1).intersected(a.src.rect());
+    const QImage straight = a.src.copy(region).convertToFormat(QImage::Format_ARGB32);
+    const ConstPixels s(straight);
+    const Pixels out(a.dst);
+    const int ox = region.left(), oy = region.top();
+    const int width = a.src.width(), height = a.src.height();
+
+    // Semiancho horizontal del círculo en cada fila (aprox. (r + 0,5)^2).
+    const int cutoff = ((rad * 2 + 1) * (rad * 2 + 1) + 2) / 4;
+    std::vector<int> edge(size_t(rad + 1), 0);
+    for (int v = 0; v <= rad; ++v)
+        for (int u = 0; u <= rad; ++u)
+            if (u * u + v * v <= cutoff)
+                edge[size_t(v)] = u;
+
+    forRows(a, [&](int y) {
+        LocalHistogram h{};
+        h.coarse = Coarse;
+        auto add = [&h](QRgb p, int sign) {
+            const int b = qBlue(p), g = qGreen(p), r = qRed(p), al = qAlpha(p);
+            h.b[b] += sign;
+            h.g[g] += sign;
+            h.r[r] += sign;
+            h.a[al] += sign;
+            if constexpr (Coarse) {
+                h.cb[b >> 4] += sign;
+                h.cg[g >> 4] += sign;
+                h.cr[r >> 4] += sign;
+                h.ca[al >> 4] += sign;
+            }
+            h.area += sign;
+        };
+        const int top = -std::min(rad, y);
+        const int bottom = std::min(rad, height - 1 - y);
+        // Las filas del vecindario en la copia, y su semiancho.
+        thread_local std::vector<const QRgb*> rows;
+        thread_local std::vector<int> widths;
+        rows.resize(size_t(bottom - top + 1));
+        widths.resize(rows.size());
+        for (int v = top; v <= bottom; ++v) {
+            rows[size_t(v - top)] = s.row(y + v - oy) - ox;
+            widths[size_t(v - top)] = edge[size_t(std::abs(v))];
+        }
+        const int x0 = a.roi.left();
+        for (size_t i = 0; i < rows.size(); ++i) {
+            const int w = widths[i];
+            for (int u = std::max(-w, -x0); u <= std::min(w, width - 1 - x0); ++u)
+                add(rows[i][x0 + u], +1);
+        }
+        const QRgb* center = s.row(y - oy) - ox;
+        QRgb* d = out.row(y);
+        for (int x = a.roi.left(); x <= a.roi.right(); ++x) {
+            d[x] = qPremultiply(apply(center[x], const_cast<const LocalHistogram&>(h)));
+            if (x == a.roi.right())
+                break;
+            for (size_t i = 0; i < rows.size(); ++i) {
+                const int w = widths[i];
+                if (x - w >= 0)
+                    add(rows[i][x - w], -1);
+                if (x + 1 + w < width)
+                    add(rows[i][x + 1 + w], +1);
+            }
+        }
+    });
+}
+
+} // namespace detail
+
+// Recorre la selección con el histograma circular de radio 'radius' alrededor de cada píxel:
+// apply(píxel directo, histograma) -> píxel directo.
+template <typename Apply>
+void localHistogram(const RenderArgs& a, int radius, Apply&& apply)
+{
+    const int rad = std::max(0, radius);
+    if (rad <= kCoarseHistogramRadius)
+        detail::localHistogramRows<true>(a, rad, apply);
+    else
+        detail::localHistogramRows<false>(a, rad, apply);
+}
+
 QRgb histogramPercentile(const LocalHistogram& h, int percentile);
 // "Calidad" (1–9) de Mediana y Contorno en Paint.NET 5: bits de precisión de la búsqueda del
 // percentil; con menos de 8 cada canal cae en el centro de su intervalo.

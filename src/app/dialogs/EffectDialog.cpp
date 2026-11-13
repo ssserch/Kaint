@@ -1,5 +1,7 @@
 #include "app/dialogs/EffectDialog.h"
 
+#include "core/Parallel.h"
+
 #include "app/Icons.h"
 #include "app/dialogs/DialogButtons.h"
 #include "app/widgets/CurvesEditor.h"
@@ -756,6 +758,8 @@ void EffectPreview::start()
     m_progressTimer.start();
     m_thread = std::thread([this, cancel, values, generation, src = m_source, sel = m_selection, ctx,
                             progress = m_progress, effect = &m_effect] {
+        // Por debajo de la interfaz: el deslizador y el lienzo siguen respondiendo mientras tanto.
+        parallel::enterBackground();
         const QImage out = Effects::apply(*effect, src, sel, values, ctx, *cancel);
         const bool cancelled = cancel->load();
         QMetaObject::invokeMethod(
@@ -829,6 +833,7 @@ QImage applyEffectWithProgress(const Effect& effect, const QImage& src, const Se
     ctx.progress = progress.get();
     QImage result;
     std::thread worker([&, ctx] {
+        parallel::enterBackground();
         result = Effects::apply(effect, src, selection, values, ctx, *cancel);
         done->store(true);
     });

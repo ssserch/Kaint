@@ -585,17 +585,11 @@ QImage boxBlur(const QImage& src, const QRect& area, int radius, const std::atom
 QRgb histogramPercentile(const LocalHistogram& h, int percentile)
 {
     const int minCount = h.area * percentile / 100;
-    auto channel = [&](const int* hist) {
-        int v = 0, count = 0;
-        while (v < 255 && hist[v] == 0)
-            ++v;
-        while (v < 255 && count < minCount) {
-            count += hist[v];
-            ++v;
-        }
-        return v;
+    auto channel = [&](const int* hist, const int* coarse) {
+        int count = 0;
+        return histogramAdvance(hist, coarse, histogramFirst(hist, coarse), count, minCount);
     };
-    return qRgba(channel(h.r), channel(h.g), channel(h.b), channel(h.a));
+    return qRgba(channel(h.r, h.coarseR()), channel(h.g, h.coarseG()), channel(h.b, h.coarseB()), channel(h.a, h.coarseA()));
 }
 
 QRgb quantizeBits(QRgb c, int bits)
@@ -608,57 +602,8 @@ QRgb quantizeBits(QRgb c, int bits)
     return qRgba(q(qRed(c)), q(qGreen(c)), q(qBlue(c)), q(qAlpha(c)));
 }
 
-void localHistogram(const RenderArgs& a, int radius, const HistogramFn& apply)
-{
-    const int rad = std::max(0, radius);
-    const QRect region = expanded(a.roi, rad + 1, a.src.rect());
-    const QImage straight = a.src.copy(region).convertToFormat(QImage::Format_ARGB32);
-    const ConstPixels s(straight);
-    const Pixels out(a.dst);
-    const int ox = region.left(), oy = region.top();
-    const int width = a.src.width(), height = a.src.height();
-
-    // Semiancho horizontal del círculo en cada fila (aprox. (r + 0,5)^2).
-    const int cutoff = ((rad * 2 + 1) * (rad * 2 + 1) + 2) / 4;
-    std::vector<int> edge(size_t(rad + 1), 0);
-    for (int v = 0; v <= rad; ++v)
-        for (int u = 0; u <= rad; ++u)
-            if (u * u + v * v <= cutoff)
-                edge[size_t(v)] = u;
-
-    forRows(a, [&](int y) {
-        LocalHistogram h{};
-        auto add = [&](int x, int yy, int sign) {
-            const QRgb p = s.at(x - ox, yy - oy);
-            h.b[qBlue(p)] += sign;
-            h.g[qGreen(p)] += sign;
-            h.r[qRed(p)] += sign;
-            h.a[qAlpha(p)] += sign;
-            h.area += sign;
-        };
-        const int top = -std::min(rad, y);
-        const int bottom = std::min(rad, height - 1 - y);
-        const int x0 = a.roi.left();
-        for (int v = top; v <= bottom; ++v) {
-            const int w = edge[size_t(std::abs(v))];
-            for (int u = std::max(-w, -x0); u <= std::min(w, width - 1 - x0); ++u)
-                add(x0 + u, y + v, +1);
-        }
-        QRgb* d = out.row(y);
-        for (int x = a.roi.left(); x <= a.roi.right(); ++x) {
-            d[x] = qPremultiply(apply(s.at(x - ox, y - oy), h));
-            if (x == a.roi.right())
-                break;
-            for (int v = top; v <= bottom; ++v) {
-                const int w = edge[size_t(std::abs(v))];
-                if (x - w >= 0)
-                    add(x - w, y + v, -1);
-                if (x + 1 + w < width)
-                    add(x + 1 + w, y + v, +1);
-            }
-        }
-    });
-}
+// (localHistogram está en EffectUtils.h: es una plantilla para que la función de cada píxel se
+// pueda integrar en el bucle.)
 
 // --- Perlin de Paint.NET -----------------------------------------------------
 

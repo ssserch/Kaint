@@ -57,7 +57,9 @@ runs on Windows 10 and 11.
     <td valign="top">
       <h4>Plugins</h4>
       Paint.NET effect plugins (.dll), through mono on Linux and the .NET Framework built into
-      Windows, plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
+      Windows, old Paint.NET 3 plugins included: the ones that use its standard Amount, Two/Three
+      Amounts and Angle windows (early CodeLab plugins) open in Kaint's own effect window, with a live
+      preview. Plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
       sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
       develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
       them. <b>paint.js plugins</b> (.paintjs) too, the same ones as the web version, with their
@@ -145,12 +147,14 @@ runs on Windows 10 and 11.
 Kaint looks the way you want. Almost everything about its appearance can be changed from
 **Settings → User interface**, and every change shows at once:
 
-- **Themes**: light and dark (or follow the system), Paint.NET's Blue, **Windows 7** (with 7.css's
-  colors and glass buttons), **Windows XP** (Luna, with XP.css's), the classic gray of **Windows 98**
-  and **Windows 98 ALT** (the classic look of Windows 2000 and XP),
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, **Windows 7** and **Windows 7
+  Dark** (with 7.css's colors and glass buttons), **Windows XP** (Luna, with XP.css's), the classic gray
+  of **Windows 98** and **Windows 98 ALT** (the classic look of Windows 2000 and XP),
   the real **KDE** theme on Linux, and a **custom theme** editor with every color,
-  the toolbar layout and a canvas background image (placement, scale, blur and tint), which you can
-  export and share.
+  the toolbar layout and a canvas background (placement, scale, blur and tint), which you can
+  export and share. The custom theme can start from any of them, Windows 7 (light or dark) and XP
+  included with their style of buttons, menus and windows, and its background can be an image, an
+  **animated GIF** (or WebP) or a **video** (MP4, WebM, MOV...), played in a loop without sound.
 - **Interface style**: Kaint's own or a recreation of **Paint.NET 5** (the default): more compact,
   with borderless windows, tighter menus and buttons, gray and blue bar sliders, hollow ring handles,
   a grid of shapes and Paint.NET's Colors window.

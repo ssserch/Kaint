@@ -109,6 +109,23 @@
   </keywords>
 
   <releases>
+    <release version="1.1.8" date="2026-11-12">
+      <description>
+        <p>Animated and video backgrounds, Windows 7 and XP in the custom theme, and better Paint.NET plugin support.</p>
+        <ul>
+          <li>The custom theme can start from Windows 7 (light or dark) or Windows XP, with their buttons, menus and windows, so you can use your own background with the Windows 7 look</li>
+          <li>The canvas background can be an animated GIF (or WebP) or a video (MP4, WebM, MOV...), played in a loop without sound</li>
+          <li>Windows 7 Dark theme in the web version, and its custom theme gets the same bases and backgrounds</li>
+          <li>Paint.NET plugins: old ones that use the standard Amount, Two/Three Amounts and Angle windows now open in Kaint's effect window with a live preview, and Burninate, Combined Adjustments, the bevel and inner shadow of ObjectTools and SelectionTools and Film work; helper libraries no longer show up as incompatible plugins, and file type plugins say what they are</li>
+          <li>Built-in effects such as Outline, Median and Reduce Noise are faster, and effects are computed below the interface's priority, so dragging a slider no longer lags; in the web version the preview no longer copies the image to every thread on each change</li>
+          <li>The Windows 7 style follows the custom theme's colors (buttons, bars, menus, selection), with a window color of your own for the glass</li>
+          <li>Custom themes can be exported and imported: a .zip with the theme and its background (image, GIF or video), or a .json without one; the same files work in Kaint and in the web version</li>
+          <li>Drag plugin files or folders onto Settings → Plugins to install them; the ones that can't be read are left out</li>
+          <li>The selection looks like Paint.NET's (a pale lavender inside and gray marching ants), Settings opens several times faster and is a bit taller, and the window opening animation on Windows is shorter, so dialogs can be used sooner</li>
+          <li>Fixes: Kaint could close when turning plugins or their effects on or off in Settings; the odd shadow behind window titles with the Windows 7 themes; the empty space after the menus in the web version</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.7" date="2026-11-11">
       <description>
         <p>Collaborative mode, over the Internet or on the local network, between Kaint and the web version.</p>

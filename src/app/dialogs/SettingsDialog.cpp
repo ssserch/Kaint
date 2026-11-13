@@ -66,6 +66,8 @@
 #include <QRadioButton>
 #include <QScreen>
 #include <QScrollArea>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
@@ -82,7 +84,10 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <atomic>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 namespace {
 
@@ -112,6 +117,9 @@ AppSettings AppSettings::load()
     a.animations = get("animations", a.animations);
     a.windowAnimation = get("windowAnimation", a.windowAnimation);
     a.windowAnimationMs = std::clamp(get("windowAnimationMs", a.windowAnimationMs), 50, 2000);
+    // Los 300 ms de antes eran la duración de fábrica, no una elegida: pasan a la nueva (una sola vez).
+    if (a.windowAnimationMs == 300 && !s.contains(QStringLiteral("windowAnimationMs2")))
+        a.windowAnimationMs = AppSettings().windowAnimationMs;
     a.aeroTransparency = get("aeroTransparency", a.aeroTransparency);
     a.translucentPanels = get("translucentPanels", a.translucentPanels);
     a.translucentOverImage = get("translucentOverImage", a.translucentOverImage);
@@ -203,6 +211,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("animations"), animations);
     s.setValue(QStringLiteral("windowAnimation"), windowAnimation);
     s.setValue(QStringLiteral("windowAnimationMs"), windowAnimationMs);
+    s.setValue(QStringLiteral("windowAnimationMs2"), true);
     s.setValue(QStringLiteral("aeroTransparency"), aeroTransparency);
     s.setValue(QStringLiteral("translucentPanels"), translucentPanels);
     s.setValue(QStringLiteral("translucentOverImage"), translucentOverImage);
@@ -312,6 +321,57 @@ private:
     std::function<void()> m_done;
 };
 
+// Acepta archivos y carpetas soltados encima (la página Complementos) y se los pasa a 'dropped'.
+class PluginDropFilter : public QObject {
+public:
+    PluginDropFilter(QObject* parent, std::function<void(const QStringList&)> dropped)
+        : QObject(parent)
+        , m_dropped(std::move(dropped))
+    {
+    }
+
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        switch (event->type()) {
+        case QEvent::DragEnter:
+        case QEvent::DragMove: {
+            auto* e = static_cast<QDropEvent*>(event);
+            if (!localPaths(e->mimeData()).isEmpty()) {
+                e->setDropAction(Qt::CopyAction);
+                e->accept();
+                return true;
+            }
+            return false;
+        }
+        case QEvent::Drop: {
+            auto* e = static_cast<QDropEvent*>(event);
+            const QStringList paths = localPaths(e->mimeData());
+            if (paths.isEmpty())
+                return false;
+            e->setDropAction(Qt::CopyAction);
+            e->accept();
+            m_dropped(paths);
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
+private:
+    static QStringList localPaths(const QMimeData* mime)
+    {
+        QStringList paths;
+        if (mime && mime->hasUrls())
+            for (const QUrl& url : mime->urls())
+                if (url.isLocalFile())
+                    paths << url.toLocalFile();
+        return paths;
+    }
+
+    std::function<void(const QStringList&)> m_dropped;
+};
+
 QLabel* wrapped(const QString& text, QWidget* parent)
 {
     auto* l = new QLabel(text, parent);
@@ -351,26 +411,44 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
         m_sections->addItem(new QListWidgetItem(Icons::theme(icon), name));
         m_pages->addWidget(page);
     };
+    // Las páginas que más tardan en crearse (atajos de teclado, diagnósticos, colaboración...) y que
+    // no dependen de las demás se crean la primera vez que se abren: así Configuración se abre antes.
+    auto addLazyPage = [&](const QString& name, std::initializer_list<const char*> icon, std::function<QWidget*()> create) {
+        m_lazyPages.insert(m_pages->count(), std::move(create));
+        addPage(name, icon, new QWidget(m_pages));
+    };
     addPage(tr("Interfaz de usuario"), {"settings-interface", "preferences-desktop-theme", "preferences-desktop"}, createInterfacePage());
     addPage(tr("Lienzo"), {"settings-canvas", "image-x-generic", "view-preview"}, createCanvasPage());
-    addPage(tr("Herramientas"), {"settings-tools", "tools", "draw-brush"}, createToolsPage(tools));
-    addPage(tr("Lápiz y tableta"), {"settings-tablet", "input-tablet", "draw-calligraphic"}, createTabletPage());
-    addPage(tr("Rendimiento"), {"settings-performance", "speedometer", "preferences-system-performance", "cpu"}, createPerformancePage());
+    addLazyPage(tr("Herramientas"), {"settings-tools", "tools", "draw-brush"}, [this, tools] { return createToolsPage(tools); });
+    addLazyPage(tr("Lápiz y tableta"), {"settings-tablet", "input-tablet", "draw-calligraphic"}, [this] { return createTabletPage(); });
+    addLazyPage(tr("Rendimiento"), {"settings-performance", "speedometer", "preferences-system-performance", "cpu"},
+                [this] { return createPerformancePage(); });
     addPage(tr("Complementos"), {"settings-plugins", "preferences-plugin", "application-x-addon"}, createPluginsPage());
     addPage(tr("Discord"), {"discord", "im-user-online", "user-online", "network-connect"}, createDiscordPage());
-    addPage(tr("Colaboración"), {"settings-collab", "collab"}, createCollabPage());
-    addPage(tr("Actualizaciones"), {"settings-updates", "update-none", "system-software-update"}, createUpdatesPage());
-    addPage(tr("Diagnósticos"), {"settings-diagnostics", "tools-report-bug", "dialog-information"}, createDiagnosticsPage());
+    addLazyPage(tr("Colaboración"), {"settings-collab", "collab"}, [this] { return createCollabPage(); });
+    addLazyPage(tr("Actualizaciones"), {"settings-updates", "update-none", "system-software-update"}, [this] { return createUpdatesPage(); });
+    addLazyPage(tr("Diagnósticos"), {"settings-diagnostics", "tools-report-bug", "dialog-information"},
+                [this] { return createDiagnosticsPage(); });
     // Como el grupo propio de paint.js: paquetes de iconos, fuentes, formas y atajos de teclado.
     addPage(tr("Paquetes de iconos"), {"settings-icon-packs", "preferences-desktop-icons", "folder-open"}, createIconPacksPage());
     addPage(tr("Fuentes"), {"settings-fonts", "preferences-desktop-font", "draw-text"}, createFontsPage());
     addPage(tr("Formas"), {"settings-shapes", "draw-rectangle", "shapes"}, createShapesPage());
     addPage(tr("Personalización"), {"settings-customize", "configure-toolbars", "preferences-desktop-theme-global", "configure"},
             createCustomizePage(tools));
-    addPage(tr("Atajos de teclado"), {"settings-keyboard", "preferences-desktop-keyboard-shortcut", "input-keyboard"},
-            createKeyboardPage());
+    addLazyPage(tr("Atajos de teclado"), {"settings-keyboard", "preferences-desktop-keyboard-shortcut", "input-keyboard"},
+                [this] { return createKeyboardPage(); });
 
-    connect(m_sections, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
+    connect(m_sections, &QListWidget::currentRowChanged, this, [this](int row) {
+        // La de una página que aún no se creó: ahora, en lugar del hueco que la guardaba.
+        if (auto create = m_lazyPages.take(row)) {
+            QWidget* placeholder = m_pages->widget(row);
+            QWidget* page = create();
+            m_pages->insertWidget(row, page);
+            m_pages->removeWidget(placeholder);
+            placeholder->deleteLater();
+        }
+        m_pages->setCurrentIndex(row);
+    });
     m_sections->setCurrentRow(0);
 
     // Como Paint.NET, los cambios se aplican al momento: solo hay "Cerrar".
@@ -385,7 +463,11 @@ SettingsDialog::SettingsDialog(const AppSettings& current, ToolManager* tools, Q
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(top, 1);
     layout->addWidget(box);
-    resize(860, 600);
+    // Algo más alta que antes: en Complementos caben la lista y los detalles del elegido sin barras
+    // de desplazamiento (sin pasarse de la pantalla).
+    const QScreen* screen = parent ? parent->screen() : QGuiApplication::primaryScreen();
+    const int available = screen ? screen->availableGeometry().height() - 80 : 680;
+    resize(860, std::clamp(available, 600, 680));
 }
 
 void SettingsDialog::showPage(Page page)
@@ -584,14 +666,18 @@ QWidget* SettingsDialog::createInterfacePage()
         changed();
     });
     auto syncAeroGlass = [this, aeroGlass, panelCloseRow] {
+        // (También el personalizado con el estilo de Windows 7.)
         const bool win7 = m_settings.colorScheme == int(Theme::Scheme::Windows7)
-                          || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark);
+                          || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark)
+                          || (m_settings.colorScheme == int(Theme::Scheme::Custom) && Theme::custom().win7 && !Theme::custom().classic);
         aeroGlass->setEnabled(win7);
         aeroGlass->setVisible(win7);
         panelCloseRow->setVisible(win7);
     };
     syncAeroGlass();
     connect(this, &SettingsDialog::settingsChanged, this, syncAeroGlass);
+    // Al cambiar el estilo del personalizado (Personalizar…).
+    connect(Theme::notifier(), &Theme::Notifier::changed, this, syncAeroGlass);
 
     // Aspecto: el de Kaint o la recreación de Paint.NET (solo lo visual).
     auto* lookRow = new QHBoxLayout;
@@ -1414,11 +1500,13 @@ QWidget* SettingsDialog::createPluginsPage()
     m_pluginList->setRootIsDecorated(true);
     m_pluginList->setMinimumHeight(160);
     m_pluginList->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-    page.layout->addWidget(m_pluginList, 2);
+    page.layout->addWidget(m_pluginList, 1);
     m_pluginDetails = new QPlainTextEdit(page.widget);
     m_pluginDetails->setReadOnly(true);
     m_pluginDetails->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-    m_pluginDetails->setMinimumHeight(100);
+    m_pluginDetails->setMinimumHeight(110);
+    // A medias con la lista: la información de un complemento (ruta, autor, nota, efectos) cabe sin
+    // barra de desplazamiento.
     page.layout->addWidget(m_pluginDetails, 1);
     m_showIncompatible = new QCheckBox(tr("Mostrar también los complementos que no son compatibles"), page.widget);
     connect(m_showIncompatible, &QCheckBox::toggled, this, &SettingsDialog::refreshPlugins);
@@ -1479,6 +1567,19 @@ QWidget* SettingsDialog::createPluginsPage()
     catalogRow->addWidget(browse);
     catalogRow->addStretch();
     page.layout->addLayout(catalogRow);
+    // Arrastrar archivos o carpetas a la página: se leen y se copian los que son complementos.
+    m_pluginDropStatus = wrapped(tr("También puedes arrastrar aquí archivos o carpetas de complementos para añadirlos."), page.widget);
+    {
+        QPalette dim = m_pluginDropStatus->palette();
+        dim.setColor(QPalette::WindowText, dim.color(QPalette::PlaceholderText));
+        m_pluginDropStatus->setPalette(dim);
+    }
+    page.layout->addWidget(m_pluginDropStatus);
+    page.widget->setAcceptDrops(true);
+    page.widget->installEventFilter(new PluginDropFilter(page.widget, [this](const QStringList& paths) {
+        // Fuera del evento de soltar (en Windows, el Explorador espera mientras tanto).
+        QTimer::singleShot(0, this, [this, paths] { installDroppedPlugins(paths); });
+    }));
 
     connect(m_pluginList, &QTreeWidget::currentItemChanged, this, &SettingsDialog::showPluginDetails);
     connect(m_pluginList, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int column) {
@@ -1486,13 +1587,18 @@ QWidget* SettingsDialog::createPluginsPage()
             return;
         const QString id = item->data(0, Qt::UserRole).toString();
         const bool on = item->checkState(0) == Qt::Checked;
-        QApplication::setOverrideCursor(Qt::WaitCursor);
-        if (item->parent())
-            PluginManager::instance()->setEffectEnabled(id, item->data(0, Qt::UserRole + 1).toString(), on);
-        else
-            PluginManager::instance()->setEnabled(id, on);
-        QApplication::restoreOverrideCursor();
-        QTimer::singleShot(0, this, &SettingsDialog::refreshPlugins);
+        const QString effectId = item->parent() ? item->data(0, Qt::UserRole + 1).toString() : QString();
+        // Fuera de la señal de la casilla: activar o desactivar avisa a las listas y a los menús,
+        // que se rehacen y borran 'item' mientras Qt todavía lo usa.
+        QTimer::singleShot(0, this, [this, id, effectId, on] {
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            if (!effectId.isEmpty())
+                PluginManager::instance()->setEffectEnabled(id, effectId, on);
+            else
+                PluginManager::instance()->setEnabled(id, on);
+            QApplication::restoreOverrideCursor();
+            schedulePluginRefresh();
+        });
     });
     // Lo plegado se recuerda mientras el diálogo está abierto (al marcar una casilla la lista se
     // vuelve a llenar).
@@ -1502,9 +1608,22 @@ QWidget* SettingsDialog::createPluginsPage()
     connect(m_pluginList, &QTreeWidget::itemExpanded, this, [this](QTreeWidgetItem* item) {
         m_collapsedPlugins.remove(item->data(0, Qt::UserRole).toString());
     });
-    connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::refreshPlugins);
+    connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::schedulePluginRefresh);
     refreshPlugins();
     return page.widget;
+}
+
+void SettingsDialog::schedulePluginRefresh()
+{
+    if (m_pluginRefreshQueued)
+        return;
+    m_pluginRefreshQueued = true;
+    QTimer::singleShot(0, this, [this] {
+        m_pluginRefreshQueued = false;
+        if (m_pluginList)
+            refreshPlugins();
+        refreshEffectMenus();
+    });
 }
 
 void SettingsDialog::refreshPlugins()
@@ -1666,6 +1785,95 @@ void SettingsDialog::addPlugins()
             break;
         }
     }
+}
+
+void SettingsDialog::installDroppedPlugins(const QStringList& paths)
+{
+    PluginManager* pm = PluginManager::instance();
+    const QStringList candidates = PluginManager::dropCandidates(paths);
+    QHash<QString, PluginManager::Check> checked;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    m_pluginDropStatus->setText(tr("Comprobando los complementos…"));
+    // Los rápidos aquí; los de Paint.NET, que examina el proceso auxiliar, en otro hilo (la ventana
+    // sigue pintándose y dice por cuál va).
+    QStringList slow;
+    for (const QString& c : candidates) {
+        if (PluginManager::isSlowCheck(c))
+            slow << c;
+        else
+            checked.insert(c, pm->check(c));
+    }
+    if (!slow.isEmpty()) {
+        std::atomic_int done{0};
+        std::mutex mutex;
+        QHash<QString, PluginManager::Check> results;
+        std::thread worker([&] {
+            for (const QString& s : std::as_const(slow)) {
+                const PluginManager::Check r = pm->check(s);
+                {
+                    std::lock_guard lock(mutex);
+                    results.insert(s, r);
+                }
+                ++done;
+            }
+        });
+        while (done < slow.size()) {
+            m_pluginDropStatus->setText(
+                tr("Comprobando los complementos de Paint.NET (%1 de %2)…").arg(std::min(done.load() + 1, int(slow.size()))).arg(slow.size()));
+            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+        }
+        worker.join();
+        for (auto it = results.constBegin(); it != results.constEnd(); ++it)
+            checked.insert(it.key(), it.value());
+    }
+    QApplication::restoreOverrideCursor();
+    const PluginManager::DropPlan plan = pm->planDrop(paths, checked);
+    const QString rejected = plan.rejected.isEmpty()
+                                 ? QString()
+                                 : tr("No se leyeron (no son complementos compatibles o están dañados): %1.")
+                                       .arg(plan.rejected.mid(0, 8).join(QStringLiteral(", "))
+                                            + (plan.rejected.size() > 8 ? tr(" y %n más", nullptr, int(plan.rejected.size() - 8)) : QString()));
+    int plugins = 0;
+    for (const auto& item : plan.copy)
+        plugins += item.plugin ? 1 : 0;
+    if (plugins == 0) {
+        m_pluginDropStatus->setText(rejected.isEmpty() ? tr("No había complementos que añadir.") : rejected);
+        return;
+    }
+    bool replace = false;
+    const QStringList existing = pm->planConflicts(plan);
+    if (!existing.isEmpty()) {
+        const auto answer = QMessageBox::question(
+            this, tr("Añadir complementos"),
+            tr("Ya hay complementos con estos nombres:\n\n%1\n\n¿Quieres sustituirlos?").arg(existing.join(QLatin1Char('\n'))),
+            QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::No);
+        if (answer == QMessageBox::Cancel) {
+            m_pluginDropStatus->clear();
+            return;
+        }
+        replace = answer == QMessageBox::Yes;
+    }
+    QStringList errors;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const QStringList copied = pm->installPlan(plan, replace, &errors);
+    pm->scan();
+    if (replace)
+        for (const QString& target : existing)
+            pm->reload(QFileInfo(QDir(pm->userPath()).filePath(target)).absoluteFilePath());
+    QApplication::restoreOverrideCursor();
+    refreshPlugins();
+    for (int i = 0; i < m_pluginList->topLevelItemCount(); ++i)
+        if (copied.contains(m_pluginList->topLevelItem(i)->data(0, Qt::UserRole).toString())) {
+            m_pluginList->setCurrentItem(m_pluginList->topLevelItem(i));
+            m_pluginList->scrollToItem(m_pluginList->topLevelItem(i));
+            break;
+        }
+    QStringList lines{tr("Añadidos: %n complemento(s).", nullptr, int(copied.size()))};
+    if (!rejected.isEmpty())
+        lines << rejected;
+    if (!errors.isEmpty())
+        lines << tr("No se pudieron copiar: %1.").arg(errors.join(QStringLiteral(", ")));
+    m_pluginDropStatus->setText(lines.join(QLatin1Char(' ')));
 }
 
 void SettingsDialog::showPluginDetails()
@@ -1832,7 +2040,8 @@ QWidget* SettingsDialog::createCustomizePage(ToolManager* tools)
         Customization::instance()->resetEffects();
         refreshEffectMenus();
     });
-    connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::refreshEffectMenus);
+    // (Al cambiar los complementos, la lista se rehace con schedulePluginRefresh.)
+    connect(PluginManager::instance(), &PluginManager::changed, this, &SettingsDialog::schedulePluginRefresh);
     connect(custom, &Customization::effectMenusChanged, this, syncButtons);
 
     page.layout->addWidget(sectionHeader(tr("Ventana Herramientas"), page.widget));

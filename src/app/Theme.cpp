@@ -1,6 +1,8 @@
 #include "app/Theme.h"
 
 #include "app/Icons.h"
+#include "app/VideoFrames.h"
+#include "core/Zip.h"
 
 #include <QApplication>
 #include <QAbstractButton>
@@ -13,13 +15,18 @@
 #include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QFontDatabase>
+#include <QHash>
+#include <QElapsedTimer>
 #include <QIcon>
+#include <QImageReader>
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMovie>
 #include <QPainter>
 #include <QPixmap>
+#include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStyle>
@@ -35,6 +42,8 @@
 #endif
 
 #include <algorithm>
+#include <memory>
+#include <vector>
 
 #ifdef Q_OS_WIN
 #include <QAbstractNativeEventFilter>
@@ -44,7 +53,7 @@
 
 namespace Theme {
 
-const std::array<ColorRole, 19> kColorRoles{{
+const std::array<ColorRole, 20> kColorRoles{{
     {"accent", &Spec::accent, QT_TRANSLATE_NOOP("Theme", "Acento")},
     {"window", &Spec::window, QT_TRANSLATE_NOOP("Theme", "Ventana y diálogos")},
     {"text", &Spec::text, QT_TRANSLATE_NOOP("Theme", "Texto")},
@@ -64,6 +73,7 @@ const std::array<ColorRole, 19> kColorRoles{{
     {"selectionBorder", &Spec::selectionBorder, QT_TRANSLATE_NOOP("Theme", "Borde de la selección")},
     {"hover", &Spec::hover, QT_TRANSLATE_NOOP("Theme", "Bajo el puntero")},
     {"workspace", &Spec::workspace, QT_TRANSLATE_NOOP("Theme", "Fondo del lienzo")},
+    {"glass", &Spec::glass, QT_TRANSLATE_NOOP("Theme", "Color de las ventanas (cristal)")},
 }};
 
 namespace {
@@ -955,6 +965,7 @@ Spec windows7()
     s.selectionBorder = rgb(0x7da2ce);
     s.hover = rgb(0xe8f2fd);
     s.workspace = rgb(0xc8d4e3);
+    s.glass = rgb(0x7ea7d6);
     s.radius = 3;
     s.buttonStyle = ButtonStyle::Flat;
     s.density = Density::Normal;
@@ -988,6 +999,7 @@ Spec windows7Dark()
     s.selectionBorder = rgb(0x4f86c6);
     s.hover = rgb(0x2f3f52);
     s.workspace = rgb(0x1b1d20);
+    s.glass = rgb(0x3a4452);
     return s;
 }
 
@@ -1068,15 +1080,28 @@ Spec blue()
     return s;
 }
 
+Spec customBase(const Spec& custom)
+{
+    if (custom.xp && !custom.classic) {
+        Spec base = windowsXP();
+        base.dark = custom.dark;
+        return base;
+    }
+    if (custom.win7 && !custom.classic)
+        return custom.dark ? windows7Dark() : windows7();
+    return preset(custom.dark);
+}
+
 Spec resolved(const Spec& custom)
 {
     Spec s = custom;
-    const Spec base = preset(custom.dark);
+    const Spec base = customBase(custom);
     for (const ColorRole& role : kColorRoles)
         if (!(s.*role.color).isValid())
             s.*role.color = base.*role.color;
-    // Sin final propio, la cabecera es de un solo color (el suyo, aunque se haya cambiado).
-    if (!custom.panelTitleEnd.isValid())
+    // Sin final propio, la cabecera es de un solo color (el suyo, aunque se haya cambiado). Si no
+    // se cambió ninguno de los dos, la del tema base (con Windows 7 y XP, su degradado).
+    if (!custom.panelTitleEnd.isValid() && (custom.panelTitle.isValid() || !(custom.win7 || custom.xp)))
         s.panelTitleEnd = s.panelTitle;
     return s;
 }
@@ -1093,18 +1118,172 @@ QString storeBackground(const QString& file)
     QFile in(file);
     if (!in.open(QIODevice::ReadOnly))
         return file;
-    const QByteArray data = in.readAll();
+    // El nombre lleva una huella del contenido. Los archivos grandes (vídeos) no se leen enteros:
+    // la huella sale del tamaño, el principio y el final, y se copian tal cual.
+    constexpr qint64 kChunk = 4 << 20;
+    QByteArray sample = in.read(kChunk);
+    if (in.size() > 2 * kChunk) {
+        in.seek(in.size() - kChunk);
+        sample += in.read(kChunk) + QByteArray::number(in.size());
+    } else {
+        sample += in.readAll();
+    }
+    in.close();
     const QString name = QStringLiteral("%1-%2.%3")
                              .arg(QFileInfo(file).completeBaseName())
-                             .arg(qHash(data), 8, 16, QLatin1Char('0'))
+                             .arg(qHash(sample), 8, 16, QLatin1Char('0'))
                              .arg(QFileInfo(file).suffix().toLower());
     const QString target = QDir(dir).filePath(name);
-    if (!QFile::exists(target)) {
-        QFile out(target);
-        if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size())
-            return file;
+    if (!QFile::exists(target) && !QFile::copy(file, target))
+        return file;
+    return target;
+}
+
+QString storeBackgroundData(const QByteArray& data, const QString& name)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/backgrounds");
+    QDir().mkpath(dir);
+    const QFileInfo info(QFileInfo(name).fileName().isEmpty() ? QStringLiteral("fondo.png") : QFileInfo(name).fileName());
+    const QString target = QDir(dir).filePath(QStringLiteral("%1-%2.%3")
+                                                  .arg(info.completeBaseName())
+                                                  .arg(qHash(data.left(8 << 20) + QByteArray::number(data.size())), 8, 16, QLatin1Char('0'))
+                                                  .arg(info.suffix().toLower()));
+    if (QFile::exists(target))
+        return target;
+    QFile out(target);
+    if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size()) {
+        out.remove();
+        return {};
     }
     return target;
+}
+
+namespace {
+
+// El nombre de la base del personalizado en Kaint.HTML (su tema guarda la base, no las marcas).
+QString webBaseName(const Spec& s)
+{
+    if (s.classic)
+        return s.window == rgb(0xd4d0c8) ? QStringLiteral("win98alt") : QStringLiteral("win98");
+    if (s.xp)
+        return QStringLiteral("xp");
+    if (s.win7)
+        return s.dark ? QStringLiteral("win7dark") : QStringLiteral("win7");
+    return s.dark ? QStringLiteral("dark") : QStringLiteral("light");
+}
+
+} // namespace
+
+bool themeHasBackground(const Spec& spec)
+{
+    return !spec.workspaceImage.isEmpty() && QFileInfo::exists(spec.workspaceImage);
+}
+
+bool exportTheme(const Spec& spec, const QString& path, QString* error)
+{
+    QJsonObject json = toJson(spec, false);
+    json.insert(QStringLiteral("format"), QStringLiteral("kaint-theme"));
+    json.insert(QStringLiteral("version"), 1);
+    json.insert(QStringLiteral("base"), webBaseName(spec));
+    QByteArray bytes;
+    if (themeHasBackground(spec)) {
+        QFile media(spec.workspaceImage);
+        if (!media.open(QIODevice::ReadOnly)) {
+            if (error)
+                *error = media.errorString();
+            return false;
+        }
+        const QString name = QStringLiteral("background.") + QFileInfo(spec.workspaceImage).suffix().toLower();
+        json.insert(QStringLiteral("workspaceImage"), name);
+        ZipWriter zip;
+        zip.add(QStringLiteral("theme.json"), QJsonDocument(json).toJson(QJsonDocument::Indented));
+        zip.add(name, media.readAll());
+        bytes = zip.finish();
+    } else {
+        json.insert(QStringLiteral("workspaceImage"), QString());
+        bytes = QJsonDocument(json).toJson(QJsonDocument::Indented);
+    }
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size() || !out.commit()) {
+        if (error)
+            *error = out.errorString();
+        return false;
+    }
+    return true;
+}
+
+bool importTheme(const QString& path, Spec* spec, QString* error)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+        if (error)
+            *error = f.errorString();
+        return false;
+    }
+    const QByteArray data = f.readAll();
+    QJsonObject json;
+    QString background;
+    if (data.startsWith("PK")) {
+        // .zip: theme.json y el fondo que nombra.
+        const ZipReader zip(data);
+        const QJsonDocument doc = QJsonDocument::fromJson(zip.read(QStringLiteral("theme.json"), 4 << 20));
+        if (!zip.isValid() || !doc.isObject()) {
+            if (error)
+                *error = QCoreApplication::translate("Theme", "No es un tema de Kaint (falta theme.json).");
+            return false;
+        }
+        json = doc.object();
+        const QString name = QFileInfo(json.value(QStringLiteral("workspaceImage")).toString()).fileName();
+        if (!name.isEmpty() && zip.contains(name)) {
+            const QByteArray media = zip.read(name, 2048LL << 20);
+            background = media.isEmpty() ? QString() : storeBackgroundData(media, name);
+        }
+    } else {
+        const QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (!doc.isObject()) {
+            if (error)
+                *error = QCoreApplication::translate("Theme", "No es un tema de Kaint.");
+            return false;
+        }
+        json = doc.object();
+    }
+    Spec s = fromJson(json);
+    // El fondo: el del .zip; en un .json, el que llevaba dentro (los de antes) o una ruta que exista.
+    if (!background.isEmpty())
+        s.workspaceImage = background;
+    else if (!s.workspaceImage.isEmpty() && (!QFileInfo(s.workspaceImage).isAbsolute() || !QFileInfo::exists(s.workspaceImage)))
+        s.workspaceImage.clear();
+    *spec = s;
+    return true;
+}
+
+bool isAnimatedBackground(const QString& file)
+{
+    if (file.isEmpty())
+        return false;
+    if (VideoFrames::isVideo(file))
+        return true;
+    // Se lee una vez por archivo (se llama al dibujar; los fondos se copian a la carpeta de Kaint con
+    // una huella del contenido en el nombre, así que no cambian).
+    static QHash<QString, bool> known;
+    const QString& key = file;
+    auto it = known.constFind(key);
+    if (it != known.constEnd())
+        return *it;
+    QImageReader reader(file);
+    const bool animated = reader.supportsAnimation() && reader.imageCount() != 1;
+    known.insert(key, animated);
+    return animated;
+}
+
+QString backgroundFileFilter()
+{
+    const QString images = QStringLiteral("*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl *.apng");
+    const QString videos = VideoFrames::filePatterns();
+    return QCoreApplication::translate("Theme", "Imágenes, animaciones y vídeos (%1 %2)").arg(images, videos) + QStringLiteral(";;")
+           + QCoreApplication::translate("Theme", "Imágenes (%1)").arg(images) + QStringLiteral(";;")
+           + QCoreApplication::translate("Theme", "Animaciones (*.gif *.webp *.apng *.png)") + QStringLiteral(";;")
+           + QCoreApplication::translate("Theme", "Vídeos (%1)").arg(videos);
 }
 
 QJsonObject toJson(const Spec& spec, bool embedImage)
@@ -1128,6 +1307,8 @@ QJsonObject toJson(const Spec& spec, bool embedImage)
         {QStringLiteral("imageTint"), spec.imageTint.isValid() ? spec.imageTint.name() : QString()},
         {QStringLiteral("imageTintStrength"), spec.imageTintStrength},
         {QStringLiteral("classic"), spec.classic},
+        {QStringLiteral("win7"), spec.win7},
+        {QStringLiteral("xp"), spec.xp},
         {QStringLiteral("pixelFont"), spec.pixelFont},
         {QStringLiteral("iconSize"), spec.iconSize},
         {QStringLiteral("toolIconSize"), spec.toolIconSize},
@@ -1139,7 +1320,8 @@ QJsonObject toJson(const Spec& spec, bool embedImage)
         {QStringLiteral("fontSize"), spec.fontSize},
         {QStringLiteral("iconTheme"), spec.iconTheme},
     };
-    if (embedImage && !spec.workspaceImage.isEmpty()) {
+    // (Los vídeos de más de 64 MB no van dentro: el tema quedaría enorme.)
+    if (embedImage && !spec.workspaceImage.isEmpty() && QFileInfo(spec.workspaceImage).size() <= (64 << 20)) {
         QFile f(spec.workspaceImage);
         if (f.open(QIODevice::ReadOnly)) {
             json.insert(QStringLiteral("workspaceImageName"), QFileInfo(spec.workspaceImage).fileName());
@@ -1184,6 +1366,8 @@ Spec fromJson(const QJsonObject& json)
     s.imageTint = QColor::fromString(json.value(QStringLiteral("imageTint")).toString());
     s.imageTintStrength = number("imageTintStrength", base.imageTintStrength, 0, 100);
     s.classic = json.value(QStringLiteral("classic")).toBool(false);
+    s.win7 = !s.classic && json.value(QStringLiteral("win7")).toBool(false);
+    s.xp = !s.classic && !s.win7 && json.value(QStringLiteral("xp")).toBool(false);
     s.pixelFont = json.value(QStringLiteral("pixelFont")).toBool(false);
     s.iconSize = number("iconSize", base.iconSize, 12, 48);
     s.toolIconSize = number("toolIconSize", base.toolIconSize, 12, 48);
@@ -1367,135 +1551,167 @@ QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 )");
 }
 
-QString win7StyleSheet()
+// Las hojas de estilo de Windows 7 con los colores del tema: cada color marcado como
+// «{papel:#rrggbb}» se mueve lo mismo que se movió ese color del tema respecto al de Windows 7
+// ('preset'). Con los colores de siempre la hoja queda igual; con los propios del personalizado,
+// los degradados de 7.css toman su tono (botones, barras, menús, selección, campos...).
+QString recolored(QString qss, const Spec& s, const Spec& preset)
 {
-    return QStringLiteral(R"(
-QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb,
-              stop:1 #cfcfcf); border: 1px solid #8e8f8f; border-radius: 3px; color: #222222; padding: 3px 12px; }
-QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd, stop:0.45 #eaf6fd, stop:0.4501 #bee6fd,
-                    stop:1 #a7d9f5); border-color: #3c7fb1; }
-QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e5f4fc, stop:0.3 #c4e5f6,
-                    stop:0.5 #c4e5f6, stop:0.5001 #98d1ef, stop:1 #68b3db); border-color: #6d91ab; }
-QPushButton:default { border-color: #3c7fb1; }
+    static const QRegularExpression marked(QStringLiteral("\\{(\\w+):#([0-9a-fA-F]{6})\\}"));
+    QString out;
+    out.reserve(qss.size());
+    qsizetype last = 0;
+    for (auto it = marked.globalMatch(qss); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        out += QStringView(qss).mid(last, m.capturedStart() - last);
+        last = m.capturedEnd();
+        const QColor original = QColor::fromString(QLatin1Char('#') + m.captured(2));
+        QColor result = original;
+        for (const ColorRole& role : kColorRoles) {
+            if (QLatin1String(role.key) != m.captured(1))
+                continue;
+            const QColor from = preset.*role.color, to = s.*role.color;
+            if (from.isValid() && to.isValid() && from != to)
+                result = QColor(std::clamp(original.red() + to.red() - from.red(), 0, 255),
+                                std::clamp(original.green() + to.green() - from.green(), 0, 255),
+                                std::clamp(original.blue() + to.blue() - from.blue(), 0, 255));
+            break;
+        }
+        out += result.name();
+    }
+    out += QStringView(qss).mid(last);
+    return out;
+}
+
+QString win7StyleSheet(const Spec& s)
+{
+    return recolored(QStringLiteral(R"(
+QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {button:#f2f2f2}, stop:0.45 {button:#f2f2f2}, stop:0.4501 {button:#ebebeb},
+              stop:1 {button:#cfcfcf}); border: 1px solid {border:#8e8f8f}; border-radius: 3px; color: {text:#222222}; padding: 3px 12px; }
+QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#eaf6fd}, stop:0.45 {hover:#eaf6fd}, stop:0.4501 {hover:#bee6fd},
+                    stop:1 {hover:#a7d9f5}); border-color: {selectionBorder:#3c7fb1}; }
+QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#e5f4fc}, stop:0.3 {hover:#c4e5f6},
+                    stop:0.5 {hover:#c4e5f6}, stop:0.5001 {hover:#98d1ef}, stop:1 {hover:#68b3db}); border-color: {selectionBorder:#6d91ab}; }
+QPushButton:default { border-color: {selectionBorder:#3c7fb1}; }
 QPushButton:disabled { background: #f4f4f4; border-color: #adb2b5; color: #838383; }
-QComboBox:!editable { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb,
-                      stop:1 #cfcfcf); border: 1px solid #8e8f8f; border-radius: 3px; color: #222222; }
-QComboBox:!editable:hover, QComboBox:!editable:on { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd,
-                      stop:0.45 #eaf6fd, stop:0.4501 #bee6fd, stop:1 #a7d9f5); border-color: #3c7fb1; }
-QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: #ffffff; border: 1px solid;
+QComboBox:!editable { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {button:#f2f2f2}, stop:0.45 {button:#f2f2f2}, stop:0.4501 {button:#ebebeb},
+                      stop:1 {button:#cfcfcf}); border: 1px solid {border:#8e8f8f}; border-radius: 3px; color: {text:#222222}; }
+QComboBox:!editable:hover, QComboBox:!editable:on { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#eaf6fd},
+                      stop:0.45 {hover:#eaf6fd}, stop:0.4501 {hover:#bee6fd}, stop:1 {hover:#a7d9f5}); border-color: {selectionBorder:#3c7fb1}; }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: {base:#ffffff}; border: 1px solid;
               border-color: #abadb3 #dbdfe6 #e3e9ef #e2e3ea; border-radius: 2px; }
 QLineEdit:hover, QAbstractSpinBox:hover, QPlainTextEdit:hover, QTextEdit:hover, QComboBox:editable:hover {
               border-color: #5794bf #b7d5ea #c7e2f1 #c5daed; }
 QLineEdit:focus, QAbstractSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:editable:focus {
               border-color: #3d7bad #a4c9e3 #b7d9ed #b5cfe7; }
-QMenuBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:0.2 #ffffff, stop:0.25 #f1f4fa, stop:0.43 #f1f4fa,
-           stop:0.48 #d4dbee, stop:1 #e6eaf6); border-color: #a0afc3; }
-QMenuBar::item:selected, QMenuBar::item:pressed { background: #3399ff; color: #ffffff; border-color: #3399ff; }
-QMenu { background: #f0f0f0; border: 1px solid rgba(0, 0, 0, 102); padding: 2px; }
+QMenuBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {toolBar:#ffffff}, stop:0.2 {toolBar:#ffffff}, stop:0.25 {toolBar:#f1f4fa}, stop:0.43 {toolBar:#f1f4fa},
+           stop:0.48 {toolBar:#d4dbee}, stop:1 {toolBar:#e6eaf6}); border-color: #a0afc3; }
+QMenuBar::item:selected, QMenuBar::item:pressed { background: {accent:#3399ff}; color: #ffffff; border-color: {accent:#3399ff}; }
+QMenu { background: {window:#f0f0f0}; border: 1px solid rgba(0, 0, 0, 102); padding: 2px; }
 QMenu::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 153),
-                       stop:0.9 rgba(230, 236, 245, 204), stop:1 rgba(255, 255, 255, 204)); border: 1px solid #aaddfa;
+                       stop:0.9 rgba(230, 236, 245, 204), stop:1 rgba(255, 255, 255, 204)); border: 1px solid {hover:#aaddfa};
                        border-radius: 3px; color: #000000; }
 QMenu::separator { height: 1px; background: #e0e0e0; margin: 3px 2px 3px 28px; }
-QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fdfeff, stop:1 #e6ecf4); }
+QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {toolBar:#fdfeff}, stop:1 {toolBar:#e6ecf4}); }
 QToolBar#ToolOptionsBar { border-bottom: 1px solid #a0afc3; }
-QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fafcfe, stop:1 #e3eefb); border: 1px solid #b8d6fb;
+QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#fafcfe}, stop:1 {hover:#e3eefb}); border: 1px solid {hover:#b8d6fb};
                     border-radius: 3px; }
-QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e0edfa, stop:1 #c3dcf6);
-                    border: 1px solid #7da2ce; border-radius: 3px; }
-QStatusBar { background: #f0f0f0; border-top: 1px solid #cfcfcf; }
+QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {selection:#e0edfa}, stop:1 {selection:#c3dcf6});
+                    border: 1px solid {selectionBorder:#7da2ce}; border-radius: 3px; }
+QStatusBar { background: {statusBar:#f0f0f0}; border-top: 1px solid #cfcfcf; }
 QHeaderView::section { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:0.45 #ffffff, stop:0.4501 #fafafa,
                        stop:1 #f0f0f0); border: 1px solid #d7d7d7; padding: 2px 8px; color: #222222; }
-QAbstractItemView { selection-background-color: #d5e6fb; selection-color: #000000; }
-QComboBox QAbstractItemView { background: #ffffff; color: #000000; border: 1px solid #646464; selection-background-color: #3399ff;
-                              selection-color: #ffffff; }
+QAbstractItemView { selection-background-color: {selection:#d5e6fb}; selection-color: #000000; }
+QComboBox QAbstractItemView { background: {base:#ffffff}; color: #000000; border: 1px solid #646464; selection-background-color: {accent:#3399ff};
+                              selection-color: {base:#ffffff}; }
 QComboBox QAbstractItemView::item { padding: 1px 3px; border: none; border-radius: 0; }
-QComboBox QAbstractItemView::item:selected { background: #3399ff; color: #ffffff; }
+QComboBox QAbstractItemView::item:selected { background: {accent:#3399ff}; color: {base:#ffffff}; }
 QComboBox QAbstractItemView::item:hover:!selected { background: transparent; }
-QListView::item:selected, QTreeView::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dcebfc,
-                       stop:1 #c1dbfc); border: 1px solid #7da2ce; border-radius: 3px; color: #000000; }
+QListView::item:selected, QTreeView::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {selection:#dcebfc},
+                       stop:1 {selection:#c1dbfc}); border: 1px solid {selectionBorder:#7da2ce}; border-radius: 3px; color: #000000; }
 QListView::item:hover:!selected, QTreeView::item:hover:!selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                       stop:0 #fafbfd, stop:1 #ebf3fd); border: 1px solid #b8d6fb; border-radius: 3px; }
+                       stop:0 {hover:#fafbfd}, stop:1 {hover:#ebf3fd}); border: 1px solid {hover:#b8d6fb}; border-radius: 3px; }
 QGroupBox { border: 1px solid #cdd7db; border-radius: 3px; margin-top: 8px; padding-top: 6px; }
 QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }
 QProgressBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f3f3f3, stop:0.25 #fcfcfc, stop:0.5 #dbdbdb, stop:1 #cacaca);
                border: 1px solid #8e8f8f; border-radius: 3px; text-align: center; color: #222222; }
 QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #a6f2b3, stop:0.25 #5fe474, stop:0.5 #0bd82c,
                       stop:1 #0bc128); border-radius: 2px; }
-QTabWidget::pane { background: #ffffff; border: 1px solid #8e8f8f; }
-QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb,
-               stop:1 #cfcfcf); border: 1px solid #8e8f8f; padding: 3px 8px; margin-right: -1px; color: #222222; }
-QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd, stop:0.45 #eaf6fd, stop:0.4501 #bee6fd,
-               stop:1 #a7d9f5); border-color: #3c7fb1; }
-QTabBar::tab:selected { background: #ffffff; border-bottom-color: #ffffff; }
+QTabWidget::pane { background: {base:#ffffff}; border: 1px solid #8e8f8f; }
+QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {button:#f2f2f2}, stop:0.45 {button:#f2f2f2}, stop:0.4501 {button:#ebebeb},
+               stop:1 {button:#cfcfcf}); border: 1px solid {border:#8e8f8f}; padding: 3px 8px; margin-right: -1px; color: {text:#222222}; }
+QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#eaf6fd}, stop:0.45 {hover:#eaf6fd}, stop:0.4501 {hover:#bee6fd},
+               stop:1 {hover:#a7d9f5}); border-color: {selectionBorder:#3c7fb1}; }
+QTabBar::tab:selected { background: {base:#ffffff}; border-bottom-color: {base:#ffffff}; }
 QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #e4e5f0); color: #575757;
            border: 1px solid #767676; border-radius: 2px; }
-)");
+)"), s, windows7());
 }
 
 // Windows 7 oscuro: los mismos degradados de cristal de 7.css, en grises oscuros y azules apagados.
-QString win7DarkStyleSheet()
+QString win7DarkStyleSheet(const Spec& s)
 {
-    return QStringLiteral(R"(
-QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44,
-              stop:1 #2e3136); border: 1px solid #5f646b; border-radius: 3px; color: #ececec; padding: 3px 12px; }
-QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78, stop:0.45 #3a5470, stop:0.4501 #2f4862,
-                    stop:1 #284057); border-color: #5c95d0; }
-QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a3f56, stop:0.3 #284057,
-                    stop:0.5 #284057, stop:0.5001 #213650, stop:1 #1c2f45); border-color: #4c7fb4; }
-QPushButton:default { border-color: #5c95d0; }
+    return recolored(QStringLiteral(R"(
+QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {button:#4a4e54}, stop:0.45 {button:#44484e}, stop:0.4501 {button:#3a3e44},
+              stop:1 {button:#2e3136}); border: 1px solid {border:#5f646b}; border-radius: 3px; color: {text:#ececec}; padding: 3px 12px; }
+QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#3f5a78}, stop:0.45 {hover:#3a5470}, stop:0.4501 {hover:#2f4862},
+                    stop:1 {hover:#284057}); border-color: {selectionBorder:#5c95d0}; }
+QPushButton:pressed, QPushButton:checked { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#2a3f56}, stop:0.3 {hover:#284057},
+                    stop:0.5 {hover:#284057}, stop:0.5001 {hover:#213650}, stop:1 {hover:#1c2f45}); border-color: {selectionBorder:#4c7fb4}; }
+QPushButton:default { border-color: {selectionBorder:#5c95d0}; }
 QPushButton:disabled { background: #33363a; border-color: #45494e; color: #7c7f84; }
-QComboBox:!editable { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44,
-                      stop:1 #2e3136); border: 1px solid #5f646b; border-radius: 3px; color: #ececec; }
-QComboBox:!editable:hover, QComboBox:!editable:on { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78,
-                      stop:0.45 #3a5470, stop:0.4501 #2f4862, stop:1 #284057); border-color: #5c95d0; }
-QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: #1e1f22; border: 1px solid;
+QComboBox:!editable { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {button:#4a4e54}, stop:0.45 {button:#44484e}, stop:0.4501 {button:#3a3e44},
+                      stop:1 {button:#2e3136}); border: 1px solid {border:#5f646b}; border-radius: 3px; color: {text:#ececec}; }
+QComboBox:!editable:hover, QComboBox:!editable:on { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#3f5a78},
+                      stop:0.45 {hover:#3a5470}, stop:0.4501 {hover:#2f4862}, stop:1 {hover:#284057}); border-color: {selectionBorder:#5c95d0}; }
+QLineEdit, QAbstractSpinBox, QPlainTextEdit, QTextEdit, QComboBox:editable { background: {base:#1e1f22}; border: 1px solid;
               border-color: #5a5f66 #44484e #3e4247 #44484e; border-radius: 2px; color: #ececec; }
 QLineEdit:hover, QAbstractSpinBox:hover, QPlainTextEdit:hover, QTextEdit:hover, QComboBox:editable:hover {
               border-color: #4f86c6 #3d5f86 #36547a #3d5f86; }
 QLineEdit:focus, QAbstractSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:editable:focus {
               border-color: #5c95d0 #4677ab #3f6c9c #4677ab; }
-QMenuBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3c4048, stop:0.2 #3a3e45, stop:0.25 #33373d, stop:0.43 #33373d,
-           stop:0.48 #2a2d32, stop:1 #30343a); border-color: #4a5260; color: #f0f0f0; }
-QMenuBar::item:selected, QMenuBar::item:pressed { background: #3399ff; color: #ffffff; border-color: #3399ff; }
-QMenu { background: #2b2d30; color: #ececec; border: 1px solid rgba(255, 255, 255, 60); padding: 2px; }
+QMenuBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {toolBar:#3c4048}, stop:0.2 {toolBar:#3a3e45}, stop:0.25 {toolBar:#33373d}, stop:0.43 {toolBar:#33373d},
+           stop:0.48 {toolBar:#2a2d32}, stop:1 {toolBar:#30343a}); border-color: #4a5260; color: #f0f0f0; }
+QMenuBar::item:selected, QMenuBar::item:pressed { background: {accent:#3399ff}; color: #ffffff; border-color: {accent:#3399ff}; }
+QMenu { background: {window:#2b2d30}; color: {text:#ececec}; border: 1px solid rgba(255, 255, 255, 60); padding: 2px; }
 QMenu::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(92, 149, 208, 110),
-                       stop:0.9 rgba(60, 100, 150, 140), stop:1 rgba(92, 149, 208, 120)); border: 1px solid #4f86c6;
+                       stop:0.9 rgba(60, 100, 150, 140), stop:1 rgba(92, 149, 208, 120)); border: 1px solid {selectionBorder:#4f86c6};
                        border-radius: 3px; color: #ffffff; }
 QMenu::separator { height: 1px; background: #45494e; margin: 3px 2px 3px 28px; }
-QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3e45, stop:1 #2c2f34); }
+QToolBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {toolBar:#3a3e45}, stop:1 {toolBar:#2c2f34}); }
 QToolBar#ToolOptionsBar { border-bottom: 1px solid #4a5260; }
-QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3d4f63, stop:1 #2f3f52); border: 1px solid #4f86c6;
+QToolButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#3d4f63}, stop:1 {hover:#2f3f52}); border: 1px solid {selectionBorder:#4f86c6};
                     border-radius: 3px; }
-QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2c4560, stop:1 #223a54);
-                    border: 1px solid #5c95d0; border-radius: 3px; }
-QStatusBar { background: #2b2d30; border-top: 1px solid #45494e; }
+QToolButton:checked, QToolButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {selection:#2c4560}, stop:1 {selection:#223a54});
+                    border: 1px solid {selectionBorder:#5c95d0}; border-radius: 3px; }
+QStatusBar { background: {statusBar:#2b2d30}; border-top: 1px solid #45494e; }
 QHeaderView::section { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #44484e, stop:0.45 #3e4248, stop:0.4501 #383c42,
                        stop:1 #33363b); border: 1px solid #4a4e54; padding: 2px 8px; color: #ececec; }
-QAbstractItemView { selection-background-color: #26476b; selection-color: #ffffff; }
-QComboBox QAbstractItemView { background: #1e1f22; color: #ececec; border: 1px solid #6a6f76; selection-background-color: #3399ff;
+QAbstractItemView { selection-background-color: {selection:#26476b}; selection-color: #ffffff; }
+QComboBox QAbstractItemView { background: {base:#1e1f22}; color: #ececec; border: 1px solid #6a6f76; selection-background-color: {accent:#3399ff};
                               selection-color: #ffffff; }
 QComboBox QAbstractItemView::item { padding: 1px 3px; border: none; border-radius: 0; }
-QComboBox QAbstractItemView::item:selected { background: #3399ff; color: #ffffff; }
+QComboBox QAbstractItemView::item:selected { background: {accent:#3399ff}; color: #ffffff; }
 QComboBox QAbstractItemView::item:hover:!selected { background: transparent; }
-QListView::item:selected, QTreeView::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #34587f,
-                       stop:1 #284768); border: 1px solid #4f86c6; border-radius: 3px; color: #ffffff; }
+QListView::item:selected, QTreeView::item:selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {selection:#34587f},
+                       stop:1 {selection:#284768}); border: 1px solid {selectionBorder:#4f86c6}; border-radius: 3px; color: #ffffff; }
 QListView::item:hover:!selected, QTreeView::item:hover:!selected { background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                       stop:0 #33404e, stop:1 #2c3846); border: 1px solid #3d5f86; border-radius: 3px; }
+                       stop:0 {hover:#33404e}, stop:1 {hover:#2c3846}); border: 1px solid {hover:#3d5f86}; border-radius: 3px; }
 QGroupBox { border: 1px solid #45494e; border-radius: 3px; margin-top: 8px; padding-top: 6px; }
 QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }
 QProgressBar { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3d41, stop:0.25 #44474b, stop:0.5 #2e3134, stop:1 #26282b);
                border: 1px solid #5f646b; border-radius: 3px; text-align: center; color: #ececec; }
 QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #a6f2b3, stop:0.25 #5fe474, stop:0.5 #0bd82c,
                       stop:1 #0bc128); border-radius: 2px; }
-QTabWidget::pane { background: #1e1f22; border: 1px solid #5f646b; }
-QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44,
-               stop:1 #2e3136); border: 1px solid #5f646b; padding: 3px 8px; margin-right: -1px; color: #ececec; }
-QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78, stop:0.45 #3a5470, stop:0.4501 #2f4862,
-               stop:1 #284057); border-color: #5c95d0; }
-QTabBar::tab:selected { background: #1e1f22; border-bottom-color: #1e1f22; }
+QTabWidget::pane { background: {base:#1e1f22}; border: 1px solid #5f646b; }
+QTabBar::tab { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {button:#4a4e54}, stop:0.45 {button:#44484e}, stop:0.4501 {button:#3a3e44},
+               stop:1 {button:#2e3136}); border: 1px solid {border:#5f646b}; padding: 3px 8px; margin-right: -1px; color: {text:#ececec}; }
+QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {hover:#3f5a78}, stop:0.45 {hover:#3a5470}, stop:0.4501 {hover:#2f4862},
+               stop:1 {hover:#284057}); border-color: {selectionBorder:#5c95d0}; }
+QTabBar::tab:selected { background: {base:#1e1f22}; border-bottom-color: {base:#1e1f22}; }
 QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3d41, stop:1 #2b2d30); color: #e0e0e0;
            border: 1px solid #6a6f76; border-radius: 2px; }
-)");
+)"), s, windows7Dark());
 }
 
 QString styleSheet(const Spec& s)
@@ -1742,7 +1958,7 @@ QWidget#PanelButtons { background: #d5dde7; border-top: 1px solid #58769c; }
     // Windows 7: lo último, para que sus degradados manden. La fila de arriba la pinta ella misma
     // (con la barra de título simulada, deja ver el cristal de Aero del marco en la del título).
     if (s.win7) {
-        qss += s.dark ? win7DarkStyleSheet() : win7StyleSheet();
+        qss += s.dark ? win7DarkStyleSheet(s) : win7StyleSheet(s);
         qss += QStringLiteral("QWidget#TopRow { background: transparent; }\n");
     }
     // Windows XP: lo mismo, con los de Luna.
@@ -1875,7 +2091,7 @@ void apply(Scheme scheme)
         QFont font = g_baseFont;
         // Si no está la fuente (Microsoft Sans Serif o Segoe UI en Linux), las más parecidas.
         if (ownFont && !g_active.fontFamily.isEmpty())
-            font.setFamilies(scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark
+            font.setFamilies(g_active.win7
                                  ? QStringList{g_active.fontFamily, QStringLiteral("Noto Sans"), QStringLiteral("Open Sans"),
                                                g_baseFont.family()}
                                  : QStringList{g_active.fontFamily, QStringLiteral("Tahoma"), QStringLiteral("DejaVu Sans"),
@@ -1969,6 +2185,9 @@ QColor titleBarColor()
     // el título de las ventanas flotantes salía blanco sobre el cristal claro de Aero).
     if (g_current == Scheme::Windows98 || g_current == Scheme::Windows98Alt || g_current == Scheme::WindowsXP
         || g_current == Scheme::Windows7 || g_current == Scheme::Windows7Dark)
+        return {};
+    // El personalizado con el estilo de Windows 7 o XP, igual.
+    if (g_current == Scheme::Custom && (custom().win7 || custom().xp) && !custom().classic)
         return {};
     // El color propio de la barra superior (en Windows, con la barra de título de Kaint).
     if (g_customTitleBar.isValid())
@@ -2171,6 +2390,27 @@ Notifier* notifier()
 // ---------------------------------------------------------------------------
 // Fondo del área de trabajo
 
+QColor glassColor(bool translucent, bool focused)
+{
+    // Desde el cristal de siempre (el de 7.css, claro u oscuro), cada variante con su diferencia:
+    // con el color de siempre salen exactamente los de antes, y uno propio los mueve a todos igual.
+    const Spec s = active();
+    const QColor fallback = s.dark ? rgb(0x3a4452) : rgb(0x7ea7d6);
+    const QColor glass = s.glass.isValid() ? s.glass : fallback;
+    struct Offset {
+        int r, g, b, alpha;
+    };
+    Offset o{0, 0, 0, 255};
+    if (s.dark)
+        o = translucent ? (focused ? Offset{-28, -30, -32, 185} : Offset{-18, -24, -32, 150})
+                        : (focused ? Offset{0, 0, 0, 255} : Offset{10, 4, -4, 255});
+    else
+        o = translucent ? (focused ? Offset{-57, -39, -18, 158} : Offset{24, 8, -9, 120})
+                        : (focused ? Offset{0, 0, 0, 255} : Offset{54, 33, 10, 255});
+    return QColor(std::clamp(glass.red() + o.r, 0, 255), std::clamp(glass.green() + o.g, 0, 255),
+                  std::clamp(glass.blue() + o.b, 0, 255), o.alpha);
+}
+
 QColor workspaceColor()
 {
     return active().workspace;
@@ -2185,20 +2425,134 @@ void paintWorkspace(QPainter& p, const QRect& area, const QRect& clip, const QCo
 
 namespace {
 
-// La imagen de fondo con sus retoques (escala de grises, desenfoque, tinte), en caché.
+// Fondos animados: GIF, WebP o PNG animados (QMovie) y vídeos (VideoFrames). Se piden al dibujar:
+// el primer fotograma arranca la animación, cada fotograma nuevo avisa (Notifier::backgroundFrame)
+// y, si pasa un momento sin que nadie lo dibuje (la ventana minimizada, otro fondo), se pausa.
+struct Animation {
+    QString path;
+    QMovie* movie = nullptr;
+    VideoFrames* video = nullptr;
+    QImage frame;
+    qint64 serial = 0;
+    QElapsedTimer lastUse;
+    bool paused = false;
+};
+
+std::vector<std::unique_ptr<Animation>>& animations()
+{
+    static std::vector<std::unique_ptr<Animation>> list;
+    return list;
+}
+
+void destroyAnimation(Animation& a)
+{
+    delete a.movie;
+    delete a.video;
+    a.movie = nullptr;
+    a.video = nullptr;
+}
+
+void setAnimationPaused(Animation& a, bool paused)
+{
+    if (a.paused == paused)
+        return;
+    a.paused = paused;
+    if (a.movie)
+        a.movie->setPaused(paused);
+    if (a.video)
+        a.video->setPaused(paused);
+}
+
+// Revisa cada segundo las animaciones: pausa las que no se dibujan y borra las olvidadas.
+void watchAnimations()
+{
+    static QTimer* timer = nullptr;
+    if (timer) {
+        if (!timer->isActive())
+            timer->start();
+        return;
+    }
+    timer = new QTimer(QCoreApplication::instance());
+    timer->setInterval(1000);
+    // Al cerrar Kaint, los vídeos paran su hilo antes de que se vaya la aplicación.
+    QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, timer, [] {
+        for (auto& a : animations())
+            destroyAnimation(*a);
+        animations().clear();
+    });
+    QObject::connect(timer, &QTimer::timeout, [] {
+        auto& list = animations();
+        for (auto it = list.begin(); it != list.end();) {
+            Animation& a = **it;
+            if (a.lastUse.elapsed() > 60000) {
+                destroyAnimation(a);
+                it = list.erase(it);
+                continue;
+            }
+            if (a.lastUse.elapsed() > 1500)
+                setAnimationPaused(a, true);
+            ++it;
+        }
+        if (list.empty())
+            timer->stop();
+    });
+    timer->start();
+}
+
+// El fotograma actual del fondo animado 'path' (nulo si aún no hay ninguno) y su número.
+QImage animationFrame(const QString& path, qint64* serial)
+{
+    auto& list = animations();
+    auto it = std::find_if(list.begin(), list.end(), [&](const auto& a) { return a->path == path; });
+    if (it == list.end()) {
+        auto a = std::make_unique<Animation>();
+        a->path = path;
+        Animation* raw = a.get();
+        auto deliver = [raw](const QImage& image) {
+            raw->frame = image;
+            ++raw->serial;
+            emit notifier()->backgroundFrame();
+        };
+        if (VideoFrames::isVideo(path)) {
+            // Los fotogramas, como mucho del tamaño de una pantalla grande.
+            raw->video = new VideoFrames(path, 2560);
+            QObject::connect(raw->video, &VideoFrames::frame, raw->video, deliver);
+        } else {
+            raw->movie = new QMovie(path);
+            raw->movie->setCacheMode(QMovie::CacheNone);
+            QObject::connect(raw->movie, &QMovie::frameChanged, raw->movie, [raw, deliver] { deliver(raw->movie->currentImage()); });
+            raw->movie->start();
+        }
+        it = list.insert(list.end(), std::move(a));
+        watchAnimations();
+    }
+    Animation& a = **it;
+    a.lastUse.start();
+    setAnimationPaused(a, false);
+    if (serial)
+        *serial = a.serial;
+    return a.frame;
+}
+
+// La imagen de fondo con sus retoques (escala de grises, desenfoque, tinte), en caché. Con los
+// fondos animados, la del fotograma actual.
 const QPixmap& processedBackground(const Spec& spec, ImageCache& cache)
 {
-    const QString key = QStringLiteral("%1|%2|%3|%4|%5")
+    const bool animated = isAnimatedBackground(spec.workspaceImage);
+    qint64 serial = 0;
+    QImage frame = animated ? animationFrame(spec.workspaceImage, &serial) : QImage();
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6")
                             .arg(spec.workspaceImage)
                             .arg(spec.imageGrayscale)
                             .arg(spec.imageBlur)
                             .arg(spec.imageTint.isValid() ? spec.imageTint.name() : QString())
-                            .arg(spec.imageTintStrength);
+                            .arg(spec.imageTintStrength)
+                            .arg(serial);
     if (cache.key == key)
         return cache.image;
     cache = ImageCache();
     cache.key = key;
-    QImage image(spec.workspaceImage);
+    QImage image = animated ? frame : QImage(spec.workspaceImage);
     if (image.isNull())
         return cache.image;
     image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);

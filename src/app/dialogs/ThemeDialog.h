@@ -47,7 +47,8 @@ private:
     bool m_refreshing = false;
     QComboBox* m_template = nullptr;
     QComboBox* m_base = nullptr;
-    QCheckBox* m_classic = nullptr;
+    // Estilo de los controles: plano, Windows 7 (Aero), Windows XP (Luna) o clásico (Windows 98).
+    QComboBox* m_style = nullptr;
     QCheckBox* m_pixelFont = nullptr;
     QWidget* m_preview = nullptr;
     QComboBox* m_imageAnchor = nullptr;

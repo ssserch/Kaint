@@ -1,6 +1,7 @@
 #include "app/dialogs/ThemeDialog.h"
 
 #include "app/Icons.h"
+#include "app/VideoFrames.h"
 #include "app/dialogs/DialogButtons.h"
 #include "app/widgets/EffectControls.h"
 #include "app/widgets/UnitField.h"
@@ -121,6 +122,14 @@ public:
         m_spec = Theme::resolved(spec);
         update();
     }
+    // Con un fondo animado (GIF o vídeo), cada fotograma.
+    void watchFrames()
+    {
+        connect(Theme::notifier(), &Theme::Notifier::backgroundFrame, this, [this] {
+            if (Theme::isAnimatedBackground(m_spec.workspaceImage))
+                update();
+        });
+    }
 
 protected:
     void paintEvent(QPaintEvent*) override
@@ -162,12 +171,16 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     layout->setContentsMargins(12, 4, 12, 4);
     scroll->setWidget(content);
 
-    // Modo base: los colores sin cambiar salen del tema claro u oscuro de Paint.NET.
+    // Modo base: los colores sin cambiar salen del tema claro u oscuro de Paint.NET (o, con el
+    // estilo de Windows 7 o XP, de los suyos).
     layout->addWidget(sectionHeader(tr("Base"), content));
     auto* baseForm = new QFormLayout;
     auto* templateRow = new QHBoxLayout;
     m_template = new QComboBox(content);
-    m_template->addItems({tr("Claro"), tr("Oscuro"), tr("Windows 98")});
+    m_template->addItems({tr("Claro"), tr("Oscuro"), tr("Windows 7"), tr("Windows 7 oscuro"), tr("Windows XP"), tr("Windows 98"),
+                          tr("Windows 98 ALT")});
+    m_template->setToolTip(tr("Los temas de Windows 7 y XP traen su estilo de botones, menús y ventanas: así puedes, por "
+                              "ejemplo, poner una imagen o un vídeo de fondo con el tema de Windows 7."));
     auto* applyTemplate = new QPushButton(tr("Aplicar"), content);
     applyTemplate->setToolTip(tr("Sustituye colores y diseño por los de la plantilla (la imagen de fondo se queda)."));
     templateRow->addWidget(m_template);
@@ -179,8 +192,25 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     baseForm->addRow(tr("Modo:"), m_base);
     connect(applyTemplate, &QPushButton::clicked, this, [this] {
         Theme::Spec spec;
+        // Windows 7 y XP: su estilo y su diseño, con los colores sin fijar (salen de su tema, claro
+        // u oscuro según el modo, y los que se cambien se ven en negrita).
+        auto styleOf = [&spec](const Theme::Spec& t) {
+            spec.dark = t.dark;
+            spec.win7 = t.win7;
+            spec.xp = t.xp;
+            spec.radius = t.radius;
+            spec.buttonStyle = t.buttonStyle;
+            spec.density = t.density;
+            spec.panelOpacity = t.panelOpacity;
+            spec.fontFamily = t.fontFamily;
+            spec.fontSize = t.fontSize;
+        };
         switch (m_template->currentIndex()) {
-        case 2: spec = Theme::windows98(); break;
+        case 2: styleOf(Theme::windows7()); break;
+        case 3: styleOf(Theme::windows7Dark()); break;
+        case 4: styleOf(Theme::windowsXP()); break;
+        case 5: spec = Theme::windows98(); break;
+        case 6: spec = Theme::windows98Alt(); break;
         default:
             spec.dark = m_template->currentIndex() == 1;
             spec.radius = Theme::preset(spec.dark).radius;
@@ -198,12 +228,13 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         setSpec(spec);
     });
     layout->addLayout(baseForm);
-    auto* note = new QLabel(tr("Los colores que no cambies siguen al modo elegido. Los cambiados aparecen en negrita."),
+    auto* note = new QLabel(tr("Los colores que no cambies siguen al modo elegido (y, con el estilo de Windows 7 o XP, a su "
+                               "tema: Windows 7 claro u oscuro). Los cambiados aparecen en negrita."),
                             content);
     note->setWordWrap(true);
     layout->addWidget(note);
     connect(m_base, &QComboBox::activated, this, [this](int i) {
-        m_spec.dark = i == 1;
+        m_spec.dark = i == 1 && !(m_spec.xp && !m_spec.classic);
         refresh();
         changed();
     });
@@ -254,6 +285,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     imageRow->addWidget(m_clearImage);
     backForm->addRow(tr("Imagen:"), imageRow);
     auto* preview = new BackgroundPreview(content);
+    preview->watchFrames();
     m_preview = preview;
     backForm->addRow(tr("Vista previa:"), preview);
     m_imageMode = new QComboBox(content);
@@ -336,12 +368,23 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     m_radius = new QSpinBox(content);
     m_radius->setRange(0, 16);
     designForm->addRow(tr("Redondeo de las esquinas:"), withUnit(m_radius, tr("px")));
-    m_classic = new QCheckBox(tr("Bordes clásicos en relieve (como Windows 98)"), content);
-    designForm->addRow(tr("Estilo:"), m_classic);
-    connect(m_classic, &QCheckBox::toggled, this, [this](bool on) {
+    m_style = new QComboBox(content);
+    m_style->addItem(tr("Plano (Paint.NET)"));
+    m_style->addItem(tr("Windows 7 (Aero)"));
+    m_style->setItemData(1, tr("Botones, menús y barras con los degradados y el cristal de Windows 7."), Qt::ToolTipRole);
+    m_style->addItem(tr("Windows XP (Luna)"));
+    m_style->setItemData(2, tr("Botones, campos, menús y ventanas de Windows XP."), Qt::ToolTipRole);
+    m_style->addItem(tr("Bordes clásicos en relieve (como Windows 98)"));
+    designForm->addRow(tr("Estilo:"), m_style);
+    connect(m_style, &QComboBox::activated, this, [this](int i) {
         if (m_refreshing)
             return;
-        m_spec.classic = on;
+        m_spec.win7 = i == 1;
+        m_spec.xp = i == 2;
+        m_spec.classic = i == 3;
+        if (m_spec.xp)
+            m_spec.dark = false;
+        refresh();
         changed();
     });
     m_pixelFont = new QCheckBox(tr("Texto sin suavizado (pixelado, como Windows 98)"), content);
@@ -372,7 +415,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         m_iconTheme->addItem(name, name);
     designForm->addRow(tr("Iconos:"), m_iconTheme);
     layout->addLayout(designForm);
-    fixedWidth({m_template, m_base, m_imageMode, m_imageAnchor, m_imageScale, m_iconSize, m_toolIconSize, m_buttonStyle,
+    fixedWidth({m_template, m_base, m_style, m_imageMode, m_imageAnchor, m_imageScale, m_iconSize, m_toolIconSize, m_buttonStyle,
                 m_density, m_radius, m_iconTheme});
     layout->addStretch();
 
@@ -480,8 +523,17 @@ void ThemeDialog::refresh()
     m_refreshing = true;
     const Theme::Spec effective = Theme::resolved(m_spec);
     m_base->setCurrentIndex(m_spec.dark ? 1 : 0);
+    // Windows XP solo tiene el modo claro.
+    const bool xpStyle = m_spec.xp && !m_spec.classic;
+    m_base->setEnabled(!xpStyle);
+    m_base->setToolTip(xpStyle ? tr("El estilo de Windows XP solo tiene modo claro.") : QString());
     for (const ColorRow& row : std::as_const(m_colors)) {
-        row.button->setColor(effective.*row.color);
+        // El cristal, solo con el estilo de Windows 7 (los demás no lo usan).
+        const bool shown = row.color != &Theme::Spec::glass || (m_spec.win7 && !m_spec.classic);
+        for (QWidget* w : {static_cast<QWidget*>(row.label), static_cast<QWidget*>(row.button), static_cast<QWidget*>(row.reset)})
+            w->setVisible(shown);
+        const QColor color = effective.*row.color;
+        row.button->setColor(color.isValid() ? color : Theme::glassColor(false, true));
         const bool custom = (m_spec.*row.color).isValid();
         row.reset->setEnabled(custom);
         QFont font = row.label->font();
@@ -505,7 +557,7 @@ void ThemeDialog::refresh()
     for (QWidget* w : std::initializer_list<QWidget*>{m_imageMode, m_imageOpacity, m_imageBlur, m_imageGrayscale, m_imageTint,
                                                       m_imageTintStrength})
         w->setEnabled(hasImage);
-    m_classic->setChecked(m_spec.classic);
+    m_style->setCurrentIndex(m_spec.classic ? 3 : m_spec.xp ? 2 : m_spec.win7 ? 1 : 0);
     m_pixelFont->setChecked(m_spec.pixelFont);
     static_cast<BackgroundPreview*>(m_preview)->setSpec(m_spec);
     selectData(m_iconSize, m_spec.iconSize);
@@ -535,10 +587,15 @@ void ThemeDialog::chooseImage()
     const QString start = m_spec.workspaceImage.isEmpty()
                               ? QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)
                               : QFileInfo(m_spec.workspaceImage).absolutePath();
-    const QString file = QFileDialog::getOpenFileName(this, tr("Imagen de fondo"), start,
-                                                      tr("Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.avif *.jxl)"));
+    const QString file = QFileDialog::getOpenFileName(this, tr("Imagen de fondo"), start, Theme::backgroundFileFilter());
     if (file.isEmpty())
         return;
+    if (VideoFrames::isVideo(file) && !VideoFrames::supported()) {
+        QMessageBox::warning(this, tr("Imagen de fondo"),
+                             tr("Kaint no puede reproducir vídeos en este sistema (en Windows hace falta Media Foundation; en "
+                                "Linux, compilar Kaint con Qt Multimedia). Elige una imagen o un GIF animado."));
+        return;
+    }
     m_spec.workspaceImage = Theme::storeBackground(file);
     refresh();
     changed();
@@ -546,28 +603,41 @@ void ThemeDialog::chooseImage()
 
 void ThemeDialog::importTheme()
 {
-    const QString file = QFileDialog::getOpenFileName(this, tr("Importar tema"), QString(), tr("Temas de Kaint (*.json)"));
+    const QString file = QFileDialog::getOpenFileName(this, tr("Importar tema"), QString(),
+                                                      tr("Temas de Kaint (*.zip *.json);;Temas con fondo (*.zip);;Temas (*.json)"));
     if (file.isEmpty())
         return;
-    QFile f(file);
-    const QJsonDocument doc = f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll()) : QJsonDocument();
-    if (!doc.isObject()) {
-        QMessageBox::warning(this, windowTitle(), tr("No se pudo leer el tema de «%1».").arg(QFileInfo(file).fileName()));
+    Theme::Spec spec;
+    QString error;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool ok = Theme::importTheme(file, &spec, &error);
+    QApplication::restoreOverrideCursor();
+    if (!ok) {
+        QMessageBox::warning(this, windowTitle(),
+                             tr("No se pudo leer el tema de «%1».").arg(QFileInfo(file).fileName())
+                                 + (error.isEmpty() ? QString() : QStringLiteral("\n\n") + error));
         return;
     }
-    setSpec(Theme::fromJson(doc.object()));
+    setSpec(spec);
 }
 
 void ThemeDialog::exportTheme()
 {
-    const QString file = QFileDialog::getSaveFileName(this, tr("Exportar tema"), QStringLiteral("kaint-theme.json"),
-                                                      tr("Temas de Kaint (*.json)"));
+    // Con fondo propio (imagen, GIF o vídeo), un .zip con el tema y el fondo; si no, el .json.
+    const bool zip = Theme::themeHasBackground(m_spec);
+    const QString file = QFileDialog::getSaveFileName(this, tr("Exportar tema"),
+                                                      zip ? QStringLiteral("kaint-theme.zip") : QStringLiteral("kaint-theme.json"),
+                                                      zip ? tr("Tema con fondo (*.zip)") : tr("Temas de Kaint (*.json)"));
     if (file.isEmpty())
         return;
-    QFile f(file);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
-        f.write(QJsonDocument(Theme::toJson(m_spec, true)).toJson(QJsonDocument::Indented)) < 0)
-        QMessageBox::warning(this, windowTitle(), tr("No se pudo guardar «%1».").arg(QFileInfo(file).fileName()));
+    QString error;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool ok = Theme::exportTheme(m_spec, file, &error);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, windowTitle(),
+                             tr("No se pudo guardar «%1».").arg(QFileInfo(file).fileName())
+                                 + (error.isEmpty() ? QString() : QStringLiteral("\n\n") + error));
 }
 
 void ThemeDialog::accept()

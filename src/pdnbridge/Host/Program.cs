@@ -34,6 +34,8 @@ namespace Kaint.PdnHost
         public Effect Instance;
         // Último token aceptado en el diálogo propio del complemento.
         public EffectConfigToken DialogToken;
+        // Usa uno de los diálogos estándar de Paint.NET 3 (Kaint lo muestra con el suyo).
+        public bool Standard;
     }
 
     public static class Program
@@ -112,6 +114,9 @@ namespace Kaint.PdnHost
                     cancelRequested = false;
                     renderThread = new Thread(() => Send(SafeRender(request)));
                     renderThread.IsBackground = true;
+                    // Por debajo de lo normal (como Paint.NET): el cálculo no le quita el procesador
+                    // a la interfaz de Kaint mientras se mueve un deslizador.
+                    renderThread.Priority = ThreadPriority.BelowNormal;
                     renderThread.Start();
                     break;
                 case "cancel":
@@ -213,6 +218,14 @@ namespace Kaint.PdnHost
                     return typeof(System.Windows.Forms.Form).Assembly;
                 case "System.Private.CoreLib":
                     return typeof(object).Assembly;
+                // Paint.NET 3 y 4 tenían PaintDotNet.SystemLayer.dll (Memory, Tracing...) y
+                // PaintDotNet.Resources.dll (PdnResources) aparte; en la capa de compatibilidad
+                // están en PaintDotNet.Core (los biseles de ObjectTools y SelectionTools usan
+                // Memory.SetToZero).
+                case "PaintDotNet.SystemLayer":
+                case "PaintDotNet.SystemLayer.Native":
+                case "PaintDotNet.Resources":
+                    return typeof(PaintDotNet.Surface).Assembly;
             }
             return null;
         }
@@ -377,6 +390,7 @@ namespace Kaint.PdnHost
                 return result;
 
             Type[] types;
+            bool fileTypePlugin = false;
             try
             {
                 types = asm.GetTypes();
@@ -387,6 +401,7 @@ namespace Kaint.PdnHost
                 Dictionary<string, bool> seen = new Dictionary<string, bool>();
                 foreach (Exception le in ex.LoaderExceptions)
                 {
+                    fileTypePlugin = fileTypePlugin || IsFileTypeLoadError(le);
                     string msg = le == null ? "" : Describe(le);
                     if (le != null && !seen.ContainsKey(msg))
                     {
@@ -421,7 +436,35 @@ namespace Kaint.PdnHost
                     errors.Add(type.Name + ": " + Describe(ex));
                 }
             }
+            if (list.Count == 0)
+            {
+                if (fileTypePlugin)
+                {
+                    // Un formato de archivo (FileType), no efectos: se explica en vez de listar los
+                    // tipos que no se pudieron cargar.
+                    errors.Clear();
+                    errors.Add(L("Es un complemento de formato de archivo de Paint.NET (FileType), no de efectos: Kaint no carga "
+                                     + "formatos de Paint.NET, pero abre y guarda por sí mismo muchos formatos (Photoshop .psd incluido).",
+                                 "It is a Paint.NET file type plugin (FileType), not an effect: Kaint does not load Paint.NET file "
+                                     + "types, but it opens and saves many formats by itself (Photoshop .psd included)."));
+                }
+                else if (errors.Count == 0)
+                {
+                    // Sin efectos ni errores: una biblioteca de apoyo de otro complemento
+                    // (Vandermotten.PaintDotNetEffects.dll, la de su sombra paralela). No se lista.
+                    result["library"] = true;
+                }
+            }
             return result;
+        }
+
+        // Si el ensamblado define formatos de archivo de Paint.NET (FileType, IFileTypeFactory).
+        private static bool IsFileTypeLoadError(Exception ex)
+        {
+            TypeLoadException tle = ex as TypeLoadException;
+            string name = tle != null ? tle.TypeName : (ex == null ? "" : ex.Message);
+            return name != null && (name.Contains("PaintDotNet.FileType") || name.Contains("PaintDotNet.IFileTypeFactory")
+                                    || name.Contains("PaintDotNet.SaveConfigToken") || name.Contains("PaintDotNet.SaveConfigWidget"));
         }
 
         private static T Attr<T>(Assembly asm) where T : Attribute
@@ -513,6 +556,49 @@ namespace Kaint.PdnHost
             return effect.CheckForEffectFlags(EffectFlags.Configurable) ? "dialog" : "none";
         }
 
+        // Los controles del diálogo estándar de Paint.NET 3 que crea el efecto (una, dos o tres
+        // cantidades, el ángulo), o null si su diálogo es propio. Kaint los muestra con su diálogo.
+        private static IList<KaintStandardParam> StandardParams(Effect effect)
+        {
+            try
+            {
+                using (EffectConfigDialog dialog = effect.CreateConfigDialog())
+                {
+                    IKaintStandardDialog standard = dialog as IKaintStandardDialog;
+                    return standard == null ? null : standard.KaintDescribe();
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private static List<object> DescribeStandard(IList<KaintStandardParam> list)
+        {
+            List<object> result = new List<object>();
+            foreach (KaintStandardParam p in list)
+            {
+                Dictionary<string, object> d = new Dictionary<string, object>();
+                d["name"] = p.Name;
+                d["label"] = string.IsNullOrEmpty(p.Label) ? p.Name : p.Label;
+                d["description"] = "";
+                d["control"] = p.Control ?? "";
+                d["readOnly"] = false;
+                d["hidden"] = false;
+                d["type"] = p.Type;
+                d["min"] = p.Minimum;
+                d["max"] = p.Maximum;
+                if (p.Type == "int")
+                    d["default"] = (int)Math.Round(p.Default);
+                else
+                    d["default"] = p.Default;
+                d["decimals"] = 0;
+                result.Add(d);
+            }
+            return result;
+        }
+
         private static Dictionary<string, object> DescribeEffect(LoadedEffect le)
         {
             Effect effect = le.Instance;
@@ -543,6 +629,17 @@ namespace Kaint.PdnHost
             PropertyBasedEffect pbe = effect as PropertyBasedEffect;
             if (pbe != null)
                 Schema.Describe(pbe, d);
+            else if ((string)d["kind"] == "dialog")
+            {
+                IList<KaintStandardParam> standard = StandardParams(effect);
+                if (standard != null && standard.Count > 0)
+                {
+                    d["kind"] = "standard";
+                    d["params"] = DescribeStandard(standard);
+                    d["rules"] = new List<object>();
+                    le.Standard = true;
+                }
+            }
             return d;
         }
 
@@ -659,14 +756,23 @@ namespace Kaint.PdnHost
             }
             if (!effect.CheckForEffectFlags(EffectFlags.Configurable))
                 return null;
-            if (le.DialogToken != null)
+            object standardValues;
+            bool hasValues = request.TryGetValue("values", out standardValues) && standardValues is Dictionary<string, object>;
+            if (le.DialogToken != null && !(le.Standard && hasValues))
                 return (EffectConfigToken)le.DialogToken.Clone();
-            // Sin diálogo previo: el token inicial que crea el propio diálogo.
+            // Sin diálogo previo: el token inicial que crea el propio diálogo (o, con los diálogos
+            // estándar, el de los valores elegidos en el de Kaint).
             using (EffectConfigDialog dialog = effect.CreateConfigDialog())
             {
                 dialog.Effect = effect;
                 dialog.EffectSourceSurface = pixels.Source;
                 dialog.Selection = new PdnRegion(roi);
+                IKaintStandardDialog standard = dialog as IKaintStandardDialog;
+                if (standard != null && hasValues)
+                {
+                    le.Standard = true;
+                    return standard.KaintCreateToken((Dictionary<string, object>)standardValues);
+                }
                 return dialog.EffectToken == null ? null : (EffectConfigToken)dialog.EffectToken.Clone();
             }
         }
@@ -778,10 +884,27 @@ namespace Kaint.PdnHost
                     }
                 }
             };
-            Thread[] workers = new Thread[threadCount - 1];
+            // La primera franja, sola: muchos complementos preparan cosas en su primera llamada a
+            // Render sin protegerlas (Film de pyrochild crea ahí su capa de grano y la desecha si
+            // cambió algo), y con varios hilos a la vez una la borraba mientras otra la usaba.
+            if (strips.Length > 1 && threadCount > 1 && !cancelRequested)
+            {
+                next = 0;
+                try
+                {
+                    effect.Render(token, dstArgs, srcArgs, strips, 0, 1);
+                    done = 1;
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+            }
+            Thread[] workers = new Thread[failure == null ? threadCount - 1 : 0];
             for (int i = 0; i < workers.Length; ++i)
             {
                 workers[i] = new Thread(work);
+                workers[i].Priority = ThreadPriority.BelowNormal;
                 workers[i].IsBackground = true;
                 workers[i].Start();
             }

@@ -178,6 +178,7 @@ add_library(kaintcore STATIC
     src/core/Ora.cpp
     src/core/PngWriter.cpp
     src/core/Palette.cpp
+    src/core/Parallel.cpp
     src/core/Pdn.cpp
     src/core/Psd.cpp
     src/core/Raster.cpp
@@ -227,6 +228,7 @@ add_library(kaintui STATIC
     src/app/Shortcuts.cpp
     src/app/SystemCursors.cpp
     src/app/UserFonts.cpp
+    src/app/VideoFrames.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp
@@ -286,6 +288,20 @@ add_library(kaintui STATIC
     src/app/tools/TextTool.cpp
 )
 target_link_libraries(kaintui PUBLIC kaintcore Qt6::Widgets Qt6::PrintSupport Qt6::Network)
+# Fondos de vídeo del lienzo: Media Foundation en Windows; Qt Multimedia (opcional) en los demás.
+if(WIN32)
+    # (mfplat y mfreadwrite se cargan al usarlos: las ediciones N de Windows no los traen.)
+    target_link_libraries(kaintui PRIVATE mfuuid ole32 uuid)
+else()
+    find_package(Qt6 QUIET COMPONENTS Multimedia)
+    if(Qt6Multimedia_FOUND)
+        target_link_libraries(kaintui PRIVATE Qt6::Multimedia)
+        target_compile_definitions(kaintui PRIVATE KAINT_HAVE_QTMULTIMEDIA)
+        message(STATUS "Kaint: fondos de vídeo con Qt Multimedia")
+    else()
+        message(STATUS "Kaint: sin Qt Multimedia; los fondos de vídeo no se reproducen")
+    endif()
+endif()
 if(KAINT_DATACHANNEL)
     target_link_libraries(kaintui PRIVATE ${KAINT_DATACHANNEL})
     target_compile_definitions(kaintui PUBLIC KAINT_HAVE_P2P)

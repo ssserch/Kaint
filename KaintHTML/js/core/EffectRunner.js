@@ -1,6 +1,11 @@
 // Ejecuta los efectos en segundo plano, como EffectPreview y applyEffectWithProgress de Kaint:
 // los integrados reparten sus filas en franjas entre varios Web Workers (los hilos de Kaint) y
 // se pueden cancelar en cualquier momento; los de los complementos se calculan aquí mismo.
+//
+// Los hilos se quedan con la imagen entre un cálculo y el siguiente: mientras se mueve un
+// deslizador, cada vista previa nueva solo manda los valores (antes se copiaba la imagen entera a
+// cada hilo y, al cancelar, se cerraban los hilos y había que crearlos y cargar los efectos otra
+// vez: con un efecto lento, como Contorno, eso se notaba en cada cambio).
 
 export const MAX_WORKERS = Math.max(1, Math.min(8, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 4));
 const idle = [];
@@ -13,10 +18,33 @@ function takeWorker() {
 
 function release(worker) {
     worker.onmessage = worker.onerror = null;
-    if (idle.length < MAX_WORKERS)
+    if (idle.length < MAX_WORKERS) {
         idle.push(worker);
-    else
+    } else {
         worker.terminate();
+    }
+}
+
+// Cada imagen de origen tiene su número: un hilo que ya la tiene no la vuelve a recibir.
+const sourceIds = new WeakMap();
+let nextSource = 0;
+function sourceId(src) {
+    let id = sourceIds.get(src);
+    if (!id)
+        sourceIds.set(src, (id = ++nextSource));
+    return id;
+}
+
+// Un rato después del último cálculo, los hilos sueltan la imagen (cada uno guarda una copia).
+let forgetTimer = 0;
+function scheduleForget() {
+    clearTimeout(forgetTimer);
+    forgetTimer = setTimeout(() => {
+        for (const worker of idle) {
+            worker.postMessage({ type: "forget" });
+            worker.kaintSource = 0;
+        }
+    }, 20000);
 }
 
 // Calcula el efecto sobre 'src' (ImageData de la capa) dentro de 'rect'. Devuelve
@@ -40,9 +68,11 @@ export function startEffect(effect, src, values, rect, info, onProgress = null) 
         return { promise, cancel: () => (cancelled = true) };
     }
 
-    const run = ++runs, w = src.width, h = src.height;
+    clearTimeout(forgetTimer);
+    const run = ++runs, w = src.width, h = src.height, srcId = sourceId(src);
     const groups = effect.serial ? 1 : Math.min(MAX_WORKERS, Math.max(1, Math.ceil(rect.h / 16)));
-    const count = effect.serial ? 1 : Math.min(rect.h, groups * 4);
+    // Franjas pequeñas: un hilo deja un cálculo cancelado al terminar la franja que tiene entre manos.
+    const count = effect.serial ? 1 : Math.min(rect.h, groups * 16);
     const bands = [];
     for (let i = 0; i < count; ++i)
         bands.push([rect.y + Math.floor((i * rect.h) / count), rect.y + Math.floor(((i + 1) * rect.h) / count) - 1]);
@@ -53,10 +83,19 @@ export function startEffect(effect, src, values, rect, info, onProgress = null) 
     const promise = new Promise((resolve, reject) => {
         let done = 0, finished = 0;
         finish = (value, error) => {
-            for (const worker of active)
-                worker.terminate();
+            // Los que siguen con este cálculo lo dejan en la próxima franja y vuelven a la reserva
+            // (con una sola franja no hay próxima: ese hilo se cierra).
+            for (const worker of active) {
+                if (count > groups) {
+                    worker.postMessage({ type: "cancel", run });
+                    release(worker);
+                } else {
+                    worker.terminate();
+                }
+            }
             active.clear();
             finish = null;
+            scheduleForget();
             error ? reject(error) : resolve(value);
         };
         for (let g = 0; g < groups; ++g) {
@@ -86,6 +125,8 @@ export function startEffect(effect, src, values, rect, info, onProgress = null) 
             // Sin módulos en los Web Workers (navegadores antiguos): se calcula aquí.
             worker.onerror = (e) => {
                 e.preventDefault?.();
+                active.delete(worker);
+                worker.terminate();
                 if (!finish)
                     return;
                 supported = false;
@@ -95,8 +136,14 @@ export function startEffect(effect, src, values, rect, info, onProgress = null) 
                     finish(null, err);
                 }
             };
-            worker.postMessage({ run, id: effect.id, width: w, height: h, pixels: src.data, values, rect, info: plain,
-                                 bands: bands.filter((_, i) => i % groups === g) });
+            // La imagen, solo si ese hilo no la tiene ya.
+            const message = { run, id: effect.id, srcId, width: w, height: h, values, rect, info: plain,
+                              bands: bands.filter((_, i) => i % groups === g) };
+            if (worker.kaintSource !== srcId) {
+                message.pixels = src.data;
+                worker.kaintSource = srcId;
+            }
+            worker.postMessage(message);
         }
     });
     return {

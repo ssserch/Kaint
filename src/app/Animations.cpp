@@ -29,7 +29,7 @@ namespace {
 
 bool g_enabled = true;
 bool g_windowAnimation = false;
-int g_windowMs = 300;
+int g_windowMs = 180;
 
 // Lo que se ve mientras se abre una ventana: su imagen, de un poco más pequeña y transparente a su
 // tamaño. Es una ventana aparte, encima, que no recibe el ratón; la de verdad, transparente debajo,
@@ -125,10 +125,14 @@ private:
             if (overlay)
                 overlay->close();
         };
+        // La ventana de verdad aparece en cuanto la imagen casi llegó a su tamaño (con la curva, a
+        // poco más de la mitad del tiempo): ya se puede usar sin esperar al final de la animación.
         QVariantAnimation* animation = run(overlay, 0, 1, g_windowMs, QEasingCurve::OutCubic,
-            [overlay](qreal v) {
+            [overlay, finish](qreal v) {
                 if (overlay)
                     overlay->setProgress(v);
+                if (v >= 0.93)
+                    finish();
             },
             finish);
         // Si la ventana se cierra o se esconde antes de terminar, se acaba ya.

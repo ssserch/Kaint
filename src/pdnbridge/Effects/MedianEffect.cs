@@ -88,10 +88,12 @@ namespace PaintDotNet.Effects
 
         protected unsafe override void OnRender(Rectangle[] rois, int startIndex, int length)
         {
-	        foreach (Rectangle rect in rois)
-	        {
-		        RenderRect(this.radius, SrcArgs.Surface, DstArgs.Surface, rect);
-	        }
+            // Kaint: solo los rectángulos de esta llamada (antes recorría todos en cada una: con el
+            // reparto en franjas, cada franja calculaba la imagen entera).
+            for (int i = startIndex; i < startIndex + length; ++i)
+            {
+                RenderRect(this.radius, SrcArgs.Surface, DstArgs.Surface, rois[i]);
+            }
         }
     }
 }

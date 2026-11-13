@@ -5,6 +5,13 @@ import en from "./i18n/en.js";
 
 const extra = {
     "Archivo": "File",
+    "Los colores de la base, sin cambios.": "The base colors, unchanged.",
+    "No se pudo guardar el fondo: %1": "The background couldn't be saved: %1",
+    "Vídeo: se reproduce en bucle y sin sonido.": "Video: it plays in a loop, without sound.",
+    "Con fondo propio, un .zip con el tema y el fondo; si no, un .json. Se abre también en Kaint para el escritorio.":
+        "With your own background, a .zip with the theme and the background; otherwise, a .json. It also opens in Kaint for the desktop.",
+    "No se pudo exportar el tema: %1": "The theme couldn't be exported: %1",
+    "Un tema de Kaint o de Kaint.HTML (.zip con fondo o .json).": "A Kaint or Kaint.HTML theme (.zip with a background, or .json).",
     "La imagen es demasiado grande (%1 × %2 píxeles).": "The image is too large (%1 × %2 pixels).",
     "La capa «%1» usa un modo de fusión que Photoshop no tiene. Cámbialo en sus propiedades o guarda la imagen como PDN u ORA.":
         "The “%1” layer uses a blend mode that Photoshop does not have. Change it in its properties or save the image as PDN or ORA.",

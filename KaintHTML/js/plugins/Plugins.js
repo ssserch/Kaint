@@ -496,17 +496,25 @@ export const Plugins = {
         return record;
     },
 
-    async setEnabled(id, enabled) {
-        const record = this.records.find((r) => r.id === id);
-        if (!record || record.enabled === enabled)
-            return;
-        if (enabled)
-            this.activate(await this.instantiate(record));
-        else
-            this.deactivate(id);
-        record.enabled = enabled;
-        await request("readwrite", (s) => s.put(record));
-        this.changed();
+    // Uno detrás de otro: al marcar y desmarcar deprisa, un «desactivar» que llegaba mientras el
+    // «activar» aún cargaba el complemento se perdía (y el complemento quedaba activo con la casilla
+    // sin marcar, o activado dos veces).
+    setEnabled(id, enabled) {
+        const run = async () => {
+            const record = this.records.find((r) => r.id === id);
+            if (!record || record.enabled === enabled)
+                return;
+            if (enabled)
+                this.activate(await this.instantiate(record));
+            else
+                this.deactivate(id);
+            record.enabled = enabled;
+            await request("readwrite", (s) => s.put(record));
+            this.changed();
+        };
+        const next = (this.toggleQueue || Promise.resolve()).catch(() => {}).then(run);
+        this.toggleQueue = next;
+        return next;
     },
 
     async remove(id) {

@@ -14,8 +14,10 @@ import { download } from "../core/ImageIO.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
-import { ColorRoles, Presets } from "./Themes.js";
-import { currentLanguage, plain, tr } from "../i18n.js";
+import { baseColors, ColorRoles, resolveScheme, themeFromJson, themeToJson } from "./Themes.js";
+import { BackgroundAccept, BackgroundDefaults, backgroundType, clearBackground, isVideoFile, loadBackgroundFile, storeBackground } from "./Background.js";
+import { unzip, zip } from "../core/Zip.js";
+import { currentLanguage, plain, tr, trn } from "../i18n.js";
 import { ResampleMethods } from "../core/Resample.js";
 import { Effects } from "../core/Effects.js";
 import { Customization } from "../Customization.js";
@@ -808,7 +810,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
     let show = null;
     const pages = [
         ["interface", "settings-interface", tr("Interfaz de usuario"), async () => {
-            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
+            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
                                   Settings.get("colorScheme"));
             scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
             const cursors = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("cursorStyle"));
@@ -859,10 +861,12 @@ export async function settingsDialog(app = null, startPage = "interface") {
             win7Shape.title = tr("La X de las ventanas Herramientas, Historial, Capas y Colores con los temas Windows 7.");
             const syncWin7Shape = () => {
                 const style = Number(buttonsStyle.value);
-                win7Shape.style.display = style === 3 || (style === 0 && Settings.get("colorScheme") === 7) ? "" : "none";
+                // (Los temas Windows 7 y Windows 7 oscuro, y el personalizado con su estilo.)
+                win7Shape.style.display = style === 3 || (style === 0 && resolveScheme(Number(Settings.get("colorScheme")) || 0).win7) ? "" : "none";
             };
             syncWin7Shape();
             buttonsStyle.addEventListener("change", syncWin7Shape);
+            window.addEventListener("kaint-settings", (e) => (e.detail?.key === "colorScheme" || e.detail?.key === "customTheme") && syncWin7Shape());
             win7Shape.addEventListener("change", () => Settings.set("win7PanelClose", Number(win7Shape.value)));
             const buttonsSide = select([[0, tr("A la derecha")], [1, tr("A la izquierda")]], Settings.get("titleButtonsLeft") ? 1 : 0);
             buttonsSide.addEventListener("change", () => Settings.set("titleButtonsLeft", buttonsSide.value === "1"));
@@ -1330,42 +1334,227 @@ function shapesPage(refresh) {
     ];
 }
 
-// Tema personalizado: parte de claro, oscuro o Windows 98 y cambia los colores que se quiera.
+// Tema personalizado: parte de claro, oscuro, Windows 7 (claro u oscuro), XP o Windows 98 (con su
+// estilo de botones, menús y ventanas) y cambia los colores que se quiera; además puede llevar una
+// imagen, un GIF o un vídeo de fondo detrás de la imagen (como el de Kaint).
 async function customThemeDialog() {
     const dlg = new Dialog(tr("Tema personalizado"), { iconName: "configure" });
     const current = Settings.get("customTheme") || { base: "dark", colors: {} };
-    let theme = { base: current.base || "dark", colors: { ...(current.colors || {}) } };
-    const save = () => Settings.set("customTheme", { base: theme.base, colors: { ...theme.colors } });
-    const base = select([["light", tr("Claro")], ["dark", tr("Oscuro")], ["win98", tr("Windows 98")]], theme.base);
+    let theme = { base: current.base || "dark", colors: { ...(current.colors || {}) },
+                  image: current.image ? { ...BackgroundDefaults, ...current.image } : null };
+    const save = () => Settings.set("customTheme", { base: theme.base, colors: { ...theme.colors }, image: theme.image ? { ...theme.image } : null });
+    const base = select([["light", tr("Claro")], ["dark", tr("Oscuro")], ["win7", tr("Windows 7")], ["win7dark", tr("Windows 7 oscuro")],
+                         ["xp", tr("Windows XP")], ["win98", tr("Windows 98")], ["win98alt", tr("Windows 98 ALT")]], theme.base);
+    base.title = tr("Los temas de Windows 7 y XP traen su estilo de botones, menús y ventanas: así puedes, por ejemplo, poner una imagen o un vídeo de fondo con el tema de Windows 7.");
     const grid = el("div", { className: "theme-colors" });
     const fill = () => {
         grid.replaceChildren();
+        const defaults = baseColors(theme.base);
         for (const [key, , label] of ColorRoles) {
-            const input = el("input", { type: "color", value: theme.colors[key] || Presets[theme.base][key] });
+            // El cristal, solo con el estilo de Windows 7 (los demás no lo usan).
+            if (key === "glass" && !defaults.glass)
+                continue;
+            const input = el("input", { type: "color", value: theme.colors[key] || defaults[key] });
+            const name = el("span", { textContent: tr(label), style: { fontWeight: theme.colors[key] ? "600" : "" } });
             input.addEventListener("input", () => {
                 theme.colors[key] = input.value;
+                name.style.fontWeight = "600";
                 save();
             });
-            grid.append(el("span", { textContent: tr(label) }), input);
+            grid.append(name, input);
         }
     };
     base.addEventListener("change", () => {
-        theme = { base: base.value, colors: {} };
+        theme = { base: base.value, colors: {}, image: theme.image };
         save();
         fill();
     });
     const reset = el("button", { className: "pushbutton", textContent: tr("Restablecer") });
+    reset.title = tr("Los colores de la base, sin cambios.");
     reset.addEventListener("click", () => {
         theme.colors = {};
         save();
         fill();
     });
     fill();
-    dlg.body.append(el("label", { style: { display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px" } }, [tr("Basado en:"), base, reset]), grid);
+
+    // Fondo del lienzo: imagen, GIF o vídeo, con su colocación y sus retoques.
+    const fileName = el("input", { type: "text", readOnly: true, placeholder: tr("Sin imagen"), style: { width: "200px" } });
+    const status = el("small", { style: { opacity: 0.75 } });
+    const picker = el("input", { type: "file", accept: BackgroundAccept, style: { display: "none" } });
+    const choose = el("button", { className: "pushbutton", textContent: tr("Elegir…") });
+    const remove = el("button", { className: "pushbutton", textContent: tr("Quitar") });
+    const mode = select([[0, tr("Mosaico")], [1, tr("Tamaño original")], [2, tr("Estirada")], [3, tr("Ajustada")], [4, tr("Rellenar")]], 0);
+    const anchor = select([[0, tr("Arriba a la izquierda")], [1, tr("Arriba")], [2, tr("Arriba a la derecha")], [3, tr("Izquierda")], [4, tr("Centro")],
+                           [5, tr("Derecha")], [6, tr("Abajo a la izquierda")], [7, tr("Abajo")], [8, tr("Abajo a la derecha")]], 4);
+    const scale = el("input", { type: "number", min: 10, max: 400, step: 10, style: { width: "64px" } });
+    scale.title = tr("Tamaño de la imagen en mosaico o a tamaño original.");
+    const opacity = el("input", { type: "range", min: 0, max: 100, step: 1 });
+    const blur = el("input", { type: "range", min: 0, max: 40, step: 1 });
+    const grayscale = el("input", { type: "checkbox" });
+    const tint = el("input", { type: "color" });
+    const tintStrength = el("input", { type: "range", min: 0, max: 100, step: 1 });
+    const opacityValue = el("span"), blurValue = el("span"), tintValue = el("span");
+    const controls = [mode, anchor, scale, opacity, blur, grayscale, tint, tintStrength];
+    const syncImage = () => {
+        const image = theme.image;
+        fileName.value = image?.name || "";
+        remove.disabled = !image;
+        for (const c of controls)
+            c.disabled = !image;
+        const v = image || BackgroundDefaults;
+        mode.value = String(v.mode);
+        anchor.value = String(v.anchor);
+        scale.value = String(v.scale);
+        opacity.value = String(v.opacity);
+        blur.value = String(v.blur);
+        grayscale.checked = !!v.grayscale;
+        tint.value = v.tint || "#000000";
+        tintStrength.value = String(v.tintStrength);
+        opacityValue.textContent = `${v.opacity} %`;
+        blurValue.textContent = `${v.blur} px`;
+        tintValue.textContent = `${v.tintStrength} %`;
+        // Escala: en mosaico y a tamaño original; la posición, salvo estirada.
+        scale.disabled = !image || v.mode > 1;
+        anchor.disabled = !image || v.mode === 2;
+        status.textContent = image?.video ? tr("Vídeo: se reproduce en bucle y sin sonido.") : "";
+    };
+    const edit = (key, read) => () => {
+        if (!theme.image)
+            return;
+        theme.image[key] = read();
+        save();
+        syncImage();
+    };
+    mode.addEventListener("change", edit("mode", () => Number(mode.value)));
+    anchor.addEventListener("change", edit("anchor", () => Number(anchor.value)));
+    scale.addEventListener("change", edit("scale", () => Math.max(10, Math.min(400, Number(scale.value) || 100))));
+    opacity.addEventListener("input", edit("opacity", () => Number(opacity.value)));
+    blur.addEventListener("input", edit("blur", () => Number(blur.value)));
+    grayscale.addEventListener("change", edit("grayscale", () => grayscale.checked));
+    tint.addEventListener("input", edit("tint", () => {
+        if (theme.image && !theme.image.tintStrength)
+            theme.image.tintStrength = 30;
+        return tint.value;
+    }));
+    tintStrength.addEventListener("input", edit("tintStrength", () => Number(tintStrength.value)));
+    choose.addEventListener("click", () => picker.click());
+    picker.addEventListener("change", async () => {
+        const file = picker.files?.[0];
+        picker.value = "";
+        if (!file)
+            return;
+        try {
+            const stored = await storeBackground(file);
+            // Los vídeos y las imágenes grandes, rellenando; los mosaicos pequeños, en mosaico.
+            const keep = theme.image ? { ...theme.image } : { ...BackgroundDefaults, mode: isVideoFile(file) ? 4 : 0 };
+            theme.image = { ...keep, ...stored };
+            save();
+            syncImage();
+        } catch (e) {
+            status.textContent = tr("No se pudo guardar el fondo: %1", e?.message || String(e));
+        }
+    });
+    remove.addEventListener("click", async () => {
+        theme.image = null;
+        save();
+        syncImage();
+        await clearBackground();
+    });
+    syncImage();
+    const row = (label, ...children) => el("label", { style: { display: "flex", gap: "6px", alignItems: "center" } }, [label, ...children]);
+    const background = el("div", { style: { display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px" } }, [
+        el("h4", { className: "section", textContent: tr("Fondo del lienzo") }),
+        el("div", { style: { display: "flex", gap: "6px", alignItems: "center" } }, [tr("Imagen:"), fileName, choose, remove, picker]),
+        status,
+        row(tr("Colocación:"), mode),
+        row(tr("Posición:"), anchor),
+        row(tr("Escala:"), scale, "%"),
+        row(tr("Opacidad de la imagen:"), opacity, opacityValue),
+        row(tr("Desenfoque:"), blur, blurValue),
+        row(grayscale, tr("En escala de grises")),
+        row(tr("Tinte:"), tint, tintStrength, tintValue),
+    ]);
+
+    // Exportar e importar (el mismo formato que Kaint): con fondo, un .zip con theme.json y el
+    // archivo del fondo; sin él, el .json.
+    const exportTheme = el("button", { className: "pushbutton", textContent: tr("Exportar…") });
+    exportTheme.title = tr("Con fondo propio, un .zip con el tema y el fondo; si no, un .json. Se abre también en Kaint para el escritorio.");
+    exportTheme.addEventListener("click", async () => {
+        try {
+            const blob = theme.image ? await loadBackgroundFile() : null;
+            if (blob) {
+                const ext = (String(theme.image.name).match(/\.([a-z0-9]+)$/i)?.[1] || "png").toLowerCase();
+                const json = themeToJson(theme, `background.${ext}`);
+                download(zip([{ name: "theme.json", data: new TextEncoder().encode(JSON.stringify(json, null, 2)) },
+                              { name: `background.${ext}`, data: new Uint8Array(await blob.arrayBuffer()) }]), "kaint-theme.zip");
+            } else {
+                download(new Blob([JSON.stringify(themeToJson(theme), null, 2)], { type: "application/json" }), "kaint-theme.json");
+            }
+        } catch (e) {
+            status.textContent = tr("No se pudo exportar el tema: %1", e?.message || String(e));
+        }
+    });
+    const importPicker = el("input", { type: "file", accept: ".zip,.json,application/zip,application/json", style: { display: "none" } });
+    const importTheme = el("button", { className: "pushbutton", textContent: tr("Importar…") });
+    importTheme.title = tr("Un tema de Kaint o de Kaint.HTML (.zip con fondo o .json).");
+    importTheme.addEventListener("click", () => importPicker.click());
+    importPicker.addEventListener("change", async () => {
+        const file = importPicker.files?.[0];
+        importPicker.value = "";
+        if (!file)
+            return;
+        try {
+            const buffer = await file.arrayBuffer();
+            const head = new Uint8Array(buffer, 0, Math.min(2, buffer.byteLength));
+            let json, media = null;
+            if (head[0] === 0x50 && head[1] === 0x4b) {
+                const files = await unzip(buffer);
+                const text = files.get("theme.json");
+                if (!text)
+                    throw new Error(tr("No es un tema de Kaint (falta theme.json)."));
+                json = JSON.parse(new TextDecoder().decode(text));
+                const name = String(json.workspaceImage || "").split(/[\\/]/).pop();
+                if (name && files.get(name))
+                    media = new File([files.get(name)], name, { type: backgroundType(name) });
+            } else {
+                json = JSON.parse(new TextDecoder().decode(buffer));
+                // Los .json de antes de Kaint llevaban la imagen dentro.
+                if (json.workspaceImageData) {
+                    const name = String(json.workspaceImageName || "fondo.png");
+                    const bytes = Uint8Array.from(atob(json.workspaceImageData), (c) => c.charCodeAt(0));
+                    media = new File([bytes], name, { type: backgroundType(name) });
+                }
+            }
+            if (!json || typeof json !== "object")
+                throw new Error(tr("No es un tema de Kaint."));
+            const imported = themeFromJson(json);
+            theme = { base: imported.base, colors: imported.colors, image: null };
+            if (media)
+                theme.image = { ...BackgroundDefaults, ...imported.image, ...(await storeBackground(media)) };
+            else
+                await clearBackground();
+            base.value = theme.base;
+            save();
+            fill();
+            syncImage();
+        } catch (e) {
+            status.textContent = tr("No se pudo leer el tema de «%1».", file.name) + (e?.message ? ` ${e.message}` : "");
+        }
+    });
+
+    dlg.body.append(el("label", { style: { display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px" } },
+                       [tr("Basado en:"), base, reset, importTheme, exportTheme, importPicker]),
+                    el("small", { style: { display: "block", opacity: 0.75, marginBottom: "6px" },
+                                  textContent: tr("Los colores que no cambies siguen al modo elegido (y, con el estilo de Windows 7 o XP, a su tema: Windows 7 claro u oscuro). Los cambiados aparecen en negrita.") }),
+                    grid, background);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     save();
     return dlg.exec();
 }
+
+// Lo que pasó al soltar complementos en su página (se rehace al instalarlos y se vuelve a mostrar).
+let pluginDropMessage = "";
 
 // Complementos (.paintjs): activar, instalar desde un archivo o desde el catálogo, y quitar.
 function pluginsPage(refresh) {
@@ -1482,6 +1671,106 @@ function pluginsPage(refresh) {
     const menuIcons = checkbox(tr("Mostrar el icono de complemento junto a sus efectos en los menús"), Settings.get("pluginMenuIcons") !== false);
     menuIcons.title = tr("En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de puzle de los complementos.");
     menuIcons.input.addEventListener("change", () => Settings.set("pluginMenuIcons", menuIcons.input.checked));
+
+    // Arrastrar archivos o carpetas a la página (como en Kaint): se instalan los complementos que se
+    // pueden leer; los que no son compatibles o están dañados se dejan (y se dice cuáles).
+    status.textContent = pluginDropMessage;
+    pluginDropMessage = "";
+    const dropHint = el("small", { textContent: tr("También puedes arrastrar aquí archivos o carpetas de complementos para añadirlos."),
+                                   style: { opacity: 0.75, display: "block" } });
+    const supported = /\.(paintjs|wasm|cube|3dl|xmp)$/i;
+    // Los archivos de lo soltado, también dentro de las carpetas (las entradas se piden ya, durante
+    // el evento: después el navegador ya no las da).
+    const collect = (dt) => {
+        const entries = [...(dt?.items || [])].map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+        const loose = [...(dt?.files || [])];
+        return (async () => {
+            const files = [], skipped = [];
+            if (!entries.length) {
+                for (const f of loose)
+                    supported.test(f.name) ? files.push(f) : skipped.push(f.name);
+                return { files, skipped };
+            }
+            const walk = async (entry, depth) => {
+                if (files.length + skipped.length > 2000)
+                    return;
+                if (entry.isFile) {
+                    const f = await new Promise((resolve, reject) => entry.file(resolve, reject)).catch(() => null);
+                    if (f && supported.test(f.name))
+                        files.push(f);
+                    else if (f && depth === 0)
+                        skipped.push(f.name);
+                } else if (entry.isDirectory && depth < 6) {
+                    const reader = entry.createReader();
+                    for (;;) {
+                        const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject)).catch(() => []);
+                        if (!batch.length)
+                            break;
+                        for (const child of batch)
+                            await walk(child, depth + 1);
+                    }
+                }
+            };
+            for (const entry of entries)
+                await walk(entry, 0);
+            return { files, skipped };
+        })();
+    };
+    const dropped = async (dt) => {
+        const { files, skipped } = await collect(dt);
+        status.textContent = tr("Comprobando los complementos…");
+        let added = 0, lastId = null;
+        const rejected = [...skipped];
+        for (const f of files) {
+            try {
+                const r = await Plugins.install(f);
+                added++;
+                lastId = r.id;
+            } catch {
+                rejected.push(f.name);
+            }
+        }
+        const parts = [trn("Añadidos: %n complemento(s).", added)];
+        if (rejected.length)
+            parts.push(tr("No se leyeron (no son complementos compatibles o están dañados): %1.",
+                          rejected.slice(0, 8).join(", ") + (rejected.length > 8 ? trn(" y %n más", rejected.length - 8) : "")));
+        if (!files.length && !rejected.length)
+            parts.splice(0, 1, tr("No había complementos que añadir."));
+        pluginDropMessage = parts.join(" ");
+        status.textContent = pluginDropMessage;
+        if (added) {
+            selected = lastId;
+            refresh();
+        } else {
+            pluginDropMessage = "";
+        }
+    };
+    // (Cuando la página ya está puesta en el diálogo.)
+    setTimeout(() => {
+        const host = list.closest(".page");
+        if (!host)
+            return;
+        // La página es la misma para todas las secciones: lo soltado solo cuenta con esta a la vista.
+        host.kaintPluginDrop = (e) => list.isConnected && dropped(e.dataTransfer);
+        if (host.kaintPluginDropBound)
+            return;
+        host.kaintPluginDropBound = true;
+        const wants = (e) => list.isConnected && [...(e.dataTransfer?.types || [])].includes("Files");
+        host.addEventListener("dragover", (e) => {
+            if (!host.kaintPluginDrop || !wants(e))
+                return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "copy";
+        });
+        host.addEventListener("drop", (e) => {
+            if (!host.kaintPluginDrop || !wants(e))
+                return;
+            e.preventDefault();
+            e.stopPropagation();
+            host.kaintPluginDrop(e);
+        });
+    }, 0);
     return [
         withFormats(tr("Complementos de efectos y formatos de archivo (%1). Se guardan en este navegador. Los .paintjs tienen el mismo acceso que Kaint: instala solo los que sean de confianza. Aparecen en Efectos > Complementos."), [
             [".paintjs", tr("De paint.js")],
@@ -1490,7 +1779,7 @@ function pluginsPage(refresh) {
             [".3dl", tr("Looks de LightCraft")],
             [".xmp", tr("Ajustes de LightCraft")],
         ]),
-        list, details, el("div", { className: "row-buttons" }, [install, browse, remove, file]), status,
+        list, details, el("div", { className: "row-buttons" }, [install, browse, remove, file]), status, dropHint,
         menuIcons,
     ];
 }
@@ -2115,7 +2404,7 @@ export async function aboutDialog(version) {
 export async function welcomeDialog() {
     const dlg = new Dialog(tr("Te damos la bienvenida a Kaint"));
     const startLanguage = Settings.get("language");
-    const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
+    const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
                           Settings.get("colorScheme"));
     scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
     const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));

@@ -1,6 +1,7 @@
-// Temas de Kaint (src/app/Theme.cpp): claro, oscuro y azul de Paint.NET, Windows 7 (con los de
-// 7.css), Windows 98 (con los colores de 98.css y botones en relieve) y el personalizado, que parte de uno de ellos y cambia sus
-// colores.
+// Temas de Kaint (src/app/Theme.cpp): claro, oscuro y azul de Paint.NET, Windows 7 y Windows 7
+// oscuro (con los de 7.css), Windows XP, Windows 98 (con los colores de 98.css y botones en relieve)
+// y el personalizado, que parte de uno de ellos (también de Windows 7, claro u oscuro, o de XP, con
+// su estilo), cambia sus colores y puede llevar una imagen, un GIF o un vídeo de fondo.
 import { Settings } from "../Settings.js";
 
 // Colores editables: clave, variable de CSS y nombre (los mismos que en el tema personalizado de
@@ -15,6 +16,8 @@ export const ColorRoles = [
     ["panelClose", "--panel-close", "Botón de cerrar"], ["selection", "--selection", "Selección"],
     ["selectionBorder", "--selection-border", "Borde de la selección"], ["hover", "--hover", "Bajo el puntero"],
     ["workspace", "--workspace", "Fondo del lienzo"],
+    // El cristal de las ventanas con el estilo de Windows 7 (su «Color de la ventana»).
+    ["glass", "--glass", "Color de las ventanas (cristal)"],
 ];
 
 export const Presets = {
@@ -43,7 +46,14 @@ const BlueColors = { toolBar: "#fbfdff", statusBar: "#ebf2fa", border: "#8fa6c3"
 const Win7Colors = { accent: "#3399ff", window: "#f0f0f0", text: "#222222", base: "#ffffff", button: "#ebebeb", border: "#8e8f8f",
                      menuBar: "#b9d1ea", menuBarText: "#000000", toolBar: "#f1f4fa", statusBar: "#f0f0f0", panel: "#f0f0f0",
                      panelTitle: "#c4d8ee", panelTitleEnd: "#a9c4e6", panelTitleText: "#000000", panelClose: "#c9503a",
-                     selection: "#d5e6fb", selectionBorder: "#7da2ce", hover: "#e8f2fd", workspace: "#c8d4e3" };
+                     selection: "#d5e6fb", selectionBorder: "#7da2ce", hover: "#e8f2fd", workspace: "#c8d4e3", glass: "#7ea7d6" };
+
+// Windows 7 oscuro (Theme::windows7Dark de Kaint): el de Windows 7 con el cristal ahumado (como los
+// temas oscuros de Aero) y los controles en grises oscuros (en la hoja de estilo, "win7" con "dark").
+const Win7DarkColors = { accent: "#3399ff", window: "#2b2d30", text: "#e8e8e8", base: "#1e1f22", button: "#3a3d41", border: "#5a5f66",
+                         menuBar: "#2a3542", menuBarText: "#f0f0f0", toolBar: "#30343a", statusBar: "#2b2d30", panel: "#2b2d30",
+                         panelTitle: "#3a4a5e", panelTitleEnd: "#2c3a4c", panelTitleText: "#ffffff", panelClose: "#c9503a",
+                         selection: "#26476b", selectionBorder: "#4f86c6", hover: "#2f3f52", workspace: "#1b1d20", glass: "#3a4452" };
 
 // Windows XP (Theme::windowsXP de Kaint), con los colores de XP.css (https://botoxparty.github.io/XP.css/,
 // licencia MIT, © 2020 Adam Hammad y Jordan Scales): Luna azul, ventanas beige y la selección azul.
@@ -59,10 +69,30 @@ const Win98AltColors = { accent: "#0a246a", window: "#d4d0c8", text: "#000000", 
                          panelTitle: "#0a246a", panelTitleEnd: "#a6caf0", panelTitleText: "#ffffff", panelClose: "#d4d0c8",
                          selection: "#0a246a", selectionBorder: "#0a246a", hover: "#d4d0c8", workspace: "#808080" };
 
-// Esquema guardado → { base: "light" | "dark" | "win98", custom }.
+// De qué parte el tema personalizado: el modo de la hoja de estilo, los colores y el estilo de los
+// controles (Windows 7, XP o el clásico de 98).
+export const CustomBases = {
+    light: { base: "light", colors: {} },
+    dark: { base: "dark", colors: {} },
+    win7: { base: "light", colors: Win7Colors, win7: true },
+    win7dark: { base: "dark", colors: Win7DarkColors, win7: true },
+    xp: { base: "light", colors: XpColors, xp: true },
+    win98: { base: "win98", colors: {} },
+    win98alt: { base: "win98", colors: Win98AltColors, alt: true },
+};
+
+// Los colores de una base del personalizado (los que tiene cada color sin cambiar).
+export function baseColors(name) {
+    const b = CustomBases[name] || CustomBases.dark;
+    return { ...Presets[b.base], ...b.colors };
+}
+
+// Esquema guardado → { base: "light" | "dark" | "win98", colors, estilo... }.
 export function resolveScheme(scheme, systemDark) {
     if (scheme === 4)
         return { base: "win98" };
+    if (scheme === 10)
+        return { base: "dark", colors: Win7DarkColors, win7: true };
     if (scheme === 9)
         return { base: "win98", colors: Win98AltColors, alt: true };
     if (scheme === 8)
@@ -73,7 +103,8 @@ export function resolveScheme(scheme, systemDark) {
         return { base: "light", colors: BlueColors, blue: true };
     if (scheme === 5) {
         const custom = Settings.get("customTheme") || {};
-        return { base: Presets[custom.base] ? custom.base : "dark", colors: custom.colors || {} };
+        const b = CustomBases[custom.base] || CustomBases.dark;
+        return { base: b.base, colors: { ...b.colors, ...(custom.colors || {}) }, win7: !!b.win7, xp: !!b.xp, alt: !!b.alt, custom: true };
     }
     return { base: scheme === 2 || (scheme === 0 && systemDark) ? "dark" : "light" };
 }
@@ -148,4 +179,49 @@ export function applyThemeColors(root, scheme, systemDark) {
     if (border)
         root.style.setProperty("--workspace", border);
     return base;
+}
+
+// --- Exportar e importar el personalizado (el mismo formato que Kaint: Theme::exportTheme) -----
+// theme.json con las marcas de Kaint (dark, win7, xp, classic), los colores cambiados y los ajustes
+// del fondo, más la base de la web; con fondo, en un .zip junto al archivo (background.mp4...).
+
+// El tema de la web (Settings.customTheme) → el JSON común.
+export function themeToJson(theme, backgroundName = "") {
+    const b = CustomBases[theme.base] || CustomBases.dark;
+    // Con Windows 98, Kaint no tiene base para los colores sin cambiar: van todos.
+    const colors = b.base === "win98" ? { ...baseColors(theme.base), ...(theme.colors || {}) } : { ...(theme.colors || {}) };
+    const img = theme.image || {};
+    return {
+        format: "kaint-theme", version: 1, base: CustomBases[theme.base] ? theme.base : "dark",
+        dark: b.base === "dark", win7: !!b.win7, xp: !!b.xp, classic: b.base === "win98", colors,
+        workspaceImage: backgroundName,
+        imageMode: Number(img.mode ?? 0), imageOpacity: Number(img.opacity ?? 100), imageScale: Number(img.scale ?? 100),
+        imageAnchor: Number(img.anchor ?? 4), imageBlur: Number(img.blur ?? 0), imageGrayscale: !!img.grayscale,
+        imageTint: img.tint && Number(img.tintStrength) > 0 ? img.tint : "", imageTintStrength: Number(img.tintStrength ?? 0),
+    };
+}
+
+// El JSON común (de Kaint o de la web) → { base, colors, image (los ajustes, sin el archivo) }.
+export function themeFromJson(json) {
+    let base = CustomBases[json?.base] ? json.base : null;
+    if (!base) {
+        const window = String(json?.colors?.window || "").toLowerCase();
+        base = json?.classic ? (window.endsWith("d4d0c8") ? "win98alt" : "win98") : json?.xp ? "xp"
+            : json?.win7 ? (json?.dark === false ? "win7" : "win7dark") : json?.dark === false ? "light" : "dark";
+    }
+    // Solo los que cambian respecto a la base (los demás la siguen), en #rrggbb.
+    const defaults = baseColors(base), colors = {};
+    for (const [key] of ColorRoles) {
+        let v = String(json?.colors?.[key] || "").toLowerCase();
+        if (/^#[0-9a-f]{8}$/.test(v))
+            v = `#${v.slice(3)}`;
+        if (/^#[0-9a-f]{6}$/.test(v) && v !== String(defaults[key] || "").toLowerCase())
+            colors[key] = v;
+    }
+    const num = (v, fallback, lo, hi) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Number(v))) : fallback);
+    const tint = /^#[0-9a-f]{6}$/i.test(json?.imageTint || "") ? json.imageTint : "#000000";
+    const image = { mode: num(json?.imageMode, 0, 0, 4), anchor: num(json?.imageAnchor, 4, 0, 8), scale: num(json?.imageScale, 100, 10, 400),
+                    opacity: num(json?.imageOpacity, 100, 0, 100), blur: num(json?.imageBlur, 0, 0, 40), grayscale: !!json?.imageGrayscale,
+                    tint, tintStrength: num(json?.imageTintStrength, 0, 0, 100) };
+    return { base, colors, image };
 }

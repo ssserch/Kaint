@@ -111,9 +111,10 @@ own history and suggest it to the host, who accepts it. The protocol is describe
   durations and **Image > Color Profile** converts or assigns sRGB, Adobe RGB, Display P3 or
   ProPhoto RGB (the profile is read from and embedded in PNG, JPEG, WebP and TIFF files). Drop
   images onto the window to open them.
-- **Themes**: light and dark (or follow the system), Paint.NET's Blue, Windows 7 (with 7.css's glass windows), Windows XP
-  (Luna, with XP.css's), Windows 98 and Windows 98 ALT (with 98.css's) and a custom theme with Kaint's
-  editable colors, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, Windows 7 and Windows 7 Dark (with 7.css's glass
+  windows; smoked glass in the dark one), Windows XP (Luna, with XP.css's), Windows 98 and Windows 98 ALT (with 98.css's)
+  and a custom theme with Kaint's editable colors that can start from any of them (Windows 7 and XP with their style) and
+  have an image, an animated GIF or a video (MP4, WebM...) as the canvas background, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
   compact, borderless windows, Windows 10 dialogs, gray and blue bar sliders and hollow handles);
   a top bar color of your own (like Windows' accent color on title bars), the interface font, and
   floating windows that snap to the edges and to each other (translucent only while they cover the

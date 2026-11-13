@@ -747,3 +747,314 @@
 :root.btn-left .dialog > .title {
     gap: 6px;
 }
+
+/* --- Windows 7 oscuro (Theme::windows7Dark de Kaint): el cristal ahumado de los temas oscuros de
+   Aero y los controles de 7.css en grises oscuros, con el celeste de Windows 7 bajo el puntero ---- */
+
+:root.win7.dark:not(#k) .floating-panel,
+:root.win7.dark:not(#k) .dialog {
+    border-color: rgba(0, 0, 0, 0.85);
+    background: linear-gradient(transparent 20%, rgba(255, 255, 255, 0.16) 40%, transparent 41%),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.08)), rgba(28, 36, 48, 0.78);
+    box-shadow: 2px 2px 12px 1px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+:root.win7.dark:not(#k) .floating-panel > .title,
+:root.win7.dark:not(#k) .dialog > .title {
+    color: #ffffff;
+    text-shadow: 0 0 8px #000000, 0 0 6px #000000;
+}
+
+:root.win7.dark:not(#k) .floating-panel > .content,
+:root.win7.dark:not(#k) .dialog > .body,
+:root.win7.dark:not(#k) .dialog > .buttons {
+    background: var(--panel);
+    border-color: rgba(0, 0, 0, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+:root.win7.dark:not(#k) :is(.fx-slider, .status-bar) input[type="range"]:focus-visible {
+    outline-color: #ffffff;
+}
+
+:root.win7.dark .pushbutton,
+:root.win7.dark .dialog select {
+    background: linear-gradient(#4a4e54, #44484e 45%, #3a3e44 45%, #2e3136);
+    border-color: #5f646b;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    color: #ececec;
+}
+
+:root.win7.dark .pushbutton:hover:not(:disabled),
+:root.win7.dark .dialog select:hover:not(:disabled) {
+    background: linear-gradient(#3f5a78, #3a5470 45%, #2f4862 45%, #284057);
+    border-color: #5c95d0;
+}
+
+:root.win7.dark .pushbutton:active:not(:disabled) {
+    background: linear-gradient(#2a3f56, #284057 30% 50%, #213650 50%, #1c2f45);
+    border-color: #4c7fb4;
+}
+
+:root.win7.dark .pushbutton.default {
+    border-color: #5c95d0;
+    box-shadow: inset 0 0 0 1px #2f4862;
+}
+
+:root.win7.dark .pushbutton:disabled {
+    background: #33363a;
+    border-color: #45494e;
+    color: #7c7f84;
+}
+
+:root.win7.dark input[type="text"],
+:root.win7.dark input[type="number"],
+:root.win7.dark textarea {
+    background: #1e1f22;
+    border-color: #5a5f66 #44484e #3e4247 #44484e;
+    color: #ececec;
+}
+
+:root.win7.dark input[type="text"]:hover,
+:root.win7.dark input[type="number"]:hover,
+:root.win7.dark textarea:hover {
+    border-color: #4f86c6 #3d5f86 #36547a #3d5f86;
+}
+
+:root.win7.dark input[type="text"]:focus,
+:root.win7.dark input[type="number"]:focus,
+:root.win7.dark textarea:focus {
+    border-color: #5c95d0 #4677ab #3f6c9c #4677ab;
+}
+
+:root.win7.dark .menubar {
+    background: linear-gradient(#3c4048, #3a3e45 20%, #33373d 25%, #33373d 43%, #2a2d32 48%, #30343a);
+    border-color: #4a5260;
+}
+
+:root.win7.dark .popup-menu {
+    background: #2b2d30;
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow: 4px 4px 3px -2px rgba(0, 0, 0, 0.7);
+}
+
+:root.win7.dark .popup-menu .item.active:not(.disabled) {
+    background: linear-gradient(rgba(92, 149, 208, 0.43), rgba(60, 100, 150, 0.55) 90%, rgba(92, 149, 208, 0.47));
+    border-color: #4f86c6;
+    color: #ffffff;
+}
+
+:root.win7.dark #main-toolbar,
+:root.win7.dark .tool-options {
+    background: linear-gradient(#3a3e45, #2c2f34);
+}
+
+:root.win7.dark .tool-options {
+    border-bottom-color: #4a5260;
+}
+
+:root.win7.dark .tbutton:hover:not(:disabled) {
+    background: linear-gradient(#3d4f63, #2f3f52);
+    border-color: #4f86c6;
+}
+
+:root.win7.dark .tbutton.checked {
+    background: linear-gradient(#2c4560, #223a54);
+    border-color: #5c95d0;
+}
+
+:root.win7.dark .list .row.selected {
+    background: linear-gradient(#34587f, #284768);
+    outline-color: #4f86c6;
+    color: #ffffff;
+}
+
+:root.win7.dark .floating-panel > .title,
+:root.win7.dark .dialog > .title,
+:root.win7.dark.pdn:not(.classic) .floating-panel > .title,
+:root.win7.dark.pdn:not(.classic) .dialog > .title {
+    color: #ffffff;
+    text-shadow: 0 0 8px #000000, 0 0 6px #000000;
+}
+
+:root.win7.dark .status-bar {
+    border-top-color: #45494e;
+}
+
+/* --- Fondo del lienzo del tema personalizado: imagen, GIF o vídeo (Background.js) -------------- */
+
+.workspace-background {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.workspace-background > .media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.workspace-background > video.media {
+    display: block;
+}
+
+.workspace-background > .tint {
+    position: absolute;
+    inset: 0;
+}
+
+/* --- Windows 7 con los colores del tema (como Theme::win7StyleSheet de Kaint): los degradados de
+   7.css se mueven lo mismo que cada color del tema respecto al de Windows 7 (con los de siempre,
+   iguales; con los del personalizado, de su tono). Colores relativos de CSS: los navegadores que no
+   los entienden se quedan con los de arriba. ------------------------------------------------------ */
+
+:root.win7:not(.dark):not(#k) .floating-panel,
+:root.win7:not(.dark):not(#k) .dialog {
+    background: linear-gradient(transparent 20%, rgba(255, 255, 255, 0.7) 40%, transparent 41%),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.2)), rgb(from var(--glass) calc(r - 57) calc(g - 39) calc(b - 18) / 0.62);
+}
+
+:root.win7:not(.dark):not(#k) .floating-panel > .content,
+:root.win7:not(.dark):not(#k) .dialog > .body,
+:root.win7:not(.dark):not(#k) .dialog > .buttons {
+    background: var(--panel);
+}
+
+:root.win7:not(.dark) .pushbutton,
+:root.win7:not(.dark) .dialog select {
+    background: linear-gradient(rgb(from var(--button) calc(r + 7) calc(g + 7) calc(b + 7)) 45%, var(--button) 45%, rgb(from var(--button) calc(r - 28) calc(g - 28) calc(b - 28)));
+    border-color: var(--border);
+    color: var(--text);
+}
+
+:root.win7:not(.dark) .pushbutton:hover:not(:disabled),
+:root.win7:not(.dark) .dialog select:hover:not(:disabled) {
+    background: linear-gradient(rgb(from var(--hover) calc(r + 2) calc(g + 4) b) 45%, rgb(from var(--hover) calc(r - 42) calc(g - 12) b) 45%, rgb(from var(--hover) calc(r - 65) calc(g - 25) calc(b - 8)));
+    border-color: rgb(from var(--selection-border) calc(r - 65) calc(g - 35) calc(b - 29));
+}
+
+:root.win7:not(.dark) .pushbutton:active:not(:disabled) {
+    background: linear-gradient(rgb(from var(--hover) calc(r - 3) calc(g + 2) calc(b - 1)), rgb(from var(--hover) calc(r - 36) calc(g - 13) calc(b - 7)) 30% 50%, rgb(from var(--hover) calc(r - 80) calc(g - 33) calc(b - 14)) 50%, rgb(from var(--hover) calc(r - 128) calc(g - 63) calc(b - 34)));
+    border-color: rgb(from var(--selection-border) calc(r - 16) calc(g - 17) calc(b - 35));
+}
+
+:root.win7:not(.dark) .pushbutton.default {
+    border-color: rgb(from var(--selection-border) calc(r - 65) calc(g - 35) calc(b - 29));
+}
+
+:root.win7:not(.dark) input[type="text"],
+:root.win7:not(.dark) input[type="number"],
+:root.win7:not(.dark) textarea {
+    background: var(--base);
+}
+
+:root.win7:not(.dark) .menubar {
+    background: linear-gradient(rgb(from var(--toolbar) calc(r + 14) calc(g + 11) calc(b + 5)) 20%, var(--toolbar) 25%, var(--toolbar) 43%, rgb(from var(--toolbar) calc(r - 29) calc(g - 25) calc(b - 12)) 48%, rgb(from var(--toolbar) calc(r - 11) calc(g - 10) calc(b - 4)));
+}
+
+:root.win7:not(.dark) .menubar > .menu-title:hover,
+:root.win7:not(.dark) .menubar.active > .menu-title.open {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+:root.win7:not(.dark) .popup-menu {
+    background: var(--window);
+}
+
+:root.win7:not(.dark) #main-toolbar,
+:root.win7:not(.dark) .tool-options {
+    background: linear-gradient(rgb(from var(--toolbar) calc(r + 12) calc(g + 10) calc(b + 5)), rgb(from var(--toolbar) calc(r - 11) calc(g - 8) calc(b - 6)));
+}
+
+:root.win7:not(.dark) .tbutton:hover:not(:disabled) {
+    background: linear-gradient(rgb(from var(--hover) calc(r + 18) calc(g + 10) calc(b + 1)), rgb(from var(--hover) calc(r - 5) calc(g - 4) calc(b - 2)));
+    border-color: rgb(from var(--hover) calc(r - 48) calc(g - 28) calc(b - 2));
+}
+
+:root.win7:not(.dark) .tbutton.checked {
+    background: linear-gradient(rgb(from var(--selection) calc(r + 11) calc(g + 7) calc(b - 1)), rgb(from var(--selection) calc(r - 18) calc(g - 10) calc(b - 5)));
+    border-color: var(--selection-border);
+}
+
+:root.win7:not(.dark) .list .row.selected {
+    background: linear-gradient(rgb(from var(--selection) calc(r + 7) calc(g + 5) calc(b + 1)), rgb(from var(--selection) calc(r - 20) calc(g - 11) calc(b + 1)));
+    outline-color: var(--selection-border);
+}
+
+:root.win7.dark:not(#k) .floating-panel,
+:root.win7.dark:not(#k) .dialog {
+    background: linear-gradient(transparent 20%, rgba(255, 255, 255, 0.16) 40%, transparent 41%),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.08)), rgb(from var(--glass) calc(r - 30) calc(g - 32) calc(b - 34) / 0.78);
+}
+
+:root.win7.dark:not(#k) .floating-panel > .content,
+:root.win7.dark:not(#k) .dialog > .body,
+:root.win7.dark:not(#k) .dialog > .buttons {
+    background: var(--panel);
+}
+
+:root.win7.dark .pushbutton,
+:root.win7.dark .dialog select {
+    background: linear-gradient(rgb(from var(--button) calc(r + 16) calc(g + 17) calc(b + 19)), rgb(from var(--button) calc(r + 10) calc(g + 11) calc(b + 13)) 45%, rgb(from var(--button) r calc(g + 1) calc(b + 3)) 45%, rgb(from var(--button) calc(r - 12) calc(g - 12) calc(b - 11)));
+    border-color: rgb(from var(--border) calc(r + 5) calc(g + 5) calc(b + 5));
+    color: rgb(from var(--text) calc(r + 4) calc(g + 4) calc(b + 4));
+}
+
+:root.win7.dark .pushbutton:hover:not(:disabled),
+:root.win7.dark .dialog select:hover:not(:disabled) {
+    background: linear-gradient(rgb(from var(--hover) calc(r + 16) calc(g + 27) calc(b + 38)), rgb(from var(--hover) calc(r + 11) calc(g + 21) calc(b + 30)) 45%, rgb(from var(--hover) r calc(g + 9) calc(b + 16)) 45%, rgb(from var(--hover) calc(r - 7) calc(g + 1) calc(b + 5)));
+    border-color: rgb(from var(--selection-border) calc(r + 13) calc(g + 15) calc(b + 10));
+}
+
+:root.win7.dark .pushbutton:active:not(:disabled) {
+    background: linear-gradient(rgb(from var(--hover) calc(r - 5) g calc(b + 4)), rgb(from var(--hover) calc(r - 7) calc(g + 1) calc(b + 5)) 30% 50%, rgb(from var(--hover) calc(r - 14) calc(g - 9) calc(b - 2)) 50%, rgb(from var(--hover) calc(r - 19) calc(g - 16) calc(b - 13)));
+    border-color: rgb(from var(--selection-border) calc(r - 3) calc(g - 7) calc(b - 18));
+}
+
+:root.win7.dark .pushbutton.default {
+    border-color: rgb(from var(--selection-border) calc(r + 13) calc(g + 15) calc(b + 10));
+}
+
+:root.win7.dark input[type="text"],
+:root.win7.dark input[type="number"],
+:root.win7.dark textarea {
+    background: var(--base);
+}
+
+:root.win7.dark .menubar {
+    background: linear-gradient(rgb(from var(--toolbar) calc(r + 12) calc(g + 12) calc(b + 14)), rgb(from var(--toolbar) calc(r + 10) calc(g + 10) calc(b + 11)) 20%, rgb(from var(--toolbar) calc(r + 3) calc(g + 3) calc(b + 3)) 25%, rgb(from var(--toolbar) calc(r + 3) calc(g + 3) calc(b + 3)) 43%, rgb(from var(--toolbar) calc(r - 6) calc(g - 7) calc(b - 8)) 48%, var(--toolbar));
+}
+
+:root.win7.dark .menubar > .menu-title:hover,
+:root.win7.dark .menubar.active > .menu-title.open {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+:root.win7.dark .popup-menu {
+    background: var(--window);
+}
+
+:root.win7.dark #main-toolbar,
+:root.win7.dark .tool-options {
+    background: linear-gradient(rgb(from var(--toolbar) calc(r + 10) calc(g + 10) calc(b + 11)), rgb(from var(--toolbar) calc(r - 4) calc(g - 5) calc(b - 6)));
+}
+
+:root.win7.dark .tbutton:hover:not(:disabled) {
+    background: linear-gradient(rgb(from var(--hover) calc(r + 14) calc(g + 16) calc(b + 17)), var(--hover));
+    border-color: var(--selection-border);
+}
+
+:root.win7.dark .tbutton.checked {
+    background: linear-gradient(rgb(from var(--selection) calc(r + 6) calc(g - 2) calc(b - 11)), rgb(from var(--selection) calc(r - 4) calc(g - 13) calc(b - 23)));
+    border-color: rgb(from var(--selection-border) calc(r + 13) calc(g + 15) calc(b + 10));
+}
+
+:root.win7.dark .list .row.selected {
+    background: linear-gradient(rgb(from var(--selection) calc(r + 14) calc(g + 17) calc(b + 20)), rgb(from var(--selection) calc(r + 2) g calc(b - 3)));
+    outline-color: var(--selection-border);
+}

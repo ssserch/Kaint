@@ -262,6 +262,125 @@ static void testEdgeSampling()
     CHECK(fx::quantizeBits(c, 1) == qRgba(191, 64, 191, 191));
 }
 
+// Arrastrar complementos a Configuración: se copian los que Kaint puede leer (con los archivos de
+// apoyo de su carpeta, y cada carpeta con complementos en su propia subcarpeta); los dañados, no.
+static void testPluginDrop()
+{
+    QTemporaryDir dir;
+    const QString user = dir.filePath(QStringLiteral("usuario"));
+    const QString source = dir.filePath(QStringLiteral("Mis complementos"));
+    QDir().mkpath(source + QStringLiteral("/Sub"));
+    QDir().mkpath(user);
+    auto write = [](const QString& path, const QByteArray& data) {
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly))
+            f.write(data);
+    };
+    const QByteArray cube = "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n";
+    write(source + QStringLiteral("/Calido.cube"), cube);
+    write(source + QStringLiteral("/Roto.paintjs"), "esto no es un zip");
+    write(source + QStringLiteral("/LEEME.txt"), "apoyo");
+    write(source + QStringLiteral("/Sub/Frio.cube"), cube);
+    write(dir.filePath(QStringLiteral("Suelto.cube")), cube);
+    write(dir.filePath(QStringLiteral("Malo.cube")), "LUT_3D_SIZE 99\n1 2");
+    write(dir.filePath(QStringLiteral("nota.txt")), "no es un complemento");
+
+    PluginManager* pm = PluginManager::instance();
+    pm->setPathsForTesting({user}, dir.filePath(QStringLiteral("cache.json")));
+    const QStringList dropped{source, dir.filePath(QStringLiteral("Suelto.cube")), dir.filePath(QStringLiteral("Malo.cube")),
+                              dir.filePath(QStringLiteral("nota.txt"))};
+    const QStringList candidates = PluginManager::dropCandidates(dropped);
+    CHECK(candidates.size() == 5);
+    QHash<QString, PluginManager::Check> checked;
+    for (const QString& c : candidates)
+        checked.insert(c, pm->check(c));
+    CHECK(checked.value(QFileInfo(source + QStringLiteral("/Calido.cube")).absoluteFilePath()) == PluginManager::Check::Compatible);
+    CHECK(checked.value(QFileInfo(source + QStringLiteral("/Roto.paintjs")).absoluteFilePath()) == PluginManager::Check::Incompatible);
+    const PluginManager::DropPlan plan = pm->planDrop(dropped, checked);
+    QStringList targets;
+    for (const auto& item : plan.copy)
+        targets << item.target;
+    targets.sort();
+    CHECK(targets == QStringList({QStringLiteral("Mis complementos/Calido.cube"), QStringLiteral("Mis complementos/LEEME.txt"),
+                                  QStringLiteral("Sub/Frio.cube"), QStringLiteral("Suelto.cube")}));
+    CHECK(plan.rejected.contains(QStringLiteral("Roto.paintjs")) && plan.rejected.contains(QStringLiteral("Malo.cube"))
+          && plan.rejected.contains(QStringLiteral("nota.txt")));
+    CHECK(pm->planConflicts(plan).isEmpty());
+    QStringList errors;
+    const QStringList copied = pm->installPlan(plan, false, &errors);
+    CHECK(errors.isEmpty() && copied.size() == 3);
+    CHECK(QFile::exists(user + QStringLiteral("/Mis complementos/LEEME.txt")) && !QFile::exists(user + QStringLiteral("/Mis complementos/Roto.paintjs")));
+    pm->scan();
+    int loaded = 0;
+    for (const PluginInfo& p : pm->plugins())
+        loaded += p.loaded ? 1 : 0;
+    CHECK(loaded == 3);
+    CHECK(pm->planConflicts(plan).size() == 3);
+    pm->setPathsForTesting({}, dir.filePath(QStringLiteral("cache.json")));
+    pm->scan();
+}
+
+// Histograma local con las cuentas de 16 en 16: los percentiles salen igual que con los bucles de
+// Paint.NET de siempre (valor a valor), con radios pequeños (con bloques) y grandes (sin ellos).
+static void testLocalHistogramSearch()
+{
+    auto reference = [](const int* hist, int first, int target, int& count) {
+        int v = first;
+        while (v < 255 && count < target)
+            count += hist[v++];
+        return v;
+    };
+    auto referenceFirst = [](const int* hist) {
+        int v = 0;
+        while (v < 255 && hist[v] == 0)
+            ++v;
+        return v;
+    };
+    QRandomGenerator rng(1234);
+    for (int round = 0; round < 2000; ++round) {
+        int hist[256] = {}, coarse[16] = {};
+        const int kinds = 1 + int(rng.bounded(6));
+        int area = 0;
+        for (int k = 0; k < kinds; ++k) {
+            const int at = round % 7 == 0 ? 240 + int(rng.bounded(16)) : int(rng.bounded(256));
+            const int n = 1 + int(rng.bounded(40));
+            hist[at] += n;
+            coarse[at >> 4] += n;
+            area += n;
+        }
+        const int t1 = int(rng.bounded(area + 2)) - 1, t2 = t1 + int(rng.bounded(area + 2));
+        int c1 = 0, c2 = 0;
+        const int f1 = fx::histogramFirst(hist, coarse), f2 = referenceFirst(hist);
+        CHECK(f1 == f2 && fx::histogramFirst(hist, nullptr) == f2);
+        const int a1 = fx::histogramAdvance(hist, coarse, f1, c1, t1), a2 = reference(hist, f2, t1, c2);
+        CHECK(a1 == a2 && c1 == c2);
+        CHECK(fx::histogramAdvance(hist, coarse, a1, c1, t2) == reference(hist, a2, t2, c2) && c1 == c2);
+        const int below = int(rng.bounded(257));
+        int sum = 0;
+        for (int i = 0; i < below && i < 256; ++i)
+            sum += hist[i];
+        CHECK(fx::histogramCountBelow(hist, coarse, std::min(below, 256)) == sum);
+    }
+    // Contorno y Mediana completos, con grosor pequeño (bloques) y grande (sin ellos).
+    QImage src(120, 90, QImage::Format_ARGB32);
+    for (int y = 0; y < src.height(); ++y)
+        for (int x = 0; x < src.width(); ++x)
+            src.setPixel(x, y, qRgba(int(rng.bounded(256)), (x * 7) & 255, (y * 5) & 255, 128 + int(rng.bounded(128))));
+    for (const char* id : {"outline", "median"}) {
+        const Effect* e = Effects::find(QLatin1String(id));
+        CHECK(e != nullptr);
+        if (!e)
+            continue;
+        for (int radius : {2, 45}) {
+            ParamValues v = Effects::defaults(*e);
+            v[QLatin1String(id) == QLatin1String("outline") ? QStringLiteral("thickness") : QStringLiteral("radius")] = radius;
+            std::atomic_bool cancel{false};
+            const QImage out = Effects::apply(*e, src, Selection(), v, EffectContext(), cancel);
+            CHECK(out.size() == src.size());
+        }
+    }
+}
+
 // Formas personalizadas de Paint.NET (.xaml): sintaxis de trazados y modelo de objetos.
 static void testCustomShapes()
 {
@@ -2270,6 +2389,8 @@ int main(int argc, char** argv)
     testPngWriter();
     testSelectionReshape();
     testColorBalance();
+    testLocalHistogramSearch();
+    testPluginDrop();
     testPackaging();
     if (g_failures == 0)
         std::printf("Todas las pruebas del núcleo pasaron.\n");

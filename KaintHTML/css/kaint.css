@@ -156,6 +156,12 @@ u {
     min-width: 0;
 }
 
+/* Como en Kaint: la fila de menús mide lo que sus menús (no se estira hasta el ancho de la barra de
+   herramientas de debajo, que dejaba un hueco vacío después de «Efectos»). */
+#top-row .top-left > .menubar {
+    align-self: flex-start;
+}
+
 .menubar {
     display: flex;
     background: var(--toolbar);
@@ -2951,7 +2957,8 @@ fieldset.group > legend {
 }
 
 :root.pdn .menubar > .menu-title {
-    padding: 3px 4px;
+    /* Como los menús de Kaint con el aspecto de Paint.NET (6 px a cada lado). */
+    padding: 3px 6px;
 }
 
 :root.pdn #main-toolbar {
@@ -3641,6 +3648,12 @@ fieldset.group > legend {
    licenses/7.css-LICENSE.txt). Los marcos de cristal y el botón de cerrar, en themes.css. */
 :root.win7 {
     --radius: 3px;
+    /* El cristal de las ventanas (Color de las ventanas del tema). */
+    --glass: #7ea7d6;
+}
+
+:root.win7.dark {
+    --glass: #3a4452;
 }
 
 :root.win7 .pushbutton,

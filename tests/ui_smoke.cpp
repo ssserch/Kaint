@@ -88,6 +88,7 @@
 #include <QLayout>
 #include <QPainter>
 #include <QToolButton>
+#include <QTreeWidget>
 #include <QtEndian>
 #include <QUndoStack>
 #include <QVariantAnimation>
@@ -428,6 +429,60 @@ static void testTheme()
         back.workspaceImage = custom.workspaceImage;
         CHECK(back == custom);
         QFile::remove(Theme::fromJson(Theme::toJson(custom, true)).workspaceImage);
+    }
+
+    // Personalizado con el estilo de Windows 7 (claro u oscuro) o de XP: se guarda en el JSON y los
+    // colores sin cambiar son los de su tema (también el degradado de las cabeceras).
+    {
+        Theme::Spec seven;
+        seven.win7 = true;
+        CHECK(Theme::fromJson(Theme::toJson(seven)).win7);
+        Theme::setCustom(seven);
+        Theme::apply(Theme::Scheme::Custom);
+        CHECK(Theme::active().win7 && QApplication::palette().color(QPalette::Window) == Theme::windows7().window);
+        CHECK(Theme::active().panelTitleEnd == Theme::windows7().panelTitleEnd && !Theme::titleBarColor().isValid());
+        seven.dark = true;
+        seven.accent = QColor(255, 0, 0);
+        Theme::setCustom(seven);
+        CHECK(Theme::active().win7 && Theme::isDark() && Theme::workspaceColor() == Theme::windows7Dark().workspace);
+        CHECK(QApplication::palette().color(QPalette::Highlight) == QColor(255, 0, 0));
+        Theme::Spec xp;
+        xp.xp = true;
+        CHECK(Theme::fromJson(Theme::toJson(xp)).xp && !Theme::fromJson(Theme::toJson(xp)).win7);
+        Theme::setCustom(xp);
+        CHECK(Theme::active().xp && QApplication::palette().color(QPalette::Window) == QColor(0xec, 0xe9, 0xd8));
+        // Los vídeos y los GIF animados son fondos animados; un PNG, no.
+        CHECK(Theme::isAnimatedBackground(QStringLiteral("fondo.mp4")) && Theme::isAnimatedBackground(QStringLiteral("x.WEBM")));
+        CHECK(!Theme::isAnimatedBackground(dir.filePath(QStringLiteral("fondo.png"))));
+        Theme::setCustom(custom);
+    }
+
+    // Exportar e importar el personalizado: con fondo, un .zip con theme.json y el fondo; sin él, el
+    // .json (y el color del cristal de Windows 7 va con los demás).
+    {
+        QTemporaryDir out;
+        Theme::Spec theme;
+        theme.win7 = true;
+        theme.dark = true;
+        theme.glass = QColor(10, 200, 30);
+        theme.workspaceImage = dir.filePath(QStringLiteral("fondo.png"));
+        theme.imageMode = Theme::ImageMode::Fill;
+        CHECK(Theme::themeHasBackground(theme));
+        const QString zipPath = out.filePath(QStringLiteral("tema.zip"));
+        CHECK(Theme::exportTheme(theme, zipPath, nullptr));
+        QFile zipFile(zipPath);
+        CHECK(zipFile.open(QIODevice::ReadOnly) && zipFile.read(2) == "PK");
+        zipFile.close();
+        Theme::Spec back;
+        CHECK(Theme::importTheme(zipPath, &back, nullptr));
+        CHECK(back.win7 && back.dark && back.glass == theme.glass && back.imageMode == Theme::ImageMode::Fill);
+        CHECK(back.workspaceImage != theme.workspaceImage && QImage(back.workspaceImage).pixelColor(0, 0) == QColor(250, 0, 0));
+        QFile::remove(back.workspaceImage);
+        theme.workspaceImage.clear();
+        CHECK(!Theme::themeHasBackground(theme));
+        const QString jsonPath = out.filePath(QStringLiteral("tema.json"));
+        CHECK(Theme::exportTheme(theme, jsonPath, nullptr) && Theme::importTheme(jsonPath, &back, nullptr) && back == theme);
+        CHECK(!Theme::importTheme(dir.filePath(QStringLiteral("fondo.png")), &back, nullptr));
     }
 
     // Windows 98: gris con relieve, cabeceras en degradado y escritorio verde azulado.
@@ -1230,6 +1285,54 @@ int main(int argc, char** argv)
             settle();
             dlg.grab().save(QDir(outDir).filePath(QStringLiteral("complementos.png")));
         }
+    }
+    // Complementos: marcar y desmarcar uno (y uno de sus efectos) varias veces seguidas en
+    // Configuración. Antes, la lista se vaciaba dentro de la señal de la casilla y Qt seguía usando
+    // el elemento borrado (a veces Kaint se cerraba).
+    {
+        QTemporaryDir folder;
+        QFile cube(folder.filePath(QStringLiteral("Prueba.cube")));
+        if (cube.open(QIODevice::WriteOnly))
+            cube.write("TITLE \"Prueba\"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
+        cube.close();
+        PluginManager* pm = PluginManager::instance();
+        pm->setPathsForTesting({folder.path()}, folder.filePath(QStringLiteral("cache.json")));
+        pm->scan();
+        settle();
+        const QString id = QFileInfo(cube.fileName()).absoluteFilePath();
+        auto plugin = [&] {
+            for (const PluginInfo& p : pm->plugins())
+                if (p.id == id)
+                    return p;
+            return PluginInfo();
+        };
+        CHECK(plugin().loaded && !plugin().effects.isEmpty());
+        SettingsDialog dlg(AppSettings::load(), w.findChild<ToolManager*>(), &w);
+        dlg.showPage(SettingsDialog::Page::Plugins);
+        QTreeWidget* tree = nullptr;
+        for (QTreeWidget* t : dlg.findChildren<QTreeWidget*>())
+            if (t->headerItem()->text(0) == QLatin1String("Complemento"))
+                tree = t;
+        CHECK(tree);
+        auto item = [&]() -> QTreeWidgetItem* {
+            for (int i = 0; tree && i < tree->topLevelItemCount(); ++i)
+                if (tree->topLevelItem(i)->data(0, Qt::UserRole).toString() == id)
+                    return tree->topLevelItem(i);
+            return nullptr;
+        };
+        for (int round = 0; round < 6 && item(); ++round) {
+            QTreeWidgetItem* it = item();
+            it->setCheckState(0, it->checkState(0) == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+            // El efecto, con el complemento activado (dos veces: queda como estaba).
+            if (it->checkState(0) == Qt::Checked && it->childCount() > 0)
+                it->child(0)->setCheckState(0, it->child(0)->checkState(0) == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+            settle();
+        }
+        CHECK(item() && plugin().enabled && plugin().loaded);
+        CHECK(item() && item()->checkState(0) == Qt::Checked);
+        pm->setPathsForTesting({}, QString());
+        pm->scan();
+        settle();
     }
     testDiscordPresence();
     testTransformBox();
@@ -2909,11 +3012,19 @@ int main(int argc, char** argv)
         const QRectF v = canvas->imageToView(QRectF(10, 10, 50, 30));
         const int right = int(std::lround(v.right())), bottom = int(std::lround(v.bottom())), midY = int(v.center().y());
         const int midX = int(v.center().x());
-        auto tinted = [&](int x, int y) { const QColor c(view.pixel(x, y)); return c.blue() > 60 && c.red() < 200; };
+        // El interior, lavanda de Paint.NET sobre el rojo; el contorno, sus hormigas gris y casi blanca.
+        auto ant = [&](int x, int y) {
+            const QColor c(view.pixel(x, y));
+            return c == QColor(0x7f, 0x82, 0x89) || c == QColor(0xf3, 0xf4, 0xf8);
+        };
+        auto tinted = [&](int x, int y) {
+            const QColor c(view.pixel(x, y));
+            return !ant(x, y) && c.blue() > 50 && c.red() < 195 && c.red() > 150;
+        };
         auto layerColor = [&](int x, int y) { return QColor(view.pixel(x, y)) == QColor(200, 60, 40); };
         CHECK(tinted(right - 1, midY) && layerColor(right + 1, midY));
         CHECK(tinted(midX, bottom - 1) && layerColor(midX, bottom + 1));
-        CHECK(!layerColor(right, midY) && !tinted(right, midY));
+        CHECK(!layerColor(right, midY) && ant(right, midY));
         findAction(&w, QStringLiteral("Anular la selección"))->trigger();
         settle();
     }

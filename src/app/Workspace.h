@@ -62,7 +62,7 @@ public:
     // Grosor mínimo del borde que se puede arrastrar para cambiar el tamaño.
     static constexpr int kBorder = 5;
     // Estilo y grosor (en píxeles) del borde de todas las ventanas; se aplica con applyChrome().
-    static void setChrome(Style style, int border);
+    static void setChrome(Style style, int border, bool rounded = false);
     static Style chromeStyle();
     static int chromeBorder();
     void applyChrome();
@@ -145,7 +145,7 @@ public:
     void setTranslucentOverImageOnly(bool on);
     // Marca las ventanas que tapan la imagen (para la translucidez solo sobre la imagen).
     void updatePanelsOverImage();
-    void setPanelChrome(FloatingPanel::Style style, int border);
+    void setPanelChrome(FloatingPanel::Style style, int border, bool rounded = false);
     // Zona para las ventanas: todo el área de trabajo menos las reglas, si se ven.
     QRect panelArea() const;
 

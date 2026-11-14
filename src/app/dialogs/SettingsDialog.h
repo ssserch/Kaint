@@ -31,6 +31,9 @@ class ToolOptionsPanel;
 
 // Preferencias de la aplicación (se guardan con QSettings).
 struct AppSettings {
+    // Ventanas con las esquinas redondeadas (en modo ventana): «Bordes: redondeados» (los temas
+    // de Windows 7 lo traen por defecto, pero se puede cambiar).
+    bool roundedWindows() const;
     // Interfaz de usuario
     bool animations = true;
     // Al abrir una ventana (Configuración, un ajuste...), como en Windows: aparece desde un poco

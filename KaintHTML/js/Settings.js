@@ -71,6 +71,8 @@ const defaults = {
     // Ventanas flotantes y diálogos: 0, como los de paint.js (Windows 10); 1, compactos. Grosor
     // del borde en píxeles.
     panelStyle: 0,
+    // Bordes de las ventanas: 0 rectos, 1 redondeados (los temas de Windows 7 los ponen al elegirlos).
+    windowCorners: 0,
     panelBorder: 1,
     // Las ventanas flotantes se acoplan a los bordes del área de trabajo y a las demás ventanas
     // al arrastrarlas cerca.

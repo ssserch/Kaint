@@ -460,6 +460,35 @@
     box-shadow: 0 0 6px 2px #e68e75, inset 0 0 0 1px #fffa;
 }
 
+/* Los diálogos (Configuración, los ajustes...), como los de Kaint con Windows 7: la X siempre unida
+   al borde de arriba, sola y más ancha. */
+:root.btn-win7:not(#k) .dialog > .title .close {
+    align-self: flex-start;
+    width: 44px;
+    height: 19px;
+    margin: 0 6px 0 0;
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+}
+
+/* (Con los temas Windows 7 el título tiene 4 px de relleno arriba: la X sube hasta el borde. Con los
+   demás temas ya está en el borde; si subía, se salía del diálogo.) */
+:root.win7.btn-win7:not(#k) .dialog > .title .close {
+    margin: -4px 0 0;
+}
+
+/* Windows 7: la franja de arriba (título y menús) de cristal, como el marco de Kaint de escritorio:
+   el color de las ventanas con su brillo (el reflejo en diagonal a la izquierda y la luz de arriba). */
+:root.win7:not(.classic):not(#k) #top-row {
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0.3) 0 9%, rgba(255, 255, 255, 0.08) 16%, transparent 28%),
+                linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08) 45%, transparent 60%), var(--menubar);
+}
+
+:root.win7.dark:not(.classic):not(#k) #top-row {
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0.14) 0 9%, rgba(255, 255, 255, 0.04) 16%, transparent 28%),
+                linear-gradient(rgba(255, 255, 255, 0.12), transparent 55%), var(--menubar);
+}
+
 /* La X de las ventanas: unida al borde de arriba (cuelga del contorno, con las esquinas de abajo
    redondeadas) o en un cuadrado suelto; el rectángulo es el de arriba. */
 :root.btn-win7.btn-win7-hanging:not(#k) .floating-panel > .title .close {

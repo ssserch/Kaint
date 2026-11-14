@@ -648,9 +648,14 @@ public:
 
     void drawPrimitive(PrimitiveElement element, const QStyleOption* option, QPainter* p, const QWidget* widget) const override
     {
+        // El «corte» de la tira de imágenes: lo pinta ella misma (sus flechas, encima de las miniaturas).
+        if ((element == PE_IndicatorTabTear || element == PE_IndicatorTabTearRight) && widget
+            && widget->objectName() == QLatin1String("ImageStrip"))
+            return;
         // Flechas de desplazamiento de la tira de imágenes: las de Paint.NET.
-        if ((element == PE_IndicatorArrowLeft || element == PE_IndicatorArrowRight) && widget && widget->parentWidget()
-            && widget->parentWidget()->objectName() == QLatin1String("ImageStrip")) {
+        if ((element == PE_IndicatorArrowLeft || element == PE_IndicatorArrowRight) && widget
+            && (widget->objectName() == QLatin1String("ImageStrip")
+                || (widget->parentWidget() && widget->parentWidget()->objectName() == QLatin1String("ImageStrip")))) {
             const QIcon icon = Icons::named(element == PE_IndicatorArrowLeft ? QStringLiteral("strip-scroll-left")
                                                                               : QStringLiteral("strip-scroll-right"));
             if (!icon.isNull()) {
@@ -735,6 +740,24 @@ public:
         if (classicButtons() && (metric == PM_ButtonShiftHorizontal || metric == PM_ButtonShiftVertical))
             return 1;
         return QProxyStyle::pixelMetric(metric, option, widget);
+    }
+
+    QRect subElementRect(SubElement element, const QStyleOption* option, const QWidget* widget) const override
+    {
+        // Tira de imágenes, como en Paint.NET: una flecha en cada borde que indica hacia qué lado
+        // quedan más imágenes (la pinta y la pulsa la tira). Los botones de Qt, que pondría juntos
+        // a la derecha, quedan sin ancho; sus huecos de los bordes (los del «corte») se reservan.
+        if (widget && widget->objectName() == QLatin1String("ImageStrip")) {
+            const QRect r = option->rect;
+            constexpr int kArrow = 16;
+            if (element == SE_TabBarScrollLeftButton || element == SE_TabBarScrollRightButton)
+                return QRect(r.right() + 1, r.top(), 0, r.height());
+            if (element == SE_TabBarTearIndicatorLeft)
+                return QRect(r.left(), r.top(), kArrow, r.height());
+            if (element == SE_TabBarTearIndicatorRight)
+                return QRect(r.right() + 1 - kArrow, r.top(), kArrow, r.height());
+        }
+        return QProxyStyle::subElementRect(element, option, widget);
     }
 
     int styleHint(StyleHint hint, const QStyleOption* option, const QWidget* widget, QStyleHintReturn* data) const override
@@ -2108,8 +2131,14 @@ void apply(Scheme scheme)
         QApplication::setStyle(createStyle());
         g_fusion = true;
     }
-    if (scheme == Scheme::Custom)
-        g_active = resolved(custom());
+    if (scheme == Scheme::Custom) {
+        Spec spec = custom();
+        // Con el estilo de Windows 7 y sin cristal propio (Personalizar…), el «Color de las
+        // ventanas» de Configuración, como en sus temas.
+        if (spec.win7 && !spec.classic && !spec.glass.isValid() && g_win7Glass.isValid())
+            spec.glass = spec.dark ? followGlass(windows7Dark().glass, windows7().glass, g_win7Glass) : g_win7Glass;
+        g_active = resolved(spec);
+    }
     else if (scheme == Scheme::Windows98)
         g_active = windows98();
     else if (scheme == Scheme::Windows98Alt)

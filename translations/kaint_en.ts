@@ -7926,6 +7926,30 @@ Do you want to replace them?</translation>
         <translation>Windows recreation:</translation>
     </message>
     <message>
+        <source>Bordes:</source>
+        <translation>Borders:</translation>
+    </message>
+    <message>
+        <source>Barra de título y ventanas</source>
+        <translation>Title bar and windows</translation>
+    </message>
+    <message>
+        <source>Con el estilo de interfaz Paint.NET, las ventanas solo llevan borde con «Bordes: Redondeados».</source>
+        <translation>With the Paint.NET interface style, windows only have a border with “Borders: Rounded”.</translation>
+    </message>
+    <message>
+        <source>Rectos</source>
+        <translation>Square</translation>
+    </message>
+    <message>
+        <source>Redondeados</source>
+        <translation>Rounded</translation>
+    </message>
+    <message>
+        <source>Ventanas con las esquinas algo redondeadas en modo ventana (los temas de Windows 7 las traen por defecto).</source>
+        <translation>Windows with slightly rounded corners when not maximized (the Windows 7 themes use them by default).</translation>
+    </message>
+    <message>
         <source>Seguir con el tema actual.</source>
         <translation>Keep the current theme.</translation>
     </message>

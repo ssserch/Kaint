@@ -183,7 +183,7 @@ export class App extends EventTarget {
     applyTheme() {
         const root = document.documentElement;
         const key = JSON.stringify([Settings.get("colorScheme"), Settings.get("customTheme"), Settings.get("canvasBorderLight"),
-                                    Settings.get("canvasBorderDark"), Settings.get("titleBarColor"),
+                                    Settings.get("canvasBorderDark"), Settings.get("titleBarColor"), Settings.get("win7Glass"),
                                     Settings.get("selectionColorLight"), Settings.get("selectionColorDark"),
                                     matchMedia("(prefers-color-scheme: dark)").matches]);
         if (this.themeKey !== key) {
@@ -210,6 +210,8 @@ export class App extends EventTarget {
         // Ventanas como las de paint.js (Windows 10) o compactas, con el borde elegido.
         const root = document.documentElement;
         root.classList.toggle("win10", Settings.get("panelStyle") === 0);
+        // Bordes redondeados de las ventanas y los diálogos (Configuración > Bordes).
+        root.classList.toggle("rounded-windows", Number(Settings.get("windowCorners")) === 1);
         // Aspecto de Paint.NET: más compacto, ventanas sin borde... (solo lo visual).
         root.classList.toggle("pdn", Settings.get("uiStyle") === 1);
         // La barra de título simulada y la tira de imágenes a toda la altura de la fila de arriba
@@ -529,7 +531,11 @@ export class App extends EventTarget {
     createImageList() {
         const button = document.getElementById("image-list");
         button.title = tr("Imágenes abiertas");
-        button.appendChild(icon("image-list-menu", 16));
+        // Tres puntos y, debajo, la flecha celeste (como Kaint de escritorio), centrados.
+        button.innerHTML = `<svg width="12" height="14" viewBox="0 0 12 14" aria-hidden="true">
+            <circle cx="2.5" cy="3" r="1.1" fill="currentColor"/><circle cx="6" cy="3" r="1.1" fill="currentColor"/>
+            <circle cx="9.5" cy="3" r="1.1" fill="currentColor"/>
+            <polyline points="2,7 6,11 10,7" fill="none" stroke="#5cc8ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
         let popup = null;
         const close = () => {
             popup?.remove();
@@ -610,7 +616,8 @@ export class App extends EventTarget {
 
     rebuildTabs() {
         const strip = document.getElementById("image-strip");
-        strip.replaceChildren();
+        this.setupStrip(strip);
+        strip.replaceChildren(strip.arrows[0]);
         for (const doc of this.docs) {
             const tab = el("div", { className: "image-tab" + (doc === this.doc ? " current" : ""), title: doc.displayName() });
             const close = el("div", { className: "close", title: tr("Cerrar") });
@@ -634,7 +641,75 @@ export class App extends EventTarget {
             strip.appendChild(tab);
             this.updateTab(doc, true);
         }
+        strip.appendChild(strip.arrows[1]);
+        strip.updateArrows();
         setWindowTitle(this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - Kaint` : "Kaint");
+    }
+
+    // Tamaño máximo de las miniaturas. A lo alto de toda la fila, como en Kaint de escritorio y
+    // paint.rs: el recuadro es el mismo para todas y la miniatura va abajo, algo más ancha que alta.
+    thumbBox() {
+        const strip = document.getElementById("image-strip");
+        if (!document.documentElement.classList.contains("strip-full") || !strip?.clientHeight)
+            return { w: 64, h: 48 };
+        const h = Math.max(48, strip.clientHeight - 10);
+        return { w: Math.max(64, Math.round(h * 26 / 25)), h };
+    }
+
+    // La tira: la rueda la desplaza (suave, como arrastrándola) en vez de cambiar de imagen, una
+    // flecha en cada borde indica hacia dónde quedan más imágenes y, al cambiar de alto, las
+    // miniaturas se rehacen con el tamaño nuevo.
+    setupStrip(strip) {
+        if (strip.arrows)
+            return;
+        const arrow = (side) => {
+            const a = el("div", { className: `strip-arrow ${side}` });
+            a.innerHTML = `<svg width="8" height="10" viewBox="0 0 8 10"><polyline points="${side === "left" ? "6,1 2,5 6,9" : "2,1 6,5 2,9"}"
+                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            a.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                strip.scrollBy({ left: (side === "left" ? -1 : 1) * 90, behavior: "smooth" });
+            });
+            return a;
+        };
+        strip.arrows = [arrow("left"), arrow("right")];
+        strip.updateArrows = () => {
+            const max = strip.scrollWidth - strip.clientWidth;
+            strip.arrows[0].classList.toggle("shown", strip.scrollLeft > 1);
+            strip.arrows[1].classList.toggle("shown", strip.scrollLeft < max - 1);
+        };
+        strip.addEventListener("scroll", strip.updateArrows, { passive: true });
+        let target = null;
+        strip.addEventListener("wheel", (e) => {
+            const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            if (!delta || strip.scrollWidth <= strip.clientWidth)
+                return;
+            e.preventDefault();
+            // La rueda (por líneas o pasos grandes): 180 px por paso, animado; el touchpad, tal cual.
+            const px = e.deltaMode === 1 ? delta * 60 : delta;
+            if (Math.abs(px) < 50) {
+                target = null;
+                strip.scrollLeft += px;
+                return;
+            }
+            const max = strip.scrollWidth - strip.clientWidth;
+            const from = target ?? strip.scrollLeft;
+            target = Math.max(0, Math.min(max, from + Math.sign(px) * 180));
+            strip.scrollTo({ left: target, behavior: "smooth" });
+            clearTimeout(strip.wheelTimer);
+            strip.wheelTimer = setTimeout(() => { target = null; }, 300);
+        }, { passive: false });
+        let height = strip.clientHeight;
+        new ResizeObserver(() => {
+            strip.updateArrows();
+            if (strip.clientHeight === height)
+                return;
+            height = strip.clientHeight;
+            strip.style.setProperty("--thumb-w", `${this.thumbBox().w}px`);
+            for (const doc of this.docs)
+                this.updateTab(doc, true);
+        }).observe(strip);
+        strip.style.setProperty("--thumb-w", `${this.thumbBox().w}px`);
     }
 
     updateTab(doc, now = false) {
@@ -645,7 +720,8 @@ export class App extends EventTarget {
             tab.querySelector(":scope > canvas")?.remove();
             tab.querySelector(".unsaved")?.remove();
             tab.querySelector(".collab-marks")?.remove();
-            tab.insertBefore(thumbnail(doc.flattened(), 64, 48, true, true), tab.firstChild);
+            const box = this.thumbBox();
+            tab.insertBefore(thumbnail(doc.flattened(), box.w, box.h, true, true), tab.firstChild);
             // Sesión colaborativa: pestaña amarilla, las personas en lugar de la estrella, la corona
             // (la imagen del anfitrión guardada o no) y, en los invitados, el equipo (su copia propia).
             const collab = this.collab?.tabState(doc) || { collab: false };

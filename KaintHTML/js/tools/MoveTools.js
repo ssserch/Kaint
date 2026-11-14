@@ -296,7 +296,7 @@ class MoveToolBase extends Tool {
         const s = this.session();
         if (s)
             return s.box;
-        const sel = this.doc?.selection, b = sel?.bounds();
+        const sel = this.doc?.selection, b = sel?.shapeBounds?.() ?? sel?.bounds();
         if (!b)
             return null;
         if (this.rest?.selection !== sel)
@@ -821,7 +821,7 @@ export class MoveSelectionTool extends MoveToolBase {
         if (!session) {
             if (doc.selection.isEmpty())
                 return null;
-            session = { doc, selBase: doc.selection, box: new TransformBox(doc.selection.bounds()), step: null };
+            session = { doc, selBase: doc.selection, box: new TransformBox(doc.selection.shapeBounds()), step: null };
             this.current = session;
         }
         return session;

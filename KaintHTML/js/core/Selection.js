@@ -44,6 +44,12 @@ function squaredDistance(mask, w, h, toInside) {
     return d;
 }
 
+function rectPath(r) {
+    const p = new Path2D();
+    p.rect(r.x, r.y, r.w, r.h);
+    return p;
+}
+
 export class Selection {
     constructor(width, height, mask = null, rect = null) {
         this.width = width;
@@ -72,7 +78,38 @@ export class Selection {
         const mask = new Uint8Array(width * height);
         for (let yy = r.y; yy < r.y + r.h; ++yy)
             mask.fill(255, yy * width + r.x, yy * width + r.x + r.w);
+        // (Al crearla, solo dentro del lienzo: el contorno es el del rectángulo recortado.)
         return new Selection(width, height, mask, r);
+    }
+
+    // El trazado de la selección para moverla o transformarla: el suyo o, si es un rectángulo, el
+    // rectángulo (así, al sacarla de la imagen, el contorno sigue entero y no se corta en el lienzo).
+    shapePath() {
+        return this.path ?? (this.rect ? rectPath(this.rect) : null);
+    }
+
+    // El recuadro de su contorno: el de la máscara o, si se sacó de la imagen moviéndola, el de su
+    // forma entera (los tiradores de Mover van con el contorno, no con lo que queda dentro).
+    shapeBounds() {
+        return this.outlineBounds ?? this.bounds();
+    }
+
+    // El de 'from' pasado por 'matrix' (sus cuatro esquinas).
+    static mappedBounds(from, matrix) {
+        if (!from)
+            return null;
+        const pts = [[from.x, from.y], [from.x + from.w, from.y], [from.x, from.y + from.h], [from.x + from.w, from.y + from.h]]
+            .map(([x, y]) => matrix.transformPoint(new DOMPoint(x, y)));
+        const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+        const x = Math.min(...xs), y = Math.min(...ys);
+        return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+    }
+
+    // Con el recuadro del contorno, si sale de la imagen.
+    withOutlineBounds(b) {
+        if (this.mask && b && (b.x < 0 || b.y < 0 || b.x + b.w > this.width || b.y + b.h > this.height))
+            this.outlineBounds = b;
+        return this;
     }
 
     // Rasteriza un trazado (función que recibe un Path2D y lo define) relleno; la selección se
@@ -348,7 +385,9 @@ export class Selection {
                     out[y * width + x] = this.mask[sy * this.width + sx];
             }
         }
-        return Selection.fromMask(width, height, out).withPath(this.path, new DOMMatrix([1, 0, 0, 1, dx, dy]));
+        const shift = new DOMMatrix([1, 0, 0, 1, dx, dy]);
+        return Selection.fromMask(width, height, out).withPath(this.shapePath(), shift)
+            .withOutlineBounds(Selection.mappedBounds(this.shapeBounds(), shift));
     }
 
     // La máscara transformada por una matriz (DOMMatrix) (Mover selección, girar, voltear).
@@ -360,7 +399,8 @@ export class Selection {
         ctx.imageSmoothingEnabled = antialias;
         ctx.setTransform(matrix);
         ctx.drawImage(this.maskCanvas(), 0, 0);
-        return Selection.fromAlpha(canvas, antialias).withPath(this.path, matrix);
+        return Selection.fromAlpha(canvas, antialias).withPath(this.shapePath(), matrix)
+            .withOutlineBounds(Selection.mappedBounds(this.shapeBounds(), matrix));
     }
 
     // La cobertura con la que se recorta lo que se pinta (Raster::clipCoverage de Kaint): con la

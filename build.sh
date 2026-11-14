@@ -308,6 +308,8 @@ if (( DO_DEBUG )); then
     [[ "$BUILD_DIR" == build ]] && BUILD_DIR=build-debug || BUILD_DIR="$BUILD_DIR-debug"
 fi
 (( DO_AVX2 )) && BUILD_DIR="$BUILD_DIR-avx2"
+# En un contenedor (musl o arm64), su propia carpeta: la de este equipo no se mezcla con la suya.
+BUILD_DIR="$BUILD_DIR${KAINT_BUILD_SUFFIX:-}"
 
 # --- Windows (solo con build.bat) ---------------------------------------------
 if (( DO_WINDOWS )); then
@@ -655,15 +657,21 @@ if [[ -z "${KAINT_IN_CONTAINER:-}" ]] && { (( DO_MUSL )) && ! is_musl || (( DO_A
     inner=(--tar)
     (( DO_APPIMAGE )) && inner=(--appimage)
     (( DO_DEBUG )) && inner+=(--debug)
+    # ca-certificates: sin ellos no se descargan por HTTPS libdatachannel ni linuxdeploy (con
+    # --no-install-recommends, Debian no lo instala junto a curl).
     if (( DO_MUSL )); then
         image=docker.io/library/alpine:3.22
-        setup="apk add --no-cache bash build-base cmake ninja qt6-qtbase-dev qt6-qttools-dev qt6-qtsvg-dev qt6-qtwayland-dev zlib-dev openssl-dev curl file"
+        setup="apk add --no-cache bash build-base cmake ninja qt6-qtbase-dev qt6-qttools-dev qt6-qtsvg-dev qt6-qtwayland-dev zlib-dev openssl-dev ca-certificates curl file"
     else
         image=docker.io/library/debian:trixie
-        setup="apt-get update && apt-get install -y --no-install-recommends ${DEB_REQUIRED[*]} curl file"
+        setup="apt-get update && apt-get install -y --no-install-recommends ${DEB_REQUIRED[*]} ca-certificates curl file"
     fi
+    build_suffix=""
+    (( DO_ARM64 )) && build_suffix="-arm64"
+    (( DO_MUSL )) && build_suffix="$build_suffix-musl"
     echo "${c_bold}Compilando en un contenedor ($image, $platform)...${c_reset}"
     "$tool" run --rm --platform "$platform" -v "$PWD:/src" -w /src -e KAINT_IN_CONTAINER=1 \
+        -e KAINT_BUILD_SUFFIX="$build_suffix" \
         -e KAINT_TAR_SUFFIX="$( (( DO_MUSL )) && echo -musl )" "$image" sh -c "$setup && ./build.sh ${inner[*]}"
     exit 0
 fi
@@ -767,6 +775,15 @@ if (( DO_FLATPAK )); then
 fi
 
 # --- Compilación ------------------------------------------------------------
+# Una carpeta configurada desde otra ruta (en un contenedor, o con el proyecto en otro sitio) hace
+# fallar a CMake: se empieza de cero.
+if [[ -f "$BUILD_DIR/CMakeCache.txt" ]] && (( ! DO_CLEAN )); then
+    cache_src=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$BUILD_DIR/CMakeCache.txt")
+    if [[ -n "$cache_src" && "$cache_src" != "$PWD" ]]; then
+        echo "${c_yellow}$BUILD_DIR/ se configuró desde $cache_src: se borra.${c_reset}"
+        DO_CLEAN=1
+    fi
+fi
 if (( DO_CLEAN )); then
     echo "${c_bold}Borrando $BUILD_DIR/${c_reset}"
     rm -rf -- "$BUILD_DIR"
@@ -879,7 +896,10 @@ if (( DO_APPIMAGE )); then
     # Dentro del AppImage, el .desktop llama a kaint sin ruta.
     sed -i 's|^Exec=.*|Exec=kaint %F|' "$appdir/usr/share/applications/$APP_ID.desktop"
     version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' version.json)
-    output="Kaint-$version-$arch$( (( DO_AVX2 )) && echo -avx2 ).AppImage"
+    # (Sin «$( (( DO_AVX2 )) && ... )»: sin AVX2 devuelve 1 y set -e corta aquí sin decir nada.)
+    avx2_suffix=""
+    (( DO_AVX2 )) && avx2_suffix="-avx2"
+    output="Kaint-$version-$arch$avx2_suffix.AppImage"
     rm -f "$BUILD_DIR/$output"
     (cd "$BUILD_DIR" && PATH="$tools:$PATH" LD_LIBRARY_PATH="$qt_libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
         QMAKE="$qmake" EXTRA_QT_MODULES="svg;waylandcompositor" \

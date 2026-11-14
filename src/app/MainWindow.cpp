@@ -57,6 +57,9 @@
 #include <QDateTime>
 #include <QDragEnterEvent>
 #include <QEventLoop>
+#include <QPointingDevice>
+#include <QWheelEvent>
+#include <QCursor>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
@@ -187,6 +190,7 @@ public:
         // La X aparece y desaparece con un fundido de 200 ms (como en paint.js).
         m_closeTimer.setInterval(16);
         connect(&m_closeTimer, &QTimer::timeout, this, &ImageStrip::stepCloseFade);
+        connect(&m_scrollTimer, &QTimer::timeout, this, &ImageStrip::stepScroll);
         connect(this, &QTabBar::currentChanged, this, &ImageStrip::fadeCloseButtons);
         connect(this, &QTabBar::tabMoved, this, [this] { resetCloseButtons(); });
     }
@@ -204,7 +208,23 @@ public:
         m_fullHeight = on;
         setIconSize(iconSize());
         updateGeometry();
+        thumbBoxChanged();
     }
+
+    // Tamaño máximo de las miniaturas. Como en Paint.NET, el recuadro es igual para todas las
+    // imágenes y lo que cambia es la miniatura dentro de él: a lo alto de toda la fila, un hueco
+    // cuadrado (una imagen apaisada deja un poco de recuadro vacío arriba; una alargada llega
+    // hasta arriba).
+    QSize thumbBox() const
+    {
+        if (!m_fullHeight)
+            return iconSize();
+        const int h = std::max(iconSize().height(), height() - 2 * kPadY - kTopGap);
+        // Casi cuadrado, como paint.rs: una imagen apaisada deja hueco arriba.
+        return QSize(std::max(iconSize().width(), h * 26 / 25), h);
+    }
+    // Se llama cuando cambia thumbBox(): las miniaturas se vuelven a crear con el tamaño nuevo.
+    std::function<void()> onThumbBoxChanged;
 
     // Miniatura de una pestaña, centrada en su hueco. Con el recuadro a lo alto de toda la fila, el
     // hueco va abajo (como en Paint.NET: la miniatura junto a la barra de herramientas y el recuadro
@@ -212,11 +232,14 @@ public:
     QRect thumbRect(int index) const
     {
         const QRect tab = tabRect(index);
-        const QSize box = iconSize();
+        const QSize box = thumbBox();
         const QSize thumb = tabIcon(index).actualSize(box).boundedTo(box);
-        const QRect slot(tab.left() + kPadX, tab.top() + std::max(kPadY, tab.height() - kPadY - box.height()), box.width(), box.height());
-        return QRect(slot.left() + (slot.width() - thumb.width()) / 2, slot.top() + (slot.height() - thumb.height()) / 2,
-                     thumb.width(), thumb.height());
+        const QRect slot = m_fullHeight ? tab.adjusted(kPadX, kPadY + kTopGap, -kPadX, -kPadY)
+                                        : QRect(tab.left() + kPadX, tab.top() + std::max(kPadY, tab.height() - kPadY - box.height()),
+                                                box.width(), box.height());
+        // A lo alto de toda la fila, abajo del recuadro (como paint.rs y Paint.NET); si no, centrada.
+        const int y = m_fullHeight ? slot.bottom() + 1 - thumb.height() : slot.top() + (slot.height() - thumb.height()) / 2;
+        return QRect(slot.left() + (slot.width() - thumb.width()) / 2, y, thumb.width(), thumb.height());
     }
 
     // Siempre en la esquina de arriba a la derecha del recuadro de la pestaña (dentro de su
@@ -263,19 +286,121 @@ protected:
         resetCloseButtons();
     }
 
-    QSize tabSizeHint(int) const override
+    QSize tabSizeHint(int index) const override
     {
+        Q_UNUSED(index);
         const QSize base = iconSize() + QSize(2 * kPadX, 2 * kPadY);
-        // A lo alto de toda la fila de arriba: el recuadro llega arriba del todo.
-        return m_fullHeight ? QSize(base.width(), std::max(base.height(), height())) : base;
+        // A lo alto de toda la fila de arriba: el recuadro llega arriba del todo (el mismo para
+        // todas las imágenes).
+        return m_fullHeight ? QSize(thumbBox().width() + 2 * kPadX, std::max(base.height(), height())) : base;
+    }
+
+    // Las flechas de los bordes (como en Paint.NET), solo hacia donde quedan imágenes cortadas.
+    QToolButton* scrollButton(bool right) const
+    {
+        return findChild<QToolButton*>(right ? QStringLiteral("ScrollRightButton") : QStringLiteral("ScrollLeftButton"),
+                                       Qt::FindDirectChildrenOnly);
+    }
+    QRect arrowRect(bool right) const
+    {
+        QStyleOptionTab opt;
+        initStyleOption(&opt, std::max(0, currentIndex()));
+        opt.rect = rect();
+        return style()->subElementRect(right ? QStyle::SE_TabBarTearIndicatorRight : QStyle::SE_TabBarTearIndicatorLeft, &opt, this);
+    }
+    bool arrowShown(bool right) const
+    {
+        const QToolButton* b = scrollButton(right);
+        return b && b->isVisible() && b->isEnabled();
+    }
+    void paintScrollArrows(QPainter& p)
+    {
+        for (bool right : {false, true}) {
+            if (!arrowShown(right))
+                continue;
+            const QRect r = arrowRect(right);
+            // (Las de Paint.NET, en su cuadrito: se leen encima de las miniaturas.)
+            const QRect icon(r.center().x() - 8, r.center().y() - 8, 16, 16);
+            QStyleOption arrow;
+            arrow.initFrom(this);
+            arrow.rect = icon;
+            style()->drawPrimitive(right ? QStyle::PE_IndicatorArrowRight : QStyle::PE_IndicatorArrowLeft, &arrow, &p, this);
+        }
+    }
+
+    // La rueda del ratón desplaza la tira (como arrastrándola), no cambia de imagen: Qt ya lo
+    // hace así con los touchpads (desplazamiento en píxeles), así que la rueda se le pasa como uno.
+    void wheelEvent(QWheelEvent* e) override
+    {
+        const QPoint pixel = e->pixelDelta();
+        const QPoint angle = e->angleDelta();
+        // Vertical u horizontal, lo que mueva más (la rueda normal es vertical).
+        // El touchpad, tal cual (ya es suave); la rueda, 180 px por paso, repartidos en una
+        // animación corta (se suman si se gira seguido).
+        if (!pixel.isNull()) {
+            scrollPixels(std::abs(pixel.y()) > std::abs(pixel.x()) ? pixel.y() : pixel.x());
+            e->accept();
+            return;
+        }
+        const int delta = (std::abs(angle.y()) > std::abs(angle.x()) ? angle.y() : angle.x()) * 3 / 2;
+        if (delta == 0) {
+            e->ignore();
+            return;
+        }
+        // Al cambiar de sentido, lo que quedaba se olvida.
+        if ((delta > 0) != (m_scrollPending > 0))
+            m_scrollPending = 0;
+        m_scrollPending += delta;
+        if (!m_scrollTimer.isActive()) {
+            m_scrollTimer.setInterval(10);
+            m_scrollTimer.start();
+        }
+        e->accept();
+    }
+    void scrollPixels(int delta)
+    {
+        static const QPointingDevice* const kPixelWheel = new QPointingDevice(
+            QStringLiteral("kaint-strip-wheel"), 0x6b61696e74, QInputDevice::DeviceType::TouchPad, QPointingDevice::PointerType::Generic,
+            QInputDevice::Capability::Scroll | QInputDevice::Capability::PixelScroll, 1, 0);
+        const QPointF pos = rect().center();
+        QWheelEvent pixelWheel(pos, mapToGlobal(pos), QPoint(delta, 0), QPoint(delta, 0), Qt::NoButton, Qt::NoModifier,
+                               Qt::NoScrollPhase, false, Qt::MouseEventSynthesizedByApplication, kPixelWheel);
+        QTabBar::wheelEvent(&pixelWheel);
+    }
+    void stepScroll()
+    {
+        // Cada paso, una parte de lo que falta (empieza rápido y frena al final); en un borde, para.
+        int step = m_scrollPending / 4;
+        if (step == 0)
+            step = m_scrollPending;
+        m_scrollPending -= step;
+        scrollPixels(step);
+        if (m_scrollPending == 0 || !arrowShown(step < 0)) {
+            m_scrollPending = 0;
+            m_scrollTimer.stop();
+        }
     }
 
     void resizeEvent(QResizeEvent* e) override
     {
         QTabBar::resizeEvent(e);
         // Las pestañas se recalculan con la altura nueva.
-        if (m_fullHeight && e->oldSize().height() != e->size().height())
+        if (m_fullHeight && e->oldSize().height() != e->size().height()) {
             setIconSize(iconSize());
+            thumbBoxChanged();
+        }
+    }
+    void thumbBoxChanged()
+    {
+        // Una vez, al terminar (al cambiar de tamaño llegan varios seguidos).
+        if (onThumbBoxChanged && !m_thumbPending) {
+            m_thumbPending = true;
+            QTimer::singleShot(0, this, [this] {
+                m_thumbPending = false;
+                if (onThumbBoxChanged)
+                    onThumbBoxChanged();
+            });
+        }
     }
     QSize minimumTabSizeHint(int index) const override { return tabSizeHint(index); }
 
@@ -313,6 +438,7 @@ protected:
         }
         for (int i = 0; i < count(); ++i)
             tabIcon(i).paint(&p, thumbRect(i));
+        paintScrollArrows(p);
         p.setRenderHint(QPainter::Antialiasing);
         for (int i = 0; i < count(); ++i) {
             const int m = marks(i);
@@ -347,6 +473,13 @@ protected:
     void mousePressEvent(QMouseEvent* e) override
     {
         const QPoint pos = e->position().toPoint();
+        // Las flechas de los bordes: una imagen hacia ese lado.
+        for (bool right : {false, true})
+            if (e->button() == Qt::LeftButton && arrowShown(right) && arrowRect(right).contains(pos)) {
+                scrollButton(right)->click();
+                e->accept();
+                return;
+            }
         const int i = tabAt(pos);
         if (e->button() == Qt::LeftButton && i >= 0 && closeTarget(i) > 0 && closeRect(i).contains(pos)) {
             m_closeTab = i;
@@ -470,9 +603,14 @@ private:
     // Margen, borde y relleno de la pestaña (los de la hoja de estilo) alrededor de la miniatura.
     static constexpr int kPadX = 6;
     static constexpr int kPadY = 5;
+    // A lo alto de toda la fila: algo de recuadro libre arriba (la miniatura, algo más pequeña).
+    static constexpr int kTopGap = 0;
     int m_hoverTab = -1;
     bool m_hoverClose = false;
     bool m_fullHeight = false;
+    bool m_thumbPending = false;
+    int m_scrollPending = 0;
+    QTimer m_scrollTimer;
     int m_closeTab = -1;
     int m_pressedTab = -1;
     QPoint m_pressPos;
@@ -667,19 +805,22 @@ protected:
         opt.arrowType = Qt::NoArrow;
         opt.features &= ~QStyleOptionToolButton::HasMenu;
         p.drawComplexControl(QStyle::CC_ToolButton, opt);
-        // El triángulo con raya de Paint.NET, algo más abajo que los menús.
-        const QIcon arrow = Icons::named(QStringLiteral("image-list-menu"));
-        if (!arrow.isNull()) {
-            arrow.paint(&p, QRect(width() / 2 - 7, 9, 14, 16));
-            return;
-        }
+        // Tres puntos y, debajo, una flecha hacia abajo, centrados en el botón.
         p.setRenderHint(QPainter::Antialiasing);
         const QColor band = TopRow::bandColor();
         const QColor color = isDown() || underMouse() ? palette().color(QPalette::ButtonText)
                                                       : (band.lightness() < 128 ? QColor(Qt::white) : QColor(Qt::black));
         p.setPen(QPen(color, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         const qreal cx = width() / 2.0;
-        p.drawPolyline(QPolygonF{QPointF(cx - 3.5, 14.5), QPointF(cx, 18), QPointF(cx + 3.5, 14.5)});
+        const qreal cy = height() / 2.0;
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        for (int i = -1; i <= 1; ++i)
+            p.drawEllipse(QPointF(cx + i * 3.5, cy - 4), 1.1, 1.1);
+        // La flecha, celeste.
+        p.setPen(QPen(QColor(0x5c, 0xc8, 0xff), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolyline(QPolygonF{QPointF(cx - 4, cy), QPointF(cx, cy + 4), QPointF(cx + 4, cy)});
     }
 };
 
@@ -1394,6 +1535,8 @@ void MainWindow::createToolBars()
     main->addActions({A["undo"], A["redo"]});
     main->addSeparator();
     main->addActions({A["pixelGrid"], A["rulers"]});
+    // Con muchas imágenes, la tira se acorta (con sus flechas); los menús y la barra, no.
+    main->setSizePolicy(QSizePolicy::Fixed, main->sizePolicy().verticalPolicy());
     m_topLayout->addWidget(main, m_menuRow + 1, 0, Qt::AlignLeft | Qt::AlignTop);
 
     m_options = new ToolOptionsBar(m_tools, this);
@@ -1428,6 +1571,7 @@ void MainWindow::createTopRow()
         top->setCaption(m_captionTitle);
         placeCaptionButtons();
     }
+    m_menuBar->setSizePolicy(QSizePolicy::Fixed, m_menuBar->sizePolicy().verticalPolicy());
     m_topLayout->addWidget(m_menuBar, m_menuRow, 0, Qt::AlignLeft | Qt::AlignBottom);
     m_topLayout->setRowStretch(m_menuRow, 1);
 
@@ -1439,6 +1583,10 @@ void MainWindow::createTopRow()
     m_tabs->setExpanding(false);
     m_tabs->setDrawBase(false);
     m_tabs->setIconSize(QSize(64, 48));
+    static_cast<ImageStrip*>(m_tabs)->onThumbBoxChanged = [this] {
+        for (Document* doc : std::as_const(m_docs))
+            updateTab(doc);
+    };
     m_tabs->setUsesScrollButtons(true);
     m_tabs->setElideMode(Qt::ElideRight);
     // Solo lo que ocupan las miniaturas: la flecha de la lista va justo después de la última y
@@ -1546,6 +1694,41 @@ void MainWindow::resizeEvent(QResizeEvent* e)
     // estado de la ventana: se mira con su tamaño, ya colocada.
     if (m_captionButtons && CaptionButtons::rowHeight(this) != m_captionRow)
         QTimer::singleShot(0, this, &MainWindow::updateCaptionRow);
+    // Al terminar de cambiar de tamaño (el gestor de ventanas maximiza o restaura en varios pasos y
+    // con animación), la fila de arriba se repinta entera.
+    if (!m_topRepaint) {
+        m_topRepaint = new QTimer(this);
+        m_topRepaint->setSingleShot(true);
+        m_topRepaint->setInterval(150);
+        connect(m_topRepaint, &QTimer::timeout, this, &MainWindow::repaintTopRow);
+    }
+    m_topRepaint->start();
+}
+
+void MainWindow::repaintTopRow()
+{
+    // Arrastrando la barra para maximizar o restaurar, el sistema se queda con el ratón (Qt no
+    // recibe la suelta): los botones podían quedar como si el puntero siguiera encima o pulsados.
+    if (m_cornerButtons) {
+        const QPoint cursor = QCursor::pos();
+        for (QToolButton* b : m_cornerButtons->findChildren<QToolButton*>()) {
+            const bool under = b->isVisible() && b->rect().contains(b->mapFromGlobal(cursor));
+            b->setAttribute(Qt::WA_UnderMouse, under);
+            if (b->isDown() && !(QGuiApplication::mouseButtons() & Qt::LeftButton))
+                b->setDown(false);
+            b->style()->unpolish(b);
+            b->style()->polish(b);
+            b->update();
+        }
+    }
+    // Al maximizar o restaurar arrastrando la ventana, el marco cambia (esquinas redondeadas,
+    // transparencia) y los botones de las ventanas, con su fondo translúcido, se quedaban a medio
+    // pintar (el relleno acumulado o solo los bordes): se repinta toda la parte de arriba.
+    if (QWidget* top = menuWidget()) {
+        top->update();
+        for (QWidget* w : top->findChildren<QWidget*>())
+            w->update();
+    }
 }
 
 void MainWindow::createPanels()
@@ -1986,7 +2169,7 @@ void MainWindow::updateTab(Document* doc)
         return;
     const qreal dpr = devicePixelRatioF();
     const QImage source = doc == m_doc ? m_canvas->composite() : doc->flattened();
-    QImage thumb = Raster::thumbnail(source, m_tabs->iconSize() * dpr);
+    QImage thumb = Raster::thumbnail(source, static_cast<ImageStrip*>(m_tabs)->thumbBox() * dpr);
     {
         // Borde fino: una imagen blanca no se pierde sobre el fondo claro.
         QPainter p(&thumb);
@@ -3909,6 +4092,10 @@ void MainWindow::changeEvent(QEvent* e)
         keepOpaque();
     if (e->type() == QEvent::WindowStateChange && m_captionButtons)
         QTimer::singleShot(0, this, &MainWindow::updateCaptionRow);
+    if (e->type() == QEvent::WindowStateChange) {
+        QTimer::singleShot(0, this, &MainWindow::repaintTopRow);
+        QTimer::singleShot(250, this, &MainWindow::repaintTopRow);
+    }
     QMainWindow::changeEvent(e);
 }
 
@@ -3984,7 +4171,7 @@ void MainWindow::applySettings()
     m_workspace->setTranslucentOverImageOnly(m_settings.translucentOverImage);
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(m_settings.win7PanelClose, 0, 2)));
-    m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder);
+    m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder, m_settings.roundedWindows());
     m_canvas->setRulerStyle(Ruler::Style(m_settings.rulerStyle));
     m_canvas->setRulersVisible(m_settings.rulers);
     m_canvas->setOverscroll(m_settings.overscroll);
@@ -4001,6 +4188,12 @@ void MainWindow::applySettings()
         strip->setFullHeight(m_settings.stripFullHeight);
         m_topLayout->removeWidget(m_tabs);
         m_topLayout->addWidget(m_tabs, 0, 1, m_tabsColumnRows, 1, m_settings.stripFullHeight ? Qt::Alignment() : Qt::AlignBottom);
+        // La flecha de la lista ocupa todo el alto de la tira (al pasar el puntero, todo el rectángulo).
+        m_topLayout->removeWidget(m_listButton);
+        if (m_settings.stripFullHeight)
+            m_topLayout->addWidget(m_listButton, 0, 2, m_tabsColumnRows, 1);
+        else
+            m_topLayout->addWidget(m_listButton, m_menuRow, 2, 2, 1);
     }
     // Las funciones de PhotoCraft y los efectos de BoltBait activados: los menús se rehacen si
     // cambian.
@@ -4022,7 +4215,7 @@ void MainWindow::applySettings()
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 5)));
 #ifdef Q_OS_WIN
     // Windows 11 redondea (o no) las esquinas de las ventanas con el marco de Kaint al momento.
-    WindowFrame::setRoundedCorners(m_settings.uiStyle == 1 && m_settings.windowsVersion == 11);
+    WindowFrame::setRoundedCorners(m_settings.roundedWindows());
 #endif
     WindowFrame::setButtonsOnLeft(m_settings.titleButtonsLeft);
     placeCaptionButtons();
@@ -4046,6 +4239,18 @@ void MainWindow::applySettings()
         || fontChanged || titleChanged || glassChanged || selectionChanged) {
         Theme::setLook(Theme::Look(m_settings.uiStyle));
         Theme::apply(Theme::Scheme(m_settings.colorScheme));
+        // Con el tema nuevo: sus esquinas (redondeadas con Windows 7; en Linux solo se quitan al
+        // momento, ponerlas necesita reiniciar) y sus botones de la barra de título.
+        const bool rounded = m_settings.roundedWindows();
+#ifdef Q_OS_WIN
+        WindowFrame::setRoundedCorners(rounded);
+#else
+        if (!rounded)
+            WindowFrame::setRoundedCorners(false);
+#endif
+        keepOpaque();
+        placeCaptionButtons();
+        WindowFrame::refreshAll();
     }
     applyCanvasAppearance();
     // Las animaciones son las de Kaint (Animations), también en Wayland: los efectos de menús y

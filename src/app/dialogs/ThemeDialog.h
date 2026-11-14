@@ -45,6 +45,8 @@ private:
     Theme::Spec m_spec;
     Theme::Spec m_original;
     bool m_refreshing = false;
+    // El modo (claro u oscuro) de antes de elegir el estilo de Windows XP, que solo es claro.
+    bool m_darkBeforeXp = false;
     QComboBox* m_template = nullptr;
     QComboBox* m_base = nullptr;
     // Estilo de los controles: plano, Windows 7 (Aero), Windows XP (Luna) o clásico (Windows 98).

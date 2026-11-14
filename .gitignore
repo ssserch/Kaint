@@ -31,3 +31,4 @@ build-tar-*/
 build-appimage-*/
 build-windows-avx2/
 build-windows-arm64/
+build-tar-zst/

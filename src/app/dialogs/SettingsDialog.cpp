@@ -100,13 +100,24 @@ namespace {
 // las ventanas translúcidas desde que se crean) se pone o se quita al abrir Kaint: true si lo
 // elegido no es lo que hay ahora. Con el tema KDE, siempre la del escritorio. En Windows las
 // esquinas las pone el propio Windows 11 al momento.
+bool frameNeedsRestart(const AppSettings& s);
+
+} // namespace
+
+bool AppSettings::roundedWindows() const
+{
+    return windowsVersion == 11;
+}
+
+namespace {
+
 bool frameNeedsRestart(const AppSettings& s)
 {
     const bool frame = s.customFrame && s.colorScheme != int(Theme::Scheme::Kde);
 #ifdef Q_OS_WIN
     const bool rounded = false;
 #else
-    const bool rounded = frame && s.uiStyle == 1 && s.windowsVersion == 11;
+    const bool rounded = frame && s.roundedWindows();
 #endif
     return frame != WindowFrame::enabled() || rounded != WindowFrame::roundedCorners();
 }
@@ -701,7 +712,8 @@ QWidget* SettingsDialog::createInterfacePage()
         changed();
     });
     // Windows 7: el color de las ventanas, como «Color de ventana» de Windows 7 (sus colores o uno
-    // propio). El personalizado lo tiene en Personalizar….
+    // propio). También el personalizado con el estilo de Windows 7 (salvo si en Personalizar… se
+    // eligió un cristal propio, que manda).
     auto* glassRow = new QWidget(page.widget);
     auto* glassCombo = new QComboBox(glassRow);
     auto* glassColor = new ColorButton(glassRow);
@@ -759,8 +771,7 @@ QWidget* SettingsDialog::createInterfacePage()
         aeroGlass->setEnabled(win7);
         aeroGlass->setVisible(win7);
         panelCloseRow->setVisible(win7);
-        glassRow->setVisible(m_settings.colorScheme == int(Theme::Scheme::Windows7)
-                             || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark));
+        glassRow->setVisible(win7);
     };
     syncAeroGlass();
     connect(this, &SettingsDialog::settingsChanged, this, syncAeroGlass);
@@ -1065,32 +1076,12 @@ QWidget* SettingsDialog::createInterfacePage()
     });
     connect(managePacks, &QPushButton::clicked, this, [this] { showPage(Page::IconPacks); });
 
-    // Ventanas flotantes: el estilo inspirado en Windows 10 o el compacto, y su borde.
-    page.layout->addWidget(sectionHeader(tr("Ventanas"), page.widget));
-    auto* panelForm = new QFormLayout;
-    panelForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
-    auto* panelStyle = new QComboBox(page.widget);
-    panelStyle->addItem(tr("Windows 10"), 0);
-    panelStyle->setItemData(0, tr("Cabecera más alta, botón de cerrar cuadrado y esquinas algo redondeadas."), Qt::ToolTipRole);
-    panelStyle->addItem(tr("Compacto"), 1);
-    panelStyle->setItemData(1, tr("La cabecera fina de siempre de Kaint."), Qt::ToolTipRole);
-    panelStyle->setCurrentIndex(std::max(0, panelStyle->findData(m_settings.panelStyle)));
-    auto* panelBorder = new QSpinBox(page.widget);
-    panelBorder->setRange(1, 12);
-    panelBorder->setValue(m_settings.panelBorder);
-    panelBorder->setToolTip(tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores."));
-    panelForm->addRow(tr("Estilo de las ventanas:"), panelStyle);
-    QWidget* borderField = withUnit(panelBorder, tr("px"), {}, page.widget);
-    panelForm->addRow(tr("Grosor del borde de las ventanas:"), borderField);
-    page.layout->addLayout(panelForm);
-    check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), &AppSettings::snapPanels,
-          tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él."));
     // Barra de título: la de Kaint (con los botones como los de Windows 11, 10, 7, XP o 98 o los de
     // macOS, a la derecha o a la izquierda) o la del sistema (la de Windows o, en Linux, la del
     // escritorio: en KDE, la de Plasma). Con el estilo Paint.NET, además, la recreación de Windows 10
     // u 11 (esquinas redondeadas en modo ventana). Por defecto, la de Kaint en Linux y la del
     // sistema en Windows.
-    page.layout->addWidget(sectionHeader(tr("Barra de título"), page.widget));
+    page.layout->addWidget(sectionHeader(tr("Barra de título y ventanas"), page.widget));
     auto* customFrame = new QCheckBox(tr("Usar la barra de título y el marco de ventana de Kaint"), page.widget);
     customFrame->setChecked(m_settings.customFrame);
 #ifdef Q_OS_WIN
@@ -1124,17 +1115,27 @@ QWidget* SettingsDialog::createInterfacePage()
     buttonsSide->addItem(tr("A la izquierda"), true);
     buttonsSide->setCurrentIndex(m_settings.titleButtonsLeft ? 1 : 0);
     auto* recreation = new QComboBox(page.widget);
-    recreation->addItem(QStringLiteral("Windows 10"), 10);
+    recreation->addItem(tr("Rectos"), 10);
     recreation->setItemData(0, tr("Ventanas con las esquinas rectas."), Qt::ToolTipRole);
-    recreation->addItem(QStringLiteral("Windows 11"), 11);
-    recreation->setItemData(1, tr("Ventanas con las esquinas algo redondeadas en modo ventana y, por defecto, los botones de "
-                                  "Windows 11."),
+    recreation->addItem(tr("Redondeados"), 11);
+    recreation->setItemData(1, tr("Ventanas con las esquinas algo redondeadas en modo ventana (los temas de Windows 7 las "
+                                  "traen por defecto)."),
                             Qt::ToolTipRole);
     recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
     titleForm->addRow(tr("Botones de la barra de título:"), buttonsStyle);
     titleForm->addRow(tr("Posición de los botones:"), buttonsSide);
-    titleForm->addRow(tr("Recreación de Windows:"), recreation);
+    titleForm->addRow(tr("Bordes:"), recreation);
+    // El grosor del borde de las ventanas flotantes (con los bordes redondeados, también con el
+    // aspecto de Paint.NET).
+    auto* panelBorder = new QSpinBox(page.widget);
+    panelBorder->setRange(1, 12);
+    panelBorder->setValue(m_settings.panelBorder);
+    QWidget* borderField = withUnit(panelBorder, tr("px"), {}, page.widget);
+    titleForm->addRow(tr("Grosor del borde de las ventanas:"), borderField);
+    QFormLayout* panelForm = titleForm;
     page.layout->addLayout(titleForm);
+    check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), &AppSettings::snapPanels,
+          tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él."));
     // Poner o quitar la barra de Kaint (o, en Linux, las esquinas redondeadas) pide reiniciar. Si se
     // dice que no, todo vuelve a como estaba (la casilla, los botones de antes y su recreación).
     auto applyTitleChange = [this, customFrame, buttonsStyle, recreation](const AppSettings& before) {
@@ -1165,33 +1166,22 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.customFrame = on;
         applyTitleChange(before);
     });
-    connect(buttonsStyle, &QComboBox::activated, this, [this, buttonsStyle, recreation, applyTitleChange](int i) {
+    connect(buttonsStyle, &QComboBox::activated, this, [this, buttonsStyle, applyTitleChange](int i) {
         const AppSettings before = m_settings;
         m_settings.titleButtons = buttonsStyle->itemData(i).toInt();
-        // Con el estilo Paint.NET, los botones de Windows 11 traen su recreación (ventanas con las
-        // esquinas redondeadas) y los de Windows 10, la suya.
-        if (m_settings.uiStyle == 1 && (m_settings.titleButtons == 0 || m_settings.titleButtons == 1)) {
-            m_settings.windowsVersion = m_settings.titleButtons == 1 ? 11 : 10;
-            recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
-        }
         applyTitleChange(before);
     });
     connect(buttonsSide, &QComboBox::activated, this, [this, buttonsSide](int i) {
         m_settings.titleButtonsLeft = buttonsSide->itemData(i).toBool();
         changed();
     });
-    connect(recreation, &QComboBox::activated, this, [this, recreation, buttonsStyle, applyTitleChange](int i) {
+    connect(recreation, &QComboBox::activated, this, [this, recreation, applyTitleChange](int i) {
         const int version = recreation->itemData(i).toInt();
         if (version == m_settings.windowsVersion)
             return;
         const AppSettings before = m_settings;
+        // (Solo las esquinas: los botones son los que estén elegidos.)
         m_settings.windowsVersion = version;
-        // Cada recreación con sus botones (si no se eligieron otros).
-        if (version == 11 && m_settings.titleButtons == 0)
-            m_settings.titleButtons = 1;
-        else if (version == 10 && m_settings.titleButtons == 1)
-            m_settings.titleButtons = 0;
-        buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
         applyTitleChange(before);
     });
     // Los botones, su posición y la recreación solo con la barra de Kaint (y la recreación, con el
@@ -1199,12 +1189,12 @@ QWidget* SettingsDialog::createInterfacePage()
     auto syncTitle = [this, titleForm, customFrame, recreation, buttonsSide, buttonsStyle] {
         const bool kde = m_settings.colorScheme == int(Theme::Scheme::Kde);
         const bool own = m_settings.customFrame && !kde;
-        const bool paintNet = m_settings.uiStyle == 1 && !kde;
         customFrame->setEnabled(!kde);
         if (kde)
             customFrame->setToolTip(tr("Con el tema KDE, las ventanas llevan la barra de título de Plasma."));
-        recreation->setEnabled(own && paintNet);
-        recreation->setToolTip(paintNet ? QString() : tr("Se desbloquea con el estilo de interfaz Paint.NET."));
+        // (Los bordes valen también para las ventanas flotantes, aunque la barra sea la del sistema.)
+        recreation->setEnabled(!kde);
+        recreation->setCurrentIndex(m_settings.windowsVersion == 11 ? 1 : 0);
         buttonsSide->setEnabled(own);
         buttonsStyle->setEnabled(own);
         buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
@@ -1230,24 +1220,20 @@ QWidget* SettingsDialog::createInterfacePage()
     // Con el estilo de Paint.NET las ventanas no tienen borde y llevan su propia cabecera: el
     // estilo y el borde no se usan y se ven desactivados (con su etiqueta). El estilo de la
     // interfaz, a su vez, no se aplica con el tema KDE.
-    auto updateCompatibility = [this, panelForm, panelStyle, borderField, look] {
+    auto updateCompatibility = [this, panelForm, borderField, look] {
+        // Con el estilo Paint.NET las ventanas no llevan borde, salvo con los bordes redondeados.
         const bool paintNet = m_settings.uiStyle == 1 && m_settings.colorScheme != int(Theme::Scheme::Kde);
-        const QString why = tr("No se usa con el estilo de interfaz Paint.NET: sus ventanas no tienen borde.");
-        for (QWidget* field : {static_cast<QWidget*>(panelStyle), borderField}) {
-            field->setEnabled(!paintNet);
-            field->setToolTip(paintNet ? why : QString());
-            if (QWidget* label = panelForm->labelForField(field))
-                label->setEnabled(!paintNet);
-        }
+        const bool off = paintNet && !m_settings.roundedWindows();
+        const QString why = tr("Con el estilo de interfaz Paint.NET, las ventanas solo llevan borde con «Bordes: Redondeados».");
+        borderField->setEnabled(!off);
+        borderField->setToolTip(off ? why : tr("Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores."));
+        if (QWidget* label = panelForm->labelForField(borderField))
+            label->setEnabled(!off);
         look->setEnabled(m_settings.colorScheme != int(Theme::Scheme::Kde));
     };
     updateCompatibility();
     connect(look, &QComboBox::activated, this, updateCompatibility);
     connect(this, &SettingsDialog::settingsChanged, this, updateCompatibility);
-    connect(panelStyle, &QComboBox::activated, this, [this, panelStyle](int i) {
-        m_settings.panelStyle = panelStyle->itemData(i).toInt();
-        changed();
-    });
     connect(panelBorder, &QSpinBox::valueChanged, this, [this](int v) {
         m_settings.panelBorder = v;
         changed();
@@ -1275,6 +1261,10 @@ QWidget* SettingsDialog::createInterfacePage()
             }
             return false;
         }
+        // Los temas de Windows 7 traen los bordes redondeados (se pueden volver a poner rectos).
+        const auto isWin7 = [](int s) { return s == int(Theme::Scheme::Windows7) || s == int(Theme::Scheme::Windows7Dark); };
+        if (isWin7(i) && !isWin7(m_settings.colorScheme))
+            m_settings.windowsVersion = 11;
         m_settings.colorScheme = i;
         scheme->setCurrentIndex(scheme->findData(i));
         changed();

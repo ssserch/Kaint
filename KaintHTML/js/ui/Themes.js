@@ -170,8 +170,13 @@ export function resolveScheme(scheme, systemDark) {
     if (scheme === 5) {
         const custom = Settings.get("customTheme") || {};
         const b = CustomBases[custom.base] || CustomBases.dark;
-        const colors = b.win7 ? customColors(CustomBases[custom.base] ? custom.base : "dark", custom.colors || {})
-                              : { ...b.colors, ...(custom.colors || {}) };
+        // Con Windows 7 y sin cristal propio, el «Color de las ventanas» de Configuración (como Kaint).
+        let own = custom.colors || {};
+        const glass = Settings.get("win7Glass");
+        if (b.win7 && !own.glass && /^#[0-9a-f]{6}$/i.test(glass || ""))
+            own = { ...own, glass: b.base === "dark" ? followGlass(Win7DarkColors.glass, Win7Colors.glass, glass) : glass };
+        const colors = b.win7 ? customColors(CustomBases[custom.base] ? custom.base : "dark", own)
+                              : { ...b.colors, ...own };
         return { base: b.base, colors, win7: !!b.win7, xp: !!b.xp, alt: !!b.alt, custom: true };
     }
     return { base: scheme === 2 || (scheme === 0 && systemDark) ? "dark" : "light" };

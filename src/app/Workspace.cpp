@@ -25,6 +25,9 @@ namespace {
 
 FloatingPanel::Style g_chromeStyle = FloatingPanel::Style::Windows10;
 int g_chromeBorder = 1;
+// «Bordes: redondeados» (Configuración): esquinas redondeadas y el borde elegido, también con el
+// aspecto de Paint.NET (que si no, no lleva borde).
+bool g_chromeRounded = false;
 bool g_snapping = true;
 bool g_overImageOnly = true;
 
@@ -212,10 +215,11 @@ FloatingPanel::FloatingPanel(const QString& id, const QString& title, QWidget* c
     updateGeometry();
 }
 
-void FloatingPanel::setChrome(Style style, int border)
+void FloatingPanel::setChrome(Style style, int border, bool rounded)
 {
     g_chromeStyle = style;
     g_chromeBorder = std::clamp(border, 1, 12);
+    g_chromeRounded = rounded;
 }
 
 void FloatingPanel::setSnapping(bool on)
@@ -289,9 +293,9 @@ int FloatingPanel::borderWidth() const
     case PanelFrame::Aero: return 6;
     case PanelFrame::Plain: break;
     }
-    // Como Paint.NET: sin borde.
+    // Como Paint.NET: sin borde (salvo con los bordes redondeados, que llevan el elegido).
     if (Theme::paintNetLook())
-        return 0;
+        return g_chromeRounded ? g_chromeBorder : 0;
     return Theme::active().classic ? 2 : g_chromeBorder;
 }
 
@@ -385,7 +389,7 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     // Con el estilo de Windows 10, las esquinas algo redondeadas de las ventanas de Paint.NET; el
     // borde, del grosor elegido. Con el aspecto de Paint.NET, rectas y sin borde.
     const bool paintNet = Theme::paintNetLook();
-    const qreal radius = paintNet ? 0 : windows10() ? 7 : s.radius;
+    const qreal radius = g_chromeRounded ? 7 : paintNet ? 0 : windows10() ? 7 : s.radius;
     const qreal half = s.classic ? 0.5 : borderWidth() / 2.0;
     QPainterPath shape;
     shape.addRoundedRect(QRectF(rect()).adjusted(half, half, -half, -half), radius, radius);
@@ -1077,9 +1081,9 @@ void Workspace::setTranslucentOverImageOnly(bool on)
     updatePanelsOverImage();
 }
 
-void Workspace::setPanelChrome(FloatingPanel::Style style, int border)
+void Workspace::setPanelChrome(FloatingPanel::Style style, int border, bool rounded)
 {
-    FloatingPanel::setChrome(style, border);
+    FloatingPanel::setChrome(style, border, rounded);
     for (FloatingPanel* p : std::as_const(m_panels)) {
         p->applyChrome();
         p->reposition();

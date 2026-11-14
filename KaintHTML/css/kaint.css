@@ -289,11 +289,12 @@ u {
 .image-list-button {
     flex: none;
     align-self: stretch;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: center;
     width: 16px;
     min-width: 16px;
     margin: 2px 0 2px -4px;
-    padding: 6px 0 0;
+    padding: 0;
 }
 
 .image-list-button.down {
@@ -590,12 +591,20 @@ input[type="number"] {
     min-width: 72px;
 }
 
-.pushbutton:hover {
+.pushbutton:hover:not(:disabled) {
     background: var(--button-hover);
     border-color: var(--accent);
 }
 
-.pushbutton:active {
+/* Desactivado: apagado y sin reaccionar al puntero (con los temas Claro, Oscuro y Paint.NET no tenía
+   estilo y, por ejemplo, Editar, Exportar y Quitar de los idiomas parecían activos con uno incluido). */
+/* (Windows 98, XP y 7 tienen el suyo.) */
+:root:not(.classic):not(.xp):not(.win7) .pushbutton:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.pushbutton:active:not(:disabled) {
     background: var(--button-pressed);
 }
 
@@ -2760,13 +2769,69 @@ fieldset.group > legend {
     word-break: break-all;
 }
 
+/* Bordes redondeados (Configuración > Bordes), como las ventanas de Kaint con «Redondeados»: con el
+   borde del grosor elegido, también con el aspecto de Paint.NET (que si no, no lleva). */
+:root.rounded-windows:not(.classic):not(#k) :is(.floating-panel, .dialog) {
+    border-radius: 8px;
+    overflow: clip;
+}
+
+:root.rounded-windows.pdn:not(.classic):not(.win7):not(.xp):not(#k) .floating-panel {
+    border: var(--window-border, 1px) solid var(--line);
+}
+
+/* Tema personalizado, como en Kaint: un diálogo de tamaño normal, los colores en dos columnas
+   (nombre y muestra juntos) y el diseño como un formulario. */
+.dialog:has(.theme-colors) {
+    width: min(720px, 94vw);
+    max-height: 92vh;
+}
+
 .theme-colors {
     display: grid;
-    grid-template-columns: 1fr 60px;
-    gap: 4px 12px;
+    grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr) 48px;
+    gap: 4px 10px;
     align-items: center;
-    max-height: 60vh;
+    max-height: 40vh;
     overflow: auto;
+    padding-right: 4px;
+}
+
+.theme-colors > input[type="color"] {
+    width: 48px;
+    height: 22px;
+    padding: 1px;
+}
+
+.theme-colors > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.theme-design {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 16px;
+    align-items: center;
+}
+
+.theme-design > h4 {
+    grid-column: 1 / -1;
+    margin: 8px 0 2px;
+}
+
+.theme-design > label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.theme-design > label > select,
+.theme-design > label > input[type="text"] {
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .catalog-list {
@@ -4696,21 +4761,54 @@ fieldset.group > legend {
     padding: 0;
 }
 
-/* El recuadro a lo alto de toda la fila y la miniatura abajo, en el hueco de 48 px de siempre
-   (como en Paint.NET: junto a la barra de herramientas, con el recuadro subiendo por encima). */
+/* El recuadro a lo alto de toda la fila, el mismo para todas las imágenes, y la miniatura abajo,
+   llenándolo (como Kaint de escritorio y paint.rs): lo que cambia es el tamaño de la miniatura. */
 :root.strip-full .image-tab {
     height: auto;
+    width: calc(var(--thumb-w, 64px) + 12px);
     align-self: stretch;
-    display: grid;
-    grid-template-rows: 1fr 48px;
-    justify-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     align-items: center;
-    padding-bottom: 4px;
+    padding: 0 5px 4px;
     box-sizing: border-box;
 }
 
 :root.strip-full .image-tab > canvas {
-    grid-row: 2;
+    max-width: none;
+    max-height: none;
+}
+
+/* Flechas de los bordes de la tira: hacia dónde quedan más imágenes (pulsarlas también desplaza). */
+.strip-arrow {
+    position: sticky;
+    z-index: 2;
+    flex: none;
+    align-self: center;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 16px;
+    color: var(--text);
+    background: var(--button);
+    border: 1px solid var(--line);
+    cursor: pointer;
+}
+
+.strip-arrow.shown {
+    display: flex;
+}
+
+.strip-arrow.left {
+    left: 0;
+    margin-right: -16px;
+}
+
+.strip-arrow.right {
+    right: 0;
+    margin-left: -16px;
 }
 
 /* La imagen actual y la que tiene el puntero, con el azul de Paint.NET encima de la franja (medido

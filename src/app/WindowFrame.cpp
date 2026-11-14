@@ -292,9 +292,15 @@ void paintGlyph11(QPainter& p, const QRect& box, int which, bool maximized, cons
         }
         break;
     default:
-        p.drawLine(QPointF(c.x() - 4.5, c.y() - 4.5), QPointF(c.x() + 4.5, c.y() + 4.5));
-        p.drawLine(QPointF(c.x() - 4.5, c.y() + 4.5), QPointF(c.x() + 4.5, c.y() - 4.5));
+    {
+        // La X, con el mismo trazo y el mismo tono que minimizar y maximizar (antes, más gruesa,
+        // resaltaba más que ellos): de esquina a esquina de píxeles, para que no salga borrosa.
+        const QPointF x(std::round(c.x()), std::round(c.y()));
+        p.setPen(QPen(color, 1, Qt::SolidLine, Qt::FlatCap));
+        p.drawLine(QPointF(x.x() - 4.5, x.y() - 4.5), QPointF(x.x() + 4.5, x.y() + 4.5));
+        p.drawLine(QPointF(x.x() - 4.5, x.y() + 4.5), QPointF(x.x() + 4.5, x.y() - 4.5));
         break;
+    }
     }
     p.restore();
 }
@@ -1712,7 +1718,25 @@ void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool 
         // Rojo de cerrar de Windows 11 y un fondo muy suave en los demás.
         QColor glyph = titleTextColor(active);
         if (which == 2 && (hot || down)) {
-            p.fillRect(box, down ? QColor(0xc4, 0x2b, 0x1c, 0xe6) : QColor(0xc4, 0x2b, 0x1c));
+            const QColor red = down ? QColor(0xc4, 0x2b, 0x1c, 0xe6) : QColor(0xc4, 0x2b, 0x1c);
+            // Con las esquinas redondeadas, el rojo sigue la esquina de la ventana (no se sale de ella).
+            if (ownCorners() && !maximized && !g_left) {
+                QPainterPath shape;
+                const QRectF r(box);
+                const qreal d = 2.0 * kRadius;
+                shape.moveTo(r.topLeft());
+                shape.lineTo(r.right() + 1 - kRadius, r.top());
+                shape.arcTo(QRectF(r.right() + 1 - d, r.top(), d, d), 90, -90);
+                shape.lineTo(r.right() + 1, r.bottom() + 1);
+                shape.lineTo(r.left(), r.bottom() + 1);
+                shape.closeSubpath();
+                p.save();
+                p.setRenderHint(QPainter::Antialiasing);
+                p.fillPath(shape, red);
+                p.restore();
+            } else {
+                p.fillRect(box, red);
+            }
             glyph = Qt::white;
         } else if (hot || down) {
             p.fillRect(box, overlay(down ? 15 : 24));

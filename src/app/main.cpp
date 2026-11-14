@@ -309,8 +309,9 @@ int main(int argc, char** argv)
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 5)));
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(startup.win7PanelClose, 0, 2)));
-    // Recreación de Windows 11 (estilo Paint.NET): esquinas redondeadas en modo ventana.
-    WindowFrame::setRoundedCorners(frame && Theme::paintNetLook() && startup.windowsVersion == 11);
+    // Recreación de Windows 11 (estilo Paint.NET) y temas de Windows 7: esquinas redondeadas en
+    // modo ventana.
+    WindowFrame::setRoundedCorners(frame && startup.roundedWindows());
     WindowFrame::setEnabled(frame);
 
     if (preview) {

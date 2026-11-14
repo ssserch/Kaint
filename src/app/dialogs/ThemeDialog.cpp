@@ -414,11 +414,18 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     connect(m_style, &QComboBox::activated, this, [this](int i) {
         if (m_refreshing)
             return;
+        // XP solo tiene modo claro: al pasar a él se recuerda el modo y, al dejarlo, se recupera
+        // (así Windows 7 oscuro vuelve a ser oscuro sin tener que usar «Partir de»).
+        const bool wasXp = m_spec.xp && !m_spec.classic;
+        if (!wasXp)
+            m_darkBeforeXp = m_spec.dark;
         m_spec.win7 = i == 1;
         m_spec.xp = i == 2;
         m_spec.classic = i == 3;
-        if (m_spec.xp)
+        if (m_spec.xp && !m_spec.classic)
             m_spec.dark = false;
+        else if (wasXp)
+            m_spec.dark = m_darkBeforeXp;
         refresh();
         changed();
     });
@@ -549,6 +556,7 @@ ThemeDialog::ColorRow ThemeDialog::addColor(const Theme::ColorRole& role, QWidge
 void ThemeDialog::setSpec(const Theme::Spec& spec)
 {
     m_spec = spec;
+    m_darkBeforeXp = spec.dark;
     refresh();
     changed();
 }

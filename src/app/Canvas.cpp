@@ -114,7 +114,13 @@ Canvas::Canvas(QWidget* parent)
             viewport()->update();
             return;
         }
-        const QRect r = imageToView(QRectF(m_doc->selection().bounds())).toAlignedRect().adjusted(-2, -2, 2, 2);
+        // Lo que ocupa su contorno, también lo que sale de la imagen (la máscara solo llega a su
+        // borde: fuera, las hormigas se quedaban quietas).
+        const Selection& sel = m_doc->selection();
+        QRectF area(sel.bounds());
+        if (!sel.path().isEmpty())
+            area = area.united(sel.path().boundingRect());
+        const QRect r = imageToView(area).toAlignedRect().adjusted(-2, -2, 2, 2);
         viewport()->update(r.intersected(viewport()->rect()));
     });
 }

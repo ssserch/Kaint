@@ -211,11 +211,36 @@ export function checkbox(text, checked) {
     return label;
 }
 
+// Una etiqueta con varios controles (un desplegable y un botón, como «Tema: … Personalizar…») no se
+// asocia a ninguno: si no, el navegador pasa el :hover de la etiqueta a su primer control y, con el
+// puntero sobre el botón, se marcaba el desplegable. (Las de un solo control, como las casillas,
+// siguen asociadas.)
+function unlinkLabels(node) {
+    if (!(node instanceof Element))
+        return;
+    for (const label of node.matches("label") ? [node] : node.querySelectorAll("label"))
+        if (!label.htmlFor && label.querySelectorAll("input, select, textarea, button").length > 1)
+            label.htmlFor = "kaint-no-control";
+}
+if (typeof document !== "undefined" && document.body)
+    new MutationObserver((records) => {
+        for (const r of records)
+            r.addedNodes.forEach(unlinkLabels);
+    }).observe(document.body, { childList: true, subtree: true });
+
 export function select(options, value) {
     const s = el("select");
     for (const [v, text] of options)
         s.appendChild(el("option", { value: v, textContent: plain(text) }));
     s.value = value;
+    // Elegido con el ratón, deja de tener el foco: si no, se quedaba resaltado (Firefox lo pinta del
+    // color de la selección) aunque el puntero ya no esté encima. Con el teclado, lo conserva.
+    s.addEventListener("pointerdown", () => (s.byPointer = true));
+    s.addEventListener("change", () => {
+        if (s.byPointer)
+            s.blur();
+        s.byPointer = false;
+    });
     return s;
 }
 
@@ -812,7 +837,13 @@ export async function settingsDialog(app = null, startPage = "interface") {
         ["interface", "settings-interface", tr("Interfaz de usuario"), async () => {
             const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
                                   Settings.get("colorScheme"));
-            scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
+            scheme.addEventListener("change", () => {
+                // Los temas de Windows 7 traen los bordes redondeados (se pueden volver a poner rectos).
+                const win7 = (s) => s === 7 || s === 10;
+                if (win7(Number(scheme.value)) && !win7(Number(Settings.get("colorScheme")) || 0))
+                    Settings.set("windowCorners", 1);
+                Settings.set("colorScheme", Number(scheme.value));
+            });
             const cursors = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("cursorStyle"));
             cursors.title = tr("Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.");
             cursors.addEventListener("change", () => Settings.set("cursorStyle", Number(cursors.value)));
@@ -832,21 +863,25 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const language = select(languageOptions(), Settings.get("language"));
             const reload = el("button", { className: "pushbutton", textContent: tr("Recargar"), style: { visibility: "hidden" } });
             reload.addEventListener("click", () => location.reload());
+            // «Recargar» solo si el idioma elegido no es el que se cargó (al volver al de antes, se va).
+            const loadedLanguage = currentCustomLanguage() ? `custom:${currentCustomLanguage().id}` : currentLanguage();
+            const syncReload = () => (reload.style.visibility = language.value !== loadedLanguage ? "visible" : "hidden");
             // Idiomas personalizados: importar, crear, editar, exportar y quitar.
             const chosenCustom = () => (language.value.startsWith("custom:") ? CustomLanguages.find(language.value.slice(7)) : null);
             let syncLanguageButtons = () => {};
             language.addEventListener("change", () => {
                 Settings.set("language", language.value);
-                reload.style.visibility = "visible";
+                syncReload();
                 syncLanguageButtons();
             });
+            // (También al cambiar con el teclado o la rueda, por si el navegador no avisa con «change».)
+            language.addEventListener("input", () => syncLanguageButtons());
             const refreshLanguages = (chosen) => {
                 language.replaceChildren(...languageOptions().map(([v, t]) => el("option", { value: v, textContent: t })));
                 language.value = chosen ?? Settings.get("language");
-                if (language.value !== Settings.get("language")) {
+                if (language.value !== Settings.get("language"))
                     Settings.set("language", language.value);
-                    reload.style.visibility = "visible";
-                }
+                syncReload();
                 syncLanguageButtons();
             };
             const languageFile = el("input", { type: "file", accept: ".kaintlang,.json,application/json", hidden: true });
@@ -887,24 +922,36 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 }
             });
             syncLanguageButtons = () => {
-                const own = !!chosenCustom();
+                // Solo con un idioma personalizado elegido (y que exista): con los incluidos, bloqueados.
+                const own = language.value.startsWith("custom:") && !!chosenCustom();
                 editLanguage.disabled = exportLanguage.disabled = removeLanguage.disabled = !own;
             };
             syncLanguageButtons();
+            syncReload();
             const packs = await IconPacks.list();
             const pack = select(packs.map((p) => [p.id, p.name]), IconPacks.activeId());
             pack.addEventListener("change", () => IconPacks.activate(pack.value));
-            const panelStyle = select([[0, tr("Windows 10")], [1, tr("Compacto")]], Settings.get("panelStyle"));
-            // Con el estilo de Paint.NET las ventanas no tienen borde: estilo y borde se ven desactivados.
+            // Bordes de las ventanas y los diálogos, como en Kaint: rectos o redondeados (solo las
+            // esquinas; los botones son los elegidos).
+            const panelStyle = select([[0, tr("Rectos")], [1, tr("Redondeados")]], Number(Settings.get("windowCorners")) === 1 ? 1 : 0);
+            panelStyle.title = tr("Ventanas con las esquinas algo redondeadas (los temas de Windows 7 las traen por defecto).");
+            // Con el estilo de Paint.NET las ventanas no tienen borde: su grosor se ve desactivado.
+            // Con el estilo de Paint.NET las ventanas no llevan borde, salvo con los bordes redondeados.
             const paintNetCompat = () => {
-                const off = Settings.get("uiStyle") === 1;
-                for (const field of [panelStyle, border]) {
+                const off = Settings.get("uiStyle") === 1 && Number(Settings.get("windowCorners")) !== 1;
+                for (const field of [border]) {
                     field.disabled = off;
-                    field.title = off ? tr("No se usa con el estilo de interfaz Paint.NET: sus ventanas no tienen borde.") : "";
+                    field.title = off ? tr("Con el estilo de interfaz Paint.NET, las ventanas solo llevan borde con «Bordes: Redondeados».") : "";
                     field.closest("label")?.classList.toggle("disabled", off);
                 }
             };
-            panelStyle.addEventListener("change", () => Settings.set("panelStyle", Number(panelStyle.value)));
+            panelStyle.addEventListener("change", () => Settings.set("windowCorners", Number(panelStyle.value)));
+            window.addEventListener("kaint-settings", (e) => {
+                if (e.detail?.key !== "windowCorners")
+                    return;
+                panelStyle.value = String(Settings.get("windowCorners") || 0);
+                paintNetCompat();
+            });
             // Botones de cerrar de las ventanas y los diálogos (la web no tiene barra de título), como
             // los de la barra de título de Kaint. Con los temas Windows 7, XP y 98, «Windows 10» son los suyos.
             const buttonsStyle = select([[0, tr("Windows 10")], [1, tr("Windows 11")], [2, "macOS"], [3, tr("Windows 7")], [4, tr("Windows XP")], [5, tr("Windows 98")]],
@@ -969,7 +1016,9 @@ export async function settingsDialog(app = null, startPage = "interface") {
             themeGlassRow.title = tr("Como «Color de ventana» de Windows 7: el cristal de los marcos, la franja de los menús y las cabeceras de las ventanas. Solo con los temas Windows 7.");
             const syncThemeWin7 = () => {
                 themeWin7Row.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win7 ? "" : "none";
-                themeGlassRow.style.display = [7, 10].includes(Number(Settings.get("colorScheme")) || 0) ? "" : "none";
+                // (También el personalizado con base Windows 7 u oscuro; si en Personalizar… tiene un
+                // cristal propio, manda ese.)
+                themeGlassRow.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win7 ? "" : "none";
             };
             syncThemeWin7();
             window.addEventListener("kaint-settings", (e) => (e.detail?.key === "colorScheme" || e.detail?.key === "customTheme") && syncThemeWin7());
@@ -1120,14 +1169,16 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 el("div", { className: "row-buttons" }, [importLanguage, newLanguage, editLanguage, exportLanguage, removeLanguage, languageFile]),
                 note(tr("Los cambios de idioma se aplican al recargar la página. En un idioma personalizado, lo que no esté traducido sale en inglés.")),
                 el("label", {}, [tr("Fuente de la interfaz:"), uiFont, fontList, uiFontSize, tr("pt")]),
-                fakeTitle, stripFull,
+                stripFull,
                 el("div", { className: "row" }, [titleOn, titleColor]),
                 selectionRow,
                 el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
-                heading(tr("Ventanas")),
-                el("label", {}, [tr("Estilo de las ventanas:"), panelStyle]),
-                el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
+                // Como en Kaint: la barra de título y las ventanas juntas (botones, bordes y su grosor).
+                heading(tr("Barra de título y ventanas")),
+                fakeTitle,
                 el("label", {}, [tr("Botones de las ventanas:"), buttonsStyle, win7Shape, buttonsSide]),
+                el("label", {}, [tr("Bordes:"), panelStyle]),
+                el("label", {}, [tr("Grosor del borde de las ventanas:"), border, tr("px")]),
                 check(tr("Acoplar las ventanas a los bordes y a las demás ventanas al moverlas"), "snapPanels",
                       tr("Al soltar una ventana cerca de un borde del área de trabajo o de otra ventana, se coloca junto a él.")),
                 ...phoneSection(),

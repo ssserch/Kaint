@@ -196,6 +196,8 @@ private:
     void placeCaptionButtons();
     // La fila de la barra de título cambia de alto al maximizar o restaurar la ventana.
     void updateCaptionRow();
+    void repaintTopRow();
+    QTimer* m_topRepaint = nullptr;
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();

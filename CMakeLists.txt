@@ -199,6 +199,15 @@ add_library(kaintcore STATIC
     src/core/effects/Render.cpp
     src/core/effects/RenderBlend.cpp
     src/core/effects/Stylize.cpp
+    src/core/effects/ExtraEffects.cpp
+    src/core/effects/GalleryEffects.cpp
+    src/core/effects/BoltBaitEffects.cpp
+    src/core/retouch/Common.cpp
+    src/core/retouch/Inpaint.cpp
+    src/core/retouch/NonLocal.cpp
+    src/core/retouch/Heal.cpp
+    src/core/retouch/Magnetic.cpp
+    src/core/retouch/Segment.cpp
     src/core/effects/Artistic.cpp
     src/core/plugins/PdnBridge.cpp
     src/core/plugins/PluginEffects.cpp
@@ -260,6 +269,8 @@ add_library(kaintui STATIC
     src/app/dialogs/IconPackEditor.cpp
     src/app/dialogs/ImageDialogs.cpp
     src/app/dialogs/PluginCatalogDialog.cpp
+    src/app/dialogs/LanguageEditorDialog.cpp
+    src/app/CustomLanguages.cpp
     src/app/dialogs/SaveAllDialog.cpp
     src/app/collab/WebSocket.cpp
     src/app/collab/CollabProtocol.cpp
@@ -282,6 +293,7 @@ add_library(kaintui STATIC
     src/app/tools/MoveTools.cpp
     src/app/tools/ViewTools.cpp
     src/app/tools/PaintTools.cpp
+    src/app/tools/RetouchTools.cpp
     src/app/tools/EditableSteps.cpp
     src/app/tools/FillTools.cpp
     src/app/tools/ShapeTools.cpp
@@ -379,6 +391,10 @@ qt_add_resources(kaintui kaint_ui_icons PREFIX "/kaint/ui-icons" BASE data/ui-ic
 # Cursores en pixel art del estilo Paint.NET (data/cursors/generate.py los dibuja).
 file(GLOB KAINT_CURSORS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/cursors/*.png")
 qt_add_resources(kaintui kaint_cursors PREFIX "/kaint/cursors" BASE data/cursors FILES ${KAINT_CURSORS})
+# La copia del catálogo de Explorar complementos (por si no se puede descargar el del repositorio).
+qt_add_resources(kaintui kaint_plugin_catalog PREFIX "/kaint" FILES plugins/catalog.json)
+# Los textos que se pueden traducir con un idioma personalizado (su original y el inglés).
+qt_add_resources(kaintui kaint_translation_sources PREFIX "/i18n" BASE translations FILES translations/kaint_en.ts)
 
 
 qt_add_executable(kaint src/app/main.cpp)
@@ -488,8 +504,10 @@ if(KAINT_PDN_BRIDGE AND KAINT_MCS AND (WIN32 OR KAINT_MONO))
         COMMAND ${KAINT_MCS} -nologo ${rsp}
         DEPENDS ${PDN_HOST_SOURCES} ${PDN_OUTPUTS}
         COMMENT "Compilando kaint-pdn-host.exe" VERBATIM)
+    set(PDN_HOST_CONFIG "${PDN_OUT}/kaint-pdn-host.exe.config")
+    configure_file("${PDN_DIR}/Host/kaint-pdn-host.exe.config" "${PDN_HOST_CONFIG}" COPYONLY)
     add_custom_target(pdnbridge ALL DEPENDS ${PDN_OUTPUTS} "${PDN_HOST}")
-    install(FILES ${PDN_OUTPUTS} "${PDN_HOST}" "${PDN_DIR}/License-PaintDotNet-3.36.txt"
+    install(FILES ${PDN_OUTPUTS} "${PDN_HOST}" "${PDN_HOST_CONFIG}" "${PDN_DIR}/License-PaintDotNet-3.36.txt"
             DESTINATION ${CMAKE_INSTALL_DATADIR}/kaint/pdnbridge)
     message(STATUS "Kaint: capa de compatibilidad con Paint.NET activada (${KAINT_MCS})")
 else()
@@ -572,6 +590,7 @@ if(KAINT_INSTALL_WEB)
             PATTERN "tests" EXCLUDE PATTERN "package.json" EXCLUDE)
 endif()
 install(FILES third_party/quickjs-ng/LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME QuickJS-ng-LICENSE.txt)
+install(FILES data/licenses/PhotoCraft-LICENSE.txt DESTINATION ${CMAKE_INSTALL_DOCDIR})
 if(WIN32)
     qt_generate_deploy_app_script(TARGET kaint OUTPUT_SCRIPT KAINT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT "${KAINT_DEPLOY_SCRIPT}")

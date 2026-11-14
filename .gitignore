@@ -24,3 +24,10 @@ build-aab/
 /package-lock.json
 build-apk.sh
 extra-effects/
+buildexample.txt
+build-web/
+build-tar/
+build-tar-*/
+build-appimage-*/
+build-windows-avx2/
+build-windows-arm64/

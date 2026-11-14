@@ -192,7 +192,7 @@ export class ToolOptions {
         // Herramienta: [icono ▾]
         const pick = button([icon(tool.icon, 16), el("span", { className: "arrow", textContent: "▼" })], tool.name, () => {
             const r = pick.getBoundingClientRect();
-            popupMenu(this.app.tools.tools.map((t) => ({ text: t.name, icon: t.icon, shortcut: t.letter, checked: t === tool,
+            popupMenu(this.app.tools.shown.map((t) => ({ text: t.name, icon: t.icon, shortcut: t.letter, checked: t === tool,
                                                          run: () => this.app.tools.select(t.id) })), r.left, r.bottom);
         });
         this.element.append(label(tr("Herramienta:")), pick);
@@ -313,6 +313,55 @@ export class ToolOptions {
                 ["none", "rectangleselect", tr("No cambiar de herramienta")],
                 ["moveselection", "moveselection", tr("Cambiar a Mover selección")],
                 ["moveselectedpixels", "moveselectedpixels", tr("Cambiar a Mover píxeles seleccionados")]], { showText: true }));
+            break;
+        // Las herramientas de PhotoCraft.
+        case "magnetic":
+            this.group(label(tr("Anchura:")), barSlider("magneticWidth", 1, 256, (v) => `${v} px`),
+                       label(tr("Contraste:")), barSlider("magneticContrast", 1, 100, (v) => `${v}%`),
+                       label(tr("Frecuencia:")), barSlider("magneticFrequency", 0, 100, (v) => `${v}`));
+            break;
+        case "objectFinder": {
+            const subject = button([el("span", { textContent: tr("Seleccionar sujeto") })], tr("Selecciona el objeto principal de la imagen"),
+                                   () => this.app.tools.find("objectselection")?.selectSubject());
+            this.group(choice(tr("Buscador de objetos"), "objectFinder", [
+                [true, "objectselection", tr("Buscador de objetos activado")],
+                [false, "toolbar-deselect", tr("Buscador de objetos desactivado")]]), subject);
+            break;
+        }
+        case "retouchSampling":
+            this.group(label(tr("Toma de muestras:")), choice(tr("Toma de muestras"), "retouchSampleImage",
+                                                               [[false, null, tr("Capa")], [true, null, tr("Imagen")]], { showText: true }));
+            break;
+        case "removeEach":
+            this.group(choice(tr("Quitar después de cada trazo"), "removeEachStroke", [
+                [true, "remove", tr("Quitar después de cada trazo")], [false, null, tr("Reunir trazos hasta pulsar Intro")]], { showText: true }));
+            break;
+        case "patch": {
+            const source = choice(tr("Origen o destino"), "patchDestination", [[false, null, tr("Origen")], [true, null, tr("Destino")]],
+                                  { showText: true });
+            const structure = barSlider("patchStructure", 1, 7, (v) => `${v}`), color = barSlider("patchColor", 0, 10, (v) => `${v}`);
+            const ca = el("span", { className: "group" }, [label(tr("Estructura:")), structure, label(tr("Color:")), color]);
+            // Origen o destino en el modo normal; estructura y color según el contenido.
+            ca.refresh = () => {
+                const contentAware = tools().patchMode === "contentAware";
+                source.style.display = contentAware ? "none" : "";
+                ca.style.display = contentAware ? "" : "none";
+                structure.refresh?.();
+                color.refresh?.();
+            };
+            ca.refresh();
+            this.group(label(tr("Parche:")), choice(tr("Parche"), "patchMode", [["normal", "patch", tr("Normal")],
+                                                                              ["contentAware", "patch", tr("Según el contenido")]],
+                                                   { showText: true }), source, ca);
+            break;
+        }
+        case "healAligned":
+            this.group(choice(tr("Alineado"), "healAligned", [[true, null, tr("Alineado")], [false, null, tr("Sin alinear")]], { showText: true }));
+            break;
+        case "spotType":
+            this.group(label(tr("Tipo:")), choice(tr("Tipo"), "spotType", [
+                ["contentAware", "spothealing", tr("Según el contenido")], ["createTexture", "spothealing", tr("Crear textura")],
+                ["proximityMatch", "spothealing", tr("Coincidencia por proximidad")]], { showText: true }));
             break;
         case "selectionQuality":
             this.group(choice(tr("Calidad de selección"), "selectionAntialias", [

@@ -7,7 +7,9 @@
 
 #include <vector>
 
-enum class StrokeKind { Paint, Erase, Clone, Recolor };
+// Mask: solo la cobertura, sin tocar la capa (las herramientas de PhotoCraft que curan o quitan lo
+// que se pinta encima).
+enum class StrokeKind { Paint, Erase, Clone, Recolor, Mask };
 
 struct StrokeParams {
     StrokeKind kind = StrokeKind::Paint;
@@ -44,6 +46,21 @@ public:
     void lineTo(QPointF pos, qreal pressure);
     bool end(const QString& text, const QString& icon = {});
     QPointF lastPoint() const { return m_last; }
+
+    // Por partes (los pinceles correctores, Quitar): termina el recorrido (la cobertura queda
+    // completa) sin pasar al historial; después commit() o cancel().
+    QRect finishPath();
+    bool commit(const QString& text, const QString& icon = {});
+    // Deja la capa como estaba antes del trazo, sin historial.
+    void cancel();
+    // 'source' (en formato de capa, del tamaño de 'r') sobre la capa de antes del trazo, a través
+    // de la cobertura (y la selección), con el modo de fusión del trazo.
+    void applyThroughCoverage(const QRect& r, const QImage& source);
+    const QImage& before() const { return m_before; }
+    const QImage& coverage() const { return m_mask; }
+    QRect bounds() const { return m_total; }
+    const StrokeParams& params() const { return m_params; }
+    Document* document() const { return m_doc; }
 
 private:
     struct Point {

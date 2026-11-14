@@ -67,6 +67,7 @@ public:
 
 protected:
     void changeEvent(QEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
     bool nativeEvent(const QByteArray& type, void* message, qintptr* result) override;
     void closeEvent(QCloseEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* e) override;
@@ -193,6 +194,8 @@ private:
     QPoint pastePosition(const QImage& image) const;
     void keepOpaque();
     void placeCaptionButtons();
+    // La fila de la barra de título cambia de alto al maximizar o restaurar la ventana.
+    void updateCaptionRow();
     void setUnit(int unit);
     void checkForUpdates(bool interactive);
     void checkHistoryMemory();
@@ -242,6 +245,9 @@ private:
     int m_menuRow = 0;
     class CaptionTitle* m_captionTitle = nullptr;
     class CaptionButtons* m_captionButtons = nullptr;
+    // Guarda el sitio de los botones de la ventana en la fila de arriba (ellos van pegados a la esquina).
+    QWidget* m_captionSpacer = nullptr;
+    int m_captionRow = 0;
 
     QLabel* m_hintIcon = nullptr;
     // Iconos de la barra de estado (se vuelven a pintar al cambiar de paquete de iconos).
@@ -261,6 +267,10 @@ private:
     QMenu* m_recentMenu = nullptr;
 
     const Effect* m_lastEffect = nullptr;
+    // Los efectos de BoltBait activados la última vez que se aplicó la configuración.
+    QStringList m_appliedBoltBait;
+    // Filas que ocupa la tira de imágenes en la fila de arriba.
+    int m_tabsColumnRows = 2;
     QHash<QString, ParamValues> m_effectValues;
     QHash<QString, ImageIO::SaveOptions> m_saveOptions;
     QString m_lastDir;

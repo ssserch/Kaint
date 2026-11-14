@@ -30,17 +30,11 @@ ToolsPanel::ToolsPanel(ToolManager* manager, QWidget* parent)
     }
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     applyCustomization();
-    connect(Customization::instance(), &Customization::toolsChanged, this, [this] {
-        // Conserva las columnas; la ventana crece o encoge con las filas.
-        const int columns = m_columns;
-        applyCustomization();
-        updateGeometry();
-        if (auto* panel = qobject_cast<FloatingPanel*>(parentWidget())) {
-            panel->resize(panel->size() - size() + sizeFor(columns));
-            panel->reposition();
-        }
-        layoutButtons();
-    });
+    // Herramientas que aparecen o desaparecen (las de PhotoCraft, al abrir Kaint o al activarlas, u
+    // ocultas en Personalización): conserva las columnas y la ventana crece o encoge con las filas.
+    const auto relayout = [this] { refit([this] { applyCustomization(); }); };
+    connect(manager, &ToolManager::availabilityChanged, this, relayout);
+    connect(Customization::instance(), &Customization::toolsChanged, this, relayout);
 
     connect(m_group, &QButtonGroup::idClicked, this, [this](int id) { m_manager->select(ToolId(id)); });
     connect(manager, &ToolManager::toolChanged, this, &ToolsPanel::onToolChanged);
@@ -59,7 +53,8 @@ void ToolsPanel::applyCustomization()
         auto* b = qobject_cast<QToolButton*>(m_group->button(id));
         if (!b)
             continue;
-        const bool hidden = custom->isToolHidden(id);
+        // Las de PhotoCraft, solo si están activadas.
+        const bool hidden = custom->isToolHidden(id) || !m_manager->isAvailable(m_manager->tool(ToolId(id)));
         b->setVisible(!hidden);
         if (!hidden)
             m_buttons.append(b);
@@ -74,13 +69,23 @@ void ToolsPanel::applyCustomization()
 void ToolsPanel::setIconSize(int side)
 {
     // Conserva las columnas: el tamaño de los botones ya puede haber cambiado con el tema.
-    const int columns = m_columns;
-    for (QToolButton* b : std::as_const(m_all))
-        b->setIconSize(QSize(side, side));
+    refit([this, side] {
+        for (QToolButton* b : std::as_const(m_all))
+            b->setIconSize(QSize(side, side));
+    });
+}
+
+void ToolsPanel::refit(const std::function<void()>& change)
+{
+    // Las columnas, las del ancho de la ventana (no las del contenido: al abrir Kaint todavía no
+    // está colocado y su tamaño no es el de la ventana, y la cuenta salía con filas de más). Sin
+    // ventana, las últimas colocadas.
+    auto* panel = qobject_cast<FloatingPanel*>(parentWidget());
+    const int columns = panel ? columnsFor(panel->contentSize().width()) : m_columns;
+    change();
     updateGeometry();
-    if (auto* panel = qobject_cast<FloatingPanel*>(parentWidget())) {
-        const QSize grid = sizeFor(columns);
-        panel->resize(panel->size() - size() + grid);
+    if (panel) {
+        panel->resizeForContent(sizeFor(columns));
         panel->reposition();
     }
     layoutButtons();

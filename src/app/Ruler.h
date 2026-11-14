@@ -18,7 +18,9 @@ public:
     // Según el tema (oscura como la de paint.js con los temas oscuros y del color de la barra de
     // herramientas con los claros, como en Paint.NET), siempre del color de la barra o siempre
     // oscura con números claros. Los valores son los que se guardan en la configuración.
-    enum class Style { Auto = 0, ToolBar = 1, PaintJs = 2 };
+    // PaintNet: como la de Paint.NET 5 (oscura u clara según el tema, con las divisiones de una
+    // regla: media, cuartos... y los números junto a la marca).
+    enum class Style { Auto = 0, ToolBar = 1, PaintJs = 2, PaintNet = 3 };
 
     Ruler(Qt::Orientation orientation, Canvas* canvas, QWidget* parent);
     static constexpr int kThickness = 20;
@@ -33,6 +35,7 @@ public:
 
 protected:
     void paintEvent(QPaintEvent* e) override;
+    void paintPaintNet(QPainter& p);
 
 private:
     Qt::Orientation m_orientation;

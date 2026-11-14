@@ -5,7 +5,7 @@ import { AppState } from "../AppState.js";
 import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
 
-class StrokeTool extends Tool {
+export class StrokeTool extends Tool {
     get options() {
         return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "blend", "selectionQuality"];
     }
@@ -148,7 +148,13 @@ export class CloneStampTool extends StrokeTool {
             this.repaint();
             return;
         }
-        if (!this.source || e.button !== "left")
+        if (!this.source) {
+            // Sin punto de origen no hay nada que copiar: se avisa junto al puntero.
+            if (e.button === "left")
+                this.notice(tr("Primero Ctrl+clic para elegir el punto de origen."));
+            return;
+        }
+        if (e.button !== "left")
             return;
         if (!this.offset)
             this.offset = { x: this.source.x - Math.floor(e.x), y: this.source.y - Math.floor(e.y) };

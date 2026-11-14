@@ -33,6 +33,13 @@ enum class ToolId {
     Text,
     Line,
     Shapes,
+    // Las de PhotoCraft (al final: los números de las anteriores no cambian).
+    MagneticLasso,
+    ObjectSelection,
+    Remove,
+    Patch,
+    HealingBrush,
+    SpotHealing,
 };
 
 // Paso del historial que su herramienta puede retomar (degradado): al volver a él en el
@@ -91,6 +98,14 @@ public:
         OptGamma = 1u << 30,
         OptMoveSelectionQuality = 1u << 31,
         OptFillAccumulate = 1ull << 32,
+        // Las herramientas de PhotoCraft.
+        OptMagnetic = 1ull << 33,
+        OptObjectFinder = 1ull << 34,
+        OptRetouchSampling = 1ull << 35,
+        OptRemoveEach = 1ull << 36,
+        OptPatch = 1ull << 37,
+        OptHealAligned = 1ull << 38,
+        OptSpotType = 1ull << 39,
     };
 
     explicit Tool(QObject* parent = nullptr) : QObject(parent) {}
@@ -101,6 +116,8 @@ public:
     virtual QString hint() const = 0;
     virtual QKeySequence shortcut() const = 0;
     virtual quint64 options() const { return 0; }
+    // Una de las herramientas de PhotoCraft (se ven si están activadas en Configuración > Complementos).
+    virtual bool isExtra() const { return false; }
 
     virtual void activate(Canvas* canvas) { m_canvas = canvas; }
     virtual void deactivate() { m_canvas = nullptr; }
@@ -147,6 +164,8 @@ signals:
 
 protected:
     void repaint() const;
+    // Aviso junto al puntero, encima de la imagen (Canvas::showNotice): lo que falta para empezar.
+    void notice(const QString& text) const;
 
     Canvas* m_canvas = nullptr;
 };

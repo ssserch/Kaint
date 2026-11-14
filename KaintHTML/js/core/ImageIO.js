@@ -1,6 +1,7 @@
 // Abrir y guardar: las imágenes que entiende el navegador (PNG, JPEG, WebP, GIF, BMP, AVIF... y, si
 // puede, HEIC y JPEG XL), OpenRaster (.ora) y Photoshop (.psd y .psb) con sus capas, como
 // src/core/Ora.cpp y Psd.cpp de Kaint.
+import { decodeJxr, decodeWithMagick } from "./ExternalCodecs.js";
 import { Document, Layer } from "./Document.js";
 import { OraNames } from "./Raster.js";
 import { unzip, zip } from "./Zip.js";
@@ -38,8 +39,8 @@ for (const f of browserFormats)
 
 // Lo que se puede abrir (además de lo que entienda el navegador). HEIC y JPEG XL, solo si el
 // navegador los entiende (Safari).
-export const OpenAccept = "image/*,.ora,.pdn,.psd,.psb,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm,.exif,.dib,.rle,.heic,.heif,.jxl";
-export const OpenExtensions = [".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".exif", ".webp", ".gif", ".bmp", ".dib", ".rle", ".avif", ".heic",
+export const OpenAccept = "image/*,.jxr,.wdp,.hdp,.wmp,.ora,.pdn,.psd,.psb,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm,.exif,.dib,.rle,.heic,.heif,.jxl";
+export const OpenExtensions = [".jxr", ".wdp", ".hdp", ".wmp", ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".exif", ".webp", ".gif", ".bmp", ".dib", ".rle", ".avif", ".heic",
                                ".heif", ".jxl", ".ico", ".ora", ".pdn", ".psd", ".psb", ".tga", ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm",
                                ".pbm", ".pnm"];
 
@@ -126,6 +127,10 @@ export async function openFile(file) {
             : documentFrom(width, height, name, anim.frames.map((f, i) => ({ name: Codecs.nameWithDelay(tr("Fotograma %1", i + 1), f.delay), data: f.data })));
         doc.active = 0;
         doc.gifLoops = anim.loops;
+    } else if (["jxr", "wdp", "hdp", "wmp"].includes(ext) || (head[0] === 0x49 && head[1] === 0x49 && head[2] === 0xbc)) {
+        // JPEG XR (ExternalCodecs.js, se carga solo ahora).
+        const image = await decodeJxr(new Uint8Array(await file.arrayBuffer()));
+        doc = documentFrom(image.width, image.height, name, [{ name: tr("Fondo"), data: image.data }]);
     } else if (ext === "qoi" || magic === "qoif" || ["ppm", "pgm", "pbm", "pnm"].includes(ext)) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const image = magic === "qoif" ? Codecs.decodeQoi(bytes) : Codecs.decodeNetpbm(bytes);
@@ -143,10 +148,21 @@ export async function openFile(file) {
         try {
             image = await decodeImage(file, profile ? "none" : "default");
         } catch (e) {
-            // HEIC y JPEG XL solo los abren algunos navegadores (Safari).
-            if (["heic", "heif", "jxl"].includes(ext))
-                throw new Error(tr("Este navegador no puede abrir imágenes %1. Prueba con Safari o con Kaint para el escritorio.", ext === "jxl" ? "JPEG XL" : "HEIC"));
-            throw e;
+            // HEIC, JPEG XL (y AVIF en navegadores viejos) solo los abren algunos navegadores:
+            // si no, ImageMagick (ExternalCodecs.js, se carga solo ahora).
+            if (!["heic", "heif", "hif", "jxl", "avif"].includes(ext))
+                throw e;
+            let decoded;
+            try {
+                decoded = await decodeWithMagick(bytes);
+            } catch {
+                throw new Error(tr("Este navegador no puede abrir imágenes %1. Prueba con Safari o con Kaint para el escritorio.", ext === "jxl" ? "JPEG XL" : ext === "avif" ? "AVIF" : "HEIC"));
+            }
+            doc = documentFrom(decoded.width, decoded.height, name, [{ name: tr("Fondo"), data: decoded.data }]);
+            doc.dpi = readResolution(bytes) || 96;
+            doc.colorProfile = profile;
+            doc.fileName = file.name;
+            return doc;
         }
         doc = Document.fromImage(image, name);
         doc.dpi = readResolution(bytes) || 96;

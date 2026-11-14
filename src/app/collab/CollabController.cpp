@@ -237,6 +237,30 @@ void CollabController::showJoinDialog(Collab::Mode mode)
     dlg.exec();
 }
 
+void CollabController::joinInvite(const QString& rawCode, const QString& source)
+{
+    const QString code = Collab::normalizedSessionCode(rawCode);
+    if (code.isEmpty())
+        return;
+    if (m_window) {
+        if (m_window->isMinimized())
+            m_window->showNormal();
+        m_window->raise();
+        m_window->activateWindow();
+    }
+    // Ya se está en esa sesión.
+    if (isActive() && Collab::normalizedSessionCode(m_session->sessionCode()) == code) {
+        showSessionWindow();
+        return;
+    }
+    if (isActive() && !leave(true))
+        return;
+    auto* dlg = new Collab::JoinDialog(this, Collab::Mode::P2P, m_window);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->show();
+    dlg->startInvite(code, source);
+}
+
 bool CollabController::leave(bool ask)
 {
     if (!isActive())

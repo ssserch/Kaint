@@ -926,7 +926,7 @@ private:
     // Lo de la principal que no es cristal: lo que hay bajo la fila de la barra de título.
     QRect clientRect() const
     {
-        return m_window->contentsRect().adjusted(0, CaptionButtons::rowHeight(), 0, 0);
+        return m_window->contentsRect().adjusted(0, CaptionButtons::rowHeight(m_window), 0, 0);
     }
 
     QRect titleRect() const
@@ -1634,7 +1634,8 @@ Metrics metricsFor(Buttons style, int h)
     case Buttons::Windows11:
     case Buttons::Windows10: return {kButton, kButton, h, 0, 0, 0, false};
     case Buttons::MacOS: {
-        const int d = h >= 26 ? 12 : std::max(8, h - 6);
+        // (22 px o más: los 12 px de siempre, también en la fila baja de la ventana maximizada.)
+        const int d = h >= 22 ? 12 : std::max(8, h - 6);
         return {d, d, d, 8, 0, 9, false};
     }
     case Buttons::Windows7: {
@@ -1868,12 +1869,12 @@ CaptionTitle::CaptionTitle(QWidget* parent)
 
 QSize CaptionTitle::sizeHint() const
 {
-    return {fontMetrics().horizontalAdvance(window()->windowTitle()) + 40, CaptionButtons::rowHeight()};
+    return {fontMetrics().horizontalAdvance(window()->windowTitle()) + 40, CaptionButtons::rowHeight(window())};
 }
 
 QSize CaptionTitle::minimumSizeHint() const
 {
-    return {40, CaptionButtons::rowHeight()};
+    return {40, CaptionButtons::rowHeight(window())};
 }
 
 bool CaptionTitle::event(QEvent* e)
@@ -1900,7 +1901,7 @@ void CaptionTitle::paintEvent(QPaintEvent*)
     const bool classic = WindowFrame::classicTitle();
     const QRect r = rect();
     // Con los botones a la izquierda, el icono y el título van después de ellos.
-    const int x0 = (WindowFrame::buttonsOnLeft() ? WindowFrame::buttonsWidth(CaptionButtons::rowHeight(), false) : 0) + (classic ? 3 : 8);
+    const int x0 = (WindowFrame::buttonsOnLeft() ? WindowFrame::buttonsWidth(CaptionButtons::rowHeight(window()), false) : 0) + (classic ? 3 : 8);
     Icons::app().paint(&p, QRect(x0, (r.height() - 16) / 2, 16, 16));
     const QRect text = r.adjusted(x0 + 16 + (classic ? 4 : 8), 0, -4, 0);
     QFont font = this->font();
@@ -1946,15 +1947,25 @@ CaptionButtons::CaptionButtons(QWidget* parent)
     });
 }
 
-int CaptionButtons::rowHeight()
+int CaptionButtons::rowHeight(const QWidget* window)
 {
-    // Windows 98: la barra de 18 px con un poco de aire; XP: 28 px; Windows 10: 32 px.
-    return WindowFrame::lunaTitle() ? 28 : WindowFrame::classicTitle() ? 20 : 32;
+    // Windows 98: la barra de 18 px con un poco de aire; XP: 28 px; Windows 7: el cristal de 32 px.
+    if (WindowFrame::lunaTitle())
+        return 28;
+    if (WindowFrame::classicTitle())
+        return 20;
+    if (WindowFrame::aeroTitle())
+        return 32;
+    // Windows 10 y 11: 30 px (31 con el borde de arriba) y, maximizada, 23, como las ventanas de
+    // Windows. Con 32 px siempre, maximizada la fila de arriba medía 11 px más que la de Paint.NET
+    // y el recuadro de la imagen actual, que sube hasta arriba, quedaba demasiado alto.
+    return window && WindowFrame::isMaximized(window) ? 23 : 30;
 }
 
 QSize CaptionButtons::sizeHint() const
 {
-    return QSize(WindowFrame::buttonsWidth(rowHeight(), false), rowHeight());
+    const int row = rowHeight(window());
+    return QSize(WindowFrame::buttonsWidth(row, false), row);
 }
 
 bool CaptionButtons::event(QEvent* e)

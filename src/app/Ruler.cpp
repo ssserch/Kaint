@@ -73,17 +73,142 @@ Ruler::Style Ruler::style()
 
 bool Ruler::dark()
 {
-    return g_style == Style::PaintJs || (g_style == Style::Auto && Theme::active().dark);
+    return g_style == Style::PaintJs || ((g_style == Style::Auto || g_style == Style::PaintNet) && Theme::active().dark);
 }
 
 QColor Ruler::background()
 {
+    if (g_style == Style::PaintNet)
+        return Theme::active().dark ? QColor(0x1c, 0x1c, 0x1c) : QColor(0xf9, 0xf9, 0xf9);
     return dark() ? kPaintJsBackground : Theme::active().toolBar;
+}
+
+// Como la regla de Paint.NET 5: fondo liso, la marca de cada número a todo lo alto con el número a
+// su derecha y, entre medias, las divisiones de una regla de verdad (la mitad más larga; en
+// pulgadas, mitades, cuartos, octavos y dieciseisavos).
+void Ruler::paintPaintNet(QPainter& p)
+{
+    const bool darkTheme = Theme::active().dark;
+    const QColor bg = background();
+    const QColor tickColor = darkTheme ? QColor(0x8c, 0x8c, 0x8c) : QColor(0x76, 0x76, 0x76);
+    const QColor textColor = darkTheme ? QColor(0xd6, 0xd6, 0xd6) : QColor(0x1e, 0x1e, 0x1e);
+    const QColor mark = darkTheme ? QColor(0x4c, 0xa8, 0xff) : QColor(0x00, 0x67, 0xc0);
+    p.fillRect(rect(), bg);
+    const Document* doc = m_canvas->document();
+    const bool horiz = m_orientation == Qt::Horizontal;
+    if (doc) {
+        const Unit unit = m_canvas->unit();
+        const double ppu = pixelsPerUnit(unit, doc->dpi());
+        const double scale = m_canvas->scale() * ppu;
+        const QPoint offset = m_canvas->viewport()->mapTo(parentWidget(), QPoint(0, 0)) - pos();
+        auto toRuler = [&](double imagePx) {
+            const QPointF v = m_canvas->imageToView(QPointF(imagePx, imagePx));
+            return horiz ? v.x() + offset.x() : v.y() + offset.y();
+        };
+        const int length = horiz ? width() : height();
+        // Selección: un poco de color, como en Paint.NET.
+        if (!doc->selection().isEmpty()) {
+            const QRect b = doc->selection().bounds();
+            const double a = toRuler(horiz ? b.left() : b.top()), c = toRuler(horiz ? b.right() + 1 : b.bottom() + 1);
+            QColor hl = mark;
+            hl.setAlpha(55);
+            p.fillRect(horiz ? QRectF(a, 0, c - a, height()) : QRectF(0, a, width(), c - a), hl);
+        }
+        // Números: 1, 2, 5 x 10^n con al menos 50 px entre ellos (en pulgadas, también medias).
+        double step = 1;
+        bool found = false;
+        for (double mag = 1e-3; mag < 1e7 && !found; mag *= 10)
+            for (double s : {1.0, 2.0, 5.0})
+                if (s * mag * scale >= 50) {
+                    step = s * mag;
+                    found = true;
+                    break;
+                }
+        // Divisiones: dieciseisavos en pulgadas, décimas en lo demás (de las que caben).
+        const bool inches = unit == Unit::Inches && step >= 1;
+        int divisions = inches ? 16 : 10;
+        while (divisions > 1 && step / divisions * scale < 4)
+            divisions /= 2;
+        const int k = kThickness;
+        auto tickLength = [&](int i) {
+            if (i == 0)
+                return k;
+            if (inches) {
+                if (i % 8 == 0)
+                    return k * 11 / 20;
+                if (i % 4 == 0)
+                    return k * 8 / 20;
+                if (i % 2 == 0)
+                    return k * 6 / 20;
+                return k * 4 / 20;
+            }
+            return divisions == 10 && i == 5 ? k / 2 : k / 4;
+        };
+        QFont f = font();
+        f.setPixelSize(10);
+        p.setFont(f);
+        const double startUnits = std::floor((-toRuler(0) / scale) / step) * step - step;
+        for (double u = startUnits;; u += step) {
+            const double base = toRuler(u * ppu);
+            if (base > length)
+                break;
+            if (base < -80)
+                continue;
+            p.setPen(tickColor);
+            for (int i = 0; i < divisions; ++i) {
+                const double pos = std::floor(toRuler((u + step * i / divisions) * ppu)) + 0.5;
+                const int t = tickLength(i);
+                if (horiz)
+                    p.drawLine(QPointF(pos, k - t), QPointF(pos, k));
+                else
+                    p.drawLine(QPointF(k - t, pos), QPointF(k, pos));
+            }
+            const QString label = QString::number(std::abs(u) < step * 1e-6 ? 0.0 : u, 'g', 6);
+            p.setPen(textColor);
+            if (horiz) {
+                p.drawText(QPointF(std::floor(base) + 3, 10), label);
+            } else {
+                p.save();
+                p.translate(10, std::floor(base) + 3);
+                p.rotate(-90);
+                p.drawText(QPointF(-p.fontMetrics().horizontalAdvance(label), 0), label);
+                p.restore();
+            }
+        }
+        // El puntero: una línea azul (con zum, una franja del ancho del píxel).
+        if (m_canvas->cursorSeen()) {
+            const QPointF cursor = m_canvas->cursorImagePos();
+            const double pixel = std::floor(horiz ? cursor.x() : cursor.y());
+            const double a = toRuler(pixel), b = toRuler(pixel + 1);
+            const double from = std::min(a, b), size = std::abs(b - a);
+            if (size <= 1.5) {
+                const double c = std::floor(toRuler(horiz ? cursor.x() : cursor.y())) + 0.5;
+                p.setPen(QPen(mark, 1));
+                if (horiz)
+                    p.drawLine(QPointF(c, 0), QPointF(c, height()));
+                else
+                    p.drawLine(QPointF(0, c), QPointF(width(), c));
+            } else {
+                QColor fill = mark;
+                fill.setAlpha(90);
+                p.fillRect(horiz ? QRectF(from, 0, size, height()) : QRectF(0, from, width(), size), fill);
+            }
+        }
+    }
+    p.setPen(darkTheme ? QColor(0x3a, 0x3a, 0x3a) : QColor(0xd0, 0xd0, 0xd0));
+    if (horiz)
+        p.drawLine(0, height() - 1, width(), height() - 1);
+    else
+        p.drawLine(width() - 1, 0, width() - 1, height());
 }
 
 void Ruler::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
+    if (g_style == Style::PaintNet) {
+        paintPaintNet(p);
+        return;
+    }
     const QPalette& pal = palette();
     const bool paintJs = dark();
     // paint.js: oscura; si no, como en Paint.NET, del color de la barra de herramientas que tiene

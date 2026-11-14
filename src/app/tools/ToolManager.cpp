@@ -5,6 +5,7 @@
 #include "app/tools/FillTools.h"
 #include "app/tools/MoveTools.h"
 #include "app/tools/PaintTools.h"
+#include "app/tools/RetouchTools.h"
 #include "app/tools/SelectionTools.h"
 #include "app/tools/ShapeTools.h"
 #include "app/tools/TextTool.h"
@@ -21,12 +22,16 @@ ToolManager::ToolManager(Canvas* canvas, QObject* parent)
     m_tools = {
         new RectSelectTool(this),   new MoveSelectedTool(this),
         new LassoSelectTool(this),  new MoveSelectionTool(this),
+        // Las de PhotoCraft en sus sitios de la ventana Herramientas (solo con ellas activadas).
+        new MagneticLassoTool(this), new ObjectSelectionTool(this),
         new EllipseSelectTool(this), new ZoomTool(this),
         new MagicWandTool(this),    new PanTool(this),
         new PaintBucketTool(this),  new GradientTool(this),
         new BrushTool(this),        new EraserTool(this),
         new PencilTool(this),       new ColorPickerTool(this),
         new CloneStampTool(this),   new RecolorTool(this),
+        new RemoveTool(this),       new PatchTool(this),
+        new HealingBrushTool(this), new SpotHealingTool(this),
         new TextTool(this),         new LineTool(this),
         new ShapesTool(this),
     };
@@ -66,10 +71,21 @@ Tool* ToolManager::tool(ToolId id) const
     return nullptr;
 }
 
+void ToolManager::setExtrasEnabled(bool on)
+{
+    if (m_extras == on)
+        return;
+    m_extras = on;
+    // Sin ellas, la que estaba elegida pasa a otra.
+    if (m_current && !isAvailable(m_current))
+        select(m_previous && isAvailable(m_previous) ? m_previous->id() : ToolId::Paintbrush);
+    emit availabilityChanged();
+}
+
 void ToolManager::select(ToolId id)
 {
     Tool* t = tool(id);
-    if (!t || t == m_current)
+    if (!t || t == m_current || !isAvailable(t))
         return;
     m_previous = m_current;
     m_current = t;
@@ -87,7 +103,7 @@ void ToolManager::activateShortcut(const QKeySequence& key, bool reverse)
 {
     QList<Tool*> group;
     for (Tool* t : m_tools)
-        if (t->shortcut() == key)
+        if (t->shortcut() == key && isAvailable(t))
             group.append(t);
     if (group.isEmpty())
         return;
@@ -101,7 +117,7 @@ QList<QKeySequence> ToolManager::shortcuts() const
 {
     QList<QKeySequence> keys;
     for (Tool* t : m_tools)
-        if (!keys.contains(t->shortcut()))
+        if (isAvailable(t) && !keys.contains(t->shortcut()))
             keys.append(t->shortcut());
     return keys;
 }

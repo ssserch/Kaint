@@ -1,0 +1,2055 @@
+{
+  "schemaVersion": 1,
+  "description": "A limited list of plugins selected and tested for Kaint.",
+  "photocraft": [
+    {
+      "id": "org.photocraft.community.film-emulation",
+      "name": "Film Emulation Toolkit",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Applies compact film-inspired color looks with deterministic grain.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_film_emulation.wasm",
+          "path": "photocraft_plugin_film_emulation.wasm",
+          "sha256": "6ce4158b1b07951ea4da2b8021f365f32b3f279430a80930fe29e31e1c1c55b1",
+          "size": 4278
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.detail-recovery",
+      "name": "Detail Recovery",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Reduces small noise and restores local detail with lightweight spatial filtering.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_detail_recovery.wasm",
+          "path": "photocraft_plugin_detail_recovery.wasm",
+          "sha256": "f4ed43fd7f36f728dd36e8f242eae7c51d9478c89af8cb4ef7789e3463bef16d",
+          "size": 3262
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.color-toolkit",
+      "name": "Color Toolkit",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Adjusts exposure, contrast, and saturation while preserving alpha.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_color_toolkit.wasm",
+          "path": "photocraft_plugin_color_toolkit.wasm",
+          "sha256": "fdac9ce5d5ca02cd5b7eec8073eceb6e6f0514d075f2e486e291733557308355",
+          "size": 3000
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.gradient-map",
+      "name": "Gradient Map & Duotone",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Maps image luminance to a selectable two-colour gradient while preserving alpha.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_gradient_map.wasm",
+          "path": "photocraft_plugin_gradient_map.wasm",
+          "sha256": "065da12df5ef8a13d08dde3d0275a457e71b64ccf2d45e885e64d7d205758be8",
+          "size": 3604
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.smudge-blend",
+      "name": "Smudge Blend",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Directional smudge-inspired pixel filter.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_smudge_blend.wasm",
+          "path": "photocraft_plugin_smudge_blend.wasm",
+          "sha256": "9e1fa1871353536520a3ed41a135ba1f28c4710fcec62564cdd5aeded08986ad",
+          "size": 3331
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.mixer-blend",
+      "name": "Mixer Blend",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Wet-paint-inspired local colour mixing filter.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_mixer_blend.wasm",
+          "path": "photocraft_plugin_mixer_blend.wasm",
+          "sha256": "32f0e9d71f75356282e05c253cb092270cb151d3af44128a41f5ddaa11c6374f",
+          "size": 3068
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.mosaic-pixelate",
+      "name": "Mosaic Pixelate",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Creates block-based pixelation with adjustable block size and intensity, preserving alpha.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_mosaic_pixelate.wasm",
+          "path": "photocraft_plugin_mosaic_pixelate.wasm",
+          "sha256": "dadb5945ca8a1050775bb1fb6b07dbdca3f36e95342d64c73517f2d4ddf59c5f",
+          "size": 3525
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.vignette",
+      "name": "Vignette",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Adds a soft, adjustable edge darkening with a smooth radial falloff while preserving alpha.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_vignette.wasm",
+          "path": "photocraft_plugin_vignette.wasm",
+          "sha256": "d2477d3a2ef9028cc36cafb6cf681459a9e3b11b586ca35d912145423aa554ff",
+          "size": 3019
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.white-balance",
+      "name": "White Balance",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Corrects warm/cool color casts and green/magenta tint with lightweight channel gains.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_white_balance.wasm",
+          "path": "photocraft_plugin_white_balance.wasm",
+          "sha256": "7544f3848374aa1ef7a02f98cede3c44885b570894b2264933029458a4745c96",
+          "size": 2589
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.lut-studio",
+      "name": "LUT Studio",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Applies bundled 3D LUTs in PhotoCraft; companion browser studio imports custom .cube files and exports images or video frames.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_lut_studio.wasm",
+          "path": "photocraft_plugin_lut_studio.wasm",
+          "sha256": "6d93d1272524d5e8cc9978e6ce04d6dd48d6de6793a7fbd1a0a8ad334c190fe9",
+          "size": 299044
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.geometry-fixer",
+      "name": "Geometry Fixer",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Straightens rotation and corrects horizontal or vertical perspective with adjustable zoom, preserving alpha.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_geometry_fixer.wasm",
+          "path": "photocraft_plugin_geometry_fixer.wasm",
+          "sha256": "10995731f2c500b31fba24bbefb17dce67bda2b9883d63100ab8bf399a2b9bf4",
+          "size": 4114
+        }
+      ]
+    },
+    {
+      "id": "org.photocraft.community.seamless-pattern-generator",
+      "name": "Seamless Pattern Generator",
+      "version": "0.1.0",
+      "author": "ArtCraft Store community",
+      "description": "Reduces visible tiling seams by smoothly blending opposing image edges while preserving alpha.",
+      "files": [
+        {
+          "url": "https://akkk09.github.io/artcraft-store/downloads/photocraft_plugin_seamless_pattern_generator.wasm",
+          "path": "photocraft_plugin_seamless_pattern_generator.wasm",
+          "sha256": "bbafeec9027554680e877ccecbabd98868e8bc89946451d2fcf9847b0dfb9663",
+          "size": 3951
+        }
+      ]
+    }
+  ],
+  "paintnet": [
+    {
+      "id": "kaint.boltbait.bbBlackAndWhitePlus",
+      "name": "Black and White+",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "Several ways to turn the image gray (luminosity, average, a channel...), with brightness and contrast. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Black and White+"
+      ],
+      "builtin": [
+        "bbBlackAndWhitePlus"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.colorbalance",
+      "name": "Color Balance",
+      "version": "4.0.5284.37112",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Shift the overall color balance of your image",
+      "effects": [
+        "Color Balance"
+      ],
+      "files": [
+        {
+          "path": "paintnet/ColorBalance.dll",
+          "sha256": "2bfa0043d85aede6ea934f4cfb3f302cc7916a15a9b6937fcf2cea71f7033f2f",
+          "size": 11776
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.photoadjustments",
+      "name": "Combined Adjustments",
+      "version": "4.0.5284.38689",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Combined adjustments for photos",
+      "effects": [
+        "Combined Adjustments"
+      ],
+      "files": [
+        {
+          "path": "paintnet/PhotoAdjustments.dll",
+          "sha256": "c64947bd0c2baac746b66c84917a87ddcd8f84a02c01f2e5baedd7382cc60fc6",
+          "size": 11264
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "kaint.boltbait.bbCombinedAdjustments",
+      "name": "Combined Adjustments 6",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "Brightness, contrast, saturation and temperature at once. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Combined Adjustments 6"
+      ],
+      "builtin": [
+        "bbCombinedAdjustments"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "kaint.boltbait.bbComplementaryColors",
+      "name": "Complementary Colors",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "Turns every color into its complementary color. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Complementary Colors"
+      ],
+      "builtin": [
+        "bbComplementaryColors"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.dimensions",
+      "name": "Dimensions",
+      "version": "1.3.6826.38472",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn",
+      "description": "Render |<---5'--->|",
+      "effects": [
+        "Dimensions"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Dimensions.dll",
+          "sha256": "404b13253afb146c1470cd301c1d428b753e0083fc7d2c1cde7e24d6e4e1688b",
+          "size": 13824
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.dream",
+      "name": "Dream",
+      "version": "4.1.5307.24374",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Make your photo look like a dream",
+      "effects": [
+        "Dream"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Dream.dll",
+          "sha256": "46d18d8d27ec3738eb962fd1385da9d2b3ddc766b1924c038bdbf2394f564659",
+          "size": 8704
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "kaint.boltbait.bbDropShadowPlus",
+      "name": "Drop Shadow+",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "A soft shadow behind the objects of the layer, of any color. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Drop Shadow+"
+      ],
+      "builtin": [
+        "bbDropShadowPlus"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "kaint.boltbait.bbEdgeDetectClassic",
+      "name": "Edge Detect Classic",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "The edge detection of Paint.NET 3. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Edge Detect Classic"
+      ],
+      "builtin": [
+        "bbEdgeDetectClassic"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.burninate",
+      "name": "Flames",
+      "version": "4.0.5284.36910",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Turns a black and white gradient into flames",
+      "effects": [
+        "Flames"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Burninate.dll",
+          "sha256": "3e431dee7b4fbd6c737e1494808cd1f286669c700f3351c6b21008918b6b8633",
+          "size": 10752
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.flip",
+      "name": "Flip",
+      "version": "4.6.7358.36953",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Flip Selected Pixels",
+      "effects": [
+        "Flip Horizontal",
+        "Flip Vertical"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Flip.dll",
+          "sha256": "2b50931b28455c3b0a6c43c8eae770ca32bd698d3792b94321378d5cd94d051f",
+          "size": 11776
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.floydsteinbergdithering",
+      "name": "Floyd-Steinberg Dithering",
+      "version": "1.0.5321.25313",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Dither selected pixels",
+      "effects": [
+        "Floyd-Steinberg Dithering"
+      ],
+      "files": [
+        {
+          "path": "paintnet/FloydSteinbergDithering.dll",
+          "sha256": "7ebe901414d5c145b33c6ab952f8926d8f50a99d96ca38315e28dba35dad7f88",
+          "size": 14848
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.fillfromclipboard",
+      "name": "From Clipboard",
+      "version": "4.0.5286.32881",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn/",
+      "description": "Paste the clipboard into your selection",
+      "effects": [
+        "From Clipboard"
+      ],
+      "files": [
+        {
+          "path": "paintnet/FillFromClipboard.dll",
+          "sha256": "818a58ab216452eca3a5c752e2be0f6808c76db9cfb80b477e2a0935556aa64e",
+          "size": 11776
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.fillfromfile",
+      "name": "From File",
+      "version": "4.0.5286.32800",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn/",
+      "description": "Paste into your selection from a file",
+      "effects": [
+        "From File"
+      ],
+      "files": [
+        {
+          "path": "paintnet/FillFromFile.dll",
+          "sha256": "f5bd204800b9e9964e69ed8b349997aaee61bacf61b6e77c0db788daaeba840e",
+          "size": 12288
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.gaussianblurplus",
+      "name": "Gaussian Blur+",
+      "version": "4.2.5691.27401",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn",
+      "description": "Blur individual channels",
+      "effects": [
+        "Gaussian Blur+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/GaussianBlurPlus.dll",
+          "sha256": "ea7235cf9261352141c0e1af031ceaf7167879cf63000beecd807d911614233a",
+          "size": 18944
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.hsvgradients",
+      "name": "Gradient",
+      "version": "4.5.6832.41864",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Render various shapes of colorful gradients",
+      "effects": [
+        "Gradient"
+      ],
+      "files": [
+        {
+          "path": "paintnet/HSVGradients.dll",
+          "sha256": "0379ddf38741ae074f5054f7e5694b202549c74a92f78cd2f308d5accf406126",
+          "size": 124416
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.gridcheckerboard",
+      "name": "Grid / Checkerboard",
+      "version": "3.0.5297.18928",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Draw a grid or checkerboard",
+      "effects": [
+        "Grid / Checkerboard"
+      ],
+      "files": [
+        {
+          "path": "paintnet/GridCheckerboard.dll",
+          "sha256": "86bdd24ad6fc39eaf427ac8c5ee78c708193f3aa4df62e0504d4900385369251",
+          "size": 11264
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.huesatplus",
+      "name": "Hue / Saturation+",
+      "version": "4.1.5333.37244",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn/",
+      "description": "Conditional Hue/Saturation Adjustment",
+      "effects": [
+        "Hue / Saturation+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/HueSatPlus.dll",
+          "sha256": "b9583c69684520af8ff30aa32ee0bf616a05a07e059184d92c9928dde7449445",
+          "size": 12800
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "kaint.boltbait.bbLevelHorizon",
+      "name": "Level Horizon",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "Rotates the photo to straighten the horizon, zooming in to fill the corners. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Level Horizon"
+      ],
+      "builtin": [
+        "bbLevelHorizon"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.objecttools",
+      "name": "Object Tools",
+      "version": "4.1.5513.37206",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Modify pixels along the edges of objects",
+      "effects": [
+        "Inner Shadow",
+        "Outline Object",
+        "Feather Object",
+        "Bevel Object"
+      ],
+      "files": [
+        {
+          "path": "paintnet/ObjectTools.dll",
+          "sha256": "2ca7234b44f72b924e42290a69172b4f3f72ac98df34f863e8400cc9cb8deb1d",
+          "size": 23040
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.oilpaintingplus",
+      "name": "Oil Painting+",
+      "version": "5.2.8141.27893",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn",
+      "description": "Advanced Oil Painting",
+      "effects": [
+        "Oil Painting+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/OilPaintingPlus.dll",
+          "sha256": "7e6a6cc9c6c54c2d70f9b2bd54ad7499bb60083bcb899feb2e60fd53eab6cea4",
+          "size": 13824
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.oldfeather",
+      "name": "Old Feather",
+      "version": "2.3.4315.37038",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Back by popular demand: True Feather effect plugin for Paint.NET v4.0.  This effect shows up under the Effects > Object menu.",
+      "effects": [
+        "Old Feather"
+      ],
+      "files": [
+        {
+          "path": "paintnet/OldFeather.dll",
+          "sha256": "3a1a5c7aede8e5dcac3b4419f2200f8adc0d30ba7d8c46c3760d7f038bb40f37",
+          "size": 10240
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.pastealpha",
+      "name": "Paste Alpha",
+      "version": "4.0.5284.38515",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Paste alpha mask from clipboard",
+      "effects": [
+        "Paste Alpha"
+      ],
+      "files": [
+        {
+          "path": "paintnet/PasteAlpha.dll",
+          "sha256": "7ed853876c2ca4ba55d549db85175f78d39a475643fd1f8a32467b6d632082c1",
+          "size": 10752
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.pastel",
+      "name": "Pastel",
+      "version": "4.0.5284.38621",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Make your photo drawn with pastels or water colors",
+      "effects": [
+        "Pastel"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Pastel.dll",
+          "sha256": "d97902a355f657cde3c07bb55348cb59e9ea784390229f2e2adb250d138d245f",
+          "size": 10752
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.polygon",
+      "name": "Polygon / Stars",
+      "version": "4.5.6828.38648",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Create triangles, squares, pentagons, hexagons, and stars",
+      "effects": [
+        "Polygon / Stars"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Polygon.dll",
+          "sha256": "889a67182345ae341e031b0f51a9312a0601f29e7e9387c510b3415580c73b0d",
+          "size": 40960
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.removedust",
+      "name": "Remove Dust",
+      "version": "4.0.5284.39560",
+      "author": "BoltBait",
+      "website": "http://boltbait.com/pdn",
+      "description": "Remove dust from scanned photographs",
+      "effects": [
+        "Remove Dust"
+      ],
+      "files": [
+        {
+          "path": "paintnet/RemoveDust.dll",
+          "sha256": "444d6bff8cc51b76c4f305b3bd5e15fa8ee48d9fd05ff2754659a664a3c5052f",
+          "size": 9216
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.selectiontools",
+      "name": "Selection Tools",
+      "version": "4.1.5513.37153",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Modify pixels along the selection edge",
+      "effects": [
+        "Inner Shadow Selection",
+        "Bevel Selection",
+        "Feather Selection",
+        "Outline Selection",
+        "Blur Selection Edge"
+      ],
+      "files": [
+        {
+          "path": "paintnet/SelectionTools.dll",
+          "sha256": "f86c98dc8aa55d6497627e4a110b8d3f2ec9d1aaf7fa41cd0ab8aed354704829",
+          "size": 24576
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "kaint.boltbait.bbSharpenClassic",
+      "name": "Sharpen Classic",
+      "version": "",
+      "author": "BoltBait",
+      "website": "https://www.boltbait.com/pdn/",
+      "description": "The sharpening of Paint.NET 3. Built into Kaint (the plugin for Paint.NET 5 cannot run in Kaint).",
+      "effects": [
+        "Sharpen Classic"
+      ],
+      "builtin": [
+        "bbSharpenClassic"
+      ],
+      "files": [],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.landscape",
+      "name": "Sharpen Landscape",
+      "version": "4.0.5284.38226",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Combined adjustments for landscape photos",
+      "effects": [
+        "Sharpen Landscape"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Landscape.dll",
+          "sha256": "2f88c7b5a36061e45285478fe3866c8249019161902c65f908ee11fe3f95869e",
+          "size": 12800
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.alpha2gray",
+      "name": "Switch Alpha to Gray",
+      "version": "4.0.5284.36690",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Convert alpha channel to shades of gray",
+      "effects": [
+        "Switch Alpha to Gray"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Alpha2Gray.dll",
+          "sha256": "c499f55cf25ddb2099bc25678466cc98094c19c0ecaebc2feb3cdecd0c211346",
+          "size": 8704
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.gray2alpha",
+      "name": "Switch Gray to Alpha",
+      "version": "4.0.5284.37903",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Isolate line art",
+      "effects": [
+        "Switch Gray to Alpha"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Gray2Alpha.dll",
+          "sha256": "8f18ca44f6fb07191e1f3a9539010e7a59672af5a7be9fb4a5032c68f287fa49",
+          "size": 8192
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.transparency",
+      "name": "Transparency",
+      "version": "4.0.5284.39911",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Adjust the transparency of a selection",
+      "effects": [
+        "Transparency"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Transparency.dll",
+          "sha256": "380fa2db34062be02ec542d94526f425e3c31afe859c964d6fa048c95cd3ab58",
+          "size": 9728
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.vignetteplus",
+      "name": "Vignette+",
+      "version": "4.0.5284.40018",
+      "author": "BoltBait",
+      "website": "http://www.boltbait.com/pdn",
+      "description": "Add colorful vignettes to your photographs",
+      "effects": [
+        "Vignette+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/VignettePlus.dll",
+          "sha256": "70cdf2fc8df1404084643973a8dcb17bfc61413de6e6bf03c904801a4be99f1c",
+          "size": 11776
+        }
+      ],
+      "group": "boltbait"
+    },
+    {
+      "id": "pdn.pxeexpansion",
+      "name": "1px Expansion",
+      "version": "1.0.4437.36287",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Grows the opaque pixels of the layer by one pixel.",
+      "effects": [
+        "1px Expansion"
+      ],
+      "files": [
+        {
+          "path": "paintnet/pxEexpansion.dll",
+          "sha256": "92a6464fcc54f3589c759ec1a7baeb0b0b0d3758f570c48b51aaa264a7923366",
+          "size": 8192
+        }
+      ]
+    },
+    {
+      "id": "pdn.2dimagefilter-r133",
+      "name": "2D Image Filter",
+      "version": "1.1.3.3",
+      "author": "Hawkynt",
+      "website": "http://code.google.com/p/2dimagefilter/",
+      "description": "Pixel-art scalers (Scale2x, hq2x, xBR, Eagle...) and resamplers from the 2dimagefilter library.",
+      "effects": [
+        "2D Image Filter"
+      ],
+      "files": [
+        {
+          "path": "paintnet/2dImageFilter-r133.dll",
+          "sha256": "ee0d7901d427ae0fdf6853f8ca4c25454772901f5926457363d13187bd271523",
+          "size": 304128
+        }
+      ]
+    },
+    {
+      "id": "pdn.aas_assistant",
+      "name": "AA's_Assistant",
+      "version": "1.1.4329.33034",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Softens the jagged edge of a cut-out object and fine-tunes its transparency.",
+      "effects": [
+        "AA's_Assistant"
+      ],
+      "files": [
+        {
+          "path": "paintnet/AA's_Assistant.dll",
+          "sha256": "83fd9e3435e502b9cc77dc97b3f9018be08c0b03e3bef9653c6bdddf6756f8cb",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.advanced_kaleidoscope",
+      "name": "Advanced Kaleidoscope",
+      "version": "1.0.7194.37638",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23",
+      "description": "A kaleidoscope with adjustable slices, angle and center.",
+      "effects": [
+        "Advanced Kaleidoscope"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Advanced_Kaleidoscope.dll",
+          "sha256": "b8a2ad323828341fd79fe671362f537bf7107695f17a16aac0880343d8001930",
+          "size": 14336
+        }
+      ]
+    },
+    {
+      "id": "pdn.alpha_to_0",
+      "name": "Alpha_to_0",
+      "version": "1.0.4452.22746",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Makes every pixel below a level fully transparent.",
+      "effects": [
+        "Alpha_to_0"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Alpha_to_0.dll",
+          "sha256": "6b61747cc2010af22da6bf73c6c17b812a08349df937b15f7f2f8469a0dbe916",
+          "size": 7168
+        }
+      ]
+    },
+    {
+      "id": "pdn.alpha_to_255",
+      "name": "Alpha_to_255",
+      "version": "1.0.4452.22782",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Makes every semi-transparent pixel fully opaque.",
+      "effects": [
+        "Alpha_to_255"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Alpha_to_255.dll",
+          "sha256": "27da4b0b44039874c76153339e817663d43f9c3978a9347494bd4f796ca6ce73",
+          "size": 7168
+        }
+      ]
+    },
+    {
+      "id": "pdn.blackandalpha+",
+      "name": "Black and Alpha+",
+      "version": "1.2.4329.272",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Turns brightness into transparency over a solid color.",
+      "effects": [
+        "Black and Alpha+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/BlackandAlpha+.dll",
+          "sha256": "bc01a1205ec76406fc170d5a7834958fd4704bd6c96379d1a340370b4208867c",
+          "size": 9216
+        }
+      ]
+    },
+    {
+      "id": "pdn.borders-n-shapes",
+      "name": "Borders N' Shapes",
+      "version": "4.0.4642.26476",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Draws borders, grids and shapes on the image.",
+      "effects": [
+        "Borders N' Shapes"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Borders N' Shapes.dll",
+          "sha256": "5645b684e302486e9b14c9118545081a6495b707eff49143f3361328fb9bccb1",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.cameratrouserflarev3",
+      "name": "Camera Trouser Flare",
+      "version": "1.1.4600.41268",
+      "author": "Stuart Radforth",
+      "website": "http://www.getpaint.net/redirect/plugins.html",
+      "description": "Renders a camera lens flare.",
+      "effects": [
+        "Camera Trouser Flare"
+      ],
+      "files": [
+        {
+          "path": "paintnet/CameraTrouserFlareV3.dll",
+          "sha256": "80c76c0762e1061f1f21b4bbd142e151cbe88eda790c7a8847985c18b8fa4c13",
+          "size": 15360
+        }
+      ]
+    },
+    {
+      "id": "pdn.chromakeyplugin",
+      "name": "Chroma Key",
+      "version": "1.0.0.2",
+      "author": "Honey Run Apiaries",
+      "website": "",
+      "description": "Removes a background color (green screen) and makes it transparent.",
+      "effects": [
+        "Chroma Key"
+      ],
+      "files": [
+        {
+          "path": "paintnet/ChromaKeyPlugin.dll",
+          "sha256": "4b49c5b75a38a8f1e701084f27a9ad4ac5b9c013ac2c1c476b5771e237ea02be",
+          "size": 41472
+        }
+      ]
+    },
+    {
+      "id": "pdn.circletext",
+      "name": "Circle Text",
+      "version": "1.4.4415.32488",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Writes text along a circle.",
+      "effects": [
+        "Circle Text"
+      ],
+      "files": [
+        {
+          "path": "paintnet/CircleText.dll",
+          "sha256": "3c07ec94bfb522e72ad20edf0237c14cac108fbfd10cc8fdb5682a6d7b4c2fd5",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.dpycolorbalance",
+      "name": "Color Balance+",
+      "version": "1.1.4330.37850",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Color balance for shadows, midtones and highlights.",
+      "effects": [
+        "Color Balance+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/dpyColorBalance.dll",
+          "sha256": "8813ca9dd380cb60ac07d7ad8500e95a29dc1e0e5706926e14d0425fb3252b58",
+          "size": 12288
+        }
+      ]
+    },
+    {
+      "id": "pdn.color_magic",
+      "name": "Color Magic",
+      "version": "1.0.7186.9639",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Swaps and remixes the color channels.",
+      "effects": [
+        "Color Magic"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Color_Magic.dll",
+          "sha256": "69065f548fd7165ad7ce7f7cc8e7ec274b7237b1bdb73dc7659a3fdb9723cd9e",
+          "size": 11264
+        }
+      ]
+    },
+    {
+      "id": "pdn.color-match",
+      "name": "Color Match",
+      "version": "4.2.7630.21216",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Matches the colors of the image to another color.",
+      "effects": [
+        "Color Match"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Color Match.dll",
+          "sha256": "56901296cb048b4c37dc874acc00643f9934bfb38345e480ed30f785757fc933",
+          "size": 29696
+        }
+      ]
+    },
+    {
+      "id": "pdn.cubic_transformation",
+      "name": "Cubic Transformation",
+      "version": "2.0.7235.39373",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Folds the image into a cube-like shape.",
+      "effects": [
+        "Cubic Transformation"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Cubic_Transformation.dll",
+          "sha256": "78152f171120c291065a9c6bab5df1e22c98ac8ec10ab0c21a11cf004fa434e8",
+          "size": 12800
+        }
+      ]
+    },
+    {
+      "id": "pdn.curves+",
+      "name": "Curves+",
+      "version": "4.0.6119.31044",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Curves with more channels (RGB, HSV, CMYK, alpha) and modes.",
+      "effects": [
+        "Curves+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Curves+.dll",
+          "sha256": "f3385ddde74eb2fca701fd4612293e8b691834ae1dffed2f31195fa612e654e2",
+          "size": 102400
+        }
+      ]
+    },
+    {
+      "id": "pdn.vandermotten.paintdotneteffects.dropshadow",
+      "name": "Drop Shadow",
+      "version": "3.8.0.0",
+      "author": "Kris Vandermotten",
+      "website": "http://users.telenet.be/krisvandermotten/Downloads/PaintDotNetEffects.html",
+      "description": "Adds a drop shadow to the objects of the layer.",
+      "effects": [
+        "Drop Shadow"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Vandermotten.PaintDotNetEffects.DropShadow.dll",
+          "sha256": "76e921d480b473ead45b5a8abdb4740d34438cad374133d9883688c0ed7c614d",
+          "size": 23040
+        },
+        {
+          "path": "paintnet/Vandermotten.PaintDotNetEffects.dll",
+          "sha256": "f513c18b9dbedd98ac150025bb0caa893a6dacf3a1c3e7be34b79772470b77d8",
+          "size": 24064
+        }
+      ]
+    },
+    {
+      "id": "pdn.eoeffects",
+      "name": "Evan Olds' Effects",
+      "version": "1.10.16.12",
+      "author": "Evan Olds",
+      "website": "",
+      "description": "Mirrors, Quadrilateral Reshape, Conditional Hue/Saturation, 3D Object, Pie Chart and Polygonal Transparency.",
+      "effects": [
+        "Mirror top half over bottom half",
+        "Quadrilateral Reshape",
+        "Conditional Hue/Saturation",
+        "3D Object",
+        "Mirror right half over left half",
+        "Mirror bottom half over top half",
+        "Pie Chart",
+        "Mirror left half over right half",
+        "Polygonal Transparency",
+        "Mirror over line"
+      ],
+      "files": [
+        {
+          "path": "paintnet/EOEffects.dll",
+          "sha256": "db978c98af4725bfa82712f177c9cdf11bd2648c7517e9a0d5c1c0a910719065",
+          "size": 232960
+        }
+      ]
+    },
+    {
+      "id": "pdn.film",
+      "name": "Film",
+      "version": "4.0.4642.26607",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Gives the photo the look of old film.",
+      "effects": [
+        "Film"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Film.dll",
+          "sha256": "4aa196a35425d13eba9e287e2e1c5e622f30b1262fdc181a29a313e1dd074536",
+          "size": 10240
+        }
+      ]
+    },
+    {
+      "id": "pdn.galaxy-transformation",
+      "name": "Galaxy Transformation",
+      "version": "1.0.7267.41850",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Twists the image into a spiral galaxy.",
+      "effects": [
+        "Galaxy Transformation"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Galaxy Transformation.dll",
+          "sha256": "cda6d2bb8818f8ea25d3b86f302270d0cfe8cedae67ea7eaa6c05dcbfb021232",
+          "size": 14848
+        }
+      ]
+    },
+    {
+      "id": "pdn.glass_blur",
+      "name": "Glass Blur",
+      "version": "1.1.7212.26179",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Blurs the image as if seen through frosted glass.",
+      "effects": [
+        "Glass Blur"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Glass_Blur.dll",
+          "sha256": "bb40edeab18e534ccf38279ce13597273e8f687f034f452272e40840f6252926",
+          "size": 9216
+        }
+      ]
+    },
+    {
+      "id": "pdn.gradient-bars",
+      "name": "Gradient Bars",
+      "version": "4.0.5152.23084",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Renders a bar chart of gradients.",
+      "effects": [
+        "Gradient Bars"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Gradient Bars.dll",
+          "sha256": "d0bf62aba1c671167318ce7236d554816224fc2e37a8cd6ae7e831ba3babc7cf",
+          "size": 16384
+        }
+      ]
+    },
+    {
+      "id": "pdn.gradient-blocks",
+      "name": "Gradient Blocks",
+      "version": "4.0.4642.26658",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Blurs the image into gradient blocks.",
+      "effects": [
+        "Gradient Blocks"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Gradient Blocks.dll",
+          "sha256": "95f8ce2b0d8baad77c0640635bf83ab100f1087ae5753afc11480d19930d3fb0",
+          "size": 12288
+        }
+      ]
+    },
+    {
+      "id": "pdn.gradient-grid",
+      "name": "Gradient Grid",
+      "version": "4.0.6436.36068",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Renders a grid of gradients.",
+      "effects": [
+        "Gradient Grid"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Gradient Grid.dll",
+          "sha256": "0217207296b6992d1b6f0ee77bbba663f67f35e09aa3058a8ccfeb307df9807d",
+          "size": 14848
+        }
+      ]
+    },
+    {
+      "id": "pdn.gradient-mapping",
+      "name": "Gradient Mapping",
+      "version": "4.0.6547.33963",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Maps the brightness of the image to a gradient of colors.",
+      "effects": [
+        "Gradient Mapping"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Gradient Mapping.dll",
+          "sha256": "09d593372b863b5c5f6ba27ac9ebdab3397298622bef71226c500aab5b4763fa",
+          "size": 87040
+        }
+      ]
+    },
+    {
+      "id": "pdn.grid-warp",
+      "name": "Grid Warp",
+      "version": "4.0.6544.34496",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Warps the image by dragging the points of a grid.",
+      "effects": [
+        "Grid Warp"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Grid Warp.dll",
+          "sha256": "0253ead6f4ca384a60435fbeb57ebd44ba3f133fb6b7c90cb109e68878cd41a7",
+          "size": 82944
+        }
+      ]
+    },
+    {
+      "id": "pdn.imageintext",
+      "name": "ImageInText",
+      "version": "0.0.1.1",
+      "author": "toe_head2001 & xod",
+      "website": "http://www.getpaint.net/redirect/plugins.html",
+      "description": "Fills text with the background image.",
+      "effects": [
+        "ImageInText"
+      ],
+      "files": [
+        {
+          "path": "paintnet/ImageInText.dll",
+          "sha256": "34e3becad42fba5e751c32d718174d24352c640268e64271f21a5ad254517071",
+          "size": 13824
+        }
+      ]
+    },
+    {
+      "id": "pdn.invert_anything",
+      "name": "Invert Anything",
+      "version": "1.0.7213.37760",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Inverts any channel: RGB, HSV or alpha.",
+      "effects": [
+        "Invert Anything"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Invert_Anything.dll",
+          "sha256": "bb598f16805881221bee6c742b881477e67c4c938966281eb899e42d31f34c0b",
+          "size": 11264
+        }
+      ]
+    },
+    {
+      "id": "pdn.jchunn",
+      "name": "jchunn's Effects",
+      "version": "1.0.0.0",
+      "author": "eFunds Corporation",
+      "website": "",
+      "description": "Varicose, Bricks, Color Replace, Stencil, Focal Point and Soften Edges.",
+      "effects": [
+        "Varicose",
+        "Bricks",
+        "Color Replace",
+        "Stencil",
+        "Focal Point",
+        "Soften Edges"
+      ],
+      "files": [
+        {
+          "path": "paintnet/jchunn.dll",
+          "sha256": "1a479452db3d1db151b3b54c3fed8fe8ede7e0a23991c34c3c65f47362145ff3",
+          "size": 53248
+        }
+      ]
+    },
+    {
+      "id": "pdn.jitter",
+      "name": "Jitter",
+      "version": "4.0.4642.26986",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Shifts pixels at random.",
+      "effects": [
+        "Jitter"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Jitter.dll",
+          "sha256": "772fc7b8279ecfcbf497325531aa6242d3e0224a342f0cc281770e2c026afb3d",
+          "size": 10752
+        }
+      ]
+    },
+    {
+      "id": "pdn.lattice_transform",
+      "name": "Lattice Transform",
+      "version": "1.0.7215.30711",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Repeats the image in a lattice.",
+      "effects": [
+        "Lattice Transform"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Lattice_Transform.dll",
+          "sha256": "58180cdf0a6ee883b3917457e6a1e07d3974980723a35dc245aa4b3f6666882d",
+          "size": 12800
+        }
+      ]
+    },
+    {
+      "id": "pdn.liquify",
+      "name": "Liquify",
+      "version": "4.0.5873.25113",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Push, pull, twirl and pinch the image with a brush.",
+      "effects": [
+        "Liquify"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Liquify.dll",
+          "sha256": "4908d5888a0e1dd75801b0d18452d998835951dc53634c2a882fc7eb47f3c0b5",
+          "size": 96256
+        }
+      ]
+    },
+    {
+      "id": "pdn.metallize",
+      "name": "Metallize",
+      "version": "1.2.4415.32969",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Gives the image a metallic look.",
+      "effects": [
+        "Metallize"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Metallize.dll",
+          "sha256": "b381ff5741bf3b6412657385dfb87c047c75f6bb67473eb2922432365f9ae775",
+          "size": 10240
+        }
+      ]
+    },
+    {
+      "id": "pdn.multithreshold",
+      "name": "Multi-Threshold",
+      "version": "1.1.4330.38982",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Posterizes with several thresholds.",
+      "effects": [
+        "Multi-Threshold"
+      ],
+      "files": [
+        {
+          "path": "paintnet/MultiThreshold.dll",
+          "sha256": "bc43e184fb3f9b4709283972963342b987010a46b1e073e36ef522d0c3ed043e",
+          "size": 10240
+        }
+      ]
+    },
+    {
+      "id": "pdn.outline-object",
+      "name": "Outline Object",
+      "version": "4.0.4642.26954",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Draws an outline around the objects of the layer.",
+      "effects": [
+        "Outline Object"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Outline Object.dll",
+          "sha256": "f1486369f902cf1a1d52f6c5b3a44f3629f314619c5c3a92684a9e7f89527757",
+          "size": 10752
+        }
+      ]
+    },
+    {
+      "id": "pdn.perspective",
+      "name": "Perspective",
+      "version": "2.1.4415.36116",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Changes the perspective of the image.",
+      "effects": [
+        "Perspective"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Perspective.dll",
+          "sha256": "0d4277bd5620327183673f5327fa5f38f514a323b967fdf1d231f9c5f60644d6",
+          "size": 12288
+        }
+      ]
+    },
+    {
+      "id": "pdn.petscopntsc",
+      "name": "Petscop NTSC",
+      "version": "1.99.6781.35003",
+      "author": "red#3510",
+      "website": "http://www.getpaint.net/redirect/plugins.html",
+      "description": "The NTSC filter from the Petscop web series.",
+      "effects": [
+        "Petscop NTSC"
+      ],
+      "files": [
+        {
+          "path": "paintnet/PetscopNTSC.dll",
+          "sha256": "cd8c80120de6ff2b586dfffb9ec4a501402950da497dcb146e821c3ef3213607",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.pixelartscaling",
+      "name": "Pixel Art Scaling",
+      "version": "1.0.0.0",
+      "author": "Jonathan Pikalek",
+      "website": "http://www.getpaint.net/redirect/plugins.html",
+      "description": "Scales pixel art with Scale2x, Scale3x and other algorithms.",
+      "effects": [
+        "Pixel Art Scaling"
+      ],
+      "files": [
+        {
+          "path": "paintnet/PixelArtScaling.dll",
+          "sha256": "f555a861298c35e26b911e698e0b70a961aca0b138225a6d59ec1ec177a8b310",
+          "size": 28672
+        }
+      ]
+    },
+    {
+      "id": "pdn.pixelate+",
+      "name": "Pixelate+",
+      "version": "4.0.4642.26940",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Pixelates with cells of several shapes.",
+      "effects": [
+        "Pixelate+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Pixelate+.dll",
+          "sha256": "8fa675829fb759b14e7b0027cd5d89bdc45dddabd1fb6d66db9331ae1324212d",
+          "size": 9728
+        }
+      ]
+    },
+    {
+      "id": "pdn.polar_kaleidoscope",
+      "name": "Polar Kaleidoscope",
+      "version": "1.0.7188.40229",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "A kaleidoscope in polar coordinates.",
+      "effects": [
+        "Polar Kaleidoscope"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Polar_Kaleidoscope.dll",
+          "sha256": "7787b3bb380bde529b7335d10456ad517d820693c5835f3d7eb605cd556d24a7",
+          "size": 11264
+        }
+      ]
+    },
+    {
+      "id": "pdn.polar_reflection",
+      "name": "Polar Reflection",
+      "version": "1.0.7198.21126",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Reflects the image around a circle.",
+      "effects": [
+        "Polar Reflection"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Polar_Reflection.dll",
+          "sha256": "f084d2f1ae60b68f79518aea9f2a9487916ee4b94f5c41253012c19e196584c2",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.polar_singularity",
+      "name": "Polar Singularity",
+      "version": "1.0.7216.34965",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Pulls the image into a tunnel.",
+      "effects": [
+        "Polar Singularity"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Polar_Singularity.dll",
+          "sha256": "fd17ae629df6c489d6efe858431d57dbb326493f5503971c4ca8a690b867ea65",
+          "size": 12288
+        }
+      ]
+    },
+    {
+      "id": "pdn.polyglitch.effects",
+      "name": "PolyGlitch",
+      "version": "1.4.0.0",
+      "author": "Graham Sutherland",
+      "website": "http://www.getpaint.net/redirect/plugins.html",
+      "description": "Nineteen glitch effects: pixel sorting, displacement, YUV, interlacing and more.",
+      "effects": [
+        "3Displace",
+        "Convert YUV to RGB",
+        "QAM Fault",
+        "Codebook",
+        "Cumulative Math",
+        "Interlace Lines",
+        "Literal Sort",
+        "Lumisort",
+        "Pixel Drag",
+        "Convert RGB to YUV",
+        "Low Pass",
+        "Sigmoid Shifter",
+        "Spiral Transform",
+        "True Glitch",
+        "Quad Flip",
+        "Quadratic Looper",
+        "Render Raw File",
+        "Row Shifter",
+        "Step Slice"
+      ],
+      "files": [
+        {
+          "path": "paintnet/PolyGlitch.Effects.dll",
+          "sha256": "3daefcce2b44c3569ae089a306e7cd9f4c7abdd8c0679c10191350be8df2cb55",
+          "size": 61440
+        },
+        {
+          "path": "paintnet/DspToolbox/CodeArtEng.DspToolbox.dll",
+          "sha256": "c17fd0b9b787856d76473d781f03019ee4e39fbd4f623c24161d7b62ca812cb4",
+          "size": 29696
+        },
+        {
+          "path": "paintnet/DspToolbox/LICENSE",
+          "sha256": "53cf241e20c00c485ff837fe47cd4febe6e18818105cdb328223e796c96d504e",
+          "size": 1101
+        }
+      ]
+    },
+    {
+      "id": "pdn.random-effect",
+      "name": "Random Effect",
+      "version": "4.0.4642.26928",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Applies a random effect.",
+      "effects": [
+        "Random Effect"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Random Effect.dll",
+          "sha256": "373e95942c28f2b6331c7426be772a4f17563099029c91f7ee5bcee0de313ee2",
+          "size": 18432
+        }
+      ]
+    },
+    {
+      "id": "pdn.random-shape-fill",
+      "name": "Random Shape Fill",
+      "version": "4.0.4642.26910",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Fills the selection with random shapes.",
+      "effects": [
+        "Random Shape Fill"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Random Shape Fill.dll",
+          "sha256": "5545388a8aac612eaf7b6ba8f831c96d4b8cced675b34fddd8e7b4ac32b0e7b5",
+          "size": 23040
+        }
+      ]
+    },
+    {
+      "id": "pdn.rectangular_inversion",
+      "name": "Rectangular Inversion",
+      "version": "2.0.7222.27910",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Turns the image inside out around a rectangle.",
+      "effects": [
+        "Rectangular Inversion"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Rectangular_Inversion.dll",
+          "sha256": "53fc873e2e776b83e2e36f526bf2a4fff3acb876b53a6841ffda1ffaefd3bffc",
+          "size": 12800
+        }
+      ]
+    },
+    {
+      "id": "pdn.remove_black",
+      "name": "Remove Black",
+      "version": "1.0.7212.28737",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Removes the black, keeping the colors as transparency.",
+      "effects": [
+        "Remove Black"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Remove_Black.dll",
+          "sha256": "ca62deef961b459e82467e896683e3c5bac892cc7459ec1dcb8bfb7e46085a74",
+          "size": 9216
+        }
+      ]
+    },
+    {
+      "id": "pdn.rotate_zoom+",
+      "name": "Rotate/Zoom+",
+      "version": "1.11.5237.17779",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Rotates, zooms and pans the layer.",
+      "effects": [
+        "Rotate/Zoom+"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Rotate_Zoom+.dll",
+          "sha256": "1e629b490ff38310bf1539d555254219445d704478a9957b96a8d5822687260a",
+          "size": 11776
+        }
+      ]
+    },
+    {
+      "id": "pdn.rotatetext",
+      "name": "RotateText",
+      "version": "1.1.4415.32628",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Writes rotated text.",
+      "effects": [
+        "RotateText"
+      ],
+      "files": [
+        {
+          "path": "paintnet/RotateText.dll",
+          "sha256": "b42bb9441eaaca2076ed25a3405fa0c79382db4084683ae81714f0e2bd6b8c97",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.rotatetextsui",
+      "name": "RotateTextSUI",
+      "version": "1.1.4415.32713",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Writes rotated text (with a simpler window).",
+      "effects": [
+        "RotateTextSUI"
+      ],
+      "files": [
+        {
+          "path": "paintnet/RotateTextSUI.dll",
+          "sha256": "437bd9ce0ad3b619b0ee4f5e6e1fc60ce3760470641d1f970cc421540d00185d",
+          "size": 13312
+        }
+      ]
+    },
+    {
+      "id": "pdn.scriptlab",
+      "name": "ScriptLab",
+      "version": "4.2.7616.26525",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Runs a list of effects one after another.",
+      "effects": [
+        "ScriptLab"
+      ],
+      "files": [
+        {
+          "path": "paintnet/ScriptLab.dll",
+          "sha256": "83c99e4ce41cb2ee25e2381ca4782a254d6cd494a25ff0ce0ad82488a925450f",
+          "size": 86016
+        }
+      ]
+    },
+    {
+      "id": "pdn.self-spiral",
+      "name": "Self Spiral",
+      "version": "1.0.7263.1666",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23",
+      "description": "Repeats the image in a spiral.",
+      "effects": [
+        "Self Spiral"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Self Spiral.dll",
+          "sha256": "99c81b1fb19dd0b34c28701b0119d31b08f057165f262de5c1da0d0a113fa7ff",
+          "size": 12800
+        }
+      ]
+    },
+    {
+      "id": "pdn.smudge",
+      "name": "Smudge",
+      "version": "4.0.5873.25097",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Smudges the image with a brush.",
+      "effects": [
+        "Smudge"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Smudge.dll",
+          "sha256": "da4345a49d740c498559d1686b9bc4506292a8d6908ca4518bc6787b2ae29da4",
+          "size": 84480
+        }
+      ]
+    },
+    {
+      "id": "pdn.speechbubble",
+      "name": "Speech bubble",
+      "version": "2.1.4445.42029",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Draws a speech bubble.",
+      "effects": [
+        "Speech bubble"
+      ],
+      "files": [
+        {
+          "path": "paintnet/SpeechBubble.dll",
+          "sha256": "d1486033934139d592b0c632bba89f78103fee8a3aca1e31bc19f77b2087faef",
+          "size": 16384
+        }
+      ]
+    },
+    {
+      "id": "pdn.spherical_bulge",
+      "name": "Spherical Bulge",
+      "version": "1.0.7224.336",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Bulges the image like a sphere.",
+      "effects": [
+        "Spherical Bulge"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Spherical_Bulge.dll",
+          "sha256": "378f1eebf44b55130b3d9175db128ea9c8b4709541159f08ca07ed87de2287bc",
+          "size": 11776
+        }
+      ]
+    },
+    {
+      "id": "pdn.spiraltext",
+      "name": "SpiralText",
+      "version": "1.4.4415.32775",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Writes text along a spiral.",
+      "effects": [
+        "SpiralText"
+      ],
+      "files": [
+        {
+          "path": "paintnet/SpiralText.dll",
+          "sha256": "179ea3fa3f17017af83e566f4c4a37953bf8870b50e196a2972801391a518cf8",
+          "size": 24576
+        }
+      ]
+    },
+    {
+      "id": "pdn.splatter",
+      "name": "Splatter",
+      "version": "4.0.5873.25083",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Paints splatters with a brush.",
+      "effects": [
+        "Splatter"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Splatter.dll",
+          "sha256": "531b20dcaa0a3b35d238f7cb630d9aba65ac2486b70b335b172dbd5cf5abd911",
+          "size": 75264
+        }
+      ]
+    },
+    {
+      "id": "pdn.stitch",
+      "name": "Stitch",
+      "version": "4.0.4642.26808",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Makes the image look like cross-stitch.",
+      "effects": [
+        "Stitch"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Stitch.dll",
+          "sha256": "adc7e591287004dd42e04b3e762e6874e99c0f5084eb13d32673ae6198b5ce87",
+          "size": 8192
+        }
+      ]
+    },
+    {
+      "id": "pdn.textplus",
+      "name": "TextPlus",
+      "version": "1.0.0.0",
+      "author": "dpy",
+      "website": "",
+      "description": "Text with outline, shadow and more.",
+      "effects": [
+        "TextPlus"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Textplus.dll",
+          "sha256": "c6c14f871b49a9405a7bdd0ed01f810ff76077714cac0d51fa6ca605af7d0e10",
+          "size": 39936
+        }
+      ]
+    },
+    {
+      "id": "pdn.trsalphacutter",
+      "name": "TR's AlphaCutter",
+      "version": "3.0.4.0",
+      "author": "TechnoRobbo",
+      "website": "http://www.technorobbo.com/",
+      "description": "Cuts out an object by its colors.",
+      "effects": [
+        "TR's AlphaCutter"
+      ],
+      "files": [
+        {
+          "path": "paintnet/TRsAlphaCutter.dll",
+          "sha256": "5e095df997b0b28584cd80582e0d09e4280fad5181393db9ef2aef9f4b467be4",
+          "size": 37376
+        }
+      ]
+    },
+    {
+      "id": "pdn.trsmonolithic",
+      "name": "TR's MonoLithic",
+      "version": "1.0.6.24412",
+      "author": "TechnoRobbo",
+      "website": "https://forums.getpaint.net/index.php?showtopic=108312",
+      "description": "Creates 3D text.",
+      "effects": [
+        "TR's MonoLithic"
+      ],
+      "files": [
+        {
+          "path": "paintnet/TRsMonolithic.dll",
+          "sha256": "3fcbe11cc4e2bc0fce477c0bc41c05f676a3e9b47ca781e4fbb69b71514faf08",
+          "size": 51712
+        }
+      ]
+    },
+    {
+      "id": "pdn.trace",
+      "name": "Trace",
+      "version": "1.0.7198.41170",
+      "author": "Xhin",
+      "website": "https://github.com/Xhin23/Paint.net-Plugins",
+      "description": "Traces the edges of the image.",
+      "effects": [
+        "Trace"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Trace.dll",
+          "sha256": "fb235da6f844a3fb18cfee5b5a82147f07ca858bc729a83323fda100af601e58",
+          "size": 9728
+        }
+      ]
+    },
+    {
+      "id": "pdn.trail",
+      "name": "Trail",
+      "version": "4.0.4642.26791",
+      "author": "Zach Walker (pyrochild)",
+      "website": "",
+      "description": "Leaves a trail behind the objects of the layer.",
+      "effects": [
+        "Trail"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Trail.dll",
+          "sha256": "d43a615d5ed8c8e864561295bae36424bb2db63c0c31fe60ff46d6ce1f627e45",
+          "size": 9216
+        }
+      ]
+    },
+    {
+      "id": "pdn.twist",
+      "name": "Twist",
+      "version": "4.0.5873.25056",
+      "author": "Zach Walker (pyrochild)",
+      "website": "http://forums.getpaint.net/index.php?showtopic=7291",
+      "description": "Twists the image around a point.",
+      "effects": [
+        "Twist"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Twist.dll",
+          "sha256": "719cdd9035b0d6f2ba9e82007c69c7c75f4fd9d59ba659e22edd9e2adb4bfcbf",
+          "size": 77312
+        }
+      ]
+    },
+    {
+      "id": "pdn.waves",
+      "name": "Waves",
+      "version": "1.2.5.14072",
+      "author": "MadJik",
+      "website": "http://forums.getpaint.net/index.php?showtopic=3625",
+      "description": "Waves and warps the image.",
+      "effects": [
+        "Waves"
+      ],
+      "files": [
+        {
+          "path": "paintnet/Waves.dll",
+          "sha256": "1b288c4cf1cdf0c318fd2f4d5af1c4916a71e3bf4242b36d93dcb31ea1c56d6f",
+          "size": 56320
+        }
+      ]
+    },
+    {
+      "id": "pdn.wavetext",
+      "name": "WaveText",
+      "version": "1.2.4415.32811",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Writes text along a wave.",
+      "effects": [
+        "WaveText"
+      ],
+      "files": [
+        {
+          "path": "paintnet/WaveText.dll",
+          "sha256": "3390f8cb854c8aefcdf48cd52fa2eeb58c2eea2b42434fd98599099c04ac95fb",
+          "size": 15360
+        }
+      ]
+    },
+    {
+      "id": "pdn.wavetextsui",
+      "name": "WaveTextSUI",
+      "version": "1.2.4415.33440",
+      "author": "dpy",
+      "website": "http://paintnet.web.fc2.com/",
+      "description": "Writes text along a wave (with a simpler window).",
+      "effects": [
+        "WaveTextSUI"
+      ],
+      "files": [
+        {
+          "path": "paintnet/WaveTextSUI.dll",
+          "sha256": "a0110fe30438513eaf4b7a386aa73dc913e59b91920c5fde1880070cea5613e9",
+          "size": 24576
+        }
+      ]
+    }
+  ]
+}

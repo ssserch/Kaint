@@ -1,10 +1,12 @@
 // Base de las herramientas (src/app/tools/Tool.h de Kaint) y el gestor que las cambia con sus
 // atajos de una letra (pulsar la misma letra pasa a la siguiente herramienta que la comparte).
 import { AppState } from "../AppState.js";
+import { Settings } from "../Settings.js";
 import { iconCursor, miniCursor, toolPixelCursor } from "../ui/Icons.js";
 import { tr } from "../i18n.js";
 
-const miniCursorTools = new Set(["rectangleselect", "ellipseselect", "lassoselect", "gradient", "linecurve"]);
+const miniCursorTools = new Set(["rectangleselect", "ellipseselect", "lassoselect", "gradient", "linecurve", "magneticlasso",
+                                 "objectselection", "patch"]);
 
 export class Tool {
     constructor(app) {
@@ -26,6 +28,11 @@ export class Tool {
     // Opciones de la barra (ToolOptions.js) que usa la herramienta.
     get options() {
         return [];
+    }
+
+    // Una de las herramientas de PhotoCraft (se ven con ellas activadas en Configuración > Complementos).
+    get extra() {
+        return false;
     }
 
     get highlightSelection() {
@@ -71,6 +78,12 @@ export class Tool {
         this.app.showHint(text);
     }
 
+    // Aviso junto al puntero, encima de la imagen (lo que falta para empezar), y en la barra de estado.
+    notice(text) {
+        this.setHint(text);
+        this.view?.showNotice?.(text);
+    }
+
     repaint() {
         this.view.update();
     }
@@ -98,9 +111,25 @@ export class ToolManager extends EventTarget {
         return this.tools.find((t) => t.id === id) || null;
     }
 
+    // Las de PhotoCraft solo con ellas activadas.
+    available(tool) {
+        return !!tool && (!tool.extra || Settings.get("photocraftExtras") === true);
+    }
+
+    get shown() {
+        return this.tools.filter((t) => this.available(t));
+    }
+
+    // Las de PhotoCraft se activaron o desactivaron: sin ellas, la elegida pasa a otra.
+    extrasChanged() {
+        if (this.current && !this.available(this.current))
+            this.select(this.previous && this.available(this.previous) ? this.previous.id : "paintbrush");
+        this.dispatchEvent(new Event("available"));
+    }
+
     select(id) {
         const tool = this.find(id);
-        if (!tool || tool === this.current)
+        if (!tool || tool === this.current || !this.available(tool))
             return;
         if (this.current) {
             // Un error al aplicar lo pendiente no puede dejar atrapada la herramienta (ningún
@@ -130,7 +159,7 @@ export class ToolManager extends EventTarget {
     // Atajo de una letra: la primera herramienta con esa letra o, si ya es la actual, la
     // siguiente que la comparta.
     selectByLetter(letter) {
-        const matching = this.tools.filter((t) => t.letter === letter.toUpperCase());
+        const matching = this.tools.filter((t) => t.letter === letter.toUpperCase() && this.available(t));
         if (!matching.length)
             return false;
         const i = matching.indexOf(this.current);

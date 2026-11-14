@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QLineF>
 #include <QPainterPath>
+#include <QPolygonF>
 #include <QRect>
 #include <QTransform>
 #include <QVector>
@@ -36,6 +37,9 @@ public:
 
     // Contorno de una selección por máscara, como segmentos entre píxeles.
     const QVector<QLineF>& outline() const;
+    // Ese contorno unido en polígonos cerrados (solo las esquinas), con el interior a la derecha de
+    // su sentido: las hormigas siguen de un tramo al siguiente y dan la vuelta a la selección.
+    const QVector<QPolygonF>& contours() const;
 
     // Geometría en el formato JSON de Paint.NET (Edición > Copiar selección): {"polygonList":
     // ["x1,y1,x2,y2,...", ...]}
@@ -62,6 +66,8 @@ private:
         QRect bounds;
         mutable QVector<QLineF> outline;
         mutable bool outlineValid = false;
+        mutable QVector<QPolygonF> contours;
+        mutable bool contoursValid = false;
     };
     std::shared_ptr<Data> d;
 };

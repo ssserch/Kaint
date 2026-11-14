@@ -9,7 +9,7 @@ import { floodMask } from "../core/FloodFill.js";
 import { context } from "../core/Raster.js";
 import { tr } from "../i18n.js";
 
-class SelectTool extends Tool {
+export class SelectTool extends Tool {
     get options() {
         return ["selectionMode", "afterSelect", "selectionQuality"];
     }
@@ -90,6 +90,9 @@ class ShapeSelectTool extends SelectTool {
             return;
         this.begin(e);
         this.start = { x: Math.round(e.x), y: Math.round(e.y) };
+        // Donde se pulsó, sin ajustar: el rectángulo incluye su píxel y el del puntero (como Kaint).
+        this.startRaw = { x: e.x, y: e.y, vx: e.vx, vy: e.vy };
+        this.movedEnough = false;
     }
 
     currentRect(e) {
@@ -106,9 +109,18 @@ class ShapeSelectTool extends SelectTool {
             const dx = end.x - this.start.x, dy = end.y - this.start.y;
             const w = Math.max(Math.abs(dx), Math.abs(dy) * ratio), h = w / ratio;
             end = { x: Math.round(this.start.x + (dx >= 0 ? w : -w)), y: Math.round(this.start.y + (dy >= 0 ? h : -h)) };
+            return { x: Math.min(this.start.x, end.x), y: Math.min(this.start.y, end.y), w: Math.abs(end.x - this.start.x),
+                     h: Math.abs(end.y - this.start.y) };
         }
-        return { x: Math.min(this.start.x, end.x), y: Math.min(this.start.y, end.y), w: Math.abs(end.x - this.start.x),
-                 h: Math.abs(end.y - this.start.y) };
+        // Como en paint.rs, el píxel donde se pulsó y el que está bajo el puntero quedan dentro: con
+        // mucho zum el borde sigue al puntero píxel a píxel. Un clic solo no selecciona: basta un poco
+        // de arrastre (2 píxeles de la pantalla) para ese píxel.
+        const ax = Math.floor(this.startRaw.x), ay = Math.floor(this.startRaw.y), bx = Math.floor(e.x), by = Math.floor(e.y);
+        if (!this.movedEnough && Math.hypot(e.vx - this.startRaw.vx, e.vy - this.startRaw.vy) >= 2)
+            this.movedEnough = true;
+        if (!this.movedEnough)
+            return { x: ax, y: ay, w: 0, h: 0 };
+        return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax) + 1, h: Math.abs(by - ay) + 1 };
     }
 
     onPointerMove(e) {
@@ -164,16 +176,17 @@ export class LassoSelectTool extends SelectTool {
         if (!this.doc || (e.button !== "left" && e.button !== "right"))
             return;
         this.begin(e);
-        this.points = [[e.x, e.y]];
+        // Como en paint.rs, el contorno pasa por las esquinas de los píxeles.
+        this.points = [[Math.floor(e.x), Math.floor(e.y)]];
     }
 
     onPointerMove(e) {
         if (!this.active)
             return;
-        const last = this.points[this.points.length - 1];
-        if (Math.hypot(e.x - last[0], e.y - last[1]) < 0.5)
+        const last = this.points[this.points.length - 1], p = [Math.floor(e.x), Math.floor(e.y)];
+        if (p[0] === last[0] && p[1] === last[1])
             return;
-        this.points.push([e.x, e.y]);
+        this.points.push(p);
         if (this.points.length < 3)
             return;
         this.dragged = true;

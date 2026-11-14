@@ -83,6 +83,12 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     auto* discord = new QCheckBox(tr("Mostrar en Discord que usas Kaint (Rich Presence)"), this);
     discord->setChecked(m_settings.discordEnabled);
     discord->setToolTip(tr("Tu perfil de Discord muestra Kaint con la imagen y la herramienta; en Configuración eliges qué se ve."));
+    // Las herramientas y los efectos de PhotoCraft (desactivados por defecto): se eligen ya aquí.
+    auto* extras = new QCheckBox(tr("Activar las herramientas y los efectos extras de PhotoCraft"), this);
+    extras->setChecked(m_settings.photocraftExtras);
+    extras->setToolTip(tr("Lazo magnético, Selección de objetos, Quitar, Parche, Pincel corrector y Pincel corrector puntual, "
+                          "y más ajustes y efectos (Intensidad, Mapa de degradado, la galería de filtros...). Llevan la pieza de "
+                          "puzle de los complementos."));
     // El aviso va en el idioma elegido, no en el actual: es el que entiende quien lo cambia.
     auto* restartNote = new QLabel(this);
     restartNote->setEnabled(false);
@@ -109,6 +115,7 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     layout->addWidget(intro);
     layout->addLayout(form);
     layout->addWidget(discord);
+    layout->addWidget(extras);
     layout->addWidget(restartNote);
     layout->addStretch();
     layout->addWidget(box);
@@ -134,4 +141,5 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
         restartNote->setVisible(m_settings.language != startLanguage);
     });
     connect(discord, &QCheckBox::toggled, this, [this](bool on) { m_settings.discordEnabled = on; });
+    connect(extras, &QCheckBox::toggled, this, [this](bool on) { m_settings.photocraftExtras = on; });
 }

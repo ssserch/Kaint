@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
 }
 
-// La versión y la firma las pone build-apk.sh (versión de version.json; la llave, por variables de
+// La versión y la firma las ponen build.sh y build.bat (--apk o --aab: versión de version.json; la llave, por variables de
 // entorno para que las contraseñas no aparezcan en la línea de órdenes).
 def env = { String name -> System.getenv(name) ?: "" }
 
@@ -45,7 +45,8 @@ android {
     // Los archivos de la web van tal cual. Solo se dejan fuera los de control de versiones: un
     // patrón con un nombre de carpeta (como «!tools») quita TODAS las carpetas que se llamen así, y
     // «!tools» dejaba el APK sin js/tools/ (las herramientas): la web no arrancaba y la pantalla se
-    // quedaba en blanco. Las carpetas tests/ y tools/ de KaintHTML ya no se copian (build-apk.sh).
+    // quedaba en blanco. Las carpetas tests/ y tools/ de KaintHTML (solo las de arriba) ya no se copian
+    // (build.sh y build.bat).
     androidResources {
         ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
     }

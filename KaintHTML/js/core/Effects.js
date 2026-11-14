@@ -5,9 +5,13 @@
 // Cada efecto recibe la capa (ImageData), sus valores y el rectángulo que debe calcular, y
 // devuelve un ImageData nuevo.
 
+import { boltBaitEffects, extraEffects } from "./Extras.js";
+
 export const Categories = {
     artistic: "Artístico", blurs: "Desenfoques", color: "Color", distort: "Distorsionar", noise: "Ruido", object: "Objeto",
     photo: "Fotografía", render: "Representación", stylize: "Estilizado",
+    // Los de las funciones de PhotoCraft (Extras.js).
+    brushstrokes: "Trazos de pincel", sketch: "Bosquejo", texture: "Textura",
 };
 
 // --- Parámetros ---------------------------------------------------------------------------
@@ -3019,7 +3023,15 @@ function cloneValue(v) {
     return typeof v === "object" && v !== null ? JSON.parse(JSON.stringify(v)) : v;
 }
 
-export const Effects = [...adjustments, ...artistic, ...blurs, ...color, ...distort, ...noise, ...object, ...photo, ...render, ...stylize, ...layer]
+// "Detección de bordes clásica" y "Nitidez clásica" de BoltBait: los de Kaint con otro nombre.
+const boltBaitAliases = [["bbEdgeDetectClassic", "Detección de bordes clásica", "edgedetect"], ["bbSharpenClassic", "Nitidez clásica", "sharpen"]]
+    .map(([id, name, base]) => {
+        const e = [...stylize, ...photo].find((x) => x.id === base);
+        return e ? { ...e, id, name, origin: "BoltBait", shortcut: undefined } : null;
+    }).filter(Boolean);
+
+export const Effects = [...adjustments, ...artistic, ...blurs, ...color, ...distort, ...noise, ...object, ...photo, ...render, ...stylize, ...layer,
+                        ...extraEffects, ...boltBaitEffects, ...boltBaitAliases]
     .map((e) => ({
         ...e, builtin: true,
         render(src, values, r, info) { return runBuiltin(this, src, values, r, info); },

@@ -217,7 +217,10 @@ namespace Kaint.PdnHost
                 case "System.Windows.Forms.Primitives":
                     return typeof(System.Windows.Forms.Form).Assembly;
                 case "System.Private.CoreLib":
+                case "Microsoft.Win32.Registry":
                     return typeof(object).Assembly;
+                case "System.Private.Uri":
+                    return typeof(Uri).Assembly;
                 // Paint.NET 3 y 4 tenían PaintDotNet.SystemLayer.dll (Memory, Tracing...) y
                 // PaintDotNet.Resources.dll (PdnResources) aparte; en la capa de compatibilidad
                 // están en PaintDotNet.Core (los biseles de ObjectTools y SelectionTools usan
@@ -259,11 +262,26 @@ namespace Kaint.PdnHost
                 }
                 try
                 {
-                    return Assembly.Load(name);
-                }
-                catch (Exception)
-                {
-                    return null;
+                    // En mono, la fachada del mismo nombre. En el .NET Framework las referencias de
+                    // .NET moderno llegan sin clave (ModernAssembly): la de Windows con ese nombre
+                    // o, si no la hay, Kaint.Runtime, que reenvía mscorlib, System y System.Core.
+                    string[] candidates = {
+                        name,
+                        name + ", Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a",
+                        name + ", Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089",
+                    };
+                    foreach (string candidate in candidates)
+                    {
+                        try
+                        {
+                            return Assembly.Load(candidate);
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+                    string facade = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Kaint.Runtime.dll");
+                    return File.Exists(facade) ? Assembly.LoadFrom(facade) : null;
                 }
                 finally
                 {

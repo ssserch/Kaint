@@ -51,13 +51,20 @@ namespace PaintDotNet.AppModel
 
 namespace PaintDotNet
 {
-    public sealed class UIScaleFactor
+    // En Paint.NET 4 es un tipo por valor: los complementos que lo usan (Flip 4.6 de BoltBait...)
+    // no cargan si aquí fuera una clase.
+    public struct UIScaleFactor
     {
         private readonly double scale;
 
         public UIScaleFactor(double scale)
         {
             this.scale = scale;
+        }
+
+        public UIScaleFactor(int dpi)
+        {
+            this.scale = dpi / 96.0;
         }
 
         public static UIScaleFactor Current
@@ -67,11 +74,29 @@ namespace PaintDotNet
 
         public double Scale
         {
-            get { return this.scale; }
+            get { return this.scale == 0 ? 1.0 : this.scale; }
         }
 
-        public int ScaleWidth(int width) { return (int)Math.Round(width * this.scale); }
-        public int ScaleHeight(int height) { return (int)Math.Round(height * this.scale); }
+        public int Dpi
+        {
+            get { return (int)Math.Round(96 * Scale); }
+        }
+
+        public int ScaleWidth(int width) { return (int)Math.Round(width * Scale); }
+        public int ScaleHeight(int height) { return (int)Math.Round(height * Scale); }
+        public float ScaleWidth(float width) { return (float)(width * Scale); }
+        public float ScaleHeight(float height) { return (float)(height * Scale); }
+        public double ScaleScalar(double value) { return value * Scale; }
+        public int ScaleScalar(int value) { return (int)Math.Round(value * Scale); }
+        public float ScaleScalar(float value) { return (float)(value * Scale); }
+        public int UnscaleScalar(int value) { return (int)Math.Round(value / Scale); }
+        public System.Drawing.Size ScaleSize(System.Drawing.Size size) { return new System.Drawing.Size(ScaleWidth(size.Width), ScaleHeight(size.Height)); }
+        public System.Drawing.Point ScalePoint(System.Drawing.Point pt) { return new System.Drawing.Point(ScaleWidth(pt.X), ScaleHeight(pt.Y)); }
+        public System.Drawing.Rectangle ScaleRectangle(System.Drawing.Rectangle r)
+        {
+            return new System.Drawing.Rectangle(ScaleWidth(r.X), ScaleHeight(r.Y), ScaleWidth(r.Width), ScaleHeight(r.Height));
+        }
+        public static float ConvertFontPointsToPixels(float points) { return points * 96f / 72f; }
     }
 
     // Cursor de espera mientras dura el objeto.

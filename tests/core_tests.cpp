@@ -18,6 +18,7 @@
 #include "core/WicCodec.h"
 #include "core/Zip.h"
 #include "core/effects/Effect.h"
+#include "core/retouch/Retouch.h"
 #include "core/effects/EffectUtils.h"
 #include "core/plugins/CraftPlugins.h"
 #include "core/plugins/PaintJs.h"
@@ -2062,6 +2063,275 @@ static void testPackaging()
     CHECK(batch.contains(QStringLiteral("--setup")) && batch.contains(QStringLiteral("packaging\\windows\\kaint.nsi")));
 }
 
+// Las funciones de PhotoCraft: cada efecto, con sus valores por omisión, termina, no toca el alfa
+// (salvo los de Objeto, que trabajan con él) y no sale de la selección; escondidas mientras no se
+// activan.
+// Retoque de PhotoCraft (core/retouch): las mismas propiedades que comprueban sus pruebas.
+static void testRetouch()
+{
+    using namespace retouch;
+    auto disc = [](int w, int h, float cx, float cy, float r) {
+        Mask m(size_t(w) * h);
+        for (int i = 0; i < w * h; ++i)
+            m[size_t(i)] = std::hypot(float(i % w) - cx, float(i / w) - cy) < r;
+        return m;
+    };
+    // La membrana reproduce un borde lineal.
+    {
+        const int w = 80, h = 60;
+        const Mask unknown = disc(w, h, 40, 30, 20);
+        Floats truth(size_t(w) * h), v(size_t(w) * h);
+        for (int i = 0; i < w * h; ++i) {
+            truth[size_t(i)] = 0.2f + 0.005f * float(i % w) + 0.003f * float(i / w);
+            v[size_t(i)] = unknown[size_t(i)] ? 0.f : truth[size_t(i)];
+        }
+        solveMembrane(w, h, unknown, v);
+        float err = 0.f;
+        for (size_t i = 0; i < v.size(); ++i)
+            err = std::max(err, std::fabs(v[i] - truth[i]));
+        CHECK(err < 2e-3f);
+    }
+    // El clonado sin costuras toma el color del destino y la textura de la fuente.
+    {
+        const int w = 64, h = 64, ch = 3;
+        const Mask mask = disc(w, h, 32, 32, 20);
+        Floats dst, src;
+        for (int i = 0; i < w * h; ++i) {
+            dst.insert(dst.end(), {0.7f, 0.3f, 0.2f});
+            const float t = (i % w / 4) % 2 == 0 ? 0.05f : -0.05f;
+            src.insert(src.end(), {0.1f + t, 0.2f + t, 0.8f + t});
+        }
+        const Floats out = seamlessClone(w, h, ch, src, dst, mask);
+        for (int c = 0; c < ch; ++c) {
+            double m = 0;
+            int n = 0;
+            for (int i = 0; i < w * h; ++i)
+                if (mask[size_t(i)]) {
+                    m += out[size_t(i) * ch + c];
+                    ++n;
+                }
+            CHECK(std::fabs(m / n - dst[size_t(c)]) < 0.02);
+        }
+        // La textura (el salto de las rayas) sigue dentro.
+        const size_t a = (size_t(32) * w + 27) * ch, b = (size_t(32) * w + 28) * ch;
+        CHECK(std::fabs((out[b] - out[a]) - (src[b] - src[a])) < 0.03f);
+    }
+    // Completar: un punto oscuro en una textura lisa desaparece; la textura de alrededor sigue.
+    auto texture = [](int x, int y) {
+        const unsigned n = ((unsigned(x) * 73856093u) ^ (unsigned(y) * 19349663u)) % 1000u;
+        const float noise = float(n) / 1000.f * 0.06f - 0.03f;
+        return std::array<float, 3>{0.3f + 0.004f * float(x) + noise, 0.5f + 0.003f * float(y) + noise, 0.45f + noise};
+    };
+    const int tw = 96, th = 80;
+    Floats field;
+    for (int y = 0; y < th; ++y)
+        for (int x = 0; x < tw; ++x) {
+            const auto c = texture(x, y);
+            field.insert(field.end(), {c[0], c[1], c[2], 1.f});
+        }
+    const Mask hole = disc(tw, th, 48, 40, 9);
+    Floats dotted = field;
+    for (size_t i = 0; i < hole.size(); ++i)
+        if (hole[i])
+            dotted[i * 4] = dotted[i * 4 + 1] = dotted[i * 4 + 2] = 0.02f;
+    auto meanError = [&](const Floats& out) {
+        double e = 0;
+        int n = 0;
+        for (size_t i = 0; i < hole.size(); ++i)
+            if (hole[i]) {
+                for (int c = 0; c < 3; ++c)
+                    e += std::fabs(out[i * 4 + c] - field[i * 4 + c]);
+                n += 3;
+            }
+        return e / n;
+    };
+    {
+        const auto out = complete(tw, th, 4, dotted, hole, CompleteParams{});
+        CHECK(out.has_value());
+        if (out) {
+            CHECK(meanError(*out) < 0.06);
+            bool outsideSame = true;
+            for (size_t i = 0; i < hole.size(); ++i)
+                if (!hole[i])
+                    for (int c = 0; c < 4; ++c)
+                        outsideSame = outsideSame && (*out)[i * 4 + c] == dotted[i * 4 + c];
+            CHECK(outsideSame);
+            // Determinista.
+            CHECK(*complete(tw, th, 4, dotted, hole, CompleteParams{}) == *out);
+        }
+        const Floats synth = synthesize(tw, th, 4, dotted, hole, 8, 0x5eed);
+        CHECK(meanError(synth) < 0.08);
+        const auto off = bestOffset(tw, th, 4, dotted, hole, 4, 40);
+        CHECK(off.has_value() && (off->first != 0 || off->second != 0));
+        Adapt a = colorLevel("default");
+        CHECK(a.gainLo == 0.9f && a.bias == 0.04f);
+        const Floats ca = contentAwareFill(tw, th, 4, dotted, hole, Mask(hole.size(), 1), a, 1);
+        CHECK(meanError(ca) < 0.06);
+    }
+    // Quitar.
+    {
+        const Floats out = removeFill(tw, th, 4, dotted, hole, 0x52e30e);
+        CHECK(meanError(out) < 0.06);
+        Mask ring(size_t(20) * 20, 0);
+        for (int i = 0; i < 20; ++i) {
+            ring[size_t(5) * 20 + i] = ring[size_t(14) * 20 + i] = 1;
+            ring[size_t(i) * 20 + 5] = ring[size_t(i) * 20 + 14] = 1;
+        }
+        Mask closed = ring;
+        closeLoops(closed, 20, 20);
+        CHECK(closed[size_t(10) * 20 + 10] && !closed[0]);
+        CHECK(holeRadius(tw, th, hole) >= 6 && holeRadius(tw, th, hole) <= 8);
+        CHECK(removeWindow({10, 10, 20, 20}, {0, 0, 1000, 1000}) == (Box{-22 + 0 + 0, -22, 52, 52}.intersect({0, 0, 1000, 1000})));
+    }
+    // Pincel corrector puntual: los tres tipos quitan el punto.
+    {
+        Bytes img(dotted.size()), cov(hole.size());
+        for (size_t i = 0; i < dotted.size(); ++i)
+            img[i] = uint8_t(std::lround(std::clamp(dotted[i], 0.f, 1.f) * 255.f));
+        for (size_t i = 0; i < hole.size(); ++i)
+            cov[i] = hole[i] ? 255 : 0;
+        for (SpotKind kind : {SpotKind::ContentAware, SpotKind::CreateTexture, SpotKind::ProximityMatch}) {
+            const Bytes out = spotHeal(tw, th, img, cov, kind, 20);
+            CHECK(meanError(toFloats(out)) < 0.08);
+        }
+        CHECK(spotWindow({40, 30, 60, 50}, {0, 0, 1000, 1000}).width() == 200);
+    }
+    // Pincel corrector: color del destino, textura de la fuente.
+    {
+        Heal heal;
+        heal.w = heal.h = 40;
+        heal.src.resize(40 * 40 * 4);
+        heal.dst.resize(40 * 40 * 4);
+        heal.cov.assign(40 * 40, 0);
+        for (int y = 0; y < 40; ++y)
+            for (int x = 0; x < 40; ++x) {
+                const size_t i = size_t(y) * 40 + x;
+                const uint8_t v = uint8_t((x / 3) % 2 ? 80 : 120);
+                for (int c = 0; c < 3; ++c) {
+                    heal.src[i * 4 + c] = v;
+                    heal.dst[i * 4 + c] = 180;
+                }
+                heal.src[i * 4 + 3] = heal.dst[i * 4 + 3] = 255;
+                heal.cov[i] = std::hypot(x - 20.f, y - 20.f) < 12 ? 255 : 0;
+            }
+        const Bytes out = heal.run();
+        double m = 0;
+        int n = 0;
+        for (int y = 14; y <= 26; ++y)
+            for (int x = 14; x <= 26; ++x) {
+                m += out[(size_t(y) * 40 + x) * 4];
+                ++n;
+            }
+        CHECK(std::fabs(m / n - 180) < 6);
+        CHECK(out[(size_t(20) * 40 + 21) * 4] != out[(size_t(20) * 40 + 18) * 4]);
+        CHECK(heal.runCoarse(1) == out);
+    }
+    // Parche.
+    {
+        PatchPlan plan;
+        CHECK(planPatch({10, 10, 30, 30}, {0, 0, 100, 100}, {0, 0}, PatchMode::Source, &plan) == PatchRefusal::NoOffset);
+        CHECK(planPatch({10, 10, 30, 30}, {0, 0, 100, 100}, {90, 0}, PatchMode::Source, &plan) == PatchRefusal::OffCanvas);
+        CHECK(planPatch({10, 10, 30, 30}, {0, 0, 100, 100}, {40, 0}, PatchMode::Source, &plan) == PatchRefusal::None);
+        CHECK(plan.rect == (Box{8, 8, 32, 32}) && plan.srcShift == (std::pair<int, int>{40, 0}));
+        CHECK(planPatch({10, 10, 30, 30}, {0, 0, 100, 100}, {40, 0}, PatchMode::Destination, &plan) == PatchRefusal::None);
+        CHECK(plan.rect == (Box{48, 8, 72, 32}) && plan.dstShift == (std::pair<int, int>{40, 0}));
+        CHECK(patchPreviewStep({0, 0, 1000, 1000}, 10000) == 10);
+    }
+    // Lazo magnético: sigue un borde vertical aunque el puntero vaya torcido.
+    {
+        const int w = 120, h = 100;
+        auto fetch = [&](Box r) {
+            std::vector<uint32_t> v;
+            for (int y = r.y0; y < r.y1; ++y)
+                for (int x = r.x0; x < r.x1; ++x)
+                    v.push_back(x < 60 ? 0xff202020u : 0xffe0e0e0u);
+            return v;
+        };
+        MagneticTracer tracer(Box{0, 0, w, h});
+        const auto snapped = tracer.snap(fetch, {55, 20}, MagneticSettings{});
+        CHECK(snapped && std::fabs(snapped->x - 60) < 1.5);
+        const auto path = tracer.trace(fetch, {60, 10}, {60, 90}, {{57, 30}, {63, 50}, {56, 70}}, MagneticSettings{});
+        CHECK(!path.empty());
+        double worst = 0;
+        for (const PointF& p : path)
+            worst = std::max(worst, std::fabs(p.x - 60));
+        CHECK(worst < 1.5);
+        CHECK(polylineLength(simplifyPolyline({{0, 0}, {1, 0.1}, {2, 0}}, 0.5)) == 2.0);
+    }
+    // Selección de objetos: un cuadrado oscuro sobre blanco.
+    {
+        const int w = 160, h = 120;
+        auto at = [](int x, int y) { return x >= 50 && x < 110 && y >= 30 && y < 90; };
+        Sampler sampler = [&](Box r) {
+            std::vector<std::array<float, 4>> v;
+            for (int y = r.y0; y < r.y1; ++y)
+                for (int x = r.x0; x < r.x1; ++x) {
+                    const float c = at(x, y) ? 0.15f : 0.95f;
+                    v.push_back({c, c * 0.9f, c * 0.8f, 1.f});
+                }
+            return v;
+        };
+        const Box canvas{0, 0, w, h};
+        auto check = [&](const std::optional<Region>& r) {
+            CHECK(r.has_value());
+            if (!r)
+                return;
+            CHECK(std::abs(r->box.x0 - 50) <= 2 && std::abs(r->box.x1 - 110) <= 2);
+            CHECK(std::abs(r->box.y0 - 30) <= 2 && std::abs(r->box.y1 - 90) <= 2);
+        };
+        check(objectInRect(sampler, {40, 20, 120, 100}, canvas, 60000));
+        check(objectAt(sampler, canvas, 80, 60, kObjectAtWorkPx));
+        check(selectSubject(sampler, canvas, kSubjectWorkPx));
+        // Cancelar lanza Cancelled.
+        std::atomic_bool stopNow{true};
+        bool threw = false;
+        try {
+            (void)selectSubject(sampler, canvas, kSubjectWorkPx, Stop(&stopNow));
+        } catch (const Cancelled&) {
+            threw = true;
+        }
+        CHECK(threw);
+    }
+}
+
+static void testPhotoCraftEffects()
+{
+    QList<const Effect*> extras;
+    for (const Effect* e : Effects::all())
+        if (e->origin() == QLatin1String("PhotoCraft"))
+            extras << e;
+    CHECK(extras.size() >= 60);
+    Effects::setExtrasEnabled(false);
+    for (const Effect* e : std::as_const(extras))
+        CHECK(e->hidden());
+    Effects::setExtrasEnabled(true);
+    QImage img(48, 36, kLayerFormat);
+    for (int y = 0; y < img.height(); ++y)
+        for (int x = 0; x < img.width(); ++x)
+            img.setPixel(x, y, qRgba((x * 37) & 255, (y * 23 + x * 5) & 255, (x * y) & 255, x < 4 ? 0 : 255));
+    const Selection sel = Selection::fromRect(QRect(6, 4, 30, 24), img.size());
+    std::atomic_bool cancel{false};
+    EffectContext ctx;
+    for (const Effect* e : std::as_const(extras)) {
+        CHECK(!e->hidden());
+        const QImage out = Effects::apply(*e, img, sel, Effects::defaults(*e, ctx), ctx, cancel);
+        bool outsideSame = true, alphaSame = true;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x) {
+                if (!QRect(6, 4, 30, 24).contains(x, y) && out.pixel(x, y) != img.pixel(x, y))
+                    outsideSame = false;
+                if (qAlpha(out.pixel(x, y)) != qAlpha(img.pixel(x, y)))
+                    alphaSame = false;
+            }
+        if (!outsideSame)
+            std::printf("  PhotoCraft %s changed pixels outside the selection\n", qPrintable(e->id()));
+        CHECK(outsideSame);
+        if (e->category() != fx::catObject() && e->id() != QLatin1String("pcOffset") && !alphaSame)
+            std::printf("  PhotoCraft %s changed alpha\n", qPrintable(e->id()));
+    }
+    Effects::setExtrasEnabled(false);
+}
+
 // Intérprete de WebAssembly y complementos de PhotoCraft y LightCraft (CraftPlugins).
 static void testCraftPlugins()
 {
@@ -2358,6 +2628,12 @@ int main(int argc, char** argv)
     QGuiApplication app(argc, argv);
     QGuiApplication::setOrganizationName(QStringLiteral("KaintCoreTest"));
     QGuiApplication::setApplicationName(QStringLiteral("KaintCoreTest"));
+    // Solo las pruebas del retoque (para medirlas): KAINT_TEST_ONLY=retouch.
+    if (qEnvironmentVariable("KAINT_TEST_ONLY") == QLatin1String("retouch")) {
+        testRetouch();
+        std::printf("%d fallos\n", g_failures);
+        return g_failures ? 1 : 0;
+    }
     testStrokeAndUndo();
     testPencilLines();
     testSelection();
@@ -2384,6 +2660,8 @@ int main(int argc, char** argv)
     testPsd();
     testWicFormats();
     testPlugins();
+    testPhotoCraftEffects();
+    testRetouch();
     testCraftPlugins();
     testPaintJs();
     testPngWriter();

@@ -914,7 +914,7 @@
 :root.win7:not(.dark):not(#k) .floating-panel,
 :root.win7:not(.dark):not(#k) .dialog {
     background: linear-gradient(transparent 20%, rgba(255, 255, 255, 0.7) 40%, transparent 41%),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.2)), rgb(from var(--glass) calc(r - 57) calc(g - 39) calc(b - 18) / 0.62);
+                linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.2)), rgb(from var(--glass-frame, #4580c4) r g b / 0.62);
 }
 
 :root.win7:not(.dark):not(#k) .floating-panel > .content,
@@ -988,7 +988,7 @@
 :root.win7.dark:not(#k) .floating-panel,
 :root.win7.dark:not(#k) .dialog {
     background: linear-gradient(transparent 20%, rgba(255, 255, 255, 0.16) 40%, transparent 41%),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.08)), rgb(from var(--glass) calc(r - 30) calc(g - 32) calc(b - 34) / 0.78);
+                linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.08)), rgb(from var(--glass-frame, #1c2430) r g b / 0.78);
 }
 
 :root.win7.dark:not(#k) .floating-panel > .content,

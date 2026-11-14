@@ -13,6 +13,10 @@ import { isCraftFile, loadCraft } from "./Craft.js";
 export const API_VERSION = 1;
 const DB = "kaint-plugins", STORE = "plugins";
 const CATALOG_URL = "https://labystudio.github.io/paintdotjs-plugins/catalog.json";
+// El catálogo de Kaint (Explorar complementos: PhotoCraft y Paint.NET), el mismo que usa Kaint para el
+// escritorio; si no se puede descargar, la copia que trae la web.
+const KAINT_CATALOG_BASE = "https://raw.githubusercontent.com/ssserch/Kaint/main/plugins/";
+const KAINT_CATALOG_BUNDLED = "assets/plugins/catalog.json";
 // Categorías de los paquetes que ya existen en Kaint.
 const knownCategories = { artistic: "artistic", blurs: "blurs", distort: "distort", noise: "noise", object: "object",
                           photo: "photo", render: "render", stylize: "stylize" };
@@ -569,11 +573,55 @@ export const Plugins = {
 
     async installFromCatalog(entry) {
         const bytes = await this.download(entry.url, 5 * 1024 * 1024);
-        const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
-        if (hash !== entry.sha256)
+        if (await sha256(bytes) !== entry.sha256)
             throw new Error(tr("El complemento descargado no coincide con el del catálogo: no se instaló nada."));
         return this.install(new File([bytes], `${entry.id}.paintjs`), entry);
     },
+
+    // Las secciones PhotoCraft y Paint.NET del catálogo de Kaint: { photocraft: [...], paintnet: [...] }.
+    // Solo los que dicen su autor y traen el SHA-256 de cada archivo.
+    async kaintCatalog() {
+        let catalog = null;
+        try {
+            catalog = JSON.parse(new TextDecoder().decode(await this.download(`${KAINT_CATALOG_BASE}catalog.json?refresh=${Date.now().toString(36)}`,
+                                                                                2 * 1024 * 1024)));
+        } catch {
+            catalog = null;
+        }
+        if (catalog?.schemaVersion !== 1) {
+            const response = await fetch(KAINT_CATALOG_BUNDLED);
+            if (!response.ok)
+                throw new Error(tr("No se pudo descargar (HTTP %1).", response.status));
+            catalog = await response.json();
+        }
+        if (catalog?.schemaVersion !== 1)
+            throw new Error(tr("El formato del catálogo no es compatible."));
+        const safe = (p) => typeof p === "string" && /^[A-Za-z0-9 _.,'+()&-]+(\/[A-Za-z0-9 _.,'+()&-]+)*$/.test(p) && !p.includes("..");
+        const read = (list) => (Array.isArray(list) ? list : []).map((e) => ({
+            id: text(e.id, "", 120), name: text(e.name, e.id, 80), version: text(e.version, "", 32), author: text(e.author, "", 120),
+            description: text(e.description, "", 500), website: text(e.website, "", 300),
+            effects: Array.isArray(e.effects) ? e.effects.map((x) => text(x, "", 80)) : [],
+            builtin: Array.isArray(e.builtin) ? e.builtin.filter((x) => typeof x === "string") : [],
+            files: (Array.isArray(e.files) ? e.files : []).map((f) => ({
+                path: f.path, sha256: f.sha256, size: Number(f.size) || 0,
+                url: typeof f.url === "string" && f.url.startsWith("https://") ? f.url : new URL(String(f.path), KAINT_CATALOG_BASE).href,
+            })),
+        })).filter((e) => e.id && e.author && (e.files.length || e.builtin.length) && e.files.every((f) => safe(f.path) && /^[a-f0-9]{64}$/.test(f.sha256)));
+        return { photocraft: read(catalog.photocraft), paintnet: read(catalog.paintnet) };
+    },
+
+    // Un filtro de PhotoCraft del catálogo de Kaint (un solo archivo .wasm).
+    async installCraftFromCatalog(entry) {
+        const f = entry.files[0];
+        const bytes = await this.download(f.url, 16 * 1024 * 1024);
+        if (await sha256(bytes) !== f.sha256)
+            throw new Error(tr("El complemento descargado no coincide con el del catálogo: no se instaló nada."));
+        return this.installCraft(new File([bytes], f.path.split("/").pop()));
+    },
 };
+
+async function sha256(bytes) {
+    return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export { kaintValues, pluginValues };

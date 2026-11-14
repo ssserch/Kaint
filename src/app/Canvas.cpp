@@ -8,6 +8,7 @@
 
 #include <QGuiApplication>
 #include <QInputMethod>
+#include <QLabel>
 #include <QMouseEvent>
 #include <QNativeGestureEvent>
 #include <QPaintEvent>
@@ -17,7 +18,9 @@
 #include <QScopedValueRollback>
 #include <QScrollBar>
 #include <QTabletEvent>
+#include <QMenu>
 #include <QTimer>
+#include <QToolButton>
 #include <QUndoStack>
 
 #include <cmath>
@@ -27,11 +30,18 @@ constexpr int kMargin = 24;
 }
 
 namespace {
-// La selección como en Paint.NET 5: el interior lavanda translúcido (sobre blanco, #e4eaf7) y el
-// contorno con hormigas grises y casi blancas (no negras y blancas).
+// La selección como en Paint.NET: el interior lavanda translúcido (sobre blanco, #e4eaf7) y el
+// contorno con hormigas blancas sobre una línea negra, que se distinguen sobre cualquier color (las
+// grises y casi blancas de antes apenas se veían sobre lo oscuro o lo muy claro).
 const QColor kSelectionTint(30, 80, 188, 31);
-const QColor kAntsDark(0x7f, 0x82, 0x89);
-const QColor kAntsLight(0xf3, 0xf4, 0xf8);
+const QColor kAntsDark(0, 0, 0);
+const QColor kAntsLight(255, 255, 255);
+// Un paso de un píxel cada 40 ms: 25 por segundo, una vuelta del patrón (8 px) en 0,32 s, casi como
+// en Paint.NET (a 120 ms por paso se arrastraban) sin repintar la selección más de lo necesario.
+constexpr int kAntsInterval = 40;
+// Con más tramos que estos (una varita sobre ruido), el contorno se dibuja por tramos sueltos:
+// trazar con hormigas un contorno tan largo 25 veces por segundo sería lento.
+constexpr int kMaxAntsLines = 60000;
 } // namespace
 
 Canvas::Canvas(QWidget* parent)
@@ -54,12 +64,31 @@ Canvas::Canvas(QWidget* parent)
     m_checker = QPixmap::fromImage(Raster::checkerboard(8, QColor(191, 191, 191), QColor(143, 143, 143)));
     m_hRuler = new Ruler(Qt::Horizontal, this, this);
     m_vRuler = new Ruler(Qt::Vertical, this, this);
-    m_rulerCorner = new QWidget(this);
+    // La esquina entre las reglas: la unidad (px, in, cm), como en Paint.NET; al pulsarla, un menú
+    // para cambiarla.
+    {
+        auto* corner = new QToolButton(this);
+        corner->setAutoRaise(true);
+        corner->setPopupMode(QToolButton::InstantPopup);
+        corner->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        corner->setToolTip(tr("Unidad de las reglas"));
+        corner->setStyleSheet(QStringLiteral("QToolButton { border: none; padding: 0px; font-size: 9px; }"
+                                             "QToolButton::menu-indicator { image: none; width: 0px; }"));
+        auto* menu = new QMenu(corner);
+        const QString names[3] = {tr("Píxeles"), tr("Pulgadas"), tr("Centímetros")};
+        for (int u = 0; u < 3; ++u)
+            menu->addAction(names[u], this, [this, u] { emit unitRequested(u); });
+        corner->setMenu(menu);
+        m_rulerCorner = corner;
+    }
     m_rulerCorner->setAutoFillBackground(true);
     // La esquina entre las reglas, del mismo color que ellas.
     auto paintCorner = [this] {
         QPalette pal = m_rulerCorner->palette();
         pal.setColor(QPalette::Window, Ruler::background());
+        const QColor text = Ruler::background().lightnessF() < 0.5 ? QColor(0xd6, 0xd6, 0xd6) : QColor(0x1e, 0x1e, 0x1e);
+        pal.setColor(QPalette::ButtonText, text);
+        pal.setColor(QPalette::WindowText, text);
         m_rulerCorner->setPalette(pal);
     };
     paintCorner();
@@ -160,6 +189,8 @@ void Canvas::setTool(Tool* tool)
         return;
     if (m_tool)
         m_tool->deactivate();
+    if (m_notice)
+        m_notice->hide();
     m_tool = tool;
     m_toolButton = Qt::NoButton;
     if (m_tool)
@@ -213,7 +244,7 @@ void Canvas::onSelectionChanged()
 {
     if ((m_doc && !m_doc->selection().isEmpty()) || m_overlayAnts) {
         if (!m_antsTimer.isActive())
-            m_antsTimer.start(120);
+            m_antsTimer.start(kAntsInterval);
     } else {
         m_antsTimer.stop();
     }
@@ -224,6 +255,35 @@ void Canvas::setOverlayAnts(bool on)
 {
     m_overlayAnts = on;
     onSelectionChanged();
+}
+
+void Canvas::showNotice(const QString& text)
+{
+    if (!m_notice) {
+        m_notice = new QLabel(viewport());
+        m_notice->setObjectName(QStringLiteral("CanvasNotice"));
+        m_notice->setAttribute(Qt::WA_TransparentForMouseEvents);
+        m_notice->setTextFormat(Qt::PlainText);
+        // Oscuro con el borde naranja de los avisos, sobre cualquier tema e imagen.
+        m_notice->setStyleSheet(QStringLiteral("QLabel#CanvasNotice { background: #2b2b2b; color: #ffffff; border: 1px solid #f0a030;"
+                                               " border-radius: 4px; padding: 6px 10px; }"));
+        m_noticeTimer.setSingleShot(true);
+        connect(&m_noticeTimer, &QTimer::timeout, m_notice, &QWidget::hide);
+    }
+    m_notice->setText(text);
+    m_notice->adjustSize();
+    // Debajo y a la derecha del puntero (encima si no cabe), sin salirse de la vista.
+    const QRect area = viewport()->rect().adjusted(6, 6, -6, -6);
+    const QPoint pointer = m_mouseSeen ? m_mouseView.toPoint() : area.center();
+    QPoint pos = pointer + QPoint(18, 22);
+    if (pos.y() + m_notice->height() > area.bottom())
+        pos.setY(pointer.y() - 14 - m_notice->height());
+    pos.setX(std::clamp(pos.x(), area.left(), std::max(area.left(), area.right() - m_notice->width())));
+    pos.setY(std::clamp(pos.y(), area.top(), std::max(area.top(), area.bottom() - m_notice->height())));
+    m_notice->move(pos);
+    m_notice->show();
+    m_notice->raise();
+    m_noticeTimer.start(3500);
 }
 
 // ---------------------------------------------------------------------------
@@ -564,12 +624,17 @@ void Canvas::setRulerStyle(Ruler::Style style)
     Ruler::setStyle(style);
     QPalette pal = m_rulerCorner->palette();
     pal.setColor(QPalette::Window, Ruler::background());
+    const QColor text = Ruler::background().lightnessF() < 0.5 ? QColor(0xd6, 0xd6, 0xd6) : QColor(0x1e, 0x1e, 0x1e);
+    pal.setColor(QPalette::ButtonText, text);
+    pal.setColor(QPalette::WindowText, text);
     m_rulerCorner->setPalette(pal);
     updateRulers();
 }
 
 void Canvas::setUnit(Unit unit)
 {
+    if (auto* corner = qobject_cast<QToolButton*>(m_rulerCorner))
+        corner->setText(unitSuffix(unit));
     m_unit = unit;
     updateRulers();
 }
@@ -776,75 +841,235 @@ void Canvas::drawSelection(QPainter& p) const
         p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1);
         p.drawImage(imageToView(QRectF(sel.bounds())), selectionTint());
     }
-    QPen white(kAntsLight, 0);
-    QPen black(kAntsDark, 0);
-    black.setDashPattern({4, 4});
-    black.setDashOffset(m_antsOffset);
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
     if (!box.isNull()) {
         drawMarchingRect(p, box, highlight && pixelBox);
     } else if (sel.isPathBased()) {
-        p.setRenderHint(QPainter::Antialiasing);
-        const QPainterPath path = t.map(sel.path());
-        p.setBrush(Qt::NoBrush);
-        p.setPen(white);
-        p.drawPath(path);
-        p.setPen(black);
-        p.drawPath(path);
+        // El trazado (elipse, lazo, lazo magnético...), suavizado, en píxeles del dispositivo.
+        if (!(m_antsCache.selection == sel) || m_antsCache.transform != t || m_antsCache.dpr != dpr) {
+            m_antsCache.selection = sel;
+            m_antsCache.transform = t;
+            m_antsCache.dpr = dpr;
+            m_antsCache.path = (t * QTransform::fromScale(dpr, dpr)).map(sel.path());
+            m_antsCache.antialias = true;
+        }
+        p.scale(1 / dpr, 1 / dpr);
+        strokeAnts(p, m_antsCache.path, true);
+    } else if (sel.outline().size() <= kMaxAntsLines) {
+        // Los bordes entre píxeles (la varita mágica, la selección de objetos, las selecciones
+        // combinadas...), unidos en contornos cerrados: las hormigas dan la vuelta a la selección.
+        drawAntsLoops(p, sel.contours(), sel);
+    } else if (!t.isRotating()) {
+        // Tantísimos tramos (ruido): cada uno suelto, en el primer píxel de dentro de la selección
+        // (Selection::outline dice de qué lado está el interior).
+        auto dx = [&](qreal x) { return int(std::lround(t.map(QPointF(x, 0)).x() * dpr)); };
+        auto dy = [&](qreal y) { return int(std::lround(t.map(QPointF(0, y)).y() * dpr)); };
+        QVector<QLine> spans;
+        const QVector<QLineF>& lines = sel.outline();
+        spans.reserve(lines.size());
+        for (const QLineF& l : lines) {
+            if (l.y1() == l.y2()) {
+                const int a = dx(std::min(l.x1(), l.x2())), b = std::max(a, dx(std::max(l.x1(), l.x2())) - 1);
+                const int y = dy(l.y1()) - (l.x2() > l.x1() ? 0 : 1);
+                spans.append(QLine(a, y, b, y));
+            } else {
+                const int a = dy(std::min(l.y1(), l.y2())), b = std::max(a, dy(std::max(l.y1(), l.y2())) - 1);
+                const int x = dx(l.x1()) - (l.y2() < l.y1() ? 0 : 1);
+                spans.append(QLine(x, a, x, b));
+            }
+        }
+        p.scale(1 / dpr, 1 / dpr);
+        drawAntsSpans(p, spans);
     } else {
         const QVector<QLineF>& lines = sel.outline();
         QVector<QLineF> mapped;
         mapped.reserve(lines.size());
         for (const QLineF& l : lines)
             mapped.append(t.map(l));
-        p.setPen(white);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(kAntsDark, 0));
         p.drawLines(mapped);
-        p.setPen(black);
+        QPen dashes(kAntsLight, 0);
+        dashes.setDashPattern({4, 4});
+        dashes.setDashOffset(8 - m_antsOffset);
+        p.setPen(dashes);
         p.drawLines(mapped);
     }
     p.restore();
+}
+
+void Canvas::strokeAnts(QPainter& p, const QPainterPath& path, bool antialias) const
+{
+    p.setRenderHint(QPainter::Antialiasing, antialias);
+    p.setBrush(Qt::NoBrush);
+    // Trazos de 4 px (8 con la pantalla al 200 %) que avanzan hacia el final del contorno.
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
+    const qreal unit = std::max(1.0, std::round(dpr));
+    p.setPen(QPen(kAntsDark, 0, Qt::SolidLine, Qt::FlatCap, Qt::BevelJoin));
+    p.drawPath(path);
+    QPen dashes(kAntsLight, 0, Qt::CustomDashLine, Qt::FlatCap, Qt::BevelJoin);
+    dashes.setDashPattern({4 * unit, 4 * unit});
+    dashes.setDashOffset((8 - m_antsOffset) * unit);
+    p.setPen(dashes);
+    p.drawPath(path);
+}
+
+void Canvas::drawSelectionAnts(QPainter& p, const Selection& sel, const QTransform& imageTransform) const
+{
+    if (sel.isEmpty())
+        return;
+    if (sel.isPathBased()) {
+        drawAntsPath(p, sel.path(), imageTransform);
+        return;
+    }
+    p.save();
+    drawAntsLoops(p, sel.contours(), {}, imageTransform);
+    p.restore();
+}
+
+void Canvas::drawAntsPath(QPainter& p, const QPainterPath& imagePath, const QTransform& imageTransform) const
+{
+    if (imagePath.isEmpty())
+        return;
+    p.save();
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
+    const QPainterPath path = (imageTransform * imageToViewTransform() * QTransform::fromScale(dpr, dpr)).map(imagePath);
+    p.scale(1 / dpr, 1 / dpr);
+    strokeAnts(p, path, true);
+    p.restore();
+}
+
+void Canvas::drawAntsLoops(QPainter& p, const QVector<QPolygonF>& loops, const Selection& cacheFor,
+                           const QTransform& imageTransform) const
+{
+    const QTransform t = imageTransform * imageToViewTransform();
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
+    const bool cached = !cacheFor.isEmpty();
+    const bool valid = cached && m_antsCache.selection == cacheFor && m_antsCache.transform == t && m_antsCache.dpr == dpr;
+    QPainterPath built;
+    bool antialias = false;
+    if (!valid) {
+        const QTransform device = t * QTransform::fromScale(dpr, dpr);
+        // Nítido si los píxeles de la imagen no se ven más pequeños que los de la pantalla (y la
+        // vista no está girada): los vértices van al píxel entero de dentro de la selección.
+        const bool crisp = !t.isRotating() && std::abs(device.m11()) >= 1.0 && std::abs(device.m22()) >= 1.0;
+        antialias = !crisp;
+        auto sign = [](qreal v) { return v > 0 ? 1 : v < 0 ? -1 : 0; };
+        for (const QPolygonF& loop : loops) {
+            const qsizetype n = loop.size();
+            if (n < 3)
+                continue;
+            QPolygonF points;
+            points.reserve(n + 1);
+            for (qsizetype i = 0; i < n; ++i) {
+                const QPointF v = device.map(loop[i]);
+                if (!crisp) {
+                    // Suavizado: al centro del píxel. Los vértices a menos de medio píxel del anterior
+                    // sobran (los escalones del zum por debajo del 100 %).
+                    const QPointF c = v + QPointF(0.5, 0.5);
+                    if (points.isEmpty() || (c - points.last()).manhattanLength() >= 0.5)
+                        points << c;
+                    continue;
+                }
+                // La normal hacia dentro de un tramo con sentido (dx, dy) es (-dy, dx): el vértice va
+                // un píxel hacia atrás en cada eje en el que alguno de sus dos tramos tiene el
+                // interior de ese lado (así los cuatro bordes caen en el primer píxel de dentro).
+                const QPointF a = loop[(i + n - 1) % n], b = loop[i], c = loop[(i + 1) % n];
+                const int inX = sign(b.x() - a.x()), inY = sign(b.y() - a.y());
+                const int outX = sign(c.x() - b.x()), outY = sign(c.y() - b.y());
+                const bool left = inY > 0 || outY > 0, up = inX < 0 || outX < 0;
+                points << QPointF(std::round(v.x()) - (left ? 1 : 0), std::round(v.y()) - (up ? 1 : 0));
+            }
+            if (points.size() < 3) {
+                // Una isla de menos de un píxel de la pantalla: un punto.
+                const QPointF c = device.map(loop.boundingRect().center());
+                built.moveTo(c);
+                built.lineTo(c + QPointF(1, 0));
+                continue;
+            }
+            built.addPolygon(points);
+            built.closeSubpath();
+        }
+        if (cached) {
+            m_antsCache.selection = cacheFor;
+            m_antsCache.transform = t;
+            m_antsCache.dpr = dpr;
+            m_antsCache.path = built;
+            m_antsCache.antialias = antialias;
+        }
+    }
+    p.save();
+    p.scale(1 / dpr, 1 / dpr);
+    if (cached)
+        strokeAnts(p, m_antsCache.path, m_antsCache.antialias);
+    else
+        strokeAnts(p, built, antialias);
+    p.restore();
+}
+
+void Canvas::drawAntsSpans(QPainter& p, const QVector<QLine>& spans) const
+{
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.setBrush(Qt::NoBrush);
+    QPen white(kAntsLight, 0), black(kAntsDark, 0);
+    p.setPen(black);
+    p.drawLines(spans);
+    // Tramos de cuatro píxeles blancos y cuatro negros según x + y (y el desplazamiento animado).
+    QVector<QLine> dark;
+    dark.reserve(spans.size() * 2);
+    for (const QLine& s : spans) {
+        const bool horizontal = s.y1() == s.y2();
+        const int from = horizontal ? std::min(s.x1(), s.x2()) : std::min(s.y1(), s.y2());
+        const int to = horizontal ? std::max(s.x1(), s.x2()) : std::max(s.y1(), s.y2());
+        const int fixed = horizontal ? s.y1() : s.x1();
+        for (int k = from; k <= to;) {
+            const int phase = ((k + fixed - m_antsOffset) % 8 + 8) % 8;
+            const int end = std::min(to, k + (phase < 4 ? 3 - phase : 7 - phase));
+            if (phase < 4)
+                dark.append(horizontal ? QLine(k, fixed, end, fixed) : QLine(fixed, k, fixed, end));
+            k = end + 1;
+        }
+    }
+    p.setPen(white);
+    p.drawLines(dark);
 }
 
 void Canvas::drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) const
 {
     p.save();
     const QTransform t = imageToViewTransform();
-    QPen white(kAntsLight, 0);
-    QPen black(kAntsDark, 0);
-    black.setDashPattern({4, 4});
-    black.setDashOffset(m_antsOffset);
     p.setBrush(Qt::NoBrush);
     if (t.isRotating()) {
-        const QPolygonF poly = t.map(QPolygonF(imageRect));
-        p.setRenderHint(QPainter::Antialiasing);
         if (tint) {
+            p.setRenderHint(QPainter::Antialiasing);
             p.setPen(Qt::NoPen);
             p.setBrush(kSelectionTint);
-            p.drawPolygon(poly);
+            p.drawPolygon(t.map(QPolygonF(imageRect)));
             p.setBrush(Qt::NoBrush);
         }
-        p.setPen(white);
-        p.drawPolygon(poly);
-        p.setPen(black);
-        p.drawPolygon(poly);
+        // El rectángulo como contorno cerrado, en el sentido de las agujas del reloj (el interior a
+        // su derecha): las hormigas le dan la vuelta.
+        drawAntsLoops(p, {QPolygonF(QList<QPointF>{imageRect.topLeft(), imageRect.topRight(), imageRect.bottomRight(),
+                                                   imageRect.bottomLeft()})});
         p.restore();
         return;
     }
     // Líneas nítidas en píxeles enteros de la pantalla (también con escalas fraccionarias), con
     // el mismo grosor y trazos con cualquier zum (suavizadas salían grises y borrosas). Como el
-    // contorno de las demás selecciones, los bordes izquierdo y de arriba van en el primer píxel
-    // de dentro y el derecho y el de abajo en el primero de fuera.
+    // contorno de las demás selecciones, los cuatro bordes van en el primer píxel de dentro.
     const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
     const QRectF v = t.mapRect(imageRect);
     const int left = int(std::lround(v.left() * dpr)), top = int(std::lround(v.top() * dpr));
-    const QRect r(left, top, int(std::lround(v.right() * dpr)) - left, int(std::lround(v.bottom() * dpr)) - top);
+    const int right = std::max(left, int(std::lround(v.right() * dpr)) - 1), bottom = std::max(top, int(std::lround(v.bottom() * dpr)) - 1);
     p.scale(1 / dpr, 1 / dpr);
     if (tint)
-        p.fillRect(r, kSelectionTint);
-    p.setRenderHint(QPainter::Antialiasing, false);
-    p.setPen(white);
-    p.drawRect(r);
-    p.setPen(black);
-    p.drawRect(r);
+        p.fillRect(QRect(QPoint(left, top), QPoint(right, bottom)), kSelectionTint);
+    // El contorno de esos píxeles, en el sentido de las agujas del reloj (sin suavizar, los píxeles
+    // enteros son los de la línea).
+    QPainterPath box;
+    box.addPolygon(QPolygonF(QList<QPointF>{QPointF(left, top), QPointF(right, top), QPointF(right, bottom), QPointF(left, bottom)}));
+    box.closeSubpath();
+    strokeAnts(p, box, false);
     p.restore();
 }
 

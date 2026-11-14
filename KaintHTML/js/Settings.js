@@ -3,6 +3,14 @@ const KEY = "kaint.settings";
 
 const defaults = {
     animations: true,
+    // Las funciones de PhotoCraft (desactivadas por defecto) y los efectos que siguen complementos
+    // de BoltBait activados desde Explorar complementos (sus identificadores).
+    photocraftExtras: false,
+    // La fila de arriba como la de Kaint para el escritorio: el icono y el título de la imagen (sin
+    // los botones de la ventana), y la tira de imágenes a toda la altura de la fila.
+    fakeTitleBar: true,
+    stripFullHeight: true,
+    boltBaitEffects: [],
     // Modo colaborativo (Configuración > Colaboración; js/collab/CollabUI.js).
     collabName: "",
     collabColor: "",
@@ -77,7 +85,7 @@ const defaults = {
     selectionColorDark: null,
     // Ver > Reglas y su estilo: 0, oscura como la de paint.js; 1, del color de la barra.
     rulers: false,
-    rulerStyle: 0,
+    rulerStyle: 3,
     historyJumpButtons: false,
     // En Ajustes y Efectos, los efectos de los complementos con el icono de los complementos (la
     // pieza de puzle) a la derecha, como en Kaint.
@@ -109,6 +117,8 @@ const defaults = {
     // La X de las ventanas con los botones de Windows 7: 0 unida al borde de arriba, 1 rectángulo,
     // 2 cuadrado.
     win7PanelClose: 1,
+    // El color de las ventanas de los temas Windows 7 (#rrggbb; vacío, el de siempre).
+    win7Glass: "",
     // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), si al
     // sacar una se esconden las que tape (en las esquinas) y el tamaño de cada una en el modo
     // Ventanas (en %).

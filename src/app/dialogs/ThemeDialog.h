@@ -52,6 +52,9 @@ private:
     QCheckBox* m_pixelFont = nullptr;
     QWidget* m_preview = nullptr;
     QComboBox* m_imageAnchor = nullptr;
+    // Alineación de la imagen en cada eje (0-100 %).
+    QSlider* m_imageX = nullptr;
+    QSlider* m_imageY = nullptr;
     QSpinBox* m_imageScale = nullptr;
     QSlider* m_imageBlur = nullptr;
     QCheckBox* m_imageGrayscale = nullptr;

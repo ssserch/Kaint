@@ -91,6 +91,26 @@ struct ToolSettings {
     Resample::Interpolation moveInterpolation = Resample::Interpolation::Bicubic;
     bool moveGamma = true;
     AfterSelect afterSelect = AfterSelect::DoNotSwitch;
+    // Las herramientas de PhotoCraft.
+    // Lazo magnético: anchura de detección (px), contraste y frecuencia (%).
+    int magneticWidth = 10;
+    int magneticContrast = 10;
+    int magneticFrequency = 57;
+    // Selección de objetos: el Buscador de objetos (al pasar el puntero).
+    bool objectFinder = true;
+    // Quitar, Parche, los pinceles correctores y Selección de objetos: tomar de la imagen (no de la capa).
+    bool retouchSampleImage = false;
+    // Quitar: después de cada trazo (si no, al pulsar Intro).
+    bool removeEachStroke = true;
+    // Parche: 0 normal, 1 según el contenido; destino (si no, origen); estructura (1..7) y color (0..10).
+    int patchMode = 0;
+    bool patchDestination = false;
+    int patchStructure = 4;
+    int patchColor = 0;
+    // Pincel corrector: alineado.
+    bool healAligned = true;
+    // Pincel corrector puntual: 0 según el contenido, 1 crear textura, 2 coincidencia por proximidad.
+    int spotType = 0;
 };
 
 // Preferencias de Configuración que usan las herramientas (las pone MainWindow al aplicar la

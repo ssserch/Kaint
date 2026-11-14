@@ -19,6 +19,11 @@
 #include <QTimer>
 #include <QTranslator>
 
+#include "app/CustomLanguages.h"
+
+#include <memory>
+#include <optional>
+
 #include <algorithm>
 #include <cstdio>
 #include <functional>
@@ -137,6 +142,19 @@ int main(int argc, char** argv)
         yesNo("--preview-colored-icons", "settings/coloredToolIcons");
         yesNo("--preview-rulers", "settings/rulers");
         yesNo("--preview-translucent", "settings/translucentPanels");
+        yesNo("--preview-extras", "settings/photocraftExtras");
+        // Un tema personalizado (el JSON que exporta el editor de temas; con --color-scheme custom).
+        const QString customTheme = rawOption(argc, argv, QStringLiteral("--preview-custom-theme"));
+        if (!customTheme.isEmpty())
+            preset.setValue(QStringLiteral("settings/customTheme"), customTheme.toUtf8());
+        // El color de las ventanas de los temas Windows 7 (#rrggbb).
+        const QColor win7Glass = QColor::fromString(rawOption(argc, argv, QStringLiteral("--preview-win7-color")));
+        if (win7Glass.isValid())
+            preset.setValue(QStringLiteral("settings/win7Glass"), win7Glass);
+        // La herramienta elegida al empezar (su número).
+        const QString tool = rawOption(argc, argv, QStringLiteral("--preview-tool"));
+        if (!tool.isEmpty())
+            preset.setValue(QStringLiteral("settings/startupTool"), tool.toInt());
         // Estilo de la interfaz (kaint o paintnet) e idioma (en o es).
         const QString style = rawOption(argc, argv, QStringLiteral("--preview-style")).toLower();
         if (!style.isEmpty())
@@ -191,14 +209,27 @@ int main(int argc, char** argv)
 
     // Idioma: los textos del código están en español; el inglés (el predeterminado) es una
     // traducción incluida en el programa.
-    const QString language = AppSettings::load().language;
+    // Un idioma personalizado ("custom:<id>", CustomLanguages) traduce lo suyo y deja el resto en
+    // inglés.
+    const QString setting = AppSettings::load().language;
+    std::optional<CustomLanguages::Language> custom;
+    if (setting.startsWith(QLatin1String("custom:")))
+        custom = CustomLanguages::find(setting.mid(7));
+    const QString language = custom ? QStringLiteral("en") : setting;
     qputenv("KAINT_LANG", language.toUtf8());
     QTranslator appTranslator;
-    if (language != QLatin1String("es") && appTranslator.load(QStringLiteral(":/i18n/kaint_%1.qm").arg(language)))
+    const bool english = language != QLatin1String("es") && appTranslator.load(QStringLiteral(":/i18n/kaint_%1.qm").arg(language));
+    std::unique_ptr<CustomTranslator> customTranslator;
+    if (custom) {
+        CustomLanguages::setActive(custom);
+        customTranslator = std::make_unique<CustomTranslator>(*custom, english ? &appTranslator : nullptr);
+        app.installTranslator(customTranslator.get());
+    } else if (english) {
         app.installTranslator(&appTranslator);
+    }
     QTranslator qtTranslator;
-    if (qtTranslator.load(QLocale(language), QStringLiteral("qtbase"), QStringLiteral("_"),
-                          QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+    const QLocale qtLocale = custom && !custom->code.isEmpty() ? QLocale(custom->code) : QLocale(language);
+    if (qtTranslator.load(qtLocale, QStringLiteral("qtbase"), QStringLiteral("_"), QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
         app.installTranslator(&qtTranslator);
 
     QCommandLineParser parser;
@@ -231,6 +262,16 @@ int main(int argc, char** argv)
                                         QStringLiteral("yes|no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-translucent"),
                                         QObject::tr("Ventanas translúcidas en la captura (yes o no)."), QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-extras"),
+                                        QObject::tr("Las funciones de PhotoCraft en la captura (yes o no)."), QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-custom-theme"),
+                                        QObject::tr("El tema personalizado de la captura (su JSON, con --color-scheme custom)."),
+                                        QStringLiteral("json")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-win7-color"),
+                                        QObject::tr("El color de las ventanas de los temas Windows 7 en la captura (#rrggbb)."),
+                                        QStringLiteral("color")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-tool"),
+                                        QObject::tr("La herramienta elegida en la captura (su número)."), QStringLiteral("n")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-title-buttons"),
                                         QObject::tr("Botones de la barra de título en la captura (win11, win10, macos, win7, xp o win98)."),
                                         QStringLiteral("estilo")));
@@ -262,6 +303,7 @@ int main(int argc, char** argv)
     Theme::setCustomTitleBarColor(startup.titleBarColor);
 #endif
     Theme::setAeroTransparency(startup.aeroTransparency);
+    Theme::setWin7Glass(startup.win7Glass);
     Theme::setSelectionColors(startup.selectionColorLight, startup.selectionColorDark);
     Theme::apply(scheme);
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 5)));
@@ -293,7 +335,10 @@ int main(int argc, char** argv)
     // Como Paint.NET: primero se ve lo fundamental (la ventana con sus barras y las ventanas de
     // herramientas) y, ya pintada, se carga lo demás: los complementos (sus efectos y formatos
     // aparecen en los menús al terminar), las imágenes que abrir y los avisos.
-    const QStringList files = parser.positionalArguments();
+    QStringList files = parser.positionalArguments();
+    // Discord abre Kaint con "discord-<ID>://…" al aceptar una invitación: no es un archivo (la
+    // invitación llega después por el IPC de Discord).
+    files.removeIf([](const QString& f) { return f.startsWith(QLatin1String("discord-"), Qt::CaseInsensitive) && f.contains(QLatin1String("://")); });
     afterFirstPaint(&window, [&window, files] {
         PluginManager::instance()->scan();
         if (files.isEmpty())

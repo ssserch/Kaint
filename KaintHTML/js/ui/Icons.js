@@ -991,9 +991,201 @@ const drawn = {
     clonestamp: [20, drawCloneStamp], text: [20, drawTextTool], linecurve: [20, drawLineTool], shapes: [20, drawShapesTool],
     paintbrush: [20, drawBrush], paintbucket: [20, drawFill], recolor: [20, drawRecolor], gradient: [20, drawGradientTool],
     pan: [20, drawPan], "pan-grab": [20, drawPanGrab],
+    magneticlasso: [20, drawMagneticLasso], objectselection: [20, drawObjectSelection], remove: [20, drawRemoveTool],
+    patch: [20, drawPatchTool], healingbrush: [20, drawHealingBrush], spothealing: [20, drawSpotHealing],
     "toolbar-cut": [16, drawCut], "toolbar-copy": [16, drawCopy], "toolbar-paste": [16, drawPaste],
     "toolbar-crop": [16, drawCrop], "toolbar-deselect": [16, drawDeselect],
 };
+
+// Las herramientas de PhotoCraft llevan la pieza de puzle verde de los complementos abajo a la
+// derecha (como en Kaint): ocupa casi la mitad del icono (más pequeña apenas se veía), con sus dos
+// salientes, un verde vivo con borde oscuro y un halo blanco que la separa del dibujo.
+function puzzleBadge(ctx) {
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    // El cuadrado y los dos salientes se pintan por separado (unidos en un solo trazado, el borde
+    // cruzaría la pieza por donde se juntan): primero el halo, luego el borde y al final el relleno.
+    const parts = [
+        () => ctx.roundRect(12.4, 12.4, 7.2, 7.2, 1.1),
+        () => ctx.arc(16, 12.1, 1.75, 0, Math.PI * 2),
+        () => ctx.arc(12.1, 16, 1.75, 0, Math.PI * 2),
+    ];
+    const each = (paint) => {
+        for (const part of parts) {
+            ctx.beginPath();
+            part();
+            paint();
+        }
+    };
+    ctx.strokeStyle = "rgba(255,255,255,0.96)";
+    ctx.lineWidth = 3;
+    each(() => ctx.stroke());
+    ctx.strokeStyle = rgb(20, 92, 38);
+    ctx.lineWidth = 1.5;
+    each(() => ctx.stroke());
+    ctx.fillStyle = rgb(67, 196, 84);
+    each(() => ctx.fill());
+    // Un brillo arriba: se lee como una pieza y no como una mancha verde.
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.beginPath();
+    ctx.roundRect(13.6, 13.5, 4.8, 1.5, 0.7);
+    ctx.fill();
+    ctx.restore();
+}
+
+// Trazo de hormigas de las herramientas de PhotoCraft.
+function dashed(ctx, color, width, dash, gap) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = "butt";
+    ctx.setLineDash([dash, gap]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawMagneticLasso(ctx) {
+    // El lazo de hormigas inclinado, su cuerda con el nudo y, abajo, un imán rojo.
+    ctx.beginPath();
+    ctx.ellipse(11.5, 6.6, 7, 4.6, -Math.PI / 12, 0, Math.PI * 2);
+    ctx.fillStyle = rgb(215, 230, 246);
+    ctx.fill();
+    dashed(ctx, rgb(74, 134, 204), 1.3, 1.7, 1.5);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.arc(6.4, 10.6, 1.4, 0, Math.PI * 2);
+    fillStroke(ctx, null, rgb(74, 134, 204), 1.5);
+    ctx.beginPath();
+    ctx.moveTo(5.4, 11.8);
+    ctx.bezierCurveTo(5.1, 13.8, 4, 15.8, 2.2, 17.6);
+    fillStroke(ctx, null, rgb(74, 134, 204), 1.5);
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.beginPath();
+    ctx.moveTo(8.2, 12.2);
+    ctx.lineTo(10.2, 12.2);
+    ctx.lineTo(10.2, 15.2);
+    ctx.arc(11.2, 15.2, 1, Math.PI, 0, true);
+    ctx.lineTo(12.2, 12.2);
+    ctx.lineTo(14.2, 12.2);
+    ctx.lineTo(14.2, 15.2);
+    ctx.arc(11.2, 15.2, 3, 0, Math.PI, false);
+    ctx.closePath();
+    fillStroke(ctx, rgb(220, 95, 85), rgb(168, 54, 46), 0.7);
+    ctx.fillStyle = rgb(115, 122, 133);
+    ctx.fillRect(8.2, 12.2, 2, 1.8);
+    ctx.fillRect(12.2, 12.2, 2, 1.8);
+    puzzleBadge(ctx);
+}
+
+function drawObjectSelection(ctx) {
+    // Una persona (el objeto) dentro del recuadro de hormigas.
+    ctx.beginPath();
+    ctx.rect(2.5, 2.5, 14, 14);
+    dashed(ctx, rgb(115, 122, 133), 1.1, 2, 1.6);
+    ctx.beginPath();
+    ctx.arc(9.5, 7.4, 2.6, 0, Math.PI * 2);
+    fillStroke(ctx, rgb(91, 149, 214), rgb(63, 120, 186), 0.8);
+    ctx.beginPath();
+    ctx.moveTo(5.2, 15.4);
+    ctx.arc(9.5, 15.4, 4.3, Math.PI, 0, false);
+    ctx.closePath();
+    fillStroke(ctx, rgb(91, 149, 214), rgb(63, 120, 186), 0.8);
+    puzzleBadge(ctx);
+}
+
+// Destello de cuatro puntas centrado en (x, y) con brazos de 'r'.
+function sparkle(ctx, x, y, r, fill, line) {
+    const k = r * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.quadraticCurveTo(x + k, y - k, x + r, y);
+    ctx.quadraticCurveTo(x + k, y + k, x, y + r);
+    ctx.quadraticCurveTo(x - k, y + k, x - r, y);
+    ctx.quadraticCurveTo(x - k, y - k, x, y - r);
+    ctx.closePath();
+    fillStroke(ctx, fill, line, 0.6);
+}
+
+function drawRemoveTool(ctx) {
+    // Un borrador mágico en diagonal (la punta clara abajo y el cuerpo turquesa, para no confundirlo
+    // con la goma morada) y destellos: lo que toca desaparece.
+    ctx.save();
+    ctx.translate(7.8, 12.2);
+    ctx.rotate(-Math.PI / 4);
+    roundRect(ctx, -5.6, -2.8, 6.2, 5.6, 1.2);
+    fillStroke(ctx, rgb(214, 240, 242), rgb(46, 140, 152), 0.9);
+    roundRect(ctx, 0, -3.75, 6.25, 7.5, 1.9);
+    fillStroke(ctx, rgb(63, 169, 181), rgb(36, 116, 128), 0.7);
+    ctx.restore();
+    sparkle(ctx, 15.2, 4.6, 3.4, rgb(233, 182, 100), rgb(173, 135, 74));
+    sparkle(ctx, 4, 4.4, 1.8, rgb(233, 182, 100), rgb(173, 135, 74));
+    puzzleBadge(ctx);
+}
+
+function drawPatchTool(ctx) {
+    // La zona de hormigas de donde sale el parche (arriba a la izquierda) y el parche cosido
+    // encima, tapándola.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, 20, 20);
+    ctx.roundRect(4.4, 4.4, 12.8, 12.8, 2.4);
+    ctx.clip("evenodd");
+    ctx.beginPath();
+    ctx.arc(5.6, 5.6, 4.6, 0, Math.PI * 2);
+    ctx.fillStyle = rgb(215, 230, 246);
+    ctx.fill();
+    dashed(ctx, rgb(115, 122, 133), 1.1, 1.8, 1.5);
+    ctx.restore();
+    roundRect(ctx, 5.6, 5.6, 10.4, 10.4, 1.6);
+    fillStroke(ctx, rgb(233, 182, 100), rgb(176, 125, 42), 0.8);
+    roundRect(ctx, 7.2, 7.2, 7.2, 7.2, 0.8);
+    dashed(ctx, rgb(75, 82, 92), 0.8, 1.8, 1.2);
+    puzzleBadge(ctx);
+}
+
+// Una tirita en diagonal centrada en (x, y), de largo 'length' y ancho 'width'.
+function bandage(ctx, x, y, length, width, holes) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+    roundRect(ctx, -length / 2, -width / 2, length, width, width / 2);
+    fillStroke(ctx, rgb(233, 182, 100), rgb(185, 130, 53), 0.8);
+    const pad = width * 0.66;
+    roundRect(ctx, -pad / 2, -pad / 2, pad, pad, 0.6);
+    ctx.fillStyle = rgb(247, 226, 184);
+    ctx.fill();
+    if (holes) {
+        ctx.fillStyle = rgb(201, 147, 67);
+        for (const hx of [-length * 0.3, length * 0.3])
+            for (const hy of [-1.1, 1.1]) {
+                ctx.beginPath();
+                ctx.arc(hx, hy, 0.45, 0, Math.PI * 2);
+                ctx.fill();
+            }
+    }
+    ctx.restore();
+}
+
+function drawHealingBrush(ctx) {
+    // Una tirita grande en diagonal, con sus agujeros.
+    bandage(ctx, 9.6, 9.6, 17.2, 7.2, true);
+    puzzleBadge(ctx);
+}
+
+function drawSpotHealing(ctx) {
+    // Una mancha roja en un círculo de hormigas (abajo a la izquierda) y una tirita pequeña arriba.
+    ctx.beginPath();
+    ctx.arc(6.4, 13.6, 4.2, 0, Math.PI * 2);
+    dashed(ctx, rgb(115, 122, 133), 1.1, 1.6, 1.4);
+    ctx.beginPath();
+    ctx.arc(6.4, 13.6, 1.6, 0, Math.PI * 2);
+    fillStroke(ctx, rgb(220, 95, 85), rgb(170, 60, 52), 0.6);
+    bandage(ctx, 13.6, 6.2, 10.6, 5, false);
+    puzzleBadge(ctx);
+}
 
 function painterFor(name) {
     if (drawn[name])
@@ -1152,6 +1344,7 @@ const pdnToolCursors = {
     rectangleselect: "rectselect", lassoselect: "cross", ellipseselect: "ellipseselect", zoom: "zoom", magicwand: "magicwand",
     paintbucket: "paintbucket", gradient: "cross", paintbrush: "cross", eraser: "eraser", pencil: "pencil",
     colorpicker: "colorpicker", clonestamp: "clonestamp", recolor: "recolor", text: "text", linecurve: "cross", shapes: "cross",
+    magneticlasso: "cross", objectselection: "rectselect", remove: "cross", patch: "cross", healingbrush: "cross", spothealing: "cross",
 };
 
 export function pdnCursors() {
@@ -1222,6 +1415,8 @@ const cursorTips = {
     moveselectedpixels: [2, 1], moveselection: [2, 1], zoom: [8, 8], paintbucket: [4, 18.6], gradient: [2.4, 2.4],
     paintbrush: [2.4, 18.4], eraser: [3.1, 14.8], pencil: [2, 18], colorpicker: [2.2, 17.8], clonestamp: [10, 17.2],
     recolor: [6, 14], linecurve: [3.4, 16.4], shapes: [1.6, 2.8],
+    magneticlasso: [2.2, 17.6], objectselection: [2.5, 2.5], remove: [3.8, 16.2], patch: [5.6, 5.6], healingbrush: [9.6, 9.6],
+    spothealing: [6.4, 13.6],
 };
 const kCursor = 20;
 
@@ -1414,7 +1609,10 @@ export function miniCursor(name, ibeam = false) {
 // mano y siguen al puntero al girar.
 export function rotateCursor(angle, grabbing = false) {
     const steps = 72, index = ((Math.round((angle / (2 * Math.PI)) * steps) % steps) + steps) % steps;
-    const key = `rotate/${index}/${grabbing ? 1 : 0}`;
+    // Con los cursores de Paint.NET, su mano pixelada (si ya está cargada) en vez de la de Kaint.
+    const pixelHand = pdnCursors() ? pixelImages[grabbing ? "hand-closed" : "hand-open"] : null;
+    const usePixelHand = !!(pixelHand?.complete && pixelHand.naturalWidth);
+    const key = `rotate/${index}/${grabbing ? 1 : 0}/${usePixelHand ? "pdn" : "kaint"}`;
     if (!cursorCache[key]) {
         const a = (index * 2 * Math.PI) / steps;
         const draw = (scale) => {
@@ -1449,6 +1647,13 @@ export function rotateCursor(angle, grabbing = false) {
             ctx.lineWidth = 1;
             ctx.stroke();
             // La mano encima, con su punto activo (el centro) en el del cursor.
+            if (usePixelHand) {
+                const [hx, hy] = pixelHotSpots[grabbing ? "hand-closed" : "hand-open"];
+                const z = 1.25;
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(pixelHand, -hx * z, -hy * z, pixelHand.naturalWidth * z, pixelHand.naturalHeight * z);
+                return canvas.toDataURL();
+            }
             ctx.translate(-12, -12);
             ctx.scale(24 / 20, 24 / 20);
             (grabbing ? drawPanGrab : drawPan)(ctx);

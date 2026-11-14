@@ -24,6 +24,14 @@
         <translation>English translation by SSSerch</translation>
     </message>
     <message>
+        <source>Desconocido</source>
+        <translation>Unknown</translation>
+    </message>
+    <message>
+        <source>Traducción al %1 por %2</source>
+        <translation>%1 translation by %2</translation>
+    </message>
+    <message>
         <source>Bibliotecas de software y contribuciones:</source>
         <translation>Software libraries and contributions:</translation>
     </message>
@@ -94,6 +102,25 @@
     </message>
 </context>
 <context>
+    <name>Canvas</name>
+    <message>
+        <source>Unidad de las reglas</source>
+        <translation>Ruler units</translation>
+    </message>
+    <message>
+        <source>Píxeles</source>
+        <translation>Pixels</translation>
+    </message>
+    <message>
+        <source>Pulgadas</source>
+        <translation>Inches</translation>
+    </message>
+    <message>
+        <source>Centímetros</source>
+        <translation>Centimeters</translation>
+    </message>
+</context>
+<context>
     <name>CanvasSizeDialog</name>
     <message>
         <source>Tamaño del lienzo</source>
@@ -126,6 +153,10 @@
         <source>Tampón de clonar</source>
         <translation>Clone Stamp</translation>
     </message>
+    <message>
+        <source>Primero Ctrl+clic para elegir el punto de origen.</source>
+        <translation>First Ctrl+click to choose the source point.</translation>
+    </message>
 </context>
 <context>
     <name>Collab::AddressView</name>
@@ -151,7 +182,7 @@
     </message>
     <message>
         <source>Las direcciones y los códigos están difuminados para que no se vean en capturas ni transmisiones: haz clic en ellos (o en el ojo) para mostrarlos u ocultarlos.</source>
-        <translation>Addresses and codes are blurred so they don't show up in screenshots or streams: click them (or the eye) to show or hide them.</translation>
+        <translation>Addresses and codes are blurred so they don&apos;t show up in screenshots or streams: click them (or the eye) to show or hide them.</translation>
     </message>
     <message>
         <source>Sin conexión a la red</source>
@@ -285,7 +316,7 @@
     </message>
     <message>
         <source>ID de este equipo:</source>
-        <translation>This computer's ID:</translation>
+        <translation>This computer&apos;s ID:</translation>
     </message>
     <message>
         <source>Si la sesión solo admite equipos autorizados, dale este ID al anfitrión.</source>
@@ -297,19 +328,31 @@
     </message>
     <message>
         <source>No se pueden buscar sesiones (el puerto %1 está ocupado). Escribe la dirección del anfitrión.</source>
-        <translation>Sessions can't be searched for (port %1 is in use). Type the host's address.</translation>
+        <translation>Sessions can&apos;t be searched for (port %1 is in use). Type the host&apos;s address.</translation>
     </message>
     <message>
         <source>Buscando sesiones…</source>
         <translation>Looking for sessions…</translation>
     </message>
     <message>
+        <source>Esta sesión pide contraseña: escríbela y pulsa «Unirse».</source>
+        <translation>This session asks for a password: type it and click “Join”.</translation>
+    </message>
+    <message>
+        <source>La contraseña no es correcta: vuelve a escribirla.</source>
+        <translation>The password is not correct: type it again.</translation>
+    </message>
+    <message>
         <source>Elige una sesión de la lista o escribe la dirección del anfitrión.</source>
-        <translation>Choose a session from the list or type the host's address.</translation>
+        <translation>Choose a session from the list or type the host&apos;s address.</translation>
     </message>
     <message>
         <source>Conectando con %1:%2…</source>
         <translation>Connecting to %1:%2…</translation>
+    </message>
+    <message>
+        <source>Unirse por invitación de %1</source>
+        <translation>Join by invitation from %1</translation>
     </message>
     <message>
         <source>Esperando a que el anfitrión te deje entrar…</source>
@@ -317,7 +360,7 @@
     </message>
     <message>
         <source>No se pudo entrar.</source>
-        <translation>Couldn't join.</translation>
+        <translation>Couldn&apos;t join.</translation>
     </message>
     <message>
         <source>Unirse a una sesión P2P</source>
@@ -360,7 +403,7 @@
     <name>Collab::P2PGuest</name>
     <message>
         <source>No se encontró la sesión. Revisa el código y que el anfitrión siga hospedándola (y que los dos usen algún servidor de señalización en común).</source>
-        <translation>The session wasn't found. Check the code and that the host is still hosting it (and that both of you use at least one signaling server in common).</translation>
+        <translation>The session wasn&apos;t found. Check the code and that the host is still hosting it (and that both of you use at least one signaling server in common).</translation>
     </message>
     <message>
         <source>Este Kaint se compiló sin la conexión P2P.</source>
@@ -390,7 +433,7 @@
     </message>
     <message>
         <source>No se pudo conectar: %1</source>
-        <translation>Couldn't connect: %1</translation>
+        <translation>Couldn&apos;t connect: %1</translation>
     </message>
     <message>
         <source>El anfitrión terminó la sesión.</source>
@@ -406,11 +449,11 @@
     </message>
     <message>
         <source>Este equipo no está en la lista de equipos autorizados del anfitrión.</source>
-        <translation>This computer is not in the host's list of authorized computers.</translation>
+        <translation>This computer is not in the host&apos;s list of authorized computers.</translation>
     </message>
     <message>
         <source>El anfitrión no aceptó tu solicitud.</source>
-        <translation>The host didn't accept your request.</translation>
+        <translation>The host didn&apos;t accept your request.</translation>
     </message>
     <message>
         <source>La sesión usa otra versión del modo colaborativo.</source>
@@ -442,7 +485,7 @@
     </message>
     <message>
         <source>La imagen de la sesión no es válida.</source>
-        <translation>The session's image is not valid.</translation>
+        <translation>The session&apos;s image is not valid.</translation>
     </message>
     <message>
         <source>Unirse a la sesión</source>
@@ -533,7 +576,7 @@
     </message>
     <message>
         <source>Los cambios de los invitados se aplican a la imagen sin preguntar.</source>
-        <translation>The guests' changes are applied to the image without asking.</translation>
+        <translation>The guests&apos; changes are applied to the image without asking.</translation>
     </message>
     <message>
         <source>Tus cambios</source>
@@ -595,11 +638,11 @@
     </message>
     <message>
         <source>Enviados; esperando la respuesta del anfitrión.</source>
-        <translation>Sent; waiting for the host's answer.</translation>
+        <translation>Sent; waiting for the host&apos;s answer.</translation>
     </message>
     <message>
         <source>Tienes cambios sin sugerir. Su historial es solo tuyo hasta que se aceptan.</source>
-        <translation>You have changes you haven't suggested. Their history is only yours until they are accepted.</translation>
+        <translation>You have changes you haven&apos;t suggested. Their history is only yours until they are accepted.</translation>
     </message>
     <message>
         <source>Sin cambios. Edita la imagen y sugiere los cambios al anfitrión.</source>
@@ -650,7 +693,7 @@
     </message>
     <message>
         <source>No se pudo conectar con ningún servidor de señalización (%1).</source>
-        <translation>Couldn't connect to any signaling server (%1).</translation>
+        <translation>Couldn&apos;t connect to any signaling server (%1).</translation>
     </message>
 </context>
 <context>
@@ -669,7 +712,7 @@
     </message>
     <message>
         <source>Descartar el borrador (vuelve a la imagen de la sesión)</source>
-        <translation>Discard the draft (back to the session's image)</translation>
+        <translation>Discard the draft (back to the session&apos;s image)</translation>
     </message>
     <message>
         <source>Descartar el borrador</source>
@@ -677,7 +720,7 @@
     </message>
     <message>
         <source>Se pierden los cambios que no has sugerido y su historial.</source>
-        <translation>The changes you haven't suggested and their history are lost.</translation>
+        <translation>The changes you haven&apos;t suggested and their history are lost.</translation>
     </message>
     <message>
         <source>Descartar</source>
@@ -685,7 +728,7 @@
     </message>
     <message>
         <source>Volver a la imagen de la sesión.</source>
-        <translation>Go back to the session's image.</translation>
+        <translation>Go back to the session&apos;s image.</translation>
     </message>
     <message>
         <source>Cancelar</source>
@@ -736,7 +779,7 @@
 %2
 
 Prueba con otro puerto en Configuración &gt; Colaboración.</source>
-        <translation>The session couldn't be opened on port %1:
+        <translation>The session couldn&apos;t be opened on port %1:
 %2
 
 Try another port in Settings &gt; Collaboration.</translation>
@@ -763,7 +806,7 @@ Try another port in Settings &gt; Collaboration.</translation>
     </message>
     <message>
         <source>Dejarás de estar conectado. Puedes exportar una copia de la imagen antes de salir; lo que no hayas sugerido se pierde.</source>
-        <translation>You will be disconnected. You can export a copy of the image before leaving; whatever you haven't suggested is lost.</translation>
+        <translation>You will be disconnected. You can export a copy of the image before leaving; whatever you haven&apos;t suggested is lost.</translation>
     </message>
     <message>
         <source>Terminar</source>
@@ -848,7 +891,7 @@ Try another port in Settings &gt; Collaboration.</translation>
     <message>
         <source>No se pudo abrir la sesión P2P:
 %1</source>
-        <translation>Couldn't open the P2P session:
+        <translation>Couldn&apos;t open the P2P session:
 %1</translation>
     </message>
 </context>
@@ -1163,6 +1206,18 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
 <context>
     <name>DiscordPresence</name>
     <message>
+        <source>El ID de la aplicación de Discord no es válido.</source>
+        <translation>The Discord application ID is not valid.</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir en el registro de Windows.</source>
+        <translation>Could not write to the Windows registry.</translation>
+    </message>
+    <message>
+        <source>No se encontró la carpeta de aplicaciones del usuario.</source>
+        <translation>The user&apos;s applications folder was not found.</translation>
+    </message>
+    <message>
         <source>Desactivado</source>
         <translation>Disabled</translation>
     </message>
@@ -1389,6 +1444,25 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Degradado</source>
         <translation>Gradient</translation>
+    </message>
+</context>
+<context>
+    <name>HealingBrushTool</name>
+    <message>
+        <source>Pinta sobre lo que quieras arreglar: al soltar, la textura del origen toma el color y la luz de alrededor. Ctrl+clic: otro origen.</source>
+        <translation>Paint over what you want to fix: on release, the source texture takes on the surrounding color and lighting. Ctrl+click: another source.</translation>
+    </message>
+    <message>
+        <source>Ctrl+clic para elegir de dónde tomar la textura y luego pinta sobre lo que quieras arreglar.</source>
+        <translation>Ctrl+click to choose where to take the texture from, then paint over what you want to fix.</translation>
+    </message>
+    <message>
+        <source>Primero Ctrl+clic para elegir de dónde tomar la textura.</source>
+        <translation>First Ctrl+click to choose where to take the texture from.</translation>
+    </message>
+    <message>
+        <source>Pincel corrector</source>
+        <translation>Healing Brush</translation>
     </message>
 </context>
 <context>
@@ -1623,7 +1697,7 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
     <message>
         <source>Los iconos de siempre de Kaint.</source>
-        <translation>Kaint's own icons.</translation>
+        <translation>Kaint&apos;s own icons.</translation>
     </message>
     <message>
         <source>No se pudo abrir el archivo.</source>
@@ -1643,7 +1717,7 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
     <message>
         <source>El paquete usa una versión del formato que Kaint no conoce.</source>
-        <translation>The pack uses a format version Kaint doesn't know.</translation>
+        <translation>The pack uses a format version Kaint doesn&apos;t know.</translation>
     </message>
     <message>
         <source>El identificador del paquete no es válido.</source>
@@ -1664,6 +1738,73 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>El paquete no trae ninguna imagen que Kaint pueda usar.</source>
         <translation>The pack has no images Kaint can use.</translation>
+    </message>
+</context>
+<context>
+    <name>LanguageEditorDialog</name>
+    <message>
+        <source>Editar el idioma</source>
+        <translation>Edit Language</translation>
+    </message>
+    <message>
+        <source>Por ejemplo: Português</source>
+        <translation>For example: Portuguese</translation>
+    </message>
+    <message>
+        <source>Tu nombre o tu usuario</source>
+        <translation>Your name or username</translation>
+    </message>
+    <message>
+        <source>Nombre del idioma:</source>
+        <translation>Language name:</translation>
+    </message>
+    <message>
+        <source>Código del idioma:</source>
+        <translation>Language code:</translation>
+    </message>
+    <message>
+        <source>Autor de la traducción:</source>
+        <translation>Translation author:</translation>
+    </message>
+    <message>
+        <source>Página del autor:</source>
+        <translation>Author&apos;s page:</translation>
+    </message>
+    <message>
+        <source>Buscar…</source>
+        <translation>Search…</translation>
+    </message>
+    <message>
+        <source>Solo los que faltan por traducir</source>
+        <translation>Only untranslated</translation>
+    </message>
+    <message>
+        <source>Inglés</source>
+        <translation>English</translation>
+    </message>
+    <message>
+        <source>Traducción</source>
+        <translation>Translation</translation>
+    </message>
+    <message>
+        <source>Lo que dejes vacío sale en inglés. Las formas del plural se separan con « / ».</source>
+        <translation>Anything left empty appears in English. Plural forms are separated with “ / ”.</translation>
+    </message>
+    <message>
+        <source>Guardar</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>%1 de %2 traducidos (lo que falta sale en inglés).</source>
+        <translation>%1 of %2 translated (the rest appears in English).</translation>
+    </message>
+    <message>
+        <source>Idioma personalizado</source>
+        <translation>Custom language</translation>
     </message>
 </context>
 <context>
@@ -1791,7 +1932,7 @@ Opacity: %2 · Blend: %3</translation>
     <name>Link</name>
     <message>
         <source>No se pudo establecer la conexión directa.</source>
-        <translation>The direct connection couldn't be established.</translation>
+        <translation>The direct connection couldn&apos;t be established.</translation>
     </message>
 </context>
 <context>
@@ -1807,6 +1948,21 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Varita mágica</source>
         <translation>Magic Wand</translation>
+    </message>
+</context>
+<context>
+    <name>MagneticLassoTool</name>
+    <message>
+        <source>Haz clic en un borde y sigue el contorno: el borde de la selección se pega a él. [ y ]: anchura de detección.</source>
+        <translation>Click on an edge and follow the outline: the selection border snaps to it. [ and ]: detection width.</translation>
+    </message>
+    <message>
+        <source>Clic: fijar un punto · Alt+clic: tramo recto · Retroceso: quitar el último punto · doble clic, clic en el inicio o Intro: cerrar · Esc: cancelar.</source>
+        <translation>Click: fasten a point · Alt+click: straight segment · Backspace: remove the last point · double-click, click on the start or Enter: close · Esc: cancel.</translation>
+    </message>
+    <message>
+        <source>Lazo magnético</source>
+        <translation>Magnetic Lasso</translation>
     </message>
 </context>
 <context>
@@ -2136,6 +2292,10 @@ Opacity: %2 · Blend: %3</translation>
         <translation>&amp;Plugins...</translation>
     </message>
     <message>
+        <source>%1 (de %2)</source>
+        <translation>%1 (from %2)</translation>
+    </message>
+    <message>
         <source>Efectos añadidos (en Ajustes o Efectos): %1</source>
         <translation>Effects added (in Adjustments or Effects): %1</translation>
     </message>
@@ -2176,6 +2336,26 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Intercambiar colores</source>
         <translation>Swap colors</translation>
+    </message>
+    <message>
+        <source>Discord</source>
+        <translation>Discord</translation>
+    </message>
+    <message>
+        <source>«%1» pide unirse a tu sesión colaborativa desde Discord.</source>
+        <translation>“%1” asks to join your collaborative session from Discord.</translation>
+    </message>
+    <message>
+        <source>Si aceptas, Discord le da el código de la sesión. Aun así pasará por el acceso de la sesión: la contraseña o tu aprobación.</source>
+        <translation>If you accept, Discord gives them the session code. They will still go through the session&apos;s access: the password or your approval.</translation>
+    </message>
+    <message>
+        <source>Aceptar</source>
+        <translation>Accept</translation>
+    </message>
+    <message>
+        <source>Rechazar</source>
+        <translation>Decline</translation>
     </message>
     <message>
         <source>&amp;Documentación</source>
@@ -2309,7 +2489,7 @@ What do you want to do?</translation>
     </message>
     <message>
         <source>No guardar</source>
-        <translation>Don't Save</translation>
+        <translation>Don&apos;t Save</translation>
     </message>
     <message>
         <source>Descartar los cambios no guardados.</source>
@@ -2484,7 +2664,7 @@ What do you want to do?</translation>
     </message>
     <message>
         <source>No acoplar (guardar como .ora)</source>
-        <translation>Don't flatten (save as .ora)</translation>
+        <translation>Don&apos;t flatten (save as .ora)</translation>
     </message>
     <message>
         <source>Se guarda con todas sus capas en «%1».</source>
@@ -2913,7 +3093,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Copia exportada en %1. La imagen de la sesión la guarda el anfitrión.</source>
-        <translation>Copy exported to %1. The host saves the session's image.</translation>
+        <translation>Copy exported to %1. The host saves the session&apos;s image.</translation>
     </message>
     <message>
         <source>&amp;Terminar la sesión</source>
@@ -3038,6 +3218,25 @@ Do you want to replace them?</translation>
     </message>
 </context>
 <context>
+    <name>ObjectSelectionTool</name>
+    <message>
+        <source>Rodea un objeto con un recuadro, o haz clic en el que se resalta, para seleccionarlo.</source>
+        <translation>Draw a box around an object, or click the highlighted one, to select it.</translation>
+    </message>
+    <message>
+        <source>No se encontró ningún objeto.</source>
+        <translation>No object was found.</translation>
+    </message>
+    <message>
+        <source>No se encontró un sujeto destacado.</source>
+        <translation>No prominent subject was found.</translation>
+    </message>
+    <message>
+        <source>Selección de objetos</source>
+        <translation>Object Selection</translation>
+    </message>
+</context>
+<context>
     <name>PaintBucketTool</name>
     <message>
         <source>Cambia la tolerancia o los colores, o arrastra el punto de origen. Intro: terminar.</source>
@@ -3085,6 +3284,25 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
 </context>
 <context>
+    <name>PatchTool</name>
+    <message>
+        <source>Selecciona una zona y arrástrala hasta lo que la rellenará según el contenido.</source>
+        <translation>Select an area and drag it to what will fill it content-aware.</translation>
+    </message>
+    <message>
+        <source>Selecciona una zona y arrástrala hasta lo que quieras reparar con ella.</source>
+        <translation>Select an area and drag it onto what you want to repair with it.</translation>
+    </message>
+    <message>
+        <source>Selecciona lo que quieras reparar y arrástralo hasta la textura que lo sustituirá.</source>
+        <translation>Select what you want to repair and drag it to the texture that will replace it.</translation>
+    </message>
+    <message>
+        <source>Parche</source>
+        <translation>Patch</translation>
+    </message>
+</context>
+<context>
     <name>PdnBridge</name>
     <message>
         <source>Los complementos de Paint.NET necesitan mono (sudo pacman -S mono libgdiplus).</source>
@@ -3129,10 +3347,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Could not download it (HTTP %1).</translation>
     </message>
     <message>
-        <source>Complementos de Kaint.HTML</source>
-        <translation>Kaint.HTML plugins</translation>
-    </message>
-    <message>
         <source>Complementos de paint.js del catálogo que usa la versión web de Kaint (Kaint.HTML). Se ejecutan sin acceso a tus archivos ni a internet. Los que abren una ventana propia hecha para el navegador solo funcionan en la versión web.</source>
         <translation>paint.js plugins from the catalog used by the web version of Kaint (Kaint.HTML). They run with no access to your files or the internet. Those that open their own window made for the browser only work in the web version.</translation>
     </message>
@@ -3149,12 +3363,60 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The catalog format is not supported.</translation>
     </message>
     <message>
-        <source>Desconocido</source>
-        <translation>Unknown</translation>
-    </message>
-    <message>
         <source>El catálogo está vacío.</source>
         <translation>The catalog is empty.</translation>
+    </message>
+    <message>
+        <source>Explorar complementos</source>
+        <translation>Browse Plugins</translation>
+    </message>
+    <message>
+        <source>Esta es una lista limitada de complementos elegidos y probados para Kaint. Cada uno es obra de su autor, que sale junto a su nombre. Puedes instalar otros desde Configuración &gt; Complementos &gt; Añadir…</source>
+        <translation>This is a limited list of plugins chosen and tested for Kaint. Each one is the work of its author, shown next to its name. You can install others from Settings &gt; Plugins &gt; Add…</translation>
+    </message>
+    <message>
+        <source>Kaint.HTML</source>
+        <translation>Kaint.HTML</translation>
+    </message>
+    <message>
+        <source>PhotoCraft</source>
+        <translation>PhotoCraft</translation>
+    </message>
+    <message>
+        <source>Paint.NET</source>
+        <translation>Paint.NET</translation>
+    </message>
+    <message>
+        <source>Filtros de PhotoCraft (.wasm) de la tienda ArtCraft. Se ejecutan en el intérprete de WebAssembly de Kaint, sin acceso a nada de fuera.</source>
+        <translation>PhotoCraft filters (.wasm) from the ArtCraft store. They run in Kaint&apos;s WebAssembly interpreter, with no access to anything outside.</translation>
+    </message>
+    <message>
+        <source>Complementos de efectos de Paint.NET (.dll) que funcionan en Kaint, con la capa de compatibilidad (mono en Linux y el .NET Framework de Windows).</source>
+        <translation>Paint.NET effect plugins (.dll) that work in Kaint, through the compatibility layer (mono on Linux and the .NET Framework on Windows).</translation>
+    </message>
+    <message>
+        <source>De %1</source>
+        <translation>By %1</translation>
+    </message>
+    <message>
+        <source>Página web</source>
+        <translation>Website</translation>
+    </message>
+    <message>
+        <source>Efectos: %1</source>
+        <translation>Effects: %1</translation>
+    </message>
+    <message>
+        <source>Desactivar</source>
+        <translation>Disable</translation>
+    </message>
+    <message>
+        <source>Activar</source>
+        <translation>Enable</translation>
+    </message>
+    <message>
+        <source>Integrado en Kaint.</source>
+        <translation>Built into Kaint.</translation>
     </message>
     <message>
         <source>Instalado</source>
@@ -3163,6 +3425,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Instalar</source>
         <translation>Install</translation>
+    </message>
+    <message>
+        <source>Actualizar</source>
+        <translation>Update</translation>
     </message>
     <message>
         <source>Instalando…</source>
@@ -3263,8 +3529,364 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Parallelogram</translation>
     </message>
     <message>
+        <source>Filtro cálido (85)</source>
+        <translation>Warming Filter (85)</translation>
+    </message>
+    <message>
+        <source>Filtro cálido (LBA)</source>
+        <translation>Warming Filter (LBA)</translation>
+    </message>
+    <message>
+        <source>Filtro cálido (81)</source>
+        <translation>Warming Filter (81)</translation>
+    </message>
+    <message>
+        <source>Filtro frío (80)</source>
+        <translation>Cooling Filter (80)</translation>
+    </message>
+    <message>
+        <source>Filtro frío (LBB)</source>
+        <translation>Cooling Filter (LBB)</translation>
+    </message>
+    <message>
+        <source>Filtro frío (82)</source>
+        <translation>Cooling Filter (82)</translation>
+    </message>
+    <message>
+        <source>Naranja</source>
+        <translation>Orange</translation>
+    </message>
+    <message>
+        <source>Amarillo</source>
+        <translation>Yellow</translation>
+    </message>
+    <message>
+        <source>Cian</source>
+        <translation>Cyan</translation>
+    </message>
+    <message>
+        <source>Violeta</source>
+        <translation>Violet</translation>
+    </message>
+    <message>
+        <source>Magenta</source>
+        <translation>Magenta</translation>
+    </message>
+    <message>
+        <source>Rojo intenso</source>
+        <translation>Deep Red</translation>
+    </message>
+    <message>
+        <source>Azul intenso</source>
+        <translation>Deep Blue</translation>
+    </message>
+    <message>
+        <source>Esmeralda intenso</source>
+        <translation>Deep Emerald</translation>
+    </message>
+    <message>
+        <source>Amarillo intenso</source>
+        <translation>Deep Yellow</translation>
+    </message>
+    <message>
+        <source>Bajo el agua</source>
+        <translation>Underwater</translation>
+    </message>
+    <message>
+        <source>Nivel</source>
+        <translation>Level</translation>
+    </message>
+    <message>
+        <source>Color inicial</source>
+        <translation>Start color</translation>
+    </message>
+    <message>
+        <source>Color final</source>
+        <translation>End color</translation>
+    </message>
+    <message>
+        <source>Mapa de degradado</source>
+        <translation>Gradient Map</translation>
+    </message>
+    <message>
+        <source>Invertir</source>
+        <translation>Reverse</translation>
+    </message>
+    <message>
+        <source>Tramado</source>
+        <translation>Dither</translation>
+    </message>
+    <message>
+        <source>del rojo</source>
+        <translation>from red</translation>
+    </message>
+    <message>
+        <source>del verde</source>
+        <translation>from green</translation>
+    </message>
+    <message>
+        <source>del azul</source>
+        <translation>from blue</translation>
+    </message>
+    <message>
+        <source>constante</source>
+        <translation>constant</translation>
+    </message>
+    <message>
+        <source>Monocromo</source>
+        <translation>Monochrome</translation>
+    </message>
+    <message>
+        <source>Mezclador de canales</source>
+        <translation>Channel Mixer</translation>
+    </message>
+    <message>
+        <source>Filtro de fotografía</source>
+        <translation>Photo Filter</translation>
+    </message>
+    <message>
+        <source>Filtro</source>
+        <translation>Filter</translation>
+    </message>
+    <message>
+        <source>Densidad</source>
+        <translation>Density</translation>
+    </message>
+    <message>
+        <source>Corrección selectiva</source>
+        <translation>Selective Color</translation>
+    </message>
+    <message>
+        <source>Rojos</source>
+        <translation>Reds</translation>
+    </message>
+    <message>
+        <source>Amarillos</source>
+        <translation>Yellows</translation>
+    </message>
+    <message>
+        <source>Verdes</source>
+        <translation>Greens</translation>
+    </message>
+    <message>
+        <source>Cianes</source>
+        <translation>Cyans</translation>
+    </message>
+    <message>
+        <source>Azules</source>
+        <translation>Blues</translation>
+    </message>
+    <message>
+        <source>Magentas</source>
+        <translation>Magentas</translation>
+    </message>
+    <message>
+        <source>Blancos</source>
+        <translation>Whites</translation>
+    </message>
+    <message>
+        <source>Neutros</source>
+        <translation>Neutrals</translation>
+    </message>
+    <message>
+        <source>Negros</source>
+        <translation>Blacks</translation>
+    </message>
+    <message>
+        <source>Negro</source>
+        <translation>Black</translation>
+    </message>
+    <message>
+        <source>Método</source>
+        <translation>Method</translation>
+    </message>
+    <message>
+        <source>Relativo</source>
+        <translation>Relative</translation>
+    </message>
+    <message>
+        <source>Absoluto</source>
+        <translation>Absolute</translation>
+    </message>
+    <message>
+        <source>Ecualizar</source>
+        <translation>Equalize</translation>
+    </message>
+    <message>
+        <source>Contraste automático</source>
+        <translation>Auto Contrast</translation>
+    </message>
+    <message>
+        <source>Color automático</source>
+        <translation>Auto Color</translation>
+    </message>
+    <message>
+        <source>Color del matiz</source>
+        <translation>Tint color</translation>
+    </message>
+    <message>
+        <source>Mezclador de blanco y negro</source>
+        <translation>Black &amp; White Mixer</translation>
+    </message>
+    <message>
+        <source>HSB/HSL</source>
+        <translation>HSB/HSL</translation>
+    </message>
+    <message>
+        <source>Modo de entrada</source>
+        <translation>Input mode</translation>
+    </message>
+    <message>
+        <source>RGB</source>
+        <translation>RGB</translation>
+    </message>
+    <message>
+        <source>HSB</source>
+        <translation>HSB</translation>
+    </message>
+    <message>
+        <source>HSL</source>
+        <translation>HSL</translation>
+    </message>
+    <message>
+        <source>Modo de salida</source>
+        <translation>Output mode</translation>
+    </message>
+    <message>
+        <source>Ajustar</source>
+        <translation>Wrap around</translation>
+    </message>
+    <message>
+        <source>Repetir los píxeles del borde</source>
+        <translation>Repeat edge pixels</translation>
+    </message>
+    <message>
+        <source>Zonas sin definir</source>
+        <translation>Undefined areas</translation>
+    </message>
+    <message>
+        <source>Coordenadas polares</source>
+        <translation>Polar Coordinates</translation>
+    </message>
+    <message>
+        <source>De rectangulares a polares</source>
+        <translation>Rectangular to polar</translation>
+    </message>
+    <message>
+        <source>De polares a rectangulares</source>
+        <translation>Polar to rectangular</translation>
+    </message>
+    <message>
+        <source>Número de generadores</source>
+        <translation>Number of generators</translation>
+    </message>
+    <message>
+        <source>Longitud de onda mínima</source>
+        <translation>Min. wavelength</translation>
+    </message>
+    <message>
+        <source>Longitud de onda máxima</source>
+        <translation>Max. wavelength</translation>
+    </message>
+    <message>
+        <source>Amplitud mínima</source>
+        <translation>Min. amplitude</translation>
+    </message>
+    <message>
+        <source>Amplitud máxima</source>
+        <translation>Max. amplitude</translation>
+    </message>
+    <message>
         <source>Triángulo</source>
         <translation>Triangle</translation>
+    </message>
+    <message>
+        <source>Tipo</source>
+        <translation>Type</translation>
+    </message>
+    <message>
+        <source>Seno</source>
+        <translation>Sine</translation>
+    </message>
+    <message>
+        <source>Rizo</source>
+        <translation>Ripple</translation>
+    </message>
+    <message>
+        <source>Pequeño</source>
+        <translation>Small</translation>
+    </message>
+    <message>
+        <source>Mediano</source>
+        <translation>Medium</translation>
+    </message>
+    <message>
+        <source>Grande</source>
+        <translation>Large</translation>
+    </message>
+    <message>
+        <source>Crestas</source>
+        <translation>Ridges</translation>
+    </message>
+    <message>
+        <source>Estilo</source>
+        <translation>Style</translation>
+    </message>
+    <message>
+        <source>Ondas de estanque</source>
+        <translation>Pond ripples</translation>
+    </message>
+    <message>
+        <source>Desde el centro</source>
+        <translation>Out from center</translation>
+    </message>
+    <message>
+        <source>Alrededor del centro</source>
+        <translation>Around center</translation>
+    </message>
+    <message>
+        <source>Inclinar</source>
+        <translation>Shear</translation>
+    </message>
+    <message>
+        <source>Arriba</source>
+        <translation>Top</translation>
+    </message>
+    <message>
+        <source>Centro</source>
+        <translation>Center</translation>
+    </message>
+    <message>
+        <source>Abajo</source>
+        <translation>Bottom</translation>
+    </message>
+    <message>
+        <source>Solarizar</source>
+        <translation>Solarize</translation>
+    </message>
+    <message>
+        <source>Paso alto</source>
+        <translation>High Pass</translation>
+    </message>
+    <message>
+        <source>Color a alfa</source>
+        <translation>Color to Alpha</translation>
+    </message>
+    <message>
+        <source>Umbral de opacidad</source>
+        <translation>Opacity threshold</translation>
+    </message>
+    <message>
+        <source>Quitar halo negro</source>
+        <translation>Remove black matte</translation>
+    </message>
+    <message>
+        <source>Quitar halo blanco</source>
+        <translation>Remove white matte</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Average</translation>
     </message>
     <message>
         <source>Triángulo rectángulo</source>
@@ -3414,6 +4036,41 @@ Left click: active slot · right click: inactive slot</translation>
         </translation>
     </message>
     <message>
+        <source>Esperando para entrar a una sesión colaborativa</source>
+        <translation>Waiting to join a collaborative session</translation>
+    </message>
+    <message>
+        <source>Hospedando una sesión colaborativa</source>
+        <translation>Hosting a collaborative session</translation>
+    </message>
+    <message>
+        <source>Hospedando «%1»</source>
+        <translation>Hosting “%1”</translation>
+    </message>
+    <message>
+        <source>En una sesión colaborativa</source>
+        <translation>In a collaborative session</translation>
+    </message>
+    <message>
+        <source>En la sesión «%1»</source>
+        <translation>In the session “%1”</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n personas en la sesión</source>
+        <translation>
+            <numerusform>%n person in the session</numerusform>
+            <numerusform>%n people in the session</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>por P2P</source>
+        <translation>over P2P</translation>
+    </message>
+    <message>
+        <source>en la red local</source>
+        <translation>on the local network</translation>
+    </message>
+    <message>
         <source>Editor de imágenes al estilo Paint.NET para KDE Plasma</source>
         <translation>A Paint.NET-style image editor for KDE Plasma</translation>
     </message>
@@ -3452,6 +4109,22 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Ventanas translúcidas en la captura (yes o no).</source>
         <translation>Translucent windows in the screenshot (yes or no).</translation>
+    </message>
+    <message>
+        <source>Las funciones de PhotoCraft en la captura (yes o no).</source>
+        <translation>The PhotoCraft features in the capture (yes or no).</translation>
+    </message>
+    <message>
+        <source>El tema personalizado de la captura (su JSON, con --color-scheme custom).</source>
+        <translation>The custom theme in the capture (its JSON, with --color-scheme custom).</translation>
+    </message>
+    <message>
+        <source>El color de las ventanas de los temas Windows 7 en la captura (#rrggbb).</source>
+        <translation>The window color of the Windows 7 themes in the capture (#rrggbb).</translation>
+    </message>
+    <message>
+        <source>La herramienta elegida en la captura (su número).</source>
+        <translation>The tool selected in the capture (its number).</translation>
     </message>
     <message>
         <source>Botones de la barra de título en la captura (win11, win10, macos, win7, xp o win98).</source>
@@ -3794,8 +4467,572 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Oil Painting</translation>
     </message>
     <message>
+        <source>Lápiz de color</source>
+        <translation>Colored Pencil</translation>
+    </message>
+    <message>
+        <source>Cuarteado</source>
+        <translation>Cutout</translation>
+    </message>
+    <message>
+        <source>Pincel seco</source>
+        <translation>Dry Brush</translation>
+    </message>
+    <message>
+        <source>Grano de película</source>
+        <translation>Film Grain</translation>
+    </message>
+    <message>
+        <source>Fresco</source>
+        <translation>Fresco</translation>
+    </message>
+    <message>
+        <source>Resplandor de neón</source>
+        <translation>Neon Glow</translation>
+    </message>
+    <message>
+        <source>Manchas de pintura</source>
+        <translation>Paint Daubs</translation>
+    </message>
+    <message>
+        <source>Espátula</source>
+        <translation>Palette Knife</translation>
+    </message>
+    <message>
+        <source>Envoltura plástica</source>
+        <translation>Plastic Wrap</translation>
+    </message>
+    <message>
+        <source>Bordes de póster</source>
+        <translation>Poster Edges</translation>
+    </message>
+    <message>
+        <source>Pastel grueso</source>
+        <translation>Rough Pastels</translation>
+    </message>
+    <message>
+        <source>Barra difuminada</source>
+        <translation>Smudge Stick</translation>
+    </message>
+    <message>
+        <source>Esponja</source>
+        <translation>Sponge</translation>
+    </message>
+    <message>
+        <source>Pintura subyacente</source>
+        <translation>Underpainting</translation>
+    </message>
+    <message>
+        <source>Acuarela</source>
+        <translation>Watercolor</translation>
+    </message>
+    <message>
+        <source>Bordes acentuados</source>
+        <translation>Accented Edges</translation>
+    </message>
+    <message>
+        <source>Trazos angulares</source>
+        <translation>Angled Strokes</translation>
+    </message>
+    <message>
+        <source>Sombreado cruzado</source>
+        <translation>Crosshatch</translation>
+    </message>
+    <message>
+        <source>Trazos oscuros</source>
+        <translation>Dark Strokes</translation>
+    </message>
+    <message>
+        <source>Contornos con tinta</source>
+        <translation>Ink Outlines</translation>
+    </message>
+    <message>
+        <source>Salpicaduras</source>
+        <translation>Spatter</translation>
+    </message>
+    <message>
+        <source>Trazos pulverizados</source>
+        <translation>Sprayed Strokes</translation>
+    </message>
+    <message>
+        <source>Sumi-e</source>
+        <translation>Sumi-e</translation>
+    </message>
+    <message>
+        <source>Resplandor difuso</source>
+        <translation>Diffuse Glow</translation>
+    </message>
+    <message>
+        <source>Vidrio</source>
+        <translation>Glass</translation>
+    </message>
+    <message>
+        <source>Rizo oceánico</source>
+        <translation>Ocean Ripple</translation>
+    </message>
+    <message>
+        <source>Bajorrelieve</source>
+        <translation>Bas Relief</translation>
+    </message>
+    <message>
+        <source>Tiza y carboncillo</source>
+        <translation>Chalk &amp; Charcoal</translation>
+    </message>
+    <message>
+        <source>Carboncillo</source>
+        <translation>Charcoal</translation>
+    </message>
+    <message>
+        <source>Cromo</source>
+        <translation>Chrome</translation>
+    </message>
+    <message>
+        <source>Crayón Conté</source>
+        <translation>Conté Crayon</translation>
+    </message>
+    <message>
+        <source>Pluma gráfica</source>
+        <translation>Graphic Pen</translation>
+    </message>
+    <message>
+        <source>Trama de semitonos</source>
+        <translation>Halftone Pattern</translation>
+    </message>
+    <message>
+        <source>Papel de cartas</source>
+        <translation>Note Paper</translation>
+    </message>
+    <message>
+        <source>Fotocopia</source>
+        <translation>Photocopy</translation>
+    </message>
+    <message>
+        <source>Yeso</source>
+        <translation>Plaster</translation>
+    </message>
+    <message>
+        <source>Reticulación</source>
+        <translation>Reticulation</translation>
+    </message>
+    <message>
+        <source>Sello</source>
+        <translation>Stamp</translation>
+    </message>
+    <message>
+        <source>Bordes rasgados</source>
+        <translation>Torn Edges</translation>
+    </message>
+    <message>
+        <source>Papel húmedo</source>
+        <translation>Water Paper</translation>
+    </message>
+    <message>
+        <source>Bordes brillantes</source>
+        <translation>Glowing Edges</translation>
+    </message>
+    <message>
+        <source>Craquelado</source>
+        <translation>Craquelure</translation>
+    </message>
+    <message>
+        <source>Granulado</source>
+        <translation>Grain</translation>
+    </message>
+    <message>
+        <source>Azulejos de mosaico</source>
+        <translation>Mosaic Tiles</translation>
+    </message>
+    <message>
+        <source>Patchwork</source>
+        <translation>Patchwork</translation>
+    </message>
+    <message>
+        <source>Vidriera</source>
+        <translation>Stained Glass</translation>
+    </message>
+    <message>
+        <source>Texturizador</source>
+        <translation>Texturizer</translation>
+    </message>
+    <message>
+        <source>Ancho del lápiz</source>
+        <translation>Pencil width</translation>
+    </message>
+    <message>
+        <source>Presión del trazo</source>
+        <translation>Stroke pressure</translation>
+    </message>
+    <message>
+        <source>Brillo del papel</source>
+        <translation>Paper brightness</translation>
+    </message>
+    <message>
+        <source>Número de niveles</source>
+        <translation>Number of levels</translation>
+    </message>
+    <message>
+        <source>Simplicidad de los bordes</source>
+        <translation>Edge simplicity</translation>
+    </message>
+    <message>
+        <source>Fidelidad de los bordes</source>
+        <translation>Edge fidelity</translation>
+    </message>
+    <message>
         <source>Tamaño del pincel</source>
         <translation>Brush size</translation>
+    </message>
+    <message>
+        <source>Detalle del pincel</source>
+        <translation>Brush detail</translation>
+    </message>
+    <message>
+        <source>Textura</source>
+        <translation>Texture</translation>
+    </message>
+    <message>
+        <source>Grano</source>
+        <translation>Grain</translation>
+    </message>
+    <message>
+        <source>Área de iluminación</source>
+        <translation>Highlight area</translation>
+    </message>
+    <message>
+        <source>Tamaño del resplandor</source>
+        <translation>Glow size</translation>
+    </message>
+    <message>
+        <source>Brillo del resplandor</source>
+        <translation>Glow brightness</translation>
+    </message>
+    <message>
+        <source>Nitidez</source>
+        <translation>Sharpness</translation>
+    </message>
+    <message>
+        <source>Tipo de pincel</source>
+        <translation>Brush type</translation>
+    </message>
+    <message>
+        <source>Tamaño del trazo</source>
+        <translation>Stroke size</translation>
+    </message>
+    <message>
+        <source>Detalle del trazo</source>
+        <translation>Stroke detail</translation>
+    </message>
+    <message>
+        <source>Suavidad</source>
+        <translation>Smoothness</translation>
+    </message>
+    <message>
+        <source>Intensidad de las iluminaciones</source>
+        <translation>Highlight strength</translation>
+    </message>
+    <message>
+        <source>Grosor de los bordes</source>
+        <translation>Edge thickness</translation>
+    </message>
+    <message>
+        <source>Intensidad de los bordes</source>
+        <translation>Edge intensity</translation>
+    </message>
+    <message>
+        <source>Longitud del trazo</source>
+        <translation>Stroke length</translation>
+    </message>
+    <message>
+        <source>Luz</source>
+        <translation>Light</translation>
+    </message>
+    <message>
+        <source>Definición</source>
+        <translation>Definition</translation>
+    </message>
+    <message>
+        <source>Cobertura de la textura</source>
+        <translation>Texture coverage</translation>
+    </message>
+    <message>
+        <source>Intensidad de las sombras</source>
+        <translation>Shadow intensity</translation>
+    </message>
+    <message>
+        <source>Ancho de los bordes</source>
+        <translation>Edge width</translation>
+    </message>
+    <message>
+        <source>Brillo de los bordes</source>
+        <translation>Edge brightness</translation>
+    </message>
+    <message>
+        <source>Equilibrio de la dirección</source>
+        <translation>Direction balance</translation>
+    </message>
+    <message>
+        <source>Equilibrio</source>
+        <translation>Balance</translation>
+    </message>
+    <message>
+        <source>Intensidad del negro</source>
+        <translation>Black intensity</translation>
+    </message>
+    <message>
+        <source>Intensidad del blanco</source>
+        <translation>White intensity</translation>
+    </message>
+    <message>
+        <source>Intensidad oscura</source>
+        <translation>Dark intensity</translation>
+    </message>
+    <message>
+        <source>Intensidad de la luz</source>
+        <translation>Light intensity</translation>
+    </message>
+    <message>
+        <source>Radio de pulverización</source>
+        <translation>Spray radius</translation>
+    </message>
+    <message>
+        <source>Dirección del trazo</source>
+        <translation>Stroke direction</translation>
+    </message>
+    <message>
+        <source>Ancho del trazo</source>
+        <translation>Stroke width</translation>
+    </message>
+    <message>
+        <source>Cantidad de resplandor</source>
+        <translation>Glow amount</translation>
+    </message>
+    <message>
+        <source>Cantidad de claridad</source>
+        <translation>Clear amount</translation>
+    </message>
+    <message>
+        <source>Distorsión</source>
+        <translation>Distortion</translation>
+    </message>
+    <message>
+        <source>Tamaño del rizo</source>
+        <translation>Ripple size</translation>
+    </message>
+    <message>
+        <source>Magnitud del rizo</source>
+        <translation>Ripple magnitude</translation>
+    </message>
+    <message>
+        <source>Área de carboncillo</source>
+        <translation>Charcoal area</translation>
+    </message>
+    <message>
+        <source>Área de tiza</source>
+        <translation>Chalk area</translation>
+    </message>
+    <message>
+        <source>Grosor del carboncillo</source>
+        <translation>Charcoal thickness</translation>
+    </message>
+    <message>
+        <source>Equilibrio claro/oscuro</source>
+        <translation>Light/dark balance</translation>
+    </message>
+    <message>
+        <source>Nivel del primer plano</source>
+        <translation>Foreground level</translation>
+    </message>
+    <message>
+        <source>Nivel del fondo</source>
+        <translation>Background level</translation>
+    </message>
+    <message>
+        <source>Tipo de trama</source>
+        <translation>Pattern type</translation>
+    </message>
+    <message>
+        <source>Equilibrio de la imagen</source>
+        <translation>Image balance</translation>
+    </message>
+    <message>
+        <source>Oscuridad</source>
+        <translation>Darkness</translation>
+    </message>
+    <message>
+        <source>Longitud de las fibras</source>
+        <translation>Fiber length</translation>
+    </message>
+    <message>
+        <source>Separación de las grietas</source>
+        <translation>Crack spacing</translation>
+    </message>
+    <message>
+        <source>Profundidad de las grietas</source>
+        <translation>Crack depth</translation>
+    </message>
+    <message>
+        <source>Brillo de las grietas</source>
+        <translation>Crack brightness</translation>
+    </message>
+    <message>
+        <source>Tipo de grano</source>
+        <translation>Grain type</translation>
+    </message>
+    <message>
+        <source>Tamaño de los azulejos</source>
+        <translation>Tile size</translation>
+    </message>
+    <message>
+        <source>Ancho de la lechada</source>
+        <translation>Grout width</translation>
+    </message>
+    <message>
+        <source>Aclarar la lechada</source>
+        <translation>Lighten grout</translation>
+    </message>
+    <message>
+        <source>Tamaño de los cuadrados</source>
+        <translation>Square size</translation>
+    </message>
+    <message>
+        <source>Tamaño de las celdas</source>
+        <translation>Cell size</translation>
+    </message>
+    <message>
+        <source>Grosor del borde</source>
+        <translation>Border thickness</translation>
+    </message>
+    <message>
+        <source>Simple</source>
+        <translation>Simple</translation>
+    </message>
+    <message>
+        <source>Claro y rugoso</source>
+        <translation>Light rough</translation>
+    </message>
+    <message>
+        <source>Oscuro y rugoso</source>
+        <translation>Dark rough</translation>
+    </message>
+    <message>
+        <source>Ancho y nítido</source>
+        <translation>Wide sharp</translation>
+    </message>
+    <message>
+        <source>Ancho y borroso</source>
+        <translation>Wide blurry</translation>
+    </message>
+    <message>
+        <source>Chispas</source>
+        <translation>Sparkle</translation>
+    </message>
+    <message>
+        <source>Lienzo</source>
+        <translation>Canvas</translation>
+    </message>
+    <message>
+        <source>Ladrillo</source>
+        <translation>Brick</translation>
+    </message>
+    <message>
+        <source>Arpillera</source>
+        <translation>Burlap</translation>
+    </message>
+    <message>
+        <source>Arenisca</source>
+        <translation>Sandstone</translation>
+    </message>
+    <message>
+        <source>Escarchado</source>
+        <translation>Frosted</translation>
+    </message>
+    <message>
+        <source>Bloques</source>
+        <translation>Blocks</translation>
+    </message>
+    <message>
+        <source>Lentes pequeñas</source>
+        <translation>Tiny lens</translation>
+    </message>
+    <message>
+        <source>Abajo a la izquierda</source>
+        <translation>Bottom left</translation>
+    </message>
+    <message>
+        <source>Izquierda</source>
+        <translation>Left</translation>
+    </message>
+    <message>
+        <source>Arriba a la izquierda</source>
+        <translation>Top left</translation>
+    </message>
+    <message>
+        <source>Arriba a la derecha</source>
+        <translation>Top right</translation>
+    </message>
+    <message>
+        <source>Derecha</source>
+        <translation>Right</translation>
+    </message>
+    <message>
+        <source>Abajo a la derecha</source>
+        <translation>Bottom right</translation>
+    </message>
+    <message>
+        <source>Diagonal derecha</source>
+        <translation>Right diagonal</translation>
+    </message>
+    <message>
+        <source>Diagonal izquierda</source>
+        <translation>Left diagonal</translation>
+    </message>
+    <message>
+        <source>Punto</source>
+        <translation>Dot</translation>
+    </message>
+    <message>
+        <source>Línea</source>
+        <translation>Line</translation>
+    </message>
+    <message>
+        <source>Suave</source>
+        <translation>Soft</translation>
+    </message>
+    <message>
+        <source>Salpicado</source>
+        <translation>Sprinkles</translation>
+    </message>
+    <message>
+        <source>Agrupado</source>
+        <translation>Clumped</translation>
+    </message>
+    <message>
+        <source>Contrastado</source>
+        <translation>Contrasty</translation>
+    </message>
+    <message>
+        <source>Ampliado</source>
+        <translation>Enlarged</translation>
+    </message>
+    <message>
+        <source>Punteado</source>
+        <translation>Stippled</translation>
+    </message>
+    <message>
+        <source>Moteado</source>
+        <translation>Speckle</translation>
+    </message>
+    <message>
+        <source>Primer plano</source>
+        <translation>Foreground</translation>
+    </message>
+    <message>
+        <source>Papel</source>
+        <translation>Paper</translation>
+    </message>
+    <message>
+        <source>Color del resplandor</source>
+        <translation>Glow color</translation>
     </message>
     <message>
         <source>Granularidad</source>
@@ -4164,6 +5401,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Capa</source>
         <translation>Layer</translation>
+    </message>
+    <message>
+        <source>Trazos de pincel</source>
+        <translation>Brush Strokes</translation>
+    </message>
+    <message>
+        <source>Bosquejo</source>
+        <translation>Sketch</translation>
+    </message>
+    <message>
+        <source>Rellenar</source>
+        <translation>Fill</translation>
     </message>
     <message>
         <source>Giro y zum</source>
@@ -5090,7 +6339,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Este tipo de archivo TGA no se puede abrir.</source>
-        <translation>This kind of TGA file can't be opened.</translation>
+        <translation>This kind of TGA file can&apos;t be opened.</translation>
     </message>
     <message>
         <source>La imagen es demasiado grande.</source>
@@ -5102,7 +6351,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Este tipo de archivo DDS no se puede abrir.</source>
-        <translation>This kind of DDS file can't be opened.</translation>
+        <translation>This kind of DDS file can&apos;t be opened.</translation>
     </message>
     <message>
         <source>El archivo QOI no es válido o está dañado.</source>
@@ -5258,7 +6507,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Con permiso del anfitrión</source>
-        <translation>With the host's permission</translation>
+        <translation>With the host&apos;s permission</translation>
     </message>
     <message>
         <source>Con contraseña</source>
@@ -5282,7 +6531,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Sesión de %1</source>
-        <translation>%1's session</translation>
+        <translation>%1&apos;s session</translation>
     </message>
     <message>
         <source>Invitado %1</source>
@@ -5418,7 +6667,7 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Este documento de Photoshop usa cosas que las capas de Kaint no pueden representar sin cambiar su aspecto:</source>
-        <translation>This Photoshop document uses things that Kaint's layers cannot represent without changing how it looks:</translation>
+        <translation>This Photoshop document uses things that Kaint&apos;s layers cannot represent without changing how it looks:</translation>
     </message>
     <message>
         <source>Se abrió la imagen combinada que guarda el archivo, en una sola capa.</source>
@@ -5494,7 +6743,95 @@ Left click: active slot · right click: inactive slot</translation>
     </message>
     <message>
         <source>Para abrir este formato hace falta kimageformats (el paquete de complementos de imagen de KDE para Qt 6).</source>
-        <translation>Opening this format needs kimageformats (KDE's image plugin package for Qt 6).</translation>
+        <translation>Opening this format needs kimageformats (KDE&apos;s image plugin package for Qt 6).</translation>
+    </message>
+    <message>
+        <source>Detección de bordes clásica</source>
+        <translation>Classic Edge Detect</translation>
+    </message>
+    <message>
+        <source>Nitidez clásica</source>
+        <translation>Classic Sharpen</translation>
+    </message>
+    <message>
+        <source>Colores complementarios</source>
+        <translation>Complementary Colors</translation>
+    </message>
+    <message>
+        <source>Blanco y negro+</source>
+        <translation>Black and White+</translation>
+    </message>
+    <message>
+        <source>Promedio</source>
+        <translation>Average</translation>
+    </message>
+    <message>
+        <source>Desaturar</source>
+        <translation>Desaturate</translation>
+    </message>
+    <message>
+        <source>Canal rojo</source>
+        <translation>Red channel</translation>
+    </message>
+    <message>
+        <source>Canal verde</source>
+        <translation>Green channel</translation>
+    </message>
+    <message>
+        <source>Canal azul</source>
+        <translation>Blue channel</translation>
+    </message>
+    <message>
+        <source>Ajustes combinados</source>
+        <translation>Combined Adjustments</translation>
+    </message>
+    <message>
+        <source>Sombra paralela+</source>
+        <translation>Drop Shadow+</translation>
+    </message>
+    <message>
+        <source>Desplazamiento horizontal</source>
+        <translation>Horizontal offset</translation>
+    </message>
+    <message>
+        <source>Desplazamiento vertical</source>
+        <translation>Vertical offset</translation>
+    </message>
+    <message>
+        <source>Solo la sombra</source>
+        <translation>Shadow only</translation>
+    </message>
+    <message>
+        <source>Nivelar el horizonte</source>
+        <translation>Level Horizon</translation>
+    </message>
+    <message>
+        <source>Ampliar para rellenar</source>
+        <translation>Zoom to fill</translation>
+    </message>
+    <message>
+        <source>No es un idioma de Kaint (.kaintlang).</source>
+        <translation>This is not a Kaint language (.kaintlang).</translation>
+    </message>
+    <message>
+        <source>Idioma personalizado</source>
+        <translation>Custom language</translation>
+    </message>
+    <message>
+        <source>La zona es demasiado grande (más de 16 millones de píxeles).</source>
+        <translation>The area is too large (more than 16 million pixels).</translation>
+    </message>
+    <message>
+        <source>La selección es demasiado grande para el parche.</source>
+        <translation>The selection is too large to patch.</translation>
+    </message>
+    <message>
+        <source>Arrastra la selección hasta la zona de la que tomar.</source>
+        <translation>Drag the selection to the area to sample from.</translation>
+    </message>
+    <message>
+        <source>El parche arrastrado tiene que quedar dentro de la imagen.</source>
+        <translation>The dragged patch must stay inside the image.</translation>
     </message>
 </context>
 <context>
@@ -5528,6 +6865,25 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Selección rectangular</source>
         <translation>Rectangle Select</translation>
+    </message>
+</context>
+<context>
+    <name>RemoveTool</name>
+    <message>
+        <source>Pinta encima o alrededor de lo que quieras quitar; Intro lo quita (Esc descarta los trazos).</source>
+        <translation>Paint over or around what you want to remove; Enter removes it (Esc discards the strokes).</translation>
+    </message>
+    <message>
+        <source>Pinta encima o alrededor de lo que quieras quitar: al soltar se rellena con lo de alrededor.</source>
+        <translation>Paint over or around what you want to remove: on release it is filled from its surroundings.</translation>
+    </message>
+    <message>
+        <source>La zona es demasiado grande para quitarla.</source>
+        <translation>The area is too large to remove.</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
     </message>
 </context>
 <context>
@@ -5802,7 +7158,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La capa de abajo es el primer fotograma. La duración de cada uno va en el nombre de la capa, p. ej. «Fotograma 1 (100ms)» (Imagen &gt; Animación).</source>
-        <translation>The bottom layer is the first frame. Each frame's duration goes in the layer name, e.g. “Frame 1 (100ms)” (Image &gt; Animation).</translation>
+        <translation>The bottom layer is the first frame. Each frame&apos;s duration goes in the layer name, e.g. “Frame 1 (100ms)” (Image &gt; Animation).</translation>
     </message>
     <message>
         <source>Para las capas que no indican su duración en el nombre</source>
@@ -6001,7 +7357,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No fundir el último fotograma con el primero</source>
-        <translation>Don't fade the last frame into the first</translation>
+        <translation>Don&apos;t fade the last frame into the first</translation>
     </message>
     <message>
         <source>Duración del fundido:</source>
@@ -6013,7 +7369,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No apilar los fotogramas</source>
-        <translation>Don't stack frames</translation>
+        <translation>Don&apos;t stack frames</translation>
     </message>
     <message>
         <source>(cada fotograma se borra al mostrar el siguiente; para imágenes con fondo transparente)</source>
@@ -6025,7 +7381,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Duración 0 para el primer fotograma (no mostrarlo solo)</source>
-        <translation>0 duration for the first frame (don't show it alone)</translation>
+        <translation>0 duration for the first frame (don&apos;t show it alone)</translation>
     </message>
     <message>
         <source>No se muestra: clic para mostrarlo</source>
@@ -6275,7 +7631,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores del escritorio con su icono al lado. Desactivado, la flecha de Kaint.</source>
-        <translation>The selection tools, Gradient, Line, Text and Shapes show the arrow (or I-beam) of the desktop cursor theme with their icon beside it. When off, Kaint's own arrow.</translation>
+        <translation>The selection tools, Gradient, Line, Text and Shapes show the arrow (or I-beam) of the desktop cursor theme with their icon beside it. When off, Kaint&apos;s own arrow.</translation>
     </message>
     <message>
         <source>Usar el diálogo de archivos del sistema para abrir y guardar</source>
@@ -6294,12 +7650,28 @@ Do you want to replace them?</translation>
         <translation>When off, the layer moves along the list with the mouse while you drag it.</translation>
     </message>
     <message>
+        <source>Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba</source>
+        <translation>Image thumbnails take the full height of the top area</translation>
+    </message>
+    <message>
+        <source>Como en Paint.NET: el recuadro de la imagen actual y el de la que tiene el puntero llegan hasta arriba de la ventana (también la barra de título). Desactivado, solo la altura de la miniatura.</source>
+        <translation>As in Paint.NET: the box of the current image and of the one under the pointer reach the top of the window (the title bar too). Off: only the height of the thumbnail.</translation>
+    </message>
+    <message>
+        <source>Mostrar el botón «Explorar complementos…»</source>
+        <translation>Show the “Browse Plugins…” button</translation>
+    </message>
+    <message>
+        <source>En Complementos, un botón con una lista de complementos elegidos para Kaint (de Kaint.HTML, PhotoCraft y Paint.NET) que se instalan con un clic.</source>
+        <translation>In Plugins, a button with a list of plugins chosen for Kaint (from Kaint.HTML, PhotoCraft and Paint.NET) that install with one click.</translation>
+    </message>
+    <message>
         <source>Windows XP</source>
         <translation>Windows XP</translation>
     </message>
     <message>
         <source>El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css.</source>
-        <translation>Luna's beige with the blue windows and the XP buttons, with XP.css's colors.</translation>
+        <translation>Luna&apos;s beige with the blue windows and the XP buttons, with XP.css&apos;s colors.</translation>
     </message>
     <message>
         <source>Windows 98</source>
@@ -6319,7 +7691,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>El aspecto propio de Kaint.</source>
-        <translation>Kaint's own look.</translation>
+        <translation>Kaint&apos;s own look.</translation>
     </message>
     <message>
         <source>Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.</source>
@@ -6344,6 +7716,82 @@ Do you want to replace them?</translation>
     <message>
         <source>Cambiar el estilo ahora y la barra de título la próxima vez que se abra Kaint.</source>
         <translation>Change the style now and the title bar the next time Kaint starts.</translation>
+    </message>
+    <message>
+        <source>Importar…</source>
+        <translation>Import…</translation>
+    </message>
+    <message>
+        <source>Importar un idioma personalizado (.kaintlang)</source>
+        <translation>Import a custom language (.kaintlang)</translation>
+    </message>
+    <message>
+        <source>Nuevo…</source>
+        <translation>New…</translation>
+    </message>
+    <message>
+        <source>Crear un idioma personalizado</source>
+        <translation>Create a custom language</translation>
+    </message>
+    <message>
+        <source>Editar…</source>
+        <translation>Edit…</translation>
+    </message>
+    <message>
+        <source>Editar el idioma personalizado elegido</source>
+        <translation>Edit the selected custom language</translation>
+    </message>
+    <message>
+        <source>Exportar…</source>
+        <translation>Export…</translation>
+    </message>
+    <message>
+        <source>Guardar el idioma personalizado elegido en un archivo</source>
+        <translation>Save the selected custom language to a file</translation>
+    </message>
+    <message>
+        <source>Quitar el idioma personalizado elegido</source>
+        <translation>Remove the selected custom language</translation>
+    </message>
+    <message>
+        <source>En un idioma personalizado, lo que no esté traducido sale en inglés.</source>
+        <translation>In a custom language, anything not translated appears in English.</translation>
+    </message>
+    <message>
+        <source>Importar un idioma</source>
+        <translation>Import Language</translation>
+    </message>
+    <message>
+        <source>Idiomas de Kaint (*.kaintlang *.json)</source>
+        <translation>Kaint languages (*.kaintlang *.json)</translation>
+    </message>
+    <message>
+        <source>No se pudo importar el idioma: %1</source>
+        <translation>Could not import the language: %1</translation>
+    </message>
+    <message>
+        <source>Nuevo idioma</source>
+        <translation>New Language</translation>
+    </message>
+    <message>
+        <source>Editar el idioma</source>
+        <translation>Edit Language</translation>
+    </message>
+    <message>
+        <source>Exportar el idioma</source>
+        <translation>Export Language</translation>
+    </message>
+    <message>
+        <source>Idiomas de Kaint (*.kaintlang)</source>
+        <translation>Kaint languages (*.kaintlang)</translation>
+    </message>
+    <message>
+        <source>Quitar el idioma</source>
+        <translation>Remove Language</translation>
+    </message>
+    <message>
+        <source>¿Quieres quitar el idioma «%1»?</source>
+        <translation>Do you want to remove the language “%1”?</translation>
     </message>
     <message>
         <source>La del sistema</source>
@@ -6399,7 +7847,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La cabecera fina de siempre de Kaint.</source>
-        <translation>Kaint's usual thin title bar.</translation>
+        <translation>Kaint&apos;s usual thin title bar.</translation>
     </message>
     <message>
         <source>Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.</source>
@@ -6511,7 +7959,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Como en Paint.NET: «No guardar» descarta todas a la vez. Desactivado, se pregunta imagen por imagen.</source>
-        <translation>Like Paint.NET: “Don't Save” discards all of them at once. When off, Kaint asks image by image.</translation>
+        <translation>Like Paint.NET: “Don&apos;t Save” discards all of them at once. When off, Kaint asks image by image.</translation>
     </message>
     <message>
         <source>Recuperación</source>
@@ -6542,16 +7990,24 @@ Do you want to replace them?</translation>
         <translation>Reset</translation>
     </message>
     <message>
-        <source>En Complementos, un botón para instalar complementos de paint.js del catálogo de la versión web de Kaint (Kaint.HTML).</source>
-        <translation>In Plugins, a button to install paint.js plugins from the catalog of the web version of Kaint (Kaint.HTML).</translation>
-    </message>
-    <message>
         <source>Windows 7</source>
         <translation>Windows 7</translation>
     </message>
     <message>
         <source>Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css.</source>
         <translation>Light gray with glass buttons and the Aero blue, with the colors of 7.css.</translation>
+    </message>
+    <message>
+        <source>Color de las ventanas:</source>
+        <translation>Window color:</translation>
+    </message>
+    <message>
+        <source>Como «Color de ventana» de Windows 7: el cristal de los marcos, la franja de los menús y las cabeceras de las ventanas. Solo con los temas Windows 7.</source>
+        <translation>Like Windows 7's “Window Color”: the glass of the frames, the menu band and the window headers. Only with the Windows 7 themes.</translation>
+    </message>
+    <message>
+        <source>Predeterminado</source>
+        <translation>Default</translation>
     </message>
     <message>
         <source>Acoplar las ventanas a los bordes y a las demás ventanas al moverlas</source>
@@ -6563,15 +8019,15 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Usar la barra de título y el marco de ventana de Kaint</source>
-        <translation>Use Kaint's title bar and window frame</translation>
+        <translation>Use Kaint&apos;s title bar and window frame</translation>
     </message>
     <message>
         <source>Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, llevan la de Windows.</source>
-        <translation>Windows get Kaint's title bar, with the chosen buttons. When it's off, they get the Windows one.</translation>
+        <translation>Windows get Kaint&apos;s title bar, with the chosen buttons. When it&apos;s off, they get the Windows one.</translation>
     </message>
     <message>
         <source>Las ventanas llevan la barra de título de Kaint, con los botones elegidos. Si se desactiva, llevan la del escritorio (en KDE, la de Plasma).</source>
-        <translation>Windows get Kaint's title bar, with the chosen buttons. When it's off, they get the desktop's (on KDE, Plasma's).</translation>
+        <translation>Windows get Kaint&apos;s title bar, with the chosen buttons. When it&apos;s off, they get the desktop&apos;s (on KDE, Plasma&apos;s).</translation>
     </message>
     <message>
         <source>Kaint se cerrará y se abrirá de nuevo con la barra de título elegida. Si hay cambios sin guardar, te lo preguntará antes.</source>
@@ -6583,7 +8039,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Con el tema KDE, las ventanas llevan la barra de título de Plasma.</source>
-        <translation>With the KDE theme, windows get Plasma's title bar.</translation>
+        <translation>With the KDE theme, windows get Plasma&apos;s title bar.</translation>
     </message>
     <message>
         <source>Se desbloquea con el estilo de interfaz Paint.NET.</source>
@@ -6616,6 +8072,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Del color de la barra de herramientas</source>
         <translation>Same color as the toolbar</translation>
+    </message>
+    <message>
+        <source>Como Paint.NET</source>
+        <translation>Like Paint.NET</translation>
+    </message>
+    <message>
+        <source>Como la regla de Paint.NET 5: las divisiones de una regla de verdad y la unidad en la esquina.</source>
+        <translation>Like the Paint.NET 5 ruler: the divisions of a real ruler and the unit in the corner.</translation>
     </message>
     <message>
         <source>Reglas:</source>
@@ -6667,7 +8131,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Usar la Goma con el extremo borrador del lápiz</source>
-        <translation>Use the Eraser with the pen's eraser end</translation>
+        <translation>Use the Eraser with the pen&apos;s eraser end</translation>
     </message>
     <message>
         <source>Al dar la vuelta al lápiz se activa la herramienta Goma de borrar, y al volver a la punta, la herramienta anterior. La sensibilidad a la presión se activa en la barra de opciones del pincel, la goma y el lápiz.</source>
@@ -6709,7 +8173,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Si el historial de una imagen ocupa más, se descartan los pasos más antiguos (y se avisa en la barra de estado).</source>
-        <translation>If an image's history takes more, the oldest steps are discarded (and the status bar says so).</translation>
+        <translation>If an image&apos;s history takes more, the oldest steps are discarded (and the status bar says so).</translation>
     </message>
     <message>
         <source>De Kaint</source>
@@ -6753,11 +8217,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de puzle de los complementos.</source>
-        <translation>In Adjustments and Effects, effects that come from plugins show the plugins' puzzle piece on the right.</translation>
-    </message>
-    <message>
-        <source>Mostrar el botón «Complementos de Kaint.HTML»</source>
-        <translation>Show the “Kaint.HTML plugins” button</translation>
+        <translation>In Adjustments and Effects, effects that come from plugins show the plugins&apos; puzzle piece on the right.</translation>
     </message>
     <message>
         <source>Añadir…</source>
@@ -6766,6 +8226,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Copiar complementos (.so, .dll, .wasm, .cube, .3dl, .xmp o .paintjs) a la carpeta de complementos</source>
         <translation>Copy plugins (.so, .dll, .wasm, .cube, .3dl, .xmp or .paintjs) to the plugins folder</translation>
+    </message>
+    <message>
+        <source>Explorar complementos…</source>
+        <translation>Browse Plugins…</translation>
+    </message>
+    <message>
+        <source>Una lista de complementos elegidos y probados para Kaint: los de Kaint.HTML, PhotoCraft y Paint.NET</source>
+        <translation>A list of plugins chosen and tested for Kaint: Kaint.HTML, PhotoCraft and Paint.NET ones</translation>
     </message>
     <message>
         <source>Abrir la carpeta</source>
@@ -6916,7 +8384,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No se pudieron copiar: %1.</source>
-        <translation>Couldn't copy: %1.</translation>
+        <translation>Couldn&apos;t copy: %1.</translation>
     </message>
     <message>
         <source>No hay complementos instalados.</source>
@@ -7036,7 +8504,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Quita la casilla de las herramientas que no uses y cambia su orden. Sus atajos de teclado siguen funcionando aunque estén ocultas.</source>
-        <translation>Uncheck the tools you don't use and change their order. Their keyboard shortcuts keep working even when hidden.</translation>
+        <translation>Uncheck the tools you don&apos;t use and change their order. Their keyboard shortcuts keep working even when hidden.</translation>
     </message>
     <message>
         <source>Subir</source>
@@ -7091,6 +8559,54 @@ Do you want to replace them?</translation>
         <translation>How long I have been in Kaint</translation>
     </message>
     <message>
+        <source>Modo colaborativo</source>
+        <translation>Collaborative mode</translation>
+    </message>
+    <message>
+        <source>La sesión colaborativa y cuántas personas hay</source>
+        <translation>The collaborative session and how many people are in it</translation>
+    </message>
+    <message>
+        <source>El nombre de la sesión</source>
+        <translation>The session name</translation>
+    </message>
+    <message>
+        <source>Invitaciones a mis sesiones P2P y «Pedir unirse»</source>
+        <translation>Invitations to my P2P sessions and “Ask to Join”</translation>
+    </message>
+    <message>
+        <source>Preguntarme</source>
+        <translation>Ask me</translation>
+    </message>
+    <message>
+        <source>Aceptarlas siempre</source>
+        <translation>Always accept</translation>
+    </message>
+    <message>
+        <source>Rechazarlas siempre</source>
+        <translation>Always decline</translation>
+    </message>
+    <message>
+        <source>Solicitudes para unirse:</source>
+        <translation>Join requests:</translation>
+    </message>
+    <message>
+        <source> plazas</source>
+        <translation> slots</translation>
+    </message>
+    <message>
+        <source>Tamaño del grupo en Discord:</source>
+        <translation>Party size on Discord:</translation>
+    </message>
+    <message>
+        <source>Abrir Kaint al aceptar una invitación</source>
+        <translation>Open Kaint when an invitation is accepted</translation>
+    </message>
+    <message>
+        <source>Solo con sesiones P2P. Aceptar en Discord no deja entrar de frente: si la sesión tiene contraseña, Kaint la pide, y si apruebas a mano, el invitado espera a que lo aceptes.</source>
+        <translation>P2P sessions only. Accepting on Discord does not let anyone straight in: if the session has a password, Kaint asks for it, and if you approve guests by hand, the guest waits until you accept them.</translation>
+    </message>
+    <message>
         <source>Estado: %1</source>
         <translation>Status: %1</translation>
     </message>
@@ -7108,7 +8624,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los paquetes de iconos (archivos .zip con asset-pack.json) cambian los iconos de Kaint, también los de las herramientas. Los iconos que no traiga un paquete siguen siendo los de Kaint. Se guardan en este equipo.</source>
-        <translation>Icon packs (.zip files with an asset-pack.json) change Kaint's icons, the tool icons too. Icons a pack doesn't include stay as Kaint's. Packs are stored on this computer.</translation>
+        <translation>Icon packs (.zip files with an asset-pack.json) change Kaint&apos;s icons, the tool icons too. Icons a pack doesn&apos;t include stay as Kaint&apos;s. Packs are stored on this computer.</translation>
     </message>
     <message>
         <source>Usar</source>
@@ -7163,7 +8679,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Añade fuentes para la herramienta Texto (.ttf, .otf, .ttc, .woff). Se copian a la carpeta de Kaint y solo las usa Kaint: no se instalan en el sistema.</source>
-        <translation>Add fonts for the Text tool (.ttf, .otf, .ttc, .woff). They are copied to Kaint's folder and only Kaint uses them: they aren't installed on the system.</translation>
+        <translation>Add fonts for the Text tool (.ttf, .otf, .ttc, .woff). They are copied to Kaint&apos;s folder and only Kaint uses them: they aren&apos;t installed on the system.</translation>
     </message>
     <message>
         <source>Añadir fuentes…</source>
@@ -7195,11 +8711,11 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Todavía no has añadido ninguna fuente.</source>
-        <translation>You haven't added any fonts yet.</translation>
+        <translation>You haven&apos;t added any fonts yet.</translation>
     </message>
     <message>
         <source>Formas de Paint.NET (.xaml) para la herramienta Formas: aparecen en el grupo «Formas personalizadas». Se copian a la carpeta de formas de Kaint.</source>
-        <translation>Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom Shapes” group. They are copied to Kaint's shapes folder.</translation>
+        <translation>Paint.NET shapes (.xaml) for the Shapes tool: they appear in the “Custom Shapes” group. They are copied to Kaint&apos;s shapes folder.</translation>
     </message>
     <message>
         <source>Añadir formas…</source>
@@ -7272,14 +8788,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Oscura</source>
         <translation>Dark</translation>
-    </message>
-    <message>
-        <source>Complementos de Kaint.HTML…</source>
-        <translation>Kaint.HTML plugins…</translation>
-    </message>
-    <message>
-        <source>El catálogo de complementos de paint.js de la versión web de Kaint</source>
-        <translation>The paint.js plugin catalog of the web version of Kaint</translation>
     </message>
     <message>
         <source>Las versiones nuevas se publican en %1</source>
@@ -7439,7 +8947,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Se desbloquea con la barra de título de Kaint.</source>
-        <translation>Unlocked with Kaint's title bar.</translation>
+        <translation>Unlocked with Kaint&apos;s title bar.</translation>
     </message>
     <message>
         <source>Colaboración</source>
@@ -7503,7 +9011,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>ID de este equipo:</source>
-        <translation>This computer's ID:</translation>
+        <translation>This computer&apos;s ID:</translation>
     </message>
     <message>
         <source>Para entrar en una sesión que solo admite equipos autorizados, dale este ID al anfitrión. El ID no viaja por la red: el equipo demuestra que lo tiene sin enviarlo.</source>
@@ -7519,7 +9027,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Cambiar el ID de este equipo.</source>
-        <translation>Change this computer's ID.</translation>
+        <translation>Change this computer&apos;s ID.</translation>
     </message>
     <message>
         <source>Conservar el ID actual.</source>
@@ -7531,7 +9039,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Sesión de %1</source>
-        <translation>%1's session</translation>
+        <translation>%1&apos;s session</translation>
     </message>
     <message>
         <source>Nombre de la sesión:</source>
@@ -7611,7 +9119,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los navegadores de la red abren Kaint para la web desde la dirección de la sesión (si está instalado junto a Kaint).</source>
-        <translation>Browsers on the network open Kaint for the web from the session's address (if it is installed with Kaint).</translation>
+        <translation>Browsers on the network open Kaint for the web from the session&apos;s address (if it is installed with Kaint).</translation>
     </message>
     <message>
         <source>Vista</source>
@@ -7619,15 +9127,23 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Mostrar los punteros de los demás</source>
-        <translation>Show the other participants' pointers</translation>
+        <translation>Show the other participants&apos; pointers</translation>
     </message>
     <message>
         <source>Un triángulo del color de cada participante, con su nombre y el icono de su herramienta.</source>
-        <translation>A triangle in each participant's color, with their name and the icon of their tool.</translation>
+        <translation>A triangle in each participant&apos;s color, with their name and the icon of their tool.</translation>
     </message>
     <message>
         <source>Vista:</source>
         <translation>View:</translation>
+    </message>
+    <message>
+        <source>Activar las funciones de PhotoCraft</source>
+        <translation>Enable the PhotoCraft features</translation>
+    </message>
+    <message>
+        <source>Más ajustes y efectos (Intensidad, Mapa de degradado, Corrección selectiva, la galería de filtros artísticos, de bosquejo y de textura...) y herramientas, de PhotoCraft. En los menús llevan la pieza de puzle de los complementos.</source>
+        <translation>More adjustments and effects (Vibrance, Gradient Map, Selective Color, the artistic, sketch and texture filter gallery...) and tools, from PhotoCraft. In the menus they carry the plugins&apos; puzzle piece.</translation>
     </message>
     <message>
         <source>Simplificada</source>
@@ -7735,7 +9251,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Te avisa cuando alguien quiere entrar y tú decides si pasa.</source>
-        <translation>You're told when someone wants to join and you decide whether they get in.</translation>
+        <translation>You&apos;re told when someone wants to join and you decide whether they get in.</translation>
     </message>
     <message>
         <source>Solo entra quien sepa la contraseña.</source>
@@ -7759,7 +9275,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Solo entran estos equipos. Cada persona ve el ID de su equipo en Configuración &gt; Colaboración.</source>
-        <translation>Only these computers can join. Each person sees their computer's ID in Settings &gt; Collaboration.</translation>
+        <translation>Only these computers can join. Each person sees their computer&apos;s ID in Settings &gt; Collaboration.</translation>
     </message>
     <message>
         <source>Estos equipos entran sin esperar a que los apruebes.</source>
@@ -7767,7 +9283,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Cambios de los invitados</source>
-        <translation>Guests' changes</translation>
+        <translation>Guests&apos; changes</translation>
     </message>
     <message>
         <source>Más opciones</source>
@@ -7779,7 +9295,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los servidores de señalización solo presentan a los equipos (como los rastreadores de WebTorrent): la imagen va directa de un equipo a otro, cifrada. El código de la sesión no viaja: solo su huella.</source>
-        <translation>Signaling servers only introduce the computers to each other (like WebTorrent trackers): the image goes straight from one computer to the other, encrypted. The session code isn't sent: only its fingerprint.</translation>
+        <translation>Signaling servers only introduce the computers to each other (like WebTorrent trackers): the image goes straight from one computer to the other, encrypted. The session code isn&apos;t sent: only its fingerprint.</translation>
     </message>
     <message>
         <source>Servidores de señalización:</source>
@@ -7795,7 +9311,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Ayudan a atravesar los routers. «stun:servidor:puerto» o, si una red no deja conectar directamente, un TURN: «turn:usuario:contraseña@servidor:puerto».</source>
-        <translation>They help get through routers. “stun:server:port” or, if a network doesn't allow direct connections, a TURN server: “turn:user:password@server:port”.</translation>
+        <translation>They help get through routers. “stun:server:port” or, if a network doesn&apos;t allow direct connections, a TURN server: “turn:user:password@server:port”.</translation>
     </message>
     <message>
         <source>Puerto TCP de la sesión en la red local (por defecto %1). Se aplica a la próxima sesión.</source>
@@ -7827,7 +9343,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Un cuadrado suelto con la X, como el de las ventanas de Paint.NET en Windows 7.</source>
-        <translation>A loose square with the X, like the one of Paint.NET's windows on Windows 7.</translation>
+        <translation>A loose square with the X, like the one of Paint.NET&apos;s windows on Windows 7.</translation>
     </message>
     <message>
         <source>La X de las ventanas Herramientas, Historial, Capas y Colores con los temas Windows 7.</source>
@@ -7969,6 +9485,17 @@ Do you want to replace them?</translation>
     </message>
 </context>
 <context>
+    <name>SpotHealingTool</name>
+    <message>
+        <source>Pinta sobre una mancha: al soltar se rellena con lo de alrededor y se funde con su color.</source>
+        <translation>Paint over a blemish: on release it is filled from its surroundings and blended with their color.</translation>
+    </message>
+    <message>
+        <source>Pincel corrector puntual</source>
+        <translation>Spot Healing Brush</translation>
+    </message>
+</context>
+<context>
     <name>TextTool</name>
     <message>
         <source>Escribe el texto. Flechas, Inicio y Fin mueven el cursor; arrastra el tirador o con el botón derecho para moverlo. Esc o Terminar: aplicar.</source>
@@ -8097,6 +9624,70 @@ Do you want to replace them?</translation>
         <source>Vídeos (%1)</source>
         <translation>Videos (%1)</translation>
     </message>
+    <message>
+        <source>Cielo</source>
+        <translation>Sky</translation>
+    </message>
+    <message>
+        <source>Crepúsculo</source>
+        <translation>Twilight</translation>
+    </message>
+    <message>
+        <source>Mar</source>
+        <translation>Sea</translation>
+    </message>
+    <message>
+        <source>Hoja</source>
+        <translation>Leaf</translation>
+    </message>
+    <message>
+        <source>Lima</source>
+        <translation>Lime</translation>
+    </message>
+    <message>
+        <source>Sol</source>
+        <translation>Sun</translation>
+    </message>
+    <message>
+        <source>Calabaza</source>
+        <translation>Pumpkin</translation>
+    </message>
+    <message>
+        <source>Rubor</source>
+        <translation>Blush</translation>
+    </message>
+    <message>
+        <source>Rubí</source>
+        <translation>Ruby</translation>
+    </message>
+    <message>
+        <source>Fucsia</source>
+        <translation>Fuchsia</translation>
+    </message>
+    <message>
+        <source>Violeta</source>
+        <translation>Violet</translation>
+    </message>
+    <message>
+        <source>Lavanda</source>
+        <translation>Lavender</translation>
+    </message>
+    <message>
+        <source>Topo</source>
+        <translation>Taupe</translation>
+    </message>
+    <message>
+        <source>Chocolate</source>
+        <translation>Chocolate</translation>
+    </message>
+    <message>
+        <source>Pizarra</source>
+        <translation>Slate</translation>
+    </message>
+    <message>
+        <source>Escarcha</source>
+        <translation>Frost</translation>
+    </message>
 </context>
 <context>
     <name>ThemeDialog</name>
@@ -8158,7 +9749,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Los colores que no cambies siguen al modo elegido (y, con el estilo de Windows 7 o XP, a su tema: Windows 7 claro u oscuro). Los cambiados aparecen en negrita.</source>
-        <translation>Colors you don't change follow the chosen mode (and, with the Windows 7 or XP style, its theme: Windows 7 light or dark). Changed ones are shown in bold.</translation>
+        <translation>Colors you don&apos;t change follow the chosen mode (and, with the Windows 7 or XP style, its theme: Windows 7 light or dark). Changed ones are shown in bold.</translation>
     </message>
     <message>
         <source>Colores</source>
@@ -8418,7 +10009,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Kaint no puede reproducir vídeos en este sistema (en Windows hace falta Media Foundation; en Linux, compilar Kaint con Qt Multimedia). Elige una imagen o un GIF animado.</source>
-        <translation>Kaint can't play videos on this system (on Windows it needs Media Foundation; on Linux, Kaint built with Qt Multimedia). Choose an image or an animated GIF.</translation>
+        <translation>Kaint can&apos;t play videos on this system (on Windows it needs Media Foundation; on Linux, Kaint built with Qt Multimedia). Choose an image or an animated GIF.</translation>
     </message>
     <message>
         <source>Importar tema</source>
@@ -8447,6 +10038,30 @@ Do you want to replace them?</translation>
     <message>
         <source>No se pudo guardar «%1».</source>
         <translation>Could not save “%1”.</translation>
+    </message>
+    <message>
+        <source>Personalizada</source>
+        <translation>Custom</translation>
+    </message>
+    <message>
+        <source>0 %: pegada a la izquierda; 50 %: centrada; 100 %: pegada a la derecha.</source>
+        <translation>0%: against the left edge; 50%: centered; 100%: against the right edge.</translation>
+    </message>
+    <message>
+        <source>Alineación horizontal (X):</source>
+        <translation>Horizontal alignment (X):</translation>
+    </message>
+    <message>
+        <source>0 %: pegada arriba; 50 %: centrada; 100 %: pegada abajo.</source>
+        <translation>0%: against the top edge; 50%: centered; 100%: against the bottom edge.</translation>
+    </message>
+    <message>
+        <source>Alineación vertical (Y):</source>
+        <translation>Vertical alignment (Y):</translation>
+    </message>
+    <message>
+        <source>Desenfoque gaussiano, en píxeles de la pantalla.</source>
+        <translation>Gaussian blur, in screen pixels.</translation>
     </message>
 </context>
 <context>
@@ -8724,7 +10339,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>La conversión del tamaño de letra a píxeles utiliza puntos estándar de la industria definidos por los metadatos de resolución (PPP) de la imagen.</source>
-        <translation>Font size is converted to pixels using industry-standard points defined by the image's resolution (DPI) metadata.</translation>
+        <translation>Font size is converted to pixels using industry-standard points defined by the image&apos;s resolution (DPI) metadata.</translation>
     </message>
     <message>
         <source>Fijo (96 PPP)</source>
@@ -8939,6 +10554,170 @@ Do you want to replace them?</translation>
         <translation>Sampling:</translation>
     </message>
     <message>
+        <source> px</source>
+        <translation> px</translation>
+    </message>
+    <message>
+        <source>Anchura de detección: el borde solo sigue los bordes que estén así de cerca del puntero ([ y ] para cambiarla)</source>
+        <translation>Detection width: the border only follows edges this close to the pointer ([ and ] to change it)</translation>
+    </message>
+    <message>
+        <source>Contraste: los saltos más débiles no cuentan como bordes</source>
+        <translation>Contrast: weaker steps do not count as edges</translation>
+    </message>
+    <message>
+        <source>Frecuencia: cada cuánto se fija un punto solo</source>
+        <translation>Frequency: how often a point is fastened automatically</translation>
+    </message>
+    <message>
+        <source>Anchura:</source>
+        <translation>Width:</translation>
+    </message>
+    <message>
+        <source>Contraste:</source>
+        <translation>Contrast:</translation>
+    </message>
+    <message>
+        <source>Frecuencia:</source>
+        <translation>Frequency:</translation>
+    </message>
+    <message>
+        <source>Buscador de objetos</source>
+        <translation>Object Finder</translation>
+    </message>
+    <message>
+        <source>Buscador de objetos activado</source>
+        <translation>Object Finder on</translation>
+    </message>
+    <message>
+        <source>Al pasar el puntero se resalta el objeto de debajo; un clic lo selecciona.</source>
+        <translation>Hovering highlights the object underneath; a click selects it.</translation>
+    </message>
+    <message>
+        <source>Buscador de objetos desactivado</source>
+        <translation>Object Finder off</translation>
+    </message>
+    <message>
+        <source>Seleccionar sujeto</source>
+        <translation>Select Subject</translation>
+    </message>
+    <message>
+        <source>Selecciona el objeto principal de la imagen</source>
+        <translation>Selects the main subject of the image</translation>
+    </message>
+    <message>
+        <source>Parche</source>
+        <translation>Patch</translation>
+    </message>
+    <message>
+        <source>Normal</source>
+        <translation>Normal</translation>
+    </message>
+    <message>
+        <source>La textura se funde con el color y la luz de alrededor.</source>
+        <translation>The texture blends with the surrounding color and lighting.</translation>
+    </message>
+    <message>
+        <source>Según el contenido</source>
+        <translation>Content-Aware</translation>
+    </message>
+    <message>
+        <source>La selección se rellena desde donde se suelta y su borde se rehace.</source>
+        <translation>The selection is filled from where it is dropped and its edge is rebuilt.</translation>
+    </message>
+    <message>
+        <source>Parche:</source>
+        <translation>Patch:</translation>
+    </message>
+    <message>
+        <source>Origen o destino</source>
+        <translation>Source or destination</translation>
+    </message>
+    <message>
+        <source>Origen</source>
+        <translation>Source</translation>
+    </message>
+    <message>
+        <source>Lo seleccionado se repara con lo que hay donde se suelta.</source>
+        <translation>The selection is repaired with what is where it is dropped.</translation>
+    </message>
+    <message>
+        <source>Destino</source>
+        <translation>Destination</translation>
+    </message>
+    <message>
+        <source>Lo seleccionado repara el sitio donde se suelta.</source>
+        <translation>The selection repairs the place where it is dropped.</translation>
+    </message>
+    <message>
+        <source>Estructura: cuánto del borde de la selección se rehace (1: mucho; 3 a 7: un parche)</source>
+        <translation>Structure: how much of the selection edge is rebuilt (1: a lot; 3 to 7: one patch)</translation>
+    </message>
+    <message>
+        <source>Color: cuánto se ajusta el color de lo que entra al de alrededor</source>
+        <translation>Color: how much the incoming color is adjusted to its surroundings</translation>
+    </message>
+    <message>
+        <source>Estructura:</source>
+        <translation>Structure:</translation>
+    </message>
+    <message>
+        <source>Color:</source>
+        <translation>Color:</translation>
+    </message>
+    <message>
+        <source>Quitar después de cada trazo</source>
+        <translation>Remove after each stroke</translation>
+    </message>
+    <message>
+        <source>Reunir trazos hasta pulsar Intro</source>
+        <translation>Collect strokes until Enter</translation>
+    </message>
+    <message>
+        <source>Alineado</source>
+        <translation>Aligned</translation>
+    </message>
+    <message>
+        <source>El origen sigue al pincel de un trazo al siguiente.</source>
+        <translation>The source follows the brush from one stroke to the next.</translation>
+    </message>
+    <message>
+        <source>Sin alinear</source>
+        <translation>Not aligned</translation>
+    </message>
+    <message>
+        <source>Cada trazo vuelve a tomar desde el punto de origen.</source>
+        <translation>Each stroke samples from the source point again.</translation>
+    </message>
+    <message>
+        <source>Tipo</source>
+        <translation>Type</translation>
+    </message>
+    <message>
+        <source>Se rellena con lo que encaja de alrededor.</source>
+        <translation>Filled with what fits from the surroundings.</translation>
+    </message>
+    <message>
+        <source>Crear textura</source>
+        <translation>Create Texture</translation>
+    </message>
+    <message>
+        <source>Se rellena con una textura hecha con trozos de alrededor.</source>
+        <translation>Filled with a texture made from surrounding pieces.</translation>
+    </message>
+    <message>
+        <source>Coincidencia por proximidad</source>
+        <translation>Proximity Match</translation>
+    </message>
+    <message>
+        <source>Se rellena con la zona de alrededor que mejor encaja con su borde.</source>
+        <translation>Filled with the surrounding area that best matches its edge.</translation>
+    </message>
+    <message>
+        <source>Tipo:</source>
+        <translation>Type:</translation>
+    </message>
+    <message>
         <source>Trayectoria</source>
         <translation>Path</translation>
     </message>
@@ -8984,7 +10763,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No acumular rellenos</source>
-        <translation>Don't accumulate fills</translation>
+        <translation>Don&apos;t accumulate fills</translation>
     </message>
     <message>
         <source>Modo de fusión</source>
@@ -9023,11 +10802,11 @@ Do you want to replace them?</translation>
     <name>VideoFrames</name>
     <message>
         <source>Windows no tiene Media Foundation (en las ediciones N se instala con el «Media Feature Pack»).</source>
-        <translation>Windows doesn't have Media Foundation (on N editions it comes with the “Media Feature Pack”).</translation>
+        <translation>Windows doesn&apos;t have Media Foundation (on N editions it comes with the “Media Feature Pack”).</translation>
     </message>
     <message>
         <source>Esta compilación de Kaint no reproduce vídeos (falta Qt Multimedia).</source>
-        <translation>This build of Kaint doesn't play videos (Qt Multimedia is missing).</translation>
+        <translation>This build of Kaint doesn&apos;t play videos (Qt Multimedia is missing).</translation>
     </message>
 </context>
 <context>
@@ -9038,11 +10817,11 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>No se pudo conectar.</source>
-        <translation>Couldn't connect.</translation>
+        <translation>Couldn&apos;t connect.</translation>
     </message>
     <message>
         <source>No respondió a tiempo.</source>
-        <translation>It didn't answer in time.</translation>
+        <translation>It didn&apos;t answer in time.</translation>
     </message>
     <message>
         <source>Respuesta no válida.</source>
@@ -9062,14 +10841,14 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Este Kaint no puede usar conexiones cifradas (TLS).</source>
-        <translation>This Kaint can't use encrypted connections (TLS).</translation>
+        <translation>This Kaint can&apos;t use encrypted connections (TLS).</translation>
     </message>
 </context>
 <context>
     <name>WebSocketServer</name>
     <message>
         <source>Esta sesión de Kaint no sirve la versión web. Ábrela desde tu copia de Kaint para la web.</source>
-        <translation>This Kaint session doesn't serve the web version. Open it from your copy of Kaint for the web.</translation>
+        <translation>This Kaint session doesn&apos;t serve the web version. Open it from your copy of Kaint for the web.</translation>
     </message>
 </context>
 <context>
@@ -9088,7 +10867,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Apoyar el desarrollo de Kaint en Ko-fi</source>
-        <translation>Support Kaint's development on Ko-fi</translation>
+        <translation>Support Kaint&apos;s development on Ko-fi</translation>
     </message>
     <message>
         <source>Elige cómo quieres que se vea Kaint. Todo se puede cambiar más tarde en Configuración.</source>
@@ -9173,6 +10952,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Windows 7 oscuro</source>
         <translation>Windows 7 Dark</translation>
+    </message>
+    <message>
+        <source>Activar las herramientas y los efectos extras de PhotoCraft</source>
+        <translation>Enable PhotoCraft&apos;s extra tools and effects</translation>
+    </message>
+    <message>
+        <source>Lazo magnético, Selección de objetos, Quitar, Parche, Pincel corrector y Pincel corrector puntual, y más ajustes y efectos (Intensidad, Mapa de degradado, la galería de filtros...). Llevan la pieza de puzle de los complementos.</source>
+        <translation>Magnetic Lasso, Object Selection, Remove, Patch, Healing Brush and Spot Healing Brush, plus more adjustments and effects (Vibrance, Gradient Map, the filter gallery...). They carry the plugins&apos; puzzle piece.</translation>
     </message>
 </context>
 <context>

@@ -695,6 +695,7 @@ void Session::onGuestText(const QByteArray& text)
             return;
         }
         if (auth == Access::Password && m_password.isEmpty()) {
+            m_needsPassword = true;
             finish(tr("Esta sesión pide contraseña."));
             return;
         }
@@ -713,6 +714,7 @@ void Session::onGuestText(const QByteArray& text)
     } else if (t == QLatin1String("waiting")) {
         setState(State::Waiting);
     } else if (t == QLatin1String("denied")) {
+        m_needsPassword = m.value(QStringLiteral("reason")).toString() == QLatin1String("password");
         finish(reasonText(m.value(QStringLiteral("reason")).toString()));
     } else if (t == QLatin1String("joined")) {
         m_myId = m.value(QStringLiteral("you")).toInt();

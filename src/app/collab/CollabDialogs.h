@@ -65,6 +65,9 @@ class JoinDialog : public QDialog {
     Q_OBJECT
 public:
     JoinDialog(CollabController* collab, Mode mode, QWidget* parent = nullptr);
+    // Una invitación (de Discord): rellena el código y entra. Si la sesión pide contraseña, se
+    // pide aquí; si el anfitrión aprueba a mano, se espera.
+    void startInvite(const QString& code, const QString& source);
 
 private:
     void refreshFound();

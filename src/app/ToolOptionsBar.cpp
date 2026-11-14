@@ -2,6 +2,7 @@
 
 #include "app/AppState.h"
 #include "app/Icons.h"
+#include "app/tools/RetouchTools.h"
 #include "app/tools/ToolManager.h"
 #include "app/widgets/BarSlider.h"
 #include "app/widgets/ChoiceButton.h"
@@ -106,6 +107,11 @@ bool ToolOptionsEditor::groupApplies(const QString& key, const ToolSettings& s)
         return s.rectMode != RectSelectMode::Normal;
     if (key == QLatin1String("corner"))
         return s.shape == ShapeType::RoundedRect || s.shape == ShapeType::RoundedRectCallout;
+    // Parche: origen o destino en el modo normal; estructura y color según el contenido.
+    if (key == QLatin1String("patch.src"))
+        return s.patchMode == 0;
+    if (key == QLatin1String("patch.ca"))
+        return s.patchMode == 1;
     return true;
 }
 
@@ -618,6 +624,107 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     add(QStringLiteral("picker.sampling"), Tool::OptSampleSize, Picker,
         {label(tr("Toma de muestras:")), m_pickerSampling, m_pickerSize});
 
+    // --- Las herramientas de PhotoCraft -----------------------------------------
+    // Lazo magnético: anchura de detección, contraste y frecuencia (como en Photoshop).
+    m_magneticWidth = new BarSlider(1, 256, tr(" px"), parent);
+    m_magneticWidth->setToolTip(tr("Anchura de detección: el borde solo sigue los bordes que estén así de cerca del puntero "
+                                   "([ y ] para cambiarla)"));
+    connect(m_magneticWidth, &BarSlider::valueChanged, this,
+            [update](int v) { update([v](ToolSettings& s) { s.magneticWidth = v; }); });
+    m_magneticContrast = new BarSlider(1, 100, QStringLiteral("%"), parent);
+    m_magneticContrast->setToolTip(tr("Contraste: los saltos más débiles no cuentan como bordes"));
+    connect(m_magneticContrast, &BarSlider::valueChanged, this,
+            [update](int v) { update([v](ToolSettings& s) { s.magneticContrast = v; }); });
+    m_magneticFrequency = new BarSlider(0, 100, QString(), parent);
+    m_magneticFrequency->setToolTip(tr("Frecuencia: cada cuánto se fija un punto solo"));
+    connect(m_magneticFrequency, &BarSlider::valueChanged, this,
+            [update](int v) { update([v](ToolSettings& s) { s.magneticFrequency = v; }); });
+    add(QStringLiteral("magnetic"), Tool::OptMagnetic, Select,
+        {label(tr("Anchura:")), m_magneticWidth, label(tr("Contraste:")), m_magneticContrast, label(tr("Frecuencia:")),
+         m_magneticFrequency});
+
+    // Selección de objetos: el Buscador de objetos y Seleccionar sujeto.
+    m_objectFinder = new ChoiceButton(tr("Buscador de objetos"), parent);
+    m_objectFinder->addChoice(Icons::tool(QStringLiteral("objectselection"), Icons::theme({"edit-select-all"})),
+                              tr("Buscador de objetos activado"), 1,
+                              tr("Al pasar el puntero se resalta el objeto de debajo; un clic lo selecciona."));
+    m_objectFinder->addChoice(Icons::theme({"edit-select-none", "dialog-cancel"}), tr("Buscador de objetos desactivado"), 0);
+    m_objectFinder->onChosen = [update](int v) { update([v](ToolSettings& s) { s.objectFinder = v == 1; }); };
+    m_selectSubject = new QToolButton(parent);
+    m_selectSubject->setText(tr("Seleccionar sujeto"));
+    m_selectSubject->setToolTip(tr("Selecciona el objeto principal de la imagen"));
+    m_selectSubject->setAutoRaise(true);
+    connect(m_selectSubject, &QToolButton::clicked, this, [this] {
+        if (onSelectSubject)
+            onSelectSubject();
+    });
+    add(QStringLiteral("objectFinder"), Tool::OptObjectFinder, Select, {m_objectFinder, m_selectSubject});
+
+    // Parche: normal o según el contenido; origen o destino; estructura y color.
+    m_patchMode = new ChoiceButton(tr("Parche"), parent);
+    m_patchMode->addChoice(Icons::tool(QStringLiteral("patch"), QIcon()), tr("Normal"), 0,
+                           tr("La textura se funde con el color y la luz de alrededor."));
+    m_patchMode->addChoice(Icons::tool(QStringLiteral("patch"), QIcon()), tr("Según el contenido"), 1,
+                           tr("La selección se rellena desde donde se suelta y su borde se rehace."));
+    m_patchMode->setShowText(true);
+    m_patchMode->onChosen = [update](int v) { update([v](ToolSettings& s) { s.patchMode = v; }); };
+    add(QStringLiteral("patch"), Tool::OptPatch, Select, {label(tr("Parche:")), m_patchMode});
+    m_patchSource = new ChoiceButton(tr("Origen o destino"), parent);
+    m_patchSource->addChoice(Icons::theme({"go-previous", "arrow-left"}), tr("Origen"), 0,
+                             tr("Lo seleccionado se repara con lo que hay donde se suelta."));
+    m_patchSource->addChoice(Icons::theme({"go-next", "arrow-right"}), tr("Destino"), 1,
+                             tr("Lo seleccionado repara el sitio donde se suelta."));
+    m_patchSource->setShowText(true);
+    m_patchSource->onChosen = [update](int v) { update([v](ToolSettings& s) { s.patchDestination = v == 1; }); };
+    add(QStringLiteral("patch.src"), Tool::OptPatch, Select, {m_patchSource});
+    m_patchStructure = new BarSlider(1, 7, QString(), parent);
+    m_patchStructure->setToolTip(tr("Estructura: cuánto del borde de la selección se rehace (1: mucho; 3 a 7: un parche)"));
+    connect(m_patchStructure, &BarSlider::valueChanged, this,
+            [update](int v) { update([v](ToolSettings& s) { s.patchStructure = v; }); });
+    m_patchColor = new BarSlider(0, 10, QString(), parent);
+    m_patchColor->setToolTip(tr("Color: cuánto se ajusta el color de lo que entra al de alrededor"));
+    connect(m_patchColor, &BarSlider::valueChanged, this, [update](int v) { update([v](ToolSettings& s) { s.patchColor = v; }); });
+    add(QStringLiteral("patch.ca"), Tool::OptPatch, Select,
+        {label(tr("Estructura:")), m_patchStructure, label(tr("Color:")), m_patchColor});
+
+    // Quitar: después de cada trazo o al pulsar Intro.
+    m_removeEach = new ChoiceButton(tr("Quitar después de cada trazo"), parent);
+    m_removeEach->addChoice(Icons::tool(QStringLiteral("remove"), QIcon()), tr("Quitar después de cada trazo"), 1);
+    m_removeEach->addChoice(Icons::theme({"dialog-ok-apply", "dialog-ok"}), tr("Reunir trazos hasta pulsar Intro"), 0);
+    m_removeEach->setShowText(true);
+    m_removeEach->onChosen = [update](int v) { update([v](ToolSettings& s) { s.removeEachStroke = v == 1; }); };
+    add(QStringLiteral("removeEach"), Tool::OptRemoveEach, Brush, {m_removeEach});
+
+    // Pincel corrector: alineado.
+    m_healAligned = new ChoiceButton(tr("Alineado"), parent);
+    m_healAligned->addChoice(Icons::theme({"object-locked", "link"}), tr("Alineado"), 1,
+                             tr("El origen sigue al pincel de un trazo al siguiente."));
+    m_healAligned->addChoice(Icons::theme({"object-unlocked", "remove-link"}), tr("Sin alinear"), 0,
+                             tr("Cada trazo vuelve a tomar desde el punto de origen."));
+    m_healAligned->setShowText(true);
+    m_healAligned->onChosen = [update](int v) { update([v](ToolSettings& s) { s.healAligned = v == 1; }); };
+    add(QStringLiteral("healAligned"), Tool::OptHealAligned, Brush, {m_healAligned});
+
+    // Pincel corrector puntual: el tipo.
+    m_spotType = new ChoiceButton(tr("Tipo"), parent);
+    m_spotType->addChoice(Icons::tool(QStringLiteral("spothealing"), QIcon()), tr("Según el contenido"), 0,
+                          tr("Se rellena con lo que encaja de alrededor."));
+    m_spotType->addChoice(Icons::tool(QStringLiteral("spothealing"), QIcon()), tr("Crear textura"), 1,
+                          tr("Se rellena con una textura hecha con trozos de alrededor."));
+    m_spotType->addChoice(Icons::tool(QStringLiteral("spothealing"), QIcon()), tr("Coincidencia por proximidad"), 2,
+                          tr("Se rellena con la zona de alrededor que mejor encaja con su borde."));
+    m_spotType->setShowText(true);
+    m_spotType->onChosen = [update](int v) { update([v](ToolSettings& s) { s.spotType = v; }); };
+    add(QStringLiteral("spotType"), Tool::OptSpotType, Brush, {label(tr("Tipo:")), m_spotType});
+
+    // Tomar de la capa o de la imagen (Quitar, Parche, los pinceles correctores, Selección de objetos).
+    m_retouchSampling = new ChoiceButton(tr("Toma de muestras"), parent);
+    m_retouchSampling->addChoice(Icons::theme({"sample-image", "image-x-generic"}), tr("Imagen"), 1);
+    m_retouchSampling->addChoice(Icons::theme({"sample-layer", "view-list-details"}), tr("Capa"), 0);
+    m_retouchSampling->setShowText(true);
+    m_retouchSampling->onChosen = [update](int v) { update([v](ToolSettings& s) { s.retouchSampleImage = v == 1; }); };
+    add(QStringLiteral("retouchSampling"), Tool::OptRetouchSampling, Sampling, {label(tr("Toma de muestras:")), m_retouchSampling});
+
     // --- Opciones -----------------------------------------------------------
     m_smoothing = new ChoiceButton(tr("Trayectoria"), parent);
     m_smoothing->addChoice(Icons::smoothing(false), tr("Trayectoria no suavizada"), 0,
@@ -744,6 +851,22 @@ void ToolOptionsEditor::sync()
     m_textRendering->setCurrent(int(s.textRendering));
     m_sampling->setCurrent(s.sampleImage ? 1 : 0);
     m_pickerSampling->setCurrent(s.pickerSampleImage ? 1 : 0);
+    {
+        const QSignalBlocker b1(m_magneticWidth), b2(m_magneticContrast), b3(m_magneticFrequency), b4(m_patchStructure),
+            b5(m_patchColor);
+        m_magneticWidth->setValue(s.magneticWidth);
+        m_magneticContrast->setValue(s.magneticContrast);
+        m_magneticFrequency->setValue(s.magneticFrequency);
+        m_patchStructure->setValue(s.patchStructure);
+        m_patchColor->setValue(s.patchColor);
+    }
+    m_objectFinder->setCurrent(s.objectFinder ? 1 : 0);
+    m_retouchSampling->setCurrent(s.retouchSampleImage ? 1 : 0);
+    m_removeEach->setCurrent(s.removeEachStroke ? 1 : 0);
+    m_patchMode->setCurrent(s.patchMode);
+    m_patchSource->setCurrent(s.patchDestination ? 1 : 0);
+    m_healAligned->setCurrent(s.healAligned ? 1 : 0);
+    m_spotType->setCurrent(s.spotType);
     if (!s.fontFamily.isEmpty() && m_font->currentFont().family() != s.fontFamily && !m_font->isEditingName()) {
         const QSignalBlocker b(m_font);
         m_font->setCurrentFont(QFont(s.fontFamily));
@@ -783,6 +906,14 @@ QStringList ToolOptionsBar::order(ToolId id)
     case ToolId::Text: return list("text.font | text.style | text.align | aa blend selQuality");
     case ToolId::Line: return list("curve | size | style | fill | aa blend selQuality");
     case ToolId::Shapes: return list("shape shapeStyle corner | size | style | fill | aa blend selQuality");
+    // Las de PhotoCraft.
+    case ToolId::MagneticLasso: return list("selMode | magnetic | afterSelect | selQuality");
+    case ToolId::ObjectSelection: return list("selMode | objectFinder | retouchSampling | afterSelect | selQuality");
+    case ToolId::Remove: return list("size hardness spacing | removeEach | retouchSampling | smoothing pressure aa");
+    case ToolId::Patch: return list("selMode | patch patch.src patch.ca | retouchSampling | selQuality");
+    case ToolId::HealingBrush:
+        return list("size hardness spacing | healAligned | retouchSampling | smoothing pressure aa blend selQuality");
+    case ToolId::SpotHealing: return list("size hardness spacing | spotType | retouchSampling | smoothing pressure aa selQuality");
     default: break;
     }
     return {};
@@ -809,12 +940,23 @@ ToolOptionsBar::ToolOptionsBar(ToolManager* manager, QWidget* parent)
         a->setShortcut(t->shortcut());
         a->setShortcutVisibleInContextMenu(true);
         a->setShortcutContext(Qt::WidgetShortcut);
+        a->setVisible(manager->isAvailable(t));
         connect(a, &QAction::triggered, this, [manager, t] { manager->select(t->id()); });
+        m_toolActions.append({t, a});
     }
+    connect(manager, &ToolManager::availabilityChanged, this, [this, manager] {
+        for (const auto& [t, a] : std::as_const(m_toolActions))
+            a->setVisible(manager->isAvailable(t));
+    });
     m_toolButton->setMenu(menu);
     addWidget(m_toolButton);
 
     m_editor = new ToolOptionsEditor(new AppToolSettings(this), this);
+    // Seleccionar sujeto lo hace la herramienta Selección de objetos.
+    m_editor->onSelectSubject = [manager] {
+        if (auto* t = qobject_cast<ObjectSelectionTool*>(manager->tool(ToolId::ObjectSelection)))
+            t->selectSubject();
+    };
     for (const ToolOptionsEditor::Group& g : m_editor->groups()) {
         BarGroup bg;
         bg.key = g.key;

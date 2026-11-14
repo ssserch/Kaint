@@ -42,10 +42,29 @@ import { MoveSelectedTool, MoveSelectionTool } from "../tools/MoveTools.js";
 import { ColorPickerTool, PanTool, ZoomTool } from "../tools/ViewTools.js";
 import { GradientTool, PaintBucketTool } from "../tools/FillTools.js";
 import { BrushTool, CloneStampTool, EraserTool, PencilTool, RecolorTool } from "../tools/PaintTools.js";
+import { HealingBrushTool, MagneticLassoTool, ObjectSelectionTool, PatchTool, RemoveTool, SpotHealingTool } from "../tools/RetouchTools.js";
 import { TextTool } from "../tools/TextTool.js";
 import { LineTool, ShapesTool } from "../tools/ShapeTools.js";
 
 const openUrl = (url) => () => window.open(url, "_blank", "noopener,noreferrer");
+
+// El título de la página y el de la barra de título simulada (como la de Kaint para el escritorio).
+function setWindowTitle(text) {
+    document.title = text;
+    const caption = document.querySelector("#caption-title .caption-text");
+    if (caption)
+        caption.textContent = text;
+}
+
+// Las funciones de PhotoCraft (Configuración > Complementos, desactivadas por defecto) y los efectos
+// que siguen complementos de BoltBait (cada uno se activa desde Explorar complementos).
+function extraVisible(e) {
+    if (!e.origin)
+        return true;
+    if (e.origin === "BoltBait")
+        return (Settings.get("boltBaitEffects") || []).includes(e.id);
+    return Settings.get("photocraftExtras") === true;
+}
 
 // Firma de una imagen (tamaño y un resumen de sus píxeles) para reconocer al pegar una copia hecha en
 // Kaint, como imageSignature de Kaint. Los semitransparentes solo cuentan por su alfa: al pasar por el
@@ -72,9 +91,11 @@ export class App extends EventTarget {
         this.clipboard = null;
         this.view = new CanvasView(document.getElementById("view"), document.getElementById("workspace"));
         this.tools = new ToolManager(this, [
-            RectSelectTool, MoveSelectedTool, LassoSelectTool, MoveSelectionTool, EllipseSelectTool, ZoomTool, MagicWandTool,
-            PanTool, PaintBucketTool, GradientTool, BrushTool, EraserTool, PencilTool, ColorPickerTool, CloneStampTool,
-            RecolorTool, TextTool, LineTool, ShapesTool,
+            // Las de PhotoCraft en sus sitios de la ventana Herramientas (solo con ellas activadas).
+            RectSelectTool, MoveSelectedTool, LassoSelectTool, MoveSelectionTool, MagneticLassoTool, ObjectSelectionTool,
+            EllipseSelectTool, ZoomTool, MagicWandTool, PanTool, PaintBucketTool, GradientTool, BrushTool, EraserTool, PencilTool,
+            ColorPickerTool, CloneStampTool, RecolorTool, RemoveTool, PatchTool, HealingBrushTool, SpotHealingTool, TextTool,
+            LineTool, ShapesTool,
         ]);
         this.actions = new Map();
         this.applyTheme();
@@ -120,6 +141,10 @@ export class App extends EventTarget {
         });
         AppState.addEventListener("colors", () => this.updateToolIconColors());
         window.addEventListener("kaint-settings", () => this.applySettings());
+        window.addEventListener("kaint-settings", (e) => {
+            if (e.detail?.key === "photocraftExtras")
+                this.tools.extrasChanged();
+        });
         // La miniatura del cursor de Formas sigue a la forma elegida y el contorno de los pinceles,
         // a su tamaño.
         AppState.addEventListener("tools", () => {
@@ -187,6 +212,10 @@ export class App extends EventTarget {
         root.classList.toggle("win10", Settings.get("panelStyle") === 0);
         // Aspecto de Paint.NET: más compacto, ventanas sin borde... (solo lo visual).
         root.classList.toggle("pdn", Settings.get("uiStyle") === 1);
+        // La barra de título simulada y la tira de imágenes a toda la altura de la fila de arriba
+        // (con la imagen actual en el azul de Paint.NET encima de la franja).
+        root.classList.toggle("fake-title", Settings.get("fakeTitleBar") !== false);
+        root.classList.toggle("strip-full", Settings.get("stripFullHeight") !== false);
         // Letras de acceso de los menús: siempre subrayadas o solo con Alt.
         root.classList.toggle("mnemonics", !!Settings.get("menuMnemonics"));
         root.classList.toggle("no-history-jumps", Settings.get("historyJumpButtons") === false);
@@ -261,7 +290,7 @@ export class App extends EventTarget {
         this.rebuildTabs();
         this.updateStatus();
         updateActions();
-        document.title = doc ? `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint` : "Kaint";
+        setWindowTitle(doc ? `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint` : "Kaint");
     }
 
     async closeDocument(doc, ask = true) {
@@ -605,7 +634,7 @@ export class App extends EventTarget {
             strip.appendChild(tab);
             this.updateTab(doc, true);
         }
-        document.title = this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - Kaint` : "Kaint";
+        setWindowTitle(this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - Kaint` : "Kaint");
     }
 
     updateTab(doc, now = false) {
@@ -637,7 +666,7 @@ export class App extends EventTarget {
             }
             tab.title = doc.displayName();
             if (doc === this.doc)
-                document.title = `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint`;
+                setWindowTitle(`${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint`);
         };
         clearTimeout(doc.tabTimer);
         now ? paint() : (doc.tabTimer = setTimeout(paint, 400));
@@ -847,9 +876,9 @@ export class App extends EventTarget {
         const effectEntry = (e) => ({
             text: tr(e.name) + (e.params.length || e.configure ? "..." : ""), icon: `effect-${e.id}`, shortcut: e.shortcut || "",
             enabled: !!this.doc, run: this.command(() => this.runEffect(e, false)),
-            badge: e.pluginId && Settings.get("pluginMenuIcons") !== false ? "settings-plugins" : undefined,
+            badge: (e.pluginId || e.origin) && Settings.get("pluginMenuIcons") !== false ? "settings-plugins" : undefined,
         });
-        const menuEffects = () => Effects.filter((e) => !e.hidden && !Customization.isHidden(e.id));
+        const menuEffects = () => Effects.filter((e) => !e.hidden && extraVisible(e) && !Customization.isHidden(e.id));
         const sorted = (list) => [...list].sort((x, y) => tr(x.name).localeCompare(tr(y.name)));
         this.menuBar.setMenus([
             // En el teléfono no se ve: lo mismo está en el botón de guardar con flecha (createToolBar).
@@ -1073,6 +1102,11 @@ export class App extends EventTarget {
             const r = this.unitButton.getBoundingClientRect(), a = (id) => this.actions.get(id);
             popupMenu([a("unit0"), a("unit1"), a("unit2")], r.left, r.top, { above: true });
         });
+        // La unidad en la esquina de las reglas (con el estilo de Paint.NET): el mismo menú.
+        document.querySelector(".ruler-corner")?.addEventListener("click", (e) => {
+            const r = e.currentTarget.getBoundingClientRect(), a = (id) => this.actions.get(id);
+            popupMenu([a("unit0"), a("unit1"), a("unit2")], r.left, r.bottom);
+        });
         this.unitButton.textContent = unitSuffix(this.unit());
         return this.unitButton;
     }
@@ -1202,7 +1236,7 @@ export class App extends EventTarget {
                     return;
                 }
             // Atajos de los ajustes y efectos (Ctrl+Mayús+I, Ctrl+L...).
-            const effect = Effects.find((fx) => fx.shortcut === combo && !fx.hidden);
+            const effect = Effects.find((fx) => fx.shortcut === combo && !fx.hidden && extraVisible(fx));
             if (effect && this.doc) {
                 e.preventDefault();
                 this.command(() => this.runEffect(effect, false))();

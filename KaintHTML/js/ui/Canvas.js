@@ -52,7 +52,9 @@ export class CanvasView extends EventTarget {
         new ResizeObserver(() => this.resized()).observe(workspace);
         this.installEvents();
         this.installScrollbars();
-        setInterval(() => this.stepAnts(), 120);
+        // Las hormigas avanzan 25 píxeles por segundo (una vuelta del patrón en 0,32 s), casi como
+        // en Paint.NET, como en Kaint: 1 px cada 40 ms (a 1 px cada 120 ms se arrastraban).
+        setInterval(() => this.stepAnts(), 40);
         window.addEventListener("kaint-settings", () => {
             this.clampOrigin();
             this.update();
@@ -610,6 +612,12 @@ export class CanvasView extends EventTarget {
             return;
         // 0: según el tema (oscura con los temas oscuros); 1: del color de la barra; 2: oscura.
         const style = Settings.get("rulerStyle");
+        // 3: como la de Paint.NET 5 (Kaint: Ruler::Style::PaintNet).
+        if (style === 3) {
+            this.renderPdnRulers();
+            return;
+        }
+        this.workspace.classList.remove("ruler-pdn");
         const paintJs = style === 2 || (style !== 1 && document.documentElement.classList.contains("dark"));
         this.workspace.classList.toggle("ruler-classic", !paintJs);
         const styles = getComputedStyle(document.documentElement);
@@ -735,6 +743,113 @@ export class CanvasView extends EventTarget {
         }
     }
 
+    // Como la regla de Paint.NET 5 (y la de Kaint con ese estilo): fondo liso, la marca de cada
+    // número a todo lo alto con el número a su derecha y las divisiones de una regla de verdad (la
+    // mitad más larga; en pulgadas, mitades, cuartos, octavos y dieciseisavos).
+    renderPdnRulers() {
+        const dark = document.documentElement.classList.contains("dark");
+        this.workspace.classList.remove("ruler-classic");
+        this.workspace.classList.add("ruler-pdn");
+        this.workspace.classList.toggle("ruler-pdn-dark", dark);
+        const colors = dark ? { bg: "#1c1c1c", tick: "#8c8c8c", text: "#d6d6d6", edge: "#3a3a3a", mark: "#4ca8ff" }
+                            : { bg: "#f9f9f9", tick: "#767676", text: "#1e1e1e", edge: "#d0d0d0", mark: "#0067c0" };
+        const styles = getComputedStyle(document.documentElement);
+        const unit = Settings.get("unit") ?? 0;
+        const corner = this.workspace.querySelector(".ruler-corner");
+        if (corner)
+            corner.textContent = ["px", "in", "cm"][unit] || "px";
+        for (const vertical of [false, true]) {
+            const canvas = vertical ? this.vRuler : this.hRuler;
+            if (!canvas)
+                continue;
+            const dpr = this.dpr, w = canvas.clientWidth, h = canvas.clientHeight;
+            if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+                canvas.width = Math.round(w * dpr);
+                canvas.height = Math.round(h * dpr);
+            }
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.fillStyle = colors.bg;
+            ctx.fillRect(0, 0, w, h);
+            const doc = this.doc, t = kRuler;
+            if (doc) {
+                const ppu = pixelsPerUnit(unit, doc.dpi), length = vertical ? h : w, origin = vertical ? this.origin.y : this.origin.x;
+                const s = this.scale * ppu;
+                const b = doc.selection.bounds();
+                if (b) {
+                    ctx.globalAlpha = 0.22;
+                    ctx.fillStyle = colors.mark;
+                    const a = origin + (vertical ? b.y : b.x) * this.scale, size = (vertical ? b.h : b.w) * this.scale;
+                    vertical ? ctx.fillRect(0, a, t, size) : ctx.fillRect(a, 0, size, t);
+                    ctx.globalAlpha = 1;
+                }
+                let step = 1;
+                outer: for (let mag = 1e-3; mag < 1e7; mag *= 10)
+                    for (const k of [1, 2, 5])
+                        if (k * mag * s >= 50) {
+                            step = k * mag;
+                            break outer;
+                        }
+                const inches = unit === 1 && step >= 1;
+                let divisions = inches ? 16 : 10;
+                while (divisions > 1 && (step / divisions) * s < 4)
+                    divisions /= 2;
+                const tickLength = (i) => {
+                    if (i === 0)
+                        return t;
+                    if (inches)
+                        return i % 8 === 0 ? (t * 11) / 20 : i % 4 === 0 ? (t * 8) / 20 : i % 2 === 0 ? (t * 6) / 20 : (t * 4) / 20;
+                    return divisions === 10 && i === 5 ? t / 2 : t / 4;
+                };
+                ctx.font = `10px ${styles.getPropertyValue("--font").trim() || "sans-serif"}`;
+                ctx.lineWidth = 1;
+                const first = Math.floor(-origin / s / step) * step - step, last = (length - origin) / s;
+                for (let value = first; value <= last + step; value += step) {
+                    const base = origin + value * s;
+                    ctx.strokeStyle = colors.tick;
+                    ctx.beginPath();
+                    for (let i = 0; i < divisions; ++i) {
+                        const pos = Math.floor(origin + (value + (step * i) / divisions) * s) + 0.5, tk = tickLength(i);
+                        vertical ? (ctx.moveTo(t - tk, pos), ctx.lineTo(t, pos)) : (ctx.moveTo(pos, t - tk), ctx.lineTo(pos, t));
+                    }
+                    ctx.stroke();
+                    const label = String(Math.abs(value) < step * 1e-6 ? 0 : Number(value.toPrecision(6)));
+                    ctx.fillStyle = colors.text;
+                    if (vertical) {
+                        ctx.save();
+                        ctx.translate(10, Math.floor(base) + 3);
+                        ctx.rotate(-Math.PI / 2);
+                        ctx.fillText(label, -ctx.measureText(label).width, 0);
+                        ctx.restore();
+                    } else {
+                        ctx.fillText(label, Math.floor(base) + 3, 10);
+                    }
+                }
+                if (this.lastMouse) {
+                    const px = Math.floor(vertical ? this.lastMouse.y : this.lastMouse.x);
+                    const p0 = this.imageToView(px, px), p1 = this.imageToView(px + 1, px + 1);
+                    const a = vertical ? p0.y : p0.x, bb = vertical ? p1.y : p1.x, from = Math.min(a, bb), size = Math.abs(bb - a);
+                    if (size <= 1.5) {
+                        const m = this.imageToView(this.lastMouse.x, this.lastMouse.y), c = Math.floor(vertical ? m.y : m.x) + 0.5;
+                        ctx.strokeStyle = colors.mark;
+                        ctx.beginPath();
+                        vertical ? (ctx.moveTo(0, c), ctx.lineTo(t, c)) : (ctx.moveTo(c, 0), ctx.lineTo(c, t));
+                        ctx.stroke();
+                    } else {
+                        ctx.globalAlpha = 0.35;
+                        ctx.fillStyle = colors.mark;
+                        vertical ? ctx.fillRect(0, from, t, size) : ctx.fillRect(from, 0, size, t);
+                        ctx.globalAlpha = 1;
+                    }
+                }
+            }
+            ctx.strokeStyle = colors.edge;
+            ctx.beginPath();
+            vertical ? (ctx.moveTo(w - 0.5, 0), ctx.lineTo(w - 0.5, h)) : (ctx.moveTo(0, h - 0.5), ctx.lineTo(w, h - 0.5));
+            ctx.stroke();
+        }
+    }
+
     drawPixelGrid(ctx, v) {
         const doc = this.doc, s = this.scale;
         const x0 = Math.max(0, Math.floor(-this.origin.x / s)), y0 = Math.max(0, Math.floor(-this.origin.y / s));
@@ -794,16 +909,22 @@ export class CanvasView extends EventTarget {
             this.strokeOutline(ctx, sel.outline(), transform);
     }
 
-    // Casi blanco y, encima, gris a trazos que se mueven (las hormigas de Paint.NET 5), de un píxel
-    // de la pantalla.
+    // Una línea negra de un píxel de la pantalla y, encima, trazos blancos que avanzan por el
+    // contorno (las hormigas de Paint.NET): se distinguen sobre cualquier color (las grises y casi
+    // blancas de antes apenas se veían sobre lo oscuro o lo muy claro).
     strokeAnts(ctx, path) {
         ctx.save();
+        // Trazos de 4 px de la pantalla (8 con la pantalla al 200 %).
+        const unit = Math.max(1, Math.round(this.dpr)) / this.dpr;
         ctx.lineWidth = 1 / this.dpr;
-        ctx.strokeStyle = "#f3f4f8";
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "bevel";
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "#000";
         ctx.stroke(path);
-        ctx.setLineDash([4 / this.dpr, 4 / this.dpr]);
-        ctx.lineDashOffset = -this.antsOffset / this.dpr;
-        ctx.strokeStyle = "#7f8289";
+        ctx.setLineDash([4 * unit, 4 * unit]);
+        ctx.lineDashOffset = -this.antsOffset * unit;
+        ctx.strokeStyle = "#fff";
         ctx.stroke(path);
         ctx.restore();
     }
@@ -820,17 +941,47 @@ export class CanvasView extends EventTarget {
 
     // Contornos cerrados [[x, y, x, y, ...], ...] en coordenadas de la imagen; sin transformar, en
     // píxeles enteros de la pantalla para que se vean nítidos.
+    // Sin transformar, el contorno va en el primer píxel de dentro por los cuatro lados (como en
+    // Kaint): los contornos llevan el interior a su derecha y cada vértice se corre medio píxel de la
+    // pantalla hacia ese lado (en las esquinas, hacia los dos). Con el zum por debajo del 100 % (los
+    // píxeles de la imagen miden menos que los de la pantalla), suavizado y sin los vértices a menos
+    // de medio píxel del anterior: los escalones se ven como una línea seguida y no como dientes.
     strokeOutline(ctx, loops, transform = null) {
-        const px = (n) => Math.round(n * this.dpr) / this.dpr + 0.5 / this.dpr;
+        const px = (n) => Math.round(n * this.dpr) / this.dpr;
+        const half = 0.5 / this.dpr;
+        const smooth = !transform && this.scale * this.dpr < 1;
         const path = new Path2D();
         for (const loop of loops) {
-            for (let i = 0; i < loop.length; i += 2) {
-                let p = { x: loop[i], y: loop[i + 1] };
-                if (transform)
+            const n = loop.length / 2;
+            let lastX = 0, lastY = 0, count = 0;
+            for (let i = 0; i < n; ++i) {
+                let p = { x: loop[i * 2], y: loop[i * 2 + 1] };
+                if (transform) {
                     p = transform.transformPoint(p);
-                const v = this.imageToView(p.x, p.y), x = transform ? v.x : px(v.x), y = transform ? v.y : px(v.y);
+                    const v = this.imageToView(p.x, p.y);
+                    i ? path.lineTo(v.x, v.y) : path.moveTo(v.x, v.y);
+                    continue;
+                }
+                if (smooth) {
+                    const v = this.imageToView(p.x, p.y), x = v.x + half, y = v.y + half;
+                    if (count && Math.abs(x - lastX) + Math.abs(y - lastY) < half)
+                        continue;
+                    count++ ? path.lineTo(x, y) : path.moveTo(x, y);
+                    lastX = x;
+                    lastY = y;
+                    continue;
+                }
+                const prev = (i + n - 1) % n, next = (i + 1) % n;
+                const din = [Math.sign(loop[i * 2] - loop[prev * 2]), Math.sign(loop[i * 2 + 1] - loop[prev * 2 + 1])];
+                const dout = [Math.sign(loop[next * 2] - loop[i * 2]), Math.sign(loop[next * 2 + 1] - loop[i * 2 + 1])];
+                const nin = [-din[1], din[0]], nout = [-dout[1], dout[0]];
+                const o = nin[0] === nout[0] && nin[1] === nout[1] ? nin : [nin[0] + nout[0], nin[1] + nout[1]];
+                const v = this.imageToView(p.x, p.y), x = px(v.x) + o[0] * half, y = px(v.y) + o[1] * half;
                 i ? path.lineTo(x, y) : path.moveTo(x, y);
             }
+            // Una isla de menos de un píxel de la pantalla: un punto.
+            if (smooth && count === 1)
+                path.lineTo(lastX + 1 / this.dpr, lastY);
             path.closePath();
         }
         this.strokeAnts(ctx, path);
@@ -850,12 +1001,45 @@ export class CanvasView extends EventTarget {
         this.overlayAnts = on;
     }
 
+    // Aviso breve junto al puntero, encima de la imagen (a una herramienta le falta algo para
+    // empezar: el origen del Tampón de clonar o del Pincel corrector). Se va solo a los pocos segundos.
+    showNotice(text) {
+        if (!this.notice) {
+            this.notice = document.createElement("div");
+            this.notice.className = "canvas-notice";
+            this.notice.setAttribute("role", "status");
+            this.workspace.appendChild(this.notice);
+        }
+        const box = this.notice, v = this.viewSize();
+        box.textContent = text;
+        box.classList.add("shown");
+        // Debajo y a la derecha del puntero (encima si no cabe), sin salirse de la vista.
+        const pointer = this.lastPointer || { x: v.w / 2, y: v.h / 2 };
+        const w = box.offsetWidth, h = box.offsetHeight;
+        let x = pointer.x + 18, y = pointer.y + 22;
+        if (y + h > v.h - 6)
+            y = pointer.y - 14 - h;
+        x = Math.max(6, Math.min(x, v.w - 6 - w));
+        y = Math.max(6, Math.min(y, v.h - 6 - h));
+        box.style.left = `${this.canvas.offsetLeft + x}px`;
+        box.style.top = `${this.canvas.offsetTop + y}px`;
+        clearTimeout(this.noticeTimer);
+        this.noticeTimer = setTimeout(() => box.classList.remove("shown"), 3500);
+    }
+
+    hideNotice() {
+        clearTimeout(this.noticeTimer);
+        this.notice?.classList.remove("shown");
+    }
+
     // --- Ratón -----------------------------------------------------------------------------
 
     toolEvent(e) {
         const rect = this.canvas.getBoundingClientRect();
         const vx = e.clientX - rect.left, vy = e.clientY - rect.top;
         const p = this.viewToImage(vx, vy);
+        // Donde está el puntero (también el dedo o el lápiz): junto a él salen los avisos.
+        this.lastPointer = { x: vx, y: vy };
         return {
             x: p.x, y: p.y, vx, vy, button: e.button === 2 ? "right" : e.button === 1 ? "middle" : "left",
             shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, pressure: e.pressure || 0.5,

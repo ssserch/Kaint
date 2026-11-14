@@ -14,10 +14,10 @@ import { download } from "../core/ImageIO.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
-import { baseColors, ColorRoles, resolveScheme, themeFromJson, themeToJson } from "./Themes.js";
-import { BackgroundAccept, BackgroundDefaults, backgroundType, clearBackground, isVideoFile, loadBackgroundFile, storeBackground } from "./Background.js";
+import { baseColors, ColorRoles, customColors, readDesign, resolveScheme, themeFromJson, themeToJson, Win7WindowColors } from "./Themes.js";
+import { BackgroundAccept, BackgroundDefaults, backgroundAlignment, backgroundType, clearBackground, isVideoFile, loadBackgroundFile, storeBackground } from "./Background.js";
 import { unzip, zip } from "../core/Zip.js";
-import { currentLanguage, plain, tr, trn } from "../i18n.js";
+import { CustomLanguages, currentCustomLanguage, currentLanguage, plain, tr, trn } from "../i18n.js";
 import { ResampleMethods } from "../core/Resample.js";
 import { Effects } from "../core/Effects.js";
 import { Customization } from "../Customization.js";
@@ -827,13 +827,70 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 scheme.value = "5";
                 await customThemeDialog();
             });
-            const language = select([["en", "English"], ["es", "Español"]], Settings.get("language"));
+            const languageOptions = () => [["en", "English"], ["es", "Español"],
+                                           ...CustomLanguages.list().map((l) => [`custom:${l.id}`, l.name])];
+            const language = select(languageOptions(), Settings.get("language"));
             const reload = el("button", { className: "pushbutton", textContent: tr("Recargar"), style: { visibility: "hidden" } });
             reload.addEventListener("click", () => location.reload());
+            // Idiomas personalizados: importar, crear, editar, exportar y quitar.
+            const chosenCustom = () => (language.value.startsWith("custom:") ? CustomLanguages.find(language.value.slice(7)) : null);
+            let syncLanguageButtons = () => {};
             language.addEventListener("change", () => {
                 Settings.set("language", language.value);
                 reload.style.visibility = "visible";
+                syncLanguageButtons();
             });
+            const refreshLanguages = (chosen) => {
+                language.replaceChildren(...languageOptions().map(([v, t]) => el("option", { value: v, textContent: t })));
+                language.value = chosen ?? Settings.get("language");
+                if (language.value !== Settings.get("language")) {
+                    Settings.set("language", language.value);
+                    reload.style.visibility = "visible";
+                }
+                syncLanguageButtons();
+            };
+            const languageFile = el("input", { type: "file", accept: ".kaintlang,.json,application/json", hidden: true });
+            languageFile.addEventListener("change", async () => {
+                const f = languageFile.files?.[0];
+                languageFile.value = "";
+                if (!f)
+                    return;
+                try {
+                    const lang = CustomLanguages.parse(await f.text());
+                    CustomLanguages.save(lang);
+                    refreshLanguages(`custom:${lang.id}`);
+                } catch (e) {
+                    alert(tr("No se pudo importar el idioma: %1", e.message));
+                }
+            });
+            const importLanguage = button(tr("Importar…"), tr("Importar un idioma personalizado (.kaintlang)"), () => languageFile.click());
+            const newLanguage = button(tr("Nuevo…"), tr("Crear un idioma personalizado"), async () => {
+                const lang = await languageEditorDialog({ id: `lang-${Date.now().toString(36)}`, name: "", code: "", author: "", authorUrl: "", strings: {} });
+                if (lang)
+                    refreshLanguages(`custom:${lang.id}`);
+            });
+            const editLanguage = button(tr("Editar…"), tr("Editar el idioma personalizado elegido"), async () => {
+                const lang = chosenCustom();
+                if (lang && await languageEditorDialog(lang))
+                    refreshLanguages(`custom:${lang.id}`);
+            });
+            const exportLanguage = button(tr("Exportar…"), tr("Guardar el idioma personalizado elegido en un archivo"), () => {
+                const lang = chosenCustom();
+                if (lang)
+                    download(new Blob([CustomLanguages.serialize(lang)], { type: "application/json" }), `${lang.name || lang.id}.kaintlang`);
+            });
+            const removeLanguage = button(tr("Quitar"), tr("Quitar el idioma personalizado elegido"), () => {
+                const lang = chosenCustom();
+                if (lang && confirm(tr("¿Quieres quitar el idioma «%1»?", lang.name))) {
+                    CustomLanguages.remove(lang.id);
+                    refreshLanguages(language.value === `custom:${lang.id}` ? "en" : undefined);
+                }
+            });
+            syncLanguageButtons = () => {
+                const own = !!chosenCustom();
+                editLanguage.disabled = exportLanguage.disabled = removeLanguage.disabled = !own;
+            };
+            syncLanguageButtons();
             const packs = await IconPacks.list();
             const pack = select(packs.map((p) => [p.id, p.name]), IconPacks.activeId());
             pack.addEventListener("change", () => IconPacks.activate(pack.value));
@@ -867,7 +924,55 @@ export async function settingsDialog(app = null, startPage = "interface") {
             syncWin7Shape();
             buttonsStyle.addEventListener("change", syncWin7Shape);
             window.addEventListener("kaint-settings", (e) => (e.detail?.key === "colorScheme" || e.detail?.key === "customTheme") && syncWin7Shape());
-            win7Shape.addEventListener("change", () => Settings.set("win7PanelClose", Number(win7Shape.value)));
+            win7Shape.addEventListener("change", () => {
+                Settings.set("win7PanelClose", Number(win7Shape.value));
+                themeWin7Shape.value = win7Shape.value;
+            });
+            // Como en Kaint: con un tema Windows 7, la forma de la X de las ventanas también junto al
+            // tema (sea cual sea el estilo de los botones elegido).
+            const themeWin7Shape = select([[0, tr("Unido al borde de arriba")], [1, tr("Rectángulo")], [2, tr("Cuadrado")]],
+                                          Number(Settings.get("win7PanelClose") ?? 1));
+            themeWin7Shape.title = win7Shape.title;
+            themeWin7Shape.addEventListener("change", () => {
+                Settings.set("win7PanelClose", Number(themeWin7Shape.value));
+                win7Shape.value = themeWin7Shape.value;
+                // Con otro estilo de botones elegido, la forma solo se ve con los de Windows 7.
+                if (Number(buttonsStyle.value) !== 0 && Number(buttonsStyle.value) !== 3) {
+                    buttonsStyle.value = "3";
+                    Settings.set("titleButtons", 3);
+                    syncWin7Shape();
+                }
+            });
+            const themeWin7Row = el("label", { style: { marginLeft: "20px" } }, [tr("Botón de cerrar de las ventanas:"), themeWin7Shape]);
+            // Windows 7: el color de las ventanas, como «Color de ventana» de Windows 7 (sus colores o
+            // uno propio). El personalizado lo tiene en Personalizar….
+            const glassValue = String(Settings.get("win7Glass") || "").toLowerCase();
+            const glassPreset = Win7WindowColors.find(([, hex]) => hex === glassValue);
+            const glassChoice = select([["", tr("Predeterminado")], ...Win7WindowColors.map(([name, hex]) => [hex, tr(name)]),
+                                        ["custom", tr("Personalizado")]],
+                                       !glassValue ? "" : glassPreset ? glassPreset[1] : "custom");
+            const glassInput = el("input", { type: "color", value: glassValue || "#7ea7d6" });
+            glassInput.hidden = glassChoice.value !== "custom";
+            // Cada opción con su color al lado (donde el navegador lo muestra).
+            for (const option of glassChoice.options) {
+                if (!/^#/.test(option.value))
+                    continue;
+                option.style.boxShadow = `inset 14px 0 0 ${option.value}`;
+                option.style.paddingLeft = "18px";
+            }
+            glassChoice.addEventListener("change", () => {
+                glassInput.hidden = glassChoice.value !== "custom";
+                Settings.set("win7Glass", glassChoice.value === "custom" ? glassInput.value : glassChoice.value);
+            });
+            glassInput.addEventListener("input", () => Settings.set("win7Glass", glassInput.value));
+            const themeGlassRow = el("label", { style: { marginLeft: "20px" } }, [tr("Color de las ventanas:"), glassChoice, glassInput]);
+            themeGlassRow.title = tr("Como «Color de ventana» de Windows 7: el cristal de los marcos, la franja de los menús y las cabeceras de las ventanas. Solo con los temas Windows 7.");
+            const syncThemeWin7 = () => {
+                themeWin7Row.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win7 ? "" : "none";
+                themeGlassRow.style.display = [7, 10].includes(Number(Settings.get("colorScheme")) || 0) ? "" : "none";
+            };
+            syncThemeWin7();
+            window.addEventListener("kaint-settings", (e) => (e.detail?.key === "colorScheme" || e.detail?.key === "customTheme") && syncThemeWin7());
             const buttonsSide = select([[0, tr("A la derecha")], [1, tr("A la izquierda")]], Settings.get("titleButtonsLeft") ? 1 : 0);
             buttonsSide.addEventListener("change", () => Settings.set("titleButtonsLeft", buttonsSide.value === "1"));
             const border = numberInput(Settings.get("panelBorder"), 1, 12);
@@ -891,6 +996,10 @@ export async function settingsDialog(app = null, startPage = "interface") {
             uiFontSize.title = tr("Tamaño de la letra en puntos (Automático: el del sistema o del tema).");
             uiFontSize.addEventListener("input", () => Settings.set("uiFontSize", uiFontSize.read()));
             // Como el color propio de la barra superior de Kaint en Linux (el de énfasis de Windows).
+            const fakeTitle = check(tr("Mostrar una barra de título como la de Kaint para el escritorio"), "fakeTitleBar",
+                                    tr("Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint (sin los botones de la ventana)."));
+            const stripFull = check(tr("Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba"), "stripFullHeight",
+                                    tr("Como en Paint.NET: el recuadro de la imagen actual y el de la que tiene el puntero llegan hasta arriba. Desactivado, solo la altura de la miniatura."));
             const titleOn = checkbox(tr("Color propio en la barra superior:"), !!Settings.get("titleBarColor"));
             titleOn.title = tr("Como «Mostrar el color de énfasis en las barras de título» de Windows: la fila de los menús y las cabeceras de las ventanas llevan este color (los temas Windows 98, XP y 7 tienen sus propias barras).");
             const titleColor = el("input", { type: "color", value: Settings.get("titleBarColor") || "#744da9", disabled: !Settings.get("titleBarColor") });
@@ -1004,11 +1113,14 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), "paletteTranslucent",
                       tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de menos colores no se muestra nunca.")),
                 el("label", {}, [tr("Tema:"), scheme, customize]),
+                themeWin7Row, themeGlassRow,
                 el("label", {}, [tr("Estilo de la interfaz:"), look]),
                 el("label", {}, [tr("Cursores:"), cursors]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
-                note(tr("Los cambios de idioma se aplican al recargar la página.")),
+                el("div", { className: "row-buttons" }, [importLanguage, newLanguage, editLanguage, exportLanguage, removeLanguage, languageFile]),
+                note(tr("Los cambios de idioma se aplican al recargar la página. En un idioma personalizado, lo que no esté traducido sale en inglés.")),
                 el("label", {}, [tr("Fuente de la interfaz:"), uiFont, fontList, uiFontSize, tr("pt")]),
+                fakeTitle, stripFull,
                 el("div", { className: "row" }, [titleOn, titleColor]),
                 selectionRow,
                 el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
@@ -1053,7 +1165,8 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 brightness.set(0.75);
                 Settings.set("checkerBrightness", 191);
             });
-            const ruler = select([[0, tr("Según el tema")], [1, tr("Del color de la barra de herramientas")], [2, tr("Oscura")]], Settings.get("rulerStyle"));
+            const ruler = select([[0, tr("Según el tema")], [1, tr("Del color de la barra de herramientas")], [2, tr("Oscura")], [3, tr("Como Paint.NET")]],
+                                 Settings.get("rulerStyle"));
             ruler.addEventListener("change", () => Settings.set("rulerStyle", Number(ruler.value)));
             return [check(tr("Proyectar una sombra bajo el lienzo"), "dropShadow"),
                     borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas claros"), "canvasBorderLight", "#cfcfcf"),
@@ -1341,33 +1454,94 @@ async function customThemeDialog() {
     const dlg = new Dialog(tr("Tema personalizado"), { iconName: "configure" });
     const current = Settings.get("customTheme") || { base: "dark", colors: {} };
     let theme = { base: current.base || "dark", colors: { ...(current.colors || {}) },
-                  image: current.image ? { ...BackgroundDefaults, ...current.image } : null };
-    const save = () => Settings.set("customTheme", { base: theme.base, colors: { ...theme.colors }, image: theme.image ? { ...theme.image } : null });
+                  image: current.image ? { ...BackgroundDefaults, ...current.image } : null, design: readDesign(current.design || {}) };
+    const save = () => Settings.set("customTheme", { base: theme.base, colors: { ...theme.colors }, image: theme.image ? { ...theme.image } : null,
+                                                     design: { ...theme.design } });
     const base = select([["light", tr("Claro")], ["dark", tr("Oscuro")], ["win7", tr("Windows 7")], ["win7dark", tr("Windows 7 oscuro")],
                          ["xp", tr("Windows XP")], ["win98", tr("Windows 98")], ["win98alt", tr("Windows 98 ALT")]], theme.base);
     base.title = tr("Los temas de Windows 7 y XP traen su estilo de botones, menús y ventanas: así puedes, por ejemplo, poner una imagen o un vídeo de fondo con el tema de Windows 7.");
     const grid = el("div", { className: "theme-colors" });
     const fill = () => {
         grid.replaceChildren();
-        const defaults = baseColors(theme.base);
+        const defaults = baseColors(theme.base), inputs = {};
+        // Los que no tienen color propio muestran el que llevan (con Windows 7, algunos siguen al
+        // color de las ventanas).
+        const showEffective = () => {
+            const effective = customColors(theme.base, theme.colors);
+            for (const [key, input] of Object.entries(inputs))
+                if (!theme.colors[key])
+                    input.value = effective[key] || "#000000";
+        };
         for (const [key, , label] of ColorRoles) {
             // El cristal, solo con el estilo de Windows 7 (los demás no lo usan).
             if (key === "glass" && !defaults.glass)
                 continue;
             const input = el("input", { type: "color", value: theme.colors[key] || defaults[key] });
+            inputs[key] = input;
             const name = el("span", { textContent: tr(label), style: { fontWeight: theme.colors[key] ? "600" : "" } });
             input.addEventListener("input", () => {
                 theme.colors[key] = input.value;
                 name.style.fontWeight = "600";
                 save();
+                showEffective();
             });
             grid.append(name, input);
         }
+        showEffective();
     };
     base.addEventListener("change", () => {
-        theme = { base: base.value, colors: {}, image: theme.image };
+        theme = { base: base.value, colors: {}, image: theme.image, design: theme.design };
         save();
         fill();
+    });
+    // Diseño (como en Kaint): botones, espaciado, redondeo, opacidad, iconos, fuente y bordes.
+    const designSection = () => {
+        const d = theme.design;
+        const change = (key, value) => {
+            theme.design = { ...theme.design, [key]: value };
+            save();
+        };
+        const pick = (key, options) => {
+            const s = select(options, d[key]);
+            s.addEventListener("change", () => change(key, Number(s.value)));
+            return s;
+        };
+        const number = (key, min, max) => {
+            const n = el("input", { type: "number", min, max, value: d[key], style: { width: "64px" } });
+            n.addEventListener("change", () => change(key, Math.max(min, Math.min(max, Math.round(Number(n.value) || 0)))));
+            return n;
+        };
+        const font = el("input", { type: "text", value: d.fontFamily, placeholder: tr("La del sistema"), style: { width: "160px" } });
+        font.addEventListener("change", () => change("fontFamily", font.value.trim()));
+        const flag = (key, text) => {
+            const c = checkbox(text, !!d[key]);
+            c.input.addEventListener("change", () => change(key, c.input.checked));
+            return c;
+        };
+        return el("div", { className: "theme-design" }, [
+            el("h4", { textContent: tr("Diseño") }),
+            el("label", {}, [tr("Botones de las barras:"), pick("buttonStyle", [[0, tr("Plano (Paint.NET)")], [1, tr("Con marco")], [2, tr("Redondeados")]])]),
+            el("label", {}, [tr("Espaciado:"), pick("density", [[0, tr("Compacto")], [1, tr("Normal")], [2, tr("Amplio")]])]),
+            el("label", {}, [tr("Redondeo de las esquinas:"), number("radius", 0, 16), tr("px")]),
+            el("label", {}, [tr("Opacidad de las ventanas translúcidas:"), number("panelOpacity", 20, 100), "%"]),
+            el("label", {}, [tr("Iconos de las barras:"), number("iconSize", 12, 48), tr("px")]),
+            el("label", {}, [tr("Iconos de la ventana Herramientas:"), number("toolIconSize", 12, 48), tr("px")]),
+            el("label", {}, [tr("Fuente:"), font, number("fontSize", 0, 32), tr("pt")]),
+            flag("classic", tr("Bordes clásicos en relieve (como Windows 98)")),
+            flag("pixelFont", tr("Texto sin suavizado (pixelado, como Windows 98)")),
+        ]);
+    };
+    let design = designSection();
+    const resetAll = el("button", { className: "pushbutton", textContent: tr("Restablecer todo") });
+    resetAll.title = tr("Los colores y el diseño de la base, sin cambios (la imagen de fondo se queda).");
+    resetAll.addEventListener("click", () => {
+        theme.colors = {};
+        theme.design = readDesign({});
+        save();
+        fill();
+        const fresh = designSection();
+        design.replaceWith(fresh);
+        design = fresh;
     });
     const reset = el("button", { className: "pushbutton", textContent: tr("Restablecer") });
     reset.title = tr("Los colores de la base, sin cambios.");
@@ -1386,16 +1560,24 @@ async function customThemeDialog() {
     const remove = el("button", { className: "pushbutton", textContent: tr("Quitar") });
     const mode = select([[0, tr("Mosaico")], [1, tr("Tamaño original")], [2, tr("Estirada")], [3, tr("Ajustada")], [4, tr("Rellenar")]], 0);
     const anchor = select([[0, tr("Arriba a la izquierda")], [1, tr("Arriba")], [2, tr("Arriba a la derecha")], [3, tr("Izquierda")], [4, tr("Centro")],
-                           [5, tr("Derecha")], [6, tr("Abajo a la izquierda")], [7, tr("Abajo")], [8, tr("Abajo a la derecha")]], 4);
+                           [5, tr("Derecha")], [6, tr("Abajo a la izquierda")], [7, tr("Abajo")], [8, tr("Abajo a la derecha")],
+                           [9, tr("Personalizada")]], 4);
+    // La alineación en cada eje, para colocarla en cualquier punto entre esas nueve posiciones.
+    const alignX = el("input", { type: "range", min: 0, max: 100, step: 1 });
+    alignX.title = tr("0 %: pegada a la izquierda; 50 %: centrada; 100 %: pegada a la derecha.");
+    const alignY = el("input", { type: "range", min: 0, max: 100, step: 1 });
+    alignY.title = tr("0 %: pegada arriba; 50 %: centrada; 100 %: pegada abajo.");
+    const alignXValue = el("span"), alignYValue = el("span");
     const scale = el("input", { type: "number", min: 10, max: 400, step: 10, style: { width: "64px" } });
     scale.title = tr("Tamaño de la imagen en mosaico o a tamaño original.");
     const opacity = el("input", { type: "range", min: 0, max: 100, step: 1 });
     const blur = el("input", { type: "range", min: 0, max: 40, step: 1 });
+    blur.title = tr("Desenfoque gaussiano, en píxeles de la pantalla.");
     const grayscale = el("input", { type: "checkbox" });
     const tint = el("input", { type: "color" });
     const tintStrength = el("input", { type: "range", min: 0, max: 100, step: 1 });
     const opacityValue = el("span"), blurValue = el("span"), tintValue = el("span");
-    const controls = [mode, anchor, scale, opacity, blur, grayscale, tint, tintStrength];
+    const controls = [mode, anchor, alignX, alignY, scale, opacity, blur, grayscale, tint, tintStrength];
     const syncImage = () => {
         const image = theme.image;
         fileName.value = image?.name || "";
@@ -1404,7 +1586,12 @@ async function customThemeDialog() {
             c.disabled = !image;
         const v = image || BackgroundDefaults;
         mode.value = String(v.mode);
-        anchor.value = String(v.anchor);
+        const at = backgroundAlignment(v), ownAlignment = Number(v.x) >= 0 || Number(v.y) >= 0;
+        anchor.value = String(ownAlignment ? 9 : v.anchor);
+        alignX.value = String(at.x);
+        alignY.value = String(at.y);
+        alignXValue.textContent = `${at.x} %`;
+        alignYValue.textContent = `${at.y} %`;
         scale.value = String(v.scale);
         opacity.value = String(v.opacity);
         blur.value = String(v.blur);
@@ -1416,7 +1603,7 @@ async function customThemeDialog() {
         tintValue.textContent = `${v.tintStrength} %`;
         // Escala: en mosaico y a tamaño original; la posición, salvo estirada.
         scale.disabled = !image || v.mode > 1;
-        anchor.disabled = !image || v.mode === 2;
+        anchor.disabled = alignX.disabled = alignY.disabled = !image || v.mode === 2;
         status.textContent = image?.video ? tr("Vídeo: se reproduce en bucle y sin sonido.") : "";
     };
     const edit = (key, read) => () => {
@@ -1427,7 +1614,28 @@ async function customThemeDialog() {
         syncImage();
     };
     mode.addEventListener("change", edit("mode", () => Number(mode.value)));
-    anchor.addEventListener("change", edit("anchor", () => Number(anchor.value)));
+    // En una de las nueve posiciones de siempre es ella (así el tema lo entiende también Kaint de
+    // antes); si no, la alineación propia.
+    const align = (x, y) => {
+        if (x % 50 === 0 && y % 50 === 0)
+            Object.assign(theme.image, { anchor: (y / 50) * 3 + x / 50, x: -1, y: -1 });
+        else
+            Object.assign(theme.image, { x, y });
+    };
+    const editAlignment = (apply) => () => {
+        if (!theme.image)
+            return;
+        apply(backgroundAlignment(theme.image));
+        save();
+        syncImage();
+    };
+    anchor.addEventListener("change", editAlignment((at) => {
+        const i = Number(anchor.value);
+        // «Personalizada»: donde está, para moverla con los deslizadores.
+        Object.assign(theme.image, i < 9 ? { anchor: i, x: -1, y: -1 } : { x: at.x, y: at.y });
+    }));
+    alignX.addEventListener("input", editAlignment((at) => align(Number(alignX.value), at.y)));
+    alignY.addEventListener("input", editAlignment((at) => align(at.x, Number(alignY.value))));
     scale.addEventListener("change", edit("scale", () => Math.max(10, Math.min(400, Number(scale.value) || 100))));
     opacity.addEventListener("input", edit("opacity", () => Number(opacity.value)));
     blur.addEventListener("input", edit("blur", () => Number(blur.value)));
@@ -1469,6 +1677,8 @@ async function customThemeDialog() {
         status,
         row(tr("Colocación:"), mode),
         row(tr("Posición:"), anchor),
+        row(tr("Alineación horizontal (X):"), alignX, alignXValue),
+        row(tr("Alineación vertical (Y):"), alignY, alignYValue),
         row(tr("Escala:"), scale, "%"),
         row(tr("Opacidad de la imagen:"), opacity, opacityValue),
         row(tr("Desenfoque:"), blur, blurValue),
@@ -1529,7 +1739,7 @@ async function customThemeDialog() {
             if (!json || typeof json !== "object")
                 throw new Error(tr("No es un tema de Kaint."));
             const imported = themeFromJson(json);
-            theme = { base: imported.base, colors: imported.colors, image: null };
+            theme = { base: imported.base, colors: imported.colors, image: null, design: imported.design };
             if (media)
                 theme.image = { ...BackgroundDefaults, ...imported.image, ...(await storeBackground(media)) };
             else
@@ -1537,6 +1747,9 @@ async function customThemeDialog() {
             base.value = theme.base;
             save();
             fill();
+            const fresh = designSection();
+            design.replaceWith(fresh);
+            design = fresh;
             syncImage();
         } catch (e) {
             status.textContent = tr("No se pudo leer el tema de «%1».", file.name) + (e?.message ? ` ${e.message}` : "");
@@ -1544,10 +1757,10 @@ async function customThemeDialog() {
     });
 
     dlg.body.append(el("label", { style: { display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px" } },
-                       [tr("Basado en:"), base, reset, importTheme, exportTheme, importPicker]),
+                       [tr("Basado en:"), base, reset, resetAll, importTheme, exportTheme, importPicker]),
                     el("small", { style: { display: "block", opacity: 0.75, marginBottom: "6px" },
                                   textContent: tr("Los colores que no cambies siguen al modo elegido (y, con el estilo de Windows 7 o XP, a su tema: Windows 7 claro u oscuro). Los cambiados aparecen en negrita.") }),
-                    grid, background);
+                    grid, design, background);
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     save();
     return dlg.exec();
@@ -1671,6 +1884,10 @@ function pluginsPage(refresh) {
     const menuIcons = checkbox(tr("Mostrar el icono de complemento junto a sus efectos en los menús"), Settings.get("pluginMenuIcons") !== false);
     menuIcons.title = tr("En Ajustes y Efectos, los efectos que vienen de complementos llevan a la derecha la pieza de puzle de los complementos.");
     menuIcons.input.addEventListener("change", () => Settings.set("pluginMenuIcons", menuIcons.input.checked));
+    // Las funciones de PhotoCraft que trae Kaint (desactivadas por defecto).
+    const extras = checkbox(tr("Activar las funciones de PhotoCraft"), Settings.get("photocraftExtras") === true);
+    extras.title = tr("Más ajustes y efectos (Intensidad, Mapa de degradado, Corrección selectiva, la galería de filtros artísticos, de bosquejo y de textura...) y herramientas, de PhotoCraft. En los menús llevan la pieza de puzle de los complementos.");
+    extras.input.addEventListener("change", () => Settings.set("photocraftExtras", extras.input.checked));
 
     // Arrastrar archivos o carpetas a la página (como en Kaint): se instalan los complementos que se
     // pueden leer; los que no son compatibles o están dañados se dejan (y se dice cuáles).
@@ -1780,7 +1997,7 @@ function pluginsPage(refresh) {
             [".xmp", tr("Ajustes de LightCraft")],
         ]),
         list, details, el("div", { className: "row-buttons" }, [install, browse, remove, file]), status, dropHint,
-        menuIcons,
+        menuIcons, extras,
     ];
 }
 
@@ -1799,40 +2016,128 @@ function withFormats(text, formats) {
     return p;
 }
 
-// El catálogo de complementos: cada uno con su botón de instalar.
+// Explorar complementos: una lista limitada de complementos elegidos y probados para Kaint, por
+// secciones (como en Kaint): los de paint.js (Kaint.HTML), los filtros de PhotoCraft y los de
+// Paint.NET, que solo funcionan en Kaint para el escritorio.
 async function pluginCatalogDialog() {
     const dlg = new Dialog(tr("Explorar complementos"), { iconName: "plugins" });
-    const list = el("div", { className: "list catalog-list" }, [el("p", { textContent: tr("Cargando el catálogo…") })]);
-    dlg.body.appendChild(list);
+    dlg.body.appendChild(el("p", { textContent: tr("Esta es una lista limitada de complementos elegidos y probados para Kaint. Cada uno es obra de su autor, que sale junto a su nombre. Puedes instalar otros desde Configuración > Complementos > Instalar complemento…"),
+                                   style: { maxWidth: "560px" } }));
+    const bar = el("div", { className: "fx-tabbar", role: "tablist" }), pages = el("div", { className: "fx-pages catalog-pages" });
+    const sections = [
+        { title: tr("Kaint.HTML"), note: tr("Complementos de paint.js del catálogo de Kaint.HTML. Los .paintjs tienen el mismo acceso que Kaint: instala solo los que sean de confianza.") },
+        { title: tr("PhotoCraft"), note: tr("Filtros de PhotoCraft (.wasm) de la tienda ArtCraft. Se ejecutan sin acceso a nada de fuera.") },
+        { title: tr("Paint.NET"), note: tr("Complementos de Paint.NET (.dll) que funcionan en Kaint para el escritorio (Windows, y Linux con mono). En el navegador no se pueden ejecutar: instálalos desde Kaint.") },
+    ];
+    const lists = sections.map((section, index) => {
+        const tab = el("button", { className: "fx-tab", type: "button", role: "tab", textContent: section.title });
+        const list = el("div", { className: "list catalog-list" }, [el("p", { textContent: tr("Cargando el catálogo…") })]);
+        const page = el("div", { className: "fx-page" }, [el("p", { textContent: section.note, style: { maxWidth: "560px", opacity: 0.85 } }), list]);
+        tab.addEventListener("click", () => show(index));
+        bar.appendChild(tab);
+        pages.appendChild(page);
+        return { tab, page, list };
+    });
+    const show = (index) => lists.forEach((t, i) => {
+        t.tab.classList.toggle("current", i === index);
+        t.page.style.display = i === index ? "" : "none";
+    });
+    show(0);
+    dlg.body.appendChild(el("div", { className: "fx-tabs" }, [bar, pages]));
     dlg.addButton(tr("Cerrar"), "ok", { isDefault: true });
     const pending = dlg.exec();
-    try {
-        const entries = await Plugins.catalog();
+    const row = (entry, button) => {
+        const credit = el("div", { textContent: [tr("De %1", entry.author), entry.license].filter(Boolean).join(" · ") });
+        if (/^https?:\/\//.test(entry.website || "")) {
+            credit.append(" · ");
+            credit.appendChild(el("a", { href: entry.website, target: "_blank", rel: "noopener noreferrer", textContent: tr("Página web") }));
+        }
+        const effects = entry.effects?.length > 1 || (entry.effects?.length === 1 && entry.effects[0] !== entry.name)
+            ? tr("Efectos: %1", entry.effects.join(", ")) : "";
+        const status = el("small");
+        const details = [entry.description, effects].filter(Boolean).join(String.fromCharCode(10));
+        const info = el("div", {}, [el("b", { textContent: `${entry.name} ${entry.version}` }), credit,
+                                    el("div", { textContent: details, style: { opacity: 0.8, whiteSpace: "pre-line" } }),
+                                    status]);
+        return { element: el("div", { className: "catalog-row" }, button ? [info, button] : [info]), status };
+    };
+    const installButton = (installed) => {
+        const b = el("button", { className: "pushbutton", textContent: installed ? tr("Instalado") : tr("Instalar") });
+        b.disabled = installed;
+        return b;
+    };
+    // Kaint.HTML (paint.js).
+    Plugins.catalog().then((entries) => {
+        const list = lists[0].list;
         list.replaceChildren();
-        for (const entry of entries) {
+        for (const entry of entries.filter((e) => e.author && e.author !== tr("Desconocido"))) {
             const installed = Plugins.records.find((r) => r.id === entry.id);
-            const b = el("button", { className: "pushbutton", textContent: installed?.version === entry.version ? tr("Instalado") : tr("Instalar") });
-            b.disabled = installed?.version === entry.version;
-            const status = el("small");
+            const b = installButton(installed?.version === entry.version);
+            const r = row(entry, b);
             b.addEventListener("click", async () => {
                 b.disabled = true;
                 try {
                     await Plugins.installFromCatalog(entry);
                     b.textContent = tr("Instalado");
                 } catch (e) {
-                    status.textContent = e.message;
+                    r.status.textContent = e.message;
                     b.disabled = false;
                 }
             });
-            list.appendChild(el("div", { className: "catalog-row" }, [
-                el("div", {}, [el("b", { textContent: `${entry.name} ${entry.version}` }), el("div", { textContent: `${entry.author} · ${entry.license}` }),
-                               el("div", { textContent: entry.description, style: { opacity: 0.8 } }), status]), b]));
+            list.appendChild(r.element);
         }
-        if (!entries.length)
+        if (!list.children.length)
             list.replaceChildren(el("p", { textContent: tr("El catálogo está vacío.") }));
-    } catch (e) {
-        list.replaceChildren(el("p", { textContent: tr("No se pudo cargar el catálogo: %1", e.message) }));
-    }
+    }).catch((e) => lists[0].list.replaceChildren(el("p", { textContent: tr("No se pudo cargar el catálogo: %1", e.message) })));
+    // PhotoCraft y Paint.NET (el catálogo de Kaint).
+    Plugins.kaintCatalog().then(({ photocraft, paintnet }) => {
+        const craft = lists[1].list;
+        craft.replaceChildren();
+        for (const entry of photocraft) {
+            const file = entry.files[0].path.split("/").pop();
+            const b = installButton(Plugins.records.some((r) => r.fileName === file || r.id === entry.id));
+            const r = row(entry, b);
+            b.addEventListener("click", async () => {
+                b.disabled = true;
+                try {
+                    await Plugins.installCraftFromCatalog(entry);
+                    b.textContent = tr("Instalado");
+                } catch (e) {
+                    r.status.textContent = e.message;
+                    b.disabled = false;
+                }
+            });
+            craft.appendChild(r.element);
+        }
+        if (!photocraft.length)
+            craft.replaceChildren(el("p", { textContent: tr("El catálogo está vacío.") }));
+        const pdn = lists[2].list;
+        pdn.replaceChildren();
+        for (const entry of paintnet) {
+            if (entry.builtin.length && entry.builtin.every((id) => Effects.some((e) => e.id === id))) {
+                // Integrado en Kaint (también aquí): se activa o se desactiva.
+                const active = () => entry.builtin.every((id) => (Settings.get("boltBaitEffects") || []).includes(id));
+                const b = el("button", { className: "pushbutton", textContent: active() ? tr("Desactivar") : tr("Activar") });
+                const r = row(entry, b);
+                r.status.textContent = tr("Integrado en Kaint.");
+                b.addEventListener("click", () => {
+                    const on = !active();
+                    const list = (Settings.get("boltBaitEffects") || []).filter((id) => !entry.builtin.includes(id));
+                    Settings.set("boltBaitEffects", on ? [...list, ...entry.builtin] : list);
+                    b.textContent = on ? tr("Desactivar") : tr("Activar");
+                });
+                pdn.appendChild(r.element);
+                continue;
+            }
+            const r = row(entry, el("small", { className: "catalog-desktop-only", textContent: tr("Solo en Kaint para el escritorio") }));
+            pdn.appendChild(r.element);
+        }
+        if (!paintnet.length)
+            pdn.replaceChildren(el("p", { textContent: tr("El catálogo está vacío.") }));
+    }).catch((e) => {
+        for (const i of [1, 2])
+            lists[i].list.replaceChildren(el("p", { textContent: tr("No se pudo cargar el catálogo: %1", e.message) }));
+    });
     return pending;
 }
 
@@ -2375,10 +2680,90 @@ const credits = [
     ["98.css (MIT)", "Jordan Scales", "https://jdan.github.io/98.css/"],
     // Kaint no usa el sistema de complementos de paint.js: solo admite sus complementos (.paintjs).
     [`paint.js (${tr("soporte de sus complementos")})`, "LabyStudio", "https://github.com/LabyStudio/paintdotjs"],
+    // Las funciones y herramientas de PhotoCraft (sus algoritmos) y los decodificadores de assets/codecs.
+    ["PhotoCraft (MIT)", "ArtCraft Team", "licenses/PhotoCraft-LICENSE.txt"],
+    ["jpegxr (BSD)", "Brion Vibber, Microsoft (jxrlib)", "https://github.com/brion/jpegxr.js"],
+    ["magick-wasm (Apache-2.0)", "Dirk Lemstra", "https://github.com/dlemstra/magick-wasm"],
 ];
 
 // Como el Acerca de de Kaint: el logo, la versión, los derechos, el enlace al repositorio, la firma
 // con la ola, la traducción y las contribuciones.
+// Quién tradujo el idioma en uso: el de Kaint o, con un idioma personalizado, su autor (con su
+// página, si la dio).
+function translationCredit() {
+    const lang = currentCustomLanguage();
+    if (!lang)
+        return el("div", { textContent: tr("Traducido al español por SSSerch"), style: { marginTop: "6px" } });
+    const who = lang.author || tr("Desconocido");
+    const mark = String.fromCharCode(1);
+    const [before, after] = tr("Traducción al %1 por %2", lang.name, mark).split(mark);
+    const line = el("div", { style: { marginTop: "6px" } });
+    line.append(before);
+    line.appendChild(lang.authorUrl ? el("a", { href: lang.authorUrl, target: "_blank", rel: "noopener noreferrer", textContent: who })
+                                    : document.createTextNode(who));
+    line.append(after ?? "");
+    return line;
+}
+
+// Editor de un idioma personalizado: su nombre, su código, quién lo traduce (y su página) y cada
+// texto (con el inglés al lado). Devuelve el idioma guardado o null.
+async function languageEditorDialog(lang) {
+    const dlg = new Dialog(tr("Editar el idioma"), { iconName: "configure" });
+    const field = (value, placeholder) => el("input", { type: "text", value: value || "", placeholder });
+    const name = field(lang.name, tr("Por ejemplo: Português"));
+    const code = field(lang.code, "pt-BR");
+    const author = field(lang.author, tr("Tu nombre o tu usuario"));
+    const authorUrl = field(lang.authorUrl, "https://");
+    const strings = { ...lang.strings };
+    const search = el("input", { type: "search", placeholder: tr("Buscar…") });
+    const onlyMissing = checkbox(tr("Solo los que faltan por traducir"), false);
+    const count = el("small");
+    const list = el("div", { className: "list language-list" });
+    const sources = CustomLanguages.sources();
+    const updateCount = () => {
+        const done = sources.filter(([k]) => strings[k]).length;
+        count.textContent = tr("%1 de %2 traducidos (lo que falta sale en inglés).", done, sources.length);
+    };
+    const render = () => {
+        const q = search.value.trim().toLowerCase();
+        const shown = sources.filter(([k, v]) => (!onlyMissing.input.checked || !strings[k])
+            && (!q || k.toLowerCase().includes(q) || String(Array.isArray(v) ? v[0] : v).toLowerCase().includes(q)
+                || String(strings[k] || "").toLowerCase().includes(q))).slice(0, 300);
+        list.replaceChildren(...shown.map(([k, v]) => {
+            const english = Array.isArray(v) ? v.join(" / ") : v;
+            const input = el("textarea", { rows: 1, value: Array.isArray(strings[k]) ? strings[k].join(" / ") : strings[k] || "" });
+            input.addEventListener("input", () => {
+                if (input.value.trim())
+                    strings[k] = input.value;
+                else
+                    delete strings[k];
+                updateCount();
+            });
+            return el("div", { className: "language-row" }, [el("div", { className: "language-source", textContent: english, title: k }), input]);
+        }));
+    };
+    search.addEventListener("input", render);
+    onlyMissing.input.addEventListener("change", render);
+    dlg.body.append(
+        el("div", { className: "language-fields" }, [
+            el("label", {}, [tr("Nombre del idioma:"), name]), el("label", {}, [tr("Código del idioma:"), code]),
+            el("label", {}, [tr("Autor de la traducción:"), author]), el("label", {}, [tr("Página del autor:"), authorUrl]),
+        ]),
+        el("div", { className: "row" }, [search, onlyMissing]), count, list,
+        el("small", { textContent: tr("Solo se muestran los primeros 300 que coinciden: busca para llegar a los demás."), style: { opacity: 0.75 } }));
+    updateCount();
+    render();
+    dlg.addButton(tr("Guardar"), "ok", { isDefault: true });
+    dlg.addButton(tr("Cancelar"), null);
+    if ((await dlg.exec()) !== "ok")
+        return null;
+    const url = authorUrl.value.trim();
+    const saved = { id: lang.id, name: name.value.trim() || tr("Idioma personalizado"), code: code.value.trim(), author: author.value.trim(),
+                    authorUrl: /^https?:\/\//.test(url) ? url : "", strings };
+    CustomLanguages.save(saved);
+    return saved;
+}
+
 export async function aboutDialog(version) {
     const dlg = new Dialog(tr("Acerca de Kaint"), { iconName: "help-about" });
     const list = el("div", { className: "credits" }, credits.map(([name, author, url]) =>
@@ -2389,7 +2774,7 @@ export async function aboutDialog(version) {
         el("div", {}, [tr("Copyright © 2026 SSSerch (aka Y2Kerchy) y colaboradores."), el("br"), tr("Software libre con licencia GPL-3.0.")]),
         el("a", { href: REPOSITORY, target: "_blank", rel: "noopener", textContent: REPOSITORY }),
         el("div", {}, [waveLabel("By ", "Y2Kerchy", "https://ssserch.com")]),
-        el("div", { textContent: tr("Traducido al español por SSSerch"), style: { marginTop: "6px" } }),
+        translationCredit(),
         el("div", { textContent: tr("Bibliotecas de software y contribuciones:"), style: { marginTop: "6px" } }),
         list,
         el("small", { textContent: "Paint.NET is a trademark of dotPDN LLC.", style: { opacity: 0.7 } }),
@@ -2399,7 +2784,8 @@ export async function aboutDialog(version) {
 }
 
 // Bienvenida de la primera vez (como la de Kaint): el logo, la versión y el autor (con un botón
-// discreto para donar) y lo básico de la configuración: tema, estilo de la interfaz e idioma. El
+// discreto para donar) y lo básico de la configuración: tema, estilo de la interfaz, idioma y las
+// herramientas extras de PhotoCraft. El
 // tema y el estilo se ven al momento; el idioma, al recargar la página.
 export async function welcomeDialog() {
     const dlg = new Dialog(tr("Te damos la bienvenida a Kaint"));
@@ -2422,6 +2808,11 @@ export async function welcomeDialog() {
         note.textContent = notes[language.value];
         note.style.display = language.value !== startLanguage ? "" : "none";
     });
+    // Las herramientas y los efectos de PhotoCraft (desactivados por defecto): se eligen ya aquí.
+    const extras = checkbox(tr("Activar las herramientas y los efectos extras de PhotoCraft"), Settings.get("photocraftExtras") === true);
+    extras.title = tr("Lazo magnético, Selección de objetos, Quitar, Parche, Pincel corrector y Pincel corrector puntual, y más ajustes y efectos (Intensidad, Mapa de degradado, la galería de filtros...). Llevan la pieza de puzle de los complementos.");
+    extras.classList.add("extras");
+    extras.input.addEventListener("change", () => Settings.set("photocraftExtras", extras.input.checked));
     const donate = el("a", { className: "donate", href: "https://ko-fi.com/opposition", target: "_blank", rel: "noopener",
                              textContent: tr("♥ Donar"), title: tr("Apoyar el desarrollo de Kaint en Ko-fi") });
     dlg.body.appendChild(el("div", { className: "about welcome" }, [
@@ -2436,6 +2827,7 @@ export async function welcomeDialog() {
             el("span", { textContent: tr("Cursores:") }), cursors,
             el("span", { textContent: tr("Idioma:") }), language,
         ]),
+        extras,
         note,
     ]));
     dlg.addButton(tr("Empezar"), "ok", { isDefault: true });

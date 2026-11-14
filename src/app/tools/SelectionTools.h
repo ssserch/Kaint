@@ -52,6 +52,11 @@ protected:
     virtual bool ellipse() const = 0;
     QRectF currentRect(const QPointF& end, Qt::KeyboardModifiers mods) const;
     QPointF m_start;
+    // Donde se pulsó, sin ajustar: el rectángulo incluye el píxel de ese punto y el del puntero.
+    QPointF m_startRaw;
+    // Se arrastró un poco desde donde se pulsó (un clic solo no selecciona nada; un poco de
+    // arrastre ya selecciona ese píxel).
+    bool m_movedEnough = false;
     QPointF m_last;
     bool m_moveOrigin = false;
     QPointF m_originGrab;

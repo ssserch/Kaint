@@ -1,0 +1,56 @@
+{
+    "name": "Kaint",
+    "version": "",
+    "publisher": "SSSerch",
+    "website": "https://github.com/ssserch/Kaint",
+    "supportUrl": "https://github.com/ssserch/Kaint/issues",
+    "copyright": "GPL-3.0",
+    "fileDescription": "{name} Setup",
+    "outputFile": "{name}-{version}-windows-{arch}-setup.exe",
+    "brandingText": "{name} {version}",
+    "icon": "data/kaint.ico",
+    "uninstallerIcon": "data/kaint.ico",
+    "license": "LICENSE",
+    "installFolder": "$LOCALAPPDATA\\Programs\\{name}",
+    "executable": "bin\\kaint.exe",
+    "registryKey": "Kaint",
+    "compression": "lzma",
+    "solidCompression": true,
+    "pages": {
+        "welcome": true,
+        "license": true,
+        "components": true,
+        "folder": true,
+        "finish": true
+    },
+    "runAfterInstall": true,
+    "startMenuShortcut": true,
+    "desktopShortcut": "optional",
+    "userData": {
+        "registryKeys": ["Software\\Kaint"],
+        "folders": [
+            "$APPDATA\\Kaint",
+            "$LOCALAPPDATA\\Kaint\\Kaint",
+            "$LOCALAPPDATA\\Kaint\\Effects",
+            "$LOCALAPPDATA\\Kaint\\Shapes"
+        ],
+        "files": ["$LOCALAPPDATA\\Kaint\\discord.json"],
+        "foldersIfEmpty": ["$LOCALAPPDATA\\Kaint"]
+    },
+    "languages": {
+        "English": {
+            "appComponent": "{name} (required)",
+            "desktopComponent": "Desktop shortcut",
+            "uninstallAppComponent": "{name}",
+            "uninstallDataComponent": "Also delete my settings, palettes, plugins, icon packs, fonts and recovery copies",
+            "running": "{name} is running. Close it and click OK to continue."
+        },
+        "Spanish": {
+            "appComponent": "{name} (necesario)",
+            "desktopComponent": "Acceso directo en el escritorio",
+            "uninstallAppComponent": "{name}",
+            "uninstallDataComponent": "Borrar también mi configuración, paletas, complementos, paquetes de iconos, fuentes y copias de recuperación",
+            "running": "{name} está abierto. Ciérralo y pulsa Aceptar para continuar."
+        }
+    }
+}

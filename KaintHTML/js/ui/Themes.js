@@ -87,24 +87,92 @@ export function baseColors(name) {
     return { ...Presets[b.base], ...b.colors };
 }
 
+const rgbOf = (hex) => {
+    const n = parseInt(String(hex).slice(1, 7), 16);
+    return [n >> 16 & 255, n >> 8 & 255, n & 255];
+};
+const hexOf = (c) => `#${c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
+
+// Como followGlass de Kaint: 'color' de la base llevado al color de las ventanas 'glass', aclarado
+// (hacia el blanco) u oscurecido (hacia el negro) en la proporción en que 'color' lo está respecto
+// al cristal de la base; así toma el tono del cristal propio y no le queda el azul de la base.
+function followGlass(color, baseGlass, glass) {
+    const c = rgbOf(color), g = rgbOf(baseGlass), to = rgbOf(glass);
+    const lighter = c[0] + c[1] + c[2] >= g[0] + g[1] + g[2];
+    let t = 0;
+    for (let i = 0; i < 3; i++)
+        t += lighter ? (g[i] >= 255 ? 0 : (c[i] - g[i]) / (255 - g[i])) : (g[i] <= 0 ? 0 : (g[i] - c[i]) / g[i]);
+    t = Math.max(0, Math.min(1, t / 3));
+    return hexOf(to.map((v) => lighter ? v + t * (255 - v) : v * (1 - t)));
+}
+
+// Los colores del personalizado con base 'name' y los propios 'colors': con Windows 7 y un color de
+// las ventanas propio, lo que en Windows 7 es de ese color (la franja de los menús y las cabeceras
+// de las ventanas flotantes) lo toma, salvo lo que tenga su propio color (como Theme::resolved).
+export function customColors(name, colors = {}) {
+    const b = CustomBases[name] || CustomBases.dark;
+    const defaults = baseColors(name), out = { ...defaults, ...colors };
+    const glass = colors.glass;
+    if (b.win7 && /^#[0-9a-f]{6}$/i.test(glass || "") && glass.toLowerCase() !== defaults.glass)
+        for (const key of ["menuBar", "panelTitle", "panelTitleEnd"])
+            if (!colors[key])
+                out[key] = followGlass(defaults[key], defaults.glass, glass);
+    // Con una cabecera propia sin final propio, de un solo color.
+    if (colors.panelTitle && !colors.panelTitleEnd)
+        out.panelTitleEnd = colors.panelTitle;
+    return out;
+}
+
+// Los colores de ventana de Windows 7 (aproximados), como Theme::win7Colors de Kaint.
+export const Win7WindowColors = [
+    ["Cielo", "#74b8fc"], ["Crepúsculo", "#2d5fa8"], ["Mar", "#32b4b4"], ["Hoja", "#3c9a2e"], ["Lima", "#9ccf3c"],
+    ["Sol", "#f2cf2a"], ["Calabaza", "#f39a1e"], ["Rubor", "#ee7fae"], ["Rubí", "#c8282c"], ["Fucsia", "#d63ca8"],
+    ["Violeta", "#8a4fc4"], ["Lavanda", "#b1a5e2"], ["Topo", "#9a8a72"], ["Chocolate", "#6e4026"], ["Pizarra", "#6d747c"],
+    ["Escarcha", "#f4f6f8"],
+];
+
+// Los temas Windows 7 con el color de las ventanas 'glass' (como withWin7Glass de Kaint): el
+// cristal y lo que en Windows 7 es de ese color; con el oscuro, el color se ahúma como el cristal
+// oscuro respecto al claro.
+function withWin7Glass(colors, glass, dark) {
+    if (!/^#[0-9a-f]{6}$/i.test(glass || ""))
+        return colors;
+    if (dark)
+        glass = followGlass(Win7DarkColors.glass, Win7Colors.glass, glass);
+    const out = { ...colors, glass };
+    for (const key of ["menuBar", "panelTitle", "panelTitleEnd"])
+        out[key] = followGlass(colors[key], colors.glass, glass);
+    return out;
+}
+
+// El cristal de los marcos de las ventanas (como Theme::glassColor de Kaint): el de siempre,
+// llevado al tono del color de las ventanas.
+function glassFrame(glass, dark) {
+    const base = dark ? Win7DarkColors.glass : Win7Colors.glass;
+    const variant = dark ? "#1c2430" : "#4580c4";
+    return followGlass(variant, base, glass);
+}
+
 // Esquema guardado → { base: "light" | "dark" | "win98", colors, estilo... }.
 export function resolveScheme(scheme, systemDark) {
     if (scheme === 4)
         return { base: "win98" };
     if (scheme === 10)
-        return { base: "dark", colors: Win7DarkColors, win7: true };
+        return { base: "dark", colors: withWin7Glass(Win7DarkColors, Settings.get("win7Glass"), true), win7: true };
     if (scheme === 9)
         return { base: "win98", colors: Win98AltColors, alt: true };
     if (scheme === 8)
         return { base: "light", colors: XpColors, xp: true };
     if (scheme === 7)
-        return { base: "light", colors: Win7Colors, win7: true };
+        return { base: "light", colors: withWin7Glass(Win7Colors, Settings.get("win7Glass"), false), win7: true };
     if (scheme === 6)
         return { base: "light", colors: BlueColors, blue: true };
     if (scheme === 5) {
         const custom = Settings.get("customTheme") || {};
         const b = CustomBases[custom.base] || CustomBases.dark;
-        return { base: b.base, colors: { ...b.colors, ...(custom.colors || {}) }, win7: !!b.win7, xp: !!b.xp, alt: !!b.alt, custom: true };
+        const colors = b.win7 ? customColors(CustomBases[custom.base] ? custom.base : "dark", custom.colors || {})
+                              : { ...b.colors, ...(custom.colors || {}) };
+        return { base: b.base, colors, win7: !!b.win7, xp: !!b.xp, alt: !!b.alt, custom: true };
     }
     return { base: scheme === 2 || (scheme === 0 && systemDark) ? "dark" : "light" };
 }
@@ -137,6 +205,7 @@ export function applyThemeColors(root, scheme, systemDark) {
     root.classList.toggle("win7", !!win7);
     root.classList.toggle("xp", !!xp);
     root.classList.toggle("alt", !!alt);
+    applyDesign(root, scheme === 5 ? Settings.get("customTheme")?.design || null : null);
     applyWindowButtons(root);
     for (const [key, cssVar] of ColorRoles) {
         const value = colors?.[key] || (classic ? Presets.win98[key] : null);
@@ -145,6 +214,11 @@ export function applyThemeColors(root, scheme, systemDark) {
         else
             root.style.removeProperty(cssVar);
     }
+    // Windows 7: el cristal de los marcos, del tono del color de las ventanas.
+    if (win7 && colors?.glass)
+        root.style.setProperty("--glass-frame", glassFrame(colors.glass, base === "dark"));
+    else
+        root.style.removeProperty("--glass-frame");
     // Como el color de énfasis en las barras de título de Windows (y el color propio de Kaint en
     // Linux): con los temas de Paint.NET, la barra superior y las cabeceras de las ventanas lo llevan
     // (Windows 98, XP y 7 tienen las suyas: con Windows 7, el título salía blanco sobre el cristal).
@@ -186,6 +260,41 @@ export function applyThemeColors(root, scheme, systemDark) {
 // del fondo, más la base de la web; con fondo, en un .zip junto al archivo (background.mp4...).
 
 // El tema de la web (Settings.customTheme) → el JSON común.
+// El diseño del tema personalizado (como el de Kaint: Theme::Spec): botones, espaciado, redondeo,
+// opacidad de las ventanas translúcidas, iconos, fuente, bordes clásicos y texto sin suavizado.
+export const DesignDefaults = { buttonStyle: 0, density: 1, radius: 0, panelOpacity: 75, iconSize: 16, toolIconSize: 22,
+                                fontFamily: "", fontSize: 0, classic: false, pixelFont: false };
+
+export function readDesign(json) {
+    const num = (v, fallback, lo, hi) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Math.round(Number(v)))) : fallback);
+    return {
+        buttonStyle: num(json?.buttonStyle, 0, 0, 2), density: num(json?.density, 1, 0, 2), radius: num(json?.radius, 0, 0, 16),
+        panelOpacity: num(json?.panelOpacity, 75, 20, 100), iconSize: num(json?.iconSize, 16, 12, 48), toolIconSize: num(json?.toolIconSize, 22, 12, 48),
+        fontFamily: typeof json?.fontFamily === "string" ? json.fontFamily.replace(/["\\<>]/g, "").slice(0, 80) : "",
+        fontSize: num(json?.fontSize, 0, 0, 32), classic: !!json?.classic, pixelFont: !!json?.pixelFont,
+    };
+}
+
+// Aplica el diseño del tema personalizado (o lo quita con otro tema).
+export function applyDesign(root, design) {
+    const d = design ? readDesign(design) : null;
+    const set = (name, value) => (value === null ? root.style.removeProperty(name) : root.style.setProperty(name, value));
+    set("--radius", d && d.radius ? `${d.radius}px` : null);
+    set("--panel-opacity", d ? String(d.panelOpacity / 100) : null);
+    set("--bar-icon", d && d.iconSize !== 16 ? `${d.iconSize}px` : null);
+    set("--tool-icon", d && d.toolIconSize !== 22 ? `${d.toolIconSize}px` : null);
+    set("--theme-font", d && d.fontFamily ? `"${d.fontFamily}"` : null);
+    set("--theme-font-size", d && d.fontSize ? `${Math.round((d.fontSize * 96) / 72)}px` : null);
+    root.classList.toggle("theme-btn-framed", !!d && d.buttonStyle === 1);
+    root.classList.toggle("theme-btn-rounded", !!d && d.buttonStyle === 2);
+    root.classList.toggle("density-compact", !!d && d.density === 0);
+    root.classList.toggle("density-comfortable", !!d && d.density === 2);
+    root.classList.toggle("theme-bar-icons", !!d && d.iconSize !== 16);
+    root.classList.toggle("theme-tool-icons", !!d && d.toolIconSize !== 22);
+    root.classList.toggle("pixel-font", !!d && d.pixelFont);
+    root.classList.toggle("theme-classic", !!d && d.classic);
+}
+
 export function themeToJson(theme, backgroundName = "") {
     const b = CustomBases[theme.base] || CustomBases.dark;
     // Con Windows 98, Kaint no tiene base para los colores sin cambiar: van todos.
@@ -196,8 +305,14 @@ export function themeToJson(theme, backgroundName = "") {
         dark: b.base === "dark", win7: !!b.win7, xp: !!b.xp, classic: b.base === "win98", colors,
         workspaceImage: backgroundName,
         imageMode: Number(img.mode ?? 0), imageOpacity: Number(img.opacity ?? 100), imageScale: Number(img.scale ?? 100),
-        imageAnchor: Number(img.anchor ?? 4), imageBlur: Number(img.blur ?? 0), imageGrayscale: !!img.grayscale,
+        imageAnchor: Number(img.anchor ?? 4), imageX: Number(img.x ?? -1), imageY: Number(img.y ?? -1),
+        imageBlur: Number(img.blur ?? 0), imageGrayscale: !!img.grayscale,
         imageTint: img.tint && Number(img.tintStrength) > 0 ? img.tint : "", imageTintStrength: Number(img.tintStrength ?? 0),
+        // El diseño (los mismos campos que Kaint para el escritorio).
+        ...(() => {
+            const d = readDesign(theme.design || {});
+            return { ...d, classic: b.base === "win98" || d.classic };
+        })(),
     };
 }
 
@@ -220,8 +335,14 @@ export function themeFromJson(json) {
     }
     const num = (v, fallback, lo, hi) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Number(v))) : fallback);
     const tint = /^#[0-9a-f]{6}$/i.test(json?.imageTint || "") ? json.imageTint : "#000000";
-    const image = { mode: num(json?.imageMode, 0, 0, 4), anchor: num(json?.imageAnchor, 4, 0, 8), scale: num(json?.imageScale, 100, 10, 400),
+    const image = { mode: num(json?.imageMode, 0, 0, 4), anchor: num(json?.imageAnchor, 4, 0, 8),
+                    // (Los temas de antes no llevan la alineación propia: -1, la de su posición.)
+                    x: num(json?.imageX ?? -1, -1, -1, 100), y: num(json?.imageY ?? -1, -1, -1, 100), scale: num(json?.imageScale, 100, 10, 400),
                     opacity: num(json?.imageOpacity, 100, 0, 100), blur: num(json?.imageBlur, 0, 0, 40), grayscale: !!json?.imageGrayscale,
                     tint, tintStrength: num(json?.imageTintStrength, 0, 0, 100) };
-    return { base, colors, image };
+    const design = readDesign(json);
+    // Con la base Windows 98, «classic» es la suya: no cuenta como opción del diseño.
+    if (CustomBases[base]?.base === "win98")
+        design.classic = false;
+    return { base, colors, image, design };
 }

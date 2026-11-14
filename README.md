@@ -63,9 +63,11 @@ runs on Windows 10 and 11.
       sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
       develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
       them. <b>paint.js plugins</b> (.paintjs) too, the same ones as the web version, with their
-      effects and file types (Photoshop PSD with layers, for example), installed from a file or from
-      the web version's plugin catalog (<b>Settings → Plugins → Kaint.HTML plugins…</b>, a button you
-      turn on in <b>Settings → User interface</b>). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
+      effects and file types (Photoshop PSD with layers, for example). <b>Settings → Plugins → Browse
+      Plugins…</b> is a short list of plugins chosen and tested for Kaint, installed with one click:
+      Kaint.HTML's paint.js plugins, PhotoCraft filters from the ArtCraft store and Paint.NET effect
+      plugins, each credited to its author (the button can be hidden in <b>Settings → User
+      interface</b>). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
       your files or the internet; plugins that open their own HTML window only work in the web
       version, and Kaint says so. Each effect of a plugin
       can be turned on or off on its own, and native plugins can bring their own menu icon. In the
@@ -110,6 +112,24 @@ runs on Windows 10 and 11.
   </tr>
   <tr>
     <td colspan="2" valign="top">
+      <h4>PhotoCraft features (optional)</h4>
+      Turn on <b>Settings → Plugins → Enable the PhotoCraft features</b> for more adjustments and
+      effects (Vibrance, Gradient Map, Channel Mixer, Photo Filter, Selective Color, Auto Contrast,
+      Color to Alpha, Polar Coordinates, the artistic, brush stroke, sketch and texture filter gallery
+      and more) and six retouching tools: <b>Magnetic Lasso</b> (the selection border snaps to the
+      edges as you trace), <b>Object Selection</b> (draw a box around an object, click the one the
+      Object Finder highlights, or <b>Select Subject</b>), <b>Remove</b> (paint over or around
+      something and it is filled from its surroundings), <b>Patch</b> (drag a selection to repair it
+      with another area, normal or content-aware), <b>Healing Brush</b> and <b>Spot Healing Brush</b>
+      (content-aware, create texture or proximity match). The long calculations run in the background
+      and Esc cancels them. They work the same in the web version, and in the menus and the Tools
+      window they carry the plugins' puzzle piece. Their algorithms are
+      PhotoCraft's, by the ArtCraft Team and the PhotoCraft
+      contributors (MIT, see <code>data/licenses/PhotoCraft-LICENSE.txt</code>).
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
       <h4>Collaborative mode</h4>
       Host the current image and edit it together with other copies of Kaint or with browsers
       running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
@@ -131,13 +151,25 @@ runs on Windows 10 and 11.
     </td>
   </tr>
   <tr>
+    <td colspan="2" valign="top">
+      <h4>Discord</h4>
+      Kaint can show what you're working on in your Discord profile (Rich Presence: the image, the
+      layer, the tool...). In a collaborative session it shows the session and how many people are in
+      it, and you can <b>invite people from Discord</b> to your P2P session (or let them use <b>Ask to
+      Join</b>): accepting on Discord doesn't let anyone straight in, since Kaint still asks for the
+      session's password or waits for your approval. Everything is in <b>Settings → Discord</b>.
+    </td>
+  </tr>
+  <tr>
     <td valign="top">
       <h4>Recovery copies</h4>
       Unsaved images are kept safe in case Kaint closes unexpectedly.
     </td>
     <td valign="top">
       <h4>Languages</h4>
-      English and Spanish (for now).
+      English and Spanish, and your own: import, create, edit and export <b>custom languages</b>
+      (.kaintlang) in <b>Settings → User interface</b>, with the translator's name and page in
+      <b>About</b>. Anything a custom language doesn't translate appears in English.
     </td>
   </tr>
 </table>
@@ -179,7 +211,11 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   submenu (say, a plugin's blur into **Effects → Blurs**), hide the ones you never use, and choose
   which tools the Tools window shows and in what order (**Settings → Customization**).
 - **Canvas**: your own background color around the image (one for light themes and one for dark
-  ones), the checkerboard brightness, the drop shadow and dark or toolbar-colored rulers.
+  ones), the checkerboard brightness, the drop shadow and dark, toolbar-colored or **Paint.NET 5
+  style rulers** (the divisions of a real ruler, with a unit button in the corner: pixels, inches or
+  centimeters).
+- **Image strip**: like Paint.NET, the box of the current image and of the one under the pointer can
+  reach the top of the window, title bar included (or only the height of the thumbnail).
 - **Little touches**: tool icons in the active colors, Paint.NET's orange star on unsaved images
   (on their thumbnail in the strip and in the open images list),
   animations everywhere (fades, sliding layers, the active color slot) that you can turn off, and a
@@ -317,6 +353,15 @@ menu (and optionally the desktop) and registers it in *Installed apps*, so it ca
 any other application. Its uninstaller can also delete your settings, palettes, plugins, icon packs,
 fonts and recovery copies. If NSIS is missing, it offers to download it (about 2 MB).
 
+Everything the installer shows and does comes from **`winsetup.json`** (next to `build.bat`): name,
+version (empty: the one in `version.json`), publisher, website, copyright, icons, license, output
+file name, install folder, executable, registry key, compression, which pages appear (welcome,
+license, components, folder, finish), whether it runs Kaint at the end, the Start menu and desktop
+shortcuts (`optional`, `checked`, `always` or `never`), what *delete my settings* removes, and the
+languages (NSIS names: `English`, `Spanish`, `French`...) with their texts. In texts, `{name}`,
+`{version}` and `{arch}` are replaced. Anything left out keeps its usual value. Use another file
+with `build.bat --setup --winsetup path	oile.json`.
+
 `build.bat --zip` makes a portable `Kaint-<version>-windows-x64.zip`: unzip it anywhere and run
 `Kaint\bin\kaint.exe`.
 
@@ -325,18 +370,21 @@ fonts and recovery copies. If NSIS is missing, it offers to download it (about 2
 <details open>
 <summary><b>🟢 Android (Kaint.APK)</b></summary>
 
-Kaint.APK is the web version (`KaintHTML`) as an Android app (`android/`). `./build-apk.sh` asks
-whether you want an **APK** (to install on the phone) or an **App Bundle** (to publish on Google
-Play), where `KaintHTML` is (Enter accepts this repository's) and, for the App Bundle, your upload
-key, its alias and passwords. The result goes to `build-apk/Kaint-<version>.apk` or
+Kaint.APK is the web version (`KaintHTML`) as an Android app (`android/`). It is built by
+`build.sh` (Linux, macOS) or `build.bat` (Windows, natively: no WSL needed), from their menus or with
+`--apk` (to install on the phone) or `--aab` (an App Bundle to publish on Google Play). They ask where
+`KaintHTML` is (Enter accepts this repository's) and, for the App Bundle, your upload key, its alias
+and passwords (or use `--kainthtml`, `--keystore`, `--alias` and the `KAINT_STORE_PASSWORD` /
+`KAINT_KEY_PASSWORD` variables). The result goes to `build-apk/Kaint-<version>.apk` or
 `build-aab/Kaint-<version>.aab`. It needs a JDK from 17 to 25 (21 is best: `jdk21-openjdk` on Arch,
-`openjdk-21-jdk` on Debian/Ubuntu); the Android SDK command-line tools and Gradle are downloaded the
-first time if missing (checked against their checksums), and you accept the Android SDK licenses
-yourself. APKs are signed with a key kept on this computer, so newer versions install over older
-ones.
+`openjdk-21-jdk` on Debian/Ubuntu, `brew install openjdk@21` on macOS; on Windows, `build.bat` offers
+to download Temurin 21 if there is none). The Android SDK command-line tools and Gradle are
+downloaded the first time if missing (checked against their checksums), and you accept the Android
+SDK licenses yourself. APKs are signed with a key kept on this computer, so newer versions install
+over older ones.
 
 ```bash
-./build-apk.sh              # asks APK or App Bundle, the KaintHTML folder and (AAB) your key
+./build.sh --apk            # or build.bat --apk on Windows; --aab for Google Play
 adb install -r build-apk/Kaint-*.apk
 ```
 
@@ -347,14 +395,27 @@ adb install -r build-apk/Kaint-*.apk
 > mono libgdiplus` (Arch) or `qt6-image-formats-plugins kimageformat6-plugins mono-devel libgdiplus`
 > (Debian/Ubuntu). On Windows, plugins work out of the box.
 
-| Option | `build.sh` (Linux) | `build.bat` (Windows) |
+Run `build.sh` or `build.bat` without options for an **interactive menu**: *Compile* or *Debug*
+lead to the list of formats (the ones that don't suit this system are marked *not recommended*),
+and *Exit* leaves.
+
+| Option | `build.sh` (Linux, FreeBSD, macOS) | `build.bat` (Windows) |
 | --- | :---: | :---: |
 | Build and install | `--install` | `--install` |
 | Build and run | `--run` | `--run` |
 | Run the tests | `--test` | `--test` |
 | Debug build | `--debug` | `--debug` |
-| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) · `--flatpak` · `--appimage` | `--setup` (installer) · `--zip` |
+| Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) · `--flatpak` · `--appimage` · `--tar` | `--setup` (installer) · `--zip` |
+| Variants | `--avx2` (x86-64-v3) · `--musl` (Alpine container) · `--arm64` (aarch64) | `--avx2` · `--arm64` |
+| FreeBSD / macOS | `--tar` on FreeBSD · `--tar` on macOS (with Kaint.app) | |
+| Linux packages from Windows | | `--wsl deb`, `pkg`, `appimage`, `appimage-avx2`, `tar`, `tar-musl` or `tar-arm64` |
+| Web version (.zip) | `--web` | `--web` |
+| Mobile version (Android) | `--apk` · `--aab` | `--apk` · `--aab` (with WSL) |
+| Build threads | `--jobs N` | `--jobs N` |
 | Every option | `--help` | `--help` |
+
+Both scripts use `ccache` or `sccache` when installed (`--no-ccache` turns it off), show how long
+the build took and the size of what they made, and say which step failed.
 
 Packagers can build with `-DKAINT_UPDATE_CHECK=OFF` so that Kaint leaves updates to the package
 manager and never looks for new versions on GitHub (the Flatpak does this).
@@ -373,7 +434,14 @@ JavaScript engine that runs paint.js plugins. Kaint supports the plugins of
 JavaScript API); it doesn't use paint.js's own plugin system. The P2P collaboration uses
 [libdatachannel](https://github.com/paullouisageneau/libdatachannel) (MPL-2.0) with usrsctp
 (BSD-3-Clause), libjuice (MPL-2.0) and plog (MIT), and Mbed TLS (Apache-2.0) where there is no
-OpenSSL.
+OpenSSL. The PhotoCraft features and tools reimplement algorithms of PhotoCraft by the ArtCraft Team
+and the PhotoCraft contributors (MIT, `data/licenses/PhotoCraft-LICENSE.txt`); the web version opens
+JPEG XR with [jpegxr](https://github.com/brion/jpegxr.js) by Brion Vibber, built on Microsoft's
+jxrlib (BSD), and HEIC, JPEG XL and AVIF (where the browser can't) with
+[magick-wasm](https://github.com/dlemstra/magick-wasm) by Dirk Lemstra (Apache-2.0). Plugins from
+**Browse Plugins** are the work of their authors, credited next to each one. Some features were
+inspired by [paint.rs](https://github.com/daijro/paint.rs) by daijro, such as having PhotoCraft's
+tools in Kaint.
 
 ## Disclaimer
 

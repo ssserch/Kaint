@@ -42,6 +42,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -86,6 +87,7 @@ bool retroScheme(Scheme scheme)
 }
 
 bool g_aeroTransparency = true;
+QColor g_win7Glass;
 
 QString g_systemIconTheme;
 QString g_configStamp;
@@ -116,8 +118,14 @@ QFileSystemWatcher* g_watcher = nullptr;
 struct ImageCache {
     QString key;
     QPixmap image;
+    // La misma, como imagen: de ella sale la copia desenfocada.
+    QImage source;
     QPixmap scaled;
     QSize scaledSize;
+    // Con qué se hizo la copia escalada (tamaño, desenfoque y colocación) y lo que sobresale por
+    // cada lado (los bordes difuminados de una imagen que no llena el área).
+    QString scaledKey;
+    QPoint scaledMargin;
 };
 
 QColor rgb(QRgb value) { return QColor::fromRgb(value); }
@@ -1092,6 +1100,43 @@ Spec customBase(const Spec& custom)
     return preset(custom.dark);
 }
 
+namespace {
+
+// 'color' del tema base, llevado al color de las ventanas 'glass': el cristal propio, aclarado
+// (hacia el blanco) u oscurecido (hacia el negro) en la proporción en que 'color' lo está respecto
+// al cristal de la base. Así toma el tono del cristal propio y no le queda el azul de la base.
+QColor followGlass(const QColor& color, const QColor& baseGlass, const QColor& glass)
+{
+    const int c[3] = {color.red(), color.green(), color.blue()};
+    const int g[3] = {baseGlass.red(), baseGlass.green(), baseGlass.blue()};
+    const bool lighter = c[0] + c[1] + c[2] >= g[0] + g[1] + g[2];
+    double t = 0;
+    for (int i = 0; i < 3; ++i)
+        t += lighter ? (g[i] >= 255 ? 0.0 : double(c[i] - g[i]) / (255 - g[i])) : (g[i] <= 0 ? 0.0 : double(g[i] - c[i]) / g[i]);
+    t = std::clamp(t / 3, 0.0, 1.0);
+    auto channel = [&](int to) {
+        return std::clamp(int(std::lround(lighter ? to + t * (255 - to) : to * (1.0 - t))), 0, 255);
+    };
+    return QColor(channel(glass.red()), channel(glass.green()), channel(glass.blue()));
+}
+
+// Windows 7 con el color de las ventanas 'glass' (el de los temas Windows 7, no el personalizado):
+// el cristal y lo que en Windows 7 es de ese color, desde los de la base. Con el oscuro, el color
+// se ahúma como el cristal oscuro respecto al claro.
+Spec withWin7Glass(Spec s, QColor glass)
+{
+    if (!glass.isValid())
+        return s;
+    if (s.dark)
+        glass = followGlass(windows7Dark().glass, windows7().glass, glass);
+    for (QColor Spec::*member : {&Spec::menuBar, &Spec::panelTitle, &Spec::panelTitleEnd})
+        s.*member = followGlass(s.*member, s.glass, glass);
+    s.glass = glass;
+    return s;
+}
+
+} // namespace
+
 Spec resolved(const Spec& custom)
 {
     Spec s = custom;
@@ -1099,6 +1144,13 @@ Spec resolved(const Spec& custom)
     for (const ColorRole& role : kColorRoles)
         if (!(s.*role.color).isValid())
             s.*role.color = base.*role.color;
+    // Windows 7 con un color de las ventanas propio: como en Windows 7, lo toma todo lo que es del
+    // color de las ventanas (la franja de los menús, que sigue a la barra de título de cristal, y las
+    // cabeceras de las ventanas flotantes), salvo lo que tenga su propio color.
+    if (custom.win7 && !custom.classic && custom.glass.isValid() && base.glass.isValid() && custom.glass != base.glass)
+        for (QColor Spec::*member : {&Spec::menuBar, &Spec::panelTitle, &Spec::panelTitleEnd})
+            if (!(custom.*member).isValid())
+                s.*member = followGlass(base.*member, base.glass, custom.glass);
     // Sin final propio, la cabecera es de un solo color (el suyo, aunque se haya cambiado). Si no
     // se cambió ninguno de los dos, la del tema base (con Windows 7 y XP, su degradado).
     if (!custom.panelTitleEnd.isValid() && (custom.panelTitle.isValid() || !(custom.win7 || custom.xp)))
@@ -1302,6 +1354,8 @@ QJsonObject toJson(const Spec& spec, bool embedImage)
         {QStringLiteral("imageOpacity"), spec.imageOpacity},
         {QStringLiteral("imageScale"), spec.imageScale},
         {QStringLiteral("imageAnchor"), spec.imageAnchor},
+        {QStringLiteral("imageX"), spec.imageX},
+        {QStringLiteral("imageY"), spec.imageY},
         {QStringLiteral("imageBlur"), spec.imageBlur},
         {QStringLiteral("imageGrayscale"), spec.imageGrayscale},
         {QStringLiteral("imageTint"), spec.imageTint.isValid() ? spec.imageTint.name() : QString()},
@@ -1361,6 +1415,9 @@ Spec fromJson(const QJsonObject& json)
     s.imageOpacity = number("imageOpacity", base.imageOpacity, 0, 100);
     s.imageScale = number("imageScale", base.imageScale, 10, 400);
     s.imageAnchor = number("imageAnchor", base.imageAnchor, 0, 8);
+    // (Los temas de antes no la llevan: -1, la de su posición.)
+    s.imageX = number("imageX", -1, -1, 100);
+    s.imageY = number("imageY", -1, -1, 100);
     s.imageBlur = number("imageBlur", base.imageBlur, 0, 40);
     s.imageGrayscale = json.value(QStringLiteral("imageGrayscale")).toBool(false);
     s.imageTint = QColor::fromString(json.value(QStringLiteral("imageTint")).toString());
@@ -1445,9 +1502,19 @@ namespace {
 // (azul con borde de acento), las casillas de las capas blancas y el botón «Más >>» claro.
 QString paintNetStyleSheet(const Spec& s, const QColor& line)
 {
-    // La pestaña de la imagen actual: el azul de Paint.NET o el color de selección propio.
-    const QColor edge = s.ownSelection ? s.selectionBorder : QColor(0x00, 0x78, 0xd7);
-    const QColor tab = s.ownSelection ? s.selection : s.dark ? QColor(0x3a, 0x63, 0xc0) : QColor(0xcc, 0xe8, 0xff);
+    // La pestaña de la imagen actual: el azul de Paint.NET (medido en Paint.NET 5: #0078d7 con el
+    // borde opaco y el relleno a la mitad, encima del color de la franja, sea cual sea) o el color de
+    // selección propio. La que tiene el puntero, el mismo azul algo más apagado y más tenue (#0066cc
+    // con el borde al 75 % y el relleno al 25 %).
+    auto withAlpha = [](QColor c, int a) {
+        c.setAlpha(a);
+        return c;
+    };
+    const QColor pdnBlue(0x00, 0x78, 0xd7), pdnHover(0x00, 0x66, 0xcc);
+    const QColor edge = s.ownSelection ? s.selectionBorder : pdnBlue;
+    const QColor tab = s.ownSelection ? s.selection : withAlpha(pdnBlue, 128);
+    const QColor hoverTab = withAlpha(s.ownSelection ? s.selection : pdnHover, 64);
+    const QColor hoverEdge = withAlpha(s.ownSelection ? s.selectionBorder : pdnHover, 191);
     // Los menús van en un recuadro con borde arriba y a los lados, como en Paint.NET (gris en el
     // claro y azul oscuro en el Azul), con algo de espacio antes de «Archivo».
     const QColor menuEdge = s.blue ? QColor(0x36, 0x5d, 0x90) : s.dark ? line : QColor(0xb8, 0xb8, 0xb8);
@@ -1461,6 +1528,7 @@ QToolBar { spacing: 0px; padding: 0px 2px; }
 QToolBar::separator { margin: 3px 2px; }
 QTabBar#ImageStrip::tab { border-radius: 0px; margin: 0px 1px; }
 QTabBar#ImageStrip::tab:selected { background: %1; border-color: %2; }
+QTabBar#ImageStrip::tab:hover:!selected { background: %7; border-color: %8; }
 QComboBox#ZoomBox { background: transparent; border: 1px solid transparent; }
 QComboBox#ZoomBox:hover { border-color: %3; }
 QPushButton#ColorsMoreButton { background: #e1e1e1; color: #000000; border: 1px solid %2; border-radius: 0px; padding: 2px 8px; }
@@ -1469,7 +1537,8 @@ QPushButton#ColorsMoreButton:pressed, QPushButton#ColorsMoreButton:checked { bac
 QWidget#PanelButtons { background: %4; border-top: 1px solid %5; }
 FloatingPanel QAbstractItemView { background: %6; }
 )")
-               .arg(css(tab), css(edge), css(line), css(s.toolBar), css(line), css(s.panel));
+               .arg(css(tab), css(edge), css(line), css(s.toolBar), css(line), css(s.panel))
+               .arg(css(hoverTab), css(hoverEdge));
     if (s.dark)
         qss += QStringLiteral(R"(
 FloatingPanel QAbstractItemView::indicator { background: #ffffff; border: 1px solid #333333; border-radius: 0px; }
@@ -2048,9 +2117,9 @@ void apply(Scheme scheme)
     else if (scheme == Scheme::WindowsXP)
         g_active = windowsXP();
     else if (scheme == Scheme::Windows7)
-        g_active = withTitleBarColor(windows7(), g_titleBar);
+        g_active = withTitleBarColor(withWin7Glass(windows7(), g_win7Glass), g_titleBar);
     else if (scheme == Scheme::Windows7Dark)
-        g_active = withTitleBarColor(windows7Dark(), g_titleBar);
+        g_active = withTitleBarColor(withWin7Glass(windows7Dark(), g_win7Glass), g_titleBar);
     else if (scheme == Scheme::Blue)
         g_active = withTitleBarColor(blue(), g_titleBar);
     else
@@ -2231,6 +2300,42 @@ bool setAeroTransparency(bool on)
     return changed;
 }
 
+bool setWin7Glass(const QColor& color)
+{
+    const QColor rgb = color.isValid() ? QColor(color.rgb()) : QColor();
+    const bool changed = g_win7Glass != rgb;
+    g_win7Glass = rgb;
+    return changed;
+}
+
+QColor win7Glass()
+{
+    return g_win7Glass;
+}
+
+const std::array<Win7Color, 16>& win7Colors()
+{
+    static const std::array<Win7Color, 16> colors{{
+        {QT_TRANSLATE_NOOP("Theme", "Cielo"), 0x74b8fc},
+        {QT_TRANSLATE_NOOP("Theme", "Crepúsculo"), 0x2d5fa8},
+        {QT_TRANSLATE_NOOP("Theme", "Mar"), 0x32b4b4},
+        {QT_TRANSLATE_NOOP("Theme", "Hoja"), 0x3c9a2e},
+        {QT_TRANSLATE_NOOP("Theme", "Lima"), 0x9ccf3c},
+        {QT_TRANSLATE_NOOP("Theme", "Sol"), 0xf2cf2a},
+        {QT_TRANSLATE_NOOP("Theme", "Calabaza"), 0xf39a1e},
+        {QT_TRANSLATE_NOOP("Theme", "Rubor"), 0xee7fae},
+        {QT_TRANSLATE_NOOP("Theme", "Rubí"), 0xc8282c},
+        {QT_TRANSLATE_NOOP("Theme", "Fucsia"), 0xd63ca8},
+        {QT_TRANSLATE_NOOP("Theme", "Violeta"), 0x8a4fc4},
+        {QT_TRANSLATE_NOOP("Theme", "Lavanda"), 0xb1a5e2},
+        {QT_TRANSLATE_NOOP("Theme", "Topo"), 0x9a8a72},
+        {QT_TRANSLATE_NOOP("Theme", "Chocolate"), 0x6e4026},
+        {QT_TRANSLATE_NOOP("Theme", "Pizarra"), 0x6d747c},
+        {QT_TRANSLATE_NOOP("Theme", "Escarcha"), 0xf4f6f8},
+    }};
+    return colors;
+}
+
 bool aeroTransparency()
 {
     return g_aeroTransparency && active().win7 && g_current != Scheme::Kde;
@@ -2407,8 +2512,13 @@ QColor glassColor(bool translucent, bool focused)
     else
         o = translucent ? (focused ? Offset{-57, -39, -18, 158} : Offset{24, 8, -9, 120})
                         : (focused ? Offset{0, 0, 0, 255} : Offset{54, 33, 10, 255});
-    return QColor(std::clamp(glass.red() + o.r, 0, 255), std::clamp(glass.green() + o.g, 0, 255),
-                  std::clamp(glass.blue() + o.b, 0, 255), o.alpha);
+    QColor color(std::clamp(fallback.red() + o.r, 0, 255), std::clamp(fallback.green() + o.g, 0, 255),
+                 std::clamp(fallback.blue() + o.b, 0, 255));
+    // Con un color propio, la variante toma su tono (aclarada u oscurecida como la de siempre).
+    if (glass != fallback)
+        color = followGlass(color, fallback, glass);
+    color.setAlpha(o.alpha);
+    return color;
 }
 
 QColor workspaceColor()
@@ -2534,17 +2644,129 @@ QImage animationFrame(const QString& path, qint64* serial)
     return a.frame;
 }
 
-// La imagen de fondo con sus retoques (escala de grises, desenfoque, tinte), en caché. Con los
-// fondos animados, la del fotograma actual.
+// Una pasada de desenfoque de caja de 'r' píxeles a cada lado sobre una fila o una columna de 'n'
+// píxeles premultiplicados (de 'src' a 'dst', cada uno con su paso). 'wrap': los bordes dan la
+// vuelta (el mosaico sigue casando); si no, repiten el píxel del borde.
+void boxBlurLine(const QRgb* src, qsizetype sstep, QRgb* dst, qsizetype dstep, int n, int r, bool wrap)
+{
+    if (r <= 0) {
+        for (int i = 0; i < n; ++i)
+            dst[i * dstep] = src[i * sstep];
+        return;
+    }
+    auto at = [&](int i) {
+        if (wrap) {
+            i %= n;
+            if (i < 0)
+                i += n;
+        } else {
+            i = std::clamp(i, 0, n - 1);
+        }
+        return src[i * sstep];
+    };
+    const quint32 width = quint32(2 * r + 1);
+    // (suma * inv + medio) >> 24: la media redondeada, sin dividir en cada píxel.
+    const quint32 inv = (1u << 24) / width;
+    quint32 a = 0, red = 0, green = 0, blue = 0;
+    for (int i = -r; i <= r; ++i) {
+        const QRgb c = at(i);
+        a += quint32(qAlpha(c));
+        red += quint32(qRed(c));
+        green += quint32(qGreen(c));
+        blue += quint32(qBlue(c));
+    }
+    for (int i = 0; i < n; ++i) {
+        const quint32 alpha = (a * inv + (1u << 23)) >> 24;
+        auto channel = [&](quint32 sum) { return int(std::min(alpha, (sum * inv + (1u << 23)) >> 24)); };
+        dst[i * dstep] = qRgba(channel(red), channel(green), channel(blue), int(alpha));
+        const QRgb out = at(i - r), in = at(i + r + 1);
+        a += quint32(qAlpha(in)) - quint32(qAlpha(out));
+        red += quint32(qRed(in)) - quint32(qRed(out));
+        green += quint32(qGreen(in)) - quint32(qGreen(out));
+        blue += quint32(qBlue(in)) - quint32(qBlue(out));
+    }
+}
+
+// Desenfoque gaussiano de desviación 'sigma' (en píxeles de 'image'): tres pasadas de caja, que se
+// le parecen muchísimo y no dependen del radio.
+void gaussianBlur(QImage& image, double sigma, bool wrap)
+{
+    if (sigma <= 0.05 || image.isNull())
+        return;
+    // Los anchos de las tres cajas cuya suma de varianzas es la de la gaussiana.
+    constexpr int passes = 3;
+    const double ideal = std::sqrt(12.0 * sigma * sigma / passes + 1.0);
+    int lower = int(std::floor(ideal));
+    if (lower % 2 == 0)
+        --lower;
+    lower = std::max(1, lower);
+    const int upper = lower + 2;
+    const int withLower = int(std::round((12.0 * sigma * sigma - passes * lower * lower - 4.0 * passes * lower - 3.0 * passes)
+                                         / (-4.0 * lower - 4.0)));
+    const int w = image.width(), h = image.height();
+    QImage other(image.size(), image.format());
+    const qsizetype stride = image.bytesPerLine() / qsizetype(sizeof(QRgb));
+    for (int pass = 0; pass < passes; ++pass) {
+        const int r = ((pass < withLower ? lower : upper) - 1) / 2;
+        if (r <= 0)
+            continue;
+        for (int y = 0; y < h; ++y)
+            boxBlurLine(reinterpret_cast<const QRgb*>(image.constScanLine(y)), 1, reinterpret_cast<QRgb*>(other.scanLine(y)), 1, w, r,
+                        wrap);
+        const QRgb* from = reinterpret_cast<const QRgb*>(other.constBits());
+        QRgb* to = reinterpret_cast<QRgb*>(image.bits());
+        for (int x = 0; x < w; ++x)
+            boxBlurLine(from + x, stride, to + x, stride, h, r, wrap);
+    }
+}
+
+// La imagen 'source' al tamaño 'target' (en píxeles del dispositivo) con un desenfoque gaussiano
+// de 'sigma' píxeles del dispositivo. Se desenfoca en pequeño (la mitad de la desviación: rápido
+// también con un vídeo de fondo) y se amplía con suavizado, sin los cuadros que dejaba reducir y
+// ampliar sin más. 'wrap': mosaico (los bordes dan la vuelta). 'soft': la imagen no llena el área
+// (tamaño original, ajustada), así que sus bordes se difuminan hacia fuera, como en la versión
+// web; el resultado lleva entonces 'margin' píxeles de más por cada lado.
+QImage blurredToSize(const QImage& source, QSize target, double sigma, bool wrap, bool soft, bool animated, QSize* margin)
+{
+    *margin = QSize(0, 0);
+    const double shrink = std::max(animated ? 1.5 : 1.0, sigma / 2.0);
+    const QSize smallSize(std::max(1, int(std::ceil(target.width() / shrink))), std::max(1, int(std::ceil(target.height() / shrink))));
+    QImage small = source.scaled(smallSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                       .convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const double fx = double(target.width()) / small.width(), fy = double(target.height()) / small.height();
+    // Reducir (media de cada bloque) y ampliar (interpolación lineal) ya desenfocan un poco: la
+    // gaussiana pone el resto.
+    const double f = std::sqrt(fx * fy);
+    const double smallSigma = std::sqrt(std::max(0.0, (sigma / f) * (sigma / f) - (f > 1.01 ? 0.25 : 0.0)));
+    QSize pad(0, 0);
+    if (soft) {
+        const int px = int(std::ceil(3.0 * smallSigma)) + 1;
+        pad = QSize(px, px);
+        QImage padded(small.size() + 2 * pad, QImage::Format_ARGB32_Premultiplied);
+        padded.fill(Qt::transparent);
+        QPainter pp(&padded);
+        pp.setCompositionMode(QPainter::CompositionMode_Source);
+        pp.drawImage(pad.width(), pad.height(), small);
+        pp.end();
+        small = padded;
+    }
+    gaussianBlur(small, smallSigma, wrap);
+    *margin = QSize(int(std::round(pad.width() * fx)), int(std::round(pad.height() * fy)));
+    const QSize full = target + 2 * *margin;
+    return small.size() == full ? small : small.scaled(full, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+// La imagen de fondo con sus retoques (escala de grises y tinte; el desenfoque se hace al tamaño
+// de la pantalla, en paintBackgroundImage), en caché. Con los fondos animados, la del fotograma
+// actual.
 const QPixmap& processedBackground(const Spec& spec, ImageCache& cache)
 {
     const bool animated = isAnimatedBackground(spec.workspaceImage);
     qint64 serial = 0;
     QImage frame = animated ? animationFrame(spec.workspaceImage, &serial) : QImage();
-    const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6")
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5")
                             .arg(spec.workspaceImage)
                             .arg(spec.imageGrayscale)
-                            .arg(spec.imageBlur)
                             .arg(spec.imageTint.isValid() ? spec.imageTint.name() : QString())
                             .arg(spec.imageTintStrength)
                             .arg(serial);
@@ -2565,13 +2787,6 @@ const QPixmap& processedBackground(const Spec& spec, ImageCache& cache)
             }
         }
     }
-    if (spec.imageBlur > 0) {
-        // Reducir y volver a ampliar con suavizado: un desenfoque rápido y sin bordes duros.
-        const double f = 1.0 + spec.imageBlur / 2.0;
-        const QSize small((image.size() / f).expandedTo(QSize(1, 1)));
-        image = image.scaled(small, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
-                    .scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    }
     if (spec.imageTint.isValid() && spec.imageTintStrength > 0) {
         QPainter tp(&image);
         tp.setCompositionMode(QPainter::CompositionMode_SourceAtop);
@@ -2579,18 +2794,28 @@ const QPixmap& processedBackground(const Spec& spec, ImageCache& cache)
         tp.fillRect(image.rect(), spec.imageTint);
     }
     cache.image = QPixmap::fromImage(image);
+    cache.source = image;
     return cache.image;
 }
 
-// Posición de un rectángulo 'size' en 'area' según el ancla (0..8: de arriba a la izquierda a
-// abajo a la derecha, 4 es el centro).
-QPoint anchored(const QRect& area, QSize size, int anchor)
+// Posición de un rectángulo 'size' en 'area' según su alineación en cada eje, en % (0: pegado a
+// la izquierda o arriba; 100: a la derecha o abajo), como background-position de CSS.
+QPoint aligned(const QRect& area, QSize size, QPoint percent)
 {
-    const int col = std::clamp(anchor, 0, 8) % 3, row = std::clamp(anchor, 0, 8) / 3;
-    return QPoint(area.left() + (area.width() - size.width()) * col / 2, area.top() + (area.height() - size.height()) * row / 2);
+    return QPoint(area.left() + int(std::lround((area.width() - size.width()) * percent.x() / 100.0)),
+                  area.top() + int(std::lround((area.height() - size.height()) * percent.y() / 100.0)));
 }
 
 } // namespace
+
+QPoint imageAlignment(const Spec& spec)
+{
+    // La propia o, sin ella, la de su posición de las nueve (0..8: de arriba a la izquierda a abajo
+    // a la derecha, 4 es el centro).
+    const int anchor = std::clamp(spec.imageAnchor, 0, 8);
+    return QPoint(spec.imageX >= 0 ? std::min(spec.imageX, 100) : (anchor % 3) * 50,
+                  spec.imageY >= 0 ? std::min(spec.imageY, 100) : (anchor / 3) * 50);
+}
 
 void paintBackgroundImage(QPainter& p, const QRect& area, const QRect& clip, const Spec& spec)
 {
@@ -2616,19 +2841,36 @@ void paintBackgroundImage(QPainter& p, const QRect& area, const QRect& clip, con
     case ImageMode::Fit: target = image.size().scaled(area.size(), Qt::KeepAspectRatio); break;
     case ImageMode::Fill: target = image.size().scaled(area.size(), Qt::KeepAspectRatioByExpanding); break;
     }
-    if (cache.scaledSize != target * dpr) {
+    const bool tile = spec.imageMode == ImageMode::Tile;
+    const int blur = std::clamp(spec.imageBlur, 0, 40);
+    // El desenfoque va con el tamaño con el que se ve (en píxeles de la pantalla): la misma
+    // intensidad con una imagen pequeña que con una enorme reducida.
+    const QString scaledKey = QStringLiteral("%1x%2|%3|%4").arg(target.width() * dpr).arg(target.height() * dpr).arg(blur).arg(
+        int(spec.imageMode));
+    if (cache.scaledKey != scaledKey) {
+        cache.scaledKey = scaledKey;
         cache.scaledSize = target * dpr;
-        cache.scaled = target == image.size() ? image
-                                              : image.scaled(cache.scaledSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        cache.scaledMargin = QPoint(0, 0);
+        if (blur > 0) {
+            const bool soft = spec.imageMode == ImageMode::Center || spec.imageMode == ImageMode::Fit;
+            QSize margin;
+            const QImage blurred = blurredToSize(cache.source, cache.scaledSize, blur * dpr, tile, soft,
+                                                 isAnimatedBackground(spec.workspaceImage), &margin);
+            cache.scaled = QPixmap::fromImage(blurred);
+            cache.scaledMargin = QPoint(int(std::lround(margin.width() / dpr)), int(std::lround(margin.height() / dpr)));
+        } else {
+            cache.scaled = target == image.size() ? image
+                                                  : image.scaled(cache.scaledSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        }
         cache.scaled.setDevicePixelRatio(dpr);
     }
-    if (spec.imageMode == ImageMode::Tile) {
-        const QPoint origin = anchored(area, target, spec.imageAnchor);
+    const QPoint origin = aligned(area, target, imageAlignment(spec));
+    if (tile) {
         auto wrap = [](int v, int m) { return ((v % m) + m) % m; };
         const QPoint offset(wrap(clip.left() - origin.x(), target.width()), wrap(clip.top() - origin.y(), target.height()));
         p.drawTiledPixmap(clip, cache.scaled, offset);
     } else {
-        p.drawPixmap(anchored(area, target, spec.imageAnchor), cache.scaled);
+        p.drawPixmap(origin - cache.scaledMargin, cache.scaled);
     }
     p.restore();
 }

@@ -701,6 +701,18 @@ QRect FloatingPanel::constrained(const QRect& proposed, Qt::Edges edges) const
     return g;
 }
 
+QSize FloatingPanel::contentSize() const
+{
+    const_cast<FloatingPanel*>(this)->ensurePolished();
+    return size() - chromeSize();
+}
+
+void FloatingPanel::resizeForContent(QSize content)
+{
+    ensurePolished();
+    resize(content + chromeSize());
+}
+
 void FloatingPanel::fitToContent()
 {
     if (const auto* fit = dynamic_cast<const PanelContent*>(m_content)) {

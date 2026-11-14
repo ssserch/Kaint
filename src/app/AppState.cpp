@@ -148,6 +148,18 @@ ToolSettings AppState::toolDefaults() const
     t.moveInterpolation = Resample::Interpolation(std::clamp(num("moveResampling", int(t.moveInterpolation)), 0, 4));
     t.moveGamma = num("moveGamma", t.moveGamma);
     t.afterSelect = AfterSelect(std::clamp(num("afterSelect", int(t.afterSelect)), 0, 2));
+    t.magneticWidth = std::clamp(num("magneticWidth", t.magneticWidth), 1, 256);
+    t.magneticContrast = std::clamp(num("magneticContrast", t.magneticContrast), 1, 100);
+    t.magneticFrequency = std::clamp(num("magneticFrequency", t.magneticFrequency), 0, 100);
+    t.objectFinder = num("objectFinder", t.objectFinder);
+    t.retouchSampleImage = num("retouchSampleImage", t.retouchSampleImage);
+    t.removeEachStroke = num("removeEachStroke", t.removeEachStroke);
+    t.patchMode = std::clamp(num("patchMode", t.patchMode), 0, 1);
+    t.patchDestination = num("patchDestination", t.patchDestination);
+    t.patchStructure = std::clamp(num("patchStructure", t.patchStructure), 1, 7);
+    t.patchColor = std::clamp(num("patchColor", t.patchColor), 0, 10);
+    t.healAligned = num("healAligned", t.healAligned);
+    t.spotType = std::clamp(num("spotType", t.spotType), 0, 2);
     return t;
 }
 
@@ -208,6 +220,18 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.remove(QStringLiteral("moveInterpolation"));
     s.setValue(QStringLiteral("moveGamma"), t.moveGamma);
     s.setValue(QStringLiteral("afterSelect"), int(t.afterSelect));
+    s.setValue(QStringLiteral("magneticWidth"), t.magneticWidth);
+    s.setValue(QStringLiteral("magneticContrast"), t.magneticContrast);
+    s.setValue(QStringLiteral("magneticFrequency"), t.magneticFrequency);
+    s.setValue(QStringLiteral("objectFinder"), t.objectFinder);
+    s.setValue(QStringLiteral("retouchSampleImage"), t.retouchSampleImage);
+    s.setValue(QStringLiteral("removeEachStroke"), t.removeEachStroke);
+    s.setValue(QStringLiteral("patchMode"), t.patchMode);
+    s.setValue(QStringLiteral("patchDestination"), t.patchDestination);
+    s.setValue(QStringLiteral("patchStructure"), t.patchStructure);
+    s.setValue(QStringLiteral("patchColor"), t.patchColor);
+    s.setValue(QStringLiteral("healAligned"), t.healAligned);
+    s.setValue(QStringLiteral("spotType"), t.spotType);
 }
 
 namespace {

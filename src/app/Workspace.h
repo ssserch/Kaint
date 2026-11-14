@@ -53,6 +53,11 @@ public:
     // Se muestra delante de las demás con un fundido (si hay animaciones).
     void showAnimated();
     void fitToContent();
+    // El tamaño del contenido según el de la ventana (sin la cabecera ni el marco), y la ventana a
+    // la medida de un contenido de 'content'. No dependen de que el contenido ya esté colocado (al
+    // abrir Kaint, todavía no lo está).
+    QSize contentSize() const;
+    void resizeForContent(QSize content);
 
     // Grosor mínimo del borde que se puede arrastrar para cambiar el tamaño.
     static constexpr int kBorder = 5;

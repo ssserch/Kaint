@@ -83,29 +83,9 @@ void SelectToolBase::paintOverlay(QPainter& p)
 {
     if (!m_active || m_shape.isEmpty())
         return;
-    p.save();
-    const QTransform t = canvas()->imageToViewTransform();
-    QPen under(Qt::white, 0);
-    QPen dashes(QApplication::palette().color(QPalette::Highlight).darker(140), 0, Qt::CustomDashLine);
-    dashes.setDashPattern({3, 3});
-    if (m_shape.isPathBased()) {
-        p.setRenderHint(QPainter::Antialiasing);
-        const QPainterPath path = t.map(m_shape.path());
-        p.setBrush(Qt::NoBrush);
-        p.setPen(under);
-        p.drawPath(path);
-        p.setPen(dashes);
-        p.drawPath(path);
-    } else {
-        QVector<QLineF> mapped;
-        for (const QLineF& l : m_shape.outline())
-            mapped.append(t.map(l));
-        p.setPen(under);
-        p.drawLines(mapped);
-        p.setPen(dashes);
-        p.drawLines(mapped);
-    }
-    p.restore();
+    // Con las mismas hormigas que la selección (antes, un punteado azul fijo que con contornos
+    // irregulares se veía cortado y casi no se distinguía).
+    canvas()->drawSelectionAnts(p, m_shape);
 }
 
 void SelectToolBase::showStatus(const QRectF& r)
@@ -180,8 +160,16 @@ QRectF ShapeSelectTool::currentRect(const QPointF& endIn, Qt::KeyboardModifiers 
         const double h = w / ratio;
         end = QPointF(m_start.x() + (dx >= 0 ? w : -w), m_start.y() + (dy >= 0 ? h : -h));
         end = snapped(end);
+        return QRectF(m_start, end).normalized();
     }
-    return QRectF(m_start, end).normalized();
+    // Sin proporción fija, como en paint.rs: el píxel donde se pulsó y el que está bajo el puntero
+    // quedan dentro (con mucho zum, el borde sigue al puntero píxel a píxel en vez de saltar al pasar
+    // la mitad de uno). Un clic solo no selecciona: basta un poco de arrastre para ese píxel.
+    const double ax = std::floor(m_startRaw.x()), ay = std::floor(m_startRaw.y());
+    const double bx = std::floor(endIn.x()), by = std::floor(endIn.y());
+    if (!m_movedEnough)
+        return QRectF();
+    return QRectF(QPointF(std::min(ax, bx), std::min(ay, by)), QPointF(std::max(ax, bx) + 1, std::max(ay, by) + 1));
 }
 
 void ShapeSelectTool::mousePress(const ToolEvent& e)
@@ -190,6 +178,8 @@ void ShapeSelectTool::mousePress(const ToolEvent& e)
         return;
     begin(e);
     m_start = snapped(e.pos);
+    m_startRaw = e.pos;
+    m_movedEnough = false;
     m_last = e.pos;
     m_moveOrigin = false;
 }
@@ -209,9 +199,13 @@ void ShapeSelectTool::mouseMove(const ToolEvent& e)
     if (m_moveOrigin) {
         const QPointF d = e.pos - m_originGrab;
         m_start += QPointF(std::round(d.x()), std::round(d.y()));
+        m_startRaw += QPointF(std::round(d.x()), std::round(d.y()));
         m_originGrab += QPointF(std::round(d.x()), std::round(d.y()));
     }
     m_last = e.pos;
+    // Un poco de arrastre en la pantalla (2 píxeles) ya cuenta, aunque siga en el mismo píxel.
+    if (!m_movedEnough && QLineF(m_startRaw, e.pos).length() * canvas()->scale() >= 2.0)
+        m_movedEnough = true;
     const QRectF r = currentRect(e.pos, e.modifiers);
     if (r.width() < 1 && r.height() < 1)
         return;
@@ -253,7 +247,8 @@ void LassoSelectTool::mousePress(const ToolEvent& e)
     if (!document() || (e.button != Qt::LeftButton && e.button != Qt::RightButton))
         return;
     begin(e);
-    m_points = QPolygonF{e.pos};
+    // Como en paint.rs, el contorno pasa por las esquinas de los píxeles (las del que tiene el puntero).
+    m_points = QPolygonF{QPointF(std::floor(e.pos.x()), std::floor(e.pos.y()))};
     m_moveOrigin = false;
 }
 
@@ -285,14 +280,17 @@ void LassoSelectTool::mouseMove(const ToolEvent& e)
     if (!m_active)
         return;
     if (m_moveOrigin) {
-        m_points.translate(e.pos - m_last);
-        m_last = e.pos;
+        // En píxeles enteros, para que el contorno siga en las esquinas de los píxeles.
+        const QPointF d(std::round(e.pos.x() - m_last.x()), std::round(e.pos.y() - m_last.y()));
+        m_points.translate(d);
+        m_last += d;
         update();
         return;
     }
-    if (QLineF(m_points.last(), e.pos).length() * canvas()->scale() < 2.0)
+    const QPointF p(std::floor(e.pos.x()), std::floor(e.pos.y()));
+    if (p == m_points.last())
         return;
-    m_points << e.pos;
+    m_points << p;
     update();
 }
 

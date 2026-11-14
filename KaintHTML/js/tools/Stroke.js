@@ -302,6 +302,12 @@ export class Stroke {
     refresh(rect) {
         if (!rect || rect.w <= 0 || rect.h <= 0)
             return;
+        // Solo la cobertura (las herramientas de PhotoCraft que curan o quitan lo que se pinta
+        // encima): la capa no cambia, la herramienta la enseña a su manera.
+        if (this.mode === "mask") {
+            this.doc.pixelsChanged(this.layer, rect);
+            return;
+        }
         const w = this.width, src = this.startData.data;
         const out = this.previewCtx.createImageData(rect.w, rect.h), o = out.data;
         for (let y = 0; y < rect.h; ++y) {
@@ -393,5 +399,32 @@ export class Stroke {
 
     cancel() {
         this.doc.setPreview(null);
+    }
+
+    // Los píxeles RGBA 'pixels' (del tamaño de 'rect') sobre la capa de antes del trazo, a través de
+    // la cobertura (con la selección) y el modo de fusión del trazo; 'opacity' escala su alfa.
+    applyThroughCoverage(rect, pixels, opacity = 255) {
+        const w = this.width, src = this.startData.data;
+        const out = this.previewCtx.createImageData(rect.w, rect.h), o = out.data;
+        const top = new ImageData(rect.w, rect.h), t = top.data, overwrite = this.blend === "overwrite";
+        for (let y = 0; y < rect.h; ++y)
+            for (let x = 0; x < rect.w; ++x) {
+                const i = ((rect.y + y) * w + rect.x + x) * 4, j = (y * rect.w + x) * 4;
+                o[j] = src[i]; o[j + 1] = src[i + 1]; o[j + 2] = src[i + 2]; o[j + 3] = src[i + 3];
+                const m = this.mask[(rect.y + y) * w + rect.x + x];
+                if (!m)
+                    continue;
+                const a = scaleAlpha(pixels[j + 3], opacity);
+                if (overwrite)
+                    lerpStraight(o, j, pixels[j], pixels[j + 1], pixels[j + 2], a, m);
+                else {
+                    t[j] = pixels[j]; t[j + 1] = pixels[j + 1]; t[j + 2] = pixels[j + 2]; t[j + 3] = scaleAlpha(a, m);
+                }
+            }
+        if (!overwrite)
+            blendPixels(out, top, this.blend);
+        this.previewCtx.putImageData(out, rect.x, rect.y);
+        this.dirty = unionRect(this.dirty, rect);
+        this.doc.pixelsChanged(this.layer, rect);
     }
 }

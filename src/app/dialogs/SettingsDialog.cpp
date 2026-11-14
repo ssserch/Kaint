@@ -26,6 +26,8 @@
 #include "app/widgets/UnitField.h"
 #include "core/CustomShapes.h"
 #include "app/dialogs/PluginCatalogDialog.h"
+#include "app/CustomLanguages.h"
+#include "app/dialogs/LanguageEditorDialog.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
@@ -39,6 +41,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFile>
+#include <QDateTime>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
@@ -59,6 +62,8 @@
 #include <QMap>
 #include <QLocale>
 #include <QMessageBox>
+#include <QSaveFile>
+#include <QSignalBlocker>
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QProcess>
@@ -121,6 +126,7 @@ AppSettings AppSettings::load()
     if (a.windowAnimationMs == 300 && !s.contains(QStringLiteral("windowAnimationMs2")))
         a.windowAnimationMs = AppSettings().windowAnimationMs;
     a.aeroTransparency = get("aeroTransparency", a.aeroTransparency);
+    a.win7Glass = s.value(QStringLiteral("win7Glass"), QColor()).value<QColor>();
     a.translucentPanels = get("translucentPanels", a.translucentPanels);
     a.translucentOverImage = get("translucentOverImage", a.translucentOverImage);
     a.overscroll = get("overscroll", a.overscroll);
@@ -132,7 +138,10 @@ AppSettings AppSettings::load()
     a.layerDropLine = get("layerDropLine", a.layerDropLine);
     a.historyJumpButtons = get("historyJumpButtons", a.historyJumpButtons);
     a.pluginMenuIcons = get("pluginMenuIcons", a.pluginMenuIcons);
-    a.kaintHtmlPlugins = get("kaintHtmlPlugins", a.kaintHtmlPlugins);
+    a.browsePlugins = get("browsePlugins", a.browsePlugins);
+    a.photocraftExtras = get("photocraftExtras", a.photocraftExtras);
+    a.stripFullHeight = get("stripFullHeight", a.stripFullHeight);
+    a.boltBaitEffects = s.value(QStringLiteral("boltBaitEffects")).toStringList();
     a.paletteTranslucent = get("paletteTranslucent", a.paletteTranslucent);
     a.panelStyle = std::clamp(get("panelStyle", a.panelStyle), 0, 1);
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
@@ -166,11 +175,18 @@ AppSettings AppSettings::load()
         a.colorScheme = int(Theme::Scheme::System);
 #endif
     a.autosaveMinutes = std::clamp(get("autosaveMinutes", a.autosaveMinutes), 0, 120);
-    a.language = get("language", a.language) == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
+    {
+        // Inglés, español o un idioma personalizado que siga instalado.
+        const QString lang = get("language", a.language);
+        if (lang.startsWith(QLatin1String("custom:")) && CustomLanguages::find(lang.mid(7)))
+            a.language = lang;
+        else
+            a.language = lang == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
+    }
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);
     a.rulers = get("rulers", a.rulers);
-    a.rulerStyle = std::clamp(get("rulerStyle", a.rulerStyle), 0, 2);
+    a.rulerStyle = std::clamp(get("rulerStyle", a.rulerStyle), 0, 3);
     a.dropShadow = get("dropShadow", a.dropShadow);
     a.canvasBorderLight = s.value(QStringLiteral("canvasBorderLight"), QColor()).value<QColor>();
     a.canvasBorderDark = s.value(QStringLiteral("canvasBorderDark"), QColor()).value<QColor>();
@@ -201,6 +217,12 @@ AppSettings AppSettings::load()
     a.discordShowFileInfo = get("discordShowFileInfo", a.discordShowFileInfo);
     a.discordShowTool = get("discordShowTool", a.discordShowTool);
     a.discordShowElapsed = get("discordShowElapsed", a.discordShowElapsed);
+    a.discordShowCollab = get("discordShowCollab", a.discordShowCollab);
+    a.discordShowCollabName = get("discordShowCollabName", a.discordShowCollabName);
+    a.discordInvites = get("discordInvites", a.discordInvites);
+    a.discordJoinRequests = std::clamp(get("discordJoinRequests", a.discordJoinRequests), 0, 2);
+    a.discordPartySize = std::clamp(get("discordPartySize", a.discordPartySize), 2, 99);
+    a.discordRegisterLaunch = get("discordRegisterLaunch", a.discordRegisterLaunch);
     return a;
 }
 
@@ -213,6 +235,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("windowAnimationMs"), windowAnimationMs);
     s.setValue(QStringLiteral("windowAnimationMs2"), true);
     s.setValue(QStringLiteral("aeroTransparency"), aeroTransparency);
+    s.setValue(QStringLiteral("win7Glass"), win7Glass);
     s.setValue(QStringLiteral("translucentPanels"), translucentPanels);
     s.setValue(QStringLiteral("translucentOverImage"), translucentOverImage);
     s.setValue(QStringLiteral("overscroll"), overscroll);
@@ -224,7 +247,10 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
     s.setValue(QStringLiteral("historyJumpButtons"), historyJumpButtons);
     s.setValue(QStringLiteral("pluginMenuIcons"), pluginMenuIcons);
-    s.setValue(QStringLiteral("kaintHtmlPlugins"), kaintHtmlPlugins);
+    s.setValue(QStringLiteral("browsePlugins"), browsePlugins);
+    s.setValue(QStringLiteral("photocraftExtras"), photocraftExtras);
+    s.setValue(QStringLiteral("stripFullHeight"), stripFullHeight);
+    s.setValue(QStringLiteral("boltBaitEffects"), boltBaitEffects);
     s.setValue(QStringLiteral("paletteTranslucent"), paletteTranslucent);
     s.remove(QStringLiteral("allPaletteColors"));
     s.setValue(QStringLiteral("panelStyle"), panelStyle);
@@ -276,6 +302,12 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("discordShowFileInfo"), discordShowFileInfo);
     s.setValue(QStringLiteral("discordShowTool"), discordShowTool);
     s.setValue(QStringLiteral("discordShowElapsed"), discordShowElapsed);
+    s.setValue(QStringLiteral("discordShowCollab"), discordShowCollab);
+    s.setValue(QStringLiteral("discordShowCollabName"), discordShowCollabName);
+    s.setValue(QStringLiteral("discordInvites"), discordInvites);
+    s.setValue(QStringLiteral("discordJoinRequests"), discordJoinRequests);
+    s.setValue(QStringLiteral("discordPartySize"), discordPartySize);
+    s.setValue(QStringLiteral("discordRegisterLaunch"), discordRegisterLaunch);
     s.remove(QStringLiteral("discordClientId"));
 }
 
@@ -583,16 +615,19 @@ QWidget* SettingsDialog::createInterfacePage()
           tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra."));
     check(tr("Mostrar los botones de ir al principio y al final del historial"), &AppSettings::historyJumpButtons,
           tr("En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio."));
+    check(tr("Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba"), &AppSettings::stripFullHeight,
+          tr("Como en Paint.NET: el recuadro de la imagen actual y el de la que tiene el puntero llegan hasta arriba de la "
+             "ventana (también la barra de título). Desactivado, solo la altura de la miniatura."));
     check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), &AppSettings::paletteTranslucent,
           tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de "
              "menos colores no se muestra nunca."));
     // El botón está en Complementos (se muestra o se esconde al momento).
-    QCheckBox* kaintHtml = check(tr("Mostrar el botón «Complementos de Kaint.HTML»"), &AppSettings::kaintHtmlPlugins,
-                                 tr("En Complementos, un botón para instalar complementos de paint.js del catálogo de la versión "
-                                    "web de Kaint (Kaint.HTML)."));
-    connect(kaintHtml, &QCheckBox::toggled, this, [this](bool on) {
-        if (m_kaintHtmlButton)
-            m_kaintHtmlButton->setVisible(on);
+    QCheckBox* browsePlugins = check(tr("Mostrar el botón «Explorar complementos…»"), &AppSettings::browsePlugins,
+                                     tr("En Complementos, un botón con una lista de complementos elegidos para Kaint (de "
+                                        "Kaint.HTML, PhotoCraft y Paint.NET) que se instalan con un clic."));
+    connect(browsePlugins, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_browsePluginsButton)
+            m_browsePluginsButton->setVisible(on);
     });
 
     // Temas: los cuatro primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
@@ -665,7 +700,58 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.win7PanelClose = panelClose->itemData(i).toInt();
         changed();
     });
-    auto syncAeroGlass = [this, aeroGlass, panelCloseRow] {
+    // Windows 7: el color de las ventanas, como «Color de ventana» de Windows 7 (sus colores o uno
+    // propio). El personalizado lo tiene en Personalizar….
+    auto* glassRow = new QWidget(page.widget);
+    auto* glassCombo = new QComboBox(glassRow);
+    auto* glassColor = new ColorButton(glassRow);
+    {
+        auto* l = new QHBoxLayout(glassRow);
+        l->setContentsMargins(20, 0, 0, 0);
+        l->addWidget(new QLabel(tr("Color de las ventanas:"), glassRow));
+        l->addWidget(glassCombo);
+        l->addWidget(glassColor);
+        l->addStretch();
+        page.layout->addWidget(glassRow);
+    }
+    glassRow->setToolTip(tr("Como «Color de ventana» de Windows 7: el cristal de los marcos, la franja de los menús y las "
+                            "cabeceras de las ventanas. Solo con los temas Windows 7."));
+    auto swatch = [](const QColor& c) {
+        QPixmap pm(14, 14);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setPen(QColor(0, 0, 0, 110));
+        p.setBrush(c);
+        p.drawRect(QRectF(0.5, 0.5, 13, 13));
+        return QIcon(pm);
+    };
+    glassCombo->addItem(swatch(Theme::windows7().glass), tr("Predeterminado"), QColor());
+    for (const Theme::Win7Color& c : Theme::win7Colors())
+        glassCombo->addItem(swatch(QColor(c.rgb)), QCoreApplication::translate("Theme", c.name), QColor(c.rgb));
+    glassCombo->addItem(tr("Personalizado"), QStringLiteral("custom"));
+    {
+        int index = 0;
+        if (m_settings.win7Glass.isValid()) {
+            index = glassCombo->count() - 1;
+            for (int i = 1; i + 1 < glassCombo->count(); ++i)
+                if (glassCombo->itemData(i).value<QColor>().rgb() == m_settings.win7Glass.rgb())
+                    index = i;
+        }
+        glassCombo->setCurrentIndex(index);
+    }
+    glassColor->setColor(m_settings.win7Glass.isValid() ? m_settings.win7Glass : Theme::windows7().glass);
+    glassColor->setVisible(glassCombo->currentIndex() == glassCombo->count() - 1);
+    connect(glassCombo, &QComboBox::activated, this, [this, glassCombo, glassColor](int i) {
+        const bool own = i == glassCombo->count() - 1;
+        glassColor->setVisible(own);
+        m_settings.win7Glass = own ? glassColor->color() : glassCombo->itemData(i).value<QColor>();
+        changed();
+    });
+    connect(glassColor, &ColorButton::colorChanged, this, [this, glassColor] {
+        m_settings.win7Glass = glassColor->color();
+        changed();
+    });
+    auto syncAeroGlass = [this, aeroGlass, panelCloseRow, glassRow] {
         // (También el personalizado con el estilo de Windows 7.)
         const bool win7 = m_settings.colorScheme == int(Theme::Scheme::Windows7)
                           || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark)
@@ -673,6 +759,8 @@ QWidget* SettingsDialog::createInterfacePage()
         aeroGlass->setEnabled(win7);
         aeroGlass->setVisible(win7);
         panelCloseRow->setVisible(win7);
+        glassRow->setVisible(m_settings.colorScheme == int(Theme::Scheme::Windows7)
+                             || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark));
     };
     syncAeroGlass();
     connect(this, &SettingsDialog::settingsChanged, this, syncAeroGlass);
@@ -731,13 +819,121 @@ QWidget* SettingsDialog::createInterfacePage()
 
     auto* languageRow = new QHBoxLayout;
     auto* language = new QComboBox(page.widget);
-    language->addItem(QStringLiteral("English"), QStringLiteral("en"));
-    language->addItem(QStringLiteral("Español"), QStringLiteral("es"));
-    language->setCurrentIndex(language->findData(m_settings.language));
+    // Inglés, español y los idiomas personalizados instalados.
+    auto fillLanguages = [language] {
+        const QSignalBlocker block(language);
+        language->clear();
+        language->addItem(QStringLiteral("English"), QStringLiteral("en"));
+        language->addItem(QStringLiteral("Español"), QStringLiteral("es"));
+        for (const CustomLanguages::Language& l : CustomLanguages::list())
+            language->addItem(l.name, QStringLiteral("custom:") + l.id);
+    };
+    fillLanguages();
+    language->setCurrentIndex(std::max(0, language->findData(m_settings.language)));
     languageRow->addWidget(new QLabel(tr("Idioma:"), page.widget));
     languageRow->addWidget(language);
+    // Idiomas personalizados: importar, crear, editar, exportar y quitar (CustomLanguages).
+    auto* importLanguage = new QPushButton(tr("Importar…"), page.widget);
+    importLanguage->setToolTip(tr("Importar un idioma personalizado (.kaintlang)"));
+    auto* newLanguage = new QPushButton(tr("Nuevo…"), page.widget);
+    newLanguage->setToolTip(tr("Crear un idioma personalizado"));
+    auto* editLanguage = new QPushButton(tr("Editar…"), page.widget);
+    editLanguage->setToolTip(tr("Editar el idioma personalizado elegido"));
+    auto* exportLanguage = new QPushButton(tr("Exportar…"), page.widget);
+    exportLanguage->setToolTip(tr("Guardar el idioma personalizado elegido en un archivo"));
+    auto* removeLanguage = new QPushButton(tr("Quitar"), page.widget);
+    removeLanguage->setToolTip(tr("Quitar el idioma personalizado elegido"));
+    for (QPushButton* b : {importLanguage, newLanguage, editLanguage, exportLanguage, removeLanguage})
+        languageRow->addWidget(b);
     languageRow->addStretch();
     page.layout->addLayout(languageRow);
+    page.layout->addWidget(wrapped(tr("En un idioma personalizado, lo que no esté traducido sale en inglés."), page.widget));
+    auto chosenCustom = [language]() -> std::optional<CustomLanguages::Language> {
+        const QString data = language->currentData().toString();
+        return data.startsWith(QLatin1String("custom:")) ? CustomLanguages::find(data.mid(7)) : std::nullopt;
+    };
+    auto syncLanguageButtons = [chosenCustom, editLanguage, exportLanguage, removeLanguage] {
+        const bool own = chosenCustom().has_value();
+        editLanguage->setEnabled(own);
+        exportLanguage->setEnabled(own);
+        removeLanguage->setEnabled(own);
+    };
+    syncLanguageButtons();
+    connect(language, &QComboBox::currentIndexChanged, this, syncLanguageButtons);
+    // Tras crear o importar uno: se elige (y se ofrece reiniciar, como al cambiar de idioma).
+    auto chooseLanguage = [language, fillLanguages](const QString& data) {
+        fillLanguages();
+        const int i = language->findData(data);
+        if (i >= 0) {
+            language->setCurrentIndex(i);
+            emit language->activated(i);
+        }
+    };
+    connect(importLanguage, &QPushButton::clicked, this, [this, chooseLanguage] {
+        const QString file = QFileDialog::getOpenFileName(this, tr("Importar un idioma"), QString(), tr("Idiomas de Kaint (*.kaintlang *.json)"));
+        if (file.isEmpty())
+            return;
+        QFile f(file);
+        QString error;
+        std::optional<CustomLanguages::Language> lang;
+        if (f.open(QIODevice::ReadOnly))
+            lang = CustomLanguages::parse(f.read(32 * 1024 * 1024), &error);
+        else
+            error = f.errorString();
+        if (!lang || !CustomLanguages::save(*lang, &error)) {
+            QMessageBox::warning(this, tr("Importar un idioma"), tr("No se pudo importar el idioma: %1").arg(error));
+            return;
+        }
+        chooseLanguage(QStringLiteral("custom:") + lang->id);
+    });
+    connect(newLanguage, &QPushButton::clicked, this, [this, chooseLanguage] {
+        CustomLanguages::Language lang;
+        lang.id = QStringLiteral("lang-") + QString::number(QDateTime::currentMSecsSinceEpoch(), 36);
+        LanguageEditorDialog dlg(lang, this);
+        if (dlg.exec() != QDialog::Accepted)
+            return;
+        QString error;
+        if (!CustomLanguages::save(dlg.language(), &error)) {
+            QMessageBox::warning(this, tr("Nuevo idioma"), error);
+            return;
+        }
+        chooseLanguage(QStringLiteral("custom:") + lang.id);
+    });
+    connect(editLanguage, &QPushButton::clicked, this, [this, chosenCustom, fillLanguages, language] {
+        const auto lang = chosenCustom();
+        if (!lang)
+            return;
+        LanguageEditorDialog dlg(*lang, this);
+        if (dlg.exec() != QDialog::Accepted)
+            return;
+        QString error;
+        if (!CustomLanguages::save(dlg.language(), &error))
+            QMessageBox::warning(this, tr("Editar el idioma"), error);
+        const QString data = language->currentData().toString();
+        fillLanguages();
+        language->setCurrentIndex(std::max(0, language->findData(data)));
+    });
+    connect(exportLanguage, &QPushButton::clicked, this, [this, chosenCustom] {
+        const auto lang = chosenCustom();
+        if (!lang)
+            return;
+        const QString file = QFileDialog::getSaveFileName(this, tr("Exportar el idioma"), lang->name + QStringLiteral(".kaintlang"),
+                                                          tr("Idiomas de Kaint (*.kaintlang)"));
+        if (file.isEmpty())
+            return;
+        QSaveFile f(file);
+        if (!f.open(QIODevice::WriteOnly) || f.write(CustomLanguages::serialize(*lang)) < 0 || !f.commit())
+            QMessageBox::warning(this, tr("Exportar el idioma"), f.errorString());
+    });
+    connect(removeLanguage, &QPushButton::clicked, this, [this, chosenCustom, fillLanguages, language, syncLanguageButtons] {
+        const auto lang = chosenCustom();
+        if (!lang || QMessageBox::question(this, tr("Quitar el idioma"), tr("¿Quieres quitar el idioma «%1»?").arg(lang->name)) != QMessageBox::Yes)
+            return;
+        CustomLanguages::remove(lang->id);
+        fillLanguages();
+        language->setCurrentIndex(std::max(0, language->findData(m_settings.language)));
+        syncLanguageButtons();
+    });
 
     // Fuente de la interfaz: la del sistema (o la del tema) o cualquiera instalada, y su tamaño.
     auto* fontRow = new QHBoxLayout;
@@ -1307,6 +1503,9 @@ QWidget* SettingsDialog::createCanvasPage()
                        Qt::ToolTipRole);
     ruler->addItem(tr("Del color de la barra de herramientas"), int(Ruler::Style::ToolBar));
     ruler->addItem(tr("Oscura"), int(Ruler::Style::PaintJs));
+    ruler->addItem(tr("Como Paint.NET"), int(Ruler::Style::PaintNet));
+    ruler->setItemData(3, tr("Como la regla de Paint.NET 5: las divisiones de una regla de verdad y la unidad en la esquina."),
+                       Qt::ToolTipRole);
     ruler->setCurrentIndex(std::max(0, ruler->findData(m_settings.rulerStyle)));
     rulerRow->addWidget(new QLabel(tr("Reglas:"), page.widget));
     rulerRow->addWidget(ruler);
@@ -1520,20 +1719,35 @@ QWidget* SettingsDialog::createPluginsPage()
         changed();
     });
     page.layout->addWidget(menuIcons);
+    // Las funciones de PhotoCraft que trae Kaint (desactivadas por defecto).
+    auto* extras = new QCheckBox(tr("Activar las funciones de PhotoCraft"), page.widget);
+    extras->setToolTip(tr("Más ajustes y efectos (Intensidad, Mapa de degradado, Corrección selectiva, la galería de filtros "
+                          "artísticos, de bosquejo y de textura...) y herramientas, de PhotoCraft. En los menús llevan la pieza "
+                          "de puzle de los complementos."));
+    extras->setChecked(m_settings.photocraftExtras);
+    connect(extras, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.photocraftExtras = on;
+        changed();
+    });
+    page.layout->addWidget(extras);
 
     auto* row = new QHBoxLayout;
     auto* add = new QPushButton(Icons::theme({"list-add", "document-import"}), tr("Añadir…"), page.widget);
     add->setToolTip(tr("Copiar complementos (.so, .dll, .wasm, .cube, .3dl, .xmp o .paintjs) a la carpeta de complementos"));
     connect(add, &QPushButton::clicked, this, &SettingsDialog::addPlugins);
-    // El catálogo de complementos de paint.js (el de Explorar complementos de la versión web),
-    // solo si se activó en Interfaz de usuario.
-    auto* browse = new QPushButton(Icons::theme({"plugins", "application-x-addon"}), tr("Complementos de Kaint.HTML…"), page.widget);
-    browse->setToolTip(tr("El catálogo de complementos de paint.js de la versión web de Kaint"));
-    browse->setVisible(m_settings.kaintHtmlPlugins);
-    m_kaintHtmlButton = browse;
+    // La lista de complementos elegidos para Kaint (se puede esconder en Interfaz de usuario).
+    auto* browse = new QPushButton(Icons::theme({"plugins", "application-x-addon"}), tr("Explorar complementos…"), page.widget);
+    browse->setToolTip(tr("Una lista de complementos elegidos y probados para Kaint: los de Kaint.HTML, PhotoCraft y Paint.NET"));
+    browse->setVisible(m_settings.browsePlugins);
+    m_browsePluginsButton = browse;
     connect(browse, &QPushButton::clicked, this, [this] {
         PluginCatalogDialog dlg(this);
+        dlg.setEnabledBuiltins(m_settings.boltBaitEffects);
         dlg.exec();
+        if (dlg.enabledBuiltins() != m_settings.boltBaitEffects) {
+            m_settings.boltBaitEffects = dlg.enabledBuiltins();
+            changed();
+        }
         refreshPlugins();
     });
     auto* openFolder = new QPushButton(Icons::theme({"folder-open"}), tr("Abrir la carpeta"), page.widget);
@@ -2600,7 +2814,7 @@ QWidget* SettingsDialog::createCollabView(QWidget* parent, const std::shared_ptr
         }
     };
     fillIds();
-    connect(addId, &QPushButton::clicked, view, [=] {
+    connect(addId, &QPushButton::clicked, view, [=, this] {
         bool ok = false;
         const QString idCode = QInputDialog::getText(this, tr("Agregar equipo"), tr("ID del equipo (lo ve en Configuración > Colaboración):"),
                                                      QLineEdit::Normal, QString(), &ok)
@@ -2851,6 +3065,56 @@ QWidget* SettingsDialog::createDiscordPage()
     option(tr("El tipo de archivo y el tamaño de la imagen"), &AppSettings::discordShowFileInfo);
     option(tr("La herramienta que estoy usando"), &AppSettings::discordShowTool);
     option(tr("El tiempo que llevo en Kaint"), &AppSettings::discordShowElapsed);
+
+    // El modo colaborativo: lo que se ve y las invitaciones (solo sesiones P2P: el código viaja por
+    // Discord y quien entra pasa por la contraseña o la aprobación de la sesión).
+    auto* collabHeader = sectionHeader(tr("Modo colaborativo"), details);
+    detailsLayout->addSpacing(6);
+    detailsLayout->addWidget(collabHeader);
+    option(tr("La sesión colaborativa y cuántas personas hay"), &AppSettings::discordShowCollab);
+    option(tr("El nombre de la sesión"), &AppSettings::discordShowCollabName);
+    auto* invites = new QCheckBox(tr("Invitaciones a mis sesiones P2P y «Pedir unirse»"), details);
+    invites->setChecked(m_settings.discordInvites);
+    detailsLayout->addWidget(invites);
+    auto* inviteOptions = new QWidget(details);
+    auto* inviteForm = new QFormLayout(inviteOptions);
+    inviteForm->setContentsMargins(20, 0, 0, 0);
+    auto* requests = new QComboBox(inviteOptions);
+    requests->addItems({tr("Preguntarme"), tr("Aceptarlas siempre"), tr("Rechazarlas siempre")});
+    requests->setCurrentIndex(m_settings.discordJoinRequests);
+    connect(requests, &QComboBox::currentIndexChanged, this, [this](int i) {
+        m_settings.discordJoinRequests = i;
+        changed();
+    });
+    inviteForm->addRow(tr("Solicitudes para unirse:"), requests);
+    auto* partySize = new QSpinBox(inviteOptions);
+    partySize->setRange(2, 99);
+    partySize->setValue(m_settings.discordPartySize);
+    partySize->setSuffix(tr(" plazas"));
+    connect(partySize, &QSpinBox::valueChanged, this, [this](int v) {
+        m_settings.discordPartySize = v;
+        changed();
+    });
+    inviteForm->addRow(tr("Tamaño del grupo en Discord:"), partySize);
+    auto* launch = new QCheckBox(tr("Abrir Kaint al aceptar una invitación"), inviteOptions);
+    launch->setChecked(m_settings.discordRegisterLaunch);
+    connect(launch, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.discordRegisterLaunch = on;
+        changed();
+    });
+    inviteForm->addRow(launch);
+    detailsLayout->addWidget(inviteOptions);
+    auto* inviteHint = wrapped(tr("Solo con sesiones P2P. Aceptar en Discord no deja entrar de frente: si la sesión tiene "
+                                  "contraseña, Kaint la pide, y si apruebas a mano, el invitado espera a que lo aceptes."),
+                               details);
+    inviteHint->setEnabled(false);
+    detailsLayout->addWidget(inviteHint);
+    inviteOptions->setEnabled(m_settings.discordInvites);
+    connect(invites, &QCheckBox::toggled, this, [this, inviteOptions](bool on) {
+        m_settings.discordInvites = on;
+        inviteOptions->setEnabled(on);
+        changed();
+    });
     page.layout->addWidget(details);
 
     // La aplicación de Discord (su ID) viene de discord.json: no se cambia aquí.

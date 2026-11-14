@@ -4,6 +4,8 @@
 
 #include <QWidget>
 
+#include <functional>
+
 class QButtonGroup;
 class QToolButton;
 class ToolManager;
@@ -32,6 +34,9 @@ private:
     QSize cell() const;
     QSize sizeFor(int columns) const;
     void layoutButtons();
+    // Aplica 'change' (herramientas o iconos) y ajusta la ventana a la rejilla con las mismas
+    // columnas.
+    void refit(const std::function<void()>& change);
     // Orden y herramientas ocultas de Configuración > Personalización.
     void applyCustomization();
 

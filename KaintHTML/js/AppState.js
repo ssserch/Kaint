@@ -20,6 +20,22 @@ export const defaultTools = () => ({
     selectionMode: "replace",
     // Después de seleccionar: "none", "moveselection" o "moveselectedpixels" (como Kaint).
     afterSelect: "none",
+    // Las herramientas de PhotoCraft (como Kaint): Lazo magnético (anchura, contraste y
+    // frecuencia), el Buscador de objetos, tomar de la imagen, Quitar después de cada trazo, el
+    // Parche (modo, origen o destino, estructura y color), Pincel corrector alineado y el tipo del
+    // Pincel corrector puntual.
+    magneticWidth: 10,
+    magneticContrast: 10,
+    magneticFrequency: 57,
+    objectFinder: true,
+    retouchSampleImage: false,
+    removeEachStroke: true,
+    patchMode: "normal",
+    patchDestination: false,
+    patchStructure: 4,
+    patchColor: 0,
+    healAligned: true,
+    spotType: "contentAware",
     rectMode: "normal",
     fixedWidth: 4,
     fixedHeight: 3,

@@ -221,6 +221,8 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         spec.imageOpacity = m_spec.imageOpacity;
         spec.imageScale = m_spec.imageScale;
         spec.imageAnchor = m_spec.imageAnchor;
+        spec.imageX = m_spec.imageX;
+        spec.imageY = m_spec.imageY;
         spec.imageBlur = m_spec.imageBlur;
         spec.imageGrayscale = m_spec.imageGrayscale;
         spec.imageTint = m_spec.imageTint;
@@ -293,8 +295,17 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     backForm->addRow(tr("Colocación:"), m_imageMode);
     m_imageAnchor = new QComboBox(content);
     m_imageAnchor->addItems({tr("Arriba a la izquierda"), tr("Arriba"), tr("Arriba a la derecha"), tr("Izquierda"), tr("Centro"),
-                             tr("Derecha"), tr("Abajo a la izquierda"), tr("Abajo"), tr("Abajo a la derecha")});
+                             tr("Derecha"), tr("Abajo a la izquierda"), tr("Abajo"), tr("Abajo a la derecha"), tr("Personalizada")});
     backForm->addRow(tr("Posición:"), m_imageAnchor);
+    // La alineación en cada eje, para colocarla en cualquier punto entre esas nueve posiciones.
+    m_imageX = new QSlider(Qt::Horizontal, content);
+    m_imageX->setRange(0, 100);
+    m_imageX->setToolTip(tr("0 %: pegada a la izquierda; 50 %: centrada; 100 %: pegada a la derecha."));
+    backForm->addRow(tr("Alineación horizontal (X):"), sliderRow(m_imageX, content));
+    m_imageY = new QSlider(Qt::Horizontal, content);
+    m_imageY->setRange(0, 100);
+    m_imageY->setToolTip(tr("0 %: pegada arriba; 50 %: centrada; 100 %: pegada abajo."));
+    backForm->addRow(tr("Alineación vertical (Y):"), sliderRow(m_imageY, content));
     m_imageScale = new QSpinBox(content);
     m_imageScale->setRange(10, 400);
     m_imageScale->setSingleStep(10);
@@ -305,6 +316,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     backForm->addRow(tr("Opacidad de la imagen:"), sliderRow(m_imageOpacity, content));
     m_imageBlur = new QSlider(Qt::Horizontal, content);
     m_imageBlur->setRange(0, 40);
+    m_imageBlur->setToolTip(tr("Desenfoque gaussiano, en píxeles de la pantalla."));
     auto* blurRow = new QHBoxLayout;
     auto* blurValue = new QLabel(content);
     blurValue->setMinimumWidth(blurValue->fontMetrics().horizontalAdvance(QStringLiteral("40 px")));
@@ -340,7 +352,30 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         };
     };
     connect(m_imageMode, &QComboBox::activated, this, edit([this](int i) { m_spec.imageMode = Theme::ImageMode(i); }));
-    connect(m_imageAnchor, &QComboBox::activated, this, edit([this](int i) { m_spec.imageAnchor = i; }));
+    connect(m_imageAnchor, &QComboBox::activated, this, edit([this](int i) {
+        if (i < 9) {
+            m_spec.imageAnchor = i;
+            m_spec.imageX = m_spec.imageY = -1;
+        } else {
+            // «Personalizada»: donde está, para moverla con los deslizadores.
+            const QPoint at = Theme::imageAlignment(m_spec);
+            m_spec.imageX = at.x();
+            m_spec.imageY = at.y();
+        }
+    }));
+    // En una de las nueve posiciones de siempre es ella (así el tema lo entienden también las
+    // versiones anteriores); si no, la alineación propia.
+    auto align = [this](int x, int y) {
+        if (x % 50 == 0 && y % 50 == 0) {
+            m_spec.imageAnchor = (y / 50) * 3 + x / 50;
+            m_spec.imageX = m_spec.imageY = -1;
+        } else {
+            m_spec.imageX = x;
+            m_spec.imageY = y;
+        }
+    };
+    connect(m_imageX, &QSlider::valueChanged, this, edit([this, align](int v) { align(v, Theme::imageAlignment(m_spec).y()); }));
+    connect(m_imageY, &QSlider::valueChanged, this, edit([this, align](int v) { align(Theme::imageAlignment(m_spec).x(), v); }));
     connect(m_imageScale, &QSpinBox::valueChanged, this, edit([this](int v) { m_spec.imageScale = v; }));
     connect(m_imageOpacity, &QSlider::valueChanged, this, edit([this](int v) { m_spec.imageOpacity = v; }));
     connect(m_imageBlur, &QSlider::valueChanged, this, edit([this](int v) { m_spec.imageBlur = v; }));
@@ -543,12 +578,17 @@ void ThemeDialog::refresh()
     m_image->setText(QDir::toNativeSeparators(m_spec.workspaceImage));
     m_clearImage->setEnabled(!m_spec.workspaceImage.isEmpty());
     m_imageMode->setCurrentIndex(int(m_spec.imageMode));
-    m_imageAnchor->setCurrentIndex(m_spec.imageAnchor);
+    m_imageAnchor->setCurrentIndex(m_spec.imageX >= 0 || m_spec.imageY >= 0 ? 9 : m_spec.imageAnchor);
+    const QPoint alignment = Theme::imageAlignment(m_spec);
+    m_imageX->setValue(alignment.x());
+    m_imageY->setValue(alignment.y());
     m_imageScale->setValue(m_spec.imageScale);
     const bool hasImage = !m_spec.workspaceImage.isEmpty();
     m_imageScale->parentWidget()->setEnabled(hasImage
                              && (m_spec.imageMode == Theme::ImageMode::Tile || m_spec.imageMode == Theme::ImageMode::Center));
-    m_imageAnchor->setEnabled(hasImage && m_spec.imageMode != Theme::ImageMode::Stretch);
+    // Estirada ocupa toda el área: no hay dónde alinearla.
+    for (QWidget* w : std::initializer_list<QWidget*>{m_imageAnchor, m_imageX, m_imageY})
+        w->setEnabled(hasImage && m_spec.imageMode != Theme::ImageMode::Stretch);
     m_imageOpacity->setValue(m_spec.imageOpacity);
     m_imageBlur->setValue(m_spec.imageBlur);
     m_imageGrayscale->setChecked(m_spec.imageGrayscale);

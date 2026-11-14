@@ -681,6 +681,200 @@ void drawCollab(QPainter& p)
     person(QPointF(5.8, 6.2), 2.9, QRectF(0.8, 10.2, 10, 5.3), QColor(58, 132, 216));
 }
 
+// Las herramientas de PhotoCraft llevan la pieza de puzle verde de los complementos abajo a la
+// derecha: ocupa casi la mitad del icono (más pequeña apenas se veía), con sus dos salientes
+// (arriba y a la izquierda), un verde vivo con borde oscuro y un halo blanco que la separa del
+// dibujo, sobre fondos claros y oscuros.
+void puzzleBadge(QPainter& p)
+{
+    aa(p);
+    QPainterPath piece;
+    piece.addRoundedRect(QRectF(12.4, 12.4, 7.2, 7.2), 1.1, 1.1);
+    QPainterPath knobs;
+    knobs.addEllipse(QPointF(16.0, 12.1), 1.75, 1.75);
+    knobs.addEllipse(QPointF(12.1, 16.0), 1.75, 1.75);
+    piece = piece.united(knobs);
+    p.setPen(QPen(QColor(255, 255, 255, 245), 2.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(piece);
+    p.setPen(QPen(QColor(20, 92, 38), 0.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(QColor(67, 196, 84));
+    p.drawPath(piece);
+    // Un brillo arriba: se lee como una pieza y no como una mancha verde.
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 90));
+    p.drawRoundedRect(QRectF(13.6, 13.5, 4.8, 1.5), 0.7, 0.7);
+}
+
+// Hormigas de las herramientas de PhotoCraft: trazos cortos grises (o del color dado) de 'width'.
+QPen dashedPen(const QColor& color, qreal width, qreal dash, qreal gap)
+{
+    QPen pen(color, width, Qt::CustomDashLine, Qt::FlatCap);
+    pen.setDashPattern({dash / width, gap / width});
+    return pen;
+}
+
+void drawMagneticLasso(QPainter& p)
+{
+    // El lazo de hormigas inclinado, su cuerda con el nudo y, abajo, un imán rojo.
+    aa(p);
+    p.save();
+    p.translate(11.5, 6.6);
+    p.rotate(-15);
+    p.setPen(dashedPen(QColor(74, 134, 204), 1.3, 1.7, 1.5));
+    p.setBrush(QColor(215, 230, 246));
+    p.drawEllipse(QPointF(0, 0), 7.0, 4.6);
+    p.restore();
+    QPen rope(QColor(74, 134, 204), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    p.setPen(rope);
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(6.4, 10.6), 1.4, 1.4);
+    QPainterPath tail;
+    tail.moveTo(5.4, 11.8);
+    tail.cubicTo(5.1, 13.8, 4.0, 15.8, 2.2, 17.6);
+    p.drawPath(tail);
+    QPainterPath magnet;
+    magnet.moveTo(8.2, 12.2);
+    magnet.lineTo(10.2, 12.2);
+    magnet.lineTo(10.2, 15.2);
+    magnet.arcTo(QRectF(10.2, 14.2, 2.0, 2.0), 180, 180);
+    magnet.lineTo(12.2, 12.2);
+    magnet.lineTo(14.2, 12.2);
+    magnet.lineTo(14.2, 15.2);
+    magnet.arcTo(QRectF(8.2, 12.2, 6.0, 6.0), 0, -180);
+    magnet.closeSubpath();
+    p.setPen(QPen(QColor(168, 54, 46), 0.7));
+    p.setBrush(QColor(220, 95, 85));
+    p.drawPath(magnet);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(115, 122, 133));
+    p.drawRect(QRectF(8.2, 12.2, 2.0, 1.8));
+    p.drawRect(QRectF(12.2, 12.2, 2.0, 1.8));
+    puzzleBadge(p);
+}
+
+void drawObjectSelection(QPainter& p)
+{
+    // Una persona (el objeto) dentro del recuadro de hormigas.
+    aa(p);
+    p.setPen(dashedPen(QColor(115, 122, 133), 1.1, 2.0, 1.6));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(QRectF(2.5, 2.5, 14.0, 14.0));
+    p.setPen(QPen(QColor(63, 120, 186), 0.8));
+    p.setBrush(QColor(91, 149, 214));
+    p.drawEllipse(QPointF(9.5, 7.4), 2.6, 2.6);
+    QPainterPath body;
+    body.moveTo(5.2, 15.4);
+    body.arcTo(QRectF(5.2, 11.1, 8.6, 8.6), 180, -180);
+    body.closeSubpath();
+    p.drawPath(body);
+    puzzleBadge(p);
+}
+
+// Destello de cuatro puntas centrado en 'c' con brazos de 'r'.
+void sparkle(QPainter& p, QPointF c, qreal r, const QColor& color)
+{
+    const qreal k = r * 0.3;
+    QPainterPath star;
+    star.moveTo(c.x(), c.y() - r);
+    star.quadTo(c.x() + k, c.y() - k, c.x() + r, c.y());
+    star.quadTo(c.x() + k, c.y() + k, c.x(), c.y() + r);
+    star.quadTo(c.x() - k, c.y() + k, c.x() - r, c.y());
+    star.quadTo(c.x() - k, c.y() - k, c.x(), c.y() - r);
+    p.setPen(QPen(color.darker(135), 0.6));
+    p.setBrush(color);
+    p.drawPath(star);
+}
+
+void drawRemove(QPainter& p)
+{
+    // Un borrador mágico en diagonal (la punta clara abajo y el cuerpo turquesa, para no confundirlo
+    // con la goma morada) y destellos: lo que toca desaparece.
+    aa(p);
+    p.save();
+    p.translate(7.8, 12.2);
+    p.rotate(-45);
+    p.setPen(QPen(QColor(46, 140, 152), 0.9));
+    p.setBrush(QColor(214, 240, 242));
+    p.drawRoundedRect(QRectF(-5.6, -2.8, 6.2, 5.6), 1.2, 1.2);
+    p.setPen(QPen(QColor(36, 116, 128), 0.7));
+    p.setBrush(QColor(63, 169, 181));
+    p.drawRoundedRect(QRectF(0.0, -3.75, 6.25, 7.5), 1.9, 1.9);
+    p.restore();
+    sparkle(p, QPointF(15.2, 4.6), 3.4, QColor(233, 182, 100));
+    sparkle(p, QPointF(4.0, 4.4), 1.8, QColor(233, 182, 100));
+    puzzleBadge(p);
+}
+
+void drawPatch(QPainter& p)
+{
+    // La zona de hormigas de donde sale el parche (arriba a la izquierda) y el parche cosido
+    // encima, tapándola.
+    aa(p);
+    const QRectF patch(5.6, 5.6, 10.4, 10.4);
+    p.save();
+    QPainterPath outside;
+    outside.setFillRule(Qt::OddEvenFill);
+    outside.addRect(QRectF(0, 0, 20, 20));
+    outside.addRoundedRect(patch.adjusted(-1.2, -1.2, 1.2, 1.2), 2.4, 2.4);
+    p.setClipPath(outside);
+    p.setPen(dashedPen(QColor(115, 122, 133), 1.1, 1.8, 1.5));
+    p.setBrush(QColor(215, 230, 246));
+    p.drawEllipse(QPointF(5.6, 5.6), 4.6, 4.6);
+    p.restore();
+    p.setPen(QPen(QColor(176, 125, 42), 0.8));
+    p.setBrush(QColor(233, 182, 100));
+    p.drawRoundedRect(patch, 1.6, 1.6);
+    p.setPen(dashedPen(QColor(75, 82, 92), 0.8, 1.8, 1.2));
+    p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(patch.adjusted(1.6, 1.6, -1.6, -1.6), 0.8, 0.8);
+    puzzleBadge(p);
+}
+
+// Una tirita en diagonal centrada en 'c', de largo 'length' y ancho 'width'.
+void bandage(QPainter& p, QPointF c, qreal length, qreal width, bool holes)
+{
+    p.save();
+    p.translate(c);
+    p.rotate(-45);
+    p.setPen(QPen(QColor(185, 130, 53), 0.8));
+    p.setBrush(QColor(233, 182, 100));
+    p.drawRoundedRect(QRectF(-length / 2, -width / 2, length, width), width / 2, width / 2);
+    const qreal pad = width * 0.66;
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(247, 226, 184));
+    p.drawRoundedRect(QRectF(-pad / 2, -pad / 2, pad, pad), 0.6, 0.6);
+    if (holes) {
+        p.setBrush(QColor(201, 147, 67));
+        for (qreal x : {-length * 0.3, length * 0.3})
+            for (qreal y : {-1.1, 1.1})
+                p.drawEllipse(QPointF(x, y), 0.45, 0.45);
+    }
+    p.restore();
+}
+
+void drawHealingBrush(QPainter& p)
+{
+    // Una tirita grande en diagonal, con sus agujeros.
+    aa(p);
+    bandage(p, QPointF(9.6, 9.6), 17.2, 7.2, true);
+    puzzleBadge(p);
+}
+
+void drawSpotHealing(QPainter& p)
+{
+    // Una mancha roja en un círculo de hormigas (abajo a la izquierda) y una tirita pequeña arriba.
+    aa(p);
+    p.setPen(dashedPen(QColor(115, 122, 133), 1.1, 1.6, 1.4));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(6.4, 13.6), 4.2, 4.2);
+    p.setPen(QPen(QColor(170, 60, 52), 0.6));
+    p.setBrush(QColor(220, 95, 85));
+    p.drawEllipse(QPointF(6.4, 13.6), 1.6, 1.6);
+    bandage(p, QPointF(13.6, 6.2), 10.6, 5.0, false);
+    puzzleBadge(p);
+}
+
 // Nombre de Kaint → dibujo, rejilla en la que se dibuja y archivo de paint.js con el que lo puede
 // sustituir un paquete de iconos.
 struct Entry {
@@ -712,6 +906,12 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("text"), {TS, drawText, "text_tool_icon"}},
         {QStringLiteral("linecurve"), {TS, drawLine, "line_tool_icon"}},
         {QStringLiteral("shapes"), {TS, drawShape, "shapes_tool_icon"}},
+        {QStringLiteral("magneticlasso"), {TS, drawMagneticLasso, ""}},
+        {QStringLiteral("objectselection"), {TS, drawObjectSelection, ""}},
+        {QStringLiteral("remove"), {TS, drawRemove, ""}},
+        {QStringLiteral("patch"), {TS, drawPatch, ""}},
+        {QStringLiteral("healingbrush"), {TS, drawHealingBrush, ""}},
+        {QStringLiteral("spothealing"), {TS, drawSpotHealing, ""}},
         {QStringLiteral("toolbar-cut"), {BS, drawCut, "menu_edit_cut_icon"}},
         {QStringLiteral("toolbar-copy"), {BS, drawCopy, "menu_edit_copy_icon"}},
         {QStringLiteral("toolbar-paste"), {BS, drawPaste, "menu_edit_paste_icon"}},
@@ -1026,6 +1226,9 @@ QCursor toolCursor(const QString& name, Qt::CursorShape fallback)
         {QStringLiteral("colorpicker"), {2.2, 17.8}},     {QStringLiteral("clonestamp"), {10, 17.2}},
         {QStringLiteral("recolor"), {6, 14}},             {QStringLiteral("linecurve"), {3.4, 16.4}},
         {QStringLiteral("shapes"), {1.6, 2.8}},
+        {QStringLiteral("magneticlasso"), {2.2, 17.6}},   {QStringLiteral("objectselection"), {2.5, 2.5}},
+        {QStringLiteral("remove"), {3.8, 16.2}},          {QStringLiteral("patch"), {5.6, 5.6}},
+        {QStringLiteral("healingbrush"), {9.6, 9.6}},     {QStringLiteral("spothealing"), {6.4, 13.6}},
     };
     const QIcon icon = pdn(name);
     if (icon.isNull())

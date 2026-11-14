@@ -68,6 +68,11 @@ struct Spec {
     int imageOpacity = 100;
     int imageScale = 100;
     int imageAnchor = 4;
+    // Alineación propia de la imagen en cada eje, en % (0: a la izquierda o arriba; 50: centrada;
+    // 100: a la derecha o abajo). -1: la de 'imageAnchor' (las nueve posiciones de siempre).
+    int imageX = -1;
+    int imageY = -1;
+    // Desenfoque gaussiano: su desviación en píxeles de la pantalla (como blur() de CSS).
     int imageBlur = 0;
     bool imageGrayscale = false;
     QColor imageTint;
@@ -185,6 +190,18 @@ QColor titleBarColor();
 // Devuelve si cambió (entonces hay que volver a aplicar el tema).
 bool setAeroTransparency(bool on);
 bool aeroTransparency();
+// Windows 7: el color de las ventanas de los temas Windows 7 y Windows 7 oscuro (como «Color de
+// ventana» de Windows 7): el cristal, la franja de los menús y las cabeceras de las ventanas lo
+// toman. No válido: el de siempre. Devuelve si cambió (entonces hay que volver a aplicar el tema).
+bool setWin7Glass(const QColor& color);
+QColor win7Glass();
+// Los colores de ventana de Windows 7 (aproximados): nombre (para traducir en el contexto "Theme")
+// y color.
+struct Win7Color {
+    const char* name;
+    QRgb rgb;
+};
+const std::array<Win7Color, 16>& win7Colors();
 // Color de selección propio de los temas Claro y Oscuro (y Seguir al sistema, según el modo):
 // el fondo de lo elegido en las ventanas (herramientas, capas, historial...), en la barra
 // superior y en las listas; el borde y lo de bajo el puntero salen de él. No válido: el azul de
@@ -229,6 +246,8 @@ QColor workspaceColor();
 void paintWorkspace(QPainter& p, const QRect& area, const QRect& clip, const QColor& color = QColor());
 // La imagen de fondo de un tema (con su colocación, escala, desenfoque y tinte) sobre 'area'.
 void paintBackgroundImage(QPainter& p, const QRect& area, const QRect& clip, const Spec& spec);
+// Alineación de la imagen de fondo en cada eje, en % (la propia o la de su posición de las nueve).
+QPoint imageAlignment(const Spec& spec);
 
 // Avisa de los cambios de tema, también cuando el sistema pasa de claro a oscuro.
 class Notifier : public QObject {

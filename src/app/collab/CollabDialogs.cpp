@@ -293,9 +293,23 @@ void JoinDialog::start()
             else if (session->state() == Session::State::Connecting && !session->progressText().isEmpty())
                 setBusy(true, session->progressText());
         });
-        connect(session, &Session::ended, this, [this](const QString& reason) {
-            if (m_connecting)
-                setBusy(false, reason.isEmpty() ? tr("No se pudo entrar.") : reason, true);
+        connect(session, &Session::ended, this, [this, session](const QString& reason) {
+            if (!m_connecting)
+                return;
+            if (session->needsPassword()) {
+                // Se pide la contraseña (no se entra sin ella).
+                setBusy(false,
+                        m_password->text().isEmpty() ? tr("Esta sesión pide contraseña: escríbela y pulsa «Unirse».")
+                                                     : tr("La contraseña no es correcta: vuelve a escribirla."),
+                        true);
+                show();
+                raise();
+                activateWindow();
+                m_password->setFocus();
+                m_password->selectAll();
+                return;
+            }
+            setBusy(false, reason.isEmpty() ? tr("No se pudo entrar.") : reason, true);
         });
         return;
     }
@@ -326,6 +340,20 @@ void JoinDialog::start()
         if (m_connecting)
             setBusy(false, reason.isEmpty() ? tr("No se pudo entrar.") : reason, true);
     });
+}
+
+void JoinDialog::startInvite(const QString& code, const QString& source)
+{
+    if (!m_code)
+        return;
+    m_code->setText(code);
+    // El código llega por la invitación: no hace falta verlo ni cambiarlo.
+    m_code->setEchoMode(QLineEdit::Password);
+    m_code->setReadOnly(true);
+    setWindowTitle(tr("Unirse por invitación de %1").arg(source));
+    // Sin P2P en esta compilación, el botón está desactivado y se ve el motivo.
+    if (m_join->isEnabled())
+        start();
 }
 
 void JoinDialog::setBusy(bool busy, const QString& status, bool error)

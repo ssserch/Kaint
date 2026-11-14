@@ -2,11 +2,13 @@
 
 #include "app/Icons.h"
 #include "app/Ruler.h"
+#include "core/Selection.h"
 
 #include <QAbstractScrollArea>
 #include <QColorTransform>
 #include <QHash>
 #include <QImage>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QTimer>
 
@@ -56,8 +58,18 @@ public:
     // Rectángulo de la imagen dibujado como el contorno de una selección rectangular: tinte
     // azul y hormigas en los bordes de los píxeles (la herramienta Zum lo usa para su recuadro).
     void drawMarchingRect(QPainter& p, const QRectF& imageRect, bool tint) const;
+    // El contorno de 'sel' con las hormigas de la selección (las mismas, que avanzan): lo que una
+    // herramienta está seleccionando (lazo, lazo magnético...) o la selección que arrastra.
+    // 'imageTransform': dónde queda en la imagen (al arrastrarla, desplazada).
+    void drawSelectionAnts(QPainter& p, const Selection& sel, const QTransform& imageTransform = QTransform()) const;
+    // Un trazado (abierto o cerrado) en coordenadas de la imagen con esas hormigas.
+    void drawAntsPath(QPainter& p, const QPainterPath& imagePath, const QTransform& imageTransform = QTransform()) const;
     // Hormigas en movimiento también sin selección, mientras una herramienta las dibuja.
     void setOverlayAnts(bool on);
+    // Aviso breve junto al puntero, encima de la imagen (a una herramienta le falta algo para
+    // empezar: el origen del Tampón de clonar o del Pincel corrector). Se va solo a los pocos
+    // segundos; la barra de estado sola pasaba desapercibida.
+    void showNotice(const QString& text);
     void updateCursor();
     void setToolCursor(const QCursor& cursor);
     // Con el puntero quieto sobre el lienzo, la herramienta vuelve a elegir su cursor (después de
@@ -100,6 +112,8 @@ signals:
     void cursorMoved(QPoint imagePos, bool inside);
     void deselectRequested();
     void tabletEraserChanged(bool eraser);
+    // Se pulsó la unidad en la esquina de las reglas: la que se pide.
+    void unitRequested(int unit);
 
 protected:
     bool event(QEvent* e) override;
@@ -143,6 +157,21 @@ private:
     void applyCursor(const QCursor& cursor);
     void nextCursorFrame();
     void drawSelection(QPainter& p) const;
+    // Las hormigas de Paint.NET: una línea negra de un píxel de la pantalla y, encima, trazos
+    // blancos de cuatro píxeles que avanzan por el contorno. 'path' va en píxeles del dispositivo
+    // (el pintor ya está en ellos); 'antialias': suavizado (curvas, diagonales y zum por debajo del
+    // 100 %) o nítido en píxeles enteros.
+    void strokeAnts(QPainter& p, const QPainterPath& path, bool antialias) const;
+    // Contornos cerrados entre píxeles de la imagen (el interior a la derecha de su sentido) como
+    // hormigas: con el zum al 100 % o más, en el primer píxel de dentro de la selección por los
+    // cuatro lados; por debajo, suavizados (los escalones de menos de un píxel se ven como una
+    // línea seguida). 'cacheFor': la selección de la que salen, para no rehacerlos en cada paso.
+    void drawAntsLoops(QPainter& p, const QVector<QPolygonF>& loops, const Selection& cacheFor = {},
+                       const QTransform& imageTransform = QTransform()) const;
+    // Hormigas en píxeles enteros de la pantalla: tramos horizontales o verticales (en píxeles del
+    // dispositivo, extremos incluidos), con un patrón que sigue la posición. Solo para selecciones
+    // con tantísimos tramos (ruido) que seguir su contorno sería lento.
+    void drawAntsSpans(QPainter& p, const QVector<QLine>& spans) const;
     void drawRemotePointers(QPainter& p) const;
     QRect remotePointerRect(const RemotePointer& r) const;
     void drawPixelGrid(QPainter& p, const QRect& src) const;
@@ -196,6 +225,8 @@ private:
     int m_cursorFrame = 0;
     QTimer m_cursorTimer;
 
+    class QLabel* m_notice = nullptr;
+    QTimer m_noticeTimer;
     QTimer m_antsTimer;
     int m_antsOffset = 0;
     bool m_overlayAnts = false;
@@ -215,5 +246,13 @@ private:
     QColor m_border;
     mutable QImage m_tint;
     mutable const void* m_tintKey = nullptr;
+    // El contorno de la selección ya en píxeles del dispositivo, mientras no cambien ella ni la vista.
+    mutable struct {
+        Selection selection;
+        QTransform transform;
+        qreal dpr = 0;
+        QPainterPath path;
+        bool antialias = false;
+    } m_antsCache;
     QList<RemotePointer> m_remotePointers;
 };

@@ -116,8 +116,9 @@ class CaptionButtons : public QWidget {
 public:
     explicit CaptionButtons(QWidget* parent = nullptr);
     QSize sizeHint() const override;
-    // Alto de la fila de la barra de título.
-    static int rowHeight();
+    // Alto de la fila de la barra de título de 'window'. Con los estilos de Windows 10 y 11, el de
+    // las ventanas de Windows (y el de Paint.NET): 30 px y, maximizada o a pantalla completa, 23.
+    static int rowHeight(const QWidget* window);
 
     static constexpr int kWidth = 46;
 

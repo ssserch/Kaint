@@ -159,8 +159,16 @@ own history and suggest it to the host, who accepts it. The protocol is describe
 
 - **Plugins**: .paintjs packages, PhotoCraft filters (.wasm, run in a Web Worker with no access
   to anything outside) and LightCraft looks (.cube, .3dl) and develop presets (.xmp), installed
-  from **Settings → Plugins** or by dropping them on the window. Each effect of a plugin can be
-  turned on or off on its own.
+  from **Settings → Plugins** or by dropping them on the window, or from **Browse Plugins…**, a short
+  list chosen and tested for Kaint. Each effect of a plugin can be turned on or off on its own.
+- **PhotoCraft features** (off by default, **Settings → Plugins**): the same extra adjustments,
+  effects and tools as Kaint for the desktop: Magnetic Lasso, Object Selection (with the Object
+  Finder and Select Subject), Remove, Patch, Healing Brush and Spot Healing Brush, which compute in
+  a Web Worker (Esc cancels them). Their algorithms are PhotoCraft's, by the ArtCraft Team and the
+  PhotoCraft contributors (MIT, `licenses/PhotoCraft-LICENSE.txt`).
+- **Formats Kaint opens on its own**: JPEG XR (with jpegxr by Brion Vibber, on Microsoft's jxrlib)
+  and HEIC, JPEG XL and AVIF where the browser can't (with magick-wasm by Dirk Lemstra), loaded only
+  when such a file is opened.
 
 Not available on the web: Paint.NET (.dll) and native plugins and scanning. Reopening the last session's files needs a browser with access to the system's
 files (Chrome, Edge...). Browsers keep some shortcuts for themselves (Ctrl+N, Ctrl+W, Ctrl+T): use
@@ -168,9 +176,9 @@ the menus for those.
 
 ## Android
 
-`../build-apk.sh` turns this folder into **Kaint.APK**, an Android app (the source is in
-`../android`): it asks whether you want an APK or an App Bundle for Google Play and leaves it in
-`build-apk/` or `build-aab/`. Inside the app, Open uses Android's file picker and saving asks where
+`../build.sh --apk` (or `..\build.bat --apk` on Windows; `--aab` for an App Bundle for Google Play)
+turns this folder into **Kaint.APK**, an Android app (the source is in `../android`), and leaves it
+in `build-apk/` or `build-aab/`. Inside the app, Open uses Android's file picker and saving asks where
 to put the file.
 
 ## Development
@@ -190,7 +198,9 @@ Kaint is free software under the [GNU General Public License v3.0](LICENSE).
 Breeze icons (LGPL-3.0-or-later), and the Windows 7, Windows XP and Windows 98 themes use colors,
 gradients and drawings from [7.css](https://khang-nd.github.io/7.css/) by Khang Nguyen Duy,
 [XP.css](https://botoxparty.github.io/XP.css/) by Adam Hammad and Jordan Scales and
-[98.css](https://jdan.github.io/98.css/) by Jordan Scales (all MIT, see `licenses/`).
+[98.css](https://jdan.github.io/98.css/) by Jordan Scales (all MIT, see `licenses/`). Some features
+were inspired by [paint.rs](https://github.com/daijro/paint.rs) by daijro, such as having
+PhotoCraft's tools in Kaint.
 
 ## Disclaimer
 

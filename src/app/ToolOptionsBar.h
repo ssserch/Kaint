@@ -89,6 +89,8 @@ public:
     const QList<Group>& groups() const { return m_groups; }
     ToolSettingsModel* model() const { return m_model; }
     static bool groupApplies(const QString& key, const ToolSettings& s);
+    // El botón Seleccionar sujeto (Selección de objetos): lo conecta la barra de herramientas.
+    std::function<void()> onSelectSubject;
 
 private:
     void sync();
@@ -156,6 +158,20 @@ private:
     QToolButton* m_pressure;
     ChoiceButton* m_blend;
     ChoiceButton* m_fill;
+    // Las herramientas de PhotoCraft.
+    BarSlider* m_magneticWidth;
+    BarSlider* m_magneticContrast;
+    BarSlider* m_magneticFrequency;
+    ChoiceButton* m_objectFinder;
+    QToolButton* m_selectSubject;
+    ChoiceButton* m_retouchSampling;
+    ChoiceButton* m_removeEach;
+    ChoiceButton* m_patchMode;
+    ChoiceButton* m_patchSource;
+    BarSlider* m_patchStructure;
+    BarSlider* m_patchColor;
+    ChoiceButton* m_healAligned;
+    ChoiceButton* m_spotType;
 };
 
 // Segunda fila de la barra de herramientas: "Herramienta: [icono]" y las opciones que use la
@@ -190,6 +206,8 @@ private:
     QList<BarGroup> m_groups;
     QAction* m_finishSeparator = nullptr;
     QAction* m_finish = nullptr;
+    // El menú de herramientas (las de PhotoCraft solo con ellas activadas).
+    QList<QPair<Tool*, QAction*>> m_toolActions;
 };
 
 // Todas las opciones, por secciones (Configuración > Herramientas).

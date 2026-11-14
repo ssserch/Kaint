@@ -154,6 +154,10 @@ public:
     virtual QList<EffectParam> params() const { return {}; }
     virtual bool straightAlpha() const { return false; }
     virtual QString pluginName() const { return {}; }
+    // Funciones integradas que vienen de otro programa (PhotoCraft) o que siguen complementos
+    // conocidos (BoltBait): su nombre. En los menús llevan la pieza de puzle de los complementos y
+    // no se ven mientras no se activen (Effects::setExtrasEnabled y Effects::setBoltBaitEnabled).
+    virtual QString origin() const { return {}; }
     virtual QImage iconImage() const { return {}; }
     virtual QString helpText() const { return {}; }
     virtual QString dialogNote() const { return {}; }
@@ -176,6 +180,12 @@ const Effect* find(const QString& id);
 void addExternal(const Effect* effect);
 void removeExternal(const Effect* effect);
 QStringList categories();
+// Las funciones de PhotoCraft (desactivadas por defecto: Configuración > Complementos) y los
+// efectos que siguen complementos de BoltBait (se activan uno a uno desde Explorar complementos).
+void setExtrasEnabled(bool on);
+bool extrasEnabled();
+void setBoltBaitEnabled(const QStringList& effectIds);
+bool boltBaitEnabled(const QString& effectId);
 ParamValues defaults(const Effect& effect, const EffectContext& ctx = EffectContext());
 
 // Ejecuta el efecto respetando la selección (fuera de ella la imagen queda igual y en los

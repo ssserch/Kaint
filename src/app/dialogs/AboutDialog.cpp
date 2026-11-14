@@ -1,5 +1,7 @@
 #include "app/dialogs/AboutDialog.h"
 
+#include "app/CustomLanguages.h"
+
 #include "app/Animations.h"
 #include "app/Icons.h"
 #include "app/widgets/WaveLabel.h"
@@ -143,7 +145,16 @@ AboutDialog::AboutDialog(QWidget* parent)
     link->setTextInteractionFlags(Qt::TextBrowserInteraction);
     auto* signature = new WaveLabel(QStringLiteral("By "), QStringLiteral("Y2Kerchy"), QUrl(QStringLiteral("https://ssserch.com")),
                                     this);
+    // Quién tradujo el idioma en uso: con un idioma personalizado, su autor (con su página).
     auto* translation = new QLabel(tr("Traducido al español por SSSerch"), this);
+    if (const CustomLanguages::Language* own = CustomLanguages::active()) {
+        const QString who = own->author.isEmpty() ? tr("Desconocido") : own->author;
+        const QString person = own->authorUrl.isEmpty() ? who.toHtmlEscaped()
+                                                        : QStringLiteral("<a href=\"%1\">%2</a>").arg(own->authorUrl.toHtmlEscaped(), who.toHtmlEscaped());
+        translation->setText(tr("Traducción al %1 por %2").arg(own->name.toHtmlEscaped(), person));
+        translation->setTextFormat(Qt::RichText);
+        translation->setOpenExternalLinks(true);
+    }
     auto* creditsTitle = new QLabel(tr("Bibliotecas de software y contribuciones:"), this);
     auto* creditsList = new QTextBrowser(this);
     creditsList->setOpenExternalLinks(true);

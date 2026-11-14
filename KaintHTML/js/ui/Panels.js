@@ -401,7 +401,8 @@ export function toolsPanel(app) {
     let count = 0;
     const arrange = () => {
         const order = Customization.toolOrder(app.tools.tools.map((t) => t.id));
-        let shown = order.filter((id) => !Customization.isToolHidden(id));
+        // Las de PhotoCraft, solo si están activadas.
+        let shown = order.filter((id) => !Customization.isToolHidden(id) && app.tools.available(app.tools.find(id)));
         if (!shown.length)
             shown = [order[0]];
         grid.replaceChildren(...shown.map((id) => buttons.get(id)));
@@ -411,6 +412,11 @@ export function toolsPanel(app) {
     window.addEventListener("kaint-settings", (e) => {
         if (e.detail.key !== "toolOrder" && e.detail.key !== "hiddenTools")
             return;
+        arrange();
+        grid.fit.apply(columns);
+        grid.closest(".floating-panel") && grid.dispatchEvent(new Event("panel-content-resized", { bubbles: true }));
+    });
+    app.tools.addEventListener("available", () => {
         arrange();
         grid.fit.apply(columns);
         grid.closest(".floating-panel") && grid.dispatchEvent(new Event("panel-content-resized", { bubbles: true }));

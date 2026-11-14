@@ -24,6 +24,12 @@ void Tool::repaint() const
         m_canvas->updateOverlay();
 }
 
+void Tool::notice(const QString& text) const
+{
+    if (m_canvas)
+        m_canvas->showNotice(text);
+}
+
 QCursor Tool::cursor() const
 {
     // Estilo Paint.NET: sus cursores en pixel art (la cruz sola en las que dibujan con el contorno
@@ -46,6 +52,12 @@ QCursor Tool::cursor() const
             {int(ToolId::Text), QStringLiteral("text")},
             {int(ToolId::Line), QStringLiteral("cross")},
             {int(ToolId::Shapes), QStringLiteral("cross")},
+            {int(ToolId::MagneticLasso), QStringLiteral("cross")},
+            {int(ToolId::ObjectSelection), QStringLiteral("rectselect")},
+            {int(ToolId::Patch), QStringLiteral("cross")},
+            {int(ToolId::Remove), QStringLiteral("cross")},
+            {int(ToolId::HealingBrush), QStringLiteral("cross")},
+            {int(ToolId::SpotHealing), QStringLiteral("cross")},
         };
         if (id() == ToolId::MoveSelected || id() == ToolId::MoveSelection)
             return QCursor(Qt::SizeAllCursor);
@@ -70,10 +82,17 @@ QCursor Tool::cursor() const
         {int(ToolId::Recolor), QStringLiteral("recolor")},
         {int(ToolId::Line), QStringLiteral("linecurve")},
         {int(ToolId::Shapes), QStringLiteral("shapes")},
+        {int(ToolId::MagneticLasso), QStringLiteral("magneticlasso")},
+        {int(ToolId::ObjectSelection), QStringLiteral("objectselection")},
+        {int(ToolId::Remove), QStringLiteral("remove")},
+        {int(ToolId::Patch), QStringLiteral("patch")},
+        {int(ToolId::HealingBrush), QStringLiteral("healingbrush")},
+        {int(ToolId::SpotHealing), QStringLiteral("spothealing")},
     };
     // Como en Paint.NET, con estas se sigue viendo el puntero y el icono va a su lado en miniatura.
     static const QSet<int> mini{int(ToolId::RectSelect), int(ToolId::LassoSelect), int(ToolId::EllipseSelect),
-                                int(ToolId::Gradient), int(ToolId::Line)};
+                                int(ToolId::Gradient), int(ToolId::Line), int(ToolId::MagneticLasso),
+                                int(ToolId::ObjectSelection), int(ToolId::Patch)};
     const auto it = names.constFind(int(id()));
     if (it == names.cend())
         return QCursor(Qt::CrossCursor);

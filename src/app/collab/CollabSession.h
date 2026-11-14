@@ -80,6 +80,8 @@ public:
     int signalingTotal() const;
     // Mientras se conecta (P2P: buscando la sesión, conectando con el anfitrión).
     QString progressText() const { return m_progress; }
+    // Terminó porque la sesión pide contraseña (no se dio o no era la correcta).
+    bool needsPassword() const { return m_needsPassword; }
 
     QList<Peer> peers() const;
     QList<Peer> waitingPeers() const { return m_waiting.values(); }
@@ -280,6 +282,7 @@ private:
 
     // Invitado con confirmaciones.
     bool m_hasDraft = false;
+    bool m_needsPassword = false;
     int m_pendingPid = 0;
     // Primer paso del historial que es del borrador actual.
     int m_draftStart = 0;

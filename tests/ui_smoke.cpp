@@ -21,6 +21,8 @@
 #include "app/collab/CollabDialogs.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/dialogs/EffectDialog.h"
+#include "app/dialogs/PluginCatalogDialog.h"
+#include "app/CustomLanguages.h"
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
@@ -45,6 +47,7 @@
 #include "core/Zip.h"
 #include "core/plugins/PluginManager.h"
 
+#include <QTranslator>
 #include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
@@ -59,6 +62,7 @@
 #include <QGraphicsBlurEffect>
 #include <QGraphicsOpacityEffect>
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLabel>
@@ -196,15 +200,69 @@ static void testDiscordPresence()
     CHECK(!DiscordPresence::isValidClientId(QStringLiteral("sin-configurar")));
     CHECK(DiscordPresence::isValidClientId(QStringLiteral("123456789012345678")));
 
+    // El modo colaborativo: la sesión, el grupo («2 de 8») y, con P2P, el secreto para unirse.
+    {
+        PresenceInfo c = info;
+        c.collab = true;
+        c.collabHost = true;
+        c.collabP2P = true;
+        c.collabPeople = 3;
+        c.collabName = QStringLiteral("Sesión de prueba");
+        c.collabCode = QStringLiteral("ABCD-EFGH-JKLM-NPQR");
+        PresenceOptions o;
+        QJsonObject ca = DiscordPresence::buildActivity(c, o, 1000);
+        CHECK(ca.value(QStringLiteral("details")).toString().contains(QStringLiteral("Sesión de prueba")));
+        CHECK(ca.value(QStringLiteral("state")).toString().contains(QStringLiteral("foto.png")));
+        const QJsonObject party = ca.value(QStringLiteral("party")).toObject();
+        CHECK(party.value(QStringLiteral("size")).toArray() == (QJsonArray{3, 8}));
+        CHECK(!party.value(QStringLiteral("id")).toString().contains(QStringLiteral("ABCD")));
+        CHECK(ca.value(QStringLiteral("secrets")).toObject().value(QStringLiteral("join")).toString()
+              == QLatin1String("kaint-p2p:ABCD-EFGH-JKLM-NPQR"));
+        CHECK(DiscordPresence::codeFromSecret(QStringLiteral("kaint-p2p:ABCD-EFGH-JKLM-NPQR")) == QLatin1String("ABCD-EFGH-JKLM-NPQR"));
+        CHECK(DiscordPresence::codeFromSecret(QStringLiteral("otro:ABCD")).isEmpty());
+        CHECK(DiscordPresence::codeFromSecret(QStringLiteral("kaint-p2p:a b;c")).isEmpty());
+        // Sin invitaciones, o en la red local: el grupo, pero sin secreto.
+        o.invites = false;
+        CHECK(!DiscordPresence::buildActivity(c, o, 1000).contains(QStringLiteral("secrets")));
+        o.invites = true;
+        c.collabP2P = false;
+        c.collabCode.clear();
+        ca = DiscordPresence::buildActivity(c, o, 1000);
+        CHECK(ca.contains(QStringLiteral("party")) && !ca.contains(QStringLiteral("secrets")));
+        // Sin mostrar la sesión: como siempre.
+        o.showCollab = false;
+        ca = DiscordPresence::buildActivity(c, o, 1000);
+        CHECK(!ca.contains(QStringLiteral("party")) && ca.value(QStringLiteral("details")).toString().contains(QStringLiteral("foto.png")));
+        // Esperando a entrar: sin grupo.
+        o.showCollab = true;
+        c.collabHost = false;
+        c.collabWaiting = true;
+        c.collabPeople = 0;
+        ca = DiscordPresence::buildActivity(c, o, 1000);
+        CHECK(!ca.contains(QStringLiteral("party")) && ca.value(QStringLiteral("details")).toString().contains(QStringLiteral("Esperando")));
+        // Sin el nombre de la sesión.
+        c.collabWaiting = false;
+        c.collabPeople = 2;
+        o.showCollabName = false;
+        CHECK(!QJsonDocument(DiscordPresence::buildActivity(c, o, 1000)).toJson().contains("prueba"));
+    }
+
     QTemporaryDir dir;
-    const QByteArray oldRuntime = qgetenv("XDG_RUNTIME_DIR");
-    qputenv("XDG_RUNTIME_DIR", QFile::encodeName(dir.path()));
+    // Un Discord falso, aparte del de verdad (que puede estar abierto en discord-ipc-0).
+#ifdef Q_OS_WIN
+    const QString ipc = QStringLiteral("kaint-test-discord-ipc-%1").arg(QCoreApplication::applicationPid());
+#else
+    const QString ipc = dir.filePath(QStringLiteral("discord-ipc-0"));
+#endif
+    qputenv("KAINT_DISCORD_IPC", QFile::encodeName(ipc));
     QLocalServer server;
-    CHECK(server.listen(dir.filePath(QStringLiteral("discord-ipc-0"))));
+    CHECK(server.listen(ipc));
     DiscordPresence presence;
     presence.setIntervals(50, 200);
     PresenceOptions on;
     on.clientId = QStringLiteral("123456789012345678");
+    // Sin registrar el protocolo discord-<ID> en este equipo.
+    on.registerLaunch = false;
     presence.update(info);
     presence.setOptions(on);
     CHECK(server.waitForNewConnection(2000));
@@ -219,6 +277,14 @@ static void testDiscordPresence()
         client->write(DiscordPresence::frame(1, QJsonObject{{QStringLiteral("cmd"), QStringLiteral("DISPATCH")},
                                                            {QStringLiteral("evt"), QStringLiteral("READY")}}));
         client->flush();
+        // Primero se suscribe a las invitaciones (unirse y «Pedir unirse»).
+        QStringList subscribed;
+        for (int i = 0; i < 2; ++i) {
+            CHECK(readFrame(client, &op, &msg) && op == 1);
+            CHECK(msg.value(QStringLiteral("cmd")).toString() == QLatin1String("SUBSCRIBE"));
+            subscribed << msg.value(QStringLiteral("evt")).toString();
+        }
+        CHECK(subscribed.contains(QStringLiteral("ACTIVITY_JOIN")) && subscribed.contains(QStringLiteral("ACTIVITY_JOIN_REQUEST")));
         CHECK(readFrame(client, &op, &msg) && op == 1);
         CHECK(presence.status() == DiscordPresence::Status::Connected);
         CHECK(msg.value(QStringLiteral("cmd")).toString() == QLatin1String("SET_ACTIVITY"));
@@ -233,11 +299,65 @@ static void testDiscordPresence()
         client->write(DiscordPresence::frame(3, QJsonObject{{QStringLiteral("n"), 7}}));
         client->flush();
         CHECK(readFrame(client, &op, &msg) && op == 4 && msg.value(QStringLiteral("n")).toInt() == 7);
+        // Una invitación aceptada: el código de la sesión.
+        QString invited;
+        QObject::connect(&presence, &DiscordPresence::joinInvite, [&invited](const QString& code) { invited = code; });
+        client->write(DiscordPresence::frame(
+            1, QJsonObject{{QStringLiteral("cmd"), QStringLiteral("DISPATCH")},
+                           {QStringLiteral("evt"), QStringLiteral("ACTIVITY_JOIN")},
+                           {QStringLiteral("data"), QJsonObject{{QStringLiteral("secret"), QStringLiteral("kaint-p2p:ABCD-EFGH-JKLM-NPQR")}}}}));
+        client->flush();
+        for (int i = 0; i < 100 && invited.isEmpty(); ++i)
+            QApplication::processEvents(QEventLoop::AllEvents, 10);
+        CHECK(invited == QLatin1String("ABCD-EFGH-JKLM-NPQR"));
+        // «Pedir unirse»: con «Preguntar» se avisa; al aceptar se responde a Discord.
+        QString requestUser, requestName;
+        QObject::connect(&presence, &DiscordPresence::joinRequest, [&](const QString& id, const QString& name) {
+            requestUser = id;
+            requestName = name;
+        });
+        const QJsonObject user{{QStringLiteral("id"), QStringLiteral("987654321098765432")},
+                               {QStringLiteral("username"), QStringLiteral("amiga")},
+                               {QStringLiteral("global_name"), QStringLiteral("Amiga")},
+                               {QStringLiteral("discriminator"), QStringLiteral("0")}};
+        client->write(DiscordPresence::frame(1, QJsonObject{{QStringLiteral("cmd"), QStringLiteral("DISPATCH")},
+                                                           {QStringLiteral("evt"), QStringLiteral("ACTIVITY_JOIN_REQUEST")},
+                                                           {QStringLiteral("data"), QJsonObject{{QStringLiteral("user"), user}}}}));
+        client->flush();
+        for (int i = 0; i < 100 && requestUser.isEmpty(); ++i)
+            QApplication::processEvents(QEventLoop::AllEvents, 10);
+        CHECK(requestUser == QLatin1String("987654321098765432") && requestName == QLatin1String("Amiga"));
+        presence.replyJoinRequest(requestUser, true);
+        CHECK(readFrame(client, &op, &msg) && op == 1);
+        CHECK(msg.value(QStringLiteral("cmd")).toString() == QLatin1String("SEND_ACTIVITY_JOIN_INVITE"));
+        CHECK(msg.value(QStringLiteral("args")).toObject().value(QStringLiteral("user_id")).toString() == requestUser);
+        // Con «Rechazar siempre» se responde sola.
+        on.joinRequests = PresenceOptions::JoinRequests::Decline;
+        presence.setOptions(on);
+        client->write(DiscordPresence::frame(1, QJsonObject{{QStringLiteral("cmd"), QStringLiteral("DISPATCH")},
+                                                           {QStringLiteral("evt"), QStringLiteral("ACTIVITY_JOIN_REQUEST")},
+                                                           {QStringLiteral("data"), QJsonObject{{QStringLiteral("user"), user}}}}));
+        client->flush();
+        bool closed = false;
+        for (int i = 0; i < 4 && !closed; ++i) {
+            if (!readFrame(client, &op, &msg))
+                break;
+            closed = msg.value(QStringLiteral("cmd")).toString() == QLatin1String("CLOSE_ACTIVITY_REQUEST");
+        }
+        CHECK(closed);
+        // Un error de una orden de las invitaciones no corta la conexión.
+        client->write(DiscordPresence::frame(1, QJsonObject{{QStringLiteral("cmd"), QStringLiteral("SUBSCRIBE")},
+                                                           {QStringLiteral("evt"), QStringLiteral("ERROR")},
+                                                           {QStringLiteral("data"), QJsonObject{{QStringLiteral("message"), QStringLiteral("x")}}}}));
+        client->flush();
+        for (int i = 0; i < 20; ++i)
+            QApplication::processEvents(QEventLoop::AllEvents, 10);
+        CHECK(presence.status() == DiscordPresence::Status::Connected);
         on.enabled = false;
         presence.setOptions(on);
         CHECK(presence.status() == DiscordPresence::Status::Disabled);
     }
-    qputenv("XDG_RUNTIME_DIR", oldRuntime);
+    qunsetenv("KAINT_DISCORD_IPC");
 }
 
 // Cuadro de transformación de las herramientas Mover: el punto central se puede mover, el giro
@@ -665,7 +785,8 @@ int main(int argc, char** argv)
     tools->select(ToolId::RectSelect);
     drag(canvas, {QPointF(60, 60), QPointF(300, 200), QPointF(420, 230)});
     CHECK(!doc->selection().isEmpty());
-    CHECK(doc->selection().bounds() == QRect(60, 60, 360, 170));
+    // Como paint.rs: el píxel bajo el puntero al soltar también entra.
+    CHECK(doc->selection().bounds() == QRect(60, 60, 361, 171));
 
     const int before = doc->undoStack()->count();
     doc->setActiveIndex(0);
@@ -1241,17 +1362,52 @@ int main(int argc, char** argv)
             CHECK(plugins >= 0 && discord == plugins + 1);
         }
         CHECK(AppSettings().discordEnabled);
-        // Complementos: el botón del catálogo de paint.js (Complementos de Kaint.HTML) solo se ve
-        // si se activa con su casilla (en Interfaz de usuario); por defecto, no.
+        // Idiomas personalizados: el archivo va y vuelve igual, lo que traduce sale traducido y lo
+        // que no, en inglés.
         {
-            CHECK(!AppSettings().kaintHtmlPlugins);
+            CustomLanguages::Language lang;
+            lang.id = QStringLiteral("prueba");
+            lang.name = QStringLiteral("Prueba");
+            lang.author = QStringLiteral("Alguien");
+            lang.authorUrl = QStringLiteral("https://example.com");
+            lang.strings.insert(QStringLiteral("Cerrar"), QStringLiteral("Fermer"));
+            const auto back = CustomLanguages::parse(CustomLanguages::serialize(lang));
+            CHECK(back && back->name == lang.name && back->authorUrl == lang.authorUrl
+                  && back->strings.value(QStringLiteral("Cerrar")).toString() == QLatin1String("Fermer"));
+            CHECK(!CustomLanguages::parse("{\"strings\":{}}"));
+            CHECK(CustomLanguages::sources().size() > 1000);
+            QTranslator english;
+            CHECK(english.load(QStringLiteral(":/i18n/kaint_en.qm")));
+            CustomTranslator custom(lang, &english);
+            CHECK(custom.translate("AboutDialog", "Cerrar") == QLatin1String("Fermer"));
+            CHECK(custom.translate("AboutDialog", "Traducido al español por SSSerch") == english.translate("AboutDialog", "Traducido al español por SSSerch"));
+        }
+        // El catálogo de Explorar complementos que trae Kaint: las secciones PhotoCraft y Paint.NET,
+        // todos con su autor, y los integrados (BoltBait) con sus efectos.
+        {
+            QFile bundled(QStringLiteral(":/kaint/plugins/catalog.json"));
+            CHECK(bundled.open(QIODevice::ReadOnly));
+            const auto entries = PluginCatalogDialog::parseKaintCatalog(bundled.readAll());
+            int photocraft = 0, paintnet = 0, builtin = 0;
+            for (const auto& e : entries) {
+                CHECK(!e.author.isEmpty());
+                photocraft += e.section == PluginCatalogDialog::Section::PhotoCraft;
+                paintnet += e.section == PluginCatalogDialog::Section::PaintNet;
+                builtin += !e.builtin.isEmpty();
+            }
+            CHECK(photocraft >= 10 && paintnet >= 90 && builtin >= 7);
+        }
+        // Complementos: el botón «Explorar complementos…» se ve por defecto y se esconde con su
+        // casilla (en Interfaz de usuario).
+        {
+            CHECK(AppSettings().browsePlugins);
             QPushButton* catalog = nullptr;
             for (QPushButton* b : dlg.findChildren<QPushButton*>())
-                if (b->text().startsWith(QLatin1String("Complementos de Kaint.HTML")))
+                if (b->text().startsWith(QLatin1String("Explorar complementos")))
                     catalog = b;
             QCheckBox* show = nullptr;
             for (QCheckBox* c : dlg.findChildren<QCheckBox*>())
-                if (c->text().contains(QLatin1String("Complementos de Kaint.HTML")))
+                if (c->text().contains(QLatin1String("Explorar complementos")))
                     show = c;
             CHECK(catalog && show);
             if (catalog && show) {
@@ -1259,7 +1415,7 @@ int main(int argc, char** argv)
                 show->setChecked(false);
                 CHECK(catalog->isHidden());
                 show->setChecked(true);
-                CHECK(!catalog->isHidden() && dlg.settings().kaintHtmlPlugins);
+                CHECK(!catalog->isHidden() && dlg.settings().browsePlugins);
                 if (!outDir.isEmpty()) {
                     // Alta, para que se vea entera (con el botón, abajo).
                     dlg.showPage(SettingsDialog::Page::Interface);
@@ -1384,7 +1540,8 @@ int main(int argc, char** argv)
         CHECK(colored && gray);
         int builtIn = 0, withIcon = 0;
         for (const Effect* e : Effects::all()) {
-            if (!e->pluginName().isEmpty())
+            // Los de complementos y las funciones de PhotoCraft y BoltBait (con iconos del tema).
+            if (!e->pluginName().isEmpty() || !e->origin().isEmpty())
                 continue;
             ++builtIn;
             if (Icons::effectIcon(e->id(), {}).startsWith(QLatin1String("effect-")))
@@ -2469,7 +2626,7 @@ int main(int argc, char** argv)
         // Pegar donde se copió si ese sitio se ve; si no, en lo visible más cercano.
         tools->select(ToolId::RectSelect);
         drag(canvas, {QPointF(120, 140), QPointF(150, 170), QPointF(170, 190)});
-        CHECK(d->selection().bounds() == QRect(120, 140, 50, 50));
+        CHECK(d->selection().bounds() == QRect(120, 140, 51, 51));
         findAction(&w, QStringLiteral("Copiar"))->trigger();
         findAction(&w, QStringLiteral("Anular la selección"))->trigger();
         findAction(&w, QStringLiteral("Pegar"))->trigger();
@@ -2480,7 +2637,7 @@ int main(int argc, char** argv)
         canvas->setZoom(8);
         settle();
         const QRect visible = canvas->visibleImageRect();
-        CHECK(!visible.contains(QRect(120, 140, 50, 50)));
+        CHECK(!visible.contains(QRect(120, 140, 51, 51)));
         findAction(&w, QStringLiteral("Pegar"))->trigger();
         settle();
         CHECK(visible.contains(d->selection().bounds()));
@@ -2491,7 +2648,7 @@ int main(int argc, char** argv)
 
         // Supr a mitad de arrastre con Mover píxeles: lo borrado no vuelve a aparecer al seguir.
         drag(canvas, {QPointF(300, 300), QPointF(330, 320), QPointF(360, 340)});
-        CHECK(d->selection().bounds() == QRect(300, 300, 60, 40));
+        CHECK(d->selection().bounds() == QRect(300, 300, 61, 41));
         tools->select(ToolId::MoveSelected);
         mouse(QEvent::MouseButtonPress, QPointF(320, 320), Qt::LeftButton, Qt::LeftButton);
         mouse(QEvent::MouseMove, QPointF(400, 380), Qt::NoButton, Qt::LeftButton);
@@ -2574,7 +2731,7 @@ int main(int argc, char** argv)
         settle();
         bool infoShown = false;
         for (QLabel* l : w.statusBar()->findChildren<QLabel*>())
-            if (l->text().contains(QStringLiteral("50 px × 40 px")) && l->text().contains(QStringLiteral("Área")))
+            if (l->text().contains(QStringLiteral("51 px × 41 px")) && l->text().contains(QStringLiteral("Área")))
                 infoShown = true;
         CHECK(infoShown);
         findAction(&w, QStringLiteral("Anular la selección"))->trigger();

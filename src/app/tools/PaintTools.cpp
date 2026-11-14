@@ -140,8 +140,13 @@ bool CloneStampTool::canStart(const ToolEvent& e)
         m_hasSource = false;
         emit hintChanged(hint());
     }
-    if (!m_hasSource)
+    if (!m_hasSource) {
+        // Sin punto de origen no hay nada que copiar: se avisa junto al puntero.
+        const QString missing = tr("Primero Ctrl+clic para elegir el punto de origen.");
+        emit hintChanged(missing);
+        notice(missing);
         return false;
+    }
     if (!m_hasOffset) {
         const QPointF d = m_source - e.pos;
         m_offset = QPoint(int(std::round(d.x())), int(std::round(d.y())));

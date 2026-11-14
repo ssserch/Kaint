@@ -4,6 +4,17 @@
 import en from "./i18n/en.js";
 
 const extra = {
+    "Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint (sin los botones de la ventana).": "At the top, the Kaint icon and the image title, like Kaint's title bar (without the window buttons).",
+    "Como en Paint.NET: el recuadro de la imagen actual y el de la que tiene el puntero llegan hasta arriba. Desactivado, solo la altura de la miniatura.": "As in Paint.NET: the box of the current image and of the one under the pointer reach the top. Off: only the height of the thumbnail.",
+    "Complementos de Paint.NET (.dll) que funcionan en Kaint para el escritorio (Windows, y Linux con mono). En el navegador no se pueden ejecutar: instálalos desde Kaint.": "Paint.NET plugins (.dll) that work in Kaint for the desktop (Windows, and Linux with mono). They can't run in the browser: install them from Kaint.",
+    "Complementos de paint.js del catálogo de Kaint.HTML. Los .paintjs tienen el mismo acceso que Kaint: instala solo los que sean de confianza.": "paint.js plugins from the Kaint.HTML catalog. .paintjs plugins have the same access as Kaint: install only the ones you trust.",
+    "Esta es una lista limitada de complementos elegidos y probados para Kaint. Cada uno es obra de su autor, que sale junto a su nombre. Puedes instalar otros desde Configuración > Complementos > Instalar complemento…": "This is a limited list of plugins chosen and tested for Kaint. Each one is the work of its author, shown next to its name. You can install others from Settings > Plugins > Install plugin…",
+    "Filtros de PhotoCraft (.wasm) de la tienda ArtCraft. Se ejecutan sin acceso a nada de fuera.": "PhotoCraft filters (.wasm) from the ArtCraft store. They run with no access to anything outside.",
+    "Los cambios de idioma se aplican al recargar la página. En un idioma personalizado, lo que no esté traducido sale en inglés.": "Language changes apply when the page is reloaded. In a custom language, anything not translated appears in English.",
+    "Los colores y el diseño de la base, sin cambios (la imagen de fondo se queda).": "The base colors and design, unchanged (the background image stays).",
+    "Mostrar una barra de título como la de Kaint para el escritorio": "Show a title bar like Kaint's for the desktop",
+    "Solo en Kaint para el escritorio": "Only in Kaint for the desktop",
+    "Solo se muestran los primeros 300 que coinciden: busca para llegar a los demás.": "Only the first 300 matches are shown: search to reach the others.",
     "Archivo": "File",
     "Los colores de la base, sin cambios.": "The base colors, unchanged.",
     "No se pudo guardar el fondo: %1": "The background couldn't be saved: %1",
@@ -263,8 +274,69 @@ const extra = {
 };
 
 let language = "en";
+// El idioma personalizado en uso (o null): lo que no traduce sale en inglés.
+let custom = null;
+
+// Idiomas personalizados (como los de Kaint): un archivo .kaintlang (JSON) con el nombre del idioma,
+// su código, quién lo tradujo (y su página) y los textos, por su original en español. Se guardan en
+// este navegador y se importan, editan y exportan desde Configuración.
+const LANGUAGES_KEY = "kaint.languages";
+
+export const CustomLanguages = {
+    list() {
+        try {
+            const list = JSON.parse(localStorage.getItem(LANGUAGES_KEY) || "[]");
+            return Array.isArray(list) ? list.filter((l) => l && typeof l.id === "string" && l.strings && typeof l.strings === "object") : [];
+        } catch {
+            return [];
+        }
+    },
+    find(id) {
+        return this.list().find((l) => l.id === id) || null;
+    },
+    save(lang) {
+        const list = this.list().filter((l) => l.id !== lang.id);
+        list.push(lang);
+        localStorage.setItem(LANGUAGES_KEY, JSON.stringify(list));
+    },
+    remove(id) {
+        localStorage.setItem(LANGUAGES_KEY, JSON.stringify(this.list().filter((l) => l.id !== id)));
+    },
+    // Lee un .kaintlang (texto JSON); lanza un error si no lo es.
+    parse(text) {
+        const o = JSON.parse(text);
+        if (o?.format !== "kaint-language" || typeof o.strings !== "object" || !o.strings)
+            throw new Error(tr("No es un idioma de Kaint (.kaintlang)."));
+        const str = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+        const strings = {};
+        for (const [k, v] of Object.entries(o.strings))
+            if (typeof v === "string" ? v.length : Array.isArray(v) && v.every((x) => typeof x === "string"))
+                strings[k] = v;
+        const name = str(o.name, 60) || tr("Idioma personalizado");
+        return { id: str(o.id, 60) || `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`, name,
+                 code: str(o.code, 20), author: str(o.author, 80), authorUrl: /^https?:\/\//.test(o.authorUrl || "") ? str(o.authorUrl, 300) : "", strings };
+    },
+    serialize(lang) {
+        return JSON.stringify({ format: "kaint-language", version: 1, id: lang.id, name: lang.name, code: lang.code, author: lang.author,
+                                authorUrl: lang.authorUrl, strings: lang.strings }, null, 2);
+    },
+    // Los textos que se pueden traducir: [original en español, inglés] (los de Kaint y los de la web).
+    sources() {
+        const all = { ...en, ...extra };
+        return Object.keys(all).sort((a, b) => a.localeCompare(b)).map((k) => [k, all[k]]);
+    },
+};
 
 export function setLanguage(lang) {
+    custom = null;
+    if (typeof lang === "string" && lang.startsWith("custom:")) {
+        custom = CustomLanguages.find(lang.slice(7));
+        if (custom) {
+            language = "custom";
+            document.documentElement.lang = custom.code || "und";
+            return;
+        }
+    }
     language = lang === "es" ? "es" : "en";
     document.documentElement.lang = language;
 }
@@ -273,10 +345,19 @@ export function currentLanguage() {
     return language;
 }
 
+export function currentCustomLanguage() {
+    return custom;
+}
+
 // Texto traducido, con los marcadores %1, %2... sustituidos por los argumentos.
 export function tr(text, ...args) {
     let out = text;
-    if (language === "en")
+    if (language === "custom") {
+        const own = custom.strings[text];
+        out = typeof own === "string" && own ? own : en[text] ?? extra[text] ?? text;
+        if (Array.isArray(out))
+            out = out[0];
+    } else if (language === "en")
         out = en[text] ?? extra[text] ?? text;
     args.forEach((a, i) => {
         out = out.split(`%${i + 1}`).join(String(a));
@@ -286,7 +367,9 @@ export function tr(text, ...args) {
 
 // Como tr() para un texto con plural: %n es el número (en inglés, con la forma que toca).
 export function trn(text, n, ...args) {
-    const forms = language === "en" ? en[text] ?? extra[text] : null;
+    const own = language === "custom" ? custom.strings[text] : null;
+    const forms = own && (typeof own === "string" || own.length) ? (typeof own === "string" ? [own] : own)
+        : language === "en" || language === "custom" ? en[text] ?? extra[text] : null;
     let out = Array.isArray(forms) ? forms[n === 1 ? 0 : Math.min(1, forms.length - 1)] : text;
     out = out.split("%n").join(String(n));
     args.forEach((a, i) => {
@@ -299,9 +382,10 @@ export function trn(text, n, ...args) {
 // en Kaint): "V:" es el verde en RGB y el valor en MSV.
 export function trc(comment, text, ...args) {
     const key = `${comment}\u0004${text}`;
-    if (language !== "en" || !(key in en))
+    const own = language === "custom" ? custom.strings[key] : null;
+    if (!own && (language === "es" || !(key in en)))
         return tr(text, ...args);
-    let out = en[key];
+    let out = own || en[key];
     args.forEach((a, i) => {
         out = out.split(`%${i + 1}`).join(String(a));
     });

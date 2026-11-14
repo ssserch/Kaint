@@ -53,6 +53,9 @@ public:
     void join(const QString& address, quint16 port, const QString& password);
     void joinP2P(const QString& code, const QString& password);
     void showJoinDialog(Collab::Mode mode);
+    // Una invitación a una sesión P2P (de Discord, 'source'): abre «Unirse» con el código y entra;
+    // si la sesión pide contraseña se pide y, si el anfitrión aprueba a mano, se espera.
+    void joinInvite(const QString& code, const QString& source);
     // Pregunta antes si 'ask'; falso si se canceló.
     bool leave(bool ask);
     void showSessionWindow();

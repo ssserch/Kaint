@@ -44,6 +44,8 @@ struct AppSettings {
     int windowAnimationMs = 180;
     // Windows 7: «Habilitar transparencia» (el cristal de los marcos deja ver lo de detrás).
     bool aeroTransparency = true;
+    // Windows 7: el color de las ventanas de sus temas (no válido: el de siempre).
+    QColor win7Glass;
     bool translucentPanels = true;
     // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar
     // su borde o encima de ella); fuera de la imagen, opacas.
@@ -66,10 +68,19 @@ struct AppSettings {
     // En los menús Ajustes y Efectos, los efectos de los complementos con el icono de los
     // complementos (la pieza de puzle) a la derecha.
     bool pluginMenuIcons = true;
-    // Configuración > Complementos: el botón «Complementos de Kaint.HTML», el catálogo de
-    // complementos de paint.js de la versión web. Escondido mientras no se active (con su casilla,
-    // en Interfaz de usuario).
-    bool kaintHtmlPlugins = false;
+    // Configuración > Complementos: el botón «Explorar complementos…», con la lista de complementos
+    // elegidos para Kaint (los de Kaint.HTML, PhotoCraft y Paint.NET). Se puede esconder con su
+    // casilla, en Interfaz de usuario.
+    bool browsePlugins = true;
+    // Las funciones de PhotoCraft (herramientas, ajustes y efectos): desactivadas por defecto; en
+    // los menús llevan la pieza de puzle de los complementos.
+    bool photocraftExtras = false;
+    // La tira de imágenes a lo alto de toda la fila de arriba (también la de la barra de título):
+    // el recuadro de la imagen actual y el de la que tiene el puntero llegan arriba del todo, como en
+    // Paint.NET.
+    bool stripFullHeight = true;
+    // Los efectos que siguen complementos de BoltBait activados desde Explorar complementos.
+    QStringList boltBaitEffects;
     // Colores ampliado: también los colores semitransparentes de la paleta (las filas de abajo de
     // la de fábrica, como en Paint.NET). El blanco de relleno de las paletas cortas nunca se ve.
     bool paletteTranslucent = true;
@@ -126,7 +137,7 @@ struct AppSettings {
     bool rulers = false;
     // Ruler::Style: 0, según el tema; 1, del color de la barra de herramientas; 2, oscura, como la
     // de paint.js (antes el 0 era la oscura).
-    int rulerStyle = 0;
+    int rulerStyle = 3;
     bool dropShadow = true;
     // Color propio del fondo alrededor de la imagen, uno para los temas claros y otro para los
     // oscuros (no válido: el del tema).
@@ -162,6 +173,14 @@ struct AppSettings {
     bool discordShowFileInfo = true;
     bool discordShowTool = true;
     bool discordShowElapsed = true;
+    // Discord y el modo colaborativo.
+    bool discordShowCollab = true;
+    bool discordShowCollabName = true;
+    bool discordInvites = true;
+    // 0: preguntar, 1: aceptar siempre, 2: rechazar siempre (PresenceOptions::JoinRequests).
+    int discordJoinRequests = 0;
+    int discordPartySize = 8;
+    bool discordRegisterLaunch = true;
 
     static AppSettings load();
     void save() const;
@@ -259,7 +278,7 @@ private:
     QCheckBox* m_showIncompatible = nullptr;
     QPushButton* m_openPluginFolder = nullptr;
     // Complementos de Kaint.HTML (en Complementos); su casilla está en Interfaz de usuario.
-    QPushButton* m_kaintHtmlButton = nullptr;
+    QPushButton* m_browsePluginsButton = nullptr;
     QSet<QString> m_collapsedPlugins;
     QLabel* m_updateStatus = nullptr;
     QLabel* m_discordStatus = nullptr;

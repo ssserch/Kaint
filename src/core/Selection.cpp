@@ -295,35 +295,113 @@ const QVector<QLineF>& Selection::outline() const
         return x >= 0 && y >= 0 && x < w && y < h && m.constScanLine(y)[x] >= 128;
     };
 
+    // Cada tramo lleva el interior a su derecha según su sentido (en la pantalla, con y hacia
+    // abajo): los horizontales con el interior debajo van de izquierda a derecha y con el interior
+    // encima, al revés; los verticales con el interior a la izquierda bajan y con él a la derecha
+    // suben. Así el lienzo dibuja el contorno en los píxeles de dentro.
     QVector<QLineF> lines;
     const QRect b = d->bounds.adjusted(-1, -1, 1, 1);
     for (int y = std::max(0, b.top()); y <= std::min(h, b.bottom() + 1); ++y) {
         int start = -1;
+        bool below = false;
+        auto flush = [&](int x) {
+            if (start >= 0)
+                lines.append(below ? QLineF(start, y, x, y) : QLineF(x, y, start, y));
+            start = -1;
+        };
         for (int x = std::max(0, b.left()); x <= std::min(w, b.right() + 1); ++x) {
             const bool edge = x < w && sel(x, y) != sel(x, y - 1);
-            if (edge && start < 0)
+            const bool in = edge && sel(x, y);
+            if (start >= 0 && (!edge || in != below))
+                flush(x);
+            if (edge && start < 0) {
                 start = x;
-            else if (!edge && start >= 0) {
-                lines.append(QLineF(start, y, x, y));
-                start = -1;
+                below = in;
             }
         }
+        flush(std::min(w, b.right() + 1));
     }
     for (int x = std::max(0, b.left()); x <= std::min(w, b.right() + 1); ++x) {
         int start = -1;
+        bool right = false;
+        auto flush = [&](int y) {
+            if (start >= 0)
+                lines.append(right ? QLineF(x, y, x, start) : QLineF(x, start, x, y));
+            start = -1;
+        };
         for (int y = std::max(0, b.top()); y <= std::min(h, b.bottom() + 1); ++y) {
             const bool edge = y < h && sel(x, y) != sel(x - 1, y);
-            if (edge && start < 0)
+            const bool in = edge && sel(x, y);
+            if (start >= 0 && (!edge || in != right))
+                flush(y);
+            if (edge && start < 0) {
                 start = y;
-            else if (!edge && start >= 0) {
-                lines.append(QLineF(x, start, x, y));
-                start = -1;
+                right = in;
             }
         }
+        flush(std::min(h, b.bottom() + 1));
     }
     d->outline = lines;
     d->outlineValid = true;
     return d->outline;
+}
+
+const QVector<QPolygonF>& Selection::contours() const
+{
+    static const QVector<QPolygonF> empty;
+    if (!d)
+        return empty;
+    if (d->contoursValid)
+        return d->contours;
+
+    // Cada tramo de outline() va de esquina a esquina con el interior a su derecha: de donde acaba
+    // uno sale otro (dos, si dos píxeles se tocan solo por la esquina), así que seguirlos siempre
+    // vuelve al principio.
+    const QVector<QLineF>& lines = outline();
+    const qint64 stride = qint64(d->mask.width()) + 2;
+    auto key = [stride](const QPointF& p) { return qint64(p.y()) * stride + qint64(p.x()); };
+    // Tramos que salen de cada vértice (como mucho, dos).
+    std::unordered_map<qint64, std::pair<int, int>> from;
+    from.reserve(size_t(lines.size()));
+    for (int i = 0; i < lines.size(); ++i) {
+        auto [it, added] = from.try_emplace(key(lines[i].p1()), i, -1);
+        if (!added)
+            it->second.second = i;
+    }
+    std::vector<bool> used(size_t(lines.size()), false);
+    QVector<QPolygonF> loops;
+    for (int start = 0; start < lines.size(); ++start) {
+        if (used[size_t(start)])
+            continue;
+        QPolygonF loop;
+        int i = start;
+        while (i >= 0 && !used[size_t(i)]) {
+            used[size_t(i)] = true;
+            loop << lines[i].p1();
+            const auto next = from.find(key(lines[i].p2()));
+            if (next == from.end())
+                break;
+            // Con dos salidas, la que gira a la derecha (hacia el interior): cada grupo de píxeles
+            // lleva su propio contorno aunque se toquen por una esquina.
+            const int a = next->second.first, b = next->second.second;
+            auto free = [&](int k) { return k >= 0 && !used[size_t(k)]; };
+            if (free(a) && free(b)) {
+                const QPointF in = lines[i].p2() - lines[i].p1();
+                auto turn = [&](int k) {
+                    const QPointF out = lines[k].p2() - lines[k].p1();
+                    return in.x() * out.y() - in.y() * out.x();
+                };
+                i = turn(a) >= turn(b) ? a : b;
+            } else {
+                i = free(a) ? a : free(b) ? b : -1;
+            }
+        }
+        if (loop.size() >= 4)
+            loops.append(loop);
+    }
+    d->contours = loops;
+    d->contoursValid = true;
+    return d->contours;
 }
 
 Selection Selection::combined(const Selection& other, SelectionMode mode) const

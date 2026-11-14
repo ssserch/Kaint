@@ -197,13 +197,24 @@ public:
         return QSize(std::min(min.width(), sizeHint().width()), min.height());
     }
 
-    // Miniatura de una pestaña, centrada en su hueco.
+    void setFullHeight(bool on)
+    {
+        if (m_fullHeight == on)
+            return;
+        m_fullHeight = on;
+        setIconSize(iconSize());
+        updateGeometry();
+    }
+
+    // Miniatura de una pestaña, centrada en su hueco. Con el recuadro a lo alto de toda la fila, el
+    // hueco va abajo (como en Paint.NET: la miniatura junto a la barra de herramientas y el recuadro
+    // subiendo por encima de ella).
     QRect thumbRect(int index) const
     {
         const QRect tab = tabRect(index);
         const QSize box = iconSize();
         const QSize thumb = tabIcon(index).actualSize(box).boundedTo(box);
-        const QRect slot(tab.left() + kPadX, tab.top() + kPadY, box.width(), box.height());
+        const QRect slot(tab.left() + kPadX, tab.top() + std::max(kPadY, tab.height() - kPadY - box.height()), box.width(), box.height());
         return QRect(slot.left() + (slot.width() - thumb.width()) / 2, slot.top() + (slot.height() - thumb.height()) / 2,
                      thumb.width(), thumb.height());
     }
@@ -252,7 +263,20 @@ protected:
         resetCloseButtons();
     }
 
-    QSize tabSizeHint(int) const override { return iconSize() + QSize(2 * kPadX, 2 * kPadY); }
+    QSize tabSizeHint(int) const override
+    {
+        const QSize base = iconSize() + QSize(2 * kPadX, 2 * kPadY);
+        // A lo alto de toda la fila de arriba: el recuadro llega arriba del todo.
+        return m_fullHeight ? QSize(base.width(), std::max(base.height(), height())) : base;
+    }
+
+    void resizeEvent(QResizeEvent* e) override
+    {
+        QTabBar::resizeEvent(e);
+        // Las pestañas se recalculan con la altura nueva.
+        if (m_fullHeight && e->oldSize().height() != e->size().height())
+            setIconSize(iconSize());
+    }
     QSize minimumTabSizeHint(int index) const override { return tabSizeHint(index); }
 
     void initStyleOption(QStyleOptionTab* option, int index) const override
@@ -275,6 +299,17 @@ protected:
             p.setPen(QPen(QColor(226, 168, 0), 2));
             p.setBrush(Qt::NoBrush);
             p.drawRect(r.adjusted(0.5, 0.5, -0.5, -1));
+        }
+        // Paint.NET: dentro del borde azul de la imagen actual (y de la que tiene el puntero), una
+        // línea oscura muy tenue que lo separa del relleno.
+        if (Theme::paintNetLook() && !Theme::active().classic && !Theme::active().xp) {
+            p.setPen(QPen(QColor(0, 0, 0, 48), 1));
+            p.setBrush(Qt::NoBrush);
+            for (int i = 0; i < count(); ++i) {
+                if ((i != currentIndex() && i != m_hoverTab) || (marks(i) & kCollab))
+                    continue;
+                p.drawRect(QRectF(tabRect(i)).adjusted(2.5, 1.5, -2.5, -1.5));
+            }
         }
         for (int i = 0; i < count(); ++i)
             tabIcon(i).paint(&p, thumbRect(i));
@@ -437,6 +472,7 @@ private:
     static constexpr int kPadY = 5;
     int m_hoverTab = -1;
     bool m_hoverClose = false;
+    bool m_fullHeight = false;
     int m_closeTab = -1;
     int m_pressedTab = -1;
     QPoint m_pressPos;
@@ -492,7 +528,19 @@ protected:
             WindowFrame::paintClassicTitle(p, QRect(0, 0, width(), m_caption->geometry().bottom() + 1), window()->isActiveWindow());
     }
 
+    // Los botones de la ventana a la derecha van pegados a la esquina de arriba a la derecha (no en
+    // el diseño, que solo les guarda el sitio): como en Windows, llevar el puntero a la esquina de la
+    // pantalla con la ventana maximizada lo deja sobre el de cerrar.
+    void resizeEvent(QResizeEvent* e) override
+    {
+        QWidget::resizeEvent(e);
+        if (m_onResize)
+            m_onResize();
+    }
+
 public:
+    std::function<void()> m_onResize;
+
     void setCaption(QWidget* caption)
     {
         m_caption = caption;
@@ -740,6 +788,8 @@ MainWindow::MainWindow()
     });
 
     m_settings = AppSettings::load();
+    // Las herramientas de PhotoCraft antes de elegir la del arranque (puede ser una de ellas).
+    m_tools->setExtrasEnabled(m_settings.photocraftExtras);
     QSettings ts;
     const int lastTool = ts.value(QStringLiteral("tools/current"), int(ToolId::Paintbrush)).toInt();
     // Por defecto, el pincel (en Configuración > Herramientas se puede elegir otra o la última usada).
@@ -760,6 +810,26 @@ MainWindow::MainWindow()
     m_presenceTimer.setInterval(2000);
     connect(&m_presenceTimer, &QTimer::timeout, this, &MainWindow::updatePresence);
     m_presenceTimer.start();
+    connect(m_collab, &CollabController::changed, this, &MainWindow::updatePresence);
+    // Discord y el modo colaborativo: una invitación aceptada abre «Unirse» con el código (después
+    // se pide la contraseña o se espera al anfitrión, como siempre).
+    connect(m_discord, &DiscordPresence::joinInvite, this,
+            [this](const QString& code) { m_collab->joinInvite(code, QStringLiteral("Discord")); }, Qt::QueuedConnection);
+    connect(m_discord, &DiscordPresence::joinRequest, this, [this](const QString& userId, const QString& userName) {
+        auto* box = new QMessageBox(QMessageBox::Question, tr("Discord"),
+                                    tr("«%1» pide unirse a tu sesión colaborativa desde Discord.").arg(userName),
+                                    QMessageBox::NoButton, this);
+        box->setInformativeText(tr("Si aceptas, Discord le da el código de la sesión. Aun así pasará por el acceso de la "
+                                   "sesión: la contraseña o tu aprobación."));
+        box->addButton(tr("Aceptar"), QMessageBox::AcceptRole);
+        box->addButton(tr("Rechazar"), QMessageBox::RejectRole);
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        connect(box, &QMessageBox::finished, this, [this, box, userId] {
+            const bool ok = box->buttonRole(box->clickedButton()) == QMessageBox::AcceptRole;
+            m_discord->replyJoinRequest(userId, ok);
+        });
+        box->open();
+    }, Qt::QueuedConnection);
 
     connect(&m_autosaveTimer, &QTimer::timeout, this, &MainWindow::autosave);
     m_thumbTimer.setSingleShot(true);
@@ -1267,6 +1337,11 @@ void MainWindow::rebuildEffectMenus()
         if (!e->pluginName().isEmpty()) {
             a->setToolTip(tr("%1 (complemento %2)").arg(e->name(), e->pluginName()));
             EffectMenu::markPlugin(a);
+        } else if (!e->origin().isEmpty()) {
+            // Las funciones de PhotoCraft y las que siguen complementos de BoltBait llevan la misma
+            // pieza de puzle.
+            a->setToolTip(tr("%1 (de %2)").arg(e->name(), e->origin()));
+            EffectMenu::markPlugin(a);
         }
         connect(a, &QAction::triggered, this, [this, e] { runEffect(e, false); });
         m_docActions.append(a);
@@ -1370,6 +1445,7 @@ void MainWindow::createTopRow()
     // llega a la derecha cuando la tira se llena.
     m_tabs->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
     m_topLayout->addWidget(m_tabs, 0, 1, m_menuRow + 2, 1, Qt::AlignBottom);
+    m_tabsColumnRows = m_menuRow + 2;
     connect(m_tabs, &QTabBar::currentChanged, this, [this](int i) { setCurrentDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabCloseRequested, this, [this](int i) { closeDocument(m_docs.value(i)); });
     connect(m_tabs, &QTabBar::tabMoved, this, [this](int from, int to) { m_docs.move(from, to); });
@@ -1411,15 +1487,65 @@ void MainWindow::placeCaptionButtons()
     // título (que deja su sitio).
     if (!m_captionButtons)
         return;
+    m_captionRow = CaptionButtons::rowHeight(this);
     m_topLayout->removeWidget(m_captionButtons);
-    if (WindowFrame::buttonsOnLeft())
+    auto* top = static_cast<TopRow*>(m_topLayout->parentWidget());
+    if (!m_captionSpacer) {
+        m_captionSpacer = new QWidget(top);
+        m_captionSpacer->setAttribute(Qt::WA_TransparentForMouseEvents);
+        // Con otro estilo de botones cambian de tamaño.
+        connect(Theme::notifier(), &Theme::Notifier::changed, m_captionSpacer, [top] {
+            if (top->m_onResize)
+                top->m_onResize();
+        });
+    }
+    m_topLayout->removeWidget(m_captionSpacer);
+    if (WindowFrame::buttonsOnLeft()) {
+        m_captionSpacer->hide();
+        top->m_onResize = nullptr;
         m_topLayout->addWidget(m_captionButtons, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
-    else
-        m_topLayout->addWidget(m_captionButtons, 0, 4, Qt::AlignRight | Qt::AlignVCenter);
+    } else {
+        // El diseño guarda su sitio (con el margen derecho de la fila) y los botones van encima,
+        // hasta el borde: la esquina de arriba a la derecha es el botón de cerrar.
+        const QSize size = m_captionButtons->sizeHint();
+        m_captionSpacer->setFixedSize(size);
+        m_captionSpacer->show();
+        m_topLayout->addWidget(m_captionSpacer, 0, 4, Qt::AlignRight | Qt::AlignTop);
+        top->m_onResize = [this, top] {
+            if (!m_captionButtons || WindowFrame::buttonsOnLeft())
+                return;
+            const QSize size = m_captionButtons->sizeHint();
+            m_captionSpacer->setFixedSize(size);
+            const int extra = m_topLayout->contentsMargins().right();
+            m_captionButtons->setGeometry(top->width() - size.width() - extra, 0, size.width() + extra, size.height());
+            m_captionButtons->raise();
+        };
+        top->m_onResize();
+    }
     m_captionButtons->raise();
     m_captionButtons->updateGeometry();
     if (m_captionTitle)
         m_captionTitle->update();
+}
+
+void MainWindow::updateCaptionRow()
+{
+    // Maximizada (o a pantalla completa), la fila de la barra de título es más baja, como las
+    // ventanas de Windows y Paint.NET: el título, los botones y su hueco toman el alto nuevo.
+    if (!m_captionButtons || CaptionButtons::rowHeight(this) == m_captionRow)
+        return;
+    if (m_captionTitle)
+        m_captionTitle->updateGeometry();
+    placeCaptionButtons();
+}
+
+void MainWindow::resizeEvent(QResizeEvent* e)
+{
+    QMainWindow::resizeEvent(e);
+    // Windows maximiza y restaura (Aero Snap, arrastrar la barra de título) sin que Qt cambie el
+    // estado de la ventana: se mira con su tamaño, ya colocada.
+    if (m_captionButtons && CaptionButtons::rowHeight(this) != m_captionRow)
+        QTimer::singleShot(0, this, &MainWindow::updateCaptionRow);
 }
 
 void MainWindow::createPanels()
@@ -1610,6 +1736,7 @@ void MainWindow::createStatusBar()
             m_zoomBox->setEditText(zoomText(m_canvas->zoom()));
     });
     connect(m_zoomSlider, &QSlider::valueChanged, this, [this](int v) { m_canvas->setZoom(sliderToZoom(v)); });
+    connect(m_canvas, &Canvas::unitRequested, this, [this](int u) { setUnit(u); });
     connect(m_canvas, &Canvas::zoomChanged, this, [this](qreal z) {
         const QSignalBlocker b1(m_zoomSlider), b2(m_zoomBox);
         m_zoomSlider->setValue(zoomToSlider(z));
@@ -3712,6 +3839,7 @@ void MainWindow::showWelcome()
     m_settings.uiStyle = chosen.uiStyle;
     m_settings.cursorStyle = chosen.cursorStyle;
     m_settings.discordEnabled = chosen.discordEnabled;
+    m_settings.photocraftExtras = chosen.photocraftExtras;
     m_settings.welcomed = true;
     const bool restart = chosen.language != m_settings.language || Theme::needsRestart(Theme::Scheme(chosen.colorScheme));
     if (!restart)
@@ -3779,6 +3907,8 @@ void MainWindow::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::StyleChange)
         keepOpaque();
+    if (e->type() == QEvent::WindowStateChange && m_captionButtons)
+        QTimer::singleShot(0, this, &MainWindow::updateCaptionRow);
     QMainWindow::changeEvent(e);
 }
 
@@ -3866,6 +3996,21 @@ void MainWindow::applySettings()
     m_layers->setDropLineMode(m_settings.layerDropLine);
     m_history->setJumpButtonsVisible(m_settings.historyJumpButtons);
     EffectMenu::showPluginIcons() = m_settings.pluginMenuIcons;
+    // La tira de imágenes a lo alto de toda la fila de arriba (o solo lo que ocupan las miniaturas).
+    if (auto* strip = static_cast<ImageStrip*>(m_tabs)) {
+        strip->setFullHeight(m_settings.stripFullHeight);
+        m_topLayout->removeWidget(m_tabs);
+        m_topLayout->addWidget(m_tabs, 0, 1, m_tabsColumnRows, 1, m_settings.stripFullHeight ? Qt::Alignment() : Qt::AlignBottom);
+    }
+    // Las funciones de PhotoCraft y los efectos de BoltBait activados: los menús se rehacen si
+    // cambian.
+    if (Effects::extrasEnabled() != m_settings.photocraftExtras || m_appliedBoltBait != m_settings.boltBaitEffects) {
+        Effects::setExtrasEnabled(m_settings.photocraftExtras);
+        Effects::setBoltBaitEnabled(m_settings.boltBaitEffects);
+        m_tools->setExtrasEnabled(m_settings.photocraftExtras);
+        m_appliedBoltBait = m_settings.boltBaitEffects;
+        rebuildEffectMenus();
+    }
     m_colors->setShowTranslucent(m_settings.paletteTranslucent);
     ToolPreferences preferences;
     preferences.hideBoxWhileDragging = m_settings.hideMoveBox;
@@ -3894,7 +4039,8 @@ void MainWindow::applySettings()
     const bool titleChanged = Theme::customTitleBarColor() != (ownTitle.isValid() ? QColor(ownTitle.rgb()) : QColor());
     Theme::setUiFont(m_settings.uiFontFamily, m_settings.uiFontSize);
     Theme::setCustomTitleBarColor(ownTitle);
-    const bool glassChanged = Theme::setAeroTransparency(m_settings.aeroTransparency);
+    bool glassChanged = Theme::setAeroTransparency(m_settings.aeroTransparency);
+    glassChanged = Theme::setWin7Glass(m_settings.win7Glass) || glassChanged;
     const bool selectionChanged = Theme::setSelectionColors(m_settings.selectionColorLight, m_settings.selectionColorDark);
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)
         || fontChanged || titleChanged || glassChanged || selectionChanged) {
@@ -3922,6 +4068,12 @@ void MainWindow::applySettings()
     presence.showFileInfo = m_settings.discordShowFileInfo;
     presence.showTool = m_settings.discordShowTool;
     presence.showElapsed = m_settings.discordShowElapsed;
+    presence.showCollab = m_settings.discordShowCollab;
+    presence.showCollabName = m_settings.discordShowCollabName;
+    presence.invites = m_settings.discordInvites;
+    presence.joinRequests = PresenceOptions::JoinRequests(std::clamp(m_settings.discordJoinRequests, 0, 2));
+    presence.partyMax = m_settings.discordPartySize;
+    presence.registerLaunch = m_settings.discordRegisterLaunch;
     m_discord->setOptions(presence);
     updatePresence();
     updateToolIconColors();
@@ -3947,6 +4099,18 @@ PresenceInfo MainWindow::presenceInfo() const
 {
     PresenceInfo info;
     info.documents = int(m_docs.size());
+    // El modo colaborativo (con el anfitrión entre las personas).
+    if (m_collab && m_collab->isActive()) {
+        const Collab::Session* session = m_collab->session();
+        info.collab = true;
+        info.collabHost = session->isHost();
+        info.collabWaiting = session->state() != Collab::Session::State::Joined;
+        info.collabP2P = session->connection() == Collab::Mode::P2P;
+        info.collabPeople = info.collabWaiting ? 0 : int(session->peers().size());
+        info.collabName = session->sessionName();
+        if (info.collabP2P && !info.collabWaiting)
+            info.collabCode = session->sessionCode();
+    }
     if (!m_doc)
         return info;
     info.hasDocument = true;
@@ -3987,6 +4151,7 @@ void MainWindow::checkHistoryMemory()
 
 void MainWindow::setUnit(int unit)
 {
+    // (También desde la esquina de las reglas: Canvas::unitRequested.)
     unit = std::clamp(unit, 0, 2);
     m_canvas->setUnit(Unit(unit));
     m_act[QStringLiteral("unit%1").arg(unit)]->setChecked(true);

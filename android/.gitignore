@@ -1,4 +1,4 @@
-# Lo que crean Android Studio y Gradle al abrir o compilar esta carpeta (build-apk.sh trabaja en una
+# Lo que crean Android Studio y Gradle al abrir o compilar esta carpeta (build.sh y build.bat trabajan en una
 # copia, en build-apk/ o build-aab/).
 .gradle/
 .idea/

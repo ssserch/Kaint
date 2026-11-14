@@ -1,5 +1,5 @@
 // Kaint.APK: la versión web de Kaint (KaintHTML) como aplicación de Android. La compila
-// ../build-apk.sh, que copia KaintHTML en app/src/main/assets/www.
+// ../build.sh --apk (o build.bat --apk en Windows), que copia KaintHTML en app/src/main/assets/www.
 pluginManagement {
     repositories {
         google()

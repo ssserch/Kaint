@@ -38,6 +38,8 @@ public:
         bool hidden = false;
         bool straight = false;
         QString note = QString();
+        // "PhotoCraft" o "BoltBait" (Effect::origin).
+        QString origin = QString();
     };
 
     explicit SimpleEffect(Def def) : m(std::move(def)) {}
@@ -45,11 +47,12 @@ public:
     QString id() const override { return m.id; }
     QString name() const override { return m.name; }
     QString category() const override { return m.category; }
-    bool hidden() const override { return m.hidden; }
+    bool hidden() const override;
     bool straightAlpha() const override { return m.straight; }
     QKeySequence shortcut() const override { return m.shortcut; }
     QString iconName() const override { return m.icon; }
     QString dialogNote() const override { return m.note; }
+    QString origin() const override { return m.origin; }
     QList<EffectParam> params() const override { return m.params; }
     std::any prepare(const QImage& src, const QRect& roi, const ParamValues& v, const EffectContext& ctx) const override
     {
@@ -363,6 +366,11 @@ void registerPhoto(QList<const Effect*>& list);
 void registerRender(QList<const Effect*>& list);
 void registerStylize(QList<const Effect*>& list);
 void registerLayerEffects(QList<const Effect*>& list);
+// Funciones de PhotoCraft (ExtraEffects*.cpp) y efectos que siguen complementos de BoltBait
+// (BoltBaitEffects.cpp).
+void registerPhotoCraft(QList<const Effect*>& list);
+void registerPhotoCraft2(QList<const Effect*>& list);
+void registerBoltBait(QList<const Effect*>& list);
 
 // Nombres de categoría (también ordenan el menú Efectos).
 inline QString catArtistic() { return QObject::tr("Artístico"); }
@@ -375,6 +383,12 @@ inline QString catPhoto() { return QObject::tr("Fotografía"); }
 inline QString catRender() { return QObject::tr("Representación"); }
 inline QString catStylize() { return QObject::tr("Estilizado"); }
 inline QString catLayer() { return QObject::tr("Capa"); }
+// Submenús nuevos de PhotoCraft (y de BoltBait).
+inline QString catBrushStrokes() { return QObject::tr("Trazos de pincel"); }
+inline QString catSketch() { return QObject::tr("Bosquejo"); }
+inline QString catTexture() { return QObject::tr("Textura"); }
+inline QString catFill() { return QObject::tr("Rellenar"); }
+inline QString catSelection() { return QObject::tr("Selección"); }
 
 // Ayudas para declarar parámetros habituales.
 EffectParam qualityParam(int def = 2);

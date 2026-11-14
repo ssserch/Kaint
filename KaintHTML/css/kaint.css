@@ -463,12 +463,26 @@ u {
     line-height: 0;
 }
 
+/* Como en Kaint, en la fila de los menús (centrados en toda la altura de la fila de arriba quedaban
+   entre los menús y la barra principal). */
 .corner-buttons {
     display: flex;
     align-items: center;
     gap: 0;
     flex: none;
     margin-left: auto;
+    align-self: flex-start;
+    height: 28px;
+}
+
+:root.fake-title .corner-buttons {
+    margin-top: 24px;
+}
+
+:root.phone .corner-buttons {
+    align-self: auto;
+    height: auto;
+    margin-top: 0;
 }
 
 .panel-buttons .tbutton > span {
@@ -888,6 +902,25 @@ input[type="checkbox"] {
     border-color: var(--line);
 }
 
+/* Como Paint.NET: la unidad en la esquina; al pulsarla, el menú para cambiarla. */
+.workspace.ruler-pdn .ruler-corner {
+    pointer-events: auto;
+    background: #f9f9f9;
+    color: #1e1e1e;
+    border-color: #d0d0d0;
+    font-size: 9px;
+    line-height: 19px;
+    text-align: center;
+    cursor: default;
+    user-select: none;
+}
+
+.workspace.ruler-pdn.ruler-pdn-dark .ruler-corner {
+    background: #1c1c1c;
+    color: #d6d6d6;
+    border-color: #3a3a3a;
+}
+
 /* Miniatura de la herramienta junto al puntero del sistema. */
 .mini-pointer {
     position: absolute;
@@ -896,6 +929,32 @@ input[type="checkbox"] {
     z-index: 5;
     pointer-events: none;
     display: none;
+}
+
+/* Aviso junto al puntero, encima de la imagen (a la herramienta le falta algo para empezar):
+   oscuro con el borde naranja de los avisos, sobre cualquier tema e imagen. */
+.canvas-notice {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 6;
+    max-width: min(320px, calc(100% - 12px));
+    padding: 6px 10px;
+    background: #2b2b2b;
+    color: #ffffff;
+    border: 1px solid #f0a030;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 150ms ease-out, visibility 0s linear 150ms;
+}
+
+.canvas-notice.shown {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 100ms ease-out;
 }
 
 .workspace.rulers #view {
@@ -2872,6 +2931,13 @@ fieldset.group > legend {
     margin: 6px 0 2px;
 }
 
+.welcome .extras {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 2px;
+}
+
 .about .credits {
     background: var(--base);
     border: 1px solid var(--field);
@@ -2983,21 +3049,33 @@ fieldset.group > legend {
     gap: 0;
 }
 
-:root.pdn .image-tab.current {
-    background: #3a63c0;
+/* El azul de Paint.NET 5 (medido): #0078d7 con el borde opaco y el relleno a la mitad encima de la
+   franja, y una línea oscura muy tenue por dentro del borde; bajo el puntero, #0066cc más tenue. */
+:root.pdn .image-tab.current:not(.collab),
+:root.pdn:not(.dark) .image-tab.current:not(.collab) {
+    background: rgba(0, 120, 215, 0.5);
     border-color: #0078d7;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.19);
 }
 
-:root.pdn:not(.dark) .image-tab.current {
-    background: #cce8ff;
-    border-color: #99d1ff;
+:root.pdn .image-tab:hover:not(.current):not(.collab) {
+    background: rgba(0, 102, 204, 0.25);
+    border-color: rgba(0, 102, 204, 0.75);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.19);
 }
 
 /* Con el color de selección propio, la pestaña de la imagen y los botones de las ventanas lo llevan. */
-:root.pdn.own-selection .image-tab.current,
-:root.pdn.own-selection:not(.dark) .image-tab.current {
+:root.pdn.own-selection .image-tab.current:not(.collab),
+:root.pdn.own-selection:not(.dark) .image-tab.current:not(.collab) {
     background: var(--selection);
     border-color: var(--selection-border);
+    box-shadow: none;
+}
+
+:root.pdn.own-selection .image-tab:hover:not(.current):not(.collab) {
+    background: color-mix(in srgb, var(--selection) 25%, transparent);
+    border-color: color-mix(in srgb, var(--selection-border) 75%, transparent);
+    box-shadow: none;
 }
 
 :root.own-selection:not(.classic) .corner-buttons .tbutton.checked {
@@ -4522,4 +4600,241 @@ fieldset.group > legend {
 
 .collab-found tbody tr.empty td {
     opacity: 0.7;
+}
+
+/* Explorar complementos: las secciones y lo que solo funciona en Kaint para el escritorio. */
+.catalog-pages .catalog-list {
+    max-height: 52vh;
+    overflow: auto;
+}
+
+.catalog-desktop-only {
+    flex: none;
+    max-width: 110px;
+    text-align: right;
+    opacity: 0.75;
+}
+
+/* Editor de idiomas personalizados. */
+.language-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 6px 12px;
+    margin-bottom: 8px;
+}
+
+.language-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.language-list {
+    width: min(720px, 86vw);
+    max-height: 48vh;
+    overflow: auto;
+    margin: 6px 0;
+}
+
+.language-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 4px;
+    border-bottom: 1px solid var(--line);
+}
+
+.language-source {
+    opacity: 0.85;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.language-row textarea {
+    width: 100%;
+    min-height: 1.6em;
+    resize: vertical;
+    box-sizing: border-box;
+    font: inherit;
+}
+
+
+/* Barra de título simulada (Configuración > Interfaz de usuario, activada por defecto): la fila de
+   arriba como la de Kaint para el escritorio, con el icono y el título de la imagen, sin los botones
+   de la ventana. La tira de imágenes ocupa toda la altura de la fila (también la del título) y la
+   imagen actual y la que tiene el puntero se aclaran encima de la franja, como en Paint.NET. */
+.caption-title {
+    display: none;
+}
+
+:root.fake-title .caption-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Como la barra de título de Paint.NET maximizado (23 px): con 32, la fila de arriba y el
+       recuadro de la imagen actual quedaban demasiado altos. */
+    height: 24px;
+    padding: 0 8px;
+    color: var(--menubar-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+:root.fake-title .caption-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+
+:root.fake-title #top-row {
+    padding-top: 0;
+}
+
+:root.strip-full .image-strip {
+    padding: 0;
+}
+
+/* El recuadro a lo alto de toda la fila y la miniatura abajo, en el hueco de 48 px de siempre
+   (como en Paint.NET: junto a la barra de herramientas, con el recuadro subiendo por encima). */
+:root.strip-full .image-tab {
+    height: auto;
+    align-self: stretch;
+    display: grid;
+    grid-template-rows: 1fr 48px;
+    justify-items: center;
+    align-items: center;
+    padding-bottom: 4px;
+    box-sizing: border-box;
+}
+
+:root.strip-full .image-tab > canvas {
+    grid-row: 2;
+}
+
+/* La imagen actual y la que tiene el puntero, con el azul de Paint.NET encima de la franja (medido
+   en Paint.NET 5; antes la franja se aclaraba y, sobre un color vivo, salía un recuadro blanquecino). */
+:root.strip-full .image-tab:hover:not(.current):not(.collab),
+:root.strip-full.pdn .image-tab:hover:not(.current):not(.collab) {
+    background: rgba(0, 102, 204, 0.25);
+    border-color: rgba(0, 102, 204, 0.75);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.19);
+}
+
+:root.strip-full .image-tab.current:not(.collab),
+:root.strip-full.pdn .image-tab.current:not(.collab),
+:root.strip-full.pdn:not(.dark) .image-tab.current:not(.collab) {
+    background: rgba(0, 120, 215, 0.5);
+    border-color: #0078d7;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.19);
+}
+
+:root.strip-full.own-selection .image-tab:hover:not(.current):not(.collab),
+:root.strip-full.pdn.own-selection .image-tab:hover:not(.current):not(.collab) {
+    background: color-mix(in srgb, var(--selection) 25%, transparent);
+    border-color: color-mix(in srgb, var(--selection-border) 75%, transparent);
+    box-shadow: none;
+}
+
+:root.strip-full.own-selection .image-tab.current:not(.collab),
+:root.strip-full.pdn.own-selection .image-tab.current:not(.collab),
+:root.strip-full.pdn.own-selection:not(.dark) .image-tab.current:not(.collab) {
+    background: var(--selection);
+    border-color: var(--selection-border);
+    box-shadow: none;
+}
+
+:root.phone .caption-title {
+    display: none;
+}
+
+
+/* Diseño del tema personalizado (Themes.js, applyDesign; como el de Kaint para el escritorio). */
+.translucent .floating-panel:not(:hover):not(.dragging):not(.solid) {
+    opacity: var(--panel-opacity, 0.75);
+}
+
+:root.theme-btn-framed .tbutton {
+    border-color: var(--border);
+    background: var(--button);
+}
+
+:root.theme-btn-rounded .tbutton {
+    border-color: var(--border);
+    background: var(--button);
+    border-radius: max(var(--radius), 5px);
+}
+
+:root.density-compact .tbutton {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 1px;
+}
+
+:root.density-compact .toolbar {
+    min-height: 22px;
+    padding: 0 2px;
+}
+
+:root.density-comfortable .tbutton {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 4px;
+}
+
+:root.density-comfortable .toolbar {
+    gap: 4px;
+    padding: 3px 6px;
+}
+
+:root.theme-bar-icons .toolbar .kicon,
+:root.theme-bar-icons .corner-buttons .kicon {
+    width: var(--bar-icon) !important;
+    height: var(--bar-icon) !important;
+}
+
+:root.theme-tool-icons .tools-grid {
+    grid-template-columns: repeat(var(--columns, 2), calc(var(--tool-icon) + 8px));
+}
+
+:root.theme-tool-icons .tools-grid .tbutton {
+    width: calc(var(--tool-icon) + 8px);
+    height: calc(var(--tool-icon) + 8px);
+}
+
+:root.theme-tool-icons .tools-grid .kicon {
+    width: var(--tool-icon) !important;
+    height: var(--tool-icon) !important;
+}
+
+/* La fuente de Configuración va delante; si no hay, la del tema personalizado. */
+html, body {
+    font: var(--ui-font-size, var(--theme-font-size, 12px)) var(--ui-font, var(--theme-font, var(--font))), var(--font);
+}
+
+:root.pixel-font,
+:root.pixel-font * {
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+}
+
+/* Bordes clásicos en relieve (como Windows 98) con cualquier base. */
+:root.theme-classic .tbutton:not(:disabled),
+:root.theme-classic .pushbutton,
+:root.theme-classic input,
+:root.theme-classic select {
+    border-style: solid;
+    border-width: 2px;
+    border-color: #ffffff #404040 #404040 #ffffff;
+    border-radius: 0;
+}
+
+:root.theme-classic .floating-panel,
+:root.theme-classic .dialog {
+    border: 2px solid;
+    border-color: #ffffff #404040 #404040 #ffffff;
+    border-radius: 0;
 }

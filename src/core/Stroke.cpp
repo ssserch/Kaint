@@ -371,6 +371,9 @@ void StrokeEngine::composite(const QRect& area)
     };
 
     switch (m_params.kind) {
+    case StrokeKind::Mask:
+        // La capa no cambia: la herramienta enseña la cobertura a su manera.
+        return;
     case StrokeKind::Erase: {
         const int strength = m_params.color.alpha();
         for (int y = r.top(); y <= r.bottom(); ++y) {
@@ -435,6 +438,14 @@ bool StrokeEngine::end(const QString& text, const QString& icon)
 {
     if (!m_doc)
         return false;
+    finishPath();
+    return commit(text, icon);
+}
+
+QRect StrokeEngine::finishPath()
+{
+    if (!m_doc)
+        return {};
     if (!m_params.pixelExact) {
         // El tramo provisional pasa a definitivo (con el final de la curva reflejado).
         QRect dirty = restoreWet();
@@ -446,6 +457,13 @@ bool StrokeEngine::end(const QString& text, const QString& icon)
         }
         composite(dirty);
     }
+    return m_total;
+}
+
+bool StrokeEngine::commit(const QString& text, const QString& icon)
+{
+    if (!m_doc)
+        return false;
     const bool changed = pushPixelPatch(m_doc, m_layer, m_before, m_total, text, icon);
     m_doc = nullptr;
     m_layer.reset();
@@ -454,4 +472,45 @@ bool StrokeEngine::end(const QString& text, const QString& icon)
     m_wetBackup = QImage();
     m_points.clear();
     return changed;
+}
+
+void StrokeEngine::cancel()
+{
+    if (!m_doc)
+        return;
+    const QRect r = m_total.intersected(m_layer->image.rect());
+    if (!r.isEmpty()) {
+        Raster::blit(m_layer->image, m_before.copy(r), r.topLeft());
+        m_doc->notifyPixelsChanged(m_layer.get(), r);
+    }
+    m_doc = nullptr;
+    m_layer.reset();
+    m_before = QImage();
+    m_mask = QImage();
+    m_wetBackup = QImage();
+    m_points.clear();
+}
+
+void StrokeEngine::applyThroughCoverage(const QRect& area, const QImage& source)
+{
+    if (!m_doc)
+        return;
+    const QRect r = area.intersected(m_layer->image.rect());
+    if (r.isEmpty())
+        return;
+    m_total |= r;
+    const bool aa = Raster::selectionAntialias();
+    const ConstMask sel(m_doc->selection().mask());
+    QImage cov(r.size(), QImage::Format_Alpha8);
+    for (int y = 0; y < r.height(); ++y) {
+        uchar* row = cov.scanLine(y);
+        const uchar* m = m_mask.constScanLine(y + r.top());
+        for (int x = 0; x < r.width(); ++x) {
+            const int c = m[x + r.left()];
+            row[x] = uchar(sel.isNull() ? c : c * Raster::clipCoverage(sel.row(y + r.top())[x + r.left()], aa) / 255);
+        }
+    }
+    const QImage src = source.copy(r.translated(-area.topLeft()));
+    Raster::compositeRegion(m_layer->image, m_before, src, r, m_params.blend, Selection(), cov);
+    m_doc->notifyPixelsChanged(m_layer.get(), r);
 }

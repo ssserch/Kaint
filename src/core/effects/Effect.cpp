@@ -739,6 +739,19 @@ EdgeBehavior edgeValue(const ParamValues& v, const QList<EdgeBehavior>& list)
     return list.value(ival(v, "edge"), EdgeBehavior::Clamp);
 }
 
+// Las funciones de PhotoCraft se ven solo con su casilla activada; las que siguen complementos de
+// BoltBait, cada una cuando se activa desde Explorar complementos.
+bool SimpleEffect::hidden() const
+{
+    if (m.hidden)
+        return true;
+    if (m.origin == QLatin1String("BoltBait"))
+        return !Effects::boltBaitEnabled(m.id);
+    if (!m.origin.isEmpty())
+        return !Effects::extrasEnabled();
+    return false;
+}
+
 } // namespace fx
 
 // ---------------------------------------------------------------------------
@@ -763,6 +776,8 @@ QList<const Effect*>& registry()
         fx::registerRender(l);
         fx::registerStylize(l);
         fx::registerLayerEffects(l);
+        fx::registerPhotoCraft(l);
+        fx::registerBoltBait(l);
         return l;
     }();
     return list;
@@ -795,8 +810,40 @@ const Effect* find(const QString& id)
 
 QStringList categories()
 {
-    return {fx::catArtistic(), fx::catBlurs(), fx::catColor(), fx::catDistort(), fx::catNoise(),
-            fx::catObject(), fx::catPhoto(), fx::catRender(), fx::catStylize()};
+    QStringList list{fx::catArtistic(), fx::catBlurs(), fx::catColor(), fx::catDistort(), fx::catNoise(),
+                     fx::catObject(), fx::catPhoto(), fx::catRender(), fx::catStylize()};
+    if (extrasEnabled())
+        list << fx::catBrushStrokes() << fx::catSketch() << fx::catTexture();
+    return list;
+}
+
+namespace {
+std::atomic_bool g_extras{false};
+QStringList& boltBaitList()
+{
+    static QStringList list;
+    return list;
+}
+} // namespace
+
+void setExtrasEnabled(bool on)
+{
+    g_extras = on;
+}
+
+bool extrasEnabled()
+{
+    return g_extras;
+}
+
+void setBoltBaitEnabled(const QStringList& effectIds)
+{
+    boltBaitList() = effectIds;
+}
+
+bool boltBaitEnabled(const QString& effectId)
+{
+    return boltBaitList().contains(effectId);
 }
 
 ParamValues defaults(const Effect& effect, const EffectContext& ctx)

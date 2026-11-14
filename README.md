@@ -401,6 +401,7 @@ and *Exit* leaves.
 
 | Option | `build.sh` (Linux, FreeBSD, macOS) | `build.bat` (Windows) |
 | --- | :---: | :---: |
+| Just build the executable | `--build` (in `build/`) | `--build` (in `build-windows\`) |
 | Build and install | `--install` | `--install` |
 | Build and run | `--run` | `--run` |
 | Run the tests | `--test` | `--test` |
@@ -408,7 +409,7 @@ and *Exit* leaves.
 | Package | `--deb` (Debian/Ubuntu) · `--pkg` (Arch) · `--flatpak` · `--appimage` · `--tar` | `--setup` (installer) · `--zip` |
 | Variants | `--avx2` (x86-64-v3) · `--musl` (Alpine container) · `--arm64` (aarch64) | `--avx2` · `--arm64` |
 | FreeBSD / macOS | `--tar` on FreeBSD · `--tar` on macOS (with Kaint.app) | |
-| Linux packages from Windows | | `--wsl deb`, `pkg`, `appimage`, `appimage-avx2`, `tar`, `tar-musl` or `tar-arm64` |
+| Linux builds from Windows | | `--wsl build`, `deb`, `pkg`, `appimage`, `appimage-avx2`, `tar`, `tar-musl` or `tar-arm64` |
 | Web version (.zip) | `--web` | `--web` |
 | Mobile version (Android) | `--apk` · `--aab` | `--apk` · `--aab` (with WSL) |
 | Build threads | `--jobs N` | `--jobs N` |

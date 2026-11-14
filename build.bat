@@ -76,6 +76,8 @@ set "SHOW_TIME=0"
 rem --- Opciones ---------------------------------------------------------------
 :args
 if "%~1"=="" goto args_done
+if /i "%~1"=="-b"          (shift & goto args)
+if /i "%~1"=="--build"     (shift & goto args)
 if /i "%~1"=="-d"          (set "BUILD_TYPE=Debug" & set "BUILD_DIR=build-windows-debug" & shift & goto args)
 if /i "%~1"=="--debug"     (set "BUILD_TYPE=Debug" & set "BUILD_DIR=build-windows-debug" & shift & goto args)
 if /i "%~1"=="-c"          (set "DO_CLEAN=1" & shift & goto args)
@@ -321,56 +323,60 @@ if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "ARM_NR="
 rem Lo de Linux y Android se compila dentro de WSL: sin él, no se puede.
 set "WSL_NR= %NR%"
 echo.
-echo (1) Instalar en este equipo
-echo (2) Portable x86_64 (.zip)
-echo (3) Portable x86_64 AVX2 (.zip)
-echo (4) Portable arm64 (.zip)%ARM_NR%
-echo (5) Instalador x86_64 (setup.exe, con los datos de winsetup.json)
-echo (6) Versión web (Kaint.HTML, .zip)
-echo (7) Versión móvil (Android, .apk)
-echo (8) Versión móvil para Google Play (.aab)
-echo (9) Paquete .deb (Debian/Ubuntu, con WSL)%WSL_NR%
-echo (10) Paquete de Arch (.pkg.tar.zst, con WSL)%WSL_NR%
-echo (11) AppImage x86_64 (con WSL)%WSL_NR%
-echo (12) AppImage x86_64 AVX2 (con WSL)%WSL_NR%
-echo (13) tar.gz Linux x86_64 (con WSL)%WSL_NR%
-echo (14) tar.gz Linux musl (con WSL)%WSL_NR%
-echo (15) tar.gz Linux aarch64 (con WSL)%WSL_NR%
-echo (16) tar.gz FreeBSD x86_64 %NR%
-echo (17) tar.gz macOS arm64 %NR%
+echo (1) Ejecutable de Windows x86_64 (solo compilar, en build-windows\)
+echo (2) Instalar en este equipo
+echo (3) Portable x86_64 (.zip)
+echo (4) Portable x86_64 AVX2 (.zip)
+echo (5) Portable arm64 (.zip)%ARM_NR%
+echo (6) Instalador x86_64 (setup.exe, con los datos de winsetup.json)
+echo (7) Versión web (Kaint.HTML, .zip)
+echo (8) Versión móvil (Android, .apk)
+echo (9) Versión móvil para Google Play (.aab)
+echo (10) Ejecutable de Linux x86_64 (con WSL, solo compilar, en build/)%WSL_NR%
+echo (11) Paquete .deb (Debian/Ubuntu, con WSL)%WSL_NR%
+echo (12) Paquete de Arch (.pkg.tar.zst, con WSL)%WSL_NR%
+echo (13) AppImage x86_64 (con WSL)%WSL_NR%
+echo (14) AppImage x86_64 AVX2 (con WSL)%WSL_NR%
+echo (15) tar.gz Linux x86_64 (con WSL)%WSL_NR%
+echo (16) tar.gz Linux musl (con WSL)%WSL_NR%
+echo (17) tar.gz Linux aarch64 (con WSL)%WSL_NR%
+echo (18) tar.gz FreeBSD x86_64 %NR%
+echo (19) tar.gz macOS arm64 %NR%
 echo (0) Volver
 echo.
 :menu_format
 set "MENU_CHOICE="
 set /p "MENU_CHOICE=> "
 if "%MENU_CHOICE%"=="0" goto menu
-if "%MENU_CHOICE%"=="1" set "MENU_ARGS=--install"
-if "%MENU_CHOICE%"=="2" set "MENU_ARGS=--zip"
-if "%MENU_CHOICE%"=="3" set "MENU_ARGS=--zip --avx2"
-if "%MENU_CHOICE%"=="4" set "MENU_ARGS=--zip --arm64"
-if "%MENU_CHOICE%"=="5" set "MENU_ARGS=--setup"
-if "%MENU_CHOICE%"=="6" set "MENU_ARGS=--web"
-if "%MENU_CHOICE%"=="7" set "MENU_ARGS=--apk"
-if "%MENU_CHOICE%"=="8" set "MENU_ARGS=--aab"
-if "%MENU_CHOICE%"=="9" set "MENU_ARGS=--wsl deb"
-if "%MENU_CHOICE%"=="10" set "MENU_ARGS=--wsl pkg"
-if "%MENU_CHOICE%"=="11" set "MENU_ARGS=--wsl appimage"
-if "%MENU_CHOICE%"=="12" set "MENU_ARGS=--wsl appimage-avx2"
-if "%MENU_CHOICE%"=="13" set "MENU_ARGS=--wsl tar"
-if "%MENU_CHOICE%"=="14" set "MENU_ARGS=--wsl tar-musl"
-if "%MENU_CHOICE%"=="15" set "MENU_ARGS=--wsl tar-arm64"
-if "%MENU_CHOICE%"=="16" (
+if "%MENU_CHOICE%"=="1" set "MENU_ARGS=--build"
+if "%MENU_CHOICE%"=="2" set "MENU_ARGS=--install"
+if "%MENU_CHOICE%"=="3" set "MENU_ARGS=--zip"
+if "%MENU_CHOICE%"=="4" set "MENU_ARGS=--zip --avx2"
+if "%MENU_CHOICE%"=="5" set "MENU_ARGS=--zip --arm64"
+if "%MENU_CHOICE%"=="6" set "MENU_ARGS=--setup"
+if "%MENU_CHOICE%"=="7" set "MENU_ARGS=--web"
+if "%MENU_CHOICE%"=="8" set "MENU_ARGS=--apk"
+if "%MENU_CHOICE%"=="9" set "MENU_ARGS=--aab"
+if "%MENU_CHOICE%"=="10" set "MENU_ARGS=--wsl build"
+if "%MENU_CHOICE%"=="11" set "MENU_ARGS=--wsl deb"
+if "%MENU_CHOICE%"=="12" set "MENU_ARGS=--wsl pkg"
+if "%MENU_CHOICE%"=="13" set "MENU_ARGS=--wsl appimage"
+if "%MENU_CHOICE%"=="14" set "MENU_ARGS=--wsl appimage-avx2"
+if "%MENU_CHOICE%"=="15" set "MENU_ARGS=--wsl tar"
+if "%MENU_CHOICE%"=="16" set "MENU_ARGS=--wsl tar-musl"
+if "%MENU_CHOICE%"=="17" set "MENU_ARGS=--wsl tar-arm64"
+if "%MENU_CHOICE%"=="18" (
     echo El .tar.gz de FreeBSD se crea en FreeBSD con: ./build.sh --tar
     goto menu_format
 )
-if "%MENU_CHOICE%"=="17" (
+if "%MENU_CHOICE%"=="19" (
     echo El .tar.gz de macOS se crea en un Mac con: ./build.sh --tar
     goto menu_format
 )
 if not defined MENU_ARGS (
     set /a "MENU_TRIES+=1"
     if !MENU_TRIES! geq 5 exit /b 1
-    echo Elige un número del 0 al 17.
+    echo Elige un número del 0 al 19.
     goto menu_format
 )
 rem La versión móvil y la web no se compilan: no tienen variante de depuración.
@@ -417,8 +423,9 @@ where wsl >nul 2>&1 || (
     echo Para los paquetes de Linux hace falta WSL ^(wsl --install^) o un equipo con Linux: ./build.sh %WSL_ARGS%
     exit /b 1
 )
-rem deb, pkg, appimage, appimage-avx2, tar, tar-musl, tar-arm64 o las opciones de build.sh.
+rem build, deb, pkg, appimage, appimage-avx2, tar, tar-musl, tar-arm64 o las opciones de build.sh.
 set "WSL_FLAGS=%WSL_ARGS%"
+if /i "%WSL_ARGS%"=="build" set "WSL_FLAGS=--build"
 if /i "%WSL_ARGS%"=="deb" set "WSL_FLAGS=--deb"
 if /i "%WSL_ARGS%"=="pkg" set "WSL_FLAGS=--pkg"
 if /i "%WSL_ARGS%"=="appimage" set "WSL_FLAGS=--appimage"
@@ -636,6 +643,8 @@ rem --- Ayuda ------------------------------------------------------------------
 :print_usage
 echo Uso: build.bat [opciones]
 echo.
+echo   -b, --build          solo compila kaint.exe en build-windows\ (con --debug, en build-windows-debug\),
+echo                        sin instalar ni empaquetar
 echo   -d, --debug          compila con símbolos de depuración (build-windows-debug\)
 echo   -c, --clean          borra la carpeta de compilación antes de empezar
 echo   -j, --jobs N         compila con N hilos (por defecto, todos los del procesador)
@@ -656,7 +665,7 @@ echo       --aab            crea el App Bundle para Google Play (build-aab\Kaint
 echo       --kainthtml RUTA (con --apk o --aab) otra carpeta de KaintHTML (por defecto, la de aquí)
 echo       --keystore RUTA  (con --apk o --aab) la llave (.jks o .keystore) con la que firmar
 echo       --alias NOMBRE   (con --apk o --aab) el usuario (alias) de esa llave
-echo       --wsl FORMATO    paquete de Linux con build.sh en WSL: deb, pkg, appimage, appimage-avx2, tar, tar-musl o tar-arm64
+echo       --wsl FORMATO    Linux con build.sh en WSL: build (el ejecutable, en build/), deb, pkg, appimage, appimage-avx2, tar, tar-musl o tar-arm64
 echo       --no-ccache      no usa ccache ni sccache aunque estén instalados
 echo   -r, --run            ejecuta Kaint al terminar
 echo   -y, --yes            descarga las herramientas que falten sin preguntar

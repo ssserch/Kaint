@@ -110,6 +110,7 @@ menu_formats() {
     # La versión móvil: con el SDK de Android y Gradle de Linux, macOS o Windows (build.bat).
     (( linux || macos || win )) && apk=1
     FORMATS=(
+        "Ejecutable de $OS_LABEL $HOST_ARCH (solo compilar, en build/)|--build|$(( linux || freebsd || macos ))"
         "Instalar en este equipo (~/.local)|--install|$(( linux || freebsd || macos ))"
         "Paquete .deb (Debian/Ubuntu)|--deb|$deb"
         "Paquete de Arch (.pkg.tar.zst)|--pkg|$pkg"
@@ -201,6 +202,8 @@ usage() {
     cat <<EOF
 Uso: $0 [opciones]
 
+  -b, --build          solo compila el ejecutable en build/ (con --debug, en build-debug/), sin
+                       instalar ni empaquetar: lo mismo que sin opciones fuera de una terminal
   -d, --debug          compila con símbolos de depuración (build-debug/)
   -c, --clean          borra la carpeta de compilación antes de empezar
   -j, --jobs N         compila con N hilos (por defecto, todos los del procesador)
@@ -242,6 +245,7 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -b|--build)   ;;
         -d|--debug)   DO_DEBUG=1 ;;
         -c|--clean)   DO_CLEAN=1 ;;
         -t|--test)    DO_TEST=1 ;;

@@ -1637,7 +1637,7 @@ export class App extends EventTarget {
         let name = doc.fileName || `${tr("Sin título")}.${doc.layers.length > 1 ? "ora" : "png"}`;
         if (!this.formatOf(name))
             name = `${baseName(name)}.ora`;
-        if (window.showSaveFilePicker) {
+        if (window.showSaveFilePicker && !window.KaintAndroid?.saveFile) {
             const formats = this.saveFormats(), chosen = this.formatOf(name);
             try {
                 const handle = await window.showSaveFilePicker({
@@ -1680,7 +1680,7 @@ export class App extends EventTarget {
             if (choice === oraChoice) {
                 name = oraName;
                 format = this.formatOf(name);
-                if (handle && window.showSaveFilePicker) {
+                if (handle && window.showSaveFilePicker && !window.KaintAndroid?.saveFile) {
                     try {
                         handle = await window.showSaveFilePicker({ suggestedName: oraName, types: [{ description: tr(format.name), accept: { [format.mime]: [".ora"] } }] });
                         name = handle.name;

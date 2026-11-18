@@ -32,3 +32,4 @@ build-appimage-*/
 build-windows-avx2/
 build-windows-arm64/
 kainttodo.pdf
+2dlocal/

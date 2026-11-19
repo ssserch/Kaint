@@ -155,6 +155,15 @@ PluginManager::PluginManager(QObject* parent)
 {
     if (QCoreApplication::instance())
         connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, &PluginManager::shutdown);
+    // Los complementos de Paint.NET activados, para la carpeta Effects del proceso auxiliar (Random
+    // Effect elige entre ellos, como en Paint.NET).
+    connect(this, &PluginManager::changed, this, [this] {
+        QStringList assemblies;
+        for (const PluginInfo& p : std::as_const(m_plugins))
+            if (p.kind == QLatin1String("Paint.NET") && p.enabled && !p.effectIds.isEmpty())
+                assemblies << p.id;
+        PdnBridge::setEffectsFolder(assemblies);
+    });
 }
 
 PluginManager::~PluginManager()

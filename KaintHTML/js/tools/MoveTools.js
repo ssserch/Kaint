@@ -573,13 +573,13 @@ export class MoveSelectedTool extends MoveToolBase {
         const s = this.session();
         if (!s?.step || this.drag || s.sampling === `${this.settings.moveInterpolation || "bicubic"}/${this.settings.moveGamma !== false}`)
             return;
-        const doc = s.doc, layer = s.layer;
+        const doc = s.doc, layer = s.layer, a = s.step.area;
         this.render(s, true);
         doc.preview = null;
-        layer.ctx.clearRect(0, 0, doc.width, doc.height);
-        layer.ctx.drawImage(s.preview, 0, 0);
-        s.step.after = layer.ctx.getImageData(0, 0, doc.width, doc.height);
-        doc.pixelsChanged(layer, null);
+        layer.ctx.clearRect(a.x, a.y, a.w, a.h);
+        layer.ctx.drawImage(s.preview, a.x, a.y, a.w, a.h, a.x, a.y, a.w, a.h);
+        s.step.after = layer.ctx.getImageData(a.x, a.y, a.w, a.h);
+        doc.pixelsChanged(layer, a);
     }
 
     get id() { return "moveselectedpixels"; }
@@ -707,6 +707,21 @@ export class MoveSelectedTool extends MoveToolBase {
             p.drawImage(s.floating, full.e, full.f);
             return;
         }
+        // Mientras se arrastra una zona grande, directamente con el navegador (también al reducir: el
+        // promedio por áreas en JavaScript se recalculaba en cada paso y las imágenes grandes iban a
+        // tirones). Al soltar queda el exacto.
+        const ours = interp === "nearest" ? exact : interp !== "bilinear" || gamma;
+        const fw = s.floating.width, fh = s.floating.height;
+        const corners = [[0, 0], [fw, 0], [0, fh], [fw, fh]].map(([x, y]) => ({ x: full.a * x + full.c * y + full.e, y: full.b * x + full.d * y + full.f }));
+        const bx0 = Math.max(0, Math.floor(Math.min(...corners.map((q) => q.x))) - 2), by0 = Math.max(0, Math.floor(Math.min(...corners.map((q) => q.y))) - 2);
+        const bx1 = Math.min(doc.width, Math.ceil(Math.max(...corners.map((q) => q.x))) + 2), by1 = Math.min(doc.height, Math.ceil(Math.max(...corners.map((q) => q.y))) + 2);
+        if (!exact && !(ours && (bx1 - bx0) * (by1 - by0) <= 40000)) {
+            p.setTransform(full);
+            p.imageSmoothingEnabled = interp !== "nearest";
+            p.imageSmoothingQuality = interp === "bicubic" || interp === "anisotropic" ? "high" : interp === "multisample" ? "medium" : "low";
+            p.drawImage(s.floating, 0, 0);
+            return;
+        }
         if (s.floatingFor !== s.floating) {
             s.floatingFor = s.floating;
             s.floatingData = context(s.floating).getImageData(0, 0, s.floating.width, s.floating.height);
@@ -723,10 +738,8 @@ export class MoveSelectedTool extends MoveToolBase {
         if (x1 <= x0 || y1 <= y0)
             return;
         // El vecino más próximo exacto (el píxel bajo el centro de cada uno) al soltar; mientras se
-        // arrastra, el del navegador, que da lo mismo.
-        const ours = interp === "nearest" ? exact : interp !== "bilinear" || gamma;
-        // Mientras se arrastra, el remuestreo exacto (en JavaScript) solo en zonas pequeñas: en las
-        // grandes cada movimiento tardaba demasiado. Al soltar queda el exacto.
+        // arrastra, el del navegador, que da lo mismo. Mientras se arrastra, el remuestreo exacto (en
+        // JavaScript) solo en zonas pequeñas.
         if (ours && (exact || (x1 - x0) * (y1 - y0) <= 40000)) {
             const tmp = new ImageData(x1 - x0, y1 - y0);
             drawTransformed(tmp, pre.image, new DOMMatrix().translate(-x0, -y0).multiply(m), interp, gamma);
@@ -763,22 +776,32 @@ export class MoveSelectedTool extends MoveToolBase {
     commit(s, name, icon, selectionBefore = s.doc.selection) {
         const doc = s.doc, layer = s.layer;
         this.render(s, true);
-        const before = layer.ctx.getImageData(0, 0, doc.width, doc.height);
+        // Solo la zona que cambia: donde estaban los píxeles (al levantarlos, su sitio de antes; si
+        // no, donde quedaron en el paso anterior) y donde quedan. Con la capa entera, cada paso
+        // guardaba dos copias de toda la imagen y al soltar una grande había una pausa.
+        const now = this.floatingBounds(s, s.box.matrix());
+        const area = unionRect(s.committed || this.floatingBounds(s, new DOMMatrix()), now);
+        s.committed = now;
+        if (area.w <= 0 || area.h <= 0) {
+            this.current = s;
+            return;
+        }
+        const before = layer.ctx.getImageData(area.x, area.y, area.w, area.h);
         doc.preview = null;
-        layer.ctx.clearRect(0, 0, doc.width, doc.height);
-        layer.ctx.drawImage(s.preview, 0, 0);
-        const after = layer.ctx.getImageData(0, 0, doc.width, doc.height);
+        layer.ctx.clearRect(area.x, area.y, area.w, area.h);
+        layer.ctx.drawImage(s.preview, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
+        const after = layer.ctx.getImageData(area.x, area.y, area.w, area.h);
         const selAfter = s.selBase.transformed(s.box.matrix(), this.settings.selectionAntialias);
         const apply = (data, sel) => {
-            layer.ctx.putImageData(data, 0, 0);
+            layer.ctx.putImageData(data, area.x, area.y);
             doc.setSelection(sel);
-            doc.pixelsChanged(layer, null);
+            doc.pixelsChanged(layer, area);
         };
-        s.step = { name, icon, bytes: before.data.length + after.data.length, after,
+        s.step = { name, icon, bytes: before.data.length + after.data.length, after, area,
                    undo: () => apply(before, selectionBefore), redo: () => apply(s.step.after, selAfter) };
         doc.selection = selAfter;
         doc.push(s.step);
-        doc.pixelsChanged(layer, null);
+        doc.pixelsChanged(layer, area);
         doc.emit("selection");
         this.current = s;
     }

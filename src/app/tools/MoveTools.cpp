@@ -227,9 +227,11 @@ void MoveSelectedTool::applyLive(const QTransform& t)
     QRect r = m_float->boundsFor(m_current) | m_float->boundsFor(t);
     if (m_first)
         r |= m_float->boundsFor(QTransform());
-    m_float->render(t, r);
+    // Mientras se arrastra, la versión rápida: al soltar, el paso del historial lo pinta con el
+    // muestreo elegido.
+    m_float->render(t, r, true);
     for (const FloatingPtr& extra : std::as_const(m_extra)) {
-        extra->render(t, r);
+        extra->render(t, r, true);
         doc->notifyPixelsChanged(extra->layer.get(), r);
     }
     m_current = t;

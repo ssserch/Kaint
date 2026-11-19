@@ -206,7 +206,10 @@ bool DiscordPresence::registerLaunchCommand(const QString& clientId, QString* er
             *error = f.errorString();
         return false;
     }
-    f.write(QStringLiteral("[Desktop Entry]\nName=Kaint\nExec=%1\nType=Application\nNoDisplay=true\n"
+    // Con %u, como Discord_Register: sin él, KDE (KIO) cree que Kaint no recibe direcciones,
+    // intenta descargar «discord-<ID>://…» con KIO y falla con «Protocolo desconocido». main.cpp ya
+    // descarta esa dirección al abrir Kaint.
+    f.write(QStringLiteral("[Desktop Entry]\nName=Kaint\nExec=%1 %u\nType=Application\nNoDisplay=true\n"
                            "Categories=Discord;Graphics;\nMimeType=x-scheme-handler/discord-%2;\n")
                 .arg(exec, id)
                 .toUtf8());
@@ -229,6 +232,18 @@ QJsonObject DiscordPresence::buildActivity(const PresenceInfo& info, const Prese
     QStringList state;
     if (!info.hasDocument) {
         details = QObject::tr("Sin imágenes abiertas");
+    } else if (info.gifEditor) {
+        // En el editor de GIF: el GIF (sin la capa ni la herramienta, que ahí no se usan).
+        details = options.showFile && !info.fileName.isEmpty() ? QObject::tr("Editando el GIF «%1»").arg(info.fileName)
+                                                               : QObject::tr("En el editor de GIF");
+        if (!minimal) {
+            state << QObject::tr("Editor de GIF");
+            if (options.showFileInfo) {
+                state << QObject::tr("%n fotogramas", nullptr, info.frames);
+                if (info.size.isValid())
+                    state << QStringLiteral("%1 × %2").arg(info.size.width()).arg(info.size.height());
+            }
+        }
     } else if (minimal) {
         details = options.showFile && !info.fileName.isEmpty() ? QObject::tr("Editando «%1»").arg(info.fileName)
                                                                : QObject::tr("Editando una imagen");
@@ -284,7 +299,7 @@ QJsonObject DiscordPresence::buildActivity(const PresenceInfo& info, const Prese
     // La herramienta va en el texto de la imagen grande: el Discord de Windows rechaza un
     // "small_text" sin imagen pequeña (y la actividad se quedaba en la primera, sin imágenes).
     QString largeText = QStringLiteral("Kaint %1").arg(QStringLiteral(KAINT_VERSION));
-    if (!minimal && options.showTool && info.hasDocument && !info.tool.isEmpty())
+    if (!minimal && options.showTool && info.hasDocument && !info.gifEditor && !info.tool.isEmpty())
         largeText += QStringLiteral(" · ") + info.tool;
     activity.insert(QStringLiteral("assets"), QJsonObject{{QStringLiteral("large_image"), largeImageKey()},
                                                           {QStringLiteral("large_text"), limited(largeText)}});

@@ -251,6 +251,12 @@ namespace Kaint.PdnHost
             return obj.TryGetValue(key, out v) && v != null ? Convert.ToDouble(v, CultureInfo.InvariantCulture) : def;
         }
 
+        public static bool Bool(Dictionary<string, object> obj, string key, bool def = false)
+        {
+            object v;
+            return obj.TryGetValue(key, out v) && v is bool ? (bool)v : def;
+        }
+
         public static List<object> List(Dictionary<string, object> obj, string key)
         {
             object v;

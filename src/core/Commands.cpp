@@ -1,5 +1,6 @@
 #include "core/Commands.h"
 
+#include "core/Parallel.h"
 #include "core/Raster.h"
 
 #include <QHash>
@@ -443,7 +444,7 @@ void replaceInto(QImage& img, const QRect& r, const QImage& src, const QImage& m
 
 } // namespace
 
-void FloatingPixels::render(const QTransform& t, const QRect& region) const
+void FloatingPixels::render(const QTransform& t, const QRect& region, bool draft) const
 {
     const QRect r = region.intersected(base.rect());
     if (r.isEmpty())
@@ -460,6 +461,26 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
         return;
     }
     QImage tmp(r.size(), kPremulFormat);
+    QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
+    if (draft && !exact) {
+        // Con QPainter, por franjas en paralelo (cada una, su propio QPainter sobre su trozo de
+        // 'tmp', que también se vacía allí): con imágenes grandes, el bicúbico con gamma tardaba de
+        // 90 a 150 ms en cada movimiento del ratón al estirar, y se notaba el retraso.
+        const bool smooth = interpolation != Resample::Interpolation::NearestNeighbor;
+        parallelRows(0, tmp.height(), [&](int y0, int y1) {
+            QImage band(tmp.scanLine(y0), tmp.width(), y1 - y0, tmp.bytesPerLine(), tmp.format());
+            band.fill(Qt::transparent);
+            QPainter p(&band);
+            p.setRenderHint(QPainter::SmoothPixmapTransform, smooth);
+            p.setTransform(toTmp * QTransform::fromTranslate(0, -y0));
+            p.drawImage(0, 0, pixels);
+        }, 64);
+        if (replacing)
+            replaceInto(img, r, tmp, placed.mask());
+        else
+            blendImage(img, r.topLeft(), tmp, BlendMode::Normal);
+        return;
+    }
     tmp.fill(Qt::transparent);
     if (exact) {
         QPainter p(&tmp);
@@ -469,7 +490,6 @@ void FloatingPixels::render(const QTransform& t, const QRect& region) const
         replaceInto(img, r, tmp, placed.mask());
         return;
     }
-    QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
     // Al reducir con bilineal o bicúbica, antes se promedia por áreas (si no, sale pixelado). El
     // vecino más próximo no: como en Paint.NET, cada píxel es uno de la imagen, sin mezclar (con el
     // promedio se veía suavizado, casi como el bicúbico).

@@ -6,6 +6,9 @@ import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
 
 export class StrokeTool extends Tool {
+    // Como en Kaint: las flechas mueven el pincel un píxel (Canvas.nudgePointer).
+    arrowKeysMovePointer() { return true; }
+
     get options() {
         return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "blend", "selectionQuality"];
     }
@@ -86,6 +89,8 @@ export class EraserTool extends StrokeTool {
 }
 
 export class PencilTool extends Tool {
+    arrowKeysMovePointer() { return true; }
+
     get id() { return "pencil"; }
     get name() { return tr("Lápiz"); }
     get icon() { return "pencil"; }

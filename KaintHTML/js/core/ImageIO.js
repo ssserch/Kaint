@@ -3,7 +3,7 @@
 // src/core/Ora.cpp y Psd.cpp de Kaint.
 import { decodeJxr, decodeWithMagick } from "./ExternalCodecs.js";
 import { Document, Layer } from "./Document.js";
-import { OraNames } from "./Raster.js";
+import { context, createCanvas, OraNames } from "./Raster.js";
 import { unzip, zip } from "./Zip.js";
 import * as Codecs from "./Codecs.js";
 import { iccFromImage, isSrgb, readIcc } from "./ColorProfiles.js";
@@ -46,10 +46,14 @@ for (const f of browserFormats)
 // Lo que se puede abrir (además de lo que entienda el navegador). HEIC y JPEG XL, solo si el
 // navegador los entiende (Safari).
 export const OpenAccept = "image/*,.jxr,.wdp,.hdp,.wmp,.ora,.pdn,.psd,.psb,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm,.pam,.pcx,.sgi,.rgb,.rgba,.bw,.ff," +
-    ".exif,.dib,.rle,.heic,.heif,.jxl";
+    ".exif,.dib,.rle,.heic,.heif,.jxl,.svg,.svgz,.hdr,.exr,.jp2,.j2k,.jpf,.pfm,.ras,.sun,.xcf,.tim,.icns";
 export const OpenExtensions = [".jxr", ".wdp", ".hdp", ".wmp", ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".exif", ".webp", ".gif", ".bmp", ".dib", ".rle", ".avif", ".heic",
                                ".heif", ".jxl", ".ico", ".cur", ".ora", ".pdn", ".psd", ".psb", ".tga", ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm",
-                               ".pbm", ".pnm", ".pam", ".pcx", ".sgi", ".rgb", ".rgba", ".bw", ".ff"];
+                               ".pbm", ".pnm", ".pam", ".pcx", ".sgi", ".rgb", ".rgba", ".bw", ".ff", ".svg", ".svgz", ".hdr", ".exr", ".jp2", ".j2k",
+                               ".jpf", ".pfm", ".ras", ".sun", ".xcf", ".tim", ".icns"];
+
+// Los que abre ImageMagick (magick-wasm) cuando el navegador no puede.
+const MagickExtensions = ["hdr", "exr", "jp2", "j2k", "jpf", "pfm", "ras", "sun", "xcf", "tim", "icns"];
 
 export function extensionOf(name) {
     return (name.split(".").pop() || "").toLowerCase();
@@ -161,20 +165,43 @@ export async function openFile(file) {
         if (image.dpi)
             doc.dpi = image.dpi;
         doc.colorProfile = await profileOf(bytes);
+    } else if (ext === "svg" || ext === "svgz" || file.type === "image/svg+xml") {
+        // SVG (como imagen, a su tamaño): createImageBitmap no lo lee; un <img> sí. El .svgz va
+        // comprimido con gzip.
+        let blob = file;
+        if (ext === "svgz" || (head[0] === 0x1f && head[1] === 0x8b))
+            blob = await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+        const url = URL.createObjectURL(new Blob([await blob.arrayBuffer()], { type: "image/svg+xml" }));
+        try {
+            const img = new Image();
+            img.src = url;
+            await img.decode();
+            const w = img.naturalWidth || 512, h = img.naturalHeight || 512;
+            const canvas = createCanvas(w, h);
+            context(canvas).drawImage(img, 0, 0, w, h);
+            doc = Document.fromImage(canvas, name);
+        } finally {
+            URL.revokeObjectURL(url);
+        }
     } else {
         const bytes = new Uint8Array(await file.arrayBuffer()), profile = await profileOf(bytes);
         let image;
         try {
             image = await decodeImage(file, profile ? "none" : "default");
         } catch (e) {
-            // HEIC, JPEG XL (y AVIF en navegadores viejos) solo los abren algunos navegadores:
-            // si no, ImageMagick (ExternalCodecs.js, se carga solo ahora).
-            if (!["heic", "heif", "hif", "jxl", "avif"].includes(ext))
+            // HEIC, JPEG XL (y AVIF en navegadores viejos) solo los abren algunos navegadores: si
+            // no, ImageMagick (ExternalCodecs.js, se carga solo ahora). Con él también se abren los
+            // que el navegador nunca lee (Radiance HDR, OpenEXR, JPEG 2000, PFM, Sun Raster, GIMP,
+            // PlayStation TIM, iconos de macOS).
+            const modern = ["heic", "heif", "hif", "jxl", "avif"].includes(ext);
+            if (!modern && !MagickExtensions.includes(ext))
                 throw e;
             let decoded;
             try {
-                decoded = await decodeWithMagick(bytes);
+                decoded = await decodeWithMagick(bytes, ext === "tim" ? "TIM" : null);
             } catch {
+                if (!modern)
+                    throw e;
                 throw new Error(tr("Este navegador no puede abrir imágenes %1. Prueba con Safari o con Kaint para el escritorio.", ext === "jxl" ? "JPEG XL" : ext === "avif" ? "AVIF" : "HEIC"));
             }
             doc = documentFrom(decoded.width, decoded.height, name, [{ name: tr("Fondo"), data: decoded.data }]);

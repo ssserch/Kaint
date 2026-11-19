@@ -19,6 +19,7 @@ import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations, enabled as animationsEnabled } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
+import { GifEditor } from "./GifEditor.js";
 import { applyThemeColors, applyWindowButtons } from "./Themes.js";
 import { applyBackground } from "./Background.js";
 import {
@@ -91,6 +92,10 @@ export class App extends EventTarget {
         this.effectValues = {};
         this.clipboard = null;
         this.view = new CanvasView(document.getElementById("view"), document.getElementById("workspace"));
+        // Archivo > Editor de GIF: la otra vista de cada imagen (como en Kaint, cada una recuerda la suya).
+        this.gifDocs = new Set();
+        this.gifEditor = new GifEditor(this);
+        document.getElementById("workspace").after(this.gifEditor.root);
         this.tools = new ToolManager(this, [
             // Las de PhotoCraft en sus sitios de la ventana Herramientas (solo con ellas activadas).
             RectSelectTool, MoveSelectedTool, LassoSelectTool, MoveSelectionTool, MagneticLassoTool, ObjectSelectionTool,
@@ -297,6 +302,34 @@ export class App extends EventTarget {
         this.updateStatus();
         updateActions();
         setWindowTitle(doc ? `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint` : "Kaint");
+        this.updateCentralView();
+    }
+
+    // Archivo > Editor de GIF: la imagen actual pasa de una vista a otra ('on' la fuerza).
+    toggleGifEditor(on = null) {
+        if (!this.doc)
+            return;
+        this.tools.finishCurrent();
+        const gif = on ?? !this.gifDocs.has(this.doc);
+        if (gif)
+            this.gifDocs.add(this.doc);
+        else
+            this.gifDocs.delete(this.doc);
+        this.updateCentralView();
+        updateActions();
+    }
+
+    updateCentralView() {
+        if (!this.gifEditor)
+            return;
+        const gif = !!this.doc && this.gifDocs.has(this.doc);
+        this.gifEditor.setOpenDocuments(this.docs);
+        this.gifEditor.setDocument(gif ? this.doc : null);
+        document.getElementById("workspace").hidden = gif;
+        document.documentElement.classList.toggle("gif-editing", gif);
+        this.gifEditor.show(gif);
+        if (!gif)
+            this.view.resized();
     }
 
     async closeDocument(doc, ask = true) {
@@ -327,6 +360,7 @@ export class App extends EventTarget {
         const i = this.docs.indexOf(doc);
         if (i < 0)
             return true;
+        this.gifDocs.delete(doc);
         this.docs.splice(i, 1);
         if (doc === this.doc) {
             // (Antes se ponía this.doc = null y setCurrent(null) no hacía nada: al cerrar la última,
@@ -1015,6 +1049,10 @@ export class App extends EventTarget {
         A("saveAll", tr("Guardar &todo"), "document-save-all", "Ctrl+Alt+S", c(() => this.saveAll()), has);
         A("saveAllAs", tr("Guardar to&dos..."), "document-save-all", null, c(() => this.saveAllAs()), has);
         A("print", tr("&Imprimir..."), "document-print", "Ctrl+P", c(() => this.print()), has);
+        // Editor de GIF: la imagen actual como una animación en una línea de tiempo (cada capa, un
+        // fotograma), con una interfaz de editor de vídeo; se vuelve con la misma opción.
+        A("gifEditor", tr("Editor de &GIF"), "media-playback-start", null, c(() => this.toggleGifEditor()), has,
+          () => !!this.doc && this.gifDocs.has(this.doc));
         A("close", tr("&Cerrar"), "document-close", "Ctrl+W", () => this.closeDocument(this.doc), has);
         const collabActive = () => !!this.collab?.active;
         // Colaboración: por P2P (la predeterminada) o en la red local, cada una con su configuración.
@@ -1201,7 +1239,8 @@ export class App extends EventTarget {
                          submenu: () => [{ text: tr("&P2P (por Internet)"), icon: "collab", submenu: () => [a("collabHost"), a("collabJoin"), "-", a("collabSettingsP2P")] },
                                          { text: tr("&Red local (LAN)"), icon: "collab", submenu: () => [a("collabHostLan"), a("collabJoinLan"), "-", a("collabSettingsLan")] },
                                          "-", a("collabWindow"), a("collabHistory"), a("collabLeave"), "-", a("collabSettings")] };
-        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("print"), "-", collab, "-", a("close"), a("closeAll")];
+        return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("gifEditor"), "-", a("print"), "-", collab, "-",
+                a("close"), a("closeAll")];
     }
 
     createToolBar() {
@@ -1480,6 +1519,10 @@ export class App extends EventTarget {
             if (typing)
                 return;
             const tool = this.tools.current;
+            if (!this.view.spaceDown && this.view.nudgePointer(e)) {
+                e.preventDefault();
+                return;
+            }
             if (e.key === " " && !tool?.wantsKeyboard()) {
                 if (!this.view.spaceDown) {
                     this.view.spaceDown = true;
@@ -1817,7 +1860,8 @@ export class App extends EventTarget {
     // Guarda como Kaint (MainWindow::save, saveAs y writeFile): en el archivo abierto si el
     // navegador deja escribir en él; si no, "Guardar como" con el diálogo del navegador (o el
     // nombre y el tipo, y se descarga).
-    async save(doc, saveAs = false) {
+    // 'ext': ese formato ya elegido (Exportar GIF del editor de GIF).
+    async save(doc, saveAs = false, ext = null) {
         if (!doc)
             return false;
         this.tools.finishCurrent();
@@ -1826,6 +1870,8 @@ export class App extends EventTarget {
         // Sugerencia: el mismo nombre; si su formato no se puede escribir (o es nueva y tiene
         // capas), OpenRaster.
         let name = doc.fileName || `${tr("Sin título")}.${doc.layers.length > 1 ? "ora" : "png"}`;
+        if (ext)
+            name = `${baseName(name)}.${ext}`;
         if (!this.formatOf(name))
             name = `${baseName(name)}.ora`;
         if (window.showSaveFilePicker && !window.KaintAndroid?.saveFile) {

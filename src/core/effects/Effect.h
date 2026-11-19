@@ -15,6 +15,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 using ParamValues = QVariantMap;
@@ -125,6 +126,9 @@ struct EffectContext {
     QColor secondary = Qt::white;
     QList<QColor> palette;
     EffectProgress* progress = nullptr;
+    // Con una ventana propia (showCustomDialog): recibe la imagen con el efecto cada vez que cambia
+    // algo en ella, para verlo en el lienzo (como en Paint.NET). Se llama desde otro hilo.
+    std::function<void(const QImage&)> dialogPreview;
 };
 
 struct RenderArgs {
@@ -188,6 +192,10 @@ void setBoltBaitEnabled(const QStringList& effectIds);
 bool boltBaitEnabled(const QString& effectId);
 ParamValues defaults(const Effect& effect, const EffectContext& ctx = EffectContext());
 
+// Fuera de la selección (o en su borde suavizado), 'after' vuelve a ser 'before': lo que hace
+// apply() con el resultado del efecto, para quien lo calcula aparte (la ventana propia de un
+// complemento). Las dos imágenes, del mismo tamaño y formato.
+void maskToSelection(const QImage& before, QImage& after, const Selection& selection);
 // Ejecuta el efecto respetando la selección (fuera de ella la imagen queda igual y en los
 // bordes suavizados se mezcla).
 QImage apply(const Effect& effect, const QImage& src, const Selection& selection, const ParamValues& values,

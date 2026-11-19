@@ -280,6 +280,73 @@ PdnBridge::~PdnBridge()
     stop();
 }
 
+namespace {
+
+std::mutex& effectsFolderMutex()
+{
+    static std::mutex m;
+    return m;
+}
+
+QStringList& effectsFolderList()
+{
+    static QStringList list;
+    return list;
+}
+
+#ifndef Q_OS_WIN
+// Como en Paint.NET, algunos complementos buscan los demás efectos en la carpeta Effects junto al
+// programa (Random Effect de pyrochild elige uno al azar entre ellos): el proceso auxiliar se
+// ejecuta desde una copia en la caché del usuario (mono no sigue un enlace simbólico al decir dónde
+// está el programa) con enlaces a sus bibliotecas, y él llena allí Effects con los complementos
+// activados. Si no se puede, el de siempre.
+QString launchHostPath(const QString& real)
+{
+    if (real.isEmpty())
+        return real;
+    const QString cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (cache.isEmpty())
+        return real;
+    const QString dir = cache + QStringLiteral("/pdnhost");
+    if (!QDir().mkpath(dir + QStringLiteral("/Effects")))
+        return real;
+    const QDir source = QFileInfo(real).absoluteDir();
+    for (const QFileInfo& f : source.entryInfoList(QDir::Files)) {
+        const QString dest = dir + QLatin1Char('/') + f.fileName();
+        const QFileInfo d(dest);
+        if (f.fileName().endsWith(QLatin1String(".exe")) || f.fileName().endsWith(QLatin1String(".config"))) {
+            // El programa (y su configuración), copiados si cambiaron; con un archivo temporal
+            // que se renombra, por si hay otro Kaint abierto.
+            QFile in(f.absoluteFilePath());
+            if (!in.open(QIODevice::ReadOnly))
+                return real;
+            const QByteArray data = in.readAll();
+            QFile current(dest);
+            if (!d.isSymLink() && current.open(QIODevice::ReadOnly) && current.readAll() == data)
+                continue;
+            current.close();
+            QSaveFile out(dest);
+            if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size() || !out.commit())
+                return real;
+            QFile::setPermissions(dest, f.permissions());
+        } else if (d.symLinkTarget() != f.absoluteFilePath()) {
+            QFile::remove(dest);
+            if (!QFile::link(f.absoluteFilePath(), dest))
+                return real;
+        }
+    }
+    return dir + QStringLiteral("/kaint-pdn-host.exe");
+}
+#endif
+
+} // namespace
+
+void PdnBridge::setEffectsFolder(const QStringList& assemblies)
+{
+    std::lock_guard lock(effectsFolderMutex());
+    effectsFolderList() = assemblies;
+}
+
 QString PdnBridge::hostPath()
 {
     const QString env = qEnvironmentVariable("KAINT_PDN_HOST");
@@ -449,9 +516,20 @@ bool PdnBridge::ensureStarted(QString* error)
     if (!debug)
         posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     const Runtime chosen = m_runtime;
+    // Ya, para que hostSidePath dé las rutas como las verá este proceso.
+    m_startedWith = chosen;
     SpawnEnvironment env;
     const QByteArray runner = QFile::encodeName(chosen == Runtime::Wine ? winePath() : monoPath());
-    const QByteArray host = QFile::encodeName(hostPath());
+    const QByteArray host = QFile::encodeName(launchHostPath(hostPath()));
+    {
+        // Los complementos de la carpeta Effects (como los ve el proceso auxiliar), uno por línea.
+        std::lock_guard lock(effectsFolderMutex());
+        QStringList paths;
+        for (const QString& a : std::as_const(effectsFolderList()))
+            paths << hostSidePath(a);
+        if (!paths.isEmpty())
+            env.set("KAINT_PDN_EFFECTS", paths.join(QLatin1Char('\n')).toUtf8());
+    }
     const QString openD2D = openD2DPath();
     if (chosen == Runtime::Wine) {
         // Wine, sin sus mensajes de depuración (salvo con KAINT_PDN_DEBUG), y con las DLL de
@@ -834,7 +912,8 @@ void PdnBridge::shutdown()
 }
 
 bool PdnBridge::readResponse(QJsonObject* out, int timeoutMs, const std::atomic_bool* cancel,
-                             EffectProgress* progress, int progressTotal, QString* error)
+                             EffectProgress* progress, int progressTotal, QString* error,
+                             const std::function<void()>& onPreview)
 {
     bool cancelSent = false;
     qint64 waited = 0;
@@ -848,6 +927,11 @@ bool PdnBridge::readResponse(QJsonObject* out, int timeoutMs, const std::atomic_
             if (obj.contains(QStringLiteral("ok"))) {
                 *out = obj;
                 return true;
+            }
+            // La vista previa de la ventana propia del complemento ya está en la memoria compartida.
+            if (onPreview && obj.contains(QStringLiteral("preview"))) {
+                onPreview();
+                continue;
             }
             if (progress && obj.contains(QStringLiteral("progress"))) {
                 const double total = std::max(1.0, obj.value(QStringLiteral("total")).toDouble());
@@ -996,9 +1080,29 @@ bool PdnBridge::showDialog(const QString& assembly, const QString& effectId, con
         {QStringLiteral("primary"), toArgb(ctx.primary)},
         {QStringLiteral("secondary"), toArgb(ctx.secondary)},
         {QStringLiteral("palette"), paletteJson(ctx)},
+        {QStringLiteral("preview"), bool(ctx.dialogPreview)},
     };
-    const QJsonObject reply = request(req, -1, error);
-    if (reply.isEmpty())
+    if (!writeLine(QJsonDocument(req).toJson(QJsonDocument::Compact))) {
+        stop();
+        if (error)
+            *error = QCoreApplication::translate("PdnBridge", "No se pudo comunicar con el proceso de compatibilidad.");
+        return false;
+    }
+    // Cada vista previa: la imagen con la zona calculada (la mitad de destino de la memoria
+    // compartida) para el lienzo.
+    std::function<void()> onPreview;
+    if (ctx.dialogPreview)
+        onPreview = [&] {
+            QImage shown = src.copy();
+            const uchar* out = m_shm + size_t(src.width()) * size_t(src.height()) * 4;
+            const int rowBytes = src.width() * 4;
+            for (int y = roi.top(); y <= roi.bottom(); ++y)
+                std::memcpy(shown.scanLine(y) + roi.left() * 4,
+                            out + size_t(y) * size_t(rowBytes) + size_t(roi.left()) * 4, size_t(roi.width()) * 4);
+            ctx.dialogPreview(shown);
+        };
+    QJsonObject reply;
+    if (!readResponse(&reply, -1, nullptr, nullptr, 0, error, onPreview))
         return false;
     if (!reply.value(QStringLiteral("ok")).toBool()) {
         if (error)

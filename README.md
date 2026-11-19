@@ -7,7 +7,7 @@
   [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg?logo=cplusplus)](CMakeLists.txt)
   [![Qt 6](https://img.shields.io/badge/Qt-6-41CD52.svg?logo=qt&logoColor=white)](https://www.qt.io/)
   [![Platforms: Linux | Windows](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-informational.svg)](#-install)
-  [![Paint.NET plugins](https://img.shields.io/badge/Paint.NET-plugins-8a2be2.svg)](#-features)
+  [![Paint.NET plugins](https://img.shields.io/badge/Paint.NET-plugins-8a2be2.svg)](#features)
   [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
   [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/E1E5ZOEH6)
@@ -25,243 +25,25 @@
 as a native application. It is made for KDE Plasma on Wayland, it also
 runs on Windows 10 and 11.
 
-[Features](#features) · [Opening and saving](#opening-and-saving) · [Make it yours](#make-it-yours) ·
-[Web version](#web-version) · [Install](#-install) · [License](#license)
-
-## Features
-
-<table>
+<table align="center">
   <tr>
-    <td width="50%" valign="top">
-      <h4>Paint.NET tools</h4>
-      Selections with their combine modes, move pixels or the selection (scale, rotate, movable
-      pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, gradients, lines and
-      curves, shapes and text, all with the same options bar. Pasted pixels replace what is
-      underneath, transparency included, like in Paint.NET (optional), and copied images keep
-      their transparency in other apps such as Discord or a web browser.
-    </td>
-    <td width="50%" valign="top">
-      <h4>Editable history</h4>
-      Click through the history like in Paint.NET. Gradients, lines, shapes, text and paint bucket
-      fills stay editable when you go back to one of their steps.
-    </td>
-  </tr>
-  <tr>
-    <td valign="top">
-      <h4>Layers</h4>
-      Blend modes, opacity, visibility and properties, with live thumbnails.
-    </td>
-    <td valign="top">
-      <h4>Adjustments and effects</h4>
-      Live preview while you tweak them, and <b>Repeat</b> (Ctrl+F) for the last one.
-    </td>
-  </tr>
-  <tr>
-    <td valign="top">
-      <h4>Plugins</h4>
-      Paint.NET effect plugins (.dll), through the .NET Framework built into Windows and, on Linux,
-      macOS and FreeBSD, with the plugin system you choose (in <b>Settings → Plugins</b> or the welcome
-      window): <b>OpenD2D</b> (mono with <a href="https://github.com/daijro/opend2d">OpenD2D</a>,
-      the open source Direct2D, DirectWrite and WIC, instead of Windows' own) or <b>Wine</b> 🍷 (the
-      plugins run inside Wine like a Windows program). With OpenD2D, whatever doesn't work with mono
-      (a plugin that doesn't load, or one of its effects that fails) can run with Wine, only that part,
-      and Kaint remembers it. Old Paint.NET 3 plugins are included: the ones that use its standard Amount, Two/Three
-      Amounts and Angle windows (early CodeLab plugins) open in Kaint's own effect window, with a live
-      preview. Plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
-      sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
-      develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
-      them. <b>paint.js plugins</b> (.paintjs) too, the same ones as the web version, with their
-      effects and file types (Photoshop PSD with layers, for example). <b>Settings → Plugins → Browse
-      Plugins…</b> is a short list of plugins chosen and tested for Kaint, installed with one click:
-      Kaint.HTML's paint.js plugins, PhotoCraft filters from the ArtCraft store and Paint.NET effect
-      plugins, each credited to its author (the button can be hidden in <b>Settings → User
-      interface</b>). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
-      your files or the internet; plugins that open their own HTML window only work in the web
-      version, and Kaint says so. Each effect of a plugin
-      can be turned on or off on its own, and native plugins can bring their own menu icon. In the
-      menus, plugin effects carry the green puzzle piece on the right (it can be turned off in
-      <b>Settings → Plugins</b>).
-    </td>
-    <td valign="top">
-      <h4>Formats</h4>
-      Paint.NET <b>.pdn</b>, OpenRaster (.ora) and <b>Photoshop (.psd and .psb)</b>, all with layers, PNG,
-      JPEG, WebP, AVIF, JPEG XL, HEIC, JPEG XR, BMP, TIFF, TGA, DDS, QOI, Netpbm (PPM, PGM, PBM, PAM), PCX,
-      SGI, Farbfeld, animated GIF, ICO and CUR (the full list is in <a href="#opening-and-saving">Opening
-      and saving</a>). PSD/PSB, TGA, DDS, QOI, PCX, SGI, Farbfeld and PAM are read and written by Kaint
-      itself, so they work everywhere: Photoshop files keep their pixel layers with
-      names, visibility, opacity and the blend modes both programs share (8, 16 and 32 bits per
-      channel, RGB, grayscale, indexed or bitmap; masks are applied, and files with clipping masks,
-      layer effects or adjustment layers open as their merged image, with a note saying why). AVIF,
-      JPEG XL, HEIC and JPEG XR come from Qt's image plugins (kimageformats) on Linux and from the
-      Windows codecs on Windows (JPEG XR is built in; HEIC, AVIF and JPEG XL need their Microsoft Store
-      extensions). Animated GIFs open as layers, as separate images, as a single image or with just the frames you pick, and
-      can be saved from the layers or from the open images you pick, with a playable preview and
-      ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
-      frames, global palette, crossfades and a background frame.
-    </td>
-  </tr>
-  <tr>
-    <td valign="top">
-      <h4>Icon packs, fonts and shortcuts</h4>
-      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview, or
-      make your own with the icon pack <b>Editor</b> (every icon side by side with Kaint's; save it
-      or export it as a .zip), add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
-      and change any keyboard shortcut in <b>Settings</b>.
-    </td>
-    <td valign="top">
-      <h4>Cursors, rulers and status bar</h4>
-      Painting tools use their icon as the cursor, sized like the system cursor and with the hot
-      spot on its tip; the selection tools, gradient, line, text and shapes keep the system pointer
-      (from your cursor theme, at its size and animated if it is) with a small icon beside it (the
-      chosen shape, for Shapes), like Paint.NET. To rotate, the move tools and Shapes show the hand in front of a curved double arrow that turns with it. Dark rulers (or the
-      toolbar color) that the floating windows never cover, and the tool's icon in the status bar.
-      Open and Save As use the system file dialog, the same one as Firefox (or Qt's, in
-      <b>Settings</b>).
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">
-      <h4>PhotoCraft features (optional)</h4>
-      Turn on <b>Settings → Plugins → Enable the PhotoCraft features</b> for more adjustments and
-      effects (Vibrance, Gradient Map, Channel Mixer, Photo Filter, Selective Color, Auto Contrast,
-      Color to Alpha, Polar Coordinates, the artistic, brush stroke, sketch and texture filter gallery
-      and more) and six retouching tools: <b>Magnetic Lasso</b> (the selection border snaps to the
-      edges as you trace), <b>Object Selection</b> (draw a box around an object, click the one the
-      Object Finder highlights, or <b>Select Subject</b>), <b>Remove</b> (paint over or around
-      something and it is filled from its surroundings), <b>Patch</b> (drag a selection to repair it
-      with another area, normal or content-aware), <b>Healing Brush</b> and <b>Spot Healing Brush</b>
-      (content-aware, create texture or proximity match). The long calculations run in the background
-      and Esc cancels them. They work the same in the web version, and in the menus and the Tools
-      window they carry the plugins' puzzle piece. Their algorithms are
-      PhotoCraft's, by the ArtCraft Team and the PhotoCraft
-      contributors (MIT, see <code>data/licenses/PhotoCraft-LICENSE.txt</code>).
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">
-      <h4>Collaborative mode</h4>
-      Host the current image and edit it together with other copies of Kaint or with browsers
-      running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
-      default: share the session code and the image goes straight from one computer to the other,
-      with WebRTC) or on your local network. Between copies
-      of Kaint and the web version changes appear in real time (in any combination); guests can also
-      edit a private draft with its own history and suggest it, and the host accepts it (or accepts
-      everything automatically): the change then shows up for everyone and in the host's history
-      as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
-      colored triangle with their name and tool, and only the host saves the image (guests export a
-      copy). The session image's tab turns yellow and shows whether the host's image is saved (the
-      crown) and whether a guest's exported copy is up to date (the computer); from the History
-      window everyone can see the host's history, and the host (and the guests it allows) can go
-      back to an earlier version for everyone. Sessions can be open, approved one by one, password protected or limited to the
-      computers whose ID the host added; on the local network nearby sessions are found
-      automatically and you can also join by IP (addresses and codes stay blurred until you click
-      them). Everything is in its own <b>Settings → Collaboration</b> section, with a simplified and
-      a compact view.
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">
-      <h4>Discord</h4>
-      Kaint can show what you're working on in your Discord profile (Rich Presence: the image, the
-      layer, the tool...). In a collaborative session it shows the session and how many people are in
-      it, and you can <b>invite people from Discord</b> to your P2P session (or let them use <b>Ask to
-      Join</b>): accepting on Discord doesn't let anyone straight in, since Kaint still asks for the
-      session's password or waits for your approval. Everything is in <b>Settings → Discord</b>.
-    </td>
-  </tr>
-  <tr>
-    <td valign="top">
-      <h4>Recovery copies</h4>
-      Unsaved images are kept safe in case Kaint closes unexpectedly.
-    </td>
-    <td valign="top">
-      <h4>Languages</h4>
-      English and Spanish, and your own: import, create, edit and export <b>custom languages</b>
-      (.kaintlang) in <b>Settings → User interface</b>, with the translator's name and page in
-      <b>About</b>. Anything a custom language doesn't translate appears in English.
-    </td>
+    <td align="center" width="110"><a href="#make-it-yours"><img src="data/ui-icons/menu_utilities_settings_icon.png" alt="" width="32"><br><sub><b>Make it yours</b></sub></a></td>
+    <td align="center" width="110"><a href="#features"><img src="img/kaint-32.png" alt="" width="32"><br><sub><b>Features</b></sub></a></td>
+    <td align="center" width="110"><a href="#gif-editor"><img src="data/ui-icons/menu_window_layers_icon.png" alt="" width="32"><br><sub><b>GIF Editor</b></sub></a></td>
+    <td align="center" width="110"><a href="#web-version"><img src="data/ui-icons/menu_help_pdn_website_icon.png" alt="" width="32"><br><sub><b>Web version</b></sub></a></td>
+    <td align="center" width="110"><a href="#opening-and-saving"><img src="data/ui-icons/menu_file_open_icon.png" alt="" width="32"><br><sub><b>Opening and saving</b></sub></a></td>
+    <td align="center" width="110"><a href="#-install"><img src="data/ui-icons/menu_file_save_icon.png" alt="" width="32"><br><sub><b>Install</b></sub></a></td>
+    <td align="center" width="110"><a href="#license"><img src="data/ui-icons/menu_help_about_icon.png" alt="" width="32"><br><sub><b>License</b></sub></a></td>
   </tr>
 </table>
 
-## Opening and saving
-
-✔ yes · ❌ no · ⚪ depends on the system, the browser or a plugin, and wasn't tested for this
-release. Formats marked ¹ come from Qt's image plugins (`qt6-imageformats` and `kimageformats` on
-Linux) or, on Windows, from the system's codecs: without them they don't appear in **Open** and
-**Save As**. Everything else is read and written by Kaint itself, so it works everywhere.
-
-### Images
-
-| Format | Extensions | Open | Save | Web / Android |
-| --- | --- | :---: | :---: | :---: |
-| Paint.NET, with its layers | `.pdn` | ✔ | ✔ | ✔ / ✔ |
-| OpenRaster, with its layers | `.ora` | ✔ | ✔ | ✔ / ✔ |
-| Photoshop, with its layers | `.psd` | ✔ | ✔ | ✔ / ✔ |
-| Photoshop large document, with its layers | `.psb` | ✔ | ✔ | ✔ / ✔ |
-| PNG (8, 24 or 32 bits, interlaced) | `.png` | ✔ | ✔ | ✔ / ✔ |
-| JPEG | `.jpg` `.jpeg` `.jpe` `.jfif` `.exif` | ✔ | ✔ | ✔ / ✔ |
-| WebP | `.webp` | ✔ | ✔ | ✔ / ✔ |
-| GIF, animated (frames as layers or images) | `.gif` | ✔ | ✔ | ✔ / ✔ |
-| BMP | `.bmp` `.dib` `.rle` | ✔ | ✔ | ✔ / ✔ |
-| TIFF | `.tif` `.tiff` | ✔ | ✔ | ✔ / ✔ |
-| TGA (8, 24 or 32 bits, RLE) | `.tga` | ✔ | ✔ | ✔ / ✔ |
-| DDS (DXT1, DXT3, DXT5 or uncompressed; saved uncompressed 32-bit) | `.dds` | ✔ | ✔ | ✔ / ✔ |
-| Windows icon, several sizes | `.ico` | ✔ | ✔ | ✔ / ✔ |
-| Windows cursor | `.cur` | ✔ | ✔ | ✔ / ✔ |
-| QOI | `.qoi` | ✔ | ✔ | ✔ / ✔ |
-| Netpbm | `.ppm` `.pgm` `.pbm` | ✔ | ✔ | ✔ / ✔ |
-| PAM (Netpbm with transparency) | `.pam` | ✔ | ✔ | ✔ / ✔ |
-| PCX (Paintbrush) | `.pcx` | ✔ | ✔ | ✔ / ✔ |
-| SGI (Silicon Graphics) | `.sgi` `.rgb` `.rgba` `.bw` | ✔ | ✔ | ✔ / ✔ |
-| Farbfeld | `.ff` | ✔ | ✔ | ✔ / ✔ |
-| AVIF ¹ | `.avif` | ✔ | ✔ | ✔ / ⚪ |
-| JPEG XL ¹ | `.jxl` | ✔ | ✔ | ⚪ / ⚪ |
-| HEIC / HEIF ¹ | `.heic` `.heif` `.hif` | ✔ | ✔ | ⚪ / ❌ |
-| JPEG XR ¹ | `.jxr` `.wdp` `.hdp` `.wmp` | ⚪ | ⚪ | ⚪ / ❌ |
-| OpenEXR ¹ | `.exr` | ✔ | ✔ | ❌ / ❌ |
-| JPEG 2000 ¹ | `.jp2` `.j2k` `.jpf` | ✔ | ✔ | ❌ / ❌ |
-| XPM, XBM, WBMP ¹ | `.xpm` `.xbm` `.wbmp` | ✔ | ✔ | ❌ / ❌ |
-| Softimage PIC ¹ | `.pic` | ✔ | ✔ | ❌ / ❌ |
-| macOS icon ¹ | `.icns` | ⚪ | ⚪ | ❌ / ❌ |
-| Radiance HDR ¹ | `.hdr` | ⚪ | ❌ | ❌ / ❌ |
-| Sun Raster ¹ | `.ras` `.sun` | ⚪ | ❌ | ❌ / ❌ |
-| Krita, merged image ¹ | `.kra` | ⚪ | ❌ | ❌ / ❌ |
-| GIMP, merged image ¹ | `.xcf` | ⚪ | ❌ | ❌ / ❌ |
-| Camera RAW ¹ | `.dng` `.cr2` `.cr3` `.nef` `.arw` `.orf` `.rw2` `.raf` `.pef` `.srw` | ⚪ | ❌ | ❌ / ❌ |
-| Animated Windows cursor ¹ | `.ani` | ⚪ | ❌ | ❌ / ❌ |
-| Pixar ¹ | `.pxr` | ⚪ | ❌ | ❌ / ❌ |
-| Amiga IFF ¹ | `.iff` `.ilbm` `.lbm` | ⚪ | ❌ | ❌ / ❌ |
-| PFM (floating point) ¹ | `.pfm` | ⚪ | ❌ | ❌ / ❌ |
-| PlayStation TIM ¹ | `.tim` | ⚪ | ❌ | ❌ / ❌ |
-| SVG, as an image (rasterized at its size) ¹ | `.svg` `.svgz` | ⚪ | ❌ | ⚪ / ❌ |
-| Formats of installed paint.js plugins (Photoshop with layers...) | `.paintjs` | ⚪ | ⚪ | ⚪ / ⚪ |
-
-¹ On Linux with `kimageformats` (and `qt6-imageformats`): the ✔ ones were saved and opened again
-with them. On Windows, JPEG XR is built in and HEIC, AVIF and JPEG XL need their Microsoft Store
-extensions. The web version opens AVIF with the browser and HEIC, JPEG XL and JPEG XR with
-magick-wasm or jpegxr.js when the browser can't; saving AVIF or JPEG XL depends on the browser.
-
-Photoshop files keep each layer's name, visibility, opacity and blend mode (the ones both programs
-share); PNG, JPEG, WebP and TIFF keep their color profile and resolution.
-
-### Other files
-
-| What | Extensions | Where |
-| --- | --- | --- |
-| Paint.NET effect plugins | `.dll` | Settings → Plugins |
-| Kaint native plugins | `.so` (Linux, macOS, FreeBSD), `.dll` (Windows) | Settings → Plugins |
-| PhotoCraft filter plugins | `.wasm` | Settings → Plugins |
-| LightCraft looks and develop presets | `.cube` `.3dl` `.xmp` | Settings → Plugins |
-| paint.js plugins | `.paintjs` | Settings → Plugins, or open it |
-| Paint.NET palettes | `.txt` | Colors window → palette menu |
-| Paint.NET shapes | `.xaml` | Settings → Shapes |
-| Fonts for the Text tool | `.ttf` `.otf` `.ttc` `.otc` `.woff` `.woff2` | Settings → Fonts |
-| Icon packs | `.zip` (with an `asset-pack.json`) | Settings → Icon packs |
-| Custom themes | `.json`, or `.zip` with their background | Settings → User interface → Custom theme |
-| Theme backgrounds | images, animated GIF or WebP, and videos (`.mp4` `.m4v` `.mov` `.webm` `.mkv` `.avi` `.wmv` `.mpg` `.mpeg` `.ogv` `.3gp`) | Custom theme editor |
-| Custom languages | `.kaintlang` | Settings → User interface |
-
 ## Make it yours
+
+<div align="center">
+  <img src="img/themes/windows7.png" alt="Windows 7 theme" width="32%">
+  <img src="img/themes/blue.png" alt="Blue theme" width="32%">
+  <img src="img/themes/windowsxp.png" alt="Windows XP theme" width="32%">
+</div>
 
 Kaint looks the way you want. Almost everything about its appearance can be changed from
 **Settings → User interface**, and every change shows at once:
@@ -463,13 +245,286 @@ color you choose for the glass of the windows (**Settings → User interface**).
 
 </details>
 
+## Features
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>Paint.NET tools</h4>
+      Selections with their combine modes, move pixels or the selection (scale, rotate, movable
+      pivot), brush, pencil, eraser, clone stamp, recolor, paint bucket, gradients, lines and
+      curves, shapes and text, all with the same options bar. Pasted pixels replace what is
+      underneath, transparency included, like in Paint.NET (optional), and copied images keep
+      their transparency in other apps such as Discord or a web browser.
+    </td>
+    <td width="50%" valign="top">
+      <h4>Editable history</h4>
+      Click through the history like in Paint.NET. Gradients, lines, shapes, text and paint bucket
+      fills stay editable when you go back to one of their steps.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Layers</h4>
+      Blend modes, opacity, visibility and properties, with live thumbnails.
+    </td>
+    <td valign="top">
+      <h4>Adjustments and effects</h4>
+      Live preview while you tweak them, and <b>Repeat</b> (Ctrl+F) for the last one.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Plugins</h4>
+      Paint.NET effect plugins (.dll), through the .NET Framework built into Windows and, on Linux,
+      macOS and FreeBSD, with the plugin system you choose (in <b>Settings → Plugins</b> or the welcome
+      window): <b>OpenD2D</b> (mono with <a href="https://github.com/daijro/opend2d">OpenD2D</a>,
+      the open source Direct2D, DirectWrite and WIC, instead of Windows' own) or <b>Wine</b> 🍷 (the
+      plugins run inside Wine like a Windows program). With OpenD2D, whatever doesn't work with mono
+      (a plugin that doesn't load, or one of its effects that fails) can run with Wine, only that part,
+      and Kaint remembers it. Old Paint.NET 3 plugins are included: the ones that use its standard Amount, Two/Three
+      Amounts and Angle windows (early CodeLab plugins) open in Kaint's own effect window, with a live
+      preview. Plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
+      sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
+      develop presets (.xmp), under <b>Effects → Plugins</b>; drop them on the window to install
+      them. <b>paint.js plugins</b> (.paintjs) too, the same ones as the web version, with their
+      effects and file types (Photoshop PSD with layers, for example). <b>Settings → Plugins → Browse
+      Plugins…</b> is a short list of plugins chosen and tested for Kaint, installed with one click:
+      Kaint.HTML's paint.js plugins, PhotoCraft filters from the ArtCraft store and Paint.NET effect
+      plugins, each credited to its author (the button can be hidden in <b>Settings → User
+      interface</b>). They run in a sandboxed JavaScript engine (QuickJS-ng) with no access to
+      your files or the internet; plugins that open their own HTML window only work in the web
+      version, and Kaint says so. Each effect of a plugin
+      can be turned on or off on its own, and native plugins can bring their own menu icon. In the
+      menus, plugin effects carry the green puzzle piece on the right (it can be turned off in
+      <b>Settings → Plugins</b>).
+    </td>
+    <td valign="top">
+      <h4>Formats</h4>
+      Paint.NET <b>.pdn</b>, OpenRaster (.ora) and <b>Photoshop (.psd and .psb)</b>, all with layers, PNG,
+      JPEG, WebP, AVIF, JPEG XL, HEIC, JPEG XR, BMP, TIFF, TGA, DDS, QOI, Netpbm (PPM, PGM, PBM, PAM), PCX,
+      SGI, Farbfeld, animated GIF, ICO and CUR (the full list is in <a href="#opening-and-saving">Opening
+      and saving</a>). PSD/PSB, TGA, DDS, QOI, PCX, SGI, Farbfeld and PAM are read and written by Kaint
+      itself, so they work everywhere: Photoshop files keep their pixel layers with
+      names, visibility, opacity and the blend modes both programs share (8, 16 and 32 bits per
+      channel, RGB, grayscale, indexed or bitmap; masks are applied, and files with clipping masks,
+      layer effects or adjustment layers open as their merged image, with a note saying why). AVIF,
+      JPEG XL, HEIC and JPEG XR come from Qt's image plugins (kimageformats) on Linux and from the
+      Windows codecs on Windows (JPEG XR is built in; HEIC, AVIF and JPEG XL need their Microsoft Store
+      extensions). Animated GIFs open as layers, as separate images, as a single image or with just the frames you pick, and
+      can be saved from the layers or from the open images you pick, with a playable preview and
+      ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
+      frames, global palette, crossfades and a background frame. <b>File → GIF Editor</b> turns
+      any image into a simple video-editor-style timeline: a media library with the open images
+      and the ones you import or drag in, a player, and one clip per frame to reorder, stretch,
+      duplicate, hide or edit with the tools, then export with the same GIF settings.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Icon packs, fonts and shortcuts</h4>
+      Install icon packs (.zip files with an <code>asset-pack.json</code>), each with a preview, or
+      make your own with the icon pack <b>Editor</b> (every icon side by side with Kaint's; save it
+      or export it as a .zip), add fonts for the Text tool and Paint.NET shapes (.xaml) without installing them system-wide,
+      and change any keyboard shortcut in <b>Settings</b>.
+    </td>
+    <td valign="top">
+      <h4>Cursors, rulers and status bar</h4>
+      Painting tools use their icon as the cursor, sized like the system cursor and with the hot
+      spot on its tip; the selection tools, gradient, line, text and shapes keep the system pointer
+      (from your cursor theme, at its size and animated if it is) with a small icon beside it (the
+      chosen shape, for Shapes), like Paint.NET. To rotate, the move tools and Shapes show the hand in front of a curved double arrow that turns with it. Dark rulers (or the
+      toolbar color) that the floating windows never cover, and the tool's icon in the status bar.
+      Open and Save As use the system file dialog, the same one as Firefox (or Qt's, in
+      <b>Settings</b>).
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <h4>PhotoCraft features (optional)</h4>
+      Turn on <b>Settings → Plugins → Enable the PhotoCraft features</b> for more adjustments and
+      effects (Vibrance, Gradient Map, Channel Mixer, Photo Filter, Selective Color, Auto Contrast,
+      Color to Alpha, Polar Coordinates, the artistic, brush stroke, sketch and texture filter gallery
+      and more) and six retouching tools: <b>Magnetic Lasso</b> (the selection border snaps to the
+      edges as you trace), <b>Object Selection</b> (draw a box around an object, click the one the
+      Object Finder highlights, or <b>Select Subject</b>), <b>Remove</b> (paint over or around
+      something and it is filled from its surroundings), <b>Patch</b> (drag a selection to repair it
+      with another area, normal or content-aware), <b>Healing Brush</b> and <b>Spot Healing Brush</b>
+      (content-aware, create texture or proximity match). The long calculations run in the background
+      and Esc cancels them. They work the same in the web version, and in the menus and the Tools
+      window they carry the plugins' puzzle piece. Their algorithms are
+      PhotoCraft's, by the ArtCraft Team and the PhotoCraft
+      contributors (MIT, see <code>data/licenses/PhotoCraft-LICENSE.txt</code>).
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <h4>Collaborative mode</h4>
+      Host the current image and edit it together with other copies of Kaint or with browsers
+      running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
+      default: share the session code and the image goes straight from one computer to the other,
+      with WebRTC) or on your local network. Between copies
+      of Kaint and the web version changes appear in real time (in any combination); guests can also
+      edit a private draft with its own history and suggest it, and the host accepts it (or accepts
+      everything automatically): the change then shows up for everyone and in the host's history
+      as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
+      colored triangle with their name and tool, and only the host saves the image (guests export a
+      copy). The session image's tab turns yellow and shows whether the host's image is saved (the
+      crown) and whether a guest's exported copy is up to date (the computer); from the History
+      window everyone can see the host's history, and the host (and the guests it allows) can go
+      back to an earlier version for everyone. Sessions can be open, approved one by one, password protected or limited to the
+      computers whose ID the host added; on the local network nearby sessions are found
+      automatically and you can also join by IP (addresses and codes stay blurred until you click
+      them). Everything is in its own <b>Settings → Collaboration</b> section, with a simplified and
+      a compact view.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <h4>Discord</h4>
+      Kaint can show what you're working on in your Discord profile (Rich Presence: the image, the
+      layer, the tool...). In a collaborative session it shows the session and how many people are in
+      it, and you can <b>invite people from Discord</b> to your P2P session (or let them use <b>Ask to
+      Join</b>): accepting on Discord doesn't let anyone straight in, since Kaint still asks for the
+      session's password or waits for your approval. Everything is in <b>Settings → Discord</b>.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Recovery copies</h4>
+      Unsaved images are kept safe in case Kaint closes unexpectedly.
+    </td>
+    <td valign="top">
+      <h4>Languages</h4>
+      English and Spanish, and your own: import, create, edit and export <b>custom languages</b>
+      (.kaintlang) in <b>Settings → User interface</b>, with the translator's name and page in
+      <b>About</b>. Anything a custom language doesn't translate appears in English.
+    </td>
+  </tr>
+</table>
+
+## GIF Editor
+
+<div align="center">
+  <img src="img/other/gifeditor-sample.gif" alt="A small animation made in the GIF editor" width="240">
+</div>
+
+**File → GIF Editor** turns the current image into an animation on a timeline, with a screen like
+a simple video editor; choosing it again goes back to the image editor (each image remembers which
+one it is in). Every frame is one of the image's layers, so the History, the tools and **Export
+GIF...** (with the usual palette, loops and effects) all work as always.
+
+- **Media**: the images open in Kaint and the ones you import or drag in from your folders
+  (still images and animated GIFs).
+- **Player**: play and pause, frame by frame, loop and preview speed.
+- **Timeline**: drop media or files on it, drag clips to reorder them, stretch a clip's edge to
+  change its duration, duplicate, hide, delete, reverse, back and forth, the same duration for all,
+  and edit any frame with the tools.
+
+<table>
+  <tr>
+    <td width="50%"><img src="img/other/gifeditor.png" alt="GIF editor, dark theme"></td>
+    <td width="50%"><img src="img/other/gifeditor-light.png" alt="GIF editor, light theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Dark</sub></td>
+    <td align="center"><sub>Light</sub></td>
+  </tr>
+</table>
+
 ## Web version
+
+<div align="center">
+  <a href="https://ssserch.github.io/kainthtml/"><img src="KaintHTML/assets/kainthtml-logo.png" alt="kaint.html" width="420"></a>
+</div>
 
 [**KaintHTML**](KaintHTML/README.md) is Kaint ported to the web: the same interface, tools,
 windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
 `KaintHTML` folder with any static web server (`python3 -m http.server`) and open it. Browsers on
 the network can also join a collaborative session hosted by Kaint by opening the address its
 session window shows, and any browser can host or join a P2P session with just its code.
+
+## Opening and saving
+
+✔ yes · ❌ no · ⚪ depends on the system, the browser or a plugin, and wasn't tested for this
+release. Formats marked ¹ come from Qt's image plugins (`qt6-imageformats` and `kimageformats` on
+Linux) or, on Windows, from the system's codecs: without them they don't appear in **Open** and
+**Save As**. Everything else is read and written by Kaint itself, so it works everywhere.
+
+### Images
+
+| Format | Extensions | Open | Save | Web / Android |
+| --- | --- | :---: | :---: | :---: |
+| Paint.NET, with its layers | `.pdn` | ✔ | ✔ | ✔ / ✔ |
+| OpenRaster, with its layers | `.ora` | ✔ | ✔ | ✔ / ✔ |
+| Photoshop, with its layers | `.psd` | ✔ | ✔ | ✔ / ✔ |
+| Photoshop large document, with its layers | `.psb` | ✔ | ✔ | ✔ / ✔ |
+| PNG (8, 24 or 32 bits, interlaced) | `.png` | ✔ | ✔ | ✔ / ✔ |
+| JPEG | `.jpg` `.jpeg` `.jpe` `.jfif` `.exif` | ✔ | ✔ | ✔ / ✔ |
+| WebP | `.webp` | ✔ | ✔ | ✔ / ✔ |
+| GIF, animated (frames as layers or images) | `.gif` | ✔ | ✔ | ✔ / ✔ |
+| BMP | `.bmp` `.dib` `.rle` | ✔ | ✔ | ✔ / ✔ |
+| TIFF | `.tif` `.tiff` | ✔ | ✔ | ✔ / ✔ |
+| TGA (8, 24 or 32 bits, RLE) | `.tga` | ✔ | ✔ | ✔ / ✔ |
+| DDS (DXT1, DXT3, DXT5 or uncompressed; saved uncompressed 32-bit) | `.dds` | ✔ | ✔ | ✔ / ✔ |
+| Windows icon, several sizes | `.ico` | ✔ | ✔ | ✔ / ✔ |
+| Windows cursor | `.cur` | ✔ | ✔ | ✔ / ✔ |
+| QOI | `.qoi` | ✔ | ✔ | ✔ / ✔ |
+| Netpbm | `.ppm` `.pgm` `.pbm` | ✔ | ✔ | ✔ / ✔ |
+| PAM (Netpbm with transparency) | `.pam` | ✔ | ✔ | ✔ / ✔ |
+| PCX (Paintbrush) | `.pcx` | ✔ | ✔ | ✔ / ✔ |
+| SGI (Silicon Graphics) | `.sgi` `.rgb` `.rgba` `.bw` | ✔ | ✔ | ✔ / ✔ |
+| Farbfeld | `.ff` | ✔ | ✔ | ✔ / ✔ |
+| AVIF ¹ | `.avif` | ✔ | ✔ | ✔ / ⚪ |
+| JPEG XL ¹ | `.jxl` | ✔ | ✔ | ✔ / ⚪ |
+| HEIC / HEIF ¹ | `.heic` `.heif` `.hif` | ✔ | ✔ | ✔ / ❌ |
+| JPEG XR ¹ | `.jxr` `.wdp` `.hdp` `.wmp` | ⚪ | ⚪ | ⚪ / ❌ |
+| OpenEXR ¹ | `.exr` | ✔ | ✔ | ✔ / ⚪ |
+| JPEG 2000 ¹ | `.jp2` `.j2k` `.jpf` | ✔ | ✔ | ✔ / ⚪ |
+| XPM, XBM, WBMP ¹ | `.xpm` `.xbm` `.wbmp` | ✔ | ✔ | ❌ / ❌ |
+| Softimage PIC ¹ | `.pic` | ✔ | ✔ | ❌ / ❌ |
+| macOS icon ¹ | `.icns` | ✔ | ✔ | ✔ / ⚪ |
+| Radiance HDR ¹ | `.hdr` | ✔ | ❌ | ✔ / ⚪ |
+| Sun Raster ¹ | `.ras` `.sun` | ✔ | ❌ | ✔ / ⚪ |
+| Krita, merged image ¹ | `.kra` | ⚪ | ❌ | ❌ / ❌ |
+| GIMP, merged image ¹ | `.xcf` | ✔ | ❌ | ✔ / ⚪ |
+| Camera RAW ¹ | `.dng` `.cr2` `.cr3` `.nef` `.arw` `.orf` `.rw2` `.raf` `.pef` `.srw` | ⚪ | ❌ | ❌ / ❌ |
+| Animated Windows cursor, first frame ¹ | `.ani` | ✔ | ❌ | ❌ / ❌ |
+| Pixar ¹ | `.pxr` | ⚪ | ❌ | ❌ / ❌ |
+| Amiga IFF ¹ | `.iff` `.ilbm` `.lbm` | ⚪ | ❌ | ❌ / ❌ |
+| PFM (floating point) ¹ | `.pfm` | ✔ | ❌ | ✔ / ⚪ |
+| PlayStation TIM ¹ | `.tim` | ✔ | ❌ | ✔ / ⚪ |
+| SVG, as an image (rasterized at its size) ¹ | `.svg` `.svgz` | ✔ | ❌ | ✔ / ⚪ |
+| Formats of installed paint.js plugins (Photoshop with layers...) | `.paintjs` | ⚪ | ⚪ | ⚪ / ⚪ |
+
+¹ On Linux with `kimageformats` (and `qt6-imageformats`): the ✔ ones were opened (and, the ones
+Kaint can save, saved and opened again) with the Kaint built for this release on Arch Linux. JPEG
+XR also needs `libjxr` (Arch: `sudo pacman -S libjxr`): without it, kimageformats doesn't load its
+JPEG XR plugin. On Windows, JPEG XR is built in and HEIC, AVIF and JPEG XL need their Microsoft
+Store extensions. The web version (tested in Chromium) opens AVIF with the browser, SVG as an image,
+JPEG XR with jpegxr.js, and HEIC, JPEG XL, OpenEXR, JPEG 2000, Radiance HDR, PFM, Sun Raster, GIMP,
+PlayStation TIM and macOS icons with magick-wasm when the browser can't; saving AVIF or JPEG XL
+depends on the browser.
+
+Photoshop files keep each layer's name, visibility, opacity and blend mode (the ones both programs
+share); PNG, JPEG, WebP and TIFF keep their color profile and resolution.
+
+### Other files
+
+| What | Extensions | Where |
+| --- | --- | --- |
+| Paint.NET effect plugins | `.dll` | Settings → Plugins |
+| Kaint native plugins | `.so` (Linux, macOS, FreeBSD), `.dll` (Windows) | Settings → Plugins |
+| PhotoCraft filter plugins | `.wasm` | Settings → Plugins |
+| LightCraft looks and develop presets | `.cube` `.3dl` `.xmp` | Settings → Plugins |
+| paint.js plugins | `.paintjs` | Settings → Plugins, or open it |
+| Paint.NET palettes | `.txt` | Colors window → palette menu |
+| Paint.NET shapes | `.xaml` | Settings → Shapes |
+| Fonts for the Text tool | `.ttf` `.otf` `.ttc` `.otc` `.woff` `.woff2` | Settings → Fonts |
+| Icon packs | `.zip` (with an `asset-pack.json`) | Settings → Icon packs |
+| Custom themes | `.json`, or `.zip` with their background | Settings → User interface → Custom theme |
+| Theme backgrounds | images, animated GIF or WebP, and videos (`.mp4` `.m4v` `.mov` `.webm` `.mkv` `.avi` `.wmv` `.mpg` `.mpeg` `.ogv` `.3gp`) | Custom theme editor |
+| Custom languages | `.kaintlang` | Settings → User interface |
 
 ## 📦 Install
 
@@ -656,7 +711,7 @@ built from its repository with Kaint. The P2P collaboration uses
 OpenSSL. The PhotoCraft features and tools reimplement algorithms of PhotoCraft by the ArtCraft Team
 and the PhotoCraft contributors (MIT, `data/licenses/PhotoCraft-LICENSE.txt`); the web version opens
 JPEG XR with [jpegxr](https://github.com/brion/jpegxr.js) by Brion Vibber, built on Microsoft's
-jxrlib (BSD), and HEIC, JPEG XL and AVIF (where the browser can't) with
+jxrlib (BSD), and HEIC, JPEG XL, AVIF, OpenEXR, JPEG 2000 and other formats (where the browser can't) with
 [magick-wasm](https://github.com/dlemstra/magick-wasm) by Dirk Lemstra (Apache-2.0). Plugins from
 **Browse Plugins** are the work of their authors, credited next to each one. Some features were
 inspired by [paint.rs](https://github.com/daijro/paint.rs) by daijro, such as having PhotoCraft's
@@ -667,3 +722,12 @@ tools in Kaint.
 Kaint is an independent project. It is not affiliated with, endorsed by or sponsored by dotPDN
 LLC or Rick Brewster. Paint.NET is a trademark of dotPDN LLC, mentioned only to describe the
 software Kaint is inspired by.
+
+---
+
+<div align="center">
+  <img src="img/kaint-128.png" alt="Kaint icon" width="96">
+  <p><b>Kaint</b> · made by <a href="https://github.com/ssserch">ssserch</a></p>
+
+  [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/E1E5ZOEH6)
+</div>

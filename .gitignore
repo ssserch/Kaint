@@ -36,3 +36,5 @@ kainttodo.pdf
 build-appimage-cache/
 build-appimage-compat/
 build-appimage-compat-*/
+releasetext.md
+testing_img/

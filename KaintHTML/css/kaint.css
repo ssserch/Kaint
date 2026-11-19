@@ -169,7 +169,7 @@ u {
     border: 1px solid var(--line);
     border-bottom: none;
     border-radius: var(--radius) var(--radius) 0 0;
-    padding: 1px 2px;
+    padding: 1px 2px 1px 4.5px;
     min-height: 26px;
 }
 
@@ -178,7 +178,9 @@ u {
 }
 
 .menubar > .menu-title {
-    padding: 3px 8px;
+    /* Como los menús de Kaint: Qt añade unos 7 px a cada menú además del relleno de su hoja de
+       estilo (8 px a cada lado); así «Efectos» queda encima de la cuadrícula y la regla. */
+    padding: 3px 11.5px;
     border: 1px solid transparent;
     border-radius: var(--radius);
     cursor: default;
@@ -3084,12 +3086,13 @@ fieldset.group > legend {
 
 :root.pdn .menubar {
     border: none;
-    padding: 0 3px;
+    padding: 0 3px 0 7.25px;
 }
 
 :root.pdn .menubar > .menu-title {
-    /* Como los menús de Kaint con el aspecto de Paint.NET (6 px a cada lado). */
-    padding: 3px 6px;
+    /* Como los menús de Kaint con el aspecto de Paint.NET (4 px a cada lado más los unos 7 px que
+       añade Qt): «Efectos» queda encima de la cuadrícula y la regla, como en Kaint. */
+    padding: 3px 7.5px;
 }
 
 :root.pdn #main-toolbar {
@@ -3601,6 +3604,7 @@ fieldset.group > legend {
     flex-wrap: wrap;
     align-self: end;
     margin-left: 2px;
+    padding-left: 3px;
 }
 
 :root.phone .menubar > .menu-title {
@@ -4986,7 +4990,12 @@ html, body {
     border-radius: 0;
 }
 
-/* Barras de desplazamiento ocultas (Configuración; en el teléfono, por defecto). */
+/* Barras de desplazamiento ocultas (Configuración; en el teléfono, por defecto): la imagen llega
+   hasta los bordes (antes quedaba su hueco a la derecha y abajo y la imagen se veía cortada). */
+.workspace.no-scrollbars {
+    --scrollbar: 0px;
+}
+
 .workspace.no-scrollbars .scrollbar,
 .workspace.no-scrollbars .scroll-corner {
     display: none;
@@ -5038,4 +5047,320 @@ html, body {
     width: 100%;
     box-sizing: border-box;
     margin: 0 0 8px;
+}
+
+/* --- Editor de GIF (Archivo > Editor de GIF) ----------------------------------------------- */
+
+#gif-editor { grid-row: 3; }
+
+:root.gif-editing #tool-options {
+    display: none;
+}
+
+.gif-editor {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    /* La línea de tiempo se desplaza dentro: no ensancha el editor. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 6px;
+    min-height: 0;
+    background: var(--window);
+    color: var(--text);
+    overflow: hidden;
+}
+
+.gif-editor[hidden] {
+    display: none;
+}
+
+.gif-head, .gif-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.gif-title {
+    flex: 1;
+    font-weight: bold;
+    font-size: 1.08em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gif-timeline {
+    min-width: 0;
+}
+
+.gif-button {
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 26px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+.gif-button:disabled, .gif-editor input:disabled {
+    opacity: 0.5;
+}
+
+.gif-top {
+    display: grid;
+    grid-template-columns: minmax(150px, 2fr) minmax(0, 5fr);
+    gap: 6px;
+    min-height: 0;
+}
+
+.gif-bin, .gif-player {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    min-width: 0;
+}
+
+.gif-section-title {
+    font-weight: bold;
+}
+
+.gif-media-list {
+    flex: 1;
+    min-height: 60px;
+    overflow: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 6px;
+    padding: 6px;
+    background: var(--base);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.gif-media {
+    width: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: 0.85em;
+    text-align: center;
+    cursor: grab;
+    user-select: none;
+}
+
+.gif-media span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gif-media:hover {
+    background: var(--hover);
+    border-color: var(--hover-border);
+}
+
+.gif-media.selected {
+    background: var(--selection);
+    border-color: var(--selection-border);
+}
+
+.gif-preview-box {
+    flex: 1;
+    min-height: 120px;
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius);
+}
+
+.gif-preview {
+    position: absolute;
+    inset: 0;
+}
+
+.gif-transport .gif-button {
+    min-width: 30px;
+    justify-content: center;
+    font-size: 1.05em;
+}
+
+.gif-time {
+    margin-left: 8px;
+    font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+    font-size: 0.92em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gif-stretch {
+    flex: 1;
+}
+
+.gif-gap {
+    width: 8px;
+    flex: none;
+}
+
+.gif-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.gif-toolbar {
+    flex-wrap: wrap;
+}
+
+.gif-delay {
+    width: 72px;
+}
+
+.gif-zoom {
+    width: 130px;
+}
+
+.gif-scroller {
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--base);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.gif-lane {
+    position: relative;
+    height: 112px;
+    touch-action: pan-x;
+}
+
+.gif-ruler {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 22px;
+    background: var(--window);
+    border-bottom: 1px solid var(--line);
+}
+
+.gif-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 28px;
+    height: 74px;
+}
+
+.gif-clip {
+    position: absolute;
+    top: 0;
+    height: 74px;
+    box-sizing: border-box;
+    background: var(--button);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+}
+
+.gif-clip.selected {
+    background: var(--accent);
+    border-color: var(--selection-border);
+    color: #ffffff;
+}
+
+.gif-clip.hidden-frame {
+    opacity: 0.45;
+}
+
+.gif-clip-thumb {
+    display: block;
+    margin: 3px auto 0;
+    max-width: calc(100% - 6px);
+    max-height: 50px;
+    pointer-events: none;
+}
+
+.gif-clip-label {
+    position: absolute;
+    left: 4px;
+    right: 6px;
+    bottom: 2px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.gif-clip-edge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 7px;
+    cursor: ew-resize;
+    background: linear-gradient(to right, transparent 3px, var(--line) 3px, var(--line) 5px, transparent 5px) no-repeat center / 100% 16px;
+}
+
+.gif-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e63c3c;
+    pointer-events: none;
+}
+
+.gif-playhead::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: 0;
+    border: 6px solid transparent;
+    border-top-color: #e63c3c;
+}
+
+.gif-drop-mark {
+    position: absolute;
+    top: 24px;
+    height: 82px;
+    width: 3px;
+    background: var(--accent);
+    pointer-events: none;
+}
+
+.gif-empty {
+    position: absolute;
+    left: 14px;
+    top: 28px;
+    height: 74px;
+    display: flex;
+    align-items: center;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.gif-empty[hidden], .gif-drop-mark[hidden] {
+    display: none;
+}
+
+/* En el teléfono: la biblioteca debajo de la vista previa. */
+:root.phone .gif-top {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 3fr) minmax(90px, 1fr);
+}
+
+:root.phone .gif-top > .gif-bin {
+    order: 2;
 }

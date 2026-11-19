@@ -53,7 +53,11 @@ export class CanvasView extends EventTarget {
         workspace.appendChild(this.miniIcon);
         this.rulersVisible = !!Settings.get("rulers");
         workspace.classList.toggle("rulers", this.rulersVisible);
-        new ResizeObserver(() => this.resized()).observe(workspace);
+        // También el lienzo: mostrar u ocultar las barras de desplazamiento o las reglas le cambia el
+        // tamaño sin cambiar el del área de trabajo.
+        const observer = new ResizeObserver(() => this.resized());
+        observer.observe(workspace);
+        observer.observe(canvas);
         this.installEvents();
         this.installScrollbars();
         this.installRotationChip();
@@ -1608,6 +1612,34 @@ export class CanvasView extends EventTarget {
             return;
         this.setCursor(this.tool.cursor?.() ?? "default");
         this.tool.onPointerMove?.({ ...this.mouse, buttons: 0 });
+    }
+
+    // Como Kaint (y Paint.NET): con las herramientas de pintar, las flechas mueven el pincel de un
+    // píxel al siguiente (con Ctrl, diez); si se está pintando, el trazo sigue. El navegador no deja
+    // mover el puntero del sistema: lo sigue el contorno del pincel.
+    nudgePointer(e) {
+        const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+        if (!d || e.altKey || e.shiftKey || e.metaKey || !this.doc || this.panning || !this.tool?.arrowKeysMovePointer?.())
+            return false;
+        const step = e.ctrlKey ? 10 : 1;
+        let from = this.mouse;
+        if (!from) {
+            const v = this.viewSize(), at = this.lastPointer || { x: v.w / 2, y: v.h / 2 };
+            const view = this.screenToView(at.x, at.y);
+            from = { ...this.viewToImage(view.x, view.y), pressure: 0.5, pointerType: "mouse" };
+        }
+        const x = Math.floor(from.x) + 0.5 + d[0] * step, y = Math.floor(from.y) + 0.5 + d[1] * step;
+        const v = this.imageToView(x, y);
+        const te = { button: "left", pressure: 0.5, pointerType: "mouse", ...from, x, y, vx: v.x, vy: v.y,
+                     shift: false, ctrl: false, alt: false, original: null };
+        this.mouse = te;
+        this.lastMouse = { x, y };
+        if (this.dragEvent)
+            this.dragEvent = te;
+        this.dispatchEvent(new CustomEvent("cursor", { detail: te }));
+        this.tool.onPointerMove?.(te);
+        this.update();
+        return true;
     }
 
     pointerMove(e) {

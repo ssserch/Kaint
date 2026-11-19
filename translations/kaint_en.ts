@@ -1369,6 +1369,266 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>GifEditor</name>
+    <message>
+        <source>Sin fotogramas: arrastra imágenes o GIF a la línea de tiempo</source>
+        <translation>No frames: drag images or GIFs to the timeline</translation>
+    </message>
+    <message>
+        <source>Arrastra aquí imágenes o GIF (de la biblioteca o de tus carpetas)</source>
+        <translation>Drag images or GIFs here (from the library or your folders)</translation>
+    </message>
+    <message>
+        <source>Editor de imágenes</source>
+        <translation>Image editor</translation>
+    </message>
+    <message>
+        <source>Vuelve a editar esta imagen con las herramientas (cada fotograma es una capa).</source>
+        <translation>Go back to editing this image with the tools (each frame is a layer).</translation>
+    </message>
+    <message>
+        <source>Exportar GIF...</source>
+        <translation>Export GIF...</translation>
+    </message>
+    <message>
+        <source>Guarda la animación como GIF, con la configuración de siempre (paleta, duración, repeticiones, efectos...).</source>
+        <translation>Saves the animation as a GIF, with the usual settings (palette, duration, loops, effects...).</translation>
+    </message>
+    <message>
+        <source>Medios</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final).</source>
+        <translation>The images open in Kaint and the ones you import. Drag them to the timeline (or double-click to add them at the end).</translation>
+    </message>
+    <message>
+        <source>Importar...</source>
+        <translation>Import...</translation>
+    </message>
+    <message>
+        <source>Importar imágenes o GIF</source>
+        <translation>Import images or GIFs</translation>
+    </message>
+    <message>
+        <source>Añadir</source>
+        <translation>Add</translation>
+    </message>
+    <message>
+        <source>Añade los medios elegidos detrás del fotograma elegido.</source>
+        <translation>Adds the chosen media after the chosen frame.</translation>
+    </message>
+    <message>
+        <source>Primer fotograma (Inicio)</source>
+        <translation>First frame (Home)</translation>
+    </message>
+    <message>
+        <source>Fotograma anterior (←)</source>
+        <translation>Previous frame (←)</translation>
+    </message>
+    <message>
+        <source>Reproducir o pausar (Espacio)</source>
+        <translation>Play or pause (Space)</translation>
+    </message>
+    <message>
+        <source>Detener</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <source>Fotograma siguiente (→)</source>
+        <translation>Next frame (→)</translation>
+    </message>
+    <message>
+        <source>Último fotograma (Fin)</source>
+        <translation>Last frame (End)</translation>
+    </message>
+    <message>
+        <source>Repetir</source>
+        <translation>Loop</translation>
+    </message>
+    <message>
+        <source>Velocidad de la vista previa (no cambia el GIF)</source>
+        <translation>Preview speed (does not change the GIF)</translation>
+    </message>
+    <message>
+        <source>Deshacer</source>
+        <translation>Undo</translation>
+    </message>
+    <message>
+        <source>Rehacer</source>
+        <translation>Redo</translation>
+    </message>
+    <message>
+        <source>Duplicar</source>
+        <translation>Duplicate</translation>
+    </message>
+    <message>
+        <source>Duplica el fotograma elegido</source>
+        <translation>Duplicates the chosen frame</translation>
+    </message>
+    <message>
+        <source>Eliminar</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Quita el fotograma elegido (Supr)</source>
+        <translation>Removes the chosen frame (Del)</translation>
+    </message>
+    <message>
+        <source>Ocultar o mostrar el fotograma (los ocultos no van en el GIF)</source>
+        <translation>Hide or show the frame (hidden ones are left out of the GIF)</translation>
+    </message>
+    <message>
+        <source>Editar el fotograma con las herramientas</source>
+        <translation>Edit the frame with the tools</translation>
+    </message>
+    <message>
+        <source>Duración:</source>
+        <translation>Duration:</translation>
+    </message>
+    <message>
+        <source> ms</source>
+        <translation> ms</translation>
+    </message>
+    <message>
+        <source>Cuánto se ve el fotograma elegido</source>
+        <translation>How long the chosen frame is shown</translation>
+    </message>
+    <message>
+        <source>A todos</source>
+        <translation>To all</translation>
+    </message>
+    <message>
+        <source>La misma duración para todos los fotogramas</source>
+        <translation>The same duration for every frame</translation>
+    </message>
+    <message>
+        <source>Invertir</source>
+        <translation>Reverse</translation>
+    </message>
+    <message>
+        <source>El último fotograma pasa a ser el primero</source>
+        <translation>The last frame becomes the first</translation>
+    </message>
+    <message>
+        <source>Ida y vuelta</source>
+        <translation>Back and forth</translation>
+    </message>
+    <message>
+        <source>Añade los fotogramas al revés al final: la animación va y vuelve</source>
+        <translation>Adds the frames in reverse at the end: the animation goes back and forth</translation>
+    </message>
+    <message>
+        <source>Zum:</source>
+        <translation>Zoom:</translation>
+    </message>
+    <message>
+        <source>Zum de la línea de tiempo (también con Ctrl y la rueda)</source>
+        <translation>Timeline zoom (also with Ctrl and the wheel)</translation>
+    </message>
+    <message>
+        <source>%1 (abierta)</source>
+        <translation>%1 (open)</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 (%n fotogramas)</source>
+        <translation>
+            <numerusform>%1 (%n frame)</numerusform>
+            <numerusform>%1 (%n frames)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>no es una imagen</source>
+        <translation>not an image</translation>
+    </message>
+    <message>
+        <source>Importar</source>
+        <translation>Import</translation>
+    </message>
+    <message>
+        <source>No se pudieron importar:
+%1</source>
+        <translation>Could not import:
+%1</translation>
+    </message>
+    <message>
+        <source>Editor de GIF: %1</source>
+        <translation>GIF editor: %1</translation>
+    </message>
+    <message>
+        <source>Editor de GIF</source>
+        <translation>GIF editor</translation>
+    </message>
+    <message>
+        <source>Fotograma %1 de %2</source>
+        <translation>Frame %1 of %2</translation>
+    </message>
+    <message>
+        <source>Fotograma %1</source>
+        <translation>Frame %1</translation>
+    </message>
+    <message>
+        <source>Añadir «%1»</source>
+        <translation>Add “%1”</translation>
+    </message>
+    <message>
+        <source>Añadir imágenes</source>
+        <translation>Add images</translation>
+    </message>
+    <message>
+        <source>Mover fotograma</source>
+        <translation>Move frame</translation>
+    </message>
+    <message>
+        <source>Duración del fotograma</source>
+        <translation>Frame duration</translation>
+    </message>
+    <message>
+        <source>Duración de todos los fotogramas</source>
+        <translation>Duration of all frames</translation>
+    </message>
+    <message>
+        <source>Eliminar fotograma</source>
+        <translation>Delete frame</translation>
+    </message>
+    <message>
+        <source>Duplicar fotograma</source>
+        <translation>Duplicate frame</translation>
+    </message>
+    <message>
+        <source>Mostrar fotograma</source>
+        <translation>Show frame</translation>
+    </message>
+    <message>
+        <source>Ocultar fotograma</source>
+        <translation>Hide frame</translation>
+    </message>
+    <message>
+        <source>Invertir el orden</source>
+        <translation>Reverse order</translation>
+    </message>
+    <message>
+        <source>Duración del fotograma %1 (ms):</source>
+        <translation>Duration of frame %1 (ms):</translation>
+    </message>
+    <message>
+        <source>Duración...</source>
+        <translation>Duration...</translation>
+    </message>
+    <message>
+        <source>Mostrar</source>
+        <translation>Show</translation>
+    </message>
+    <message>
+        <source>Ocultar</source>
+        <translation>Hide</translation>
+    </message>
+    <message>
+        <source>Editar con las herramientas</source>
+        <translation>Edit with the tools</translation>
+    </message>
+</context>
+<context>
     <name>GifFramesDialog</name>
     <message>
         <source>Elegir los fotogramas</source>
@@ -2000,6 +2260,14 @@ Opacity: %2 · Blend: %3</translation>
         <translation>&amp;Print...</translation>
     </message>
     <message>
+        <source>Editor de &amp;GIF</source>
+        <translation>&amp;GIF Editor</translation>
+    </message>
+    <message>
+        <source>Edita esta imagen como un GIF animado, con una línea de tiempo (vuelve a elegirlo para volver al editor de imágenes)</source>
+        <translation>Edit this image as an animated GIF, on a timeline (choose it again to go back to the image editor)</translation>
+    </message>
+    <message>
         <source>&amp;Cerrar</source>
         <translation>&amp;Close</translation>
     </message>
@@ -2294,6 +2562,10 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>%1 (de %2)</source>
         <translation>%1 (from %2)</translation>
+    </message>
+    <message>
+        <source>Exportar GIF</source>
+        <translation>Export GIF</translation>
     </message>
     <message>
         <source>Efectos añadidos (en Ajustes o Efectos): %1</source>
@@ -4036,6 +4308,25 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Editing “%1”</translation>
     </message>
     <message>
+        <source>Editando el GIF «%1»</source>
+        <translation>Editing the GIF “%1”</translation>
+    </message>
+    <message>
+        <source>En el editor de GIF</source>
+        <translation>In the GIF editor</translation>
+    </message>
+    <message>
+        <source>Editor de GIF</source>
+        <translation>GIF editor</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotogramas</source>
+        <translation>
+            <numerusform>%n frame</numerusform>
+            <numerusform>%n frames</numerusform>
+        </translation>
+    </message>
+    <message>
         <source>Editando una imagen</source>
         <translation>Editing an image</translation>
     </message>
@@ -4128,6 +4419,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Ventanas translúcidas en la captura (yes o no).</source>
         <translation>Translucent windows in the screenshot (yes or no).</translation>
+    </message>
+    <message>
+        <source>La primera imagen en el editor de GIF en la captura (yes o no).</source>
+        <translation>The first image in the GIF editor in the screenshot (yes or no).</translation>
     </message>
     <message>
         <source>Las funciones de PhotoCraft en la captura (yes o no).</source>

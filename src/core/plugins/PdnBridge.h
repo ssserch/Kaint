@@ -27,6 +27,9 @@ public:
     // Ruta de kaint-pdn-host.exe (junto al ejecutable, en share/kaint o en KAINT_PDN_HOST), de
     // mono y de wine; vacías si no están.
     static QString hostPath();
+    // Los complementos de Paint.NET activados (PluginManager los da al cambiar): el proceso auxiliar
+    // los pone en su carpeta Effects, donde los buscan complementos como Random Effect.
+    static void setEffectsFolder(const QStringList& assemblies);
     static QString monoPath();
     static QString winePath();
     // Carpeta con las bibliotecas de OpenD2D (libd2d1, libdwrite y libwindowscodecs) que se
@@ -82,7 +85,7 @@ private:
     void stop();
     bool writeLine(const QByteArray& line);
     bool readResponse(QJsonObject* out, int timeoutMs, const std::atomic_bool* cancel, EffectProgress* progress,
-                      int progressTotal, QString* error);
+                      int progressTotal, QString* error, const std::function<void()>& onPreview = {});
     bool prepareShared(const QImage& src, QString* error);
     QJsonObject request(const QJsonObject& req, int timeoutMs, QString* error);
     // Según el sistema: leer lo que haya llegado (1 sí, 0 nada en el plazo, -1 se cerró), crear la

@@ -238,6 +238,7 @@ add_library(kaintui STATIC
     src/app/SystemCursors.cpp
     src/app/UserFonts.cpp
     src/app/VideoFrames.cpp
+    src/app/GifEditor.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp

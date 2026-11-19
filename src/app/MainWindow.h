@@ -63,7 +63,7 @@ public:
     bool restartRequested() const { return m_restartRequested; }
     // Captura de muestra (--screenpreview): abre las imágenes (la primera queda como actual, las
     // demás en la barra de arriba) y guarda la ventana en 'output'. Devuelve el error, si lo hay.
-    QString screenPreview(const QStringList& files, const QString& output);
+    QString screenPreview(const QStringList& files, const QString& output, bool gifEditor = false);
 
 protected:
     void changeEvent(QEvent* e) override;
@@ -105,7 +105,11 @@ private:
     void open();
     void acquireFromScanner();
     bool save(Document* doc);
-    bool saveAs(Document* doc);
+    // Con 'suffix' («gif»), ese formato ya elegido (Exportar GIF del editor de GIF).
+    bool saveAs(Document* doc, const QString& suffix = {});
+    // Archivo > Editor de GIF: la imagen actual pasa de una vista a otra.
+    void toggleGifEditor();
+    void updateCentralView();
     bool saveAll();
     // "Guardar todos": nombre, formato y orden de todas las imágenes abiertas en un diálogo.
     void saveAllAs();
@@ -216,6 +220,12 @@ private:
 
     Canvas* m_canvas;
     Workspace* m_workspace;
+    // El área central: el lienzo con sus ventanas o, con Archivo > Editor de GIF, el editor de GIF
+    // (cada imagen recuerda en cuál está).
+    class QStackedWidget* m_central = nullptr;
+    class GifEditor* m_gifEditor = nullptr;
+    QSet<Document*> m_gifDocs;
+    bool m_optionsHiddenForGif = false;
     CollabController* m_collab = nullptr;
     ToolManager* m_tools;
     ToolOptionsBar* m_options = nullptr;

@@ -98,7 +98,8 @@ export async function decodeJxr(bytes) {
 }
 
 // Cualquier formato que entienda ImageMagick → { width, height, data: Uint8ClampedArray RGBA }.
-export async function decodeWithMagick(bytes) {
+// 'format': el nombre del formato de ImageMagick para los que no se reconocen por su cabecera (TIM).
+export async function decodeWithMagick(bytes, format = null) {
     magick ??= (async () => {
         const mod = await import(new URL("magick/index.js", base).href);
         await mod.initializeImageMagick(new URL("magick/magick.wasm", base));
@@ -107,11 +108,15 @@ export async function decodeWithMagick(bytes) {
     const mod = await magick;
     return new Promise((resolve, reject) => {
         try {
-            mod.ImageMagick.read(bytes, (image) => {
+            const read = (image) => {
                 image.depth = 8;
                 const width = image.width, height = image.height;
                 image.write(mod.MagickFormat.Rgba, (data) => resolve({ width, height, data: new Uint8ClampedArray(data) }));
-            });
+            };
+            if (format && mod.MagickFormat[format[0] + format.slice(1).toLowerCase()])
+                mod.ImageMagick.read(bytes, mod.MagickFormat[format[0] + format.slice(1).toLowerCase()], read);
+            else
+                mod.ImageMagick.read(bytes, read);
         } catch (e) {
             reject(e);
         }

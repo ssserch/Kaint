@@ -27,6 +27,7 @@
 #include "app/dialogs/SaveAllDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
+#include "app/GifEditor.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/WelcomeDialog.h"
 #include "app/panels/ColorsPanel.h"
@@ -195,6 +196,16 @@ static void testDiscordPresence()
     CHECK(a.value(QStringLiteral("timestamps")).toObject().value(QStringLiteral("start")).toInteger() == 1000);
     CHECK(a.value(QStringLiteral("assets")).toObject().value(QStringLiteral("large_text")).toString().contains(QLatin1String("Pincel")));
     CHECK(!a.value(QStringLiteral("assets")).toObject().contains(QStringLiteral("small_text")));
+    {
+        // En el editor de GIF: lo dice, con los fotogramas, y sin capa ni herramienta.
+        PresenceInfo gif = info;
+        gif.gifEditor = true;
+        gif.frames = 12;
+        const QJsonObject g = DiscordPresence::buildActivity(gif, options, 1000);
+        CHECK(g.value(QStringLiteral("details")).toString().contains(QStringLiteral("GIF")));
+        CHECK(g.value(QStringLiteral("state")).toString().contains(QStringLiteral("12")) && !g.value(QStringLiteral("state")).toString().contains(QStringLiteral("Sombras")));
+        CHECK(!g.value(QStringLiteral("assets")).toObject().value(QStringLiteral("large_text")).toString().contains(QLatin1String("Pincel")));
+    }
     options.showFile = options.showLayer = options.showFileInfo = options.showTool = options.showElapsed = false;
     a = DiscordPresence::buildActivity(info, options, 1000);
     CHECK(!QJsonDocument(a).toJson().contains("foto") && !a.contains(QStringLiteral("state")));
@@ -3646,6 +3657,43 @@ int main(int argc, char** argv)
         CHECK(second.menuWidget() && second.menuWidget()->objectName() == QLatin1String("TopRow"));
         auto* mainBar = second.findChild<QToolBar*>(QStringLiteral("MainToolBar"));
         CHECK(mainBar && mainBar->isVisible() && mainBar->height() > 0);
+    }
+
+    // Archivo > Editor de GIF: otra vista de la imagen (cada capa, un fotograma con su duración en el
+    // nombre); cada cambio es un paso del historial y se vuelve con la misma opción.
+    {
+        QAction* gifAction = findAction(&w, QStringLiteral("Editor de GIF"));
+        auto* gif = w.findChild<GifEditor*>();
+        CHECK(gifAction && gif);
+        if (gifAction && gif) {
+            Document* current = canvas->document();
+            const int layersBefore = current->layerCount();
+            const int stepsBefore = current->undoStack()->index();
+            gifAction->trigger();
+            settle();
+            CHECK(gif->isVisible() && gifAction->isChecked() && gif->document() == current);
+            CHECK(gif->frameCount() == layersBefore);
+            gif->setFrameDelay(0, 250);
+            CHECK(gif->frameDelay(0) == 250 && current->layer(0)->props.name.contains(QStringLiteral("(250ms)")));
+            gif->duplicateFrame(0);
+            CHECK(gif->frameCount() == layersBefore + 1 && gif->frameDelay(1) == 250);
+            gif->moveFrame(0, gif->frameCount() - 1);
+            CHECK(gif->frameDelay(gif->frameCount() - 1) == 250);
+            const QList<int> starts = gif->frameStarts();
+            CHECK(starts.size() == gif->frameCount() + 1 && starts.last() >= 500);
+            gif->seek(starts[1]);
+            CHECK(gif->selectedFrame() == 1);
+            CHECK(current->undoStack()->index() == stepsBefore + 3);
+            if (current->undoStack()->index() != stepsBefore + 3)
+                std::printf("pasos: %d -> %d (índice %d)\n", stepsBefore, int(current->undoStack()->count()), int(current->undoStack()->index()));
+            current->undoStack()->undo();
+            current->undoStack()->undo();
+            current->undoStack()->undo();
+            CHECK(current->layerCount() == layersBefore && !current->layer(0)->props.name.contains(QStringLiteral("ms)")));
+            gifAction->trigger();
+            settle();
+            CHECK(!gif->isVisible() && !gifAction->isChecked() && canvas->isVisible());
+        }
     }
 
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());

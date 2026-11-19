@@ -878,7 +878,7 @@ namespace Kaint.PdnHost
                     {
                         Rectangle[] strips = Strips(roi, effect);
                         int threads = effect.CheckForEffectFlags(EffectFlags.SingleThreaded) ? 1 : Math.Max(1, Environment.ProcessorCount);
-                        RunStrips(effect, token, dstArgs, srcArgs, strips, Math.Min(threads, strips.Length));
+                        RunStrips(effect, token, dstArgs, srcArgs, strips, Math.Min(threads, strips.Length), () => cancelRequested, true);
                     }
                 }
             }
@@ -906,7 +906,10 @@ namespace Kaint.PdnHost
             return strips;
         }
 
-        private static void RunStrips(Effect effect, EffectConfigToken token, RenderArgs dstArgs, RenderArgs srcArgs, Rectangle[] strips, int threadCount)
+        // 'stop' dice si hay que dejarlo (cancelado); 'report', si se envía el progreso a Kaint (la
+        // vista previa del diálogo propio no lo envía).
+        private static void RunStrips(Effect effect, EffectConfigToken token, RenderArgs dstArgs, RenderArgs srcArgs, Rectangle[] strips, int threadCount,
+                                      Func<bool> stop, bool report)
         {
             int next = -1;
             int done = 0;
@@ -915,7 +918,7 @@ namespace Kaint.PdnHost
             System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
             ThreadStart work = () =>
             {
-                while (!cancelRequested && failure == null)
+                while (!stop() && failure == null)
                 {
                     int i = Interlocked.Increment(ref next);
                     if (i >= strips.Length)
@@ -932,7 +935,7 @@ namespace Kaint.PdnHost
                     int n = Interlocked.Increment(ref done);
                     long now = clock.ElapsedMilliseconds;
                     long last = Interlocked.Read(ref lastReport);
-                    if (now - last >= 100 && Interlocked.CompareExchange(ref lastReport, now, last) == last)
+                    if (report && now - last >= 100 && Interlocked.CompareExchange(ref lastReport, now, last) == last)
                     {
                         Dictionary<string, object> progress = new Dictionary<string, object>();
                         progress["progress"] = n;
@@ -944,7 +947,7 @@ namespace Kaint.PdnHost
             // La primera franja, sola: muchos complementos preparan cosas en su primera llamada a
             // Render sin protegerlas (Film de pyrochild crea ahí su capa de grano y la desecha si
             // cambió algo), y con varios hilos a la vez una la borraba mientras otra la usaba.
-            if (strips.Length > 1 && threadCount > 1 && !cancelRequested)
+            if (strips.Length > 1 && threadCount > 1 && !stop())
             {
                 next = 0;
                 try
@@ -995,6 +998,7 @@ namespace Kaint.PdnHost
                                "This plugin's dialog uses WinForms and needs X11 (XWayland)."));
             }
 
+            PrepareEffectsFolder();
             using (SharedPixels pixels = new SharedPixels(Json.Str(request, "shm"), width, height))
             {
                 Services.Instance.SetCurrentPalette(PaletteFrom(request));
@@ -1004,7 +1008,9 @@ namespace Kaint.PdnHost
                     (float)Json.Num(request, "brushWidth", 2),
                     new PdnRegion(roi),
                     pixels.Source);
+                bool wantsPreview = Json.Bool(request, "preview", false);
                 using (EffectConfigDialog dialog = effect.CreateConfigDialog())
+                using (DialogPreview preview = wantsPreview ? new DialogPreview(effect, pixels, roi) : null)
                 {
                     if (dialog == null)
                         return Error(L("El complemento no tiene diálogo.", "The plugin has no dialog."));
@@ -1018,6 +1024,16 @@ namespace Kaint.PdnHost
                         dialog.Text = title;
                     dialog.StartPosition = FormStartPosition.CenterScreen;
                     dialog.TopMost = true;
+                    // Como en Paint.NET: cada cambio en el diálogo se ve en la imagen (al abrirlo,
+                    // OnLoad ya avisa con el token inicial).
+                    if (preview != null)
+                        dialog.EffectTokenChanged += (sender, e) =>
+                        {
+                            EffectConfigToken token = dialog.EffectToken;
+                            preview.Request(token == null ? null : (EffectConfigToken)token.Clone());
+                        };
+                    if (Type.GetType("Mono.Runtime") != null)
+                        dialog.Load += (sender, e) => MonoFormFixes.Apply(dialog);
                     DialogResult result = dialog.ShowDialog();
                     Dictionary<string, object> r = Ok();
                     r["accepted"] = result == DialogResult.OK;
@@ -1025,6 +1041,168 @@ namespace Kaint.PdnHost
                         le.DialogToken = (EffectConfigToken)dialog.EffectToken.Clone();
                     return r;
                 }
+            }
+        }
+
+        private static bool effectsFolderReady;
+
+        // Como en Paint.NET, la carpeta Effects junto al programa tiene los complementos: algunos
+        // la recorren desde su diálogo (Random Effect de pyrochild elige allí un efecto al azar).
+        // Kaint ejecuta este proceso desde una copia en la caché del usuario y pasa los complementos
+        // activados en KAINT_PDN_EFFECTS; se copian la primera vez que se abre un diálogo propio
+        // (los de .NET moderno, ya corregidos, como los carga Kaint).
+        private static void PrepareEffectsFolder()
+        {
+            if (effectsFolderReady)
+                return;
+            effectsFolderReady = true;
+            string list = Environment.GetEnvironmentVariable("KAINT_PDN_EFFECTS");
+            if (string.IsNullOrEmpty(list))
+                return;
+            try
+            {
+                string folder = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "Effects");
+                Directory.CreateDirectory(folder);
+                foreach (string old in Directory.GetFiles(folder))
+                {
+                    try
+                    {
+                        File.Delete(old);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+                HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string line in list.Split('\n'))
+                {
+                    string path = line.Trim();
+                    if (path.Length == 0 || !File.Exists(path) || !names.Add(Path.GetFileName(path)))
+                        continue;
+                    try
+                    {
+                        AddProbeDir(Path.GetDirectoryName(Path.GetFullPath(path)));
+                        byte[] data = File.ReadAllBytes(path);
+                        byte[] patched = ModernAssembly.Patch(data);
+                        File.WriteAllBytes(Path.Combine(folder, Path.GetFileName(path)), patched ?? data);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Sin la carpeta, esos complementos solo ven los efectos integrados.
+            }
+        }
+
+        // Vista previa en el lienzo de Kaint mientras está abierto el diálogo propio de un
+        // complemento, como en Paint.NET: cada token nuevo se calcula en otro hilo sobre una copia
+        // (el anterior se cancela) y, al terminar, pasa a la mitad de destino de la memoria
+        // compartida y se avisa con {"preview":n}; Kaint la copia y la muestra.
+        private sealed class DialogPreview
+            : IDisposable
+        {
+            private readonly Effect effect;
+            private readonly SharedPixels pixels;
+            private readonly Rectangle roi;
+            private readonly Surface scratch;
+            private readonly object sync = new object();
+            private readonly Thread thread;
+            private EffectConfigToken pending;
+            private bool hasPending;
+            private bool disposed;
+            private volatile bool cancel;
+            private int sequence;
+
+            public DialogPreview(Effect effect, SharedPixels pixels, Rectangle roi)
+            {
+                this.effect = effect;
+                this.pixels = pixels;
+                this.roi = roi;
+                this.scratch = new Surface(pixels.Source.Width, pixels.Source.Height);
+                this.thread = new Thread(Loop);
+                this.thread.IsBackground = true;
+                this.thread.Priority = ThreadPriority.BelowNormal;
+                this.thread.Start();
+            }
+
+            public void Request(EffectConfigToken token)
+            {
+                lock (this.sync)
+                {
+                    this.pending = token;
+                    this.hasPending = true;
+                    this.cancel = true;
+                    Monitor.Pulse(this.sync);
+                }
+                this.effect.SignalCancelRequest();
+            }
+
+            private void Loop()
+            {
+                while (true)
+                {
+                    EffectConfigToken token;
+                    lock (this.sync)
+                    {
+                        while (!this.hasPending && !this.disposed)
+                            Monitor.Wait(this.sync);
+                        if (this.disposed)
+                            return;
+                        token = this.pending;
+                        this.hasPending = false;
+                        this.cancel = false;
+                    }
+                    if (token == null && this.effect.CheckForEffectFlags(EffectFlags.Configurable))
+                        continue;
+                    try
+                    {
+                        this.scratch.CopySurface(this.pixels.Source, this.roi.Location, this.roi);
+                        this.effect.KaintResetCancel();
+                        using (RenderArgs dstArgs = new RenderArgs(this.scratch))
+                        using (RenderArgs srcArgs = new RenderArgs(this.pixels.Source))
+                        {
+                            this.effect.SetRenderInfo(token, dstArgs, srcArgs);
+                            if (this.effect.CheckForEffectFlags(EffectFlags.SingleRenderCall))
+                                this.effect.Render(token, dstArgs, srcArgs, new Rectangle[] { this.roi }, 0, 1);
+                            else
+                            {
+                                Rectangle[] strips = Strips(this.roi, this.effect);
+                                int threads = this.effect.CheckForEffectFlags(EffectFlags.SingleThreaded) ? 1 : Math.Max(1, Environment.ProcessorCount);
+                                RunStrips(this.effect, token, dstArgs, srcArgs, strips, Math.Min(threads, strips.Length), () => this.cancel, false);
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Una vista previa que falla no se muestra (al aceptar, el error se ve).
+                        continue;
+                    }
+                    if (this.cancel)
+                        continue;
+                    this.pixels.Destination.CopySurface(this.scratch, this.roi.Location, this.roi);
+                    Dictionary<string, object> message = new Dictionary<string, object>();
+                    message["preview"] = ++this.sequence;
+                    Send(message);
+                }
+            }
+
+            public void Dispose()
+            {
+                lock (this.sync)
+                {
+                    this.disposed = true;
+                    this.cancel = true;
+                    Monitor.Pulse(this.sync);
+                }
+                this.effect.SignalCancelRequest();
+                // Un complemento que no atiende la cancelación puede tardar: se espera un tiempo
+                // razonable (después ya no se usa nada de esto).
+                this.thread.Join(30000);
+                this.effect.KaintResetCancel();
+                this.scratch.Dispose();
             }
         }
     }

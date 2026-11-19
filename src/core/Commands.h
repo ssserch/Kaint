@@ -194,7 +194,10 @@ struct FloatingPixels {
     QRect boundsFor(const QTransform& t) const;
     // La selección colocada con 't' (se guarda la última, que se pide en cada paso del arrastre).
     Selection placedSelection(const QTransform& t) const;
-    void render(const QTransform& t, const QRect& region) const;
+    // 'draft': mientras se arrastra, rápido (bilineal sin gamma ni promedio al reducir, o el vecino
+    // más próximo), como la versión web y Paint.NET; el paso del historial lo pinta después con el
+    // muestreo elegido.
+    void render(const QTransform& t, const QRect& region, bool draft = false) const;
 
 private:
     mutable QTransform m_placedFor;

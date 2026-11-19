@@ -111,7 +111,9 @@ export class FloatingPanel {
     area() {
         const r = this.workspace.classList.contains("rulers") ? kRuler : 0;
         // El grosor de las barras de desplazamiento (más gruesas con el dedo).
-        const bar = this.workspace.querySelector(".scrollbar.v")?.offsetWidth || 14;
+        // Ocultas (Configuración), no cuentan.
+        const scroll = this.workspace.querySelector(".scrollbar.v");
+        const bar = this.workspace.classList.contains("no-scrollbars") ? 0 : scroll?.offsetWidth || 14;
         return { x: r, y: r, w: this.workspace.clientWidth - bar - r, h: this.workspace.clientHeight - bar - r };
     }
 

@@ -21,6 +21,9 @@ struct PresenceInfo {
     QString layerName;
     QString tool;
     int documents = 0;
+    // La imagen está en el editor de GIF (Archivo > Editor de GIF): cuántos fotogramas tiene.
+    bool gifEditor = false;
+    int frames = 0;
     // El modo colaborativo.
     bool collab = false;
     bool collabHost = false;

@@ -882,6 +882,31 @@ ParamValues defaults(const Effect& effect, const EffectContext& ctx)
     return v;
 }
 
+void maskToSelection(const QImage& before, QImage& after, const Selection& selection)
+{
+    if (selection.isEmpty() || before.size() != after.size())
+        return;
+    const QRect roi = selection.bounds().intersected(after.rect());
+    if (roi.isEmpty())
+        return;
+    const bool premul = isPremultiplied(after);
+    const bool aa = Raster::selectionAntialias();
+    const ConstMask mask(selection.mask());
+    const ConstPixels in(before);
+    const Pixels out(after);
+    parallelRows(roi.top(), roi.bottom() + 1, [&](int y0, int y1) {
+        for (int y = y0; y < y1; ++y) {
+            const uchar* m = mask.row(y);
+            const QRgb* s = in.row(y);
+            QRgb* d = out.row(y);
+            for (int x = roi.left(); x <= roi.right(); ++x) {
+                const int t = Raster::clipCoverage(m[x], aa);
+                d[x] = premul ? lerpPixel(s[x], d[x], t) : lerpStraight(s[x], d[x], t);
+            }
+        }
+    });
+}
+
 QImage apply(const Effect& effect, const QImage& src, const Selection& selection, const ParamValues& values,
              const EffectContext& ctx, const std::atomic_bool& cancel)
 {
@@ -903,24 +928,7 @@ QImage apply(const Effect& effect, const QImage& src, const Selection& selection
     if (cancel)
         return {};
 
-    const bool premul = isPremultiplied(dst);
-    if (!selection.isEmpty()) {
-        const bool aa = Raster::selectionAntialias();
-        const ConstMask mask(selection.mask());
-        const ConstPixels in(work);
-        const Pixels out(dst);
-        parallelRows(roi.top(), roi.bottom() + 1, [&](int y0, int y1) {
-            for (int y = y0; y < y1; ++y) {
-                const uchar* m = mask.row(y);
-                const QRgb* s = in.row(y);
-                QRgb* d = out.row(y);
-                for (int x = roi.left(); x <= roi.right(); ++x) {
-                    const int t = Raster::clipCoverage(m[x], aa);
-                    d[x] = premul ? lerpPixel(s[x], d[x], t) : lerpStraight(s[x], d[x], t);
-                }
-            }
-        });
-    }
+    maskToSelection(work, dst, selection);
     if (!convert)
         return dst;
 

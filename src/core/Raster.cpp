@@ -25,8 +25,15 @@ void copyRect(QImage& dst, const QImage& src, const QRect& area)
     if (r.isEmpty())
         return;
     const int bpp = dst.depth() / 8;
-    for (int y = r.top(); y <= r.bottom(); ++y)
-        std::memcpy(dst.scanLine(y) + r.left() * bpp, src.constScanLine(y) + r.left() * bpp, size_t(r.width()) * bpp);
+    // Por franjas en paralelo (mover píxeles copia en cada paso zonas de varios megapíxeles); 'dst'
+    // se separa antes, una vez, en este hilo.
+    uchar* to = dst.bits();
+    const uchar* from = src.constBits();
+    const qsizetype toLine = dst.bytesPerLine(), fromLine = src.bytesPerLine();
+    parallelRows(r.top(), r.bottom() + 1, [&](int y0, int y1) {
+        for (int y = y0; y < y1; ++y)
+            std::memcpy(to + y * toLine + r.left() * bpp, from + y * fromLine + r.left() * bpp, size_t(r.width()) * bpp);
+    }, 128);
 }
 
 void blit(QImage& dst, const QImage& src, QPoint at)

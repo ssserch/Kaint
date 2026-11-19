@@ -71,7 +71,17 @@ namespace PaintDotNet.Effects
         // complementos que abren el diálogo de otro efecto (Random Effect).
         public override sealed EffectConfigDialog CreateConfigDialog()
         {
-            return new PropertyBasedEffectConfigDialog(CreatePropertyCollection(), GetConfigDialogTitle());
+            PropertyCollection props = CreatePropertyCollection();
+            // La descripción de IndirectUI da los nombres que se ven (y los de cada opción).
+            ControlInfo configUI = null;
+            try
+            {
+                configUI = CreateConfigUI(props);
+            }
+            catch (Exception)
+            {
+            }
+            return new PropertyBasedEffectConfigDialog(props, configUI, GetConfigDialogTitle());
         }
 
         public ControlInfo KaintCreateConfigUI(PropertyCollection props)

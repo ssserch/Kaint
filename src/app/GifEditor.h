@@ -1,0 +1,160 @@
+#pragma once
+
+#include <QElapsedTimer>
+#include <QImage>
+#include <QList>
+#include <QListWidget>
+#include <QPointer>
+#include <QTimer>
+#include <QWidget>
+
+#include <memory>
+
+class Document;
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QScrollArea;
+class QSlider;
+class QSpinBox;
+class QToolButton;
+struct Layer;
+struct LayerProps;
+using LayerPtr = std::shared_ptr<Layer>;
+
+// Archivo > Editor de GIF: la imagen como una animación, con una interfaz de editor de vídeo
+// sencillo (como Filmora): la biblioteca de medios (las imágenes abiertas en Kaint y las que se
+// importan o se arrastran), la vista previa con su reproductor y la línea de tiempo con un clip
+// por fotograma. Es otra vista de la misma imagen: cada fotograma es una capa (la de abajo, el
+// primero) con su duración en el nombre («Fotograma 1 (100ms)»), como al abrir y guardar un GIF;
+// cada cambio es un paso del historial. Se pasa de una vista a otra en cada imagen.
+namespace GifEdit {
+
+// Un medio de la biblioteca: una imagen abierta (se lee al usarla) o un archivo importado (sus
+// fotogramas, uno si es una imagen fija).
+struct Media {
+    QString name;
+    QPointer<Document> document;
+    QList<QImage> frames;
+    QList<int> delays;
+    QImage thumbnail;
+};
+
+// Los fotogramas de una imagen abierta: sus capas, si es una animación (alguna lleva la duración
+// en el nombre); si no, la imagen acoplada.
+void framesOf(const Document* doc, QList<QImage>* frames, QList<int>* delays);
+// Un fotograma de otro tamaño, ajustado al lienzo (sin deformarlo, centrado y con transparente
+// alrededor).
+QImage fitted(const QImage& image, QSize canvas);
+int delayOf(const Layer* layer);
+
+class Preview;
+class Timeline;
+
+class MediaList : public QListWidget {
+    Q_OBJECT
+public:
+    explicit MediaList(QWidget* parent = nullptr);
+    static const char* mimeType();
+
+signals:
+    void filesDropped(const QStringList& paths);
+
+protected:
+    QMimeData* mimeData(const QList<QListWidgetItem*>& items) const override;
+    QStringList mimeTypes() const override;
+    void dragEnterEvent(QDragEnterEvent* e) override;
+    void dragMoveEvent(QDragMoveEvent* e) override;
+    void dropEvent(QDropEvent* e) override;
+};
+
+} // namespace GifEdit
+
+class GifEditor : public QWidget {
+    Q_OBJECT
+public:
+    explicit GifEditor(QWidget* parent = nullptr);
+    ~GifEditor() override;
+
+    void setDocument(Document* doc);
+    Document* document() const { return m_doc; }
+    // Las imágenes abiertas en Kaint, para la biblioteca.
+    void setOpenDocuments(const QList<Document*>& docs);
+    void stop();
+
+    // Lo que hacen los botones (también desde la línea de tiempo).
+    int frameCount() const;
+    int selectedFrame() const;
+    void selectFrame(int index);
+    int frameDelay(int index) const;
+    bool frameHidden(int index) const;
+    // Inserta en 'at' (-1: al final) los fotogramas de un medio o de unos archivos.
+    void insertMedia(int mediaIndex, int at);
+    void insertFiles(const QStringList& paths, int at);
+    void moveFrame(int from, int to);
+    void setFrameDelay(int index, int delayMs);
+    void removeFrame(int index);
+    void duplicateFrame(int index);
+    void toggleHidden(int index);
+    void showFrameMenu(int index, const QPoint& globalPos);
+    void editDelay(int index);
+    // Tiempo (ms) donde empieza cada fotograma; el último valor es la duración total.
+    QList<int> frameStarts() const;
+    int playTime() const { return m_time; }
+    void seek(int ms);
+
+signals:
+    void exportRequested();
+    void imageEditorRequested();
+    void editFrameRequested(int layerIndex);
+
+protected:
+    bool event(QEvent* e) override;
+    void keyPressEvent(QKeyEvent* e) override;
+    void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
+    void changeEvent(QEvent* e) override;
+
+private:
+    void buildUi();
+    void rebuildMedia();
+    void updateState();
+    void updateTimeLabel();
+    // Cambia la lista de capas (fotogramas) en un paso del historial.
+    void applyFrames(const QList<LayerPtr>& layers, const QList<LayerProps>& props, int active, const QString& text,
+                     const QString& icon);
+    void insertFrames(int at, const QList<QImage>& images, const QList<int>& delays, const QString& text);
+    void importFiles(const QStringList& paths);
+    bool loadFile(const QString& path, GifEdit::Media* media, QString* error) const;
+    void reverseFrames();
+    void boomerang();
+    void setAllDelays(int delayMs);
+    void togglePlay();
+    void step(int delta);
+    void tick();
+    int frameAt(int ms) const;
+
+    QPointer<Document> m_doc;
+    QList<QPointer<Document>> m_openDocs;
+    QList<GifEdit::Media> m_imported;
+    QList<GifEdit::Media> m_media;
+
+    QLabel* m_title = nullptr;
+    GifEdit::MediaList* m_mediaList = nullptr;
+    GifEdit::Preview* m_preview = nullptr;
+    GifEdit::Timeline* m_timeline = nullptr;
+    QScrollArea* m_timelineScroll = nullptr;
+    QToolButton* m_play = nullptr;
+    QLabel* m_timeLabel = nullptr;
+    QCheckBox* m_loop = nullptr;
+    QComboBox* m_speed = nullptr;
+    QSpinBox* m_delay = nullptr;
+    QSlider* m_zoom = nullptr;
+    QList<QWidget*> m_frameButtons;
+
+    QTimer m_ticker;
+    QElapsedTimer m_clock;
+    bool m_playing = false;
+    int m_time = 0;
+    qint64 m_lastTick = 0;
+};

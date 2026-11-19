@@ -264,6 +264,9 @@ int main(int argc, char** argv)
                                         QStringLiteral("yes|no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-translucent"),
                                         QObject::tr("Ventanas translúcidas en la captura (yes o no)."), QStringLiteral("yes|no")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-gif-editor"),
+                                        QObject::tr("La primera imagen en el editor de GIF en la captura (yes o no)."),
+                                        QStringLiteral("yes|no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-extras"),
                                         QObject::tr("Las funciones de PhotoCraft en la captura (yes o no)."), QStringLiteral("yes|no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-custom-theme"),
@@ -326,7 +329,9 @@ int main(int argc, char** argv)
         MainWindow window;
         window.resize(QSize(int(std::lround(pixels.width() / scale)), int(std::lround(pixels.height() / scale))));
         window.show();
-        const QString error = window.screenPreview(parser.positionalArguments(), parser.value(QStringLiteral("screenpreview")));
+        const QString gif = parser.value(QStringLiteral("preview-gif-editor")).toLower();
+        const QString error = window.screenPreview(parser.positionalArguments(), parser.value(QStringLiteral("screenpreview")),
+                                                   gif == QLatin1String("yes") || gif == QLatin1String("sí") || gif == QLatin1String("si"));
         if (!error.isEmpty()) {
             std::fprintf(stderr, "%s\n", qPrintable(error));
             return 1;

@@ -21,6 +21,7 @@
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/GifFramesDialog.h"
+#include "app/GifEditor.h"
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveAllDialog.h"
 #include "app/widgets/BarSlider.h"
@@ -103,6 +104,7 @@
 #include <QScrollBar>
 #include <QWindow>
 #include <QSettings>
+#include <QStackedWidget>
 #include <QSlider>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -1142,7 +1144,20 @@ MainWindow::MainWindow()
             prepareHistoryJump();
         doc->undoStack()->setIndex(index);
     });
-    setCentralWidget(m_workspace);
+    m_central = new QStackedWidget(this);
+    m_central->addWidget(m_workspace);
+    m_gifEditor = new GifEditor(m_central);
+    m_central->addWidget(m_gifEditor);
+    connect(m_gifEditor, &GifEditor::exportRequested, this, [this] { saveAs(m_doc, QStringLiteral("gif")); });
+    connect(m_gifEditor, &GifEditor::imageEditorRequested, this, [this] { toggleGifEditor(); });
+    connect(m_gifEditor, &GifEditor::editFrameRequested, this, [this](int layer) {
+        if (!m_doc)
+            return;
+        m_doc->setActiveIndex(layer);
+        m_gifDocs.remove(m_doc);
+        updateCentralView();
+    });
+    setCentralWidget(m_central);
     // Linux con el estilo de Paint.NET: sin la barra de título del escritorio, con la de Windows 10.
     WindowFrame::decorate(this, false);
 
@@ -1316,6 +1331,13 @@ void MainWindow::createActions()
     A["saveAllAs"] = makeAction(tr("Guardar to&dos..."), {"document-save-all", "document-save-as"}, {},
                                 [this] { saveAllAs(); }, doc);
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
+    // Editor de GIF: la imagen actual como una animación en una línea de tiempo (cada capa, un
+    // fotograma), con una interfaz de editor de vídeo; se vuelve con la misma opción.
+    A["gifEditor"] = makeAction(tr("Editor de &GIF"), {"video-x-generic", "image-gif", "media-playback-start"}, {},
+                                [this] { toggleGifEditor(); }, doc);
+    A["gifEditor"]->setCheckable(true);
+    A["gifEditor"]->setToolTip(tr("Edita esta imagen como un GIF animado, con una línea de tiempo (vuelve a elegirlo para "
+                                  "volver al editor de imágenes)"));
     // Colaboración: por P2P (la predeterminada) o en la red local, cada una con su configuración.
     A["collabHost"] = makeAction(tr("&Hospedar la imagen actual"), {"collab"}, {}, [this] { m_collab->host(m_doc, Collab::Mode::P2P); });
     A["collabJoin"] = makeAction(tr("&Unirse con un código..."), {"network-connect", "collab"}, {},
@@ -1594,6 +1616,8 @@ void MainWindow::createMenus()
     acquire->addAction(A["acquire"]);
     file->addSeparator();
     file->addActions({A["save"], A["saveAs"], A["saveAll"], A["saveAllAs"]});
+    file->addSeparator();
+    file->addAction(A["gifEditor"]);
     file->addSeparator();
     file->addAction(A["print"]);
     file->addSeparator();
@@ -2323,6 +2347,7 @@ void MainWindow::setCurrentDocument(Document* doc, bool force)
     updateTitle();
     updateActions();
     updateStatus();
+    updateCentralView();
 }
 
 bool MainWindow::closeDocument(Document* doc, bool ask)
@@ -2350,6 +2375,7 @@ bool MainWindow::closeDocument(Document* doc, bool ask)
         m_tabs->removeTab(index);
     }
     m_thumbDirty.remove(doc);
+    m_gifDocs.remove(doc);
     if (doc == m_doc)
         m_doc = nullptr;
     setCurrentDocument(next, true);
@@ -2873,7 +2899,7 @@ void MainWindow::openFiles(const QStringList& paths)
     }
 }
 
-QString MainWindow::screenPreview(const QStringList& files, const QString& output)
+QString MainWindow::screenPreview(const QStringList& files, const QString& output, bool gifEditor)
 {
     Document* first = nullptr;
     for (const QString& path : files) {
@@ -2889,6 +2915,10 @@ QString MainWindow::screenPreview(const QStringList& files, const QString& outpu
         setCurrentDocument(first);
     else
         newDefaultDocument();
+    if (gifEditor && m_doc) {
+        m_gifDocs.insert(m_doc);
+        updateCentralView();
+    }
     // Tiempo para que se pinte todo (miniaturas, ventanas, barra de opciones).
     QElapsedTimer wait;
     wait.start();
@@ -2911,13 +2941,27 @@ bool MainWindow::save(Document* doc)
     return writeFile(doc, doc->filePath());
 }
 
-bool MainWindow::saveAs(Document* doc)
+bool MainWindow::saveAs(Document* doc, const QString& suffix)
 {
     if (!doc)
         return false;
+    finishTool();
     QString selected;
     const QString filters = ImageIO::saveFilter(&selected);
     QString suggestion = doc->filePath();
+    if (!suffix.isEmpty()) {
+        // Exportar GIF (editor de GIF): ese formato, con el nombre de la imagen.
+        const QString base = !suggestion.isEmpty() ? QFileInfo(suggestion).absolutePath() + QLatin1Char('/') + QFileInfo(suggestion).completeBaseName()
+                             : m_lastDir + QLatin1Char('/') + (doc->untitledName().isEmpty() ? tr("Sin título") : doc->untitledName());
+        suggestion = base + QLatin1Char('.') + suffix;
+        for (const QString& f : filters.split(QStringLiteral(";;")))
+            if (f.contains(QStringLiteral("*.") + suffix))
+                selected = f;
+        const QString path = QFileDialog::getSaveFileName(this, tr("Exportar GIF"), suggestion, filters, &selected);
+        if (path.isEmpty())
+            return false;
+        return writeFile(doc, QFileInfo(path).suffix().isEmpty() ? path + QLatin1Char('.') + suffix : path);
+    }
     if (!suggestion.isEmpty() && !ImageIO::isWritable(suggestion)) {
         suggestion = QFileInfo(suggestion).absolutePath() + QLatin1Char('/') + QFileInfo(suggestion).completeBaseName()
                    + QStringLiteral(".ora");
@@ -2946,6 +2990,47 @@ bool MainWindow::saveAs(Document* doc)
         }
     }
     return writeFile(doc, path);
+}
+
+void MainWindow::toggleGifEditor()
+{
+    if (!m_doc)
+        return;
+    finishTool();
+    if (m_gifDocs.contains(m_doc))
+        m_gifDocs.remove(m_doc);
+    else
+        m_gifDocs.insert(m_doc);
+    updateCentralView();
+}
+
+void MainWindow::updateCentralView()
+{
+    if (!m_central)
+        return;
+    const bool gif = m_doc && m_gifDocs.contains(m_doc);
+    m_gifEditor->setOpenDocuments(m_docs);
+    m_gifEditor->setDocument(gif ? m_doc : nullptr);
+    m_central->setCurrentWidget(gif ? static_cast<QWidget*>(m_gifEditor) : m_workspace);
+    if (QAction* a = m_act.value("gifEditor")) {
+        const QSignalBlocker block(a);
+        a->setChecked(gif);
+    }
+    // Las opciones de las herramientas no sirven en el editor de GIF: se esconden mientras tanto.
+    if (m_options) {
+        if (gif && m_options->isVisible()) {
+            m_options->hide();
+            m_optionsHiddenForGif = true;
+        } else if (!gif && m_optionsHiddenForGif) {
+            m_options->show();
+            m_optionsHiddenForGif = false;
+        }
+    }
+    if (gif)
+        m_gifEditor->setFocus();
+    else
+        m_canvas->setFocus();
+    updatePresence();
 }
 
 bool MainWindow::saveAll()
@@ -4194,16 +4279,48 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
         QString error;
         bool accepted = false;
         std::atomic_bool done{false};
+        // Como en Paint.NET: lo que se cambia en la ventana del complemento se ve en la imagen. Llega
+        // desde el hilo del diálogo; la última que no se mostró sustituye a las anteriores.
+        EffectContext dialogCtx = ctx;
+        auto alive = std::make_shared<std::atomic_bool>(true);
+        auto latest = std::make_shared<std::pair<std::mutex, QImage>>();
+        const Selection selection = m_doc->selection();
+        const QImage before = layer->image;
+        Document* doc = m_doc;
+        const Layer* target = layer.get();
+        dialogCtx.dialogPreview = [this, alive, latest, selection, before, doc, target](const QImage& image) {
+            QImage shown = image;
+            Effects::maskToSelection(before, shown, selection);
+            bool first = false;
+            {
+                std::lock_guard lock(latest->first);
+                first = latest->second.isNull();
+                latest->second = std::move(shown);
+            }
+            if (!first)
+                return;
+            QMetaObject::invokeMethod(this, [this, alive, latest, doc, target] {
+                QImage next;
+                {
+                    std::lock_guard lock(latest->first);
+                    next = std::exchange(latest->second, QImage());
+                }
+                if (*alive && m_doc == doc && !next.isNull())
+                    doc->setPreview(target, next);
+            }, Qt::QueuedConnection);
+        };
         std::thread worker([&] {
-            accepted = effect->showCustomDialog(layer->image, roi, ctx, &error);
+            accepted = effect->showCustomDialog(layer->image, roi, dialogCtx, &error);
             done = true;
         });
         setEnabled(false);
         while (!done)
             QApplication::processEvents(QEventLoop::AllEvents, 30);
         worker.join();
+        *alive = false;
         setEnabled(true);
         if (!accepted) {
+            m_doc->clearPreview();
             if (!error.isEmpty())
                 QMessageBox::warning(this, effect->name(), error);
             return;
@@ -4237,8 +4354,11 @@ void MainWindow::runEffect(const Effect* effect, bool repeat)
         QMessageBox::warning(this, effect->name(), tr("El efecto no se pudo aplicar:\n%1").arg(error));
         return;
     }
-    if (result.isNull())
+    if (result.isNull()) {
+        // Cancelado: sin la vista previa de la ventana del complemento.
+        m_doc->clearPreview();
         return;
+    }
 
     const QImage before = layer->image;
     layer->image = result;
@@ -4625,6 +4745,10 @@ PresenceInfo MainWindow::presenceInfo() const
         info.fileType = file.suffix().toUpper();
     }
     info.size = m_doc->size();
+    info.gifEditor = m_gifDocs.contains(m_doc);
+    info.frames = m_doc->layerCount();
+    if (info.gifEditor)
+        return info;
     info.layerCount = m_doc->layerCount();
     info.layerIndex = m_doc->activeIndex() + 1;
     if (const Layer* layer = m_doc->activeLayer())

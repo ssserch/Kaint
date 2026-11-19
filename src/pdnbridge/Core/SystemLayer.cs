@@ -164,12 +164,49 @@ namespace PaintDotNet.SystemLayer
 
 namespace PaintDotNet
 {
-    // Textos de Paint.NET: sin recursos traducidos, se devuelve la clave.
+    // Textos de Paint.NET: los de los efectos integrados, en inglés como en Paint.NET (se ven en los
+    // diálogos que abren otros complementos, como Random Effect); cualquier otro, la clave.
     public static class PdnResources
     {
+        private static readonly System.Collections.Generic.Dictionary<string, string> strings =
+            new System.Collections.Generic.Dictionary<string, string>
+        {
+            { "AddNoiseEffect.Name", "Add Noise" },
+            { "AddNoiseEffect.Amount1Label", "Intensity" },
+            { "AddNoiseEffect.Amount2Label", "Color Saturation" },
+            { "AddNoiseEffect.Coverage", "Coverage" },
+            { "BlurEffect.Name", "Gaussian Blur" },
+            { "BlurEffect.ConfigDialog.SliderLabel", "Radius" },
+            { "BlurEffect.ConfigDialog.SliderUnitsName", "pixels" },
+            { "BrightnessAndContrastAdjustment.Name", "Brightness / Contrast" },
+            { "BrightnessAndContrastAdjustment.Brightness", "Brightness" },
+            { "BrightnessAndContrastAdjustmnet.Contrast", "Contrast" },
+            { "CloudsEffect.Name", "Clouds" },
+            { "DesaturateEffect.Name", "Black and White" },
+            { "InvertColorsEffect.Name", "Invert Colors" },
+            { "MedianEffect.Name", "Median" },
+            { "MedianEffect.ConfigDialog.RadiusLabel", "Radius" },
+            { "MedianEffect.ConfigDialog.PercentileLabel", "Percentile" },
+            { "MotionBlurEffect.Name", "Motion Blur" },
+            { "MotionBlurEffectConfigDialog.AngleHeader.Text", "Angle" },
+            { "MotionBlurEffectConfigDialog.CenteredCheckBox.Text", "Centered" },
+            { "MotionBlurEffectConfigDialog.DistanceHeader.Text", "Distance" },
+            { "OilPaintingEffect.Name", "Oil Painting" },
+            { "OilPaintingEffect.ConfigDialog.Amount1Label", "Brush size" },
+            { "OilPaintingEffect.ConfigDialog.Amount2Label", "Coarseness" },
+            { "PencilSketchEffect.Name", "Pencil Sketch" },
+            { "PencilSketchEffect.ConfigDialog.PencilTipSizeLabel", "Pencil tip size" },
+            { "PencilSketchEffect.ConfigDialog.RangeLabel", "Color range" },
+            { "ReduceNoiseEffect.Name", "Reduce Noise" },
+            { "ZoomBlurEffect.Name", "Zoom Blur" },
+            { "ZoomBlurEffect.ConfigDialog.AmountLabel", "Zoom amount" },
+            { "ZoomBlurEffect.ConfigDialog.Offset", "Offset" },
+        };
+
         public static string GetString(string key)
         {
-            return key;
+            string text;
+            return key != null && strings.TryGetValue(key, out text) ? text : key;
         }
 
         // Los iconos de los efectos integrados no hacen falta en el proceso auxiliar.

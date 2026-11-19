@@ -561,9 +561,11 @@ void CollabController::appendChat(const Collab::ChatMessage& message)
     if (!m_chatLog)
         return;
     const QString time = QDateTime::fromMSecsSinceEpoch(message.time).toString(QStringLiteral("HH:mm"));
-    m_chatLog->append(QStringLiteral("<span style=\"color:gray\">%1</span> <b style=\"color:%2\">%3</b>: %4")
+    m_chatLog->append(QStringLiteral("<span style=\"color:%5\">%1</span> <b style=\"color:%2\">%3</b>: %4")
                           .arg(time, message.color.isValid() ? message.color.name() : QStringLiteral("#808080"),
-                               message.name.toHtmlEscaped(), message.text.toHtmlEscaped()));
+                               message.name.toHtmlEscaped(), message.text.toHtmlEscaped())
+                          // La hora, con el color de los textos secundarios del tema.
+                          .arg(m_chatLog->palette().color(QPalette::PlaceholderText).name()));
 }
 
 void CollabController::showChat()
@@ -571,12 +573,15 @@ void CollabController::showChat()
     if (!chatAvailable())
         return;
     if (!m_chatDialog) {
-        auto* dlg = new QDialog(m_window, Qt::Tool);
+        // Un diálogo normal (no Qt::Tool): lleva el marco y los colores del tema de Kaint.
+        auto* dlg = new QDialog(m_window);
+        dlg->setModal(false);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
         dlg->setWindowTitle(tr("Chat de la sesión"));
         dlg->resize(340, 380);
         auto* layout = new QVBoxLayout(dlg);
         m_chatLog = new QTextBrowser(dlg);
+        m_chatLog->setFrameShape(QFrame::StyledPanel);
         m_chatLog->setOpenExternalLinks(false);
         auto* row = new QHBoxLayout;
         auto* input = new QLineEdit(dlg);

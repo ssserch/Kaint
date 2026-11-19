@@ -859,11 +859,19 @@ export class CanvasView extends EventTarget {
         const h = lines.length * lineHeight + 10;
         const x = v.x + 4, y = v.y - 12 - h;
         ctx.save();
+        // Un solo contorno con la cola (antes, el globo y la cola eran dos figuras y se veía la línea
+        // del borde entre ellas).
+        const r = 8;
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(x, y, w, h, 8); else ctx.rect(x, y, w, h);
-        ctx.moveTo(x + 10, y + h - 1);
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.lineTo(x + 22, y + h);
         ctx.lineTo(v.x + 2, v.y - 2);
-        ctx.lineTo(x + 22, y + h - 1);
+        ctx.lineTo(x + 10, y + h);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
         ctx.shadowColor = "rgba(0,0,0,0.25)";
         ctx.shadowBlur = 4;
         ctx.shadowOffsetY = 1;

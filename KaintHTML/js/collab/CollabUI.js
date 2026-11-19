@@ -314,6 +314,8 @@ export class CollabController extends EventTarget {
         this.chatLog.scrollTop = this.chatLog.scrollHeight;
     }
 
+    // Una ventana no modal como las de la sesión: se arrastra por su título, sigue el tema y se puede
+    // seguir editando la imagen con ella abierta.
     toggleChat() {
         if (this.chatPanel) {
             this.closeChat();
@@ -321,6 +323,8 @@ export class CollabController extends EventTarget {
         }
         if (!this.chatAvailable())
             return;
+        const dlg = new Dialog(tr("Chat de la sesión"), { modeless: true });
+        dlg.element.classList.add("collab-chat");
         this.chatLog = el("div", { className: "chat-log" });
         const input = el("input", { type: "text", maxLength: 500, placeholder: tr("Escribe un mensaje…") });
         const send = () => {
@@ -330,33 +334,34 @@ export class CollabController extends EventTarget {
             input.focus();
         };
         input.addEventListener("keydown", (e) => {
-            e.stopPropagation();
-            if (e.key === "Enter")
+            if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
                 send();
-            else if (e.key === "Escape")
-                this.closeChat();
+            }
         });
-        const close = el("button", { className: "tbutton", title: tr("Cerrar"), textContent: "×" });
-        close.addEventListener("click", () => this.closeChat());
         const sendButton = el("button", { className: "pushbutton", textContent: tr("Enviar") });
         sendButton.addEventListener("click", send);
-        this.chatPanel = el("div", { className: "collab-chat" }, [
-            el("div", { className: "chat-head" }, [el("b", { textContent: tr("Chat de la sesión") }), close]),
-            this.chatLog,
-            el("div", { className: "chat-input" }, [input, sendButton]),
-        ]);
-        document.body.append(this.chatPanel);
+        dlg.body.append(this.chatLog, el("div", { className: "chat-input" }, [input, sendButton]));
+        dlg.buttons.remove();
+        this.chatPanel = dlg;
         for (const m of this.session?.chat || [])
             this.appendChat(m);
         this.unread = 0;
         this.updateStatus();
-        setTimeout(() => input.focus(), 0);
+        dlg.exec().then(() => {
+            if (this.chatPanel === dlg) {
+                this.chatPanel = null;
+                this.chatLog = null;
+            }
+        });
     }
 
     closeChat() {
-        this.chatPanel?.remove();
+        const dlg = this.chatPanel;
         this.chatPanel = null;
         this.chatLog = null;
+        dlg?.close(null);
     }
 
     // --- Sesión ----------------------------------------------------------------------------------

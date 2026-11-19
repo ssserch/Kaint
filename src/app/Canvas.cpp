@@ -908,14 +908,23 @@ void Canvas::drawRemotePointers(QPainter& p) const
             const QRect textRect = fm.boundingRect(QRect(0, 0, maxWidth, 400), Qt::TextWordWrap, r.bubble);
             const qreal bw = textRect.width() + 16, bh = std::min(textRect.height(), fm.lineSpacing() * 5) + 10;
             const QRectF bubble(v.x() + 4, v.y() - 12 - bh, bw, bh);
+            // Un solo contorno con la cola (antes, el globo y la cola se dibujaban por separado y se
+            // veía la línea del borde entre los dos).
+            const qreal k = 8, l = bubble.left(), t = bubble.top(), rr = bubble.right(), b = bubble.bottom();
             QPainterPath shape;
-            shape.addRoundedRect(bubble, 8, 8);
-            QPainterPath tail;
-            tail.moveTo(bubble.left() + 10, bubble.bottom() - 1);
-            tail.lineTo(v.x() + 2, v.y() - 2);
-            tail.lineTo(bubble.left() + 22, bubble.bottom() - 1);
-            tail.closeSubpath();
-            shape = shape.united(tail);
+            shape.moveTo(l + k, t);
+            shape.lineTo(rr - k, t);
+            shape.quadTo(rr, t, rr, t + k);
+            shape.lineTo(rr, b - k);
+            shape.quadTo(rr, b, rr - k, b);
+            shape.lineTo(l + 22, b);
+            shape.lineTo(v.x() + 2, v.y() - 2);
+            shape.lineTo(l + 10, b);
+            shape.lineTo(l + k, b);
+            shape.quadTo(l, b, l, b - k);
+            shape.lineTo(l, t + k);
+            shape.quadTo(l, t, l + k, t);
+            shape.closeSubpath();
             p.setPen(QPen(QColor(0, 0, 0, 50), 3));
             p.setBrush(Qt::NoBrush);
             p.drawPath(shape.translated(1, 1));

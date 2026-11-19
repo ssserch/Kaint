@@ -68,6 +68,14 @@ const defaults = {
     replacePixels: true,
     // Herramientas Mover: ocultar el contorno y los tiradores mientras se arrastra.
     hideMoveBox: true,
+    // La rueda del ratón cambia el valor de los deslizadores (ui/Wheel.js) y su paso: 0, el 1 % del
+    // recorrido; 1, una unidad; 2, el 5 %; 3, el 10 %.
+    wheelChangesValues: true,
+    wheelStep: 0,
+    // Pantalla táctil: girar la imagen con dos dedos, y las barras de desplazamiento (null: según el
+    // equipo, ocultas en el teléfono).
+    touchRotate: true,
+    scrollbars: null,
     // Ventanas flotantes y diálogos: 0, como los de paint.js (Windows 10); 1, compactos. Grosor
     // del borde en píxeles.
     panelStyle: 0,

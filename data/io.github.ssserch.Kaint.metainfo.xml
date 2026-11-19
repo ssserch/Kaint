@@ -109,6 +109,24 @@
   </keywords>
 
   <releases>
+    <release version="1.1.9" date="2026-11-18">
+      <description>
+        <p>A plugin system switch with OpenD2D, more file formats, an image strip like Paint.NET's and many fixes, also in the web and Android versions.</p>
+        <ul>
+          <li>Paint.NET plugins (.dll) can run with OpenD2D (mono with the open source Direct2D, DirectWrite and WIC) or inside Wine, chosen in Settings → Plugins or in the welcome window; with OpenD2D, a plugin or an effect that doesn't work with mono can run with Wine, only that part; build.sh fetches and builds the latest OpenD2D, or a released version, or a local copy</li>
+          <li>New formats: Photoshop large documents (.psb) are saved too, and PCX, SGI, Farbfeld, PAM and Windows cursors (.cur) are opened and saved by Kaint itself; Krita, GIMP, OpenEXR, Radiance HDR, JPEG 2000, macOS icons, camera RAW, SVG, Amiga IFF and more open when Qt's image plugins are installed</li>
+          <li>Image strip: the edge arrows show only where there are more images, move one image per click and highlight under the pointer, with the thumbnails fading at that edge; thumbnails are dragged with an animation, the others making room</li>
+          <li>Zoom to Window goes back to how the image opened (100 % if it fits) and centered, even after zooming or moving around; then the scroll bars hide and its button shows the framed picture</li>
+          <li>Save All: number each sequence on its own (hola1…hola9, adios1…adios5), keep their numbers or add a name beside theirs with * (puerta_*), animated reordering, and all images can be saved again</li>
+          <li>The mouse wheel over sliders (Hardness, Spacing, Tolerance, effect sliders) can be turned off and its step chosen</li>
+          <li>GIF editor: reverse the order, back and forth (boomerang), faster or slower keeping each frame's duration, move frames and remove copies</li>
+          <li>Title bar buttons: a new Automatic choice (the theme's buttons); Windows 10 buttons can now be chosen with the Windows 7 themes</li>
+          <li>Web and Android: two fingers zoom, move and rotate the image (with snapping to right angles), scroll bars can be hidden (hidden on phones), ibis Paint style effects (Extract Line Art, Chromatic Aberration, Glitch), faster image switching and history, and the same fixes and formats as the desktop</li>
+          <li>Browse Plugins has a search bar</li>
+          <li>Fixes: Random Effect and other plugins that open another effect's dialog failed; the last image could not be closed when the strip was scrolled; the strip's left arrow sometimes did nothing; Save All ignored the chosen folder for images that already had a file; in the web version, .pdn files and PSD files without warnings did not open, and closing all images left the last one on screen; Kaint can be built on macOS (no SOCK_CLOEXEC there) and the AppImage runs on older distributions</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.8" date="2026-11-12">
       <description>
         <p>Animated and video backgrounds, Windows 7 and XP in the custom theme, and better Paint.NET plugin support.</p>

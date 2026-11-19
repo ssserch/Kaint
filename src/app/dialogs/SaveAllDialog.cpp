@@ -1,5 +1,6 @@
 #include "app/dialogs/SaveAllDialog.h"
 
+#include "app/Animations.h"
 #include "app/Icons.h"
 #include "core/Raster.h"
 
@@ -19,6 +20,10 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QHash>
+#include <QCursor>
+#include <QRegularExpression>
+#include <QPropertyAnimation>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
@@ -28,6 +33,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <climits>
 #include <functional>
 
 namespace SaveAll {
@@ -220,7 +226,15 @@ public:
     void setDragging(bool on)
     {
         m_dragging = on;
-        handle->setShown(on || underMouse());
+        refreshHover();
+    }
+    // Si el puntero está encima, mirándolo de verdad: al mover las filas (arrastrando una) no llegan
+    // los avisos de entrar y salir, y una fila se quedaba resaltada.
+    void refreshHover()
+    {
+        const bool hover = isVisible() && rect().contains(mapFromGlobal(QCursor::pos()));
+        m_hover = hover;
+        handle->setShown(m_dragging || hover);
         update();
     }
 
@@ -235,19 +249,21 @@ public:
 protected:
     void enterEvent(QEnterEvent* e) override
     {
+        m_hover = true;
         handle->setShown(true);
         update();
         QWidget::enterEvent(e);
     }
     void leaveEvent(QEvent* e) override
     {
+        m_hover = false;
         handle->setShown(m_dragging);
         update();
         QWidget::leaveEvent(e);
     }
     void paintEvent(QPaintEvent*) override
     {
-        if (!m_dragging && !underMouse())
+        if (!m_dragging && !m_hover)
             return;
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
@@ -260,6 +276,7 @@ protected:
 
 private:
     bool m_dragging = false;
+    bool m_hover = false;
 };
 
 } // namespace SaveAll
@@ -297,9 +314,26 @@ QString SaveAllDialog::numberText(int number, int digits, const QString& decorat
     return decoration.contains(QLatin1String("%1")) ? QString(decoration).replace(QLatin1String("%1"), n) : decoration + n;
 }
 
-QString SaveAllDialog::composeName(const QString& pattern, int number, int digits, const QString& decoration, int* numberStart,
-                                   int* numberLength)
+QString SaveAllDialog::sequenceBase(const QString& name, int* number)
 {
+    // El número del final, suelto o entre paréntesis o corchetes, y lo que lo separa del nombre.
+    static const QRegularExpression re(QStringLiteral("^(.*?)[ _.\\-]*[(\\[]?(\\d+)[)\\]]?\\s*$"));
+    const QRegularExpressionMatch m = re.match(name);
+    if (!m.hasMatch() || m.captured(1).trimmed().isEmpty()) {
+        if (number)
+            *number = -1;
+        return name.trimmed();
+    }
+    if (number)
+        *number = m.captured(2).left(9).toInt();
+    return m.captured(1).trimmed();
+}
+
+QString SaveAllDialog::composeName(const QString& rawPattern, int number, int digits, const QString& decoration, int* numberStart,
+                                   int* numberLength, const QString& base)
+{
+    // '*' es el nombre de la imagen sin su número.
+    const QString pattern = QString(rawPattern).replace(QLatin1Char('*'), base);
     // '#' (o '##', '###'...: también son las cifras mínimas) marca dónde va el número.
     const int hash = int(pattern.indexOf(QLatin1Char('#')));
     int end = hash;
@@ -357,7 +391,8 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
     m_pattern->setPlaceholderText(tr("Nombre para todas (por ejemplo, foto#)"));
     m_pattern->setClearButtonEnabled(true);
     m_pattern->setToolTip(tr("El mismo nombre para todas las imágenes marcadas, con un número que las distingue. "
-                             "# marca dónde va el número; si no hay, va al final."));
+                             "# marca dónde va el número; si no hay, va al final. * es el nombre que ya tenía cada "
+                             "imagen, sin su número (para añadirle algo al lado: «puerta_*»)."));
     m_allFormat = new QComboBox(allRow);
     m_allFormat->setMinimumWidth(84);
     m_allFormat->setToolTip(tr("El mismo formato para todas"));
@@ -406,6 +441,27 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
     numbers->addWidget(m_numberFirst);
     numbers->addStretch();
 
+    // Secuencias (hola1…hola9, adiós1…adiós5): cada una se numera aparte, con el nombre común en
+    // cada una («*» es su nombre sin el número) y, si se quiere, con sus números de siempre.
+    auto* sequences = new QHBoxLayout;
+    sequences->setSpacing(6);
+    m_bySequence = new QCheckBox(tr("Numerar cada secuencia por separado"), this);
+    m_bySequence->setChecked(settings.value(QStringLiteral("saveAll/bySequence"), false).toBool());
+    m_bySequence->setToolTip(tr("Las imágenes que se llaman igual con un número (hola1, hola2… adiós1, adiós2…) se numeran "
+                                "cada grupo desde el principio. En el nombre común, * es el nombre de cada una sin su número: "
+                                "«puerta_*» deja puerta_hola1, puerta_hola2… puerta_adiós1…"));
+    m_keepNumbers = new QCheckBox(tr("Conservar sus números"), this);
+    m_keepNumbers->setChecked(settings.value(QStringLiteral("saveAll/keepNumbers"), false).toBool());
+    m_keepNumbers->setToolTip(tr("Cada imagen de una secuencia guarda el número que ya tenía (hola7 sigue siendo el 7)."));
+    m_sequences = new QLabel(this);
+    m_sequences->setEnabled(false);
+    sequences->addWidget(m_bySequence);
+    sequences->addSpacing(8);
+    sequences->addWidget(m_keepNumbers);
+    sequences->addSpacing(8);
+    sequences->addWidget(m_sequences);
+    sequences->addStretch();
+
     // Las imágenes.
     auto* list = new QWidget;
     m_rowLayout = new QVBoxLayout(list);
@@ -447,8 +503,10 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
         });
         row->handle->dragging = [this, row](bool on) {
             row->setDragging(on);
-            if (!on)
-                applyPattern(false);
+            if (on)
+                startDrag(row, int(QCursor::pos().y()));
+            else
+                endDrag(row);
         };
         row->handle->dragged = [this, row](int y) { moveRow(row, y); };
     }
@@ -465,14 +523,20 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
     auto* browse = new QPushButton(tr("Examinar..."), this);
     connect(browse, &QPushButton::clicked, this, [this] {
         const QString dir = QFileDialog::getExistingDirectory(this, tr("Carpeta"), QDir::fromNativeSeparators(m_folder->text()));
-        if (!dir.isEmpty())
+        if (!dir.isEmpty()) {
             m_folder->setText(QDir::toNativeSeparators(dir));
+            // Se eligió dónde guardarlas: también las que ya tenían archivo (antes se quedaban en su
+            // carpeta y parecía que no se guardaban donde se pedía).
+            m_ownFolder->setChecked(false);
+        }
     });
+    connect(m_folder, &QLineEdit::textEdited, this, [this] { m_ownFolder->setChecked(false); });
     where->addWidget(new QLabel(tr("Carpeta:"), this));
     where->addWidget(m_folder, 1);
     where->addWidget(browse);
     m_ownFolder = new QCheckBox(tr("Las que ya tienen archivo se guardan en su misma carpeta"), this);
-    m_ownFolder->setChecked(settings.value(QStringLiteral("saveAll/ownFolder"), true).toBool());
+    m_ownFolder->setChecked(settings.value(QStringLiteral("saveAll/ownFolder"), false).toBool());
+    m_ownFolder->setToolTip(tr("Sin marcar, todas se guardan en la carpeta de arriba. Elegir otra carpeta lo desmarca."));
 
     m_count = new QLabel(this);
     auto* buttons = new QDialogButtonBox(this);
@@ -490,6 +554,7 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
     layout->addSpacing(4);
     layout->addWidget(allRow);
     layout->addLayout(numbers);
+    layout->addLayout(sequences);
     layout->addWidget(scroll, 1);
     layout->addLayout(where);
     layout->addWidget(m_ownFolder);
@@ -525,6 +590,26 @@ SaveAllDialog::SaveAllDialog(const QList<Entry>& entries, const QStringList& suf
     connect(m_digits, &QSpinBox::valueChanged, this, [this] { applyPattern(false); });
     connect(m_decoration, &QComboBox::currentIndexChanged, this, [this] { applyPattern(false); });
     connect(m_numberFirst, &QCheckBox::toggled, this, [this] { applyPattern(false); });
+    connect(m_bySequence, &QCheckBox::toggled, this, [this](bool on) {
+        m_keepNumbers->setEnabled(on);
+        applyPattern(false);
+    });
+    connect(m_keepNumbers, &QCheckBox::toggled, this, [this] { applyPattern(false); });
+    m_keepNumbers->setEnabled(m_bySequence->isChecked());
+
+    // Cuántas secuencias hay entre las imágenes (dos o más con el mismo nombre y un número).
+    QHash<QString, int> groups;
+    for (const Entry& e : std::as_const(m_entries)) {
+        int n = -1;
+        const QString base = sequenceBase(e.name, &n);
+        if (n >= 0)
+            ++groups[base.toLower()];
+    }
+    int found = 0;
+    for (int c : std::as_const(groups))
+        if (c >= 2)
+            ++found;
+    m_sequences->setText(found > 0 ? tr("(%n secuencia(s))", nullptr, found) : QString());
 
     syncAllControls();
     resize(720, std::min(640, sizeHint().height() + 40));
@@ -544,15 +629,24 @@ void SaveAllDialog::applyPattern(bool resetCustom)
     if (pattern.isEmpty())
         return;
     const bool numberFirst = m_numberFirst->isChecked();
+    const bool bySequence = m_bySequence->isChecked();
+    const bool keep = bySequence && m_keepNumbers->isChecked();
     const QString decoration = m_decoration->currentData().toString();
-    int k = 0;
+    // Cuántas van de cada secuencia (o de todas, sin secuencias).
+    QHash<QString, int> counters;
     for (Row* r : std::as_const(m_rows)) {
         if (!r->check->isChecked())
             continue;
-        const int number = numberFirst ? m_start->value() + k : (k == 0 ? -1 : m_start->value() + k - 1);
+        int own = -1;
+        const QString base = sequenceBase(m_entries[r->index].name, &own);
+        const QString key = bySequence ? base.toLower() : QString();
+        int& k = counters[key];
+        int number = numberFirst ? m_start->value() + k : (k == 0 ? -1 : m_start->value() + k - 1);
+        if (keep && own >= 0)
+            number = own;
         if (!r->custom) {
             int start = 0, length = 0;
-            r->name->setText(composeName(pattern, number, m_digits->value(), decoration, &start, &length));
+            r->name->setText(composeName(pattern, number, m_digits->value(), decoration, &start, &length, base));
             r->name->setHighlights({{start, length}});
         }
         ++k;
@@ -597,30 +691,119 @@ void SaveAllDialog::syncAllControls()
     m_ok->setEnabled(checked > 0);
 }
 
+void SaveAllDialog::startDrag(Row* row, int globalY)
+{
+    // Los sitios de la lista (donde el QVBoxLayout puso cada fila) y de dónde se agarró la fila: la
+    // fila sigue al puntero y las demás se apartan con una animación (como al arrastrar en Paint.NET).
+    m_slotTops.clear();
+    for (const Row* r : std::as_const(m_rows))
+        m_slotTops << r->geometry().top();
+    std::sort(m_slotTops.begin(), m_slotTops.end());
+    m_dragRow = row;
+    m_dragGrab = globalY - row->mapToGlobal(QPoint(0, 0)).y();
+    row->raise();
+}
+
 void SaveAllDialog::moveRow(Row* row, int globalY)
 {
     const int from = int(m_rows.indexOf(row));
-    if (from < 0)
+    if (from < 0 || row != m_dragRow || m_slotTops.size() != m_rows.size())
         return;
     QWidget* list = row->parentWidget();
-    const int y = list->mapFromGlobal(QPoint(0, globalY)).y();
-    // Va delante de la primera fila (sin contar ella misma) cuyo centro queda por debajo del cursor.
-    int to = 0;
-    for (const Row* r : std::as_const(m_rows))
-        if (r != row && r->geometry().center().y() < y)
-            ++to;
-    if (to == from)
-        return;
-    m_rows.move(from, to);
-    m_rowLayout->removeWidget(row);
-    m_rowLayout->insertWidget(to, row);
+    const int top = std::clamp(list->mapFromGlobal(QPoint(0, globalY)).y() - m_dragGrab, m_slotTops.first(), m_slotTops.last());
+    row->move(row->x(), top);
+    // Su sitio: el más cercano a su centro.
+    const int center = top + row->height() / 2;
+    int to = from, best = INT_MAX;
+    for (int i = 0; i < m_slotTops.size(); ++i) {
+        const int d = std::abs(m_slotTops[i] + row->height() / 2 - center);
+        if (d < best) {
+            best = d;
+            to = i;
+        }
+    }
+    if (to != from) {
+        m_rows.move(from, to);
+        animateRows(row);
+    }
     // Que se siga viendo la fila al arrastrarla hasta el borde de la lista.
     for (QWidget* w = list->parentWidget(); w; w = w->parentWidget())
         if (auto* scroll = qobject_cast<QScrollArea*>(w)) {
             scroll->ensureWidgetVisible(row, 0, 8);
             break;
         }
-    applyPattern(false);
+}
+
+void SaveAllDialog::animateRows(Row* except)
+{
+    for (int i = 0; i < m_rows.size() && i < m_slotTops.size(); ++i) {
+        Row* r = m_rows[i];
+        if (r == except)
+            continue;
+        const QPoint target(r->x(), m_slotTops[i]);
+        auto* old = r->findChild<QPropertyAnimation*>(QStringLiteral("kaintRowMove"), Qt::FindDirectChildrenOnly);
+        if (old) {
+            if (old->endValue().toPoint() == target)
+                continue;
+            old->stop();
+            old->deleteLater();
+        }
+        if (r->pos() == target)
+            continue;
+        if (!Animations::enabled()) {
+            r->move(target);
+            continue;
+        }
+        auto* anim = new QPropertyAnimation(r, "pos", r);
+        anim->setObjectName(QStringLiteral("kaintRowMove"));
+        anim->setDuration(150);
+        anim->setEasingCurve(QEasingCurve::OutCubic);
+        anim->setStartValue(r->pos());
+        anim->setEndValue(target);
+        anim->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+}
+
+void SaveAllDialog::endDrag(Row* row)
+{
+    if (row != m_dragRow)
+        return;
+    m_dragRow = nullptr;
+    // La fila suelta va a su sitio y, al llegar, el orden queda en la lista de verdad.
+    const int index = int(m_rows.indexOf(row));
+    const QPoint target(row->x(), m_slotTops.value(index, row->y()));
+    auto finish = [this] {
+        syncLayoutOrder();
+        applyPattern(false);
+        refreshHover();
+    };
+    if (!Animations::enabled() || row->pos() == target) {
+        row->move(target);
+        finish();
+        return;
+    }
+    auto* anim = new QPropertyAnimation(row, "pos", row);
+    anim->setDuration(120);
+    anim->setEasingCurve(QEasingCurve::OutCubic);
+    anim->setStartValue(row->pos());
+    anim->setEndValue(target);
+    connect(anim, &QPropertyAnimation::finished, this, finish);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void SaveAllDialog::syncLayoutOrder()
+{
+    for (Row* r : std::as_const(m_rows))
+        m_rowLayout->removeWidget(r);
+    for (int i = 0; i < m_rows.size(); ++i)
+        m_rowLayout->insertWidget(i, m_rows[i]);
+    m_rowLayout->activate();
+}
+
+void SaveAllDialog::refreshHover()
+{
+    for (Row* r : std::as_const(m_rows))
+        r->refreshHover();
 }
 
 QString SaveAllDialog::folder() const
@@ -716,4 +899,6 @@ void SaveAllDialog::saveSettings() const
     s.setValue(QStringLiteral("saveAll/decoration"), m_decoration->currentData().toString());
     s.setValue(QStringLiteral("saveAll/numberFirst"), m_numberFirst->isChecked());
     s.setValue(QStringLiteral("saveAll/ownFolder"), m_ownFolder->isChecked());
+    s.setValue(QStringLiteral("saveAll/bySequence"), m_bySequence->isChecked());
+    s.setValue(QStringLiteral("saveAll/keepNumbers"), m_keepNumbers->isChecked());
 }

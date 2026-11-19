@@ -17,6 +17,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -100,6 +101,13 @@ namespace Kaint.PdnHost
                     Dictionary<string, object> hello = Ok();
                     hello["protocol"] = ProtocolVersion;
                     hello["runtime"] = RuntimeVersion();
+                    // Con qué se ejecuta (Kaint lo dice en KAINT_PDN_RUNTIME: OpenD2D o Wine; en
+                    // Windows, nada) y si los complementos que llaman a Direct2D lo encuentran.
+                    hello["system"] = Environment.GetEnvironmentVariable("KAINT_PDN_RUNTIME") ?? "Windows";
+                    hello["direct2d"] = Direct2DStatus();
+                    string openD2D = Environment.GetEnvironmentVariable("KAINT_OPEND2D_VERSION");
+                    if (!string.IsNullOrEmpty(openD2D))
+                        hello["opend2d"] = openD2D;
                     Send(hello);
                     break;
                 case "inspect":
@@ -186,6 +194,37 @@ namespace Kaint.PdnHost
                          "It uses parts of Paint.NET that the compatibility layer does not have (")
                        + ex.Message.Split('\n')[0].Trim() + ").";
             return ex.GetType().Name + ": " + ex.Message;
+        }
+
+        // Direct2D: el de Windows, el de Wine o el de OpenD2D (mono lleva "d2d1.dll" a su libd2d1).
+        [DllImport("d2d1.dll", EntryPoint = "D2D1CreateFactory")]
+        private static extern int D2D1CreateFactory(int factoryType, ref Guid riid, IntPtr options, out IntPtr factory);
+
+        // "ok" si se puede crear una fábrica de Direct2D (ID2D1Factory); si no, por qué.
+        private static string Direct2DStatus()
+        {
+            try
+            {
+                Guid iid = new Guid("06152247-6f50-465a-9245-118bfd3b6007");
+                IntPtr factory;
+                int hr = D2D1CreateFactory(0, ref iid, IntPtr.Zero, out factory);
+                if (hr != 0 || factory == IntPtr.Zero)
+                    return "error 0x" + hr.ToString("x8");
+                Marshal.Release(factory);
+                return "ok";
+            }
+            catch (DllNotFoundException)
+            {
+                return "missing";
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return "missing";
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
         }
 
         private static string RuntimeVersion()

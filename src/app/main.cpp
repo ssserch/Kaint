@@ -159,12 +159,14 @@ int main(int argc, char** argv)
         const QString style = rawOption(argc, argv, QStringLiteral("--preview-style")).toLower();
         if (!style.isEmpty())
             preset.setValue(QStringLiteral("settings/uiStyle"), style.contains(QLatin1String("paint")) || style == QLatin1String("pdn") ? 1 : 0);
-        // Botones de la barra de título (win11, win10, macos, win7, xp, win98) y su lado.
+        // Botones de la barra de título (auto, win11, win10, macos, win7, xp, win98) y su lado. Sin
+        // elegir, los automáticos: los del tema (los de XP con el tema Windows XP...).
         const QString buttons = rawOption(argc, argv, QStringLiteral("--preview-title-buttons")).toLower();
         const QStringList buttonNames{QStringLiteral("win10"), QStringLiteral("win11"), QStringLiteral("macos"),
-                                      QStringLiteral("win7"), QStringLiteral("xp"), QStringLiteral("win98")};
-        if (buttonNames.contains(buttons))
-            preset.setValue(QStringLiteral("settings/titleButtons"), int(buttonNames.indexOf(buttons)));
+                                      QStringLiteral("win7"), QStringLiteral("xp"), QStringLiteral("win98"),
+                                      QStringLiteral("auto")};
+        preset.setValue(QStringLiteral("settings/titleButtons"), buttonNames.contains(buttons) ? int(buttonNames.indexOf(buttons)) : 6);
+        preset.setValue(QStringLiteral("settings/titleButtonsAuto"), true);
         // En las capturas la barra de Kaint solo va si se pide (--preview-frame).
         preset.setValue(QStringLiteral("settings/customWindowFrame"), true);
         yesNo("--preview-title-left", "settings/titleButtonsLeft");
@@ -306,7 +308,8 @@ int main(int argc, char** argv)
     Theme::setWin7Glass(startup.win7Glass);
     Theme::setSelectionColors(startup.selectionColorLight, startup.selectionColorDark);
     Theme::apply(scheme);
-    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 5)));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 6)));
+    WindowFrame::setAutoFallback(startup.windowsVersion == 11 ? WindowFrame::Buttons::Windows11 : WindowFrame::Buttons::Windows10);
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(startup.win7PanelClose, 0, 2)));
     // Recreación de Windows 11 (estilo Paint.NET) y temas de Windows 7: esquinas redondeadas en

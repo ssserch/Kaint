@@ -8,6 +8,7 @@
 
 #include <memory>
 class QLabel;
+class QLineEdit;
 class QNetworkAccessManager;
 class QPushButton;
 class QTabWidget;
@@ -76,9 +77,14 @@ private:
     QString installedVersion(const Entry& e) const;
     QVBoxLayout* rows(Section section) const;
     QLabel* message(Section section) const;
+    // Muestra solo los complementos que coinciden con la búsqueda (nombre, autor, descripción o
+    // efectos), en todas las secciones; las pestañas dicen cuántos hay en cada una.
+    void applyFilter();
 
     QNetworkAccessManager* m_net = nullptr;
     QTabWidget* m_tabs = nullptr;
+    QLineEdit* m_search = nullptr;
+    QString m_titles[3];
     QVBoxLayout* m_rows[3] = {};
     QLabel* m_message[3] = {};
     QList<Entry> m_entries;

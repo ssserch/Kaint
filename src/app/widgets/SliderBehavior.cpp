@@ -1,6 +1,9 @@
 #include "app/widgets/SliderBehavior.h"
 
+#include "app/widgets/BarSlider.h"
+
 #include <QApplication>
+#include <QWheelEvent>
 #include <QMouseEvent>
 #include <QSlider>
 #include <QStyle>
@@ -156,6 +159,30 @@ bool SliderBehavior::eventFilter(QObject* watched, QEvent* event)
         if (m_following)
             slider->setSliderDown(false);
         m_following = false;
+        return true;
+    }
+    case QEvent::Wheel: {
+        // La rueda cambia el valor como en las barras de la barra de opciones (con su paso), o, si
+        // se desactivó en Configuración, pasa a la ventana de detrás (que se desplaza).
+        auto* slider = qobject_cast<QSlider*>(watched);
+        auto* we = static_cast<QWheelEvent*>(event);
+        if (!slider || !slider->isEnabled())
+            return false;
+        if (!BarSlider::wheelEnabled()) {
+            we->ignore();
+            if (QWidget* parent = slider->parentWidget())
+                QCoreApplication::sendEvent(parent, we);
+            return true;
+        }
+        const QPoint angle = we->angleDelta();
+        int& rest = m_wheelRest[slider];
+        rest += std::abs(angle.y()) >= std::abs(angle.x()) ? angle.y() : -angle.x();
+        const int steps = rest / 120;
+        rest %= 120;
+        if (steps != 0)
+            slider->setValue(slider->value() + steps * BarSlider::wheelStep(slider->minimum(), slider->maximum(), we->modifiers())
+                                                   * (slider->invertedControls() ? -1 : 1));
+        we->accept();
         return true;
     }
     default:

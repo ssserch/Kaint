@@ -271,6 +271,8 @@ private:
     const Effect* m_lastEffect = nullptr;
     // Los efectos de BoltBait activados la última vez que se aplicó la configuración.
     QStringList m_appliedBoltBait;
+    // El sistema de complementos de Paint.NET aplicado (-1: todavía ninguno).
+    int m_appliedPluginRuntime = -1;
     // Filas que ocupa la tira de imágenes en la fila de arriba.
     int m_tabsColumnRows = 2;
     QHash<QString, ParamValues> m_effectValues;

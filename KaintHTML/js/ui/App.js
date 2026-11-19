@@ -17,7 +17,7 @@ import { Settings } from "../Settings.js";
 import { REPOSITORY, VERSION } from "../version.js";
 import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
-import { applySetting as applyAnimations } from "./Animations.js";
+import { applySetting as applyAnimations, enabled as animationsEnabled } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
 import { applyThemeColors, applyWindowButtons } from "./Themes.js";
 import { applyBackground } from "./Background.js";
@@ -34,6 +34,7 @@ import { isPhone, MobilePanels } from "./Mobile.js";
 import { ToolOptions } from "./ToolOptions.js";
 import { saveConfigDialog } from "./SaveDialog.js";
 import { saveAllDialog } from "./SaveAllDialog.js";
+import { installRangeWheel } from "./Wheel.js";
 import { formatLength, pixelsPerUnit, unitSuffix } from "./Units.js";
 import { ToolManager } from "../tools/Tool.js";
 import { CollabController } from "../collab/CollabUI.js";
@@ -118,6 +119,8 @@ export class App extends EventTarget {
             this.view.update();
         });
         this.installKeyboard();
+        // La rueda sobre los deslizadores de los diálogos (configurable, como en Kaint).
+        installRangeWheel();
         this.installClipboard();
         this.installDrop();
         // El área de trabajo y la página no se desplazan nunca (el lienzo tiene sus barras).
@@ -282,8 +285,9 @@ export class App extends EventTarget {
         this.rememberSession();
     }
 
-    setCurrent(doc) {
-        if (doc === this.doc)
+    // 'force': aunque sea la misma (al cerrar la última imagen, el lienzo tiene que quedar vacío).
+    setCurrent(doc, force = false) {
+        if (doc === this.doc && !force)
             return;
         this.tools.finishCurrent();
         this.doc = doc;
@@ -321,10 +325,17 @@ export class App extends EventTarget {
         if (!guest && this.collab?.isSessionDocument(doc) && !(await this.collab.leave(ask)))
             return false;
         const i = this.docs.indexOf(doc);
+        if (i < 0)
+            return true;
         this.docs.splice(i, 1);
         if (doc === this.doc) {
-            this.doc = null;
-            this.setCurrent(this.docs[Math.min(i, this.docs.length - 1)] || null);
+            // (Antes se ponía this.doc = null y setCurrent(null) no hacía nada: al cerrar la última,
+            // o con «Cerrar todas», el lienzo seguía mostrando la imagen cerrada.)
+            this.setCurrent(this.docs[Math.min(i, this.docs.length - 1)] || null, true);
+        }
+        if (doc.tab) {
+            doc.tab.remove();
+            doc.tab = null;
         }
         this.rebuildTabs();
         this.rememberSession();
@@ -505,6 +516,7 @@ export class App extends EventTarget {
                     doc.fileHandle = handle;
                     doc.fileName = name;
                     doc.markSaved();
+                    this.updateTab(doc, true);
                 } catch (e) {
                     errors.push(tr("«%1»: %2", name, String(e?.message || e)));
                 }
@@ -614,36 +626,52 @@ export class App extends EventTarget {
         });
     }
 
+    // La tira con una pestaña por imagen. Las que ya estaban se reutilizan (con su miniatura): antes se
+    // rehacían todas, con su miniatura (acoplar cada imagen), en cada cambio de imagen, y con muchas
+    // imágenes abiertas cambiar de una a otra iba lento (y no se podía arrastrar una pestaña).
     rebuildTabs() {
         const strip = document.getElementById("image-strip");
         this.setupStrip(strip);
-        strip.replaceChildren(strip.arrows[0]);
+        const fresh = [];
         for (const doc of this.docs) {
-            const tab = el("div", { className: "image-tab" + (doc === this.doc ? " current" : ""), title: doc.displayName() });
-            const close = el("div", { className: "close", title: tr("Cerrar") });
-            close.addEventListener("pointerdown", (e) => e.stopPropagation());
-            close.addEventListener("click", () => this.closeDocument(doc));
-            tab.addEventListener("pointerdown", (e) => {
-                if (e.button === 1) {
-                    e.preventDefault();
-                    this.closeDocument(doc);
-                } else if (e.button === 0) {
-                    this.setCurrent(doc);
-                }
-            });
-            tab.addEventListener("contextmenu", (e) => {
-                e.preventDefault();
-                popupMenu([this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("close"),
-                           this.actions.get("closeAll")], e.clientX, e.clientY);
-            });
-            tab.append(close);
-            doc.tab = tab;
-            strip.appendChild(tab);
-            this.updateTab(doc, true);
+            if (!doc.tab) {
+                doc.tab = this.makeTab(strip, doc);
+                fresh.push(doc);
+            }
+            doc.tab.classList.toggle("current", doc === this.doc);
         }
-        strip.appendChild(strip.arrows[1]);
+        const tabs = this.docs.map((d) => d.tab);
+        if (tabs.length !== strip.children.length || tabs.some((t, i) => strip.children[i] !== t))
+            strip.replaceChildren(...tabs);
+        for (const doc of fresh)
+            this.updateTab(doc, true);
         strip.updateArrows();
+        // La imagen actual, a la vista.
+        this.doc?.tab?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
         setWindowTitle(this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - Kaint` : "Kaint");
+    }
+
+    makeTab(strip, doc) {
+        const tab = el("div", { className: "image-tab", title: doc.displayName() });
+        const close = el("div", { className: "close", title: tr("Cerrar") });
+        close.addEventListener("pointerdown", (e) => e.stopPropagation());
+        close.addEventListener("click", () => this.closeDocument(doc));
+        tab.addEventListener("pointerdown", (e) => {
+            if (e.button === 1) {
+                e.preventDefault();
+                this.closeDocument(doc);
+            } else if (e.button === 0) {
+                this.setCurrent(doc);
+                this.startTabDrag(strip, tab, doc, e);
+            }
+        });
+        tab.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            popupMenu([this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("close"),
+                       this.actions.get("closeAll")], e.clientX, e.clientY);
+        });
+        tab.append(close);
+        return tab;
     }
 
     // Tamaño máximo de las miniaturas. A lo alto de toda la fila, como en Kaint de escritorio y
@@ -657,26 +685,44 @@ export class App extends EventTarget {
     }
 
     // La tira: la rueda la desplaza (suave, como arrastrándola) en vez de cambiar de imagen, una
-    // flecha en cada borde indica hacia dónde quedan más imágenes y, al cambiar de alto, las
-    // miniaturas se rehacen con el tamaño nuevo.
+    // flecha en cada borde indica hacia dónde quedan más imágenes (como en Paint.NET: encima de las
+    // miniaturas, que se desvanecen en ese borde; un clic lleva una imagen hacia ese lado) y, al
+    // cambiar de alto, las miniaturas se rehacen con el tamaño nuevo.
     setupStrip(strip) {
         if (strip.arrows)
             return;
+        const row = strip.parentElement;
+        if (getComputedStyle(row).position === "static")
+            row.style.position = "relative";
         const arrow = (side) => {
             const a = el("div", { className: `strip-arrow ${side}` });
-            a.innerHTML = `<svg width="8" height="10" viewBox="0 0 8 10"><polyline points="${side === "left" ? "6,1 2,5 6,9" : "2,1 6,5 2,9"}"
-                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            const pts = side === "left" ? ["7,1 3,6 7,11", "11,1 7,6 11,11"] : ["3,1 7,6 3,11", "7,1 11,6 7,11"];
+            a.innerHTML = `<svg width="14" height="12" viewBox="0 0 14 12">${pts.map((p) => `<polyline points="${p}" fill="none"
+                stroke="rgba(0,0,0,.6)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}
+                ${pts.map((p) => `<polyline points="${p}" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"
+                stroke-linejoin="round"/>`).join("")}</svg>`;
             a.addEventListener("pointerdown", (e) => {
                 e.stopPropagation();
-                strip.scrollBy({ left: (side === "left" ? -1 : 1) * 90, behavior: "smooth" });
+                e.preventDefault();
+                this.scrollStripOneImage(strip, side === "right");
             });
+            row.appendChild(a);
             return a;
         };
         strip.arrows = [arrow("left"), arrow("right")];
         strip.updateArrows = () => {
             const max = strip.scrollWidth - strip.clientWidth;
-            strip.arrows[0].classList.toggle("shown", strip.scrollLeft > 1);
-            strip.arrows[1].classList.toggle("shown", strip.scrollLeft < max - 1);
+            const left = strip.scrollLeft > 1, right = strip.scrollLeft < max - 1;
+            strip.arrows[0].classList.toggle("shown", left);
+            strip.arrows[1].classList.toggle("shown", right);
+            strip.classList.toggle("fade-left", left);
+            strip.classList.toggle("fade-right", right);
+            // Encima de la tira (son hermanas suyas: así no se desvanecen con ella).
+            for (const [i, a] of strip.arrows.entries()) {
+                a.style.top = `${strip.offsetTop}px`;
+                a.style.height = `${strip.offsetHeight}px`;
+                a.style.left = `${strip.offsetLeft + (i ? strip.clientWidth - 16 : 0)}px`;
+            }
         };
         strip.addEventListener("scroll", strip.updateArrows, { passive: true });
         let target = null;
@@ -710,6 +756,144 @@ export class App extends EventTarget {
                 this.updateTab(doc, true);
         }).observe(strip);
         strip.style.setProperty("--thumb-w", `${this.thumbBox().w}px`);
+    }
+
+    // Una imagen hacia ese lado: la siguiente que no se ve entera queda junto a la flecha (o en el
+    // borde, si es la primera o la última).
+    scrollStripOneImage(strip, right) {
+        const tabs = [...strip.querySelectorAll(".image-tab")];
+        const box = strip.getBoundingClientRect();
+        const arrowW = 16;
+        let target = null;
+        if (!right) {
+            for (let i = tabs.length - 1; i >= 0; i--) {
+                const r = tabs[i].getBoundingClientRect();
+                if (r.left - box.left < arrowW - 0.5) {
+                    target = i === 0 ? 0 : strip.scrollLeft + (r.left - box.left) - arrowW;
+                    break;
+                }
+            }
+        } else {
+            for (let i = 0; i < tabs.length; i++) {
+                const r = tabs[i].getBoundingClientRect();
+                if (r.right - box.left > strip.clientWidth - arrowW + 0.5) {
+                    target = strip.scrollLeft + (r.right - box.left) - (i === tabs.length - 1 ? strip.clientWidth : strip.clientWidth - arrowW);
+                    break;
+                }
+            }
+        }
+        if (target === null)
+            return;
+        const max = strip.scrollWidth - strip.clientWidth;
+        strip.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: animationsEnabled() ? "smooth" : "auto" });
+    }
+
+    // Arrastrar una miniatura (como en Paint.NET): va con el puntero y las demás se apartan con una
+    // animación para dejarle sitio; al soltarla, la imagen pasa a ese lugar.
+    startTabDrag(strip, tab, doc, down) {
+        const startX = down.clientX;
+        const tabs = () => [...strip.querySelectorAll(".image-tab")];
+        let dragging = false, from = -1, to = -1, slot = 0, grabOffset = 0, autoScroll = 0, lastX = startX;
+        const place = () => {
+            const list = tabs();
+            const box = strip.getBoundingClientRect();
+            const scrolled = strip.scrollLeft;
+            // Dónde estaría la miniatura: el sitio cuyo centro queda más cerca del suyo.
+            const center = lastX - box.left + scrolled - grabOffset + tab.offsetWidth / 2;
+            let best = from, bestD = Infinity;
+            list.forEach((t, i) => {
+                const c = t.slotLeft + t.offsetWidth / 2;
+                const d = Math.abs(c - center);
+                if (d < bestD) {
+                    bestD = d;
+                    best = i;
+                }
+            });
+            to = best;
+            list.forEach((t, i) => {
+                if (t === tab)
+                    return;
+                let dx = 0;
+                if (from < to && i > from && i <= to)
+                    dx = -slot;
+                else if (from > to && i >= to && i < from)
+                    dx = slot;
+                t.style.transform = dx ? `translateX(${dx}px)` : "";
+            });
+            tab.style.transform = `translateX(${lastX - box.left + scrolled - grabOffset - tab.slotLeft}px)`;
+        };
+        const move = (e) => {
+            lastX = e.clientX;
+            if (!dragging) {
+                if (Math.abs(e.clientX - startX) < 5)
+                    return;
+                dragging = true;
+                const list = tabs();
+                from = list.indexOf(tab);
+                if (from < 0 || list.length < 2) {
+                    finish();
+                    return;
+                }
+                const box = strip.getBoundingClientRect();
+                list.forEach((t) => (t.slotLeft = t.getBoundingClientRect().left - box.left + strip.scrollLeft));
+                slot = list.length > 1 ? list[1].slotLeft - list[0].slotLeft : tab.offsetWidth;
+                grabOffset = startX - box.left + strip.scrollLeft - tab.slotLeft;
+                strip.classList.add("dragging");
+                tab.classList.add("dragged");
+                autoScroll = setInterval(() => {
+                    // Con el puntero en un borde, la tira se desplaza sola.
+                    const b = strip.getBoundingClientRect();
+                    if (lastX < b.left + 32)
+                        strip.scrollLeft -= 10;
+                    else if (lastX > b.right - 32)
+                        strip.scrollLeft += 10;
+                    else
+                        return;
+                    place();
+                }, 16);
+            }
+            place();
+        };
+        const finish = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", finish);
+            window.removeEventListener("pointercancel", finish);
+            clearInterval(autoScroll);
+            if (!dragging)
+                return;
+            const list = tabs();
+            // Desde donde se ve cada una (FLIP): las demás ya están en su sitio nuevo; la arrastrada va
+            // de donde se soltó al suyo.
+            const before = new Map(list.map((t) => [t, t.getBoundingClientRect().left]));
+            strip.classList.remove("dragging");
+            list.forEach((t) => {
+                t.style.transition = "none";
+                t.style.transform = "";
+            });
+            if (to >= 0 && to !== from) {
+                const [moved] = this.docs.splice(from, 1);
+                this.docs.splice(to, 0, moved);
+                const ref = list.filter((t) => t !== tab)[to] ?? null;
+                strip.insertBefore(tab, ref);
+                this.rememberSession();
+            }
+            for (const t of list) {
+                const dx = before.get(t) - t.getBoundingClientRect().left;
+                if (Math.abs(dx) < 0.5)
+                    continue;
+                t.style.transform = `translateX(${dx}px)`;
+            }
+            requestAnimationFrame(() => {
+                for (const t of list) {
+                    t.style.transition = "";
+                    t.style.transform = "";
+                }
+                tab.classList.remove("dragged");
+            });
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
     }
 
     updateTab(doc, now = false) {
@@ -874,7 +1058,7 @@ export class App extends EventTarget {
         // Ver
         A("zoomIn", tr("&Acercar"), "zoom-in", ["Ctrl++", "Ctrl+=", "Ctrl+Shift+="], () => this.view.zoomIn(), has);
         A("zoomOut", tr("A&lejar"), "zoom-out", ["Ctrl+-", "Ctrl+Shift+-"], () => this.view.zoomOut(), has);
-        A("zoomFit", tr("&Zum a ventana"), "zoom-fit-best", "Ctrl+B", () => this.view.zoomToWindow(), has);
+        A("zoomFit", tr("&Zum a ventana"), "zoom-fit-best", "Ctrl+B", () => this.view.toggleZoomToWindow(), has);
         A("zoomSel", tr("Zum a &selección"), "zoom-select", "Ctrl+Shift+B", () => this.view.zoomToRect(this.doc.selection.bounds()), sel);
         A("actualSize", tr("&Tamaño real"), "zoom-original", "Ctrl+0", () => this.view.setZoom(1), has);
         A("pixelGrid", tr("Cuadrícula de &píxeles"), "view-grid", "Ctrl+'", () => {
@@ -1168,7 +1352,8 @@ export class App extends EventTarget {
         this.effectProgress.hidden = true;
         bar.append(this.hintIcon, this.hintLabel, this.effectProgress, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
                    item("status-cursor", this.posLabel, tr("Posición del cursor"), "cursor-position"), this.createUnitButton(),
-                   this.zoomBox, presets, this.actionButton("zoomFit"), this.actionButton("zoomOut"), this.zoomSlider, this.actionButton("zoomIn"));
+                   this.zoomBox, presets, this.zoomFitButton = this.actionButton("zoomFit"), this.actionButton("zoomOut"), this.zoomSlider,
+                   this.actionButton("zoomIn"));
     }
 
     // Unidades: botón compacto («px», «in», «cm») con menú, como en Kaint.
@@ -1273,6 +1458,12 @@ export class App extends EventTarget {
     updateZoomBox() {
         if (document.activeElement !== this.zoomBox)
             this.zoomBox.value = `${Math.round(this.view.zoom * 100)} %`;
+        // Como en Paint.NET: con la imagen como la deja «Zum a ventana», la imagen enmarcada.
+        const atWindow = this.view.atWindowZoom();
+        if (this.zoomFitButton && this.zoomFitButton.atWindow !== atWindow) {
+            this.zoomFitButton.atWindow = atWindow;
+            this.zoomFitButton.replaceChildren(icon(atWindow ? "zoom-original" : "zoom-fit-best", 16));
+        }
         const t = (Math.log(this.view.zoom) - Math.log(0.01)) / (Math.log(64) - Math.log(0.01));
         this.zoomSlider.value = String(Math.round(t * 1000));
         updateActions();
@@ -1742,6 +1933,8 @@ export class App extends EventTarget {
         doc.fileHandle = handle;
         doc.fileName = name;
         doc.markSaved();
+        // (La pestaña, sin la estrella de los cambios y con el nombre nuevo, al momento.)
+        this.updateTab(doc, true);
         this.rebuildTabs();
         this.rememberSession();
         return true;

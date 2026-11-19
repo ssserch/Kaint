@@ -78,6 +78,16 @@ struct AppSettings {
     // Las funciones de PhotoCraft (herramientas, ajustes y efectos): desactivadas por defecto; en
     // los menús llevan la pieza de puzle de los complementos.
     bool photocraftExtras = false;
+    // Con qué se cargan los complementos de Paint.NET (.dll) en Linux, macOS y FreeBSD
+    // (PdnBridge::Runtime): 0, OpenD2D (mono con el Direct2D de código abierto); 1, Wine.
+    int pluginRuntime = 0;
+    // Con OpenD2D, lo que no funcione con mono (un complemento o un efecto) se ejecuta con Wine.
+    bool pluginWineFallback = true;
+    // La rueda del ratón cambia el valor de los deslizadores (Dureza, Tolerancia, los de los
+    // efectos...) al pasar por encima; si no, desplaza la ventana. Paso de cada vuelta:
+    // 0, el 1 % del recorrido; 1, una unidad; 2, el 5 %; 3, el 10 %.
+    bool wheelChangesValues = true;
+    int wheelStep = 0;
     // La tira de imágenes a lo alto de toda la fila de arriba (también la de la barra de título):
     // el recuadro de la imagen actual y el de la que tiene el puntero llegan arriba del todo, como en
     // Paint.NET.
@@ -112,9 +122,10 @@ struct AppSettings {
     bool customFrame = true;
 #endif
     // Botones de la barra de título de Kaint (WindowFrame::Buttons): 0 Windows 10, 1 Windows 11,
-    // 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98. (Antes, -1 era «la del escritorio»: ahora es
-    // customFrame.)
-    int titleButtons = 0;
+    // 2 macOS, 3 Windows 7, 4 Windows XP, 5 Windows 98, 6 automáticos (los del tema: los de Windows 7
+    // con sus temas, los de XP con el de XP... y si no, los de Windows 10 u 11). (Antes, -1 era «la
+    // del escritorio»: ahora es customFrame; y 0, Windows 10, hacía de automáticos.)
+    int titleButtons = 6;
     // La X de las ventanas flotantes con los temas Windows 7 (WindowFrame::PanelClose7): unida al
     // borde de arriba, rectángulo o cuadrado.
     int win7PanelClose = 1;

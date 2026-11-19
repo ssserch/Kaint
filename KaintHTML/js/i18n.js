@@ -4,6 +4,34 @@
 import en from "./i18n/en.js";
 
 const extra = {
+    // 1.1.9: lo propio de la web y del móvil (Kaint.APK), y textos que Kaint para el escritorio ya no usa.
+    "Aberración cromática": "Chromatic Aberration",
+    "Blanco a partir de": "White from",
+    "Color de las líneas": "Line color",
+    "Con dos dedos se acerca o aleja (pellizcando), se mueve y, al girarlos, la imagen gira (con imán a 0°, 90°, 180° y 270°). Al tocar el ángulo, en la esquina, vuelve derecha.":
+        "With two fingers the image zooms in or out (pinching), moves and, turning them, rotates (snapping to 0°, 90°, 180° and 270°). Tapping the angle, in the corner, straightens it.",
+    "El de la imagen": "The image's",
+    "En el teléfono están ocultas por defecto: la imagen se mueve con dos dedos.": "On phones they're hidden by default: the image moves with two fingers.",
+    "En línea": "Linear",
+    "Desde el centro": "From the center",
+    "Dirección": "Direction",
+    "Estilo ibis Paint": "ibis Paint style",
+    "Extraer dibujo lineal": "Extract Line Art",
+    "Franjas": "Slices",
+    "Girar la imagen con dos dedos": "Rotate the image with two fingers",
+    "Glitch": "Glitch",
+    "Intensidad de las líneas": "Line strength",
+    "Mostrar las barras de desplazamiento": "Show the scroll bars",
+    "Pantalla táctil": "Touch screen",
+    "Separación": "Separation",
+    "Separación de colores": "Color separation",
+    "Ventanas": "Windows",
+    "Ventanas con las esquinas algo redondeadas (los temas de Windows 7 las traen por defecto).": "Windows with slightly rounded corners (the Windows 7 themes have them by default).",
+    "Windows 10": "Windows 10",
+    "Complementos de Paint.NET (.dll) que funcionan en Kaint para el escritorio (en Windows; en Linux, macOS y FreeBSD, con OpenD2D o con Wine). En el navegador no se pueden ejecutar: instálalos desde Kaint.":
+        "Paint.NET plugins (.dll) that work in Kaint for the desktop (on Windows; on Linux, macOS and FreeBSD, with OpenD2D or Wine). They can't run in the browser: install them from Kaint.",
+    "Buscar complementos (nombre, autor, efecto…)": "Search plugins (name, author, effect…)",
+    "Ningún complemento coincide con la búsqueda.": "No plugin matches the search.",
     "Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint (sin los botones de la ventana).": "At the top, the Kaint icon and the image title, like Kaint's title bar (without the window buttons).",
     "Como en Paint.NET: el recuadro de la imagen actual y el de la que tiene el puntero llegan hasta arriba. Desactivado, solo la altura de la miniatura.": "As in Paint.NET: the box of the current image and of the one under the pointer reach the top. Off: only the height of the thumbnail.",
     "Complementos de Paint.NET (.dll) que funcionan en Kaint para el escritorio (Windows, y Linux con mono). En el navegador no se pueden ejecutar: instálalos desde Kaint.": "Paint.NET plugins (.dll) that work in Kaint for the desktop (Windows, and Linux with mono). They can't run in the browser: install them from Kaint.",

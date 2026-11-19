@@ -35,3 +35,37 @@ QByteArray encode(const QImage& image);
 QImage decode(const QByteArray& data, QString* error = nullptr);
 
 } // namespace Qoi
+
+// PCX (ZSoft Paintbrush): se escribe en 24 bits (32 con transparencia, 4 planos) o en 8 con paleta;
+// se lee también el de 1, 2 y 4 bits (monocromo, CGA y EGA).
+namespace Pcx {
+
+QByteArray encode(const QImage& image);
+QImage decode(const QByteArray& data, QString* error = nullptr);
+
+} // namespace Pcx
+
+// SGI (Silicon Graphics: .sgi, .rgb, .rgba, .bw): RGB o RGBA comprimido con RLE; se leen también los
+// de grises y los de 16 bits por canal.
+namespace Sgi {
+
+QByteArray encode(const QImage& image);
+QImage decode(const QByteArray& data, QString* error = nullptr);
+
+} // namespace Sgi
+
+// Farbfeld (.ff, de suckless): RGBA de 16 bits por canal, sin comprimir.
+namespace Farbfeld {
+
+QByteArray encode(const QImage& image);
+QImage decode(const QByteArray& data, QString* error = nullptr);
+
+} // namespace Farbfeld
+
+// PAM (Netpbm P7): el de Netpbm con transparencia.
+namespace Pam {
+
+QByteArray encode(const QImage& image);
+QImage decode(const QByteArray& data, QString* error = nullptr);
+
+} // namespace Pam

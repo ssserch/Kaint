@@ -30,6 +30,10 @@ export class CanvasView extends EventTarget {
         this.tool = null;
         this.zoom = 1;
         this.origin = { x: 0, y: 0 };
+        // Giro de la vista (radianes), alrededor del centro: con dos dedos, como en las aplicaciones de
+        // dibujo del móvil. Las coordenadas de "vista" de las herramientas son las de la vista sin
+        // girar; las de la pantalla se convierten con screenToView.
+        this.rotation = 0;
         this.fitOnResize = true;
         this.pixelGrid = false;
         this.mouse = null;
@@ -52,6 +56,14 @@ export class CanvasView extends EventTarget {
         new ResizeObserver(() => this.resized()).observe(workspace);
         this.installEvents();
         this.installScrollbars();
+        this.installRotationChip();
+        // Barras de desplazamiento (Configuración): en el teléfono, ocultas por defecto (como en las
+        // aplicaciones de dibujo del móvil: la imagen se mueve con dos dedos).
+        this.applyScrollbarSetting();
+        window.addEventListener("kaint-settings", (e) => {
+            if (e.detail?.key === "scrollbars")
+                this.applyScrollbarSetting();
+        });
         // Las hormigas avanzan 25 píxeles por segundo (una vuelta del patrón en 0,32 s), casi como
         // en Paint.NET, como en Kaint: 1 px cada 40 ms (a 1 px cada 120 ms se arrastraban).
         setInterval(() => this.stepAnts(), 40);
@@ -72,6 +84,86 @@ export class CanvasView extends EventTarget {
 
     viewSize() {
         return { w: this.canvas.clientWidth, h: this.canvas.clientHeight };
+    }
+
+    // De la pantalla (relativa al lienzo) a la vista sin girar, y al revés.
+    screenToView(x, y) {
+        if (!this.rotation)
+            return { x, y };
+        const v = this.viewSize(), cx = v.w / 2, cy = v.h / 2;
+        const c = Math.cos(-this.rotation), s = Math.sin(-this.rotation);
+        return { x: cx + (x - cx) * c - (y - cy) * s, y: cy + (x - cx) * s + (y - cy) * c };
+    }
+
+    viewToScreen(x, y) {
+        if (!this.rotation)
+            return { x, y };
+        const v = this.viewSize(), cx = v.w / 2, cy = v.h / 2;
+        const c = Math.cos(this.rotation), s = Math.sin(this.rotation);
+        return { x: cx + (x - cx) * c - (y - cy) * s, y: cy + (x - cx) * s + (y - cy) * c };
+    }
+
+    // Un desplazamiento en la pantalla (dedo, rueda, Mano) en la vista sin girar.
+    scrollByScreen(dx, dy) {
+        if (this.rotation) {
+            const c = Math.cos(-this.rotation), s = Math.sin(-this.rotation);
+            [dx, dy] = [dx * c - dy * s, dx * s + dy * c];
+        }
+        this.scrollBy(dx, dy);
+    }
+
+    setRotation(angle) {
+        // Entre -180° y 180°.
+        angle = Math.atan2(Math.sin(angle), Math.cos(angle));
+        if (Math.abs(angle) < 1e-6)
+            angle = 0;
+        if (angle === this.rotation)
+            return;
+        this.rotation = angle;
+        this.update();
+        this.updateRotationChip();
+        this.dispatchEvent(new Event("rotation"));
+    }
+
+    // Con la vista girada, un aviso con el ángulo en una esquina del área de trabajo: al tocarlo, la
+    // imagen vuelve derecha (con una animación).
+    installRotationChip() {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "rotation-chip";
+        chip.addEventListener("pointerdown", (e) => e.stopPropagation());
+        chip.addEventListener("click", () => {
+            const from = this.rotation;
+            if (!from)
+                return;
+            const start = performance.now(), ms = Settings.get("animations") ? 220 : 0;
+            const step = (now) => {
+                const t = ms ? Math.min(1, (now - start) / ms) : 1;
+                this.setRotation(from * (1 - (1 - (1 - t) ** 3)));
+                if (t < 1)
+                    requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        });
+        this.workspace.appendChild(chip);
+        this.rotationChip = chip;
+        this.updateRotationChip();
+    }
+
+    updateRotationChip() {
+        const chip = this.rotationChip;
+        if (!chip)
+            return;
+        chip.classList.toggle("shown", !!this.rotation);
+        const deg = Math.round((this.rotation * 180) / Math.PI);
+        chip.textContent = `⟲ ${deg}°`;
+        chip.title = deg ? "0°" : "";
+    }
+
+    applyScrollbarSetting() {
+        const value = Settings.get("scrollbars");
+        const phone = matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) <= 600;
+        this.workspace.classList.toggle("no-scrollbars", value === undefined || value === null ? phone : !value);
     }
 
     imageToView(x, y) {
@@ -221,6 +313,7 @@ export class CanvasView extends EventTarget {
     zoomToWindow() {
         if (!this.doc)
             return;
+        this.setRotation(0);
         this.zoom = this.fitZoom();
         this.origin = { x: -1e9, y: -1e9 };
         this.clampOrigin();
@@ -231,6 +324,40 @@ export class CanvasView extends EventTarget {
         this.fitOnResize = true;
         this.update();
         this.emitZoom();
+    }
+
+    // Como en Paint.NET (y Kaint): la imagen como la deja «Zum a ventana» (al 100 % si cabe, si no
+    // ajustada) y centrada. Así no hay barras de desplazamiento y el botón cambia de icono.
+    atWindowZoom() {
+        if (!this.doc || this.rotation)
+            return false;
+        const z = this.fitZoom();
+        if (Math.abs(this.zoom - z) > z * 1e-6)
+            return false;
+        const v = this.viewSize();
+        const cx = (v.w - this.doc.width * this.scale) / 2, cy = (v.h - this.doc.height * this.scale) / 2;
+        return Math.abs(this.origin.x - cx) <= 1 && Math.abs(this.origin.y - cy) <= 1;
+    }
+
+    // El botón: a la ventana; si ya está así (sin tocar nada desde entonces), a la vista de antes.
+    toggleZoomToWindow() {
+        if (!this.doc)
+            return;
+        if (this.beforeFit && this.atWindowZoom()) {
+            const { zoom, center } = this.beforeFit;
+            this.beforeFit = null;
+            this.setZoom(zoom);
+            this.centerOn(center.x, center.y);
+            this.emitZoom();
+            return;
+        }
+        if (this.atWindowZoom()) {
+            this.beforeFit = null;
+            return;
+        }
+        const v = this.viewSize();
+        this.beforeFit = { zoom: this.zoom, center: this.viewToImage(v.w / 2, v.h / 2) };
+        this.zoomToWindow();
     }
 
     zoomToRect(r) {
@@ -266,6 +393,29 @@ export class CanvasView extends EventTarget {
         else
             this.clampOrigin();
         this.render();
+    }
+
+    // El color del área de trabajo (--workspace del tema): getComputedStyle en cada fotograma obligaba
+    // al navegador a recalcular los estilos. Se vuelve a leer cuando cambian las clases o el estilo
+    // de la página (el tema).
+    workspaceColor() {
+        const root = document.documentElement;
+        const key = `${root.className}|${root.getAttribute("style") ?? ""}`;
+        if (key !== this.workspaceKey) {
+            this.workspaceKey = key;
+            this.workspaceFill = getComputedStyle(root).getPropertyValue("--workspace").trim() || "#cfcfcf";
+        }
+        return this.workspaceFill;
+    }
+
+    // El patrón del damero, el mismo mientras no cambie el brillo.
+    checker(ctx) {
+        const brightness = Settings.get("checkerBrightness");
+        if (!this.checkerFill || this.checkerBrightness !== brightness) {
+            this.checkerBrightness = brightness;
+            this.checkerFill = checkerPattern(ctx, brightness);
+        }
+        return this.checkerFill;
     }
 
     // --- Barras de desplazamiento ----------------------------------------------------------
@@ -335,9 +485,15 @@ export class CanvasView extends EventTarget {
 
     updateScrollbars() {
         const v = this.viewSize();
+        const atWindow = this.atWindowZoom();
+        if (atWindow !== this.lastAtWindow) {
+            this.lastAtWindow = atWindow;
+            this.dispatchEvent(new Event("zoom"));
+        }
         for (const [bar, horizontal] of [[this.hScroll, true], [this.vScroll, false]]) {
             const thumb = bar.querySelector(".thumb");
-            if (!this.doc) {
+            // Sin imagen, o con la vista como la deja «Zum a ventana»: sin barras.
+            if (!this.doc || atWindow) {
                 thumb.style.display = "none";
                 continue;
             }
@@ -399,13 +555,12 @@ export class CanvasView extends EventTarget {
     render() {
         const ctx = this.ctx, dpr = this.dpr, v = this.viewSize();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const styles = getComputedStyle(document.documentElement);
         // Con una imagen o un vídeo de fondo (tema personalizado), alrededor de la imagen se ve la
         // capa de detrás (Background.js).
         if (document.documentElement.classList.contains("workspace-media")) {
             ctx.clearRect(0, 0, v.w, v.h);
         } else {
-            ctx.fillStyle = styles.getPropertyValue("--workspace").trim() || "#cfcfcf";
+            ctx.fillStyle = this.workspaceColor();
             ctx.fillRect(0, 0, v.w, v.h);
         }
         const doc = this.doc;
@@ -418,25 +573,42 @@ export class CanvasView extends EventTarget {
         this.updateComposite();
         const x = this.origin.x, y = this.origin.y, w = doc.width * this.scale, h = doc.height * this.scale;
         this.reportImageRect({ x, y, w, h }, v);
+        // Con la vista girada, todo lo de encima (imagen, selección, herramientas) se dibuja girado
+        // alrededor del centro.
+        if (this.rotation) {
+            ctx.translate(v.w / 2, v.h / 2);
+            ctx.rotate(this.rotation);
+            ctx.translate(-v.w / 2, -v.h / 2);
+        }
+        // Lo que se ve de la vista sin girar (con el giro, el rectángulo que la contiene).
+        const reach = this.rotation ? Math.hypot(v.w, v.h) / 2 : 0;
+        const view0 = { x: this.rotation ? v.w / 2 - reach : 0, y: this.rotation ? v.h / 2 - reach : 0 };
+        const view1 = { x: this.rotation ? v.w / 2 + reach : v.w, y: this.rotation ? v.h / 2 + reach : v.h };
+        // Lo visible de la imagen (con un margen para la sombra): con mucho zum, la sombra y el damero
+        // de toda la imagen (miles de píxeles fuera de la vista) costaban en cada fotograma.
+        const vx0 = Math.max(x, view0.x - 24), vy0 = Math.max(y, view0.y - 24);
+        const vx1 = Math.min(x + w, view1.x + 24), vy1 = Math.min(y + h, view1.y + 24);
         // Sombra bajo el lienzo, como Paint.NET.
-        if (Settings.get("dropShadow")) {
+        if (Settings.get("dropShadow") && vx1 > vx0 && vy1 > vy0) {
             ctx.save();
             ctx.shadowColor = "rgba(0,0,0,0.35)";
             ctx.shadowBlur = 8;
             ctx.shadowOffsetX = 1;
             ctx.shadowOffsetY = 2;
             ctx.fillStyle = "#808080";
-            ctx.fillRect(x, y, w, h);
+            ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
             ctx.restore();
         }
         ctx.save();
         ctx.beginPath();
         ctx.rect(x, y, w, h);
         ctx.clip();
-        ctx.fillStyle = checkerPattern(ctx, Settings.get("checkerBrightness"));
+        ctx.fillStyle = this.checker(ctx);
         ctx.save();
         ctx.translate(Math.round(x), Math.round(y));
-        ctx.fillRect(0, 0, w + 1, h + 1);
+        // (El damero empieza en la esquina de la imagen; solo se pinta lo que se ve.)
+        const cx0 = Math.max(0, Math.floor((view0.x - x) / 16) * 16), cy0 = Math.max(0, Math.floor((view0.y - y) / 16) * 16);
+        ctx.fillRect(cx0, cy0, Math.max(0, Math.min(w + 1, view1.x - x + 16) - cx0), Math.max(0, Math.min(h + 1, view1.y - y + 16) - cy0));
         ctx.restore();
         ctx.imageSmoothingEnabled = this.zoom < 1;
         ctx.imageSmoothingQuality = "high";
@@ -1036,10 +1208,12 @@ export class CanvasView extends EventTarget {
 
     toolEvent(e) {
         const rect = this.canvas.getBoundingClientRect();
-        const vx = e.clientX - rect.left, vy = e.clientY - rect.top;
+        const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+        // (Con la vista girada, las herramientas trabajan en la vista sin girar.)
+        const { x: vx, y: vy } = this.screenToView(sx, sy);
         const p = this.viewToImage(vx, vy);
         // Donde está el puntero (también el dedo o el lápiz): junto a él salen los avisos.
-        this.lastPointer = { x: vx, y: vy };
+        this.lastPointer = { x: sx, y: sy };
         return {
             x: p.x, y: p.y, vx, vy, button: e.button === 2 ? "right" : e.button === 1 ? "middle" : "left",
             shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, pressure: e.pressure || 0.5,
@@ -1079,7 +1253,9 @@ export class CanvasView extends EventTarget {
         if (!show)
             return;
         const [dx, dy] = this.mini.ibeam ? [5, 3] : [12, 13];
-        this.miniIcon.style.transform = `translate(${Math.round(this.canvas.offsetLeft + this.mouse.vx + dx)}px, ${Math.round(this.canvas.offsetTop + this.mouse.vy + dy)}px)`;
+        // (Junto al puntero en la pantalla, también con la vista girada.)
+        const at = this.viewToScreen(this.mouse.vx, this.mouse.vy);
+        this.miniIcon.style.transform = `translate(${Math.round(this.canvas.offsetLeft + at.x + dx)}px, ${Math.round(this.canvas.offsetTop + at.y + dy)}px)`;
     }
 
     // Con los pinceles, el contorno va en el propio cursor si cabe: así no se queda atrás del
@@ -1226,33 +1402,55 @@ export class CanvasView extends EventTarget {
         return {
             mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top },
             dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+            angle: Math.atan2(b.y - a.y, b.x - a.x),
         };
     }
 
     startGesture() {
         if (!this.doc)
             return;
-        const { mid, dist } = this.touchPoints();
-        this.gesture = { dist, zoom: this.zoom, image: this.viewToImage(mid.x, mid.y), samples: [] };
+        const { mid, dist, angle } = this.touchPoints();
+        const u = this.screenToView(mid.x, mid.y);
+        this.gesture = { dist, angle, zoom: this.zoom, rotation: this.rotation, rotating: false,
+                         image: this.viewToImage(u.x, u.y), samples: [] };
         this.fitOnResize = false;
         this.touchBlocked = true;
         this.stopAutoScroll();
         this.updateCursor();
     }
 
-    // Pellizcar acerca o aleja con el punto de la imagen que estaba entre los dedos siempre entre
-    // ellos (también al arrastrar a la vez); cerca del 100 % se queda en él.
+    // Con dos dedos, como en las aplicaciones de dibujo del móvil: pellizcar acerca o aleja, girarlos
+    // gira la imagen (Configuración: «Girar la imagen con dos dedos»; con imán a 0°, 90°, 180° y 270°)
+    // y arrastrarlos la mueve, todo a la vez, con el punto de la imagen que estaba entre los dedos
+    // siempre entre ellos; cerca del 100 % se queda en él.
     updateGesture() {
         const g = this.gesture;
         if (!g || this.touches.size < 2 || !this.doc)
             return;
-        const { mid, dist } = this.touchPoints();
+        const { mid, dist, angle } = this.touchPoints();
         let zoom = Math.min(64, Math.max(0.01, (g.zoom * dist) / g.dist));
         if (Math.abs(zoom - 1) < 0.04)
             zoom = 1;
+        if (Settings.get("touchRotate") !== false) {
+            let turn = Math.atan2(Math.sin(angle - g.angle), Math.cos(angle - g.angle));
+            // Hasta girar un poco (8°) solo se pellizca: así acercar no tuerce la imagen sin querer.
+            if (!g.rotating && Math.abs(turn) > (8 * Math.PI) / 180) {
+                g.rotating = true;
+                g.angle = angle;
+                turn = 0;
+            }
+            if (g.rotating) {
+                let r = g.rotation + turn;
+                const quarter = Math.round(r / (Math.PI / 2)) * (Math.PI / 2);
+                if (Math.abs(r - quarter) < (5 * Math.PI) / 180)
+                    r = quarter;
+                this.setRotation(r);
+            }
+        }
         const changed = zoom !== this.zoom;
         this.zoom = zoom;
-        this.origin = { x: mid.x - g.image.x * this.scale, y: mid.y - g.image.y * this.scale };
+        const u = this.screenToView(mid.x, mid.y);
+        this.origin = { x: u.x - g.image.x * this.scale, y: u.y - g.image.y * this.scale };
         this.clampOrigin();
         this.update();
         if (changed)
@@ -1286,7 +1484,7 @@ export class CanvasView extends EventTarget {
             const ms = Math.min(48, now - last);
             last = now;
             const before = { ...this.origin };
-            this.scrollBy(-vx * ms, -vy * ms);
+            this.scrollByScreen(-vx * ms, -vy * ms);
             const decay = Math.pow(0.996, ms);
             vx *= decay;
             vy *= decay;
@@ -1363,7 +1561,7 @@ export class CanvasView extends EventTarget {
             e.preventDefault();
             this.stopInertia();
             const rect = c.getBoundingClientRect();
-            const anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            const anchor = this.screenToView(e.clientX - rect.left, e.clientY - rect.top);
             const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
             // Como en Kaint: Ctrl+rueda acerca o aleja hacia el puntero con pasos de 1,12 por
             // muesca (parando en el 100 %), Mayús+rueda desplaza en horizontal y la rueda sola, en
@@ -1375,9 +1573,9 @@ export class CanvasView extends EventTarget {
                     z = 1;
                 this.setZoom(z, anchor);
             } else if (e.shiftKey && !e.deltaX) {
-                this.scrollBy(e.deltaY * unit, 0);
+                this.scrollByScreen(e.deltaY * unit, 0);
             } else {
-                this.scrollBy(e.deltaX * unit, e.deltaY * unit);
+                this.scrollByScreen(e.deltaX * unit, e.deltaY * unit);
             }
             this.followPointer(anchor);
         }, { passive: false });
@@ -1420,7 +1618,7 @@ export class CanvasView extends EventTarget {
         this.checkOutlineEdge(e);
         this.dispatchEvent(new CustomEvent("cursor", { detail: te }));
         if (this.panning) {
-            this.scrollBy(this.panning.x - e.clientX, this.panning.y - e.clientY);
+            this.scrollByScreen(this.panning.x - e.clientX, this.panning.y - e.clientY);
             this.panning.x = e.clientX;
             this.panning.y = e.clientY;
             // Con el dedo, la Mano deja la imagen con inercia al soltar.

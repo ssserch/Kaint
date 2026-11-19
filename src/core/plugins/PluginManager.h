@@ -30,6 +30,9 @@ struct PluginInfo {
     QStringList effects;
     QStringList effectIds;
     QList<QImage> effectIcons;
+    // Paint.NET con el respaldo de Wine: los identificadores de los efectos que se ejecutan con
+    // Wine (no cargan con mono).
+    QStringList wineEffectIds;
     // Efectos que el usuario desactivó (el resto del complemento sigue cargado).
     QStringList disabledEffects;
     QStringList errors;
@@ -91,6 +94,11 @@ public:
 
     // Busca los complementos y carga los activados. Se puede volver a llamar.
     void scan();
+    bool scanned() const { return m_scanned; }
+    // Cambió el sistema de complementos de Paint.NET (OpenD2D o Wine): lo que se sabía de cada
+    // .dll vale para el otro sistema, así que se vuelven a revisar (los ya cargados siguen igual:
+    // su próximo efecto ya va con el nuevo).
+    void runtimeChanged();
     const QList<PluginInfo>& plugins() const { return m_plugins; }
     void setEnabled(const QString& id, bool on);
     // Activa o desactiva un solo efecto de un complemento (sus menús lo muestran u ocultan).
@@ -141,6 +149,7 @@ private:
     QList<Loaded*> m_loaded;
     QJsonObject m_cache;
     bool m_cacheLoaded = false;
+    bool m_scanned = false;
     std::thread m_inspector;
     std::atomic_bool m_stopInspection{false};
     std::atomic_bool m_inspecting{false};

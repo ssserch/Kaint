@@ -337,6 +337,8 @@ target_compile_definitions(kaintui PUBLIC KAINT_VERSION="${PROJECT_VERSION}" KAI
                            KAINT_REPOSITORY="${KAINT_REPOSITORY}" KAINT_GITHUB="${KAINT_GITHUB}"
                            KAINT_DISCORD_CLIENT_ID="${KAINT_DISCORD_CLIENT_ID}"
                            KAINT_DISCORD_LARGE_IMAGE="${KAINT_DISCORD_LARGE_IMAGE}")
+# Dónde queda OpenD2D al instalar (lib/kaint/opend2d, o lib/<arquitectura>/kaint/opend2d en Debian).
+target_compile_definitions(kaintcore PUBLIC KAINT_INSTALL_LIBDIR="${CMAKE_INSTALL_LIBDIR}")
 # Búsqueda de versiones nuevas en GitHub (sin ella, Kaint lo deja en manos de Flathub o del
 # gestor de paquetes y no usa la red)
 option(KAINT_UPDATE_CHECK "Buscar versiones nuevas de Kaint en GitHub" ON)
@@ -514,6 +516,51 @@ else()
     message(STATUS "Kaint: sin compilador de C#; no se compila la capa de compatibilidad con Paint.NET")
 endif()
 
+# OpenD2D (https://github.com/daijro/opend2d): Direct2D, DirectWrite y WIC de código abierto para
+# los complementos de Paint.NET en Linux, macOS y FreeBSD (el sistema de complementos «OpenD2D»,
+# el predeterminado). Se compila con cargo en cada compilación: por defecto, lo último de su
+# repositorio oficial (se descarga la primera vez y se actualiza las siguientes; sin red, se usa lo
+# descargado). KAINT_OPEND2D_REF elige una versión publicada (una etiqueta, como v0.1.0-beta.1) y
+# KAINT_OPEND2D_SOURCE una carpeta con su código (por ejemplo, 2dlocal/). build.sh pregunta cuál.
+# Sin cargo ni git, Kaint se compila igual (los complementos usan mono sin OpenD2D, o Wine).
+if(NOT WIN32)
+    set(KAINT_OPEND2D AUTO CACHE STRING "Compilar OpenD2D para los complementos de Paint.NET: AUTO, ON u OFF")
+    set_property(CACHE KAINT_OPEND2D PROPERTY STRINGS AUTO ON OFF)
+    set(KAINT_OPEND2D_REF "latest" CACHE STRING "Versión de OpenD2D: latest (lo último), main o una etiqueta")
+    set(KAINT_OPEND2D_SOURCE "" CACHE PATH "Carpeta con el código de OpenD2D (vacía: se descarga del repositorio oficial)")
+    set(KAINT_OPEND2D_REPO "https://github.com/daijro/opend2d.git" CACHE STRING "Repositorio oficial de OpenD2D")
+    find_program(KAINT_CARGO cargo HINTS "$ENV{HOME}/.cargo/bin")
+    find_program(KAINT_GIT git)
+    set(_kaint_opend2d OFF)
+    if(KAINT_OPEND2D STREQUAL "ON")
+        if(NOT KAINT_CARGO)
+            message(FATAL_ERROR "Kaint: KAINT_OPEND2D=ON necesita cargo (Rust) para compilar OpenD2D")
+        endif()
+        set(_kaint_opend2d ON)
+    elseif(KAINT_OPEND2D STREQUAL "AUTO" AND KAINT_CARGO AND (KAINT_GIT OR KAINT_OPEND2D_SOURCE))
+        set(_kaint_opend2d ON)
+    endif()
+    if(_kaint_opend2d)
+        set(OPEND2D_OUT "${CMAKE_BINARY_DIR}/opend2d")
+        if(KAINT_OPEND2D_SOURCE)
+            set(_kaint_opend2d_what "${KAINT_OPEND2D_SOURCE}")
+        else()
+            set(_kaint_opend2d_what "${KAINT_OPEND2D_REF}")
+        endif()
+        add_custom_target(opend2d ALL
+            COMMAND ${CMAKE_COMMAND} "-DCARGO=${KAINT_CARGO}" "-DGIT=${KAINT_GIT}" "-DREPO=${KAINT_OPEND2D_REPO}"
+                    "-DREF=${KAINT_OPEND2D_REF}" "-DSOURCE=${KAINT_OPEND2D_SOURCE}" "-DWORK=${CMAKE_BINARY_DIR}/opend2d-build"
+                    "-DOUT=${OPEND2D_OUT}" "-DREQUIRED=${KAINT_OPEND2D}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildOpenD2D.cmake"
+            COMMENT "OpenD2D (${_kaint_opend2d_what})" VERBATIM USES_TERMINAL)
+        install(DIRECTORY "${OPEND2D_OUT}/" DESTINATION ${CMAKE_INSTALL_LIBDIR}/kaint/opend2d OPTIONAL
+                USE_SOURCE_PERMISSIONS)
+        message(STATUS "Kaint: OpenD2D para los complementos de Paint.NET (${_kaint_opend2d_what}, con ${KAINT_CARGO})")
+    else()
+        message(STATUS "Kaint: sin OpenD2D (hace falta cargo); los complementos de Paint.NET usan mono sin él, o Wine")
+    endif()
+endif()
+
 install(FILES src/core/plugins/KaintPlugin.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/kaint)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -553,9 +600,19 @@ if(BUILD_TESTING)
             COMMAND ${KAINT_MCS} -nologo ${rsp}
             DEPENDS tests/pdnplugin/KaintTestEffect.cs ${PDN_OUTPUTS}
             COMMENT "Compilando KaintTestEffect.dll" VERBATIM)
-        add_custom_target(kaint_test_pdn_plugin DEPENDS "${PDN_TEST_PLUGIN}")
+        # Otro que solo funciona en Windows o Wine (llama a kernel32.dll): el respaldo de Wine.
+        set(PDN_WINE_TEST_PLUGIN "${CMAKE_BINARY_DIR}/test-plugins/KaintWineTest.dll")
+        pdn_rsp(rsp_wine KaintWineTest "${PDN_WINE_TEST_PLUGIN}" FLAGS -target:library ${PDN_STRICT} -r:System.Drawing.dll
+                -r:System.Windows.Forms.dll
+                REFS ${PDN_REFS} SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnplugin/KaintWineTest.cs")
+        add_custom_command(OUTPUT "${PDN_WINE_TEST_PLUGIN}"
+            COMMAND ${KAINT_MCS} -nologo ${rsp_wine}
+            DEPENDS tests/pdnplugin/KaintWineTest.cs ${PDN_OUTPUTS}
+            COMMENT "Compilando KaintWineTest.dll" VERBATIM)
+        add_custom_target(kaint_test_pdn_plugin DEPENDS "${PDN_TEST_PLUGIN}" "${PDN_WINE_TEST_PLUGIN}")
         add_dependencies(kaint_core_tests pdnbridge kaint_test_pdn_plugin)
-        target_compile_definitions(kaint_core_tests PRIVATE KAINT_TEST_PDN_PLUGIN="${PDN_TEST_PLUGIN}")
+        target_compile_definitions(kaint_core_tests PRIVATE KAINT_TEST_PDN_PLUGIN="${PDN_TEST_PLUGIN}"
+                                   KAINT_TEST_WINE_PLUGIN="${PDN_WINE_TEST_PLUGIN}")
     endif()
     add_test(NAME core COMMAND kaint_core_tests)
 

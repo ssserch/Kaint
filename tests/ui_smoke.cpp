@@ -24,6 +24,7 @@
 #include "app/dialogs/PluginCatalogDialog.h"
 #include "app/CustomLanguages.h"
 #include "app/dialogs/ImageDialogs.h"
+#include "app/dialogs/SaveAllDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
 #include "app/dialogs/TaskDialog.h"
@@ -45,6 +46,7 @@
 #include "core/Palette.h"
 #include "core/effects/Effect.h"
 #include "core/Zip.h"
+#include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QTranslator>
@@ -2149,7 +2151,16 @@ int main(int argc, char** argv)
         s.setValue(QStringLiteral("settings/titleButtons"), -1);
         s.setValue(QStringLiteral("settings/windowsVersion"), 11);
         AppSettings old = AppSettings::load();
-        CHECK(!old.customFrame && old.titleButtons == 1);
+        // (Los de antes pasan a los automáticos: con Windows 11, los de Windows 11.)
+        CHECK(!old.customFrame && old.titleButtons == 6);
+        // Los «Windows 10» de antes hacían de automáticos: pasan a serlo una vez; después, se
+        // respetan (con el tema Windows 7 se pueden elegir los de Windows 10).
+        s.setValue(QStringLiteral("settings/titleButtons"), 0);
+        s.remove(QStringLiteral("settings/titleButtonsAuto"));
+        CHECK(AppSettings::load().titleButtons == 6);
+        s.setValue(QStringLiteral("settings/titleButtonsAuto"), true);
+        CHECK(AppSettings::load().titleButtons == 0);
+        s.setValue(QStringLiteral("settings/titleButtons"), -1);
         old.customFrame = true;
         old.titleButtons = 2;
         old.save();
@@ -2877,7 +2888,159 @@ int main(int argc, char** argv)
                 settle();
                 CHECK(strip->currentIndex() == 1 && canvas->document() == first);
             }
+
+            // Con muchas imágenes, las flechas de los bordes (solo hacia donde quedan imágenes): la
+            // izquierda vuelve atrás una imagen y la derecha avanza; al final del todo no tapa la X de
+            // la última imagen, que se puede cerrar.
+            auto wait = [](int ms) {
+                QElapsedTimer t;
+                t.start();
+                while (t.elapsed() < ms)
+                    QApplication::processEvents(QEventLoop::AllEvents, 5);
+            };
+            for (int k = 0; k < 30; ++k)
+                w.newDefaultDocument();
+            settle();
+            const int many = strip->count();
+            strip->setCurrentIndex(many - 1);
+            wait(50);
+            CHECK(strip->tabRect(0).left() < 0);
+            CHECK(strip->tabRect(many - 1).right() <= strip->width() - 1);
+            // Los botones de desplazamiento de QTabBar no se ven ni reciben el ratón (las flechas las
+            // dibuja la tira): con algunos temas salían encima de la flecha derecha.
+            for (QToolButton* b : strip->findChildren<QToolButton*>(Qt::FindDirectChildrenOnly))
+                CHECK(b->testAttribute(Qt::WA_TransparentForMouseEvents));
+            CHECK(strip->childAt(QPoint(strip->width() - 4, strip->height() / 2)) == nullptr);
+            const QPoint leftArrow(4, strip->height() / 2), rightArrow(strip->width() - 4, strip->height() / 2);
+            const int before = strip->tabRect(0).left();
+            mouse(QEvent::MouseButtonPress, leftArrow, Qt::LeftButton);
+            mouse(QEvent::MouseButtonRelease, leftArrow, Qt::NoButton);
+            wait(400);
+            const int afterLeft = strip->tabRect(0).left();
+            CHECK(afterLeft > before);
+            // (Una imagen: queda entera junto a la flecha.)
+            CHECK(afterLeft - before <= strip->tabRect(0).width() + 20);
+            for (int k = 0; k < 10 && strip->tabRect(many - 1).right() > strip->width() - 1; ++k) {
+                mouse(QEvent::MouseButtonPress, rightArrow, Qt::LeftButton);
+                mouse(QEvent::MouseButtonRelease, rightArrow, Qt::NoButton);
+                wait(400);
+            }
+            CHECK(strip->tabRect(many - 1).right() <= strip->width() - 1);
+            const QRect lastRect = strip->tabRect(many - 1);
+            const QPoint lastX(lastRect.right() - 12, lastRect.top() + 12);
+            mouse(QEvent::MouseMove, lastX, Qt::NoButton);
+            wait(300);
+            mouse(QEvent::MouseButtonPress, lastX, Qt::LeftButton);
+            mouse(QEvent::MouseButtonRelease, lastX, Qt::NoButton);
+            settle();
+            CHECK(strip->count() == many - 1);
+            // Las que se abrieron para la prueba se cierran (sin cambios: no preguntan).
+            while (strip->count() > tabs - 1)
+                findAction(&w, QStringLiteral("Cerrar"))->trigger();
+            settle();
         }
+    }
+
+    // Guardar todos: secuencias (cada grupo hola1, hola2… se numera aparte; * es su nombre sin el
+    // número), la carpeta elegida vale también para las que ya tenían archivo.
+    {
+        CHECK(SaveAllDialog::sequenceBase(QStringLiteral("hola12")) == QStringLiteral("hola"));
+        int n = 0;
+        CHECK(SaveAllDialog::sequenceBase(QStringLiteral("foto (3)"), &n) == QStringLiteral("foto") && n == 3);
+        CHECK(SaveAllDialog::sequenceBase(QStringLiteral("fondo"), &n) == QStringLiteral("fondo") && n == -1);
+        CHECK(SaveAllDialog::composeName(QStringLiteral("puerta_*"), 2, 1, QStringLiteral("%1"), nullptr, nullptr,
+                                         QStringLiteral("hola"))
+              == QStringLiteral("puerta_hola2"));
+        QTemporaryDir where;
+        QList<SaveAllDialog::Entry> entries;
+        for (const char* name : {"hola1", "hola2", "hola3", "adios4", "adios5"}) {
+            SaveAllDialog::Entry e;
+            e.name = QString::fromLatin1(name);
+            e.suffix = QStringLiteral("png");
+            e.filePath = QStringLiteral("/tmp/otra/") + e.name + QStringLiteral(".png");
+            e.image = QImage(8, 8, QImage::Format_ARGB32);
+            e.image.fill(Qt::red);
+            entries << e;
+        }
+        SaveAllDialog dlg(entries, {QStringLiteral("png"), QStringLiteral("jpg")}, {QStringLiteral("PNG"), QStringLiteral("JPEG")},
+                          where.path());
+        QLineEdit* pattern = nullptr;
+        for (QLineEdit* e : dlg.findChildren<QLineEdit*>())
+            if (e->placeholderText().contains(QLatin1Char('#')))
+                pattern = e;
+        QCheckBox *bySequence = nullptr, *keep = nullptr, *ownFolder = nullptr, *first = nullptr;
+        for (QCheckBox* c : dlg.findChildren<QCheckBox*>()) {
+            if (c->text().contains(QStringLiteral("secuencia")))
+                bySequence = c;
+            else if (c->text().contains(QStringLiteral("Conservar")))
+                keep = c;
+            else if (c->text().contains(QStringLiteral("misma carpeta")))
+                ownFolder = c;
+            else if (c->text().contains(QStringLiteral("primera")))
+                first = c;
+        }
+        CHECK(pattern && bySequence && keep && ownFolder && first);
+        if (pattern && bySequence && keep && ownFolder && first) {
+            first->setChecked(true);
+            bySequence->setChecked(true);
+            pattern->setText(QStringLiteral("puerta_*"));
+            QStringList names;
+            for (const SaveAllDialog::Result& r : dlg.results())
+                names << QFileInfo(r.path).completeBaseName();
+            CHECK(names == QStringList({QStringLiteral("puerta_hola1"), QStringLiteral("puerta_hola2"), QStringLiteral("puerta_hola3"),
+                                        QStringLiteral("puerta_adios1"), QStringLiteral("puerta_adios2")}));
+            keep->setChecked(true);
+            names.clear();
+            for (const SaveAllDialog::Result& r : dlg.results())
+                names << QFileInfo(r.path).completeBaseName();
+            CHECK(names.value(3) == QStringLiteral("puerta_adios4") && names.value(4) == QStringLiteral("puerta_adios5"));
+            // Sin «en su misma carpeta», todas a la carpeta elegida (también las que tenían archivo).
+            ownFolder->setChecked(false);
+            for (const SaveAllDialog::Result& r : dlg.results())
+                CHECK(QFileInfo(r.path).absolutePath() == QDir(where.path()).absolutePath());
+        }
+    }
+
+    // Zum a ventana, como en Paint.NET: vuelve a como se abrió la imagen (al 100 % si cabe) y
+    // centrada, aunque antes se ampliara o se moviera la cámara; así, sin barras de desplazamiento.
+    // Otro clic, sin tocar nada, vuelve a la vista de antes.
+    {
+        w.newDefaultDocument();
+        settle();
+        QAction* fit = findAction(&w, QStringLiteral("Zum a ventana"));
+        CHECK(fit && canvas->atWindowZoom() && canvas->zoom() == 1.0);
+        CHECK(canvas->horizontalScrollBar()->maximum() == 0 && canvas->verticalScrollBar()->maximum() == 0);
+        canvas->zoomIn();
+        canvas->zoomIn();
+        settle();
+        const qreal zoomed = canvas->zoom();
+        CHECK(zoomed > 1.0 && !canvas->atWindowZoom() && canvas->horizontalScrollBar()->maximum() > 0);
+        if (fit) {
+            fit->trigger();
+            settle();
+            CHECK(canvas->zoom() == 1.0 && canvas->atWindowZoom());
+            CHECK(canvas->horizontalScrollBar()->maximum() == 0);
+            // Moverse por la imagen y volver a pulsarlo: otra vez centrada al 100 %.
+            canvas->scrollByView(QPointF(120, 80));
+            settle();
+            CHECK(!canvas->atWindowZoom());
+            fit->trigger();
+            settle();
+            CHECK(canvas->zoom() == 1.0 && canvas->atWindowZoom());
+            // Sin tocar nada, otro clic vuelve al zum de antes... y otro, a la ventana.
+            canvas->zoomIn();
+            fit->trigger();
+            settle();
+            CHECK(canvas->atWindowZoom());
+            fit->trigger();
+            settle();
+            CHECK(canvas->zoom() > 1.0);
+            fit->trigger();
+            settle();
+            CHECK(canvas->atWindowZoom());
+        }
+        findAction(&w, QStringLiteral("Cerrar"))->trigger();
+        settle();
     }
 
     // Historial y capas: deshacer selecciona la capa que cambió ese paso; con Mover píxeles, las
@@ -3441,7 +3604,9 @@ int main(int argc, char** argv)
         welcome.show();
         settle();
         const QList<QComboBox*> combos = welcome.findChildren<QComboBox*>();
-        CHECK(combos.size() == 4 && welcome.findChild<QCheckBox*>() && welcome.findChild<WaveLabel*>());
+        // Tema, estilo, cursores, idioma y (fuera de Windows) el sistema de complementos de Paint.NET.
+        CHECK(combos.size() == (PdnBridge::runtimeSelectable() ? 5 : 4) && welcome.findChild<QCheckBox*>()
+              && welcome.findChild<WaveLabel*>());
         bool donate = false;
         for (QToolButton* b : welcome.findChildren<QToolButton*>())
             donate = donate || b->text().contains(QStringLiteral("Donar"));

@@ -76,6 +76,10 @@ void paintCrownMark(QPainter& p, const QRectF& r, const QColor& fill);
 void paintComputerMark(QPainter& p, const QRectF& r, const QColor& fill);
 // Colores de esas marcas: amarillo (cambios sin guardar), verde (guardado) y gris (sin copia).
 QColor collabMarkColor(int state);
+// Sistemas de complementos de Paint.NET (Configuración y bienvenida): la copa de vino de Wine y
+// las formas de OpenD2D (un cuadrado y un círculo superpuestos, como un dibujo 2D).
+QIcon wineIcon();
+QIcon openD2DIcon();
 // Cursores de la mano (Mano, botón central, barra espaciadora y cambiar el tamaño de lo que se
 // mueve desde su borde): abierta o agarrando.
 QCursor handCursor(bool grabbing);

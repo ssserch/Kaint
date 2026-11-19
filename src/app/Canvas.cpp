@@ -398,9 +398,15 @@ void Canvas::updateScrollBars()
     }
     const QSizeF content = QSizeF(m_doc->size()) * scale();
     const QSize vp = viewport()->size();
+    // Como en Paint.NET: con la imagen como la deja «Zum a ventana», sin barras de desplazamiento.
+    const bool atWindow = atWindowZoom();
     auto sync = [&](QScrollBar* bar, qreal c, int view, qreal origin) {
         qreal lo, hi;
         originLimits(c, view, &lo, &hi);
+        if (atWindow) {
+            bar->setRange(0, 0);
+            return;
+        }
         bar->setRange(0, std::max(0, int(std::round(hi - lo))));
         bar->setPageStep(view);
         bar->setSingleStep(32);
@@ -429,15 +435,37 @@ void Canvas::setZoom(qreal zoom, std::optional<QPointF> anchor)
     applyZoom(zoom, anchor);
 }
 
+qreal Canvas::windowZoom() const
+{
+    // Como Paint.NET: 100 % si la imagen cabe; si no, ajustada a la ventana. Con el sitio de la vista
+    // sin barras de desplazamiento (en ese zum se ocultan): así no cambia al ocultarlas.
+    if (!m_doc)
+        return 1.0;
+    const QSize area = maximumViewportSize();
+    const qreal dpr = viewport()->devicePixelRatioF();
+    const qreal zx = (area.width() - 2.0 * kMargin) / m_doc->size().width();
+    const qreal zy = (area.height() - 2.0 * kMargin) / m_doc->size().height();
+    return std::clamp(std::min(zx, zy) * dpr, 0.01, 1.0);
+}
+
+bool Canvas::atWindowZoom() const
+{
+    if (!m_doc)
+        return false;
+    const qreal target = windowZoom();
+    if (std::abs(m_zoom - target) > target * 1e-6)
+        return false;
+    // Centrada (con medio píxel de margen por el redondeo).
+    const QSizeF content = QSizeF(m_doc->size()) * scale();
+    const QPointF centered((viewport()->width() - content.width()) / 2.0, (viewport()->height() - content.height()) / 2.0);
+    return std::abs(m_origin.x() - centered.x()) <= 1.0 && std::abs(m_origin.y() - centered.y()) <= 1.0;
+}
+
 void Canvas::fitInitial()
 {
-    // Como Paint.NET: 100 % si la imagen cabe; si no, ajustada a la ventana.
     if (!m_doc)
         return;
-    const qreal dpr = viewport()->devicePixelRatioF();
-    const qreal zx = (viewport()->width() - 2.0 * kMargin) / m_doc->size().width();
-    const qreal zy = (viewport()->height() - 2.0 * kMargin) / m_doc->size().height();
-    applyZoom(std::clamp(std::min(zx, zy) * dpr, 0.01, 1.0), std::nullopt);
+    applyZoom(windowZoom(), std::nullopt);
     centerOn(QPointF(m_doc->size().width() / 2.0, m_doc->size().height() / 2.0));
 }
 
@@ -480,12 +508,11 @@ void Canvas::zoomToWindow()
 {
     if (!m_doc)
         return;
-    const qreal dpr = viewport()->devicePixelRatioF();
-    const qreal zx = (viewport()->width() - 2.0 * kMargin) / m_doc->size().width();
-    const qreal zy = (viewport()->height() - 2.0 * kMargin) / m_doc->size().height();
+    // (Antes, sin el tope del 100 %: una imagen pequeña se ampliaba hasta llenar la ventana en vez de
+    // volver al zum con que se abrió.)
     m_fitPending = false;
     const qreal before = m_zoomBeforeFit;
-    applyZoom(std::max(0.01, std::min(zx, zy) * dpr), std::nullopt);
+    applyZoom(windowZoom(), std::nullopt);
     m_zoomBeforeFit = before;
     centerOn(QPointF(m_doc->size().width() / 2.0, m_doc->size().height() / 2.0));
 }
@@ -494,11 +521,17 @@ void Canvas::toggleZoomToWindow()
 {
     if (!m_doc)
         return;
-    if (m_zoomBeforeFit > 0) {
+    // Solo con la vista aún como la dejó «Zum a ventana» vuelve a la de antes; si se movió la
+    // cámara o se cambió el zum, vuelve a la de la ventana.
+    if (m_zoomBeforeFit > 0 && atWindowZoom()) {
         const qreal z = m_zoomBeforeFit;
         m_zoomBeforeFit = 0;
         setZoom(z);
         centerOn(m_centerBeforeFit);
+        return;
+    }
+    if (atWindowZoom()) {
+        m_zoomBeforeFit = 0;
         return;
     }
     m_zoomBeforeFit = m_zoom;

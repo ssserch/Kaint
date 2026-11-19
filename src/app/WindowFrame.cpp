@@ -36,7 +36,8 @@ namespace WindowFrame {
 namespace {
 
 bool g_enabled = false;
-Buttons g_buttons = Buttons::Windows10;
+Buttons g_buttons = Buttons::Auto;
+Buttons g_autoFallback = Buttons::Windows10;
 bool g_left = false;
 bool g_rounded = false;
 #ifdef Q_OS_WIN
@@ -1453,17 +1454,25 @@ Buttons buttons()
     return g_buttons;
 }
 
+void setAutoFallback(Buttons style)
+{
+    g_autoFallback = style == Buttons::Auto ? Buttons::Windows10 : style;
+}
+
 Buttons effectiveButtons()
 {
-    // Con los temas Windows 98 (y 98 ALT), XP y 7, sus botones (si no se eligieron otros que los
-    // de Windows 10, los predeterminados).
-    if (g_buttons == Buttons::Windows10 && classic())
+    // Automáticos: con los temas Windows 98 (y 98 ALT), XP y 7, sus botones. Los demás estilos se
+    // respetan con cualquier tema (antes «Windows 10» hacía de automático y con el tema Windows 7
+    // no se podían elegir los de Windows 10).
+    if (g_buttons != Buttons::Auto)
+        return g_buttons;
+    if (classic())
         return Buttons::Windows98;
-    if (g_buttons == Buttons::Windows10 && Theme::active().win7)
+    if (Theme::active().win7)
         return Buttons::Windows7;
-    if (g_buttons == Buttons::Windows10 && Theme::active().xp)
+    if (Theme::active().xp)
         return Buttons::WindowsXP;
-    return g_buttons;
+    return g_autoFallback;
 }
 
 void setButtonsOnLeft(bool on)
@@ -1638,6 +1647,7 @@ Metrics metricsFor(Buttons style, int h)
 {
     switch (style) {
     case Buttons::Windows11:
+    case Buttons::Auto:
     case Buttons::Windows10: return {kButton, kButton, h, 0, 0, 0, false};
     case Buttons::MacOS: {
         // (22 px o más: los 12 px de siempre, también en la fila baja de la ventana maximizada.)
@@ -1744,6 +1754,7 @@ void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool 
         paintGlyph11(p, box, which, maximized, glyph);
         return;
     }
+    case Buttons::Auto:
     case Buttons::Windows10: {
         QColor glyph = titleTextColor(active);
         if (which == 2 && (hot || down)) {

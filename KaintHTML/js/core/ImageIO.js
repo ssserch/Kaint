@@ -16,6 +16,7 @@ export const SaveFormats = [
     { ext: "pdn", mime: "application/octet-stream", name: "Paint.NET con capas", layered: true },
     { ext: "ora", mime: "image/openraster", name: "OpenRaster con capas", layered: true },
     { ext: "psd", mime: "image/vnd.adobe.photoshop", name: "Photoshop con capas", layered: true },
+    { ext: "psb", mime: "image/vnd.adobe.photoshop", name: "Documento grande de Photoshop con capas", layered: true },
     { ext: "png", mime: "image/png", name: "PNG" },
     { ext: "jpg", mime: "image/jpeg", name: "JPEG", quality: true, aliases: ["jpeg", "jpe", "jfif", "exif"] },
     { ext: "webp", mime: "image/webp", name: "WebP", quality: true },
@@ -27,6 +28,11 @@ export const SaveFormats = [
     { ext: "ico", mime: "image/x-icon", name: "Icono de Windows" },
     { ext: "qoi", mime: "image/qoi", name: "QOI" },
     { ext: "ppm", mime: "image/x-portable-pixmap", name: "Netpbm" },
+    { ext: "cur", mime: "image/x-icon", name: "Cursor de Windows" },
+    { ext: "pam", mime: "image/x-portable-arbitrarymap", name: "PAM (Netpbm con transparencia)" },
+    { ext: "pcx", mime: "image/x-pcx", name: "PCX (Paintbrush)" },
+    { ext: "sgi", mime: "image/sgi", name: "SGI (Silicon Graphics)", aliases: ["rgb", "rgba", "bw"] },
+    { ext: "ff", mime: "image/x-farbfeld", name: "Farbfeld" },
 ];
 
 // AVIF (y JPEG XL), si el navegador sabe codificarlos (Chrome, por ahora, no): se miran al cargar.
@@ -39,10 +45,11 @@ for (const f of browserFormats)
 
 // Lo que se puede abrir (además de lo que entienda el navegador). HEIC y JPEG XL, solo si el
 // navegador los entiende (Safari).
-export const OpenAccept = "image/*,.jxr,.wdp,.hdp,.wmp,.ora,.pdn,.psd,.psb,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm,.exif,.dib,.rle,.heic,.heif,.jxl";
+export const OpenAccept = "image/*,.jxr,.wdp,.hdp,.wmp,.ora,.pdn,.psd,.psb,.tga,.tif,.tiff,.dds,.ico,.cur,.qoi,.ppm,.pgm,.pbm,.pnm,.pam,.pcx,.sgi,.rgb,.rgba,.bw,.ff," +
+    ".exif,.dib,.rle,.heic,.heif,.jxl";
 export const OpenExtensions = [".jxr", ".wdp", ".hdp", ".wmp", ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".exif", ".webp", ".gif", ".bmp", ".dib", ".rle", ".avif", ".heic",
-                               ".heif", ".jxl", ".ico", ".ora", ".pdn", ".psd", ".psb", ".tga", ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm",
-                               ".pbm", ".pnm"];
+                               ".heif", ".jxl", ".ico", ".cur", ".ora", ".pdn", ".psd", ".psb", ".tga", ".tif", ".tiff", ".dds", ".qoi", ".ppm", ".pgm",
+                               ".pbm", ".pnm", ".pam", ".pcx", ".sgi", ".rgb", ".rgba", ".bw", ".ff"];
 
 export function extensionOf(name) {
     return (name.split(".").pop() || "").toLowerCase();
@@ -114,6 +121,9 @@ export async function openFile(file) {
             doc.fileName = "";
             return doc;
         }
+    } else if (ext === "pdn") {
+        // (Faltaba esta rama: un PSD sin avisos seguía como si fuera un .pdn y no se abría, y los
+        // .pdn tampoco.)
         const pdn = await Codecs.decodePdn(new Uint8Array(await file.arrayBuffer()));
         doc = documentFrom(pdn.width, pdn.height, name, pdn.layers.map((l, i) => ({ ...l, name: l.name || tr("Capa %1", i + 1) })));
         doc.active = doc.layers.length - 1;
@@ -131,6 +141,15 @@ export async function openFile(file) {
         // JPEG XR (ExternalCodecs.js, se carga solo ahora).
         const image = await decodeJxr(new Uint8Array(await file.arrayBuffer()));
         doc = documentFrom(image.width, image.height, name, [{ name: tr("Fondo"), data: image.data }]);
+    } else if (["pcx", "sgi", "rgb", "rgba", "bw", "ff", "pam"].includes(ext) || magic === "farb" || magic.startsWith("P7")) {
+        // PCX, SGI, Farbfeld y PAM: los lee Kaint (Codecs.js).
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const image = magic === "farb" || ext === "ff" ? Codecs.decodeFarbfeld(bytes)
+                    : magic.startsWith("P7") || ext === "pam" ? Codecs.decodePam(bytes)
+                    : ext === "pcx" ? Codecs.decodePcx(bytes) : Codecs.decodeSgi(bytes);
+        doc = documentFrom(image.width, image.height, name, [{ name: tr("Fondo"), data: image.data }]);
+        if (image.dpi)
+            doc.dpi = image.dpi;
     } else if (ext === "qoi" || magic === "qoif" || ["ppm", "pgm", "pbm", "pnm"].includes(ext)) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const image = magic === "qoif" ? Codecs.decodeQoi(bytes) : Codecs.decodeNetpbm(bytes);
@@ -270,8 +289,8 @@ export async function encode(doc, format, options = defaultSaveOptions(), frames
         options = { ...defaultSaveOptions(), quality: options };
     if (format.ext === "pdn")
         return encodePdnFile(doc);
-    if (format.ext === "psd")
-        return encodePsdFile(doc);
+    if (format.ext === "psd" || format.ext === "psb")
+        return encodePsdFile(doc, format.ext === "psb");
     if (format.layered)
         return encodeOra(doc);
     if (format.plugin)
@@ -305,11 +324,11 @@ async function encodePlugin(doc, format) {
 }
 
 // Photoshop con todas las capas y la imagen combinada (Psd.js).
-function encodePsdFile(doc) {
+function encodePsdFile(doc, psb = false) {
     const layers = doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend,
                                             data: l.ctx.getImageData(0, 0, doc.width, doc.height).data }));
     const bytes = encodePsd({ width: doc.width, height: doc.height, dpi: doc.dpi, active: doc.active, icc: embeddedProfile(doc), layers,
-                              composite: flattenedImage(doc).data });
+                              composite: flattenedImage(doc).data }, psb);
     return new Blob([bytes], { type: "image/vnd.adobe.photoshop" });
 }
 

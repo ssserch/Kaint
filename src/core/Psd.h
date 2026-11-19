@@ -6,7 +6,8 @@
 
 class Document;
 
-// Photoshop: documentos .psd y los de tamaño grande (.psb), con sus capas de píxeles.
+// Photoshop: documentos .psd y los de tamaño grande (.psb), con sus capas de píxeles (se leen y se
+// escriben los dos).
 //
 // Al abrir, las capas conservan el nombre, la visibilidad, la opacidad y el modo de fusión (los diez
 // que Kaint y Photoshop tienen en común), en RGB o escala de grises de 8, 16 o 32 bits por canal (sin
@@ -31,9 +32,10 @@ Document* decode(const QByteArray& data, QString* error, QString* warning = null
 QImage readComposite(const QString& path, QString* error = nullptr);
 QImage decodeComposite(const QByteArray& data, QString* error = nullptr);
 
-// PSD de 8 bits en RGB con alfa. Falla si una capa usa un modo de fusión que Photoshop no tiene
-// (Reflejar, Resplandor, Negación, XOR) o si la imagen pasa de 30000 píxeles por lado.
-QByteArray encode(const Document* doc, QString* error);
+// PSD de 8 bits en RGB con alfa (o PSB, el documento grande, con 'psb'). Falla si una capa usa un
+// modo de fusión que Photoshop no tiene (Reflejar, Resplandor, Negación, XOR) o si la imagen pasa
+// de 30000 píxeles por lado (300000 en un PSB). save() elige PSB por la extensión (.psb).
+QByteArray encode(const Document* doc, QString* error, bool psb = false);
 bool save(const Document* doc, const QString& path, QString* error);
 
 // El modo de fusión de Kaint tiene uno igual en Photoshop.

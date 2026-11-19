@@ -631,8 +631,9 @@ void SaveConfigDialog::schedule()
 
 void SaveConfigDialog::showAdvanced()
 {
-    // Como el editor de GIF de ezgif: los fotogramas uno por uno (duración, omitir, copiar),
-    // rangos, opciones del GIF y efectos, con su vista previa. Se edita una copia; Aceptar la
+    // Como el editor de GIF de ezgif: los fotogramas uno por uno (duración, omitir, copiar, quitar las
+    // copias y moverlos), rangos, el orden (al revés, ida y vuelta) y la velocidad, opciones del GIF y
+    // efectos, con su vista previa. Se edita una copia; Aceptar la
     // aplica.
     m_previewPane->setPlaying(false);
     QDialog dlg(this);
@@ -701,6 +702,26 @@ void SaveConfigDialog::showAdvanced()
     rangeGrid->addWidget(skipEvery, 1, 4);
     rangeGrid->addWidget(enableEvery, 1, 5);
     rangeGrid->setColumnStretch(6, 1);
+
+    // Orden y velocidad: al revés, ida y vuelta (como un bumerán) y más rápido o más lento sin perder
+    // la duración propia de cada fotograma.
+    auto* orderBox = new QGroupBox(tr("Orden y velocidad"), &dlg);
+    auto* orderRow = new QHBoxLayout(orderBox);
+    auto* reverse = new QPushButton(Icons::theme({"media-seek-backward", "go-previous"}), tr("Invertir el orden"), orderBox);
+    reverse->setToolTip(tr("El último fotograma pasa a ser el primero."));
+    auto* boomerang = new QPushButton(Icons::theme({"media-playlist-repeat", "view-refresh"}), tr("Ida y vuelta"), orderBox);
+    boomerang->setToolTip(tr("Añade los fotogramas al revés al final (sin repetir el último ni el primero): la animación va "
+                             "y vuelve, como un bumerán."));
+    auto* faster = new QPushButton(tr("Más rápido (×2)"), orderBox);
+    faster->setToolTip(tr("La mitad de duración en cada fotograma (cada uno conserva su proporción)."));
+    auto* slower = new QPushButton(tr("Más lento (×½)"), orderBox);
+    slower->setToolTip(tr("El doble de duración en cada fotograma."));
+    orderRow->addWidget(reverse);
+    orderRow->addWidget(boomerang);
+    orderRow->addSpacing(12);
+    orderRow->addWidget(faster);
+    orderRow->addWidget(slower);
+    orderRow->addStretch();
 
     // Opciones del GIF
     auto* gifBox = new QGroupBox(tr("Opciones del GIF"), &dlg);
@@ -881,10 +902,44 @@ void SaveConfigDialog::showAdvanced()
                 adv.entries.insert(i + 1, twin);
                 QTimer::singleShot(0, &dlg, [&rebuild] { rebuild(); });
             });
+            // Mover el fotograma a un lado (cambia el orden del GIF) y quitar las copias.
+            auto* left = new QToolButton(card);
+            left->setArrowType(Qt::LeftArrow);
+            left->setAutoRaise(true);
+            left->setToolTip(tr("Mover este fotograma antes"));
+            left->setEnabled(i > 0);
+            auto* right = new QToolButton(card);
+            right->setArrowType(Qt::RightArrow);
+            right->setAutoRaise(true);
+            right->setToolTip(tr("Mover este fotograma después"));
+            right->setEnabled(i + 1 < adv.entries.size());
+            connect(left, &QToolButton::clicked, &dlg, [&adv, &rebuild, &dlg, i] {
+                adv.entries.move(i, i - 1);
+                QTimer::singleShot(0, &dlg, [&rebuild] { rebuild(); });
+            });
+            connect(right, &QToolButton::clicked, &dlg, [&adv, &rebuild, &dlg, i] {
+                adv.entries.move(i, i + 1);
+                QTimer::singleShot(0, &dlg, [&rebuild] { rebuild(); });
+            });
+            const auto copies = std::count_if(adv.entries.cbegin(), adv.entries.cend(),
+                                              [&e](const FrameEntry& other) { return other.source == e.source; });
             auto* buttons = new QHBoxLayout;
+            buttons->addWidget(left);
             buttons->addWidget(skip);
             buttons->addWidget(copy);
-            buttons->addStretch();
+            if (copies > 1) {
+                // Una copia (o el original, si hay copias) se puede quitar del todo.
+                auto* remove = new QToolButton(card);
+                remove->setIcon(Icons::theme({"edit-delete", "list-remove"}));
+                remove->setAutoRaise(true);
+                remove->setToolTip(tr("Quitar esta copia del fotograma"));
+                connect(remove, &QToolButton::clicked, &dlg, [&adv, &rebuild, &dlg, i] {
+                    adv.entries.removeAt(i);
+                    QTimer::singleShot(0, &dlg, [&rebuild] { rebuild(); });
+                });
+                buttons->addWidget(remove);
+            }
+            buttons->addWidget(right);
             v->addLayout(head);
             v->addWidget(thumb, 0, Qt::AlignHCenter);
             v->addLayout(delayRow);
@@ -936,6 +991,23 @@ void SaveConfigDialog::showAdvanced()
     connect(enableRange, &QPushButton::clicked, &dlg, [&] { mark(false, inRange); });
     connect(skipEvery, &QPushButton::clicked, &dlg, [&] { mark(true, isNth); });
     connect(enableEvery, &QPushButton::clicked, &dlg, [&] { mark(false, isNth); });
+    connect(reverse, &QPushButton::clicked, &dlg, [&] {
+        std::reverse(adv.entries.begin(), adv.entries.end());
+        rebuild();
+    });
+    connect(boomerang, &QPushButton::clicked, &dlg, [&] {
+        const QList<FrameEntry> forward = adv.entries;
+        for (qsizetype i = forward.size() - 2; i >= 1; --i)
+            adv.entries << forward[i];
+        rebuild();
+    });
+    auto scaleSpeed = [&](double factor) {
+        for (FrameEntry& e : adv.entries)
+            e.delayMs = std::clamp(int(std::lround((e.delayMs > 0 ? e.delayMs : allDelay) * factor)), Gif::kMinDelayMs, 60000);
+        rebuild();
+    };
+    connect(faster, &QPushButton::clicked, &dlg, [&] { scaleSpeed(0.5); });
+    connect(slower, &QPushButton::clicked, &dlg, [&] { scaleSpeed(2.0); });
     connect(delayAll, &QSpinBox::valueChanged, &dlg, [&](int ms) {
         allDelay = ms;
         for (FrameEntry& e : adv.entries)
@@ -1000,6 +1072,7 @@ void SaveConfigDialog::showAdvanced()
     auto* layout = new QVBoxLayout(content);
     layout->addWidget(framesScroll);
     layout->addWidget(rangeBox);
+    layout->addWidget(orderBox);
     layout->addWidget(gifBox);
     layout->addWidget(effectsBox);
     layout->addStretch();

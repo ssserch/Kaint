@@ -66,11 +66,12 @@ namespace PaintDotNet.Effects
             return;
         }
 
-        // Kaint: el diálogo lo construye Kaint con la descripción de IndirectUI
-        // (KaintCreateConfigUI y KaintCreateWindowProperties).
+        // Kaint: el diálogo de estos efectos lo construye Kaint con la descripción de IndirectUI
+        // (KaintCreateConfigUI y KaintCreateWindowProperties). Este, sencillo, solo lo usan los
+        // complementos que abren el diálogo de otro efecto (Random Effect).
         public override sealed EffectConfigDialog CreateConfigDialog()
         {
-            return null;
+            return new PropertyBasedEffectConfigDialog(CreatePropertyCollection(), GetConfigDialogTitle());
         }
 
         public ControlInfo KaintCreateConfigUI(PropertyCollection props)

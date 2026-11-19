@@ -3305,6 +3305,10 @@ Left click: active slot · right click: inactive slot</translation>
 <context>
     <name>PdnBridge</name>
     <message>
+        <source>El sistema de complementos Wine necesita wine (sudo pacman -S wine o sudo apt install wine). También puedes elegir OpenD2D en Configuración → Complementos.</source>
+        <translation>The Wine plugin system needs wine (sudo pacman -S wine or sudo apt install wine). You can also choose OpenD2D in Settings → Plugins.</translation>
+    </message>
+    <message>
         <source>Los complementos de Paint.NET necesitan mono (sudo pacman -S mono libgdiplus).</source>
         <translation>Paint.NET plugins need mono (sudo pacman -S mono libgdiplus).</translation>
     </message>
@@ -3323,6 +3327,13 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>No se pudo comunicar con el proceso de compatibilidad.</source>
         <translation>Could not communicate with the compatibility process.</translation>
+    </message>
+</context>
+<context>
+    <name>PdnEffect</name>
+    <message>
+        <source>La próxima vez este efecto se abrirá con Wine.</source>
+        <translation>Next time this effect will open with Wine.</translation>
     </message>
 </context>
 <context>
@@ -3351,6 +3362,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>paint.js plugins from the catalog used by the web version of Kaint (Kaint.HTML). They run with no access to your files or the internet. Those that open their own window made for the browser only work in the web version.</translation>
     </message>
     <message>
+        <source>Complementos de efectos de Paint.NET (.dll) que funcionan en Kaint, con su capa de compatibilidad (en Windows, con el .NET Framework; en Linux, macOS y FreeBSD, con el sistema de complementos elegido: OpenD2D o Wine).</source>
+        <translation>Paint.NET effect plugins (.dll) that work in Kaint, with its compatibility layer (on Windows, with the .NET Framework; on Linux, macOS and FreeBSD, with the chosen plugin system: OpenD2D or Wine).</translation>
+    </message>
+    <message>
         <source>Cargando el catálogo…</source>
         <translation>Loading the catalog…</translation>
     </message>
@@ -3375,6 +3390,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>This is a limited list of plugins chosen and tested for Kaint. Each one is the work of its author, shown next to its name. You can install others from Settings &gt; Plugins &gt; Add…</translation>
     </message>
     <message>
+        <source>Buscar complementos (nombre, autor, efecto…)</source>
+        <translation>Search plugins (name, author, effect…)</translation>
+    </message>
+    <message>
         <source>Kaint.HTML</source>
         <translation>Kaint.HTML</translation>
     </message>
@@ -3389,10 +3408,6 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Filtros de PhotoCraft (.wasm) de la tienda ArtCraft. Se ejecutan en el intérprete de WebAssembly de Kaint, sin acceso a nada de fuera.</source>
         <translation>PhotoCraft filters (.wasm) from the ArtCraft store. They run in Kaint&apos;s WebAssembly interpreter, with no access to anything outside.</translation>
-    </message>
-    <message>
-        <source>Complementos de efectos de Paint.NET (.dll) que funcionan en Kaint, con la capa de compatibilidad (mono en Linux y el .NET Framework de Windows).</source>
-        <translation>Paint.NET effect plugins (.dll) that work in Kaint, through the compatibility layer (mono on Linux and the .NET Framework on Windows).</translation>
     </message>
     <message>
         <source>De %1</source>
@@ -3429,6 +3444,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>Actualizar</source>
         <translation>Update</translation>
+    </message>
+    <message>
+        <source>Ningún complemento coincide con la búsqueda.</source>
+        <translation>No plugin matches the search.</translation>
     </message>
     <message>
         <source>Instalando…</source>
@@ -5995,6 +6014,10 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Windows Icon</translation>
     </message>
     <message>
+        <source>Cursor de Windows</source>
+        <translation>Windows cursor</translation>
+    </message>
+    <message>
         <source>QOI</source>
         <translation>QOI</translation>
     </message>
@@ -6003,12 +6026,104 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Netpbm</translation>
     </message>
     <message>
+        <source>PAM (Netpbm con transparencia)</source>
+        <translation>PAM (Netpbm with transparency)</translation>
+    </message>
+    <message>
+        <source>PCX (Paintbrush)</source>
+        <translation>PCX (Paintbrush)</translation>
+    </message>
+    <message>
+        <source>SGI (Silicon Graphics)</source>
+        <translation>SGI (Silicon Graphics)</translation>
+    </message>
+    <message>
+        <source>Farbfeld</source>
+        <translation>Farbfeld</translation>
+    </message>
+    <message>
+        <source>Krita (imagen combinada)</source>
+        <translation>Krita (merged image)</translation>
+    </message>
+    <message>
+        <source>GIMP (imagen combinada)</source>
+        <translation>GIMP (merged image)</translation>
+    </message>
+    <message>
+        <source>OpenEXR</source>
+        <translation>OpenEXR</translation>
+    </message>
+    <message>
+        <source>Radiance HDR</source>
+        <translation>Radiance HDR</translation>
+    </message>
+    <message>
+        <source>JPEG 2000</source>
+        <translation>JPEG 2000</translation>
+    </message>
+    <message>
+        <source>Icono de macOS</source>
+        <translation>macOS icon</translation>
+    </message>
+    <message>
+        <source>Cursor animado de Windows</source>
+        <translation>Windows animated cursor</translation>
+    </message>
+    <message>
+        <source>Sun Raster</source>
+        <translation>Sun Raster</translation>
+    </message>
+    <message>
+        <source>Softimage PIC</source>
+        <translation>Softimage PIC</translation>
+    </message>
+    <message>
+        <source>Pixar</source>
+        <translation>Pixar</translation>
+    </message>
+    <message>
+        <source>SVG (como imagen)</source>
+        <translation>SVG (as an image)</translation>
+    </message>
+    <message>
+        <source>Amiga IFF</source>
+        <translation>Amiga IFF</translation>
+    </message>
+    <message>
+        <source>PFM</source>
+        <translation>PFM</translation>
+    </message>
+    <message>
+        <source>PlayStation TIM</source>
+        <translation>PlayStation TIM</translation>
+    </message>
+    <message>
+        <source>RAW de cámara</source>
+        <translation>Camera RAW</translation>
+    </message>
+    <message>
+        <source>XPM</source>
+        <translation>XPM</translation>
+    </message>
+    <message>
+        <source>XBM</source>
+        <translation>XBM</translation>
+    </message>
+    <message>
+        <source>WBMP</source>
+        <translation>WBMP</translation>
+    </message>
+    <message>
         <source>Paint.NET con capas</source>
         <translation>Paint.NET with layers</translation>
     </message>
     <message>
         <source>OpenRaster con capas</source>
         <translation>OpenRaster with layers</translation>
+    </message>
+    <message>
+        <source>Documento grande de Photoshop con capas</source>
+        <translation>Photoshop large document with layers</translation>
     </message>
     <message>
         <source>Todos los tipos de imagen (%1)</source>
@@ -6041,6 +6156,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>TGA admite imágenes de hasta 65535 × 65535 píxeles.</source>
         <translation>TGA supports images up to 65535 × 65535 pixels.</translation>
+    </message>
+    <message>
+        <source>Este formato admite imágenes de hasta 65535 × 65535 píxeles.</source>
+        <translation>This format supports images up to 65535 × 65535 pixels.</translation>
     </message>
     <message>
         <source>El archivo no es un OpenRaster válido.</source>
@@ -6358,6 +6477,22 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>The QOI file is not valid or is damaged.</translation>
     </message>
     <message>
+        <source>El archivo PCX está dañado o no es compatible.</source>
+        <translation>The PCX file is damaged or not supported.</translation>
+    </message>
+    <message>
+        <source>El archivo SGI está dañado o no es compatible.</source>
+        <translation>The SGI file is damaged or not supported.</translation>
+    </message>
+    <message>
+        <source>El archivo farbfeld está dañado.</source>
+        <translation>The farbfeld file is damaged.</translation>
+    </message>
+    <message>
+        <source>El archivo PAM está dañado o no es compatible.</source>
+        <translation>The PAM file is damaged or not supported.</translation>
+    </message>
+    <message>
         <source>Un complemento no puede ocupar más de 5 MB.</source>
         <translation>A plugin cannot be larger than 5 MB.</translation>
     </message>
@@ -6602,10 +6737,6 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>There is not enough memory to open the image.</translation>
     </message>
     <message>
-        <source>es un documento de tamaño grande (PSB), que Kaint no guarda</source>
-        <translation>it is a large document (PSB), which Kaint does not save</translation>
-    </message>
-    <message>
         <source>tiene %1 bits por canal y Kaint trabaja con 8</source>
         <translation>it has %1 bits per channel and Kaint works with 8</translation>
     </message>
@@ -6714,8 +6845,12 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>the fill opacity was combined with the layer opacity</translation>
     </message>
     <message>
-        <source>PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PDN u ORA para conservar las capas.</source>
-        <translation>PSD supports images up to 30000 × 30000 pixels. Save it as PDN or ORA to keep the layers.</translation>
+        <source>PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PSB (documento grande de Photoshop), PDN u ORA para conservar las capas.</source>
+        <translation>PSD supports images up to 30000 × 30000 pixels. Save it as PSB (Photoshop large document), PDN or ORA to keep the layers.</translation>
+    </message>
+    <message>
+        <source>PSB admite imágenes de hasta 300000 × 300000 píxeles.</source>
+        <translation>PSB supports images up to 300000 × 300000 pixels.</translation>
     </message>
     <message>
         <source>La capa «%1» usa el modo de fusión «%2», que Photoshop no tiene. Cámbialo en sus propiedades o guarda la imagen como PDN u ORA.</source>
@@ -6951,8 +7086,8 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Name for all (for example, photo#)</translation>
     </message>
     <message>
-        <source>El mismo nombre para todas las imágenes marcadas, con un número que las distingue. # marca dónde va el número; si no hay, va al final.</source>
-        <translation>The same name for all the checked images, with a number that tells them apart. # marks where the number goes; if there is none, it goes at the end.</translation>
+        <source>El mismo nombre para todas las imágenes marcadas, con un número que las distingue. # marca dónde va el número; si no hay, va al final. * es el nombre que ya tenía cada imagen, sin su número (para añadirle algo al lado: «puerta_*»).</source>
+        <translation>The same name for all the checked images, with a number that tells them apart. # marks where the number goes; without it, it goes at the end. * is the name each image already had, without its number (to add something beside it: “door_*”).</translation>
     </message>
     <message>
         <source>El mismo formato para todas</source>
@@ -6995,6 +7130,22 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Digits</translation>
     </message>
     <message>
+        <source>Numerar cada secuencia por separado</source>
+        <translation>Number each sequence separately</translation>
+    </message>
+    <message>
+        <source>Las imágenes que se llaman igual con un número (hola1, hola2… adiós1, adiós2…) se numeran cada grupo desde el principio. En el nombre común, * es el nombre de cada una sin su número: «puerta_*» deja puerta_hola1, puerta_hola2… puerta_adiós1…</source>
+        <translation>Images with the same name and a number (hello1, hello2… bye1, bye2…) are numbered from the start in each group. In the common name, * is each one’s name without its number: “door_*” gives door_hello1, door_hello2… door_bye1…</translation>
+    </message>
+    <message>
+        <source>Conservar sus números</source>
+        <translation>Keep their numbers</translation>
+    </message>
+    <message>
+        <source>Cada imagen de una secuencia guarda el número que ya tenía (hola7 sigue siendo el 7).</source>
+        <translation>Each image of a sequence keeps the number it had (hello7 stays number 7).</translation>
+    </message>
+    <message>
         <source>Sin guardar</source>
         <translation>Not saved</translation>
     </message>
@@ -7015,12 +7166,23 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Images that already have a file are saved in their own folder</translation>
     </message>
     <message>
+        <source>Sin marcar, todas se guardan en la carpeta de arriba. Elegir otra carpeta lo desmarca.</source>
+        <translation>Unchecked, all of them are saved in the folder above. Choosing another folder unchecks it.</translation>
+    </message>
+    <message>
         <source>Guardar</source>
         <translation>Save</translation>
     </message>
     <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n secuencia(s))</source>
+        <translation>
+            <numerusform>(%n sequence)</numerusform>
+            <numerusform>(%n sequences)</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n imagen(es) para guardar</source>
@@ -7312,6 +7474,42 @@ Do you want to replace them?</translation>
         <translation>Every:</translation>
     </message>
     <message>
+        <source>Orden y velocidad</source>
+        <translation>Order and speed</translation>
+    </message>
+    <message>
+        <source>Invertir el orden</source>
+        <translation>Reverse the order</translation>
+    </message>
+    <message>
+        <source>El último fotograma pasa a ser el primero.</source>
+        <translation>The last frame becomes the first.</translation>
+    </message>
+    <message>
+        <source>Ida y vuelta</source>
+        <translation>Back and forth</translation>
+    </message>
+    <message>
+        <source>Añade los fotogramas al revés al final (sin repetir el último ni el primero): la animación va y vuelve, como un bumerán.</source>
+        <translation>Adds the frames in reverse at the end (without repeating the last or the first): the animation goes and comes back, like a boomerang.</translation>
+    </message>
+    <message>
+        <source>Más rápido (×2)</source>
+        <translation>Faster (×2)</translation>
+    </message>
+    <message>
+        <source>La mitad de duración en cada fotograma (cada uno conserva su proporción).</source>
+        <translation>Half the duration for each frame (each one keeps its proportion).</translation>
+    </message>
+    <message>
+        <source>Más lento (×½)</source>
+        <translation>Slower (×½)</translation>
+    </message>
+    <message>
+        <source>El doble de duración en cada fotograma.</source>
+        <translation>Twice the duration for each frame.</translation>
+    </message>
+    <message>
         <source>Opciones del GIF</source>
         <translation>GIF options</translation>
     </message>
@@ -7414,6 +7612,18 @@ Do you want to replace them?</translation>
     <message>
         <source>Repite este fotograma justo después</source>
         <translation>Repeats this frame right after it</translation>
+    </message>
+    <message>
+        <source>Mover este fotograma antes</source>
+        <translation>Move this frame earlier</translation>
+    </message>
+    <message>
+        <source>Mover este fotograma después</source>
+        <translation>Move this frame later</translation>
+    </message>
+    <message>
+        <source>Quitar esta copia del fotograma</source>
+        <translation>Remove this copy of the frame</translation>
     </message>
     <message>
         <source>(%1 FPS)</source>
@@ -7838,24 +8048,8 @@ Do you want to replace them?</translation>
         <translation>Icon pack:</translation>
     </message>
     <message>
-        <source>Ventanas</source>
-        <translation>Windows</translation>
-    </message>
-    <message>
-        <source>Compacto</source>
-        <translation>Compact</translation>
-    </message>
-    <message>
-        <source>La cabecera fina de siempre de Kaint.</source>
-        <translation>Kaint&apos;s usual thin title bar.</translation>
-    </message>
-    <message>
         <source>Grosor del borde de las ventanas Herramientas, Historial, Capas y Colores.</source>
         <translation>Border width of the Tools, History, Layers and Colors windows.</translation>
-    </message>
-    <message>
-        <source>Estilo de las ventanas:</source>
-        <translation>Window style:</translation>
     </message>
     <message>
         <source>Grosor del borde de las ventanas:</source>
@@ -7864,10 +8058,6 @@ Do you want to replace them?</translation>
     <message>
         <source>px</source>
         <translation>px</translation>
-    </message>
-    <message>
-        <source>Barra de título</source>
-        <translation>Title Bar</translation>
     </message>
     <message>
         <source>Finos, con el cuadrado de maximizar redondeado.</source>
@@ -7894,10 +8084,6 @@ Do you want to replace them?</translation>
         <translation>Raised gray buttons.</translation>
     </message>
     <message>
-        <source>Los botones de cerrar, maximizar o restaurar y minimizar. Con el tema Windows 98, «Windows 10» usa los de Windows 98.</source>
-        <translation>The close, maximize or restore and minimize buttons. With the Windows 98 theme, “Windows 10” uses the Windows 98 ones.</translation>
-    </message>
-    <message>
         <source>A la derecha</source>
         <translation>On the right</translation>
     </message>
@@ -7910,20 +8096,12 @@ Do you want to replace them?</translation>
         <translation>Windows with square corners.</translation>
     </message>
     <message>
-        <source>Ventanas con las esquinas algo redondeadas en modo ventana y, por defecto, los botones de Windows 11.</source>
-        <translation>Windows with slightly rounded corners when not maximized and, by default, the Windows 11 buttons.</translation>
-    </message>
-    <message>
         <source>Botones de la barra de título:</source>
         <translation>Title bar buttons:</translation>
     </message>
     <message>
         <source>Posición de los botones:</source>
         <translation>Button position:</translation>
-    </message>
-    <message>
-        <source>Recreación de Windows:</source>
-        <translation>Windows recreation:</translation>
     </message>
     <message>
         <source>Bordes:</source>
@@ -8027,7 +8205,7 @@ Do you want to replace them?</translation>
     </message>
     <message>
         <source>Como «Color de ventana» de Windows 7: el cristal de los marcos, la franja de los menús y las cabeceras de las ventanas. Solo con los temas Windows 7.</source>
-        <translation>Like Windows 7's “Window Color”: the glass of the frames, the menu band and the window headers. Only with the Windows 7 themes.</translation>
+        <translation>Like Windows 7&apos;s “Window Color”: the glass of the frames, the menu band and the window headers. Only with the Windows 7 themes.</translation>
     </message>
     <message>
         <source>Predeterminado</source>
@@ -8064,10 +8242,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Con el tema KDE, las ventanas llevan la barra de título de Plasma.</source>
         <translation>With the KDE theme, windows get Plasma&apos;s title bar.</translation>
-    </message>
-    <message>
-        <source>Se desbloquea con el estilo de interfaz Paint.NET.</source>
-        <translation>Unlocked with the Paint.NET interface style.</translation>
     </message>
     <message>
         <source>Preguntar</source>
@@ -8154,6 +8328,38 @@ Do you want to replace them?</translation>
         <translation>Like Paint.NET: pasting an image with transparency over another one on the same layer leaves that rectangle transparent. When off, they blend with what is underneath.</translation>
     </message>
     <message>
+        <source>Rueda del ratón</source>
+        <translation>Mouse wheel</translation>
+    </message>
+    <message>
+        <source>Cambiar el valor de los deslizadores con la rueda del ratón</source>
+        <translation>Change slider values with the mouse wheel</translation>
+    </message>
+    <message>
+        <source>Con el puntero encima de un deslizador (Dureza, Espaciado, Tolerancia, los de los efectos...), la rueda sube o baja su valor; con Mayús va de uno en uno y con Ctrl, diez veces más rápido. Desactivado, la rueda desplaza la ventana.</source>
+        <translation>With the pointer over a slider (Hardness, Spacing, Tolerance, the ones in effects...), the wheel raises or lowers its value; with Shift it goes one by one and with Ctrl, ten times faster. Turned off, the wheel scrolls the window.</translation>
+    </message>
+    <message>
+        <source>El 1 % del recorrido</source>
+        <translation>1 % of the range</translation>
+    </message>
+    <message>
+        <source>Una unidad</source>
+        <translation>One unit</translation>
+    </message>
+    <message>
+        <source>El 5 % del recorrido</source>
+        <translation>5 % of the range</translation>
+    </message>
+    <message>
+        <source>El 10 % del recorrido</source>
+        <translation>10 % of the range</translation>
+    </message>
+    <message>
+        <source>Cada paso de la rueda:</source>
+        <translation>Each wheel step:</translation>
+    </message>
+    <message>
         <source>Usar la Goma con el extremo borrador del lápiz</source>
         <translation>Use the Eraser with the pen&apos;s eraser end</translation>
     </message>
@@ -8218,6 +8424,78 @@ Do you want to replace them?</translation>
     <message>
         <source>Ajustes de LightCraft</source>
         <translation>LightCraft presets</translation>
+    </message>
+    <message>
+        <source>mono con OpenD2D: el Direct2D, DirectWrite y WIC de código abierto en lugar de los de Windows. No necesita nada más que mono.</source>
+        <translation>mono with OpenD2D: the open source Direct2D, DirectWrite and WIC instead of the Windows ones. It needs nothing but mono.</translation>
+    </message>
+    <message>
+        <source>Wine</source>
+        <translation>Wine</translation>
+    </message>
+    <message>
+        <source>Los complementos se ejecutan dentro de Wine (con su wine-mono), como un programa de Windows: sus ventanas propias se ven como en Windows.</source>
+        <translation>Plugins run inside Wine (with its wine-mono), like a Windows program: their own windows look like on Windows.</translation>
+    </message>
+    <message>
+        <source>Con qué se cargan los complementos de Paint.NET (.dll)</source>
+        <translation>What loads Paint.NET plugins (.dll)</translation>
+    </message>
+    <message>
+        <source>Probar</source>
+        <translation>Test</translation>
+    </message>
+    <message>
+        <source>Abre el proceso de los complementos con el sistema elegido y dice si funciona</source>
+        <translation>Starts the plugin process with the chosen system and tells whether it works</translation>
+    </message>
+    <message>
+        <source>Sistema de complementos de Paint.NET:</source>
+        <translation>Paint.NET plugin system:</translation>
+    </message>
+    <message>
+        <source>Usar Wine solo para lo que no funcione con OpenD2D</source>
+        <translation>Use Wine only for what doesn’t work with OpenD2D</translation>
+    </message>
+    <message>
+        <source>Si un complemento no carga con OpenD2D, o uno de sus efectos falla al aplicarse, ese complemento o ese efecto se ejecuta con Wine (y se recuerda para la próxima vez); todo lo demás sigue con OpenD2D. Hace falta Wine instalado.</source>
+        <translation>If a plugin doesn’t load with OpenD2D, or one of its effects fails when applied, that plugin or that effect runs with Wine (and it’s remembered for next time); everything else keeps using OpenD2D. Wine must be installed.</translation>
+    </message>
+    <message>
+        <source>Usar Wine solo para lo que no funcione con OpenD2D (Wine no está instalado)</source>
+        <translation>Use Wine only for what doesn’t work with OpenD2D (Wine is not installed)</translation>
+    </message>
+    <message>
+        <source>Wine no está instalado (sudo pacman -S wine o sudo apt install wine).</source>
+        <translation>Wine is not installed (sudo pacman -S wine or sudo apt install wine).</translation>
+    </message>
+    <message>
+        <source>Wine: %1</source>
+        <translation>Wine: %1</translation>
+    </message>
+    <message>
+        <source>mono no está instalado (sudo pacman -S mono libgdiplus).</source>
+        <translation>mono is not installed (sudo pacman -S mono libgdiplus).</translation>
+    </message>
+    <message>
+        <source>mono: %1</source>
+        <translation>mono: %1</translation>
+    </message>
+    <message>
+        <source>OpenD2D no se compiló con Kaint (hace falta cargo al compilar): los complementos usan mono sin él.</source>
+        <translation>OpenD2D was not built with Kaint (cargo is needed when building): plugins use mono without it.</translation>
+    </message>
+    <message>
+        <source>OpenD2D %1</source>
+        <translation>OpenD2D %1</translation>
+    </message>
+    <message>
+        <source>Probando…</source>
+        <translation>Testing…</translation>
+    </message>
+    <message>
+        <source>Funciona: %1 · Direct2D: %2</source>
+        <translation>It works: %1 · Direct2D: %2</translation>
     </message>
     <message>
         <source>Complemento</source>
@@ -8457,6 +8735,10 @@ Do you want to replace them?</translation>
     <message>
         <source> (desactivado)</source>
         <translation> (disabled)</translation>
+    </message>
+    <message>
+        <source> (con Wine)</source>
+        <translation> (with Wine)</translation>
     </message>
     <message>
         <source>Formatos de archivo (en Abrir y Guardar como):</source>
@@ -8802,14 +9084,6 @@ Do you want to replace them?</translation>
         <translation>Installed version: %1</translation>
     </message>
     <message>
-        <source>Windows 10</source>
-        <translation>Windows 10</translation>
-    </message>
-    <message>
-        <source>Cabecera más alta, botón de cerrar cuadrado y esquinas algo redondeadas.</source>
-        <translation>Taller title bar, square close button and slightly rounded corners.</translation>
-    </message>
-    <message>
         <source>Oscura</source>
         <translation>Dark</translation>
     </message>
@@ -8920,10 +9194,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Desactivado (o con «No volver a recordar» en el aviso), la versión nueva solo se ve aquí; «Buscar ahora» siempre avisa.</source>
         <translation>When off (or with “Don’t remind me again” in the notice), the new version is only shown here; “Check now” always notifies.</translation>
-    </message>
-    <message>
-        <source>No se usa con el estilo de interfaz Paint.NET: sus ventanas no tienen borde.</source>
-        <translation>Not used with the Paint.NET interface style: its windows have no border.</translation>
     </message>
     <message>
         <source>Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores</source>
@@ -9160,6 +9430,18 @@ Do you want to replace them?</translation>
     <message>
         <source>Vista:</source>
         <translation>View:</translation>
+    </message>
+    <message>
+        <source>Automáticos (los del tema)</source>
+        <translation>Automatic (the theme’s)</translation>
+    </message>
+    <message>
+        <source>Los del tema: de cristal con Windows 7, los azules de Luna con Windows XP, en relieve con Windows 98 y, con los demás, los de Windows 10 (o los de Windows 11 con «Bordes: Redondeados»).</source>
+        <translation>The theme’s: glass with Windows 7, the blue Luna ones with Windows XP, raised with Windows 98 and, with the others, the Windows 10 ones (or the Windows 11 ones with “Corners: Rounded”).</translation>
+    </message>
+    <message>
+        <source>Los botones de cerrar, maximizar o restaurar y minimizar. «Automáticos» usa los del tema (Windows 7, XP o 98); los demás se ven igual con cualquier tema.</source>
+        <translation>The close, maximize or restore and minimize buttons. “Automatic” uses the theme’s (Windows 7, XP or 98); the others look the same with any theme.</translation>
     </message>
     <message>
         <source>Activar las funciones de PhotoCraft</source>
@@ -10956,6 +11238,26 @@ Do you want to replace them?</translation>
     <message>
         <source>Idioma:</source>
         <translation>Language:</translation>
+    </message>
+    <message>
+        <source>mono con OpenD2D, el Direct2D de código abierto: no necesita nada más que mono.</source>
+        <translation>mono with OpenD2D, the open source Direct2D: it needs nothing but mono.</translation>
+    </message>
+    <message>
+        <source>Wine</source>
+        <translation>Wine</translation>
+    </message>
+    <message>
+        <source>Los complementos se ejecutan dentro de Wine, como un programa de Windows (hace falta Wine).</source>
+        <translation>Plugins run inside Wine, like a Windows program (Wine is needed).</translation>
+    </message>
+    <message>
+        <source>Con qué se cargan los complementos de Paint.NET (.dll). Se puede cambiar en Configuración → Complementos.</source>
+        <translation>What loads Paint.NET plugins (.dll). It can be changed in Settings → Plugins.</translation>
+    </message>
+    <message>
+        <source>Complementos de Paint.NET:</source>
+        <translation>Paint.NET plugins:</translation>
     </message>
     <message>
         <source>Empezar</source>

@@ -4010,6 +4010,20 @@ fieldset.group > legend {
     gap: 8px;
     padding: 3px 6px 3px 2px;
     border-radius: 4px;
+    position: relative;
+    transition: transform 150ms cubic-bezier(.2, .8, .2, 1);
+}
+/* La que se arrastra va con el puntero (sin animación) y por encima de las demás. */
+.save-all-row.dragging {
+    transition: none;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+:root.no-animations .save-all-row {
+    transition: none;
+}
+.save-all-numbers .sequences {
+    opacity: 0.7;
 }
 .save-all-list .save-all-row:hover, .save-all-row.dragging {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -4108,6 +4122,8 @@ fieldset.group > legend {
     width: 64px;
 }
 .save-all-list {
+    /* (Posicionada: las filas miden su sitio con offsetTop respecto a la lista al arrastrarlas.) */
+    position: relative;
     max-height: 300px;
     overflow-y: auto;
     border: 1px solid var(--border);
@@ -4780,35 +4796,68 @@ fieldset.group > legend {
     max-height: none;
 }
 
-/* Flechas de los bordes de la tira: hacia dónde quedan más imágenes (pulsarlas también desplaza). */
+/* Flechas de los bordes de la tira, como en Paint.NET: solo hacia donde quedan más imágenes, encima de
+   las miniaturas (que se desvanecen en ese borde) y resaltadas al pasar el puntero. Son hermanas de la
+   tira (App.setupStrip las coloca): así no se desplazan ni se desvanecen con ella. Un clic lleva una
+   imagen hacia ese lado. */
 .strip-arrow {
-    position: sticky;
-    z-index: 2;
-    flex: none;
-    align-self: center;
+    position: absolute;
+    z-index: 3;
     display: none;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 16px;
-    color: var(--text);
-    background: var(--button);
-    border: 1px solid var(--line);
+    width: 16px;
+    box-sizing: border-box;
+    border: 1px solid transparent;
     cursor: pointer;
+    touch-action: none;
 }
 
 .strip-arrow.shown {
     display: flex;
 }
 
-.strip-arrow.left {
-    left: 0;
-    margin-right: -16px;
+.strip-arrow:hover {
+    background: rgba(0, 120, 215, 0.37);
+    border-color: #0078d7;
 }
 
-.strip-arrow.right {
-    right: 0;
-    margin-left: -16px;
+.strip-arrow:active {
+    background: rgba(0, 120, 215, 0.6);
+}
+
+.image-strip.fade-left {
+    -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0.55) 16px, #000 40px);
+    mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0.55) 16px, #000 40px);
+}
+
+.image-strip.fade-right {
+    -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0.55) 16px, #000 40px);
+    mask-image: linear-gradient(to left, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0.55) 16px, #000 40px);
+}
+
+.image-strip.fade-left.fade-right {
+    -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0.55) 16px, #000 40px,
+                                        #000 calc(100% - 40px), rgba(0, 0, 0, 0.55) calc(100% - 16px), rgba(0, 0, 0, 0.18) 100%);
+    mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0.55) 16px, #000 40px,
+                                #000 calc(100% - 40px), rgba(0, 0, 0, 0.55) calc(100% - 16px), rgba(0, 0, 0, 0.18) 100%);
+}
+
+/* Arrastrar una miniatura: va con el puntero (encima de las demás) y las demás se apartan. */
+.image-strip .image-tab {
+    transition: transform 120ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.image-strip.dragging .image-tab.dragged {
+    transition: none;
+    z-index: 2;
+    position: relative;
+    cursor: grabbing;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+:root.no-animations .image-strip .image-tab {
+    transition: none;
 }
 
 /* La imagen actual y la que tiene el puntero, con el azul de Paint.NET encima de la franja (medido
@@ -4935,4 +4984,58 @@ html, body {
     border: 2px solid;
     border-color: #ffffff #404040 #404040 #ffffff;
     border-radius: 0;
+}
+
+/* Barras de desplazamiento ocultas (Configuración; en el teléfono, por defecto). */
+.workspace.no-scrollbars .scrollbar,
+.workspace.no-scrollbars .scroll-corner {
+    display: none;
+}
+
+/* La vista girada con dos dedos: su ángulo, abajo a la izquierda; al tocarlo, la imagen vuelve derecha. */
+.rotation-chip {
+    position: absolute;
+    left: 10px;
+    bottom: 14px;
+    z-index: 5;
+    display: none;
+    padding: 4px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--toolbar) 88%, transparent);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.rotation-chip.shown {
+    display: block;
+}
+
+/* Editor de GIF: orden y velocidad, y las flechas para mover cada fotograma. */
+.gif-order {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.gif-button.move {
+    min-width: 0;
+    padding: 2px 6px;
+    background: transparent;
+    color: var(--text);
+}
+
+.gif-button.move:disabled {
+    opacity: 0.35;
+}
+
+/* Explorar complementos: la búsqueda, encima de las pestañas. */
+.catalog-search {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 8px;
 }

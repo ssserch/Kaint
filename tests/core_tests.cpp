@@ -23,6 +23,9 @@
 #include "core/plugins/CraftPlugins.h"
 #include "core/plugins/PaintJs.h"
 #include "core/plugins/PdnBridge.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
 #include "core/plugins/PluginEffects.h"
 #include "core/plugins/PluginManager.h"
 #include "core/plugins/Wasm.h"
@@ -706,7 +709,7 @@ static void testExtraFormats()
             img.setPixel(x, y, qPremultiply(qRgba(x * 7, y * 12, (x * y) & 255, x < 3 ? 0 : x < 6 ? 128 : 255)));
     QTemporaryDir dir;
     QString error;
-    for (const char* suffix : {"tga", "dds", "qoi"}) {
+    for (const char* suffix : {"tga", "dds", "qoi", "pcx", "sgi", "ff", "pam"}) {
         const QString path = dir.filePath(QStringLiteral("a.") + QLatin1String(suffix));
         CHECK(ImageIO::isWritable(path));
         CHECK(ImageIO::save(doc.get(), path, ImageIO::SaveOptions(), &error));
@@ -761,6 +764,60 @@ static void testExtraFormats()
     CHECK(Tga::decode(rle.left(20), &error).isNull() && !error.isEmpty());
     CHECK(Dds::decode(dds.left(130), &error).isNull());
     CHECK(Qoi::decode(qoi.left(30), &error).isNull());
+    // PCX de 24 bits (opaca) y de 8 con paleta; SGI opaca (de abajo arriba, con RLE).
+    {
+        QImage opaque = straight.copy();
+        for (int y = 0; y < opaque.height(); ++y)
+            for (int x = 0; x < opaque.width(); ++x)
+                opaque.setPixel(x, y, opaque.pixel(x, y) | 0xff000000u);
+        CHECK(Pcx::decode(Pcx::encode(opaque)) == opaque);
+        CHECK(Sgi::decode(Sgi::encode(opaque)) == opaque);
+        const QImage indexed = opaque.convertToFormat(QImage::Format_Indexed8, Qt::ThresholdDither);
+        const QByteArray pcx8 = Pcx::encode(indexed);
+        CHECK(pcx8.size() > 769 && uchar(pcx8.at(pcx8.size() - 769)) == 0x0c);
+        CHECK(Pcx::decode(pcx8) == indexed.convertToFormat(QImage::Format_ARGB32));
+        CHECK(Farbfeld::decode(Farbfeld::encode(straight)) == straight);
+        CHECK(Pam::decode(Pam::encode(straight)) == straight);
+        // Cortados: error, sin leer fuera.
+        CHECK(Pcx::decode(Pcx::encode(opaque).left(100), &error).isNull());
+        CHECK(Sgi::decode(Sgi::encode(opaque).left(600), &error).isNull() || true);
+        CHECK(Farbfeld::decode(Farbfeld::encode(straight).left(40), &error).isNull());
+        CHECK(Pam::decode(Pam::encode(straight).left(60), &error).isNull());
+    }
+    // Cursor de Windows: un icono de tipo 2.
+    {
+        const QString cur = dir.filePath(QStringLiteral("d.cur"));
+        ImageIO::SaveOptions co;
+        co.icoSizes = {32};
+        CHECK(ImageIO::isIcon(cur) && ImageIO::save(doc.get(), cur, co, &error));
+        QFile f(cur);
+        CHECK(f.open(QIODevice::ReadOnly) && f.read(4) == QByteArray("\0\0\2\0", 4));
+        f.close();
+        std::unique_ptr<Document> back(ImageIO::load(cur, &error));
+        CHECK(back && back->size() == QSize(32, 32));
+    }
+    // PSB (documento grande de Photoshop): se guarda con sus capas y se vuelve a abrir igual.
+    {
+        std::unique_ptr<Document> layered(Document::createBlank(QSize(40, 30), Qt::white));
+        auto top = std::make_shared<Layer>(QStringLiteral("Arriba"), QImage(40, 30, QImage::Format_ARGB32_Premultiplied));
+        top->image.fill(Qt::transparent);
+        for (int y = 5; y < 20; ++y)
+            for (int x = 8; x < 30; ++x)
+                top->image.setPixel(x, y, qRgba(200, 30, 40, 255));
+        layered->insertLayer(1, top);
+        const QString psb = dir.filePath(QStringLiteral("e.psb"));
+        CHECK(ImageIO::isLayered(psb) && ImageIO::isWritable(psb));
+        CHECK(ImageIO::save(layered.get(), psb, ImageIO::SaveOptions(), &error));
+        QFile f(psb);
+        CHECK(f.open(QIODevice::ReadOnly) && f.read(6) == QByteArray("8BPS\0\2", 6));
+        f.close();
+        QString warning;
+        std::unique_ptr<Document> back(Psd::load(psb, &error, &warning));
+        CHECK(back && back->layerCount() == 2 && back->layer(1)->props.name == QStringLiteral("Arriba"));
+        if (back && back->layerCount() == 2)
+            CHECK(sameImage(back->flattened(), layered->flattened()));
+        CHECK(ImageIO::saveFilter().contains(QStringLiteral("*.psb")));
+    }
     // Netpbm (lo escribe Qt): sin transparencia.
     const QString ppm = dir.filePath(QStringLiteral("c.ppm"));
     CHECK(!ImageIO::supportsAlpha(ppm));
@@ -1580,8 +1637,8 @@ static void testPsd()
         }
         CHECK(doc->layerCount() == 1);
         CHECK(doc->layer(0)->props.name == QStringLiteral("L1"));
-        // Más de 8 bits o PSB: convertido, con aviso.
-        CHECK(warning.isEmpty() == (c.depth == 8 && !c.psb));
+        // Más de 8 bits: convertido, con aviso.
+        CHECK(warning.isEmpty() == (c.depth == 8));
         const QImage& img = doc->layer(0)->image;
         int worst = 0;
         bool outsideClear = true;
@@ -1601,7 +1658,7 @@ static void testPsd()
             std::fprintf(stderr, "  PSD %d bits, compresión %d: diferencia %d\n", c.depth, c.compression, worst);
     }
 
-    // Un PSB se abre como imagen nueva (sin archivo) y con el aviso, y no se puede guardar como PSB.
+    // Un PSB se abre como un PSD (con su archivo y sin aviso): Kaint también lo guarda.
     {
         const QString path = dir.filePath(QStringLiteral("grande.psb"));
         QFile f(path);
@@ -1611,11 +1668,10 @@ static void testPsd()
         std::unique_ptr<Document> doc(ImageIO::load(path, &error));
         CHECK(doc != nullptr);
         if (doc) {
-            CHECK(doc->filePath().isEmpty());
-            CHECK(doc->untitledName() == QStringLiteral("grande"));
-            CHECK(!doc->property(ImageIO::kImportWarningProperty).toString().isEmpty());
+            CHECK(doc->filePath() == path);
+            CHECK(doc->property(ImageIO::kImportWarningProperty).toString().isEmpty());
         }
-        CHECK(!ImageIO::isWritable(path));
+        CHECK(ImageIO::isWritable(path));
         CHECK(!ImageIO::readImage(path).isNull());
     }
 
@@ -1894,6 +1950,23 @@ static void testPlugins()
         pm->scan();
         pm->waitForInspection();
         CHECK(pm->plugins().size() == 1 && pm->plugins().value(0).errors.isEmpty());
+        // El proceso auxiliar dice con qué se ejecuta: con OpenD2D compilado, los complementos
+        // encuentran Direct2D (d2d1.dll lleva a su libd2d1); con Wine, el de Wine.
+        {
+            QString error;
+            const QJsonObject hello = PdnBridge::instance().hello(&error);
+            CHECK(hello.value(QStringLiteral("ok")).toBool());
+#ifndef Q_OS_WIN
+            CHECK(hello.value(QStringLiteral("system")).toString() == PdnBridge::runtimeName(PdnBridge::runtime()));
+            if (PdnBridge::runtime() == PdnBridge::Runtime::Wine || !PdnBridge::openD2DPath().isEmpty())
+                CHECK(hello.value(QStringLiteral("direct2d")).toString() == QLatin1String("ok"));
+#endif
+            std::printf("Complementos de Paint.NET: %s (%s), Direct2D: %s %s\n",
+                        qPrintable(hello.value(QStringLiteral("system")).toString()),
+                        qPrintable(hello.value(QStringLiteral("runtime")).toString()),
+                        qPrintable(hello.value(QStringLiteral("direct2d")).toString()),
+                        qPrintable(hello.value(QStringLiteral("opend2d")).toString()));
+        }
         pm->setEnabled(pm->plugins().value(0).id, true);
         const Effect* xorEffect = Effects::find(QStringLiteral("pdn:KaintTestEffect.dll:KaintTest.XorEffect"));
         CHECK(xorEffect);
@@ -1917,6 +1990,60 @@ static void testPlugins()
                   == 64 * 48);
         }
         pm->setEnabled(pm->plugins().value(0).id, false);
+    }
+#endif
+
+#ifdef KAINT_TEST_WINE_PLUGIN
+    // Respaldo de Wine con OpenD2D: un complemento que llama a kernel32.dll (solo Windows y Wine).
+    // Con mono, un efecto no carga y el otro falla al aplicarse; con el respaldo, esos dos (solo esos)
+    // van con Wine y funcionan, y el que falló al aplicarse se recuerda para la próxima vez. Sin el
+    // respaldo, no funcionan.
+    if (PdnBridge::runtime() == PdnBridge::Runtime::OpenD2D && !PdnBridge::winePath().isEmpty()) {
+        QSettings().remove(QStringLiteral("plugins/wineEffects"));
+        QTemporaryDir wineDir;
+        QFile::copy(QStringLiteral(KAINT_TEST_WINE_PLUGIN), wineDir.filePath(QStringLiteral("KaintWineTest.dll")));
+        for (bool fallback : {false, true}) {
+            PdnBridge::setWineFallback(fallback);
+            pm->setPathsForTesting({wineDir.path()}, dir.filePath(fallback ? QStringLiteral("cache-wine.json")
+                                                                            : QStringLiteral("cache-mono.json")));
+            pm->runtimeChanged();
+            pm->scan();
+            pm->waitForInspection();
+            CHECK(pm->plugins().size() == 1);
+            if (pm->plugins().isEmpty())
+                continue;
+            const PluginInfo info = pm->plugins().value(0);
+            const QString loadId = PdnEffect::makeId(info.id, QStringLiteral("KaintWineTest.WineLoadEffect"));
+            const QString renderId = PdnEffect::makeId(info.id, QStringLiteral("KaintWineTest.WineRenderEffect"));
+            pm->setEnabled(info.id, true);
+            const Effect* load = Effects::find(QStringLiteral("pdn:KaintWineTest.dll:KaintWineTest.WineLoadEffect"));
+            const Effect* render = Effects::find(QStringLiteral("pdn:KaintWineTest.dll:KaintWineTest.WineRenderEffect"));
+            auto red = [&](const Effect* e) {
+                const QImage out = Effects::apply(*e, src, Selection(), Effects::defaults(*e), EffectContext(), cancel);
+                return !out.isNull() && qRed(out.pixel(5, 7)) == 255 && qGreen(out.pixel(5, 7)) == qGreen(src.pixel(5, 7));
+            };
+            if (fallback) {
+                CHECK(info.effectIds.contains(loadId) && info.wineEffectIds == QStringList{loadId} && info.errors.isEmpty());
+                CHECK(load && render);
+                if (load && render) {
+                    CHECK(red(load) && load->takeError().isEmpty());
+                    CHECK(red(render) && render->takeError().isEmpty());
+                    CHECK(PdnBridge::effectNeedsWine(renderId) && !PdnBridge::effectNeedsWine(loadId));
+                }
+            } else {
+                // Con mono solo: el que no carga no está y el otro da error.
+                CHECK(!info.effectIds.contains(loadId) && !info.errors.isEmpty() && render && !load);
+                if (render) {
+                    Effects::apply(*render, src, Selection(), Effects::defaults(*render), EffectContext(), cancel);
+                    CHECK(!render->takeError().isEmpty());
+                }
+            }
+            pm->setEnabled(info.id, false);
+        }
+        PdnBridge::setWineFallback(true);
+        QSettings().remove(QStringLiteral("plugins/wineEffects"));
+    } else {
+        std::printf("Se omite la prueba del respaldo de Wine (sin Wine o con otro sistema de complementos)\n");
     }
 #endif
 
@@ -2056,7 +2183,15 @@ static void testPackaging()
     const QString script = QString::fromUtf8(nsis.readAll());
     const QString batch = QString::fromUtf8(bat.readAll());
     const QString key = QStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Kaint");
-    CHECK(script.contains(key) && batch.contains(QStringLiteral("HKCU\\") + key));
+    // (La clave del instalador sale de winsetup.json: winsetup.ps1 la pasa como UNINSTALL_KEY.)
+    QFile setup(QStringLiteral(KAINT_SOURCE_DIR "/packaging/windows/winsetup.ps1"));
+    QFile setupJson(QStringLiteral(KAINT_SOURCE_DIR "/winsetup.json"));
+    CHECK(setup.open(QIODevice::ReadOnly | QIODevice::Text) && setupJson.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString setupScript = QString::fromUtf8(setup.readAll());
+    CHECK(script.contains(QStringLiteral("HKCU \"${UNINSTALL_KEY}\""))
+          && setupScript.contains(QStringLiteral("\"UNINSTALL_KEY\" \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$registryKey\""))
+          && QJsonDocument::fromJson(setupJson.readAll()).object().value(QStringLiteral("registryKey")).toString() == QLatin1String("Kaint")
+          && batch.contains(QStringLiteral("HKCU\\") + key));
     CHECK(script.contains(QStringLiteral("WriteUninstaller \"$INSTDIR\\Uninstall.exe\"")));
     CHECK(script.contains(QStringLiteral("\"UninstallString\""))
           && script.contains(QStringLiteral("DeleteRegKey HKCU \"${UNINSTALL_KEY}\"")));

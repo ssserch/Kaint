@@ -23,6 +23,7 @@
 #include "app/dialogs/GifFramesDialog.h"
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveAllDialog.h"
+#include "app/widgets/BarSlider.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/WelcomeDialog.h"
@@ -41,6 +42,7 @@
 #include "core/Raster.h"
 #include "core/plugins/CraftPlugins.h"
 #include "core/plugins/PaintJs.h"
+#include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QActionGroup>
@@ -191,8 +193,24 @@ public:
         m_closeTimer.setInterval(16);
         connect(&m_closeTimer, &QTimer::timeout, this, &ImageStrip::stepCloseFade);
         connect(&m_scrollTimer, &QTimer::timeout, this, &ImageStrip::stepScroll);
+        connect(&m_shiftTimer, &QTimer::timeout, this, &ImageStrip::stepShift);
+        // Los botones de desplazamiento de QTabBar: las flechas las dibuja y las atiende la tira. Con
+        // algunos temas (hojas de estilo) salían con su ancho encima de la flecha derecha, con otro
+        // recuadro y otra flecha al pasar el puntero o pulsar: no se pintan y el ratón los atraviesa.
+        for (QToolButton* b : findChildren<QToolButton*>(Qt::FindDirectChildrenOnly)) {
+            b->setAttribute(Qt::WA_TransparentForMouseEvents);
+            b->setFocusPolicy(Qt::NoFocus);
+            b->installEventFilter(this);
+        }
         connect(this, &QTabBar::currentChanged, this, &ImageStrip::fadeCloseButtons);
         connect(this, &QTabBar::tabMoved, this, [this] { resetCloseButtons(); });
+    }
+
+    bool eventFilter(QObject* watched, QEvent* e) override
+    {
+        if (e->type() == QEvent::Paint && qobject_cast<QToolButton*>(watched) && watched->parent() == this)
+            return true;
+        return QTabBar::eventFilter(watched, e);
     }
 
     QSize minimumSizeHint() const override
@@ -295,23 +313,57 @@ protected:
         return m_fullHeight ? QSize(thumbBox().width() + 2 * kPadX, std::max(base.height(), height())) : base;
     }
 
-    // Las flechas de los bordes (como en Paint.NET), solo hacia donde quedan imágenes cortadas.
-    QToolButton* scrollButton(bool right) const
-    {
-        return findChild<QToolButton*>(right ? QStringLiteral("ScrollRightButton") : QStringLiteral("ScrollLeftButton"),
-                                       Qt::FindDirectChildrenOnly);
-    }
+    // Las flechas de los bordes (como en Paint.NET), solo hacia donde quedan imágenes cortadas. Las
+    // calcula la tira (las de QTabBar se quedaban activas al llegar al final: la de la derecha tapaba
+    // la X de la última imagen y no se podía cerrar, y la de la izquierda a veces no hacía nada).
     QRect arrowRect(bool right) const
     {
-        QStyleOptionTab opt;
-        initStyleOption(&opt, std::max(0, currentIndex()));
-        opt.rect = rect();
-        return style()->subElementRect(right ? QStyle::SE_TabBarTearIndicatorRight : QStyle::SE_TabBarTearIndicatorLeft, &opt, this);
+        return QRect(right ? width() - kArrow : 0, 0, kArrow, height());
     }
     bool arrowShown(bool right) const
     {
-        const QToolButton* b = scrollButton(right);
-        return b && b->isVisible() && b->isEnabled();
+        if (count() == 0)
+            return false;
+        return right ? tabRect(count() - 1).right() > width() - 1 : tabRect(0).left() < 0;
+    }
+    // Un clic en una flecha: la imagen siguiente hacia ese lado queda entera a la vista (junto a la
+    // flecha o, si es la última, en el borde), con una animación corta.
+    void scrollOneImage(bool right)
+    {
+        const int n = count();
+        int delta = 0;
+        if (!right) {
+            for (int i = n - 1; i >= 0; --i) {
+                const QRect r = tabRect(i);
+                if (r.left() < kArrow) {
+                    delta = i == 0 ? -r.left() : kArrow - r.left();
+                    break;
+                }
+            }
+        } else {
+            for (int i = 0; i < n; ++i) {
+                const QRect r = tabRect(i);
+                if (r.right() > width() - 1 - kArrow) {
+                    delta = i == n - 1 ? width() - 1 - r.right() : width() - 1 - kArrow - r.right();
+                    break;
+                }
+            }
+        }
+        if (delta == 0)
+            return;
+        if (!Animations::enabled()) {
+            scrollPixels(delta);
+            update();
+            return;
+        }
+        // Seguido, en el mismo sentido, se suma; en el otro, se olvida lo que quedaba.
+        if ((delta > 0) != (m_scrollPending > 0))
+            m_scrollPending = 0;
+        m_scrollPending += delta;
+        if (!m_scrollTimer.isActive()) {
+            m_scrollTimer.setInterval(10);
+            m_scrollTimer.start();
+        }
     }
     void paintScrollArrows(QPainter& p)
     {
@@ -319,13 +371,140 @@ protected:
             if (!arrowShown(right))
                 continue;
             const QRect r = arrowRect(right);
-            // (Las de Paint.NET, en su cuadrito: se leen encima de las miniaturas.)
-            const QRect icon(r.center().x() - 8, r.center().y() - 8, 16, 16);
-            QStyleOption arrow;
-            arrow.initFrom(this);
-            arrow.rect = icon;
-            style()->drawPrimitive(right ? QStyle::PE_IndicatorArrowRight : QStyle::PE_IndicatorArrowLeft, &arrow, &p, this);
+            const bool hot = m_hoverArrow == int(right);
+            // Al pasar el puntero, la columna de la flecha resaltada (como en Paint.NET).
+            if (hot) {
+                QColor fill = palette().color(QPalette::Highlight);
+                fill.setAlpha(m_arrowDown == int(right) ? 150 : 95);
+                p.save();
+                p.setRenderHint(QPainter::Antialiasing, false);
+                p.fillRect(r, fill);
+                p.setPen(palette().color(QPalette::Highlight));
+                p.setBrush(Qt::NoBrush);
+                p.drawRect(r.adjusted(0, 0, -1, -1));
+                p.restore();
+            }
+            // Siempre la doble flecha blanca con borde oscuro (se lee sobre cualquier miniatura): antes,
+            // con el estilo de Kaint, al pasar el puntero se cambiaba por otro icono más pequeño.
+            const QPointF c = QRectF(r).center();
+            QPainterPath chevrons;
+            const qreal dir = right ? 1 : -1;
+            for (qreal x : {-2.5, 2.5}) {
+                chevrons.moveTo(c.x() + x - dir * 2.5, c.y() - 4.5);
+                chevrons.lineTo(c.x() + x + dir * 2.0, c.y());
+                chevrons.lineTo(c.x() + x - dir * 2.5, c.y() + 4.5);
+            }
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(QColor(0, 0, 0, 150), 3.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(chevrons);
+            p.setPen(QPen(QColor(255, 255, 255, hot ? 255 : 225), 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(chevrons);
         }
+    }
+
+    // --- Arrastrar una miniatura (como en Paint.NET): sigue al puntero y las demás se apartan ---
+    // Desplazamiento en pantalla de cada pestaña respecto a su sitio (se anima hacia 0, o hacia el
+    // hueco que deja la que se arrastra).
+    int shiftOf(int index) const { return index >= 0 && index < m_shift.size() ? int(std::lround(m_shift[index])) : 0; }
+    int slotWidth() const
+    {
+        if (count() >= 2)
+            return tabRect(1).left() - tabRect(0).left();
+        return count() == 1 ? tabRect(0).width() : 0;
+    }
+    // Dónde quedaría la miniatura arrastrada: el sitio cuyo centro está más cerca del suyo.
+    int dropIndex() const
+    {
+        const int w = tabRect(m_dragTab).width();
+        const int center = m_dragX - m_grab + w / 2;
+        int best = m_dragTab, bestDistance = INT_MAX;
+        for (int i = 0; i < count(); ++i) {
+            const int d = std::abs(tabRect(i).center().x() - center);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = i;
+            }
+        }
+        return best;
+    }
+    qreal shiftTarget(int index) const
+    {
+        if (!m_dragging)
+            return 0;
+        if (index == m_dragTab)
+            return m_dragX - m_grab - tabRect(index).left();
+        const int to = dropIndex();
+        const int w = slotWidth();
+        if (m_dragTab < to && index > m_dragTab && index <= to)
+            return -w;
+        if (m_dragTab > to && index >= to && index < m_dragTab)
+            return w;
+        return 0;
+    }
+    void startShiftAnimation()
+    {
+        if (m_shift.size() != count())
+            m_shift.resize(count(), 0.0);
+        if (!m_shiftTimer.isActive()) {
+            m_shiftClock.start();
+            m_shiftTimer.start(16);
+        }
+        stepShift();
+    }
+    void stepShift()
+    {
+        if (m_shift.size() != count())
+            m_shift.resize(count(), 0.0);
+        // Con el puntero en un borde, la tira se desplaza sola para llegar a las que no se ven.
+        if (m_dragging) {
+            if (m_dragX < kArrow * 2 && arrowShown(false))
+                scrollPixels(10);
+            else if (m_dragX > width() - kArrow * 2 && arrowShown(true))
+                scrollPixels(-10);
+        }
+        const qreal elapsed = std::max<qreal>(1, m_shiftClock.restart());
+        // Las que se apartan llegan en unos 120 ms (más rápido al principio).
+        const qreal k = Animations::enabled() ? 1.0 - std::pow(0.001, elapsed / 360.0) : 1.0;
+        bool moving = false;
+        for (int i = 0; i < count(); ++i) {
+            const qreal target = shiftTarget(i);
+            qreal& v = m_shift[i];
+            v = (m_dragging && i == m_dragTab) ? target : v + (target - v) * k;
+            if (std::abs(target - v) < 0.5)
+                v = target;
+            moving = moving || v != target || target != 0;
+        }
+        if (!moving && !m_dragging) {
+            m_shiftTimer.stop();
+            m_shift.clear();
+        }
+        update();
+    }
+    // Suelta la miniatura: pasa a su sitio nuevo (moveTab) y, desde donde estaba en pantalla, todas
+    // van a su lugar sin saltos.
+    void finishDrag()
+    {
+        const int from = m_dragTab;
+        const int to = dropIndex();
+        QList<int> visual;
+        for (int i = 0; i < count(); ++i)
+            visual << tabRect(i).left() + (i == from ? m_dragX - m_grab - tabRect(i).left() : shiftOf(i));
+        m_dragging = false;
+        m_dragTab = -1;
+        if (from != to)
+            moveTab(from, to);
+        m_shift = QList<qreal>(count(), 0.0);
+        for (int i = 0; i < count() && i < visual.size(); ++i) {
+            int j = i;
+            if (i == from)
+                j = to;
+            else if (from < to && i > from && i <= to)
+                j = i - 1;
+            else if (from > to && i >= to && i < from)
+                j = i + 1;
+            m_shift[j] = visual[i] - tabRect(j).left();
+        }
+        startShiftAnimation();
     }
 
     // La rueda del ratón desplaza la tira (como arrastrándola), no cambia de imagen: Qt ya lo
@@ -413,13 +592,67 @@ protected:
 
     void paintEvent(QPaintEvent* e) override
     {
-        QTabBar::paintEvent(e);
-        QPainter p(this);
-        // Las imágenes de la sesión colaborativa, en amarillo.
-        for (int i = 0; i < count(); ++i) {
-            if (!(marks(i) & kCollab))
+        Q_UNUSED(e);
+        // Todo en una capa: las pestañas (en su sitio de pantalla mientras se arrastra una), sus
+        // miniaturas y marcas; hacia donde quedan imágenes, la capa se desvanece en el borde (como en
+        // Paint.NET) y encima van las flechas.
+        const qreal dpr = devicePixelRatioF();
+        QImage layer((QSizeF(size()) * dpr).toSize(), QImage::Format_ARGB32_Premultiplied);
+        layer.setDevicePixelRatio(dpr);
+        layer.fill(Qt::transparent);
+        {
+            QPainter lp(&layer);
+            QList<int> order;
+            for (int i = 0; i < count(); ++i)
+                if (i != currentIndex() && i != m_dragTab)
+                    order << i;
+            if (currentIndex() >= 0 && currentIndex() != m_dragTab)
+                order << currentIndex();
+            if (m_dragTab >= 0 && m_dragTab < count())
+                order << m_dragTab;
+            for (int i : std::as_const(order)) {
+                const int dx = shiftOf(i);
+                const QRect tab = tabRect(i).translated(dx, 0);
+                if (tab.right() < 0 || tab.left() > width())
+                    continue;
+                paintTab(lp, i, dx);
+            }
+        }
+        for (bool right : {false, true}) {
+            if (!arrowShown(right))
                 continue;
-            const QRectF r = QRectF(tabRect(i)).adjusted(1.5, 1.5, -1.5, 0);
+            QPainter fp(&layer);
+            fp.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+            const QRect r = arrowRect(right);
+            const int fade = kArrow + 22;
+            QLinearGradient g(right ? QPointF(width(), 0) : QPointF(0, 0), right ? QPointF(width() - fade, 0) : QPointF(fade, 0));
+            g.setColorAt(0, QColor(0, 0, 0, 40));
+            g.setColorAt(qreal(r.width()) / fade, QColor(0, 0, 0, 120));
+            g.setColorAt(1, QColor(0, 0, 0, 255));
+            fp.fillRect(right ? QRect(width() - fade, 0, fade, height()) : QRect(0, 0, fade, height()), g);
+        }
+        QPainter p(this);
+        p.drawImage(QPoint(0, 0), layer);
+        p.setRenderHint(QPainter::Antialiasing);
+        paintScrollArrows(p);
+    }
+
+    // Una pestaña con su recuadro (el del estilo), la miniatura, las marcas y la X, 'dx' píxeles a
+    // un lado de su sitio.
+    void paintTab(QPainter& p, int i, int dx)
+    {
+        QStyleOptionTab opt;
+        initStyleOption(&opt, i);
+        opt.rect = tabRect(i).translated(dx, 0);
+        if (i == m_dragTab)
+            opt.state |= QStyle::State_Selected;
+        p.save();
+        style()->drawControl(QStyle::CE_TabBarTab, &opt, &p, this);
+        p.restore();
+        const int m = marks(i);
+        // Las imágenes de la sesión colaborativa, en amarillo.
+        if (m & kCollab) {
+            const QRectF r = QRectF(opt.rect).adjusted(1.5, 1.5, -1.5, 0);
             p.fillRect(r, QColor(255, 206, 40, i == currentIndex() ? 150 : 105));
             p.setPen(QPen(QColor(226, 168, 0), 2));
             p.setBrush(Qt::NoBrush);
@@ -427,38 +660,30 @@ protected:
         }
         // Paint.NET: dentro del borde azul de la imagen actual (y de la que tiene el puntero), una
         // línea oscura muy tenue que lo separa del relleno.
-        if (Theme::paintNetLook() && !Theme::active().classic && !Theme::active().xp) {
+        if (Theme::paintNetLook() && !Theme::active().classic && !Theme::active().xp
+            && (i == currentIndex() || i == m_hoverTab || i == m_dragTab) && !(m & kCollab)) {
             p.setPen(QPen(QColor(0, 0, 0, 48), 1));
             p.setBrush(Qt::NoBrush);
-            for (int i = 0; i < count(); ++i) {
-                if ((i != currentIndex() && i != m_hoverTab) || (marks(i) & kCollab))
-                    continue;
-                p.drawRect(QRectF(tabRect(i)).adjusted(2.5, 1.5, -2.5, -1.5));
-            }
+            p.drawRect(QRectF(opt.rect).adjusted(2.5, 1.5, -2.5, -1.5));
         }
-        for (int i = 0; i < count(); ++i)
-            tabIcon(i).paint(&p, thumbRect(i));
-        paintScrollArrows(p);
+        tabIcon(i).paint(&p, thumbRect(i).translated(dx, 0));
+        p.save();
         p.setRenderHint(QPainter::Antialiasing);
-        for (int i = 0; i < count(); ++i) {
-            const int m = marks(i);
-            if (m & kCollab) {
-                Icons::paintCollabMark(p, QRectF(unsavedRect(i)));
-                int row = 1;
-                if (const int crown = (m >> 2) & 3)
-                    Icons::paintCrownMark(p, QRectF(markRect(i, row++)), Icons::collabMarkColor(crown));
-                if (const int computer = (m >> 4) & 3)
-                    Icons::paintComputerMark(p, QRectF(markRect(i, row++)), Icons::collabMarkColor(computer - 1));
-            } else if (m & kUnsaved) {
-                Icons::paintUnsavedStar(p, QRectF(unsavedRect(i)));
-            }
+        if (m & kCollab) {
+            Icons::paintCollabMark(p, QRectF(unsavedRect(i).translated(dx, 0)));
+            int row = 1;
+            if (const int crown = (m >> 2) & 3)
+                Icons::paintCrownMark(p, QRectF(markRect(i, row++).translated(dx, 0)), Icons::collabMarkColor(crown));
+            if (const int computer = (m >> 4) & 3)
+                Icons::paintComputerMark(p, QRectF(markRect(i, row++).translated(dx, 0)), Icons::collabMarkColor(computer - 1));
+        } else if (m & kUnsaved) {
+            Icons::paintUnsavedStar(p, QRectF(unsavedRect(i).translated(dx, 0)));
         }
-        for (int i = 0; i < count(); ++i) {
-            const qreal level = closeLevel(i);
-            if (level <= 0)
-                continue;
+        // La X (no mientras se arrastra).
+        const qreal level = m_dragging ? 0.0 : closeLevel(i);
+        if (level > 0) {
             p.setOpacity(level);
-            const QRectF r = QRectF(closeRect(i)).adjusted(0.5, 0.5, -0.5, -0.5);
+            const QRectF r = QRectF(closeRect(i).translated(dx, 0)).adjusted(0.5, 0.5, -0.5, -0.5);
             const bool hot = i == m_hoverTab && m_hoverClose;
             p.setPen(QPen(QColor(150, 30, 30), 1));
             p.setBrush(hot ? QColor(240, 80, 70) : QColor(215, 60, 55));
@@ -468,6 +693,7 @@ protected:
             p.drawLine(x.topLeft(), x.bottomRight());
             p.drawLine(x.topRight(), x.bottomLeft());
         }
+        p.restore();
     }
 
     void mousePressEvent(QMouseEvent* e) override
@@ -476,7 +702,9 @@ protected:
         // Las flechas de los bordes: una imagen hacia ese lado.
         for (bool right : {false, true})
             if (e->button() == Qt::LeftButton && arrowShown(right) && arrowRect(right).contains(pos)) {
-                scrollButton(right)->click();
+                m_arrowDown = int(right);
+                scrollOneImage(right);
+                update();
                 e->accept();
                 return;
             }
@@ -494,16 +722,31 @@ protected:
     void mouseMoveEvent(QMouseEvent* e) override
     {
         const QPoint pos = e->position().toPoint();
-        // Arrastrar una miniatura sobre otra las intercambia.
-        if (m_pressedTab >= 0 && (e->buttons() & Qt::LeftButton)
-            && (pos - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
-            const int target = tabAt(QPoint(pos.x(), height() / 2));
-            if (target >= 0 && target != m_pressedTab) {
-                moveTab(m_pressedTab, target);
-                m_pressedTab = target;
+        // Arrastrar una miniatura: va con el puntero y las demás se apartan para dejarle sitio.
+        if (m_pressedTab >= 0 && m_pressedTab < count() && (e->buttons() & Qt::LeftButton)) {
+            if (!m_dragging && (pos - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
+                m_dragging = true;
+                m_dragTab = m_pressedTab;
+                m_grab = m_pressPos.x() - tabRect(m_dragTab).left();
+                m_hoverClose = false;
+                setToolTip(QString());
+            }
+            if (m_dragging) {
+                m_dragX = pos.x();
+                startShiftAnimation();
+                e->accept();
+                return;
             }
         }
-        const int hover = tabAt(pos);
+        int arrow = -1;
+        for (bool right : {false, true})
+            if (arrowShown(right) && arrowRect(right).contains(pos))
+                arrow = int(right);
+        if (arrow != m_hoverArrow) {
+            m_hoverArrow = arrow;
+            update();
+        }
+        const int hover = arrow >= 0 ? -1 : tabAt(pos);
         const bool onClose = hover >= 0 && closeRect(hover).contains(pos);
         if (hover != m_hoverTab || onClose != m_hoverClose) {
             m_hoverTab = hover;
@@ -516,6 +759,12 @@ protected:
 
     void mouseReleaseEvent(QMouseEvent* e) override
     {
+        if (m_arrowDown >= 0) {
+            m_arrowDown = -1;
+            update();
+            e->accept();
+            return;
+        }
         if (m_closeTab >= 0) {
             const int i = m_closeTab;
             m_closeTab = -1;
@@ -525,6 +774,10 @@ protected:
             return;
         }
         m_pressedTab = -1;
+        if (m_dragging) {
+            m_dragX = int(e->position().x());
+            finishDrag();
+        }
         QTabBar::mouseReleaseEvent(e);
         update();
     }
@@ -533,6 +786,7 @@ protected:
     {
         m_hoverTab = -1;
         m_hoverClose = false;
+        m_hoverArrow = -1;
         fadeCloseButtons();
         QTabBar::leaveEvent(e);
     }
@@ -600,6 +854,8 @@ private:
     static constexpr int kCollab = 2;
     static constexpr int kClose = 14;
     static constexpr int kDot = 12;
+    // Ancho de las flechas de los bordes (el mismo hueco que reserva el estilo).
+    static constexpr int kArrow = 16;
     // Margen, borde y relleno de la pestaña (los de la hoja de estilo) alrededor de la miniatura.
     static constexpr int kPadX = 6;
     static constexpr int kPadY = 5;
@@ -614,6 +870,17 @@ private:
     int m_closeTab = -1;
     int m_pressedTab = -1;
     QPoint m_pressPos;
+    // Flecha con el puntero encima y pulsada (-1 ninguna, 0 izquierda, 1 derecha).
+    int m_hoverArrow = -1;
+    int m_arrowDown = -1;
+    // La miniatura que se arrastra, dónde está el puntero y por dónde se agarró.
+    bool m_dragging = false;
+    int m_dragTab = -1;
+    int m_dragX = 0;
+    int m_grab = 0;
+    QList<qreal> m_shift;
+    QTimer m_shiftTimer;
+    QElapsedTimer m_shiftClock;
     // Opacidad de la X de cada pestaña mientras cambia y las que se veían antes del cambio.
     QHash<int, qreal> m_closeLevel;
     QSet<int> m_closeShown;
@@ -1925,6 +2192,16 @@ void MainWindow::createStatusBar()
         m_zoomSlider->setValue(zoomToSlider(z));
         m_zoomBox->setEditText(zoomText(z));
     });
+    // Como en Paint.NET: con la imagen como la deja «Zum a ventana» (y centrada), el botón muestra la
+    // imagen enmarcada en vez de las flechas.
+    connect(m_canvas, &Canvas::viewChanged, this, [this] {
+        const bool atWindow = m_canvas->atWindowZoom();
+        QAction* fit = m_act["zoomFit"];
+        if (fit->property("kaintAtWindow").isValid() && fit->property("kaintAtWindow").toBool() == atWindow)
+            return;
+        fit->setProperty("kaintAtWindow", atWindow);
+        fit->setIcon(atWindow ? Icons::theme({"zoom-original"}) : Icons::theme({"zoom-fit-best"}));
+    });
     connect(m_canvas, &Canvas::cursorMoved, this, [this](QPoint p, bool inside) {
         // Como en Paint.NET, al salir del lienzo (o de Kaint) se queda la última posición.
         if (!m_doc) {
@@ -2721,6 +2998,11 @@ void MainWindow::saveAllAs()
     }
     if (folder.isEmpty())
         folder = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    // Si ya estaban todas guardadas, todas marcadas: si no, no quedaba ninguna y «Guardar» no se
+    // podía pulsar (no dejaba volver a guardarlas, por ejemplo en otra carpeta).
+    if (std::none_of(entries.cbegin(), entries.cend(), [](const SaveAllDialog::Entry& e) { return e.checked; }))
+        for (SaveAllDialog::Entry& e : entries)
+            e.checked = true;
     SaveAllDialog dlg(entries, suffixes, labels, folder, this);
     if (dlg.exec() != QDialog::Accepted)
         return;
@@ -4023,6 +4305,7 @@ void MainWindow::showWelcome()
     m_settings.cursorStyle = chosen.cursorStyle;
     m_settings.discordEnabled = chosen.discordEnabled;
     m_settings.photocraftExtras = chosen.photocraftExtras;
+    m_settings.pluginRuntime = chosen.pluginRuntime;
     m_settings.welcomed = true;
     const bool restart = chosen.language != m_settings.language || Theme::needsRestart(Theme::Scheme(chosen.colorScheme));
     if (!restart)
@@ -4195,6 +4478,19 @@ void MainWindow::applySettings()
         else
             m_topLayout->addWidget(m_listButton, m_menuRow, 2, 2, 1);
     }
+    // El sistema de complementos de Paint.NET (OpenD2D o Wine): al cambiar, se revisan otra vez.
+    // (Se compara con el aplicado antes: «Probar», en Configuración, ya cambia el de PdnBridge.)
+    // (El respaldo de Wine también cambia lo que se sabe de cada complemento.)
+    const int pluginSystem = m_settings.pluginRuntime | (m_settings.pluginWineFallback ? 2 : 0);
+    if (PdnBridge::runtimeSelectable() && m_appliedPluginRuntime != pluginSystem) {
+        const bool first = m_appliedPluginRuntime < 0;
+        m_appliedPluginRuntime = pluginSystem;
+        PdnBridge::setWineFallback(m_settings.pluginWineFallback);
+        PdnBridge::setRuntime(PdnBridge::Runtime(std::clamp(m_settings.pluginRuntime, 0, 1)));
+        if (!first)
+            PluginManager::instance()->runtimeChanged();
+    }
+    BarSlider::setWheelBehavior(m_settings.wheelChangesValues, m_settings.wheelStep);
     // Las funciones de PhotoCraft y los efectos de BoltBait activados: los menús se rehacen si
     // cambian.
     if (Effects::extrasEnabled() != m_settings.photocraftExtras || m_appliedBoltBait != m_settings.boltBaitEffects) {
@@ -4212,7 +4508,11 @@ void MainWindow::applySettings()
     m_canvas->viewport()->update();
     FloatingPanel::setSnapping(m_settings.snapPanels);
     // Botones de la barra de título: el estilo y el lado cambian al momento.
-    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 5)));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 6)));
+    // Los automáticos con los temas que no traen botones propios: los de Windows 11 con «Bordes:
+    // redondeados» (como antes, cuando la recreación de Windows 11 los elegía), si no los de 10.
+    WindowFrame::setAutoFallback(m_settings.windowsVersion == 11 ? WindowFrame::Buttons::Windows11
+                                                                 : WindowFrame::Buttons::Windows10);
 #ifdef Q_OS_WIN
     // Windows 11 redondea (o no) las esquinas de las ventanas con el marco de Kaint al momento.
     WindowFrame::setRoundedCorners(m_settings.roundedWindows());

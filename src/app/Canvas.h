@@ -36,8 +36,13 @@ public:
     void setZoom(qreal zoom, std::optional<QPointF> anchor = std::nullopt);
     void zoomIn(std::optional<QPointF> anchor = std::nullopt);
     void zoomOut(std::optional<QPointF> anchor = std::nullopt);
+    // Como Paint.NET: «Zum a ventana» deja la imagen como al abrirla (al 100 % si cabe; si no,
+    // ajustada a la ventana) y centrada. Con la vista así, las barras de desplazamiento se ocultan y
+    // el botón cambia de icono; otro clic vuelve a la vista de antes.
     void zoomToWindow();
     void toggleZoomToWindow();
+    qreal windowZoom() const;
+    bool atWindowZoom() const;
     void zoomToRect(const QRectF& imageRect);
     void actualSize();
     static const QList<qreal>& zoomPresets();

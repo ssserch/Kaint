@@ -907,8 +907,7 @@ Document* build(const Parsed& p, QString* warning)
         if (!list.contains(text))
             list << text;
     };
-    if (h.psb)
-        note(converted, QObject::tr("es un documento de tamaño grande (PSB), que Kaint no guarda"));
+    // (Un PSB ya no es motivo de aviso: Kaint también los guarda.)
     if (h.depth == 16 || h.depth == 32)
         note(converted, QObject::tr("tiene %1 bits por canal y Kaint trabaja con 8").arg(h.depth));
     if (h.mode == kGrayscale || h.mode == kDuotone)
@@ -1091,6 +1090,18 @@ void put32(QByteArray& out, quint32 v)
     out.append(char(v));
 }
 
+void put64(QByteArray& out, quint64 v)
+{
+    put32(out, quint32(v >> 32));
+    put32(out, quint32(v));
+}
+
+void set64(QByteArray& out, qsizetype at, quint64 v)
+{
+    for (int i = 0; i < 8; ++i)
+        out[at + i] = char(v >> (56 - 8 * i));
+}
+
 void set32(QByteArray& out, qsizetype at, quint32 v)
 {
     out[at] = char(v >> 24);
@@ -1133,8 +1144,8 @@ void packBits(const uchar* src, int n, QByteArray& out)
 }
 
 // Un canal (0 rojo, 1 verde, 2 azul, 3 alfa) del rectángulo 'r' de 'image', comprimido con PackBits:
-// la longitud de cada fila y luego las filas.
-void packChannel(const QImage& image, const QRect& r, int channel, QByteArray& counts, QByteArray& data)
+// la longitud de cada fila (de 2 bytes; de 4 en un PSB) y luego las filas.
+void packChannel(const QImage& image, const QRect& r, int channel, QByteArray& counts, QByteArray& data, bool psb = false)
 {
     std::vector<uchar> row(size_t(r.width()));
     const int shift = channel == 0 ? 16 : channel == 1 ? 8 : channel == 2 ? 0 : 24;
@@ -1144,7 +1155,10 @@ void packChannel(const QImage& image, const QRect& r, int channel, QByteArray& c
             row[size_t(x)] = uchar(src[x] >> shift);
         const qsizetype before = data.size();
         packBits(row.data(), r.width(), data);
-        put16(counts, quint32(data.size() - before));
+        if (psb)
+            put32(counts, quint32(data.size() - before));
+        else
+            put16(counts, quint32(data.size() - before));
     }
 }
 
@@ -1259,15 +1273,35 @@ QImage readComposite(const QString& path, QString* error)
     return decodeComposite(file.readAll(), error);
 }
 
-QByteArray encode(const Document* doc, QString* error)
+QByteArray encode(const Document* doc, QString* error, bool psb)
 {
     const int w = doc->size().width(), h = doc->size().height();
-    if (w > 30000 || h > 30000) {
+    if (!psb && (w > 30000 || h > 30000)) {
         if (error)
-            *error = QObject::tr("PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PDN u ORA para "
-                                 "conservar las capas.");
+            *error = QObject::tr("PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PSB (documento grande "
+                                 "de Photoshop), PDN u ORA para conservar las capas.");
         return {};
     }
+    if (psb && (w > 300000 || h > 300000)) {
+        if (error)
+            *error = QObject::tr("PSB admite imágenes de hasta 300000 × 300000 píxeles.");
+        return {};
+    }
+    // PSB (documento grande): versión 2, longitudes de 8 bytes en la sección de capas y de 4 en las
+    // filas comprimidas.
+    auto putLength = [psb](QByteArray& out, quint64 v) {
+        if (psb)
+            put64(out, v);
+        else
+            put32(out, quint32(v));
+    };
+    auto setLength = [psb](QByteArray& out, qsizetype at, quint64 v) {
+        if (psb)
+            set64(out, at, v);
+        else
+            set32(out, at, quint32(v));
+    };
+    const int lengthSize = psb ? 8 : 4;
     for (const LayerPtr& layer : doc->layers())
         if (!keyFromBlend(layer->props.blend)) {
             if (error)
@@ -1291,7 +1325,7 @@ QByteArray encode(const Document* doc, QString* error)
 
     QByteArray out;
     out.append("8BPS", 4);
-    put16(out, 1);
+    put16(out, psb ? 2 : 1);
     out.append(6, '\0');
     put16(out, quint32(channels));
     put32(out, quint32(h));
@@ -1326,9 +1360,9 @@ QByteArray encode(const Document* doc, QString* error)
 
     // Capas y máscaras.
     const qsizetype sectionAt = out.size();
-    put32(out, 0);
+    putLength(out, 0);
     const qsizetype infoAt = out.size();
-    put32(out, 0);
+    putLength(out, 0);
     const int count = doc->layerCount();
     // Negativo: el primer canal alfa de la imagen combinada es su transparencia.
     put16(out, quint32(quint16(alpha ? -count : count)));
@@ -1349,7 +1383,7 @@ QByteArray encode(const Document* doc, QString* error)
             }
             put16(c, 1);
             QByteArray counts, data;
-            packChannel(layer->image, r, kIds[k] < 0 ? 3 : kIds[k], counts, data);
+            packChannel(layer->image, r, kIds[k] < 0 ? 3 : kIds[k], counts, data, psb);
             c.append(counts);
             c.append(data);
         }
@@ -1360,7 +1394,7 @@ QByteArray encode(const Document* doc, QString* error)
         put16(out, 4);
         for (int k = 0; k < 4; ++k) {
             put16(out, quint32(quint16(kIds[k])));
-            put32(out, quint32(px.channel[k].size()));
+            putLength(out, quint64(px.channel[k].size()));
         }
         out.append("8BIM", 4);
         out.append(keyFromBlend(layer->props.blend), 4);
@@ -1396,17 +1430,17 @@ QByteArray encode(const Document* doc, QString* error)
     for (const Pixels& px : pixels)
         for (const QByteArray& c : px.channel)
             out.append(c);
-    padTo(out, infoAt + 4, 4);
-    set32(out, infoAt, quint32(out.size() - infoAt - 4));
+    padTo(out, infoAt + lengthSize, 4);
+    setLength(out, infoAt, quint64(out.size() - infoAt - lengthSize));
     put32(out, 0); // sin máscara global
-    set32(out, sectionAt, quint32(out.size() - sectionAt - 4));
+    setLength(out, sectionAt, quint64(out.size() - sectionAt - lengthSize));
 
     // Imagen combinada, con PackBits.
     put16(out, 1);
     QByteArray counts, data;
     const QRect all(0, 0, w, h);
     for (int c = 0; c < channels; ++c)
-        packChannel(composite, all, c, counts, data);
+        packChannel(composite, all, c, counts, data, psb);
     out.append(counts);
     out.append(data);
     return out;
@@ -1414,7 +1448,7 @@ QByteArray encode(const Document* doc, QString* error)
 
 bool save(const Document* doc, const QString& path, QString* error)
 {
-    const QByteArray data = encode(doc, error);
+    const QByteArray data = encode(doc, error, QFileInfo(path).suffix().compare(QLatin1String("psb"), Qt::CaseInsensitive) == 0);
     if (data.isEmpty())
         return false;
     QSaveFile file(path);

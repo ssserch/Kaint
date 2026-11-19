@@ -12,6 +12,8 @@ export const Categories = {
     photo: "Fotografía", render: "Representación", stylize: "Estilizado",
     // Los de las funciones de PhotoCraft (Extras.js).
     brushstrokes: "Trazos de pincel", sketch: "Bosquejo", texture: "Textura",
+    // Los de las aplicaciones de dibujo del móvil (como los filtros de ibis Paint), con código propio.
+    mobile: "Estilo ibis Paint",
 };
 
 // --- Parámetros ---------------------------------------------------------------------------
@@ -3030,8 +3032,100 @@ const boltBaitAliases = [["bbEdgeDetectClassic", "Detección de bordes clásica"
         return e ? { ...e, id, name, origin: "BoltBait", shortcut: undefined } : null;
     }).filter(Boolean);
 
+// --- Estilo ibis Paint (para la versión del móvil, Kaint.APK) ------------------------------
+// Filtros que se usan mucho en las aplicaciones de dibujo del móvil, escritos para Kaint.
+
+// Generador pseudoaleatorio pequeño (mulberry32): el mismo resultado con la misma semilla.
+function seeded(seed) {
+    let t = (seed * 0x9e3779b9) >>> 0;
+    return () => {
+        t = (t + 0x6d2b79f5) >>> 0;
+        let r = Math.imul(t ^ (t >>> 15), 1 | t);
+        r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+        return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// Un píxel directo (sin premultiplicar) de la imagen, con suavizado.
+const straightAt = (src, x, y) => (src.premul ? qUnpremultiply(sampleBilinear(src, x, y)) : sampleBilinear(src, x, y));
+
+const mobileEffects = [
+    {
+        // «Extraer dibujo lineal»: lo claro se vuelve transparente y las líneas oscuras se quedan (para
+        // colorear debajo un dibujo escaneado o fotografiado).
+        id: "extractlineart", name: "Extraer dibujo lineal", category: "mobile",
+        params: [P.int("threshold", "Blanco a partir de", 1, 255, 220), P.int("strength", "Intensidad de las líneas", 0, 200, 100),
+                 P.choice("color", "Color de las líneas", ["Negro", "El de la imagen"], 0)],
+        run(a) {
+            const threshold = Math.max(1, a.values.threshold), strength = a.values.strength / 100, keep = Math.round(a.values.color) === 1;
+            mapStraight(a, (c) => {
+                const r = qRed(c), g = qGreen(c), b = qBlue(c);
+                const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                const ink = clamp(1 - lum / threshold, 0, 1);
+                const alpha = clamp(Math.round(qAlpha(c) * Math.min(1, ink * strength)), 0, 255);
+                return keep ? qRgba(r, g, b, alpha) : qRgba(0, 0, 0, alpha);
+            });
+        },
+    },
+    {
+        // «Aberración cromática»: el rojo y el azul se separan hacia lados opuestos, en una dirección o
+        // desde el centro, como en una lente barata.
+        id: "chromaticaberration", name: "Aberración cromática", category: "mobile",
+        params: [P.real("amount", "Separación", 0, 60, 4, 1), P.angle("angle", "Ángulo", -180, 180, 0),
+                 P.choice("mode", "Dirección", ["En línea", "Desde el centro"], 0)],
+        run(a) {
+            const amount = a.values.amount, radial = Math.round(a.values.mode) === 1;
+            const rad = (a.values.angle * Math.PI) / 180, lx = Math.cos(rad) * amount, ly = -Math.sin(rad) * amount;
+            const cx = a.roi.left + a.roi.width / 2, cy = a.roi.top + a.roi.height / 2;
+            const reach = Math.max(1, Math.hypot(a.roi.width, a.roi.height) / 2);
+            const src = a.src, d = a.dst.px, w = src.w, pm = src.premul;
+            for (let y = a.y0; y <= a.y1; ++y)
+                for (let x = a.roi.left, i = y * w + a.roi.left; x <= a.roi.right; ++x, ++i) {
+                    let dx = lx, dy = ly;
+                    if (radial) {
+                        const k = amount / reach;
+                        dx = (x + 0.5 - cx) * k;
+                        dy = (y + 0.5 - cy) * k;
+                    }
+                    const red = straightAt(src, x + 0.5 + dx, y + 0.5 + dy), mid = straightAt(src, x + 0.5, y + 0.5);
+                    const blue = straightAt(src, x + 0.5 - dx, y + 0.5 - dy);
+                    const out = qRgba(qRed(red), qGreen(mid), qBlue(blue), Math.max(qAlpha(red), qAlpha(mid), qAlpha(blue)));
+                    d[i] = pm ? qPremultiply(out) : out;
+                }
+        },
+    },
+    {
+        // «Glitch»: franjas desplazadas a los lados y los colores separados, como una señal dañada.
+        id: "glitch", name: "Glitch", category: "mobile",
+        params: [P.int("amount", "Desplazamiento", 0, 100, 30), P.int("slices", "Franjas", 1, 60, 14),
+                 P.int("split", "Separación de colores", 0, 40, 6), P.seed()],
+        run(a) {
+            const roi = a.roi, random = seeded(Math.round(a.values.seed) + 1);
+            const maxShift = (roi.width * a.values.amount) / 100 / 4, split = a.values.split;
+            // Las franjas (las mismas en todos los hilos: dependen solo de la semilla).
+            const shift = new Float32Array(roi.height);
+            for (let k = 0; k < a.values.slices; ++k) {
+                const top = Math.floor(random() * roi.height), height = 1 + Math.floor(random() * Math.max(2, roi.height / 10));
+                const dx = (random() * 2 - 1) * maxShift;
+                for (let y = top; y < Math.min(roi.height, top + height); ++y)
+                    shift[y] = dx;
+            }
+            const src = a.src, d = a.dst.px, w = src.w, pm = src.premul;
+            for (let y = a.y0; y <= a.y1; ++y) {
+                const dx = shift[y - roi.top] || 0;
+                for (let x = roi.left, i = y * w + roi.left; x <= roi.right; ++x, ++i) {
+                    const sx = x + 0.5 - dx, sy = y + 0.5;
+                    const red = straightAt(src, sx + split, sy), mid = straightAt(src, sx, sy), blue = straightAt(src, sx - split, sy);
+                    const out = qRgba(qRed(red), qGreen(mid), qBlue(blue), Math.max(qAlpha(red), qAlpha(mid), qAlpha(blue)));
+                    d[i] = pm ? qPremultiply(out) : out;
+                }
+            }
+        },
+    },
+];
+
 export const Effects = [...adjustments, ...artistic, ...blurs, ...color, ...distort, ...noise, ...object, ...photo, ...render, ...stylize, ...layer,
-                        ...extraEffects, ...boltBaitEffects, ...boltBaitAliases]
+                        ...extraEffects, ...boltBaitEffects, ...boltBaitAliases, ...mobileEffects]
     .map((e) => ({
         ...e, builtin: true,
         render(src, values, r, info) { return runBuiltin(this, src, values, r, info); },

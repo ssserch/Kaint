@@ -12,6 +12,14 @@ public:
     int value() const { return m_value; }
     void setValue(int value);
 
+    // La rueda del ratón cambia el valor (Configuración → Interfaz de usuario): si no, la rueda pasa
+    // a lo que hay debajo (la barra o la ventana se desplazan). 'step': 0, el 1 % del recorrido;
+    // 1, una unidad; 2, el 5 %; 3, el 10 %. Con Mayús, de uno en uno; con Ctrl, diez veces más.
+    // Vale también para los deslizadores de los efectos (SliderBehavior).
+    static void setWheelBehavior(bool enabled, int step);
+    static bool wheelEnabled();
+    static int wheelStep(int min, int max, Qt::KeyboardModifiers modifiers);
+
     QSize sizeHint() const override { return {130, 24}; }
     QSize minimumSizeHint() const override { return {60, 20}; }
 
@@ -32,4 +40,6 @@ private:
     int m_max;
     int m_value;
     QString m_suffix;
+    // Lo que queda de las ruedas de alta resolución (menos de un paso).
+    int m_wheelRest = 0;
 };

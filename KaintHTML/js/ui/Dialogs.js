@@ -1245,12 +1245,32 @@ export async function settingsDialog(app = null, startPage = "interface") {
                       tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.")),
                 check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
                       tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+                heading(tr("Rueda del ratón")),
+                check(tr("Cambiar el valor de los deslizadores con la rueda del ratón"), "wheelChangesValues",
+                      tr("Con el puntero encima de un deslizador (Dureza, Espaciado, Tolerancia, los de los efectos...), la rueda sube o baja su valor; con Mayús va de uno en uno y con Ctrl, diez veces más rápido. Desactivado, la rueda desplaza la ventana.")),
+                (() => {
+                    const step = select([["0", tr("El 1 % del recorrido")], ["1", tr("Una unidad")], ["2", tr("El 5 % del recorrido")],
+                                         ["3", tr("El 10 % del recorrido")]], String(Settings.get("wheelStep") ?? 0));
+                    step.addEventListener("change", () => Settings.set("wheelStep", Number(step.value)));
+                    return el("label", {}, [tr("Cada paso de la rueda:"), step]);
+                })(),
                 ...(app ? [new ToolOptionsPanel(app, defaults).element] : []),
             ];
         }],
         ["tablet", "settings-tablet", tr("Lápiz y tableta"), () => [
             check(tr("La presión del lápiz de la tableta controla el tamaño del pincel"), "penPressure"),
             check(tr("Usar la Goma con el extremo borrador del lápiz"), "tabletEraser"),
+            heading(tr("Pantalla táctil")),
+            check(tr("Girar la imagen con dos dedos"), "touchRotate",
+                  tr("Con dos dedos se acerca o aleja (pellizcando), se mueve y, al girarlos, la imagen gira (con imán a 0°, 90°, 180° y 270°). Al tocar el ángulo, en la esquina, vuelve derecha.")),
+            (() => {
+                const current = Settings.get("scrollbars");
+                const phone = matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) <= 600;
+                const c = checkbox(tr("Mostrar las barras de desplazamiento"), current === undefined || current === null ? !phone : !!current);
+                c.title = tr("En el teléfono están ocultas por defecto: la imagen se mueve con dos dedos.");
+                c.input.addEventListener("change", () => Settings.set("scrollbars", c.input.checked));
+                return c;
+            })(),
             note(tr("Al dar la vuelta al lápiz se activa la herramienta Goma de borrar, y al volver a la punta, la herramienta de antes.")),
             note("PointerEvent" in window ? tr("El navegador admite lápices y tabletas.") : tr("No se detectó ningún lápiz ni tableta de dibujo.")),
         ]],
@@ -2074,11 +2094,14 @@ async function pluginCatalogDialog() {
     const dlg = new Dialog(tr("Explorar complementos"), { iconName: "plugins" });
     dlg.body.appendChild(el("p", { textContent: tr("Esta es una lista limitada de complementos elegidos y probados para Kaint. Cada uno es obra de su autor, que sale junto a su nombre. Puedes instalar otros desde Configuración > Complementos > Instalar complemento…"),
                                    style: { maxWidth: "560px" } }));
+    // Buscar en todas las secciones a la vez (como en Kaint).
+    const search = el("input", { type: "search", className: "catalog-search", placeholder: tr("Buscar complementos (nombre, autor, efecto…)") });
+    dlg.body.appendChild(search);
     const bar = el("div", { className: "fx-tabbar", role: "tablist" }), pages = el("div", { className: "fx-pages catalog-pages" });
     const sections = [
         { title: tr("Kaint.HTML"), note: tr("Complementos de paint.js del catálogo de Kaint.HTML. Los .paintjs tienen el mismo acceso que Kaint: instala solo los que sean de confianza.") },
         { title: tr("PhotoCraft"), note: tr("Filtros de PhotoCraft (.wasm) de la tienda ArtCraft. Se ejecutan sin acceso a nada de fuera.") },
-        { title: tr("Paint.NET"), note: tr("Complementos de Paint.NET (.dll) que funcionan en Kaint para el escritorio (Windows, y Linux con mono). En el navegador no se pueden ejecutar: instálalos desde Kaint.") },
+        { title: tr("Paint.NET"), note: tr("Complementos de Paint.NET (.dll) que funcionan en Kaint para el escritorio (en Windows; en Linux, macOS y FreeBSD, con OpenD2D o con Wine). En el navegador no se pueden ejecutar: instálalos desde Kaint.") },
     ];
     const lists = sections.map((section, index) => {
         const tab = el("button", { className: "fx-tab", type: "button", role: "tab", textContent: section.title });
@@ -2110,8 +2133,32 @@ async function pluginCatalogDialog() {
         const info = el("div", {}, [el("b", { textContent: `${entry.name} ${entry.version}` }), credit,
                                     el("div", { textContent: details, style: { opacity: 0.8, whiteSpace: "pre-line" } }),
                                     status]);
-        return { element: el("div", { className: "catalog-row" }, button ? [info, button] : [info]), status };
+        const element = el("div", { className: "catalog-row" }, button ? [info, button] : [info]);
+        element.dataset.search = [entry.name, entry.author, entry.description, (entry.effects || []).join(" "), entry.id].join(" ").toLowerCase();
+        return { element, status };
     };
+    // Solo los que coinciden con la búsqueda; las pestañas dicen cuántos hay en cada sección.
+    const applyFilter = () => {
+        const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+        lists.forEach((t, i) => {
+            const rows = [...t.list.querySelectorAll(".catalog-row")];
+            let visible = 0;
+            for (const r of rows) {
+                const match = words.every((w) => r.dataset.search.includes(w));
+                r.style.display = match ? "" : "none";
+                if (match)
+                    visible++;
+            }
+            let none = t.list.querySelector(".catalog-none");
+            if (rows.length && !visible) {
+                none ??= t.list.appendChild(el("p", { className: "catalog-none", textContent: tr("Ningún complemento coincide con la búsqueda.") }));
+            } else {
+                none?.remove();
+            }
+            t.tab.textContent = words.length && rows.length ? `${sections[i].title} (${visible})` : sections[i].title;
+        });
+    };
+    search.addEventListener("input", applyFilter);
     const installButton = (installed) => {
         const b = el("button", { className: "pushbutton", textContent: installed ? tr("Instalado") : tr("Instalar") });
         b.disabled = installed;
@@ -2139,6 +2186,7 @@ async function pluginCatalogDialog() {
         }
         if (!list.children.length)
             list.replaceChildren(el("p", { textContent: tr("El catálogo está vacío.") }));
+        applyFilter();
     }).catch((e) => lists[0].list.replaceChildren(el("p", { textContent: tr("No se pudo cargar el catálogo: %1", e.message) })));
     // PhotoCraft y Paint.NET (el catálogo de Kaint).
     Plugins.kaintCatalog().then(({ photocraft, paintnet }) => {
@@ -2185,6 +2233,7 @@ async function pluginCatalogDialog() {
         }
         if (!paintnet.length)
             pdn.replaceChildren(el("p", { textContent: tr("El catálogo está vacío.") }));
+        applyFilter();
     }).catch((e) => {
         for (const i of [1, 2])
             lists[i].list.replaceChildren(el("p", { textContent: tr("No se pudo cargar el catálogo: %1", e.message) }));

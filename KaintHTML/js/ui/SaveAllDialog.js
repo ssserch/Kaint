@@ -1,8 +1,9 @@
 // "Guardar todos" (SaveAllDialog de Kaint): las imágenes abiertas en una lista, cada una con su
 // nombre y su formato. Se puede poner el mismo nombre a todas con un número que las distingue (desde
 // cuál empieza, con cuántas cifras, si la primera lo lleva...), el mismo formato a todas y el orden
-// en que se numeran (arrastrando los puntos que salen al pasar por encima). Las que ya están
-// guardadas empiezan sin marcar.
+// en que se numeran (arrastrando los puntos que salen al pasar por encima), y numerar cada secuencia
+// (hola1, hola2…) por separado. Las que ya están guardadas empiezan sin marcar (si lo están todas,
+// todas marcadas: así se pueden volver a guardar).
 import { Settings } from "../Settings.js";
 import { tr, trn } from "../i18n.js";
 import { checkbox, Dialog, el, message, numberInput, select } from "./Dialogs.js";
@@ -28,13 +29,24 @@ export function numberText(number, digits, decoration) {
 }
 
 // El nombre común con el número en el '#' (o '##', '###'...: también son las cifras mínimas) o al
-// final si no hay; 'number' < 0: sin número.
-export function composeName(pattern, number, digits, decoration) {
-    return composeParts(pattern, number, digits, decoration).name;
+// final si no hay; 'number' < 0: sin número. Cada '*' es 'base', el nombre de la imagen sin su número
+// («puerta_*» deja puerta_hola1, puerta_hola2...).
+export function composeName(pattern, number, digits, decoration, base = "") {
+    return composeParts(pattern, number, digits, decoration, base).name;
+}
+
+// Un nombre en secuencia separado en su parte común y su número: «hola12» → «hola» y 12, «foto (3)» →
+// «foto» y 3, «fondo» → «fondo» y -1 (como SaveAllDialog::sequenceBase de Kaint).
+export function sequenceBase(name) {
+    const m = /^(.*?)[ _.\-]*[(\[]?(\d+)[)\]]?\s*$/.exec(name);
+    if (!m || !m[1].trim())
+        return { base: name.trim(), number: -1 };
+    return { base: m[1].trim(), number: Number(m[2].slice(0, 9)) };
 }
 
 // Lo mismo, con dónde quedan las cifras del número (para pintarlas en amarillo).
-export function composeParts(pattern, number, digits, decoration) {
+export function composeParts(rawPattern, number, digits, decoration, base = "") {
+    const pattern = rawPattern.replaceAll("*", base);
     const hash = pattern.indexOf("#");
     let end = hash;
     while (hash >= 0 && end < pattern.length && pattern[end] === "#")
@@ -117,7 +129,8 @@ export async function saveAllDialog(entries, formats) {
     const all = el("input", { type: "checkbox", title: tr("Marcar o desmarcar todas") });
     const pattern = nameField("");
     pattern.input.placeholder = tr("Nombre para todas (por ejemplo, foto#)");
-    pattern.input.title = tr("El mismo nombre para todas las imágenes marcadas, con un número que las distingue. # marca dónde va el número; si no hay, va al final.");
+    pattern.input.title = tr("El mismo nombre para todas las imágenes marcadas, con un número que las distingue. # marca dónde va el número; si no hay, va al final. " +
+        "* es el nombre que ya tenía cada imagen, sin su número (para añadirle algo al lado: «puerta_*»).");
     const allFormat = select([["", tr("Varios")], ...formats.map((f) => [f, f])], "");
     allFormat.title = tr("El mismo formato para todas");
     dlg.body.appendChild(el("div", { className: "save-all-row head" }, [el("span", { className: "dots" }), all,
@@ -134,12 +147,31 @@ export async function saveAllDialog(entries, formats) {
     dlg.body.appendChild(el("div", { className: "save-all-numbers" }, [el("span", { textContent: tr("Número:") }), decoration,
                                                                          el("span", { textContent: tr("Empieza en") }), start,
                                                                          el("span", { textContent: tr("Cifras") }), digits, numberFirst]));
+    // Secuencias (hola1…hola9, adiós1…adiós5): cada una se numera aparte y, si se quiere, con sus números.
+    const bySequence = checkbox(tr("Numerar cada secuencia por separado"), !!Settings.get("saveAllBySequence"));
+    bySequence.title = tr("Las imágenes que se llaman igual con un número (hola1, hola2… adiós1, adiós2…) se numeran cada grupo desde el principio. " +
+        "En el nombre común, * es el nombre de cada una sin su número: «puerta_*» deja puerta_hola1, puerta_hola2… puerta_adiós1…");
+    const keepNumbers = checkbox(tr("Conservar sus números"), !!Settings.get("saveAllKeepNumbers"));
+    keepNumbers.title = tr("Cada imagen de una secuencia guarda el número que ya tenía (hola7 sigue siendo el 7).");
+    const groups = new Map();
+    for (const e of entries) {
+        const { base, number } = sequenceBase(e.name);
+        if (number >= 0)
+            groups.set(base.toLowerCase(), (groups.get(base.toLowerCase()) ?? 0) + 1);
+    }
+    const found = [...groups.values()].filter((n) => n >= 2).length;
+    dlg.body.appendChild(el("div", { className: "save-all-numbers" }, [bySequence, keepNumbers,
+        el("span", { className: "sequences", textContent: found ? trn("(%n secuencia(s))", found) : "" })]));
+    const syncSequence = () => (keepNumbers.input.disabled = !bySequence.input.checked);
+    syncSequence();
 
     // Las imágenes.
     const list = el("div", { className: "save-all-list" });
     dlg.body.appendChild(list);
+    // Si ya estaban todas guardadas, todas marcadas (si no, «Guardar» no se podía pulsar).
+    const allSaved = entries.every((e) => e.saved);
     const rows = entries.map((e, index) => {
-        const check = el("input", { type: "checkbox", checked: !e.saved, title: tr("Guardar esta imagen") });
+        const check = el("input", { type: "checkbox", checked: allSaved || !e.saved, title: tr("Guardar esta imagen") });
         const name = nameField(e.name);
         const ext = formats.includes(e.ext) ? e.ext : formats[0];
         const format = select(formats.map((f) => [f, f]), ext);
@@ -147,7 +179,7 @@ export async function saveAllDialog(entries, formats) {
         const dots = el("span", { className: "dots", title: tr("Arrastra para cambiar el orden") });
         const thumb = el("span", { className: "thumb" }, [e.image]);
         const element = el("div", { className: "save-all-row" }, [dots, check, thumb, name.element, format]);
-        const row = { index, element, check, name, format, custom: false };
+        const row = { index, element, check, name, format, custom: false, ...sequenceBase(e.name) };
         name.input.addEventListener("input", () => {
             row.custom = true;
             // Escrito a mano: el número deja de marcarse.
@@ -161,33 +193,62 @@ export async function saveAllDialog(entries, formats) {
             sync();
             applyPattern(false);
         });
-        // Arrastrar los puntos mueve la fila (y renumera).
+        // Arrastrar los puntos: la fila va con el puntero y las demás se apartan con una animación
+        // (como al arrastrar en Paint.NET); al soltarla, se renumeran.
+        let grab = 0;
+        const pointerInList = (ev) => ev.clientY - list.getBoundingClientRect().top + list.scrollTop;
         dots.addEventListener("pointerdown", (ev) => {
             ev.preventDefault();
             dots.setPointerCapture(ev.pointerId);
             element.classList.add("dragging");
+            grab = pointerInList(ev) - element.offsetTop;
         });
         dots.addEventListener("pointermove", (ev) => {
             if (!dots.hasPointerCapture(ev.pointerId))
                 return;
+            const y = pointerInList(ev);
+            const center = y - grab + element.offsetHeight / 2;
             const others = order.filter((r) => r !== row);
             let to = 0;
-            for (const r of others) {
-                const box = r.element.getBoundingClientRect();
-                if (box.top + box.height / 2 < ev.clientY)
+            for (const r of others)
+                if (r.element.offsetTop + r.element.offsetHeight / 2 < center)
                     ++to;
-            }
             const from = order.indexOf(row);
-            if (to === from)
-                return;
-            order.splice(from, 1);
-            order.splice(to, 0, row);
-            list.insertBefore(element, list.children[to + (to > from ? 1 : 0)] || null);
-            for (const r of order)
-                list.appendChild(r.element);
-            applyPattern(false);
+            if (to !== from) {
+                // FLIP: las demás, desde donde estaban hasta su sitio nuevo.
+                const before = new Map(others.map((r) => [r, r.element.offsetTop]));
+                order.splice(from, 1);
+                order.splice(to, 0, row);
+                for (const r of order)
+                    list.appendChild(r.element);
+                for (const r of others) {
+                    const dy = before.get(r) - r.element.offsetTop;
+                    if (!dy)
+                        continue;
+                    r.element.style.transition = "none";
+                    r.element.style.transform = `translateY(${dy}px)`;
+                    requestAnimationFrame(() => {
+                        r.element.style.transition = "";
+                        r.element.style.transform = "";
+                    });
+                }
+            }
+            element.style.transform = `translateY(${y - grab - element.offsetTop}px)`;
+            // Que se siga viendo al llegar al borde de la lista.
+            const box = list.getBoundingClientRect();
+            if (ev.clientY < box.top + 24)
+                list.scrollTop -= 12;
+            else if (ev.clientY > box.bottom - 24)
+                list.scrollTop += 12;
         });
-        const end = () => element.classList.remove("dragging");
+        const end = () => {
+            if (!element.classList.contains("dragging"))
+                return;
+            element.classList.remove("dragging");
+            // A su sitio, con la misma animación.
+            element.style.transform = "";
+            applyPattern(false);
+        };
         dots.addEventListener("pointerup", end);
         dots.addEventListener("lostpointercapture", end);
         list.appendChild(element);
@@ -204,16 +265,22 @@ export async function saveAllDialog(entries, formats) {
         if (!text)
             return;
         const first = numberFirst.input.checked, from = Number(start.value) || 0, d = Number(digits.value) || 1;
-        let k = 0;
+        const sequences = bySequence.input.checked, keep = sequences && keepNumbers.input.checked;
+        // Cuántas van de cada secuencia (o de todas, sin secuencias).
+        const counters = new Map();
         for (const r of order) {
             if (!r.check.checked)
                 continue;
-            const number = first ? from + k : k === 0 ? -1 : from + k - 1;
+            const key = sequences ? r.base.toLowerCase() : "";
+            const k = counters.get(key) ?? 0;
+            let number = first ? from + k : k === 0 ? -1 : from + k - 1;
+            if (keep && r.number >= 0)
+                number = r.number;
             if (!r.custom) {
-                const parts = composeParts(text, number, d, decoration.value);
+                const parts = composeParts(text, number, d, decoration.value, r.base);
                 r.name.setValue(parts.name, [[parts.start, parts.length]]);
             }
-            ++k;
+            counters.set(key, k + 1);
         }
     }
 
@@ -250,6 +317,11 @@ export async function saveAllDialog(entries, formats) {
     for (const input of [start, digits, decoration])
         input.addEventListener("input", () => applyPattern(false));
     numberFirst.input.addEventListener("change", () => applyPattern(false));
+    bySequence.input.addEventListener("change", () => {
+        syncSequence();
+        applyPattern(false);
+    });
+    keepNumbers.input.addEventListener("change", () => applyPattern(false));
 
     dlg.buttons.prepend(count);
     const ok = dlg.addButton(tr("Guardar"), "ok", { isDefault: true });
@@ -288,5 +360,7 @@ export async function saveAllDialog(entries, formats) {
     Settings.set("saveAllStart", Number(start.value) || 0);
     Settings.set("saveAllDigits", Number(digits.value) || 1);
     Settings.set("saveAllNumberFirst", numberFirst.input.checked);
+    Settings.set("saveAllBySequence", bySequence.input.checked);
+    Settings.set("saveAllKeepNumbers", keepNumbers.input.checked);
     return results().map(({ index, name }) => ({ index, name }));
 }

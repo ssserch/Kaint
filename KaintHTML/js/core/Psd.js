@@ -674,8 +674,7 @@ async function build(p) {
     const h = p.header;
     const converted = [], unsupported = [];
     const note = (list, text) => list.includes(text) || list.push(text);
-    if (h.psb)
-        note(converted, tr("es un documento de tamaño grande (PSB), que Kaint no guarda"));
+    // (Un PSB ya no es motivo de aviso: Kaint también los guarda.)
     if (h.depth === 16 || h.depth === 32)
         note(converted, tr("tiene %1 bits por canal y Kaint trabaja con 8", h.depth));
     if (h.mode === GRAYSCALE || h.mode === DUOTONE)
@@ -902,14 +901,18 @@ function packBits(src, out) {
 
 // Un canal (0 rojo, 1 verde, 2 azul, 3 alfa) del rectángulo 'r' de una imagen RGBA, con PackBits:
 // la longitud de cada fila y después las filas.
-function packChannel(data, width, r, channel) {
+function packChannel(data, width, r, channel, psb = false) {
     const counts = new Writer(), rows = new Writer(), row = new Uint8Array(r.w);
     for (let y = r.y; y < r.y + r.h; ++y) {
         for (let x = 0; x < r.w; ++x)
             row[x] = data[(y * width + r.x + x) * 4 + channel];
         const before = rows.size;
         packBits(row, rows);
-        counts.u16(rows.size - before);
+        // (En un PSB, la longitud de cada fila ocupa 4 bytes.)
+        if (psb)
+            counts.u32(rows.size - before);
+        else
+            counts.u16(rows.size - before);
     }
     return { counts: counts.bytes(), rows: rows.bytes() };
 }
@@ -948,10 +951,22 @@ function resource(out, id, data) {
 
 // doc: { width, height, dpi, active, icc, layers: [{ name, visible, opacity, blend, data (RGBA) }]
 // (la de abajo primero), composite (RGBA) } → los bytes de un PSD de 8 bits en RGB.
-export function encodePsd(doc) {
+// 'psb': el documento grande de Photoshop (versión 2, hasta 300000 píxeles por lado, con las
+// longitudes de la sección de capas de 8 bytes y las de las filas de 4).
+export function encodePsd(doc, psb = false) {
     const { width: w, height: h } = doc;
-    if (w > 30000 || h > 30000)
-        fail(tr("PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PDN u ORA para conservar las capas."));
+    if (!psb && (w > 30000 || h > 30000))
+        fail(tr("PSD admite imágenes de hasta 30000 × 30000 píxeles. Guárdala como PSB (documento grande de Photoshop), PDN u ORA para conservar las capas."));
+    if (psb && (w > 300000 || h > 300000))
+        fail(tr("PSB admite imágenes de hasta 300000 × 300000 píxeles."));
+    const len = (writer, v) => {
+        if (psb) {
+            writer.u32(Math.floor(v / 0x100000000));
+            writer.u32(v >>> 0);
+        } else {
+            writer.u32(v);
+        }
+    };
     for (const l of doc.layers)
         if (!psdBlendSupported(l.blend))
             fail(tr("La capa «%1» usa un modo de fusión que Photoshop no tiene. Cámbialo en sus propiedades o guarda la imagen como PDN u ORA.", l.name));
@@ -962,7 +977,7 @@ export function encodePsd(doc) {
 
     const out = new Writer();
     out.text("8BPS");
-    out.u16(1);
+    out.u16(psb ? 2 : 1);
     for (let i = 0; i < 6; ++i)
         out.u8(0);
     out.u16(channels);
@@ -1004,7 +1019,7 @@ export function encodePsd(doc) {
                 c.u16(0);
             } else {
                 c.u16(1);
-                const packed = packChannel(layer.data, w, r, id < 0 ? 3 : id);
+                const packed = packChannel(layer.data, w, r, id < 0 ? 3 : id, psb);
                 c.raw(packed.counts);
                 c.raw(packed.rows);
             }
@@ -1018,7 +1033,7 @@ export function encodePsd(doc) {
         info.u16(4);
         ids.forEach((id, k) => {
             info.u16(id & 0xffff);
-            info.u32(chans[k].length);
+            len(info, chans[k].length);
         });
         info.text("8BIM");
         info.text(BLEND_KEYS[layer.blend]);
@@ -1059,8 +1074,8 @@ export function encodePsd(doc) {
     while (info.size % 4)
         info.u8(0);
     const infoBytes = info.bytes();
-    out.u32(4 + infoBytes.length + 4);
-    out.u32(infoBytes.length);
+    len(out, (psb ? 8 : 4) + infoBytes.length + 4);
+    len(out, infoBytes.length);
     out.raw(infoBytes);
     out.u32(0);
 
@@ -1069,7 +1084,7 @@ export function encodePsd(doc) {
     const all = { x: 0, y: 0, w, h };
     const packed = [];
     for (let c = 0; c < channels; ++c)
-        packed.push(packChannel(doc.composite, w, all, c));
+        packed.push(packChannel(doc.composite, w, all, c, psb));
     for (const p of packed)
         out.raw(p.counts);
     for (const p of packed)

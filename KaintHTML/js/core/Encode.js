@@ -20,6 +20,11 @@ export const FormatTraits = {
     dds: {},
     qoi: {},
     ppm: { opaque: true },
+    cur: { icon: true },
+    pam: {},
+    pcx: { depth: true },
+    sgi: {},
+    ff: {},
 };
 
 export const traits = (ext) => FormatTraits[ext] || {};
@@ -261,6 +266,16 @@ export async function encodeImage(prepared, ext, o, extra = {}) {
         return Codecs.encodeQoi(prepared);
     case "ppm":
         return Codecs.encodePpm(prepared);
+    case "cur":
+        return Codecs.encodeCur(prepared, o.icoSizes);
+    case "pam":
+        return Codecs.encodePam(prepared);
+    case "pcx":
+        return Codecs.encodePcx(prepared);
+    case "sgi":
+        return Codecs.encodeSgi(prepared);
+    case "ff":
+        return Codecs.encodeFarbfeld(prepared);
     case "png":
         if (prepared.indices || prepared.depth === 24 || o.interlaced) {
             const bytes = await Codecs.encodePng(prepared, { depth: prepared.depth || 32, interlaced: o.interlaced, dpi });
@@ -299,7 +314,15 @@ export async function decodeForPreview(bytes, ext) {
         return [Codecs.decodeQoi(bytes)];
     if (ext === "ppm")
         return [Codecs.decodeNetpbm(bytes)];
-    const bitmap = await createImageBitmap(new Blob([bytes], { type: ext === "ico" ? "image/x-icon" : MIMES[ext] || `image/${ext}` }));
+    if (ext === "pam")
+        return [Codecs.decodePam(bytes)];
+    if (ext === "pcx")
+        return [Codecs.decodePcx(bytes)];
+    if (ext === "sgi")
+        return [Codecs.decodeSgi(bytes)];
+    if (ext === "ff")
+        return [Codecs.decodeFarbfeld(bytes)];
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: ext === "ico" || ext === "cur" ? "image/x-icon" : MIMES[ext] || `image/${ext}` }));
     return [{ width: bitmap.width, height: bitmap.height, bitmap, delay: 100 }];
 }
 

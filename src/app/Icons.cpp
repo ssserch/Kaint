@@ -567,4 +567,75 @@ QIcon rotated(const QIcon& icon)
     return QIcon(new RotatedIconEngine(icon));
 }
 
+namespace {
+
+// Un icono dibujado a 16, 24, 32 y 48 píxeles (y al doble para pantallas de alta densidad).
+QIcon drawnIcon(const std::function<void(QPainter&, qreal)>& draw)
+{
+    QIcon icon;
+    for (int side : {16, 24, 32, 48, 64, 96}) {
+        QImage image(side, side, QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::transparent);
+        QPainter p(&image);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.scale(side / 16.0, side / 16.0);
+        draw(p, side / 16.0);
+        p.end();
+        icon.addPixmap(QPixmap::fromImage(image));
+    }
+    return icon;
+}
+
+} // namespace
+
+QIcon wineIcon()
+{
+    static const QIcon icon = drawnIcon([](QPainter& p, qreal scale) {
+        const qreal line = std::max(0.75, 1.0 / scale);
+        // La copa: un cuenco redondeado, el pie y la base.
+        QPainterPath bowl;
+        bowl.moveTo(3.6, 1.2);
+        bowl.lineTo(12.4, 1.2);
+        bowl.cubicTo(12.8, 5.2, 11.6, 8.6, 8.0, 9.0);
+        bowl.cubicTo(4.4, 8.6, 3.2, 5.2, 3.6, 1.2);
+        bowl.closeSubpath();
+        // El vino (la mitad de abajo del cuenco), con un brillo.
+        QPainterPath wine;
+        wine.addRect(QRectF(0, 4.4, 16, 6));
+        p.fillPath(bowl.intersected(wine), QColor(150, 18, 48));
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(255, 255, 255, 110));
+        p.drawEllipse(QRectF(9.4, 2.2, 1.4, 3.0));
+        const QColor glass(118, 128, 140);
+        p.setPen(QPen(glass, line));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(bowl);
+        p.setPen(QPen(glass, 1.2 * line, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(8.0, 9.0), QPointF(8.0, 13.6));
+        p.drawLine(QPointF(5.0, 14.4), QPointF(11.0, 14.4));
+    });
+    return icon;
+}
+
+QIcon openD2DIcon()
+{
+    static const QIcon icon = drawnIcon([](QPainter& p, qreal scale) {
+        const qreal line = std::max(0.75, 1.0 / scale);
+        // Un cuadrado azul y un círculo naranja superpuestos (con la mezcla de los dos donde se tocan).
+        const QRectF square(1.2, 1.2, 9.2, 9.2);
+        const QRectF circle(5.6, 5.6, 9.2, 9.2);
+        p.setPen(QPen(QColor(16, 86, 170), line));
+        p.setBrush(QColor(38, 132, 230));
+        p.drawRoundedRect(square, 1.4, 1.4);
+        p.setPen(QPen(QColor(196, 92, 10), line));
+        p.setBrush(QColor(255, 146, 38, 230));
+        p.drawEllipse(circle);
+        QPainterPath a, b;
+        a.addRoundedRect(square, 1.4, 1.4);
+        b.addEllipse(circle);
+        p.fillPath(a.intersected(b), QColor(122, 92, 200));
+    });
+    return icon;
+}
+
 } // namespace Icons

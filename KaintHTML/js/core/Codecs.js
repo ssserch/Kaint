@@ -1842,3 +1842,262 @@ export async function encodePdn(doc, thumbnail) {
     out.set(body, 9 + xml.length);
     return out;
 }
+
+// --- PCX, SGI, Farbfeld, PAM y CUR (ExtraFormats.cpp y ImageIO.cpp de Kaint) ---------------
+
+const tooBig = (w, h) => w <= 0 || h <= 0 || w * h > 16384 * 16384;
+// (Como los demás de aquí: el error lleva el nombre del formato; quien abre el archivo lo explica.)
+const damaged = (what) => new Error(what);
+
+// PCX (ZSoft Paintbrush): 24 bits (32 con transparencia, en 4 planos) o 8 con paleta.
+export function encodePcx(image) {
+    const { width: w, height: h } = image;
+    if (w > 0xffff || h > 0xffff)
+        throw new Error("65535 × 65535");
+    const indexed = !!image.indices;
+    const alpha = !indexed && hasTransparency(image);
+    const planes = indexed ? 1 : alpha ? 4 : 3, bpl = w + (w & 1);
+    const out = new Writer(128 + w * h * planes + 800);
+    out.u8(0x0a); out.u8(5); out.u8(1); out.u8(8);
+    out.u16(0); out.u16(0); out.u16(w - 1); out.u16(h - 1); out.u16(96); out.u16(96);
+    for (let i = 0; i < 48; ++i) out.u8(0);
+    out.u8(0); out.u8(planes); out.u16(bpl); out.u16(1); out.u16(0); out.u16(0);
+    for (let i = 0; i < 54; ++i) out.u8(0);
+    const line = new Uint8Array(bpl);
+    const pack = () => {
+        for (let i = 0; i < bpl;) {
+            let run = 1;
+            while (i + run < bpl && run < 63 && line[i + run] === line[i]) ++run;
+            if (run > 1 || line[i] >= 0xc0) out.u8(0xc0 | run);
+            out.u8(line[i]);
+            i += run;
+        }
+    };
+    for (let y = 0; y < h; ++y) {
+        if (indexed) {
+            line.fill(0);
+            line.set(image.indices.subarray(y * w, (y + 1) * w));
+            pack();
+            continue;
+        }
+        for (let p = 0; p < planes; ++p) {
+            line.fill(0);
+            for (let x = 0; x < w; ++x) line[x] = image.data[(y * w + x) * 4 + p];
+            pack();
+        }
+    }
+    if (indexed) {
+        out.u8(0x0c);
+        for (let i = 0; i < 256; ++i) {
+            const c = image.palette[i] || [0, 0, 0];
+            out.u8(c[0]); out.u8(c[1]); out.u8(c[2]);
+        }
+    }
+    return out.result();
+}
+
+export function decodePcx(b) {
+    if (b.length < 128 || b[0] !== 0x0a || b[2] > 1)
+        throw damaged("PCX");
+    const bpp = b[3], w = u16le(b, 8) - u16le(b, 4) + 1, h = u16le(b, 10) - u16le(b, 6) + 1;
+    const planes = b[65], bpl = u16le(b, 66);
+    if (tooBig(w, h) || planes < 1 || planes > 4 || !bpl || ![1, 2, 4, 8].includes(bpp) || bpl * 8 < w * bpp)
+        throw damaged("PCX");
+    const lineBytes = bpl * planes, total = lineBytes * h, px = new Uint8Array(total);
+    for (let pos = 128, done = 0; done < total && pos < b.length;) {
+        let v = b[pos++], run = 1;
+        if (b[2] === 1 && (v & 0xc0) === 0xc0) {
+            run = v & 0x3f;
+            v = b[pos++] ?? 0;
+        }
+        for (let k = 0; k < run && done < total; ++k) px[done++] = v;
+    }
+    let palette = [];
+    if (bpp === 8 && planes === 1) {
+        if (b.length >= 769 && b[b.length - 769] === 0x0c)
+            for (let i = 0; i < 256; ++i) palette.push([b[b.length - 768 + i * 3], b[b.length - 767 + i * 3], b[b.length - 766 + i * 3]]);
+        else
+            for (let i = 0; i < 256; ++i) palette.push([i, i, i]);
+    } else {
+        for (let i = 0; i < 16; ++i) palette.push([b[16 + i * 3], b[17 + i * 3], b[18 + i * 3]]);
+        if (bpp === 1 && planes === 1) palette = [[0, 0, 0], [255, 255, 255]];
+    }
+    const out = newImage(w, h), d = out.data;
+    for (let y = 0; y < h; ++y) {
+        const line = y * lineBytes;
+        for (let x = 0; x < w; ++x) {
+            const o = (y * w + x) * 4;
+            if (bpp === 8 && planes >= 3) {
+                d[o] = px[line + x]; d[o + 1] = px[line + bpl + x]; d[o + 2] = px[line + 2 * bpl + x];
+                d[o + 3] = planes === 4 ? px[line + 3 * bpl + x] : 255;
+                continue;
+            }
+            let index = 0;
+            for (let p = 0; p < planes; ++p) {
+                const bit = x * bpp;
+                index |= ((px[line + p * bpl + (bit >> 3)] >> (8 - bpp - (bit & 7))) & ((1 << bpp) - 1)) << (p * bpp);
+            }
+            const c = palette[index] || [0, 0, 0];
+            d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+        }
+    }
+    const dpi = u16le(b, 12);
+    if (dpi > 0 && dpi < 20000)
+        out.dpi = dpi;
+    return out;
+}
+
+// SGI (.sgi, .rgb, .rgba, .bw): se escribe RGB o RGBA con RLE.
+export function encodeSgi(image) {
+    const { width: w, height: h, data } = image;
+    if (w > 0xffff || h > 0xffff)
+        throw new Error("65535 × 65535");
+    const channels = hasTransparency(image) ? 4 : 3, rows = h * channels;
+    const head = new Writer(512 + rows * 8);
+    head.u16be(474); head.u8(1); head.u8(1); head.u16be(3); head.u16be(w); head.u16be(h); head.u16be(channels);
+    head.u32be(0); head.u32be(255); head.u32be(0);
+    head.ascii("Kaint");
+    while (head.length < 512) head.u8(0);
+    const starts = new Uint32Array(rows), lengths = new Uint32Array(rows);
+    const body = new Writer(w * h * channels + rows * 2);
+    const line = new Uint8Array(w);
+    let offset = 512 + rows * 8;
+    for (let c = 0; c < channels; ++c)
+        for (let y = 0; y < h; ++y) {
+            const src = h - 1 - y;
+            for (let x = 0; x < w; ++x) line[x] = data[(src * w + x) * 4 + c];
+            const before = body.length;
+            for (let i = 0; i < w;) {
+                let run = 1;
+                while (i + run < w && run < 127 && line[i + run] === line[i]) ++run;
+                if (run >= 3) {
+                    body.u8(run); body.u8(line[i]); i += run;
+                    continue;
+                }
+                const start = i;
+                let len = 0;
+                while (i < w && len < 127 && !(i + 2 < w && line[i] === line[i + 1] && line[i] === line[i + 2])) { ++i; ++len; }
+                body.u8(0x80 | len);
+                body.bytes(line.subarray(start, start + len));
+            }
+            body.u8(0);
+            starts[c * h + y] = offset + before;
+            lengths[c * h + y] = body.length - before;
+        }
+    for (const v of starts) head.u32be(v);
+    for (const v of lengths) head.u32be(v);
+    head.bytes(body.result());
+    return head.result();
+}
+
+export function decodeSgi(b) {
+    if (b.length < 512 || u16be(b, 0) !== 474)
+        throw damaged("SGI");
+    const storage = b[2], bpc = b[3], dim = u16be(b, 4), w = u16be(b, 6), h = dim === 1 ? 1 : u16be(b, 8);
+    const channels = dim < 3 ? 1 : u16be(b, 10);
+    if (tooBig(w, h) || (bpc !== 1 && bpc !== 2) || storage > 1 || channels < 1)
+        throw damaged("SGI");
+    const used = Math.min(4, channels), planes = new Uint8Array(used * w * h);
+    for (let c = 0; c < used; ++c)
+        for (let y = 0; y < h; ++y) {
+            const dst = (c * h + y) * w;
+            if (storage === 0) {
+                const at = 512 + (c * h + y) * w * bpc;
+                if (at + w * bpc > b.length)
+                    throw damaged("SGI");
+                for (let x = 0; x < w; ++x) planes[dst + x] = b[at + x * bpc];
+                continue;
+            }
+            const k = c * h + y, rows = h * channels;
+            let pos = u32be(b, 512 + k * 4);
+            const end = pos + u32be(b, 512 + rows * 4 + k * 4);
+            for (let x = 0; x < w && pos < end && pos < b.length;) {
+                const head = bpc === 2 ? u16be(b, pos) : b[pos];
+                pos += bpc;
+                const count = head & 0x7f;
+                if (!count)
+                    break;
+                if (head & 0x80) {
+                    for (let i = 0; i < count && x < w; ++i, pos += bpc) planes[dst + x++] = b[pos];
+                } else {
+                    const v = b[pos];
+                    pos += bpc;
+                    for (let i = 0; i < count && x < w; ++i) planes[dst + x++] = v;
+                }
+            }
+        }
+    const out = newImage(w, h), d = out.data;
+    for (let y = 0; y < h; ++y)
+        for (let x = 0; x < w; ++x) {
+            const o = ((h - 1 - y) * w + x) * 4, at = (c) => planes[(c * h + y) * w + x];
+            if (used <= 2) {
+                d[o] = d[o + 1] = d[o + 2] = at(0);
+                d[o + 3] = used === 2 ? at(1) : 255;
+            } else {
+                d[o] = at(0); d[o + 1] = at(1); d[o + 2] = at(2); d[o + 3] = used === 4 ? at(3) : 255;
+            }
+        }
+    return out;
+}
+
+// Farbfeld (.ff): RGBA de 16 bits por canal.
+export function encodeFarbfeld(image) {
+    const { width: w, height: h, data } = image;
+    const out = new Writer(16 + w * h * 8);
+    out.ascii("farbfeld"); out.u32be(w); out.u32be(h);
+    for (let i = 0; i < w * h * 4; ++i) { out.u8(data[i]); out.u8(data[i]); }
+    return out.result();
+}
+
+export function decodeFarbfeld(b) {
+    if (b.length < 16 || ascii(b, 0, 8) !== "farbfeld")
+        throw damaged("farbfeld");
+    const w = u32be(b, 8), h = u32be(b, 12);
+    if (tooBig(w, h) || 16 + w * h * 8 > b.length)
+        throw damaged("farbfeld");
+    const out = newImage(w, h);
+    for (let i = 0; i < w * h * 4; ++i) out.data[i] = b[16 + i * 2];
+    return out;
+}
+
+// PAM (Netpbm P7): el de Netpbm con transparencia.
+export function encodePam(image) {
+    const { width: w, height: h, data } = image;
+    const out = new Writer(80 + w * h * 4);
+    out.ascii(`P7\nWIDTH ${w}\nHEIGHT ${h}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n`);
+    out.bytes(data.subarray(0, w * h * 4));
+    return out.result();
+}
+
+export function decodePam(b) {
+    const text = ascii(b, 0, Math.min(b.length, 512));
+    const end = text.indexOf("ENDHDR\n");
+    if (!text.startsWith("P7") || end < 0)
+        throw damaged("PAM");
+    const field = (k) => Number((new RegExp(`^${k}\\s+(\\d+)`, "m").exec(text.slice(0, end)) || [])[1] || 0);
+    const w = field("WIDTH"), h = field("HEIGHT"), depth = field("DEPTH"), maxval = field("MAXVAL");
+    const bytes = maxval > 255 ? 2 : 1, start = end + 7;
+    if (tooBig(w, h) || depth < 1 || depth > 4 || maxval < 1 || maxval > 65535 || start + w * h * depth * bytes > b.length)
+        throw damaged("PAM");
+    const out = newImage(w, h), d = out.data;
+    const sample = (at) => Math.round(((bytes === 2 ? (b[at] << 8) | b[at + 1] : b[at]) * 255) / maxval);
+    for (let p = 0, pos = start; p < w * h; ++p) {
+        const c = [0, 0, 0, 255];
+        for (let k = 0; k < depth; ++k, pos += bytes) c[k] = sample(pos);
+        const o = p * 4;
+        if (depth <= 2) { d[o] = d[o + 1] = d[o + 2] = c[0]; d[o + 3] = depth === 2 ? c[1] : 255; }
+        else { d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = depth === 4 ? c[3] : 255; }
+    }
+    return out;
+}
+
+// Cursor de Windows: un icono de tipo 2 con el punto activo (arriba a la izquierda) en lugar de los
+// planos y los bits por píxel de cada entrada.
+export async function encodeCur(image, sizes) {
+    const ico = await encodeIco(image, sizes);
+    ico[2] = 2;
+    const n = ico[4] | (ico[5] << 8);
+    for (let i = 0; i < n; ++i)
+        ico.fill(0, 6 + i * 16 + 4, 6 + i * 16 + 8);
+    return ico;
+}

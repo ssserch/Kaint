@@ -24,10 +24,16 @@ DO_DEBUG=0
 DO_AVX2=0
 DO_MUSL=0
 DO_ARM64=0
+# AppImage en un contenedor de Ubuntu 22.04 (glibc 2.35): así funciona en las distribuciones más
+# antiguas con soporte (el catálogo de AppImage lo prueba en la LTS más antigua). 1: sí (si este
+# sistema tiene una glibc más nueva y hay podman o docker), 0: con lo de este sistema.
+APPIMAGE_COMPAT=1
 DO_WINDOWS=0
 DO_APK=""
 ASSUME_YES=0
 KAINTHTML=""
+OPEND2D=""
+OPEND2D_REPO=https://github.com/daijro/opend2d.git
 KEYSTORE=""
 KEY_ALIAS=""
 JOBS=""
@@ -214,7 +220,11 @@ Uso: $0 [opciones]
       --deb            crea el paquete .deb en build-deb/ (necesita dpkg)
       --pkg            crea el paquete de Arch en build-pkg/ (necesita makepkg)
       --flatpak        crea e instala el Flatpak con el código de esta carpeta (necesita flatpak-builder)
-      --appimage       crea el AppImage en build-appimage/ (descarga linuxdeploy)
+      --appimage       crea el AppImage en build-appimage/ (descarga linuxdeploy). Con una glibc más nueva
+                       que la 2.35, se compila en un contenedor de Ubuntu 22.04 (con podman o docker,
+                       y Qt de aqtinstall): así funciona también en las distribuciones antiguas
+      --appimage-native  (con --appimage) con el Qt y la glibc de este sistema, sin contenedor (solo
+                       funcionará en sistemas con una glibc igual o más nueva)
       --tar            crea un .tar.gz portable (Linux, FreeBSD o macOS: el de este sistema) en build-tar/
       --avx2           compila para procesadores con AVX2 (x86-64-v3): más rápido, no va en los antiguos
       --musl           compila para musl (Alpine) dentro de un contenedor de Alpine (podman o docker)
@@ -231,6 +241,10 @@ Uso: $0 [opciones]
       --kainthtml RUTA (con --apk o --aab) otra carpeta de KaintHTML (por defecto, la de aquí)
       --keystore RUTA  (con --apk o --aab) la llave (.jks o .keystore) con la que firmar
       --alias NOMBRE   (con --apk o --aab) el usuario (alias) de esa llave
+      --opend2d VERSIÓN  OpenD2D (el Direct2D de código abierto de los complementos de Paint.NET):
+                       latest (lo último del repositorio oficial), main, una versión publicada
+                       (v0.1.0-beta.1...), local (la copia de 2dlocal/), una carpeta con su código
+                       u off. Sin esta opción, en una terminal se pregunta (sin terminal: latest)
   -y, --yes            (con --apk o --aab) descarga sin preguntar lo que falte
       --no-ccache      no usa ccache ni sccache aunque estén instalados
   -h, --help           muestra esta ayuda
@@ -259,6 +273,7 @@ while [[ $# -gt 0 ]]; do
         --tar)        DO_TAR=1; BUILD_TYPE=Release; BUILD_DIR=build-tar; PREFIX=/usr ;;
         --avx2)       DO_AVX2=1 ;;
         --musl)       DO_MUSL=1 ;;
+        --appimage-native) APPIMAGE_COMPAT=0 ;;
         --arm64)      DO_ARM64=1 ;;
         --freebsd)    [[ "$OS_NAME" == freebsd ]] || { echo "${c_red}El .tar.gz de FreeBSD se crea en FreeBSD (./build.sh --tar).${c_reset}" >&2; exit 1; } ;;
         --macos)      [[ "$OS_NAME" == macos ]] || { echo "${c_red}El .tar.gz de macOS se crea en macOS (./build.sh --tar).${c_reset}" >&2; exit 1; } ;;
@@ -269,6 +284,7 @@ while [[ $# -gt 0 ]]; do
         --aab)        DO_APK=aab ;;
         -y|--yes)     ASSUME_YES=1 ;;
         --kainthtml)  KAINTHTML="${2:?falta la carpeta de --kainthtml}"; shift ;;
+        --opend2d)    OPEND2D="${2:?falta la versión de --opend2d (latest, main, una etiqueta, local u off)}"; shift ;;
         --keystore)   KEYSTORE="${2:?falta la llave de --keystore}"; shift ;;
         --alias)      KEY_ALIAS="${2:?falta el alias de --alias}"; shift ;;
         -j|--jobs)    JOBS="${2:?falta el número de hilos de --jobs}"; shift
@@ -643,6 +659,71 @@ PY
     exit 0
 fi
 
+# --- AppImage para las distribuciones antiguas -------------------------------------
+# Un AppImage solo funciona con una glibc (y una libstdc++) igual o más antigua que la del sistema
+# donde se compila: hecho en Arch (glibc 2.44), Ubuntu 22.04 y Debian 12 no lo abrían («GLIBC_2.38 not
+# found»). Se compila dentro de un contenedor de Ubuntu 22.04 (glibc 2.35, la LTS más antigua con
+# soporte) con g++ 12, el Qt 6.8 oficial (aqtinstall; se compiló en RHEL 8, con glibc 2.28) y, para
+# OpenD2D, Rust con rustup. Lo descargado se guarda en build-appimage-cache/ para la próxima vez.
+glibc_newer_than() {
+    local have
+    have=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || true)
+    [[ -n "$have" ]] && [[ "$(printf '%s\n%s\n' "$1" "$have" | sort -V | tail -n1)" == "$have" && "$have" != "$1" ]]
+}
+if (( DO_APPIMAGE && APPIMAGE_COMPAT && ! DO_MUSL && ! DO_ARM64 )) && [[ -z "${KAINT_IN_CONTAINER:-}" && "$OS_NAME" == linux ]] \
+    && [[ "$HOST_ARCH" == x86_64 ]] && glibc_newer_than 2.35; then
+    tool=$(container_tool)
+    if [[ -z "$tool" ]]; then
+        echo "${c_yellow}Este sistema tiene una glibc más nueva que la 2.35: el AppImage solo funcionará en distribuciones igual de"
+        echo "nuevas. Instala podman o docker para compilarlo en un contenedor de Ubuntu 22.04 (o usa --appimage-native).${c_reset}"
+    else
+        QT_COMPAT=6.8.3
+        cache="$PWD/build-appimage-cache"
+        mkdir -p "$cache"
+        inner=(--appimage --appimage-native --opend2d "${OPEND2D:-latest}")
+        (( DO_AVX2 )) && inner+=(--avx2)
+        (( DO_DEBUG )) && inner+=(--debug)
+        [[ -n "$JOBS" ]] && inner+=(--jobs "$JOBS")
+        # La copia local de OpenD2D, dentro del contenedor.
+        if [[ "${OPEND2D:-}" == local ]]; then
+            inner=(--appimage --appimage-native --opend2d /src/2dlocal)
+            (( DO_AVX2 )) && inner+=(--avx2)
+        fi
+        setup="export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends g++-12 gcc-12 cmake ninja-build git curl ca-certificates file python3-pip \
+    libgl-dev libegl-dev libxkbcommon-dev libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libssl-dev zlib1g-dev mono-devel \
+    libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+    libxcb-xinerama0 libxcb-xkb1 libwayland-client0 libwayland-cursor0 libwayland-egl1 libpulse0 libpulse-mainloop-glib0 \
+    libasound2 libcups2 libgtk-3-0 libva2 libva-drm2 libva-x11-2 libvdpau1 libdrm2 libgbm1 libxrandr2 libxcomposite1 \
+    libxdamage1 libxtst6 libxshmfence1 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 >/dev/null
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 --slave /usr/bin/g++ g++ /usr/bin/g++-12 >/dev/null
+# (cargo enlaza con cc.)
+ln -sf /usr/bin/gcc-12 /usr/bin/cc
+ln -sf /usr/bin/g++-12 /usr/bin/c++
+export HOME=/cache PATH=/cache/.cargo/bin:/cache/.local/bin:\$PATH
+if [ ! -x /cache/qt/$QT_COMPAT/gcc_64/bin/qmake ]; then
+    pip3 install -q --user aqtinstall
+    aqt install-qt -O /cache/qt linux desktop $QT_COMPAT linux_gcc_64 -m qtimageformats qtmultimedia
+fi
+if [ ! -x /cache/.cargo/bin/cargo ] && [ \"${OPEND2D:-latest}\" != off ]; then
+    curl -sSf https://sh.rustup.rs | RUSTUP_INIT_SKIP_PATH_CHECK=yes sh -s -- -y -q --profile minimal >/dev/null 2>&1
+fi
+git config --global --add safe.directory '*'
+export CMAKE_PREFIX_PATH=/cache/qt/$QT_COMPAT/gcc_64
+./build.sh ${inner[*]}"
+        echo "${c_bold}Compilando el AppImage en un contenedor de Ubuntu 22.04 (glibc 2.35, $tool)...${c_reset}"
+        echo "La primera vez descarga Qt $QT_COMPAT y Rust (en build-appimage-cache/): tarda un rato."
+        STEP="compilar el AppImage en el contenedor"
+        "$tool" run --rm --platform linux/amd64 -v "$PWD:/src" -v "$cache:/cache" -w /src -e KAINT_IN_CONTAINER=1 \
+            -e KAINT_BUILD_SUFFIX=-compat docker.io/library/ubuntu:22.04 bash -c "$setup"
+        STEP=""
+        built=$(ls -t build-appimage*-compat/Kaint-*.AppImage 2>/dev/null | head -n1 || true)
+        [[ -n "$built" ]] && report "AppImage (Ubuntu 22.04 o más nuevo)" "$built"
+        exit 0
+    fi
+fi
+
 # --- musl o arm64 en un contenedor ----------------------------------------------
 # Lo que este equipo no compila de forma nativa: el mismo build.sh dentro de un contenedor de
 # Alpine (musl) o de Debian (glibc), de la arquitectura pedida (arm64 con qemu-user-static).
@@ -721,6 +802,106 @@ elif command -v dpkg-query >/dev/null 2>&1; then
     check_packages dpkg_installed "sudo apt install" DEB_REQUIRED DEB_OPTIONAL
 else
     echo "${c_yellow}No se encontró pacman ni apt; se omite la comprobación de dependencias.${c_reset}"
+fi
+
+# --- OpenD2D -------------------------------------------------------------------
+# El puente de los complementos de Paint.NET con OpenD2D (cmake/BuildOpenD2D.cmake): cargo lo compila
+# junto a Kaint. Se elige la versión: lo último del repositorio oficial (se descarga o actualiza en
+# cada compilación), una versión publicada, la copia local de 2dlocal/ o ninguna. En una terminal se
+# pregunta; sin ella, o con --opend2d, no.
+OPEND2D_CMAKE=()
+opend2d_tags() {
+    git ls-remote --tags --refs --sort=-v:refname "$OPEND2D_REPO" 2>/dev/null | sed -n 's|.*refs/tags/||p'
+}
+choose_opend2d() {
+    local cargo
+    cargo=$(command -v cargo 2>/dev/null || true)
+    [[ -z "$cargo" && -x "$HOME/.cargo/bin/cargo" ]] && cargo="$HOME/.cargo/bin/cargo"
+    if [[ -z "$OPEND2D" ]]; then
+        if [[ -z "$cargo" ]]; then
+            echo "${c_yellow}OpenD2D:${c_reset} sin cargo (Rust) no se compila; los complementos de Paint.NET usarán mono sin él (o Wine)."
+            OPEND2D=off
+        elif [[ -t 0 && -t 1 ]]; then
+            echo
+            echo "${c_bold}OpenD2D${c_reset} (Direct2D de código abierto para los complementos de Paint.NET):"
+            echo "  1) La última versión"
+            echo "  2) Elegir una versión publicada del repositorio oficial"
+            local options=4
+            if [[ -f 2dlocal/Cargo.toml ]]; then
+                echo "  3) La copia local (2dlocal/)"
+                echo "  4) Sin OpenD2D"
+            else
+                echo "  3) Sin OpenD2D"
+                options=3
+            fi
+            local choice tries=0
+            while [[ -z "$OPEND2D" ]]; do
+                read -r -p "Elige [1-$options] (1): " choice || choice=1
+                case "$choice" in
+                    ""|1) OPEND2D=latest ;;
+                    2)
+                        local tags=() tag i
+                        while IFS= read -r tag; do [[ -n "$tag" ]] && tags+=("$tag"); done < <(opend2d_tags)
+                        if (( ${#tags[@]} == 0 )); then
+                            echo "${c_yellow}No se pudo leer la lista de versiones (¿sin conexión?): se usa la última.${c_reset}"
+                            OPEND2D=latest
+                        else
+                            echo "Versiones publicadas:"
+                            echo "  0) main (lo más nuevo, sin publicar)"
+                            for i in "${!tags[@]}"; do echo "  $((i + 1))) ${tags[i]}"; done
+                            while [[ -z "$OPEND2D" ]]; do
+                                read -r -p "Elige [0-${#tags[@]}] (1): " choice || choice=1
+                                [[ -z "$choice" ]] && choice=1
+                                if [[ "$choice" == 0 ]]; then
+                                    OPEND2D=main
+                                elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#tags[@]} )); then
+                                    OPEND2D=${tags[choice - 1]}
+                                else
+                                    echo "Elige un número de la lista."
+                                fi
+                            done
+                        fi ;;
+                    3) if (( options == 4 )); then OPEND2D=local; else OPEND2D=off; fi ;;
+                    4) (( options == 4 )) && OPEND2D=off ;;
+                esac
+                [[ -z "$OPEND2D" ]] && { (( ++tries >= 5 )) && OPEND2D=latest || echo "Elige un número del 1 al $options."; }
+            done
+        else
+            OPEND2D=latest
+        fi
+    fi
+    case "$OPEND2D" in
+        off|no|none)
+            OPEND2D_MODE=OFF; OPEND2D_REF=latest; OPEND2D_SOURCE="" ;;
+        local)
+            [[ -f 2dlocal/Cargo.toml ]] || die "--opend2d local: no está la copia de OpenD2D en 2dlocal/"
+            OPEND2D_MODE=ON; OPEND2D_REF=latest; OPEND2D_SOURCE="$PWD/2dlocal" ;;
+        latest|main)
+            OPEND2D_MODE=AUTO; OPEND2D_REF=$OPEND2D; OPEND2D_SOURCE="" ;;
+        *)
+            if [[ -d "$OPEND2D" ]]; then
+                [[ -f "$OPEND2D/Cargo.toml" ]] || die "--opend2d: $OPEND2D no tiene el código de OpenD2D"
+                OPEND2D_MODE=ON; OPEND2D_REF=latest; OPEND2D_SOURCE=$(cd "$OPEND2D" && pwd)
+            else
+                OPEND2D_MODE=AUTO; OPEND2D_REF=$OPEND2D; OPEND2D_SOURCE=""
+            fi ;;
+    esac
+    [[ "$OPEND2D_MODE" == OFF || -n "$cargo" ]] || { OPEND2D_MODE=OFF; }
+    case "$OPEND2D_MODE" in
+        OFF) echo "OpenD2D: no" ;;
+        *) if [[ -n "$OPEND2D_SOURCE" ]]; then echo "OpenD2D: $OPEND2D_SOURCE"; else echo "OpenD2D: $OPEND2D_REF"; fi ;;
+    esac
+    # Siempre los tres: CMake los recuerda de la vez anterior.
+    OPEND2D_CMAKE=(-DKAINT_OPEND2D="$OPEND2D_MODE" -DKAINT_OPEND2D_REF="$OPEND2D_REF" -DKAINT_OPEND2D_SOURCE="$OPEND2D_SOURCE")
+    export KAINT_OPEND2D="$OPEND2D_MODE" KAINT_OPEND2D_REF="$OPEND2D_REF" KAINT_OPEND2D_SOURCE="$OPEND2D_SOURCE"
+}
+# (Windows no lo usa, y el Flatpak se compila sin red: allí, sin OpenD2D.)
+if [[ "$OS_NAME" != windows ]] && (( ! DO_FLATPAK )) && [[ -z "${KAINT_IN_CONTAINER:-}" ]]; then
+    choose_opend2d
+elif [[ -n "${KAINT_IN_CONTAINER:-}" && -n "${KAINT_OPEND2D:-}" ]]; then
+    # Dentro del contenedor del AppImage: lo que se eligió fuera.
+    OPEND2D_CMAKE=(-DKAINT_OPEND2D="$KAINT_OPEND2D" -DKAINT_OPEND2D_REF="${KAINT_OPEND2D_REF:-latest}"
+                   -DKAINT_OPEND2D_SOURCE="${KAINT_OPEND2D_SOURCE:-}")
 fi
 
 # --- Paquete de Arch ---------------------------------------------------------
@@ -816,7 +997,7 @@ fi
 STEP="configurar con CMake"
 cmake -S . -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_INSTALL_PREFIX="$PREFIX" "${extra_cmake[@]}"
+    -DCMAKE_INSTALL_PREFIX="$PREFIX" "${extra_cmake[@]}" "${OPEND2D_CMAKE[@]}"
 
 jobs=${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}
 echo "${c_bold}Compilando con $jobs hilos...${c_reset}"

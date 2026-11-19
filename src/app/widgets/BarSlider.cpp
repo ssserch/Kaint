@@ -8,6 +8,41 @@
 #include <QStyleOption>
 #include <QWheelEvent>
 
+#include <algorithm>
+
+namespace {
+bool g_wheelEnabled = true;
+int g_wheelStep = 0;
+} // namespace
+
+void BarSlider::setWheelBehavior(bool enabled, int step)
+{
+    g_wheelEnabled = enabled;
+    g_wheelStep = std::clamp(step, 0, 3);
+}
+
+bool BarSlider::wheelEnabled()
+{
+    return g_wheelEnabled;
+}
+
+int BarSlider::wheelStep(int min, int max, Qt::KeyboardModifiers modifiers)
+{
+    const int range = std::max(1, max - min);
+    if (modifiers & Qt::ShiftModifier)
+        return 1;
+    int step = 1;
+    switch (g_wheelStep) {
+    case 1: step = 1; break;
+    case 2: step = std::max(1, range * 5 / 100); break;
+    case 3: step = std::max(1, range / 10); break;
+    default: step = std::max(1, range / 100); break;
+    }
+    if (modifiers & Qt::ControlModifier)
+        step *= 10;
+    return step;
+}
+
 BarSlider::BarSlider(int min, int max, const QString& suffix, QWidget* parent)
     : QWidget(parent)
     , m_min(min)
@@ -97,9 +132,18 @@ void BarSlider::mouseMoveEvent(QMouseEvent* e)
 
 void BarSlider::wheelEvent(QWheelEvent* e)
 {
-    const int steps = e->angleDelta().y() / 120;
+    if (!g_wheelEnabled) {
+        // Para la barra o la ventana que la contiene.
+        e->ignore();
+        return;
+    }
+    // (Las ruedas de alta resolución y los touchpads mandan trozos de 120: se suman.)
+    const QPoint angle = e->angleDelta();
+    m_wheelRest += std::abs(angle.y()) >= std::abs(angle.x()) ? angle.y() : -angle.x();
+    const int steps = m_wheelRest / 120;
+    m_wheelRest %= 120;
     if (steps != 0)
-        setValue(m_value + steps * std::max(1, (m_max - m_min) / 100));
+        setValue(m_value + steps * wheelStep(m_min, m_max, e->modifiers()));
     e->accept();
 }
 

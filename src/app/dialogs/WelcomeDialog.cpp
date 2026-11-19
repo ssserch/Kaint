@@ -4,6 +4,7 @@
 #include "app/Theme.h"
 #include "app/dialogs/AboutDialog.h"
 #include "app/widgets/WaveLabel.h"
+#include "core/plugins/PdnBridge.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -100,6 +101,24 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     form->addRow(tr("Estilo de la interfaz:"), look);
     form->addRow(tr("Cursores:"), cursors);
     form->addRow(tr("Idioma:"), language);
+    // Con qué se cargan los complementos de Paint.NET (.dll): OpenD2D o Wine.
+    // En Windows no hay que elegir (los carga el .NET Framework del sistema).
+    if (PdnBridge::runtimeSelectable()) {
+        auto* plugins = new QComboBox(this);
+        plugins->setIconSize(QSize(16, 16));
+        plugins->addItem(Icons::openD2DIcon(), QStringLiteral("OpenD2D"), 0);
+        plugins->setItemData(0, tr("mono con OpenD2D, el Direct2D de código abierto: no necesita nada más que mono."),
+                             Qt::ToolTipRole);
+        plugins->addItem(Icons::wineIcon(), tr("Wine"), 1);
+        plugins->setItemData(1, tr("Los complementos se ejecutan dentro de Wine, como un programa de Windows (hace falta Wine)."),
+                             Qt::ToolTipRole);
+        plugins->setCurrentIndex(std::max(0, plugins->findData(m_settings.pluginRuntime)));
+        plugins->setToolTip(tr("Con qué se cargan los complementos de Paint.NET (.dll). Se puede cambiar en Configuración → "
+                               "Complementos."));
+        form->addRow(tr("Complementos de Paint.NET:"), plugins);
+        connect(plugins, &QComboBox::activated, this,
+                [this, plugins](int i) { m_settings.pluginRuntime = plugins->itemData(i).toInt(); });
+    }
 
     auto* box = new QDialogButtonBox(this);
     box->addButton(tr("Empezar"), QDialogButtonBox::AcceptRole)->setDefault(true);

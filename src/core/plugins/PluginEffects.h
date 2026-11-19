@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QJsonObject>
 
+#include <atomic>
 #include <mutex>
 
 // Efecto de un complemento de Paint.NET: los parámetros salen de la descripción de IndirectUI
@@ -51,6 +52,8 @@ private:
     QHash<QString, bool> m_colorAlpha;
     mutable std::mutex m_errorMutex;
     mutable QString m_error;
+    // Con el respaldo de Wine: este efecto se ejecuta con Wine (no carga con mono, o falló con él).
+    mutable std::atomic_bool m_wine{false};
 };
 
 // Efecto 'index' de un complemento nativo: con la versión 1 de la API la tabla tiene la

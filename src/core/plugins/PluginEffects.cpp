@@ -60,6 +60,7 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
     , m_help(d.value(QStringLiteral("help")).toString())
 {
     m_id = makeId(assembly, m_typeId);
+    m_wine = d.value(QStringLiteral("wine")).toBool() || PdnBridge::effectNeedsWine(m_id);
     if (!m_adjustment)
         m_category = kaintCategory(d.value(QStringLiteral("subMenu")).toString());
     const QByteArray icon = QByteArray::fromBase64(d.value(QStringLiteral("icon")).toString().toLatin1());
@@ -196,9 +197,35 @@ QJsonObject PdnEffect::toHostValues(const ParamValues& values) const
 
 void PdnEffect::render(const RenderArgs& a) const
 {
+    using Runtime = PdnBridge::Runtime;
+    // Con el respaldo de Wine, lo que ya se sabe que necesita Wine va directo allí.
+    const bool viaWine = m_wine && PdnBridge::wineFallback();
+    PdnBridge& bridge = viaWine ? PdnBridge::forRuntime(Runtime::Wine) : PdnBridge::instance();
     QString error;
-    const bool ok = PdnBridge::instance().render(m_assembly, m_typeId, toHostValues(a.values), a.src, a.dst, a.roi,
-                                                 a.ctx, a.cancel, &error);
+    const QJsonObject values = toHostValues(a.values);
+    bool ok = bridge.render(m_assembly, m_typeId, values, a.src, a.dst, a.roi, a.ctx, a.cancel, &error);
+    // Falló con mono (no al cancelar): se prueba con Wine y, si funciona, este efecto se queda con
+    // Wine (también las próximas veces). Los que tienen ventana propia no: lo elegido en ella está en
+    // el proceso de mono; se usará Wine la próxima vez que se abra.
+    if (!ok && !a.cancel && !viaWine && PdnBridge::wineFallback() && PdnBridge::runtime() == Runtime::OpenD2D) {
+        if (m_customDialog) {
+            m_wine = true;
+            PdnBridge::rememberWineEffect(m_id);
+            error += QLatin1Char('\n')
+                     + QCoreApplication::translate("PdnEffect", "La próxima vez este efecto se abrirá con Wine.");
+        } else {
+            QString wineError;
+            if (PdnBridge::forRuntime(Runtime::Wine)
+                    .render(m_assembly, m_typeId, values, a.src, a.dst, a.roi, a.ctx, a.cancel, &wineError)) {
+                ok = true;
+                error.clear();
+                m_wine = true;
+                PdnBridge::rememberWineEffect(m_id);
+            } else if (!wineError.isEmpty()) {
+                error += QStringLiteral("\n(Wine: %1)").arg(wineError);
+            }
+        }
+    }
     if (!ok && !error.isEmpty()) {
         std::lock_guard lock(m_errorMutex);
         m_error = error;
@@ -215,9 +242,26 @@ QString PdnEffect::takeError() const
 
 bool PdnEffect::showCustomDialog(const QImage& src, const QRect& roi, const EffectContext& ctx, QString* error) const
 {
+    using Runtime = PdnBridge::Runtime;
     bool accepted = false;
-    if (!PdnBridge::instance().showDialog(m_assembly, m_typeId, m_name, src, roi, ctx, &accepted, error))
+    const bool viaWine = m_wine && PdnBridge::wineFallback();
+    PdnBridge& bridge = viaWine ? PdnBridge::forRuntime(Runtime::Wine) : PdnBridge::instance();
+    if (bridge.showDialog(m_assembly, m_typeId, m_name, src, roi, ctx, &accepted, error))
+        return accepted;
+    // Su ventana no abre con mono (WinForms): con el respaldo de Wine, se abre con Wine, y el efecto
+    // se queda con Wine (lo elegido en la ventana está en ese proceso).
+    if (viaWine || !PdnBridge::wineFallback() || PdnBridge::runtime() != Runtime::OpenD2D)
         return false;
+    QString wineError;
+    if (!PdnBridge::forRuntime(Runtime::Wine).showDialog(m_assembly, m_typeId, m_name, src, roi, ctx, &accepted, &wineError)) {
+        if (error && !wineError.isEmpty())
+            *error += QStringLiteral("\n(Wine: %1)").arg(wineError);
+        return false;
+    }
+    if (error)
+        error->clear();
+    m_wine = true;
+    PdnBridge::rememberWineEffect(m_id);
     return accepted;
 }
 

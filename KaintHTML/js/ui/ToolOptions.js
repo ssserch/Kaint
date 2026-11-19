@@ -10,6 +10,7 @@ import { popupMenu } from "./Menu.js";
 import { ZalgoTypes } from "../core/Zalgo.js";
 import { tr } from "../i18n.js";
 import { UserFonts } from "../UserFonts.js";
+import { wheelEnabled, wheelStep, wheelSteps } from "./Wheel.js";
 
 const brushPresets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85,
                       90, 95, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500];
@@ -103,8 +104,13 @@ function kit(model) {
             bar.addEventListener("pointerup", () => bar.removeEventListener("pointermove", move), { once: true });
         });
         bar.addEventListener("wheel", (e) => {
+            // Configurable (Configuración > Herramientas): si no, la rueda desplaza la barra.
+            if (!wheelEnabled())
+                return;
             e.preventDefault();
-            set({ [key]: Math.min(max, Math.max(min, tools()[key] + (e.deltaY < 0 ? 1 : -1))) });
+            const steps = wheelSteps(e);
+            if (steps)
+                set({ [key]: Math.min(max, Math.max(min, tools()[key] + steps * wheelStep(min, max, e))) });
         }, { passive: false });
         bar.refresh = update;
         update();
@@ -162,7 +168,7 @@ export class ToolOptions {
         window.addEventListener("kaint-shapes", () => this.rebuild());
         // La rueda desplaza la barra cuando no cabe.
         element.addEventListener("wheel", (e) => {
-            if (element.scrollWidth > element.clientWidth && !e.target.closest(".barslider")) {
+            if (element.scrollWidth > element.clientWidth && (!e.target.closest(".barslider") || !wheelEnabled())) {
                 element.scrollLeft += e.deltaY || e.deltaX;
                 e.preventDefault();
             }

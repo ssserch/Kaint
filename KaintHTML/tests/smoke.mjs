@@ -235,7 +235,8 @@ check(await page.evaluate(() => window.kaint.doc.width === 600 && window.kaint.d
 await page.keyboard.press("Control+z");
 check(await page.evaluate(() => window.kaint.doc.width === 800), "deshacer el giro");
 await tool("rectangleselect");
-await drag([[50, 50], [100, 90], [150, 150]]);
+// (Como paint.rs, el píxel donde se pulsa y el que queda bajo el puntero entran: del 50 al 149, 100.)
+await drag([[50.5, 50.5], [100, 90], [149.5, 149.5]]);
 const cropSel = await page.evaluate(() => window.kaint.doc.selection.bounds());
 check(cropSel && cropSel.w === 100 && cropSel.h === 100, `la selección rectangular mide 100 × 100 (${JSON.stringify(cropSel)})`);
 await page.keyboard.press("Control+Shift+x");
@@ -781,7 +782,7 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
             same: here.every((v, i) => v === there[i]),
         };
     });
-    check(fx.count === 55 && fx.gaussian === "radius,gamma,quality" && fx.extra && fx.same, `efectos como los de Kaint (${JSON.stringify(fx)})`);
+    check(fx.count >= 55 && fx.gaussian === "radius,gamma,quality" && fx.extra && fx.same, `efectos como los de Kaint (${JSON.stringify(fx)})`);
     const done = page.evaluate(async () => {
         const { findEffect } = await import("./js/core/Effects.js");
         return window.kaint.runEffect(findEffect("gaussianblur"), false);

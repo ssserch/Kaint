@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QObject>
 #include <QPoint>
 #include <QPointer>
@@ -34,4 +35,6 @@ private:
     bool m_onGroove = false;
     bool m_following = false;
     QTimer m_repeat;
+    // Lo que queda de las ruedas de alta resolución, por deslizador.
+    QHash<QSlider*, int> m_wheelRest;
 };

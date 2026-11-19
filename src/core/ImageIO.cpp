@@ -37,6 +37,9 @@ QString suffixOf(const QString& path)
         {QStringLiteral("hif"), QStringLiteral("heic")},  {QStringLiteral("dib"), QStringLiteral("bmp")},
         {QStringLiteral("rle"), QStringLiteral("bmp")},   {QStringLiteral("wdp"), QStringLiteral("jxr")},
         {QStringLiteral("wmp"), QStringLiteral("jxr")},   {QStringLiteral("hdp"), QStringLiteral("jxr")},
+        {QStringLiteral("rgb"), QStringLiteral("sgi")},   {QStringLiteral("rgba"), QStringLiteral("sgi")},
+        {QStringLiteral("bw"), QStringLiteral("sgi")},    {QStringLiteral("sun"), QStringLiteral("ras")},
+        {QStringLiteral("j2k"), QStringLiteral("jp2")},   {QStringLiteral("jpf"), QStringLiteral("jp2")},
     };
     return aliases.value(s, s);
 }
@@ -76,14 +79,39 @@ const FormatInfo kOpenFormats[] = {
     {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
     {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.hdp *.wmp"},
     {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
+    {"cur", QT_TRANSLATE_NOOP("QObject", "Cursor de Windows"), "*.cur"},
     {"qoi", QT_TRANSLATE_NOOP("QObject", "QOI"), "*.qoi"},
     {"ppm", QT_TRANSLATE_NOOP("QObject", "Netpbm"), "*.ppm *.pgm *.pbm"},
+    {"pam", QT_TRANSLATE_NOOP("QObject", "PAM (Netpbm con transparencia)"), "*.pam"},
+    {"pcx", QT_TRANSLATE_NOOP("QObject", "PCX (Paintbrush)"), "*.pcx"},
+    {"sgi", QT_TRANSLATE_NOOP("QObject", "SGI (Silicon Graphics)"), "*.sgi *.rgb *.rgba *.bw"},
+    {"ff", QT_TRANSLATE_NOOP("QObject", "Farbfeld"), "*.ff"},
+    // Con los complementos de imagen de Qt (qt6-imageformats o kimageformats), si están.
+    {"kra", QT_TRANSLATE_NOOP("QObject", "Krita (imagen combinada)"), "*.kra"},
+    {"xcf", QT_TRANSLATE_NOOP("QObject", "GIMP (imagen combinada)"), "*.xcf"},
+    {"exr", QT_TRANSLATE_NOOP("QObject", "OpenEXR"), "*.exr"},
+    {"hdr", QT_TRANSLATE_NOOP("QObject", "Radiance HDR"), "*.hdr"},
+    {"jp2", QT_TRANSLATE_NOOP("QObject", "JPEG 2000"), "*.jp2 *.j2k *.jpf"},
+    {"icns", QT_TRANSLATE_NOOP("QObject", "Icono de macOS"), "*.icns"},
+    {"ani", QT_TRANSLATE_NOOP("QObject", "Cursor animado de Windows"), "*.ani"},
+    {"ras", QT_TRANSLATE_NOOP("QObject", "Sun Raster"), "*.ras *.sun"},
+    {"pic", QT_TRANSLATE_NOOP("QObject", "Softimage PIC"), "*.pic"},
+    {"pxr", QT_TRANSLATE_NOOP("QObject", "Pixar"), "*.pxr"},
+    {"svg", QT_TRANSLATE_NOOP("QObject", "SVG (como imagen)"), "*.svg *.svgz"},
+    {"iff", QT_TRANSLATE_NOOP("QObject", "Amiga IFF"), "*.iff *.ilbm *.lbm"},
+    {"pfm", QT_TRANSLATE_NOOP("QObject", "PFM"), "*.pfm"},
+    {"tim", QT_TRANSLATE_NOOP("QObject", "PlayStation TIM"), "*.tim"},
+    {"dng", QT_TRANSLATE_NOOP("QObject", "RAW de cámara"), "*.dng *.cr2 *.cr3 *.nef *.arw *.orf *.rw2 *.raf *.pef *.srw"},
+    {"xpm", QT_TRANSLATE_NOOP("QObject", "XPM"), "*.xpm"},
+    {"xbm", QT_TRANSLATE_NOOP("QObject", "XBM"), "*.xbm"},
+    {"wbmp", QT_TRANSLATE_NOOP("QObject", "WBMP"), "*.wbmp"},
 };
 
 const FormatInfo kSaveFormats[] = {
     {"pdn", QT_TRANSLATE_NOOP("QObject", "Paint.NET con capas"), "*.pdn"},
     {"ora", QT_TRANSLATE_NOOP("QObject", "OpenRaster con capas"), "*.ora"},
     {"psd", QT_TRANSLATE_NOOP("QObject", "Photoshop con capas"), "*.psd"},
+    {"psb", QT_TRANSLATE_NOOP("QObject", "Documento grande de Photoshop con capas"), "*.psb"},
     {"png", QT_TRANSLATE_NOOP("QObject", "PNG"), "*.png"},
     {"jpg", QT_TRANSLATE_NOOP("QObject", "JPEG"), "*.jpg *.jpeg *.jpe *.jfif *.exif"},
     {"jxl", QT_TRANSLATE_NOOP("QObject", "JPEG XL"), "*.jxl"},
@@ -97,8 +125,21 @@ const FormatInfo kSaveFormats[] = {
     {"tga", QT_TRANSLATE_NOOP("QObject", "TGA"), "*.tga"},
     {"jxr", QT_TRANSLATE_NOOP("QObject", "JPEG XR"), "*.jxr *.wdp *.hdp"},
     {"ico", QT_TRANSLATE_NOOP("QObject", "Icono de Windows"), "*.ico"},
+    {"cur", QT_TRANSLATE_NOOP("QObject", "Cursor de Windows"), "*.cur"},
     {"qoi", QT_TRANSLATE_NOOP("QObject", "QOI"), "*.qoi"},
     {"ppm", QT_TRANSLATE_NOOP("QObject", "Netpbm"), "*.ppm *.pgm *.pbm"},
+    {"pam", QT_TRANSLATE_NOOP("QObject", "PAM (Netpbm con transparencia)"), "*.pam"},
+    {"pcx", QT_TRANSLATE_NOOP("QObject", "PCX (Paintbrush)"), "*.pcx"},
+    {"sgi", QT_TRANSLATE_NOOP("QObject", "SGI (Silicon Graphics)"), "*.sgi *.rgb"},
+    {"ff", QT_TRANSLATE_NOOP("QObject", "Farbfeld"), "*.ff"},
+    // Con los complementos de imagen de Qt, si los escriben.
+    {"exr", QT_TRANSLATE_NOOP("QObject", "OpenEXR"), "*.exr"},
+    {"jp2", QT_TRANSLATE_NOOP("QObject", "JPEG 2000"), "*.jp2"},
+    {"icns", QT_TRANSLATE_NOOP("QObject", "Icono de macOS"), "*.icns"},
+    {"pic", QT_TRANSLATE_NOOP("QObject", "Softimage PIC"), "*.pic"},
+    {"xpm", QT_TRANSLATE_NOOP("QObject", "XPM"), "*.xpm"},
+    {"xbm", QT_TRANSLATE_NOOP("QObject", "XBM"), "*.xbm"},
+    {"wbmp", QT_TRANSLATE_NOOP("QObject", "WBMP"), "*.wbmp"},
 };
 
 // Formatos que escribe Kaint sin depender de los complementos de Qt (los de Netpbm los escribe
@@ -106,8 +147,9 @@ const FormatInfo kSaveFormats[] = {
 // (kimageformats).
 bool ownWriter(const QByteArray& suffix)
 {
-    return suffix == "ora" || suffix == "pdn" || suffix == "psd" || suffix == "gif" || suffix == "ico" || suffix == "tga"
-           || suffix == "dds" || suffix == "qoi";
+    return suffix == "ora" || suffix == "pdn" || suffix == "psd" || suffix == "psb" || suffix == "gif" || suffix == "ico"
+           || suffix == "cur" || suffix == "tga" || suffix == "dds" || suffix == "qoi" || suffix == "pcx" || suffix == "sgi"
+           || suffix == "ff" || suffix == "pam";
 }
 
 // Photoshop: el PSD se lee y se escribe; el PSB (documento grande), solo se lee.
@@ -142,7 +184,9 @@ bool wicWrites(const QString& suffix)
 // Formatos que Kaint también lee por su cuenta (ExtraFormats), aunque Qt no pueda.
 bool ownReader(const QString& suffix)
 {
-    return suffix == QLatin1String("tga") || suffix == QLatin1String("dds") || suffix == QLatin1String("qoi");
+    static const QStringList own{QStringLiteral("tga"), QStringLiteral("dds"), QStringLiteral("qoi"), QStringLiteral("pcx"),
+                                 QStringLiteral("sgi"), QStringLiteral("ff"),  QStringLiteral("pam")};
+    return own.contains(suffix);
 }
 
 QImage decodeOwn(const QString& suffix, const QByteArray& data, QString* error)
@@ -151,7 +195,32 @@ QImage decodeOwn(const QString& suffix, const QByteArray& data, QString* error)
         return Tga::decode(data, error);
     if (suffix == QLatin1String("dds"))
         return Dds::decode(data, error);
+    if (suffix == QLatin1String("pcx"))
+        return Pcx::decode(data, error);
+    if (suffix == QLatin1String("sgi"))
+        return Sgi::decode(data, error);
+    if (suffix == QLatin1String("ff"))
+        return Farbfeld::decode(data, error);
+    if (suffix == QLatin1String("pam"))
+        return Pam::decode(data, error);
     return Qoi::decode(data, error);
+}
+
+QByteArray encodeOwn(const QString& suffix, const QImage& image)
+{
+    if (suffix == QLatin1String("tga"))
+        return Tga::encode(image);
+    if (suffix == QLatin1String("dds"))
+        return Dds::encode(image);
+    if (suffix == QLatin1String("pcx"))
+        return Pcx::encode(image);
+    if (suffix == QLatin1String("sgi"))
+        return Sgi::encode(image);
+    if (suffix == QLatin1String("ff"))
+        return Farbfeld::encode(image);
+    if (suffix == QLatin1String("pam"))
+        return Pam::encode(image);
+    return Qoi::encode(image);
 }
 
 // Formato de un complemento de paint.js para el archivo. Los de las listas de arriba los lee y
@@ -190,7 +259,8 @@ namespace ImageIO {
 QStringList supportedReadSuffixes()
 {
     QStringList list{QStringLiteral("ora"), QStringLiteral("pdn"), QStringLiteral("psd"), QStringLiteral("psb"),
-                     QStringLiteral("tga"), QStringLiteral("dds"), QStringLiteral("qoi")};
+                     QStringLiteral("tga"), QStringLiteral("dds"), QStringLiteral("qoi"), QStringLiteral("pcx"),
+                     QStringLiteral("sgi"), QStringLiteral("ff"),  QStringLiteral("pam"), QStringLiteral("cur")};
     for (const QByteArray& f : QImageReader::supportedImageFormats()) {
         const QString s = suffixOf(QStringLiteral("x.") + QString::fromLatin1(f));
         if (!list.contains(s))
@@ -264,7 +334,8 @@ bool isLayered(const QString& path)
     const QString suffix = suffixOf(path);
     if (const auto type = pluginType(path, true))
         return type->layers;
-    return suffix == QLatin1String("ora") || suffix == QLatin1String("pdn") || suffix == QLatin1String("psd");
+    return suffix == QLatin1String("ora") || suffix == QLatin1String("pdn") || suffix == QLatin1String("psd")
+           || suffix == QLatin1String("psb");
 }
 
 bool isWritable(const QString& path)
@@ -282,7 +353,8 @@ bool isAnimation(const QString& path)
 
 bool isIcon(const QString& path)
 {
-    return suffixOf(path) == QLatin1String("ico");
+    // (Los cursores .cur son iconos con el punto activo en lugar de los planos y los bits.)
+    return suffixOf(path) == QLatin1String("ico") || suffixOf(path) == QLatin1String("cur");
 }
 
 bool supportsQuality(const QString& path)
@@ -431,7 +503,7 @@ Document* load(const QString& path, QString* error)
 
 bool hasBitDepth(const QString& path)
 {
-    static const QStringList list{QStringLiteral("png"), QStringLiteral("bmp"), QStringLiteral("tga")};
+    static const QStringList list{QStringLiteral("png"), QStringLiteral("bmp"), QStringLiteral("tga"), QStringLiteral("pcx")};
     return list.contains(suffixOf(path));
 }
 
@@ -523,8 +595,19 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
 {
     if (isAnimation(path))
         return encodeAnimation({Gif::Frame{prepared, options.frameDelay}}, options, error);
-    if (isIcon(path))
-        return Ico::encode(prepared, options.icoSizes, error);
+    if (isIcon(path)) {
+        QByteArray icon = Ico::encode(prepared, options.icoSizes, error);
+        // Cursor: tipo 2 y, en cada entrada, el punto activo (arriba a la izquierda) en lugar de los
+        // planos y los bits por píxel.
+        if (suffixOf(path) == QLatin1String("cur") && icon.size() >= 6) {
+            icon[2] = 2;
+            const int entries = uchar(icon[4]) | uchar(icon[5]) << 8;
+            for (int i = 0; i < entries && 6 + i * 16 + 8 <= icon.size(); ++i)
+                for (int k = 4; k < 8; ++k)
+                    icon[6 + i * 16 + k] = 0;
+        }
+        return icon;
+    }
     if (options.interlaced && supportsInterlace(path)) {
         QByteArray png = Png::encode(prepared, true);
         if (png.isEmpty() && error)
@@ -540,9 +623,13 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
                 *error = QObject::tr("TGA admite imágenes de hasta 65535 × 65535 píxeles.");
             return {};
         }
-        const QByteArray own = format == QLatin1String("tga") ? Tga::encode(prepared)
-                               : format == QLatin1String("dds") ? Dds::encode(prepared)
-                                                                : Qoi::encode(prepared);
+        if ((format == QLatin1String("pcx") || format == QLatin1String("sgi"))
+            && (prepared.width() > 0xffff || prepared.height() > 0xffff)) {
+            if (error)
+                *error = QObject::tr("Este formato admite imágenes de hasta 65535 × 65535 píxeles.");
+            return {};
+        }
+        const QByteArray own = encodeOwn(format, prepared);
         if (own.isEmpty() && error)
             *error = QObject::tr("No se pudo comprimir la imagen.");
         return own;
@@ -569,7 +656,7 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
         return PaintJs::encode(*type, doc, path, error);
     if (suffixOf(path) == QLatin1String("pdn"))
         return Pdn::save(doc, path, error);
-    if (suffixOf(path) == QLatin1String("psd"))
+    if (isPsd(suffixOf(path)))
         return Psd::save(doc, path, error);
     if (isLayered(path))
         return Ora::save(doc, path, error);

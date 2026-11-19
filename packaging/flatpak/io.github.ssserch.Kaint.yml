@@ -83,10 +83,13 @@ modules:
       - -DBUILD_TESTING=OFF
       # Updates come from Flathub, so Kaint does not need network access
       - -DKAINT_UPDATE_CHECK=OFF
+      # OpenD2D is downloaded and built with cargo, which needs the network: Paint.NET plugins use
+      # mono without it (the Flatpak includes mono)
+      - -DKAINT_OPEND2D=OFF
     sources:
       - type: git
         url: https://github.com/ssserch/Kaint.git
-        tag: v1.1.8
+        tag: v1.1.9
         x-checker-data:
           type: git
           tag-pattern: ^v([\d.]+)$

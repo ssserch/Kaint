@@ -649,3 +649,463 @@ QImage decode(const QByteArray& data, QString* error)
 }
 
 } // namespace Qoi
+
+// --- PCX (ZSoft Paintbrush) ---------------------------------------------------------------------
+
+namespace Pcx {
+
+namespace {
+
+// RLE de PCX: un byte con los dos bits altos puestos lleva la cuenta (hasta 63) y el siguiente, el
+// valor; los valores de 0xC0 en adelante siempre van como una repetición de uno.
+void packLine(const uchar* src, int n, QByteArray& out)
+{
+    int i = 0;
+    while (i < n) {
+        int run = 1;
+        while (i + run < n && run < 63 && src[i + run] == src[i])
+            ++run;
+        if (run > 1 || src[i] >= 0xc0)
+            out.append(char(0xc0 | run));
+        out.append(char(src[i]));
+        i += run;
+    }
+}
+
+} // namespace
+
+QByteArray encode(const QImage& source)
+{
+    if (source.isNull() || source.width() > 0xffff || source.height() > 0xffff)
+        return {};
+    const bool indexed = source.format() == QImage::Format_Indexed8;
+    const QImage image = indexed ? source : source.convertToFormat(QImage::Format_ARGB32);
+    const bool alpha = !indexed && image.hasAlphaChannel() && [&] {
+        for (int y = 0; y < image.height(); ++y) {
+            const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+            for (int x = 0; x < image.width(); ++x)
+                if (qAlpha(row[x]) != 255)
+                    return true;
+        }
+        return false;
+    }();
+    const int w = image.width(), h = image.height();
+    const int planes = indexed ? 1 : alpha ? 4 : 3;
+    const int bytesPerLine = w + (w & 1); // par, como pide el formato
+    QByteArray out;
+    put8(out, 0x0a);  // ZSoft
+    put8(out, 5);     // versión 3.0 y posteriores
+    put8(out, 1);     // RLE
+    put8(out, 8);     // bits por píxel y plano
+    put16(out, 0);
+    put16(out, 0);
+    put16(out, quint32(w - 1));
+    put16(out, quint32(h - 1));
+    put16(out, 96);
+    put16(out, 96);
+    out.append(48, '\0'); // paleta de 16 colores (sin usar)
+    put8(out, 0);
+    put8(out, quint32(planes));
+    put16(out, quint32(bytesPerLine));
+    put16(out, indexed ? 1 : 1); // color
+    put16(out, 0);
+    put16(out, 0);
+    out.append(54, '\0');
+    std::vector<uchar> line(size_t(bytesPerLine), 0);
+    for (int y = 0; y < h; ++y) {
+        if (indexed) {
+            std::memcpy(line.data(), image.constScanLine(y), size_t(w));
+            packLine(line.data(), bytesPerLine, out);
+            continue;
+        }
+        const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        for (int p = 0; p < planes; ++p) {
+            for (int x = 0; x < w; ++x)
+                line[size_t(x)] = uchar(p == 0 ? qRed(row[x]) : p == 1 ? qGreen(row[x]) : p == 2 ? qBlue(row[x]) : qAlpha(row[x]));
+            packLine(line.data(), bytesPerLine, out);
+        }
+    }
+    if (indexed) {
+        put8(out, 0x0c);
+        const QList<QRgb> table = image.colorTable();
+        for (int i = 0; i < 256; ++i) {
+            const QRgb c = table.value(i, 0);
+            put8(out, quint32(qRed(c)));
+            put8(out, quint32(qGreen(c)));
+            put8(out, quint32(qBlue(c)));
+        }
+    }
+    return out;
+}
+
+QImage decode(const QByteArray& data, QString* error)
+{
+    const QString damaged = QObject::tr("El archivo PCX está dañado o no es compatible.");
+    const Reader b(data);
+    if (b.size() < 128 || b.u8(0) != 0x0a || b.u8(2) > 1)
+        return fail(error, damaged);
+    const int bpp = b.u8(3);
+    const int w = int(b.u16(8)) - int(b.u16(4)) + 1;
+    const int h = int(b.u16(10)) - int(b.u16(6)) + 1;
+    const int planes = b.u8(65);
+    const int bytesPerLine = int(b.u16(66));
+    if (tooLarge(w, h) || planes < 1 || planes > 4 || bytesPerLine <= 0 || !(bpp == 1 || bpp == 2 || bpp == 4 || bpp == 8))
+        return fail(error, damaged);
+    if (qint64(bytesPerLine) * 8 < qint64(w) * bpp)
+        return fail(error, damaged);
+    const bool rle = b.u8(2) == 1;
+    // Las filas descomprimidas: cada una, sus planos seguidos.
+    const qint64 lineBytes = qint64(bytesPerLine) * planes;
+    std::vector<uchar> pixels(size_t(lineBytes * h), 0);
+    qint64 pos = 128, done = 0;
+    const qint64 total = lineBytes * h;
+    while (done < total && pos < b.size()) {
+        uchar v = b.u8(pos++);
+        int run = 1;
+        if (rle && (v & 0xc0) == 0xc0) {
+            run = v & 0x3f;
+            v = b.u8(pos++);
+        }
+        for (int k = 0; k < run && done < total; ++k)
+            pixels[size_t(done++)] = v;
+    }
+    // La paleta: la de 256 colores del final (8 bits, un plano) o la de 16 de la cabecera.
+    QList<QRgb> palette;
+    if (bpp == 8 && planes == 1) {
+        if (b.size() >= 769 && b.u8(b.size() - 769) == 0x0c) {
+            for (int i = 0; i < 256; ++i) {
+                const qint64 at = b.size() - 768 + i * 3;
+                palette << qRgb(b.u8(at), b.u8(at + 1), b.u8(at + 2));
+            }
+        } else {
+            for (int i = 0; i < 256; ++i)
+                palette << qRgb(i, i, i);
+        }
+    } else {
+        for (int i = 0; i < 16; ++i)
+            palette << qRgb(b.u8(16 + i * 3), b.u8(17 + i * 3), b.u8(18 + i * 3));
+        if (bpp == 1 && planes == 1)
+            palette = {qRgb(0, 0, 0), qRgb(255, 255, 255)};
+    }
+    QImage out(w, h, QImage::Format_ARGB32);
+    for (int y = 0; y < h; ++y) {
+        const uchar* line = pixels.data() + qint64(y) * lineBytes;
+        QRgb* row = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            if (bpp == 8 && planes >= 3) {
+                const uchar r = line[x], g = line[bytesPerLine + x], bl = line[2 * bytesPerLine + x];
+                row[x] = qRgba(r, g, bl, planes == 4 ? line[3 * bytesPerLine + x] : 255);
+                continue;
+            }
+            // Índice: los bits de cada plano (EGA: 1 bit en 4 planos) o varios bits por píxel.
+            int index = 0;
+            for (int p = 0; p < planes; ++p) {
+                const uchar* plane = line + qint64(p) * bytesPerLine;
+                const int bit = x * bpp;
+                const int value = (plane[bit / 8] >> (8 - bpp - bit % 8)) & ((1 << bpp) - 1);
+                index |= value << (p * bpp);
+            }
+            row[x] = palette.value(index, qRgb(0, 0, 0));
+        }
+    }
+    const int dpi = int(b.u16(12));
+    if (dpi > 0 && dpi < 20000) {
+        out.setDotsPerMeterX(int(std::lround(dpi / 0.0254)));
+        out.setDotsPerMeterY(int(std::lround(int(b.u16(14) ? b.u16(14) : dpi) / 0.0254)));
+    }
+    return out;
+}
+
+} // namespace Pcx
+
+// --- SGI (Silicon Graphics: .sgi, .rgb, .rgba, .bw) ----------------------------------------------
+
+namespace Sgi {
+
+namespace {
+
+quint32 be16(const Reader& b, qint64 at)
+{
+    return quint32(b.u8(at)) << 8 | b.u8(at + 1);
+}
+
+void put16be(QByteArray& out, quint32 v)
+{
+    put8(out, v >> 8);
+    put8(out, v);
+}
+
+// RLE de SGI: un byte con el bit alto puesto copia tantos bytes como dice su resto; sin él, repite
+// el siguiente; 0 termina la fila.
+void packRow(const uchar* src, int n, QByteArray& out)
+{
+    int i = 0;
+    while (i < n) {
+        int run = 1;
+        while (i + run < n && run < 127 && src[i + run] == src[i])
+            ++run;
+        if (run >= 3) {
+            put8(out, quint32(run));
+            put8(out, src[i]);
+            i += run;
+            continue;
+        }
+        const int start = i;
+        int len = 0;
+        while (i < n && len < 127) {
+            if (i + 2 < n && src[i] == src[i + 1] && src[i] == src[i + 2])
+                break;
+            ++i;
+            ++len;
+        }
+        put8(out, quint32(0x80 | len));
+        out.append(reinterpret_cast<const char*>(src + start), len);
+    }
+    put8(out, 0);
+}
+
+} // namespace
+
+QByteArray encode(const QImage& source)
+{
+    if (source.isNull() || source.width() > 0xffff || source.height() > 0xffff)
+        return {};
+    const QImage image = source.convertToFormat(QImage::Format_ARGB32);
+    const int w = image.width(), h = image.height();
+    bool alpha = false;
+    for (int y = 0; y < h && !alpha; ++y) {
+        const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        for (int x = 0; x < w; ++x)
+            if (qAlpha(row[x]) != 255) {
+                alpha = true;
+                break;
+            }
+    }
+    const int channels = alpha ? 4 : 3;
+    QByteArray out;
+    put16be(out, 474);
+    put8(out, 1); // RLE
+    put8(out, 1); // un byte por canal
+    put16be(out, 3);
+    put16be(out, quint32(w));
+    put16be(out, quint32(h));
+    put16be(out, quint32(channels));
+    put32be(out, 0);
+    put32be(out, 255);
+    put32be(out, 0);
+    QByteArray name("Kaint");
+    name.resize(80, '\0');
+    out.append(name);
+    put32be(out, 0); // colores normales
+    out.resize(512, '\0');
+    // Tablas de dónde empieza cada fila y cuánto ocupa (de abajo arriba, canal por canal).
+    const qsizetype tablesAt = out.size();
+    const qint64 rows = qint64(h) * channels;
+    out.append(QByteArray(rows * 8, '\0'));
+    std::vector<uchar> line(static_cast<size_t>(w));
+    for (int c = 0; c < channels; ++c)
+        for (int y = 0; y < h; ++y) {
+            const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(h - 1 - y));
+            for (int x = 0; x < w; ++x)
+                line[size_t(x)] = uchar(c == 0 ? qRed(row[x]) : c == 1 ? qGreen(row[x]) : c == 2 ? qBlue(row[x]) : qAlpha(row[x]));
+            const qsizetype start = out.size();
+            packRow(line.data(), w, out);
+            const qint64 k = qint64(c) * h + y;
+            const quint32 offset = quint32(start), length = quint32(out.size() - start);
+            for (int i = 0; i < 4; ++i) {
+                out[tablesAt + k * 4 + i] = char(offset >> (24 - 8 * i));
+                out[tablesAt + rows * 4 + k * 4 + i] = char(length >> (24 - 8 * i));
+            }
+        }
+    return out;
+}
+
+QImage decode(const QByteArray& data, QString* error)
+{
+    const QString damaged = QObject::tr("El archivo SGI está dañado o no es compatible.");
+    const Reader b(data);
+    if (b.size() < 512 || be16(b, 0) != 474)
+        return fail(error, damaged);
+    const int storage = b.u8(2), bpc = b.u8(3);
+    const int dimension = int(be16(b, 4));
+    const int w = int(be16(b, 6));
+    const int h = dimension == 1 ? 1 : int(be16(b, 8));
+    const int channels = dimension < 3 ? 1 : int(be16(b, 10));
+    if (tooLarge(w, h) || (bpc != 1 && bpc != 2) || storage > 1 || channels < 1)
+        return fail(error, damaged);
+    const int used = std::min(channels, 4);
+    // Cada canal, fila a fila (de abajo arriba), con el byte alto si son de 16 bits.
+    std::vector<uchar> planes(size_t(used) * size_t(w) * size_t(h), 0);
+    auto sample = [&](qint64 at) { return bpc == 2 ? b.u8(at) : b.u8(at); };
+    for (int c = 0; c < used; ++c)
+        for (int y = 0; y < h; ++y) {
+            uchar* dst = planes.data() + (qint64(c) * h + y) * w;
+            if (storage == 0) {
+                const qint64 at = 512 + (qint64(c) * h + y) * w * bpc;
+                if (!b.has(at, qint64(w) * bpc))
+                    return fail(error, damaged);
+                for (int x = 0; x < w; ++x)
+                    dst[x] = sample(at + qint64(x) * bpc);
+                continue;
+            }
+            const qint64 k = qint64(c) * h + y;
+            const qint64 rows = qint64(h) * channels;
+            qint64 pos = b.u32be(512 + k * 4);
+            const qint64 end = pos + b.u32be(512 + rows * 4 + k * 4);
+            int x = 0;
+            while (x < w && pos < end && pos < b.size()) {
+                const quint32 head = bpc == 2 ? be16(b, pos) : b.u8(pos);
+                pos += bpc;
+                const int count = int(head & 0x7f);
+                if (count == 0)
+                    break;
+                if (head & 0x80) {
+                    for (int i = 0; i < count && x < w; ++i, pos += bpc)
+                        dst[x++] = sample(pos);
+                } else {
+                    const uchar v = sample(pos);
+                    pos += bpc;
+                    for (int i = 0; i < count && x < w; ++i)
+                        dst[x++] = v;
+                }
+            }
+        }
+    QImage out(w, h, QImage::Format_ARGB32);
+    for (int y = 0; y < h; ++y) {
+        QRgb* row = reinterpret_cast<QRgb*>(out.scanLine(h - 1 - y));
+        for (int x = 0; x < w; ++x) {
+            auto at = [&](int c) { return planes[size_t((qint64(c) * h + y) * w + x)]; };
+            if (used <= 2)
+                row[x] = qRgba(at(0), at(0), at(0), used == 2 ? at(1) : 255);
+            else
+                row[x] = qRgba(at(0), at(1), at(2), used == 4 ? at(3) : 255);
+        }
+    }
+    return out;
+}
+
+} // namespace Sgi
+
+// --- Farbfeld ------------------------------------------------------------------------------------
+
+namespace Farbfeld {
+
+QByteArray encode(const QImage& source)
+{
+    if (source.isNull())
+        return {};
+    const QImage image = source.convertToFormat(QImage::Format_ARGB32);
+    QByteArray out("farbfeld");
+    put32be(out, quint32(image.width()));
+    put32be(out, quint32(image.height()));
+    out.reserve(16 + qsizetype(image.width()) * image.height() * 8);
+    for (int y = 0; y < image.height(); ++y) {
+        const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        for (int x = 0; x < image.width(); ++x)
+            for (int v : {qRed(row[x]), qGreen(row[x]), qBlue(row[x]), qAlpha(row[x])}) {
+                put8(out, quint32(v));
+                put8(out, quint32(v)); // 16 bits: v * 257
+            }
+    }
+    return out;
+}
+
+QImage decode(const QByteArray& data, QString* error)
+{
+    const QString damaged = QObject::tr("El archivo farbfeld está dañado.");
+    const Reader b(data);
+    if (!b.startsWith("farbfeld"))
+        return fail(error, damaged);
+    const qint64 w = b.u32be(8), h = b.u32be(12);
+    if (tooLarge(w, h) || !b.has(16, w * h * 8))
+        return fail(error, damaged);
+    QImage out(int(w), int(h), QImage::Format_ARGB32);
+    qint64 pos = 16;
+    for (int y = 0; y < h; ++y) {
+        QRgb* row = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < w; ++x, pos += 8)
+            row[x] = qRgba(b.u8(pos), b.u8(pos + 2), b.u8(pos + 4), b.u8(pos + 6));
+    }
+    return out;
+}
+
+} // namespace Farbfeld
+
+// --- PAM (Netpbm P7, con transparencia) ---------------------------------------------------------
+
+namespace Pam {
+
+QByteArray encode(const QImage& source)
+{
+    if (source.isNull())
+        return {};
+    const QImage image = source.convertToFormat(QImage::Format_ARGB32);
+    QByteArray out = QStringLiteral("P7\nWIDTH %1\nHEIGHT %2\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n")
+                         .arg(image.width())
+                         .arg(image.height())
+                         .toLatin1();
+    out.reserve(out.size() + qsizetype(image.width()) * image.height() * 4);
+    for (int y = 0; y < image.height(); ++y) {
+        const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            put8(out, quint32(qRed(row[x])));
+            put8(out, quint32(qGreen(row[x])));
+            put8(out, quint32(qBlue(row[x])));
+            put8(out, quint32(qAlpha(row[x])));
+        }
+    }
+    return out;
+}
+
+QImage decode(const QByteArray& data, QString* error)
+{
+    const QString damaged = QObject::tr("El archivo PAM está dañado o no es compatible.");
+    if (!data.startsWith("P7"))
+        return fail(error, damaged);
+    const qsizetype end = data.indexOf("ENDHDR\n");
+    if (end < 0)
+        return fail(error, damaged);
+    qint64 w = 0, h = 0, depth = 0, maxval = 0;
+    for (const QByteArray& line : data.left(end).split('\n')) {
+        const QList<QByteArray> parts = line.simplified().split(' ');
+        if (parts.size() < 2)
+            continue;
+        const QByteArray key = parts[0].toUpper();
+        if (key == "WIDTH")
+            w = parts[1].toLongLong();
+        else if (key == "HEIGHT")
+            h = parts[1].toLongLong();
+        else if (key == "DEPTH")
+            depth = parts[1].toLongLong();
+        else if (key == "MAXVAL")
+            maxval = parts[1].toLongLong();
+    }
+    if (tooLarge(w, h) || depth < 1 || depth > 4 || maxval < 1 || maxval > 65535)
+        return fail(error, damaged);
+    const int bytes = maxval > 255 ? 2 : 1;
+    const qint64 start = end + 7;
+    const Reader b(data);
+    if (!b.has(start, w * h * depth * bytes))
+        return fail(error, damaged);
+    auto sample = [&](qint64 at) {
+        const quint32 v = bytes == 2 ? (quint32(b.u8(at)) << 8 | b.u8(at + 1)) : b.u8(at);
+        return int((v * 255 + quint32(maxval) / 2) / quint32(maxval));
+    };
+    QImage out(int(w), int(h), QImage::Format_ARGB32);
+    qint64 pos = start;
+    for (int y = 0; y < h; ++y) {
+        QRgb* row = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < w; ++x) {
+            int c[4] = {0, 0, 0, 255};
+            for (int k = 0; k < depth; ++k, pos += bytes)
+                c[k] = sample(pos);
+            if (depth <= 2)
+                row[x] = qRgba(c[0], c[0], c[0], depth == 2 ? c[1] : 255);
+            else
+                row[x] = qRgba(c[0], c[1], c[2], depth == 4 ? c[3] : 255);
+        }
+    }
+    return out;
+}
+
+} // namespace Pam

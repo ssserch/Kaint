@@ -28,9 +28,13 @@ void decorate(QWidget* window, bool titleBar = true);
 bool isDecorated(const QWidget* window);
 
 // Estilo de los botones de la barra de título (minimizar, maximizar o restaurar y cerrar).
-enum class Buttons { Windows10, Windows11, MacOS, Windows7, WindowsXP, Windows98 };
+// Auto: los del tema (Windows 7, XP o 98 con sus temas) y, con los demás, los de autoFallback.
+enum class Buttons { Windows10, Windows11, MacOS, Windows7, WindowsXP, Windows98, Auto };
 void setButtons(Buttons style);
 Buttons buttons();
+// Los automáticos con un tema sin botones propios (los de Windows 10, o los de 11 con «Bordes:
+// redondeados»).
+void setAutoFallback(Buttons style);
 // El que se dibuja: con el tema Windows 98, «Windows 10» (el predeterminado) son los de Windows 98.
 Buttons effectiveButtons();
 // Los botones a la izquierda de la barra (en el orden cerrar, minimizar, maximizar) o a la derecha.

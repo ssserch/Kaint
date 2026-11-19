@@ -25,6 +25,9 @@
 as a native application. It is made for KDE Plasma on Wayland, it also
 runs on Windows 10 and 11.
 
+[Features](#features) · [Opening and saving](#opening-and-saving) · [Make it yours](#make-it-yours) ·
+[Web version](#web-version) · [Install](#-install) · [License](#license)
+
 ## Features
 
 <table>
@@ -56,8 +59,13 @@ runs on Windows 10 and 11.
   <tr>
     <td valign="top">
       <h4>Plugins</h4>
-      Paint.NET effect plugins (.dll), through mono on Linux and the .NET Framework built into
-      Windows, old Paint.NET 3 plugins included: the ones that use its standard Amount, Two/Three
+      Paint.NET effect plugins (.dll), through the .NET Framework built into Windows and, on Linux,
+      macOS and FreeBSD, with the plugin system you choose (in <b>Settings → Plugins</b> or the welcome
+      window): <b>OpenD2D</b> (mono with <a href="https://github.com/daijro/opend2d">OpenD2D</a>,
+      the open source Direct2D, DirectWrite and WIC, instead of Windows' own) or <b>Wine</b> 🍷 (the
+      plugins run inside Wine like a Windows program). With OpenD2D, whatever doesn't work with mono
+      (a plugin that doesn't load, or one of its effects that fails) can run with Wine, only that part,
+      and Kaint remembers it. Old Paint.NET 3 plugins are included: the ones that use its standard Amount, Two/Three
       Amounts and Angle windows (early CodeLab plugins) open in Kaint's own effect window, with a live
       preview. Plus native plugins with a stable C API. Also PhotoCraft filter plugins (.wasm, run
       sandboxed in Kaint's own WebAssembly interpreter) and LightCraft looks (.cube, .3dl) and
@@ -76,10 +84,11 @@ runs on Windows 10 and 11.
     </td>
     <td valign="top">
       <h4>Formats</h4>
-      Paint.NET <b>.pdn</b>, OpenRaster (.ora) and <b>Photoshop (.psd)</b>, all with layers, Photoshop
-      large documents (.psb, open only), PNG, JPEG, WebP, AVIF, JPEG XL, HEIC, JPEG XR, BMP, TIFF, TGA,
-      DDS, QOI, Netpbm (PPM, PGM, PBM), animated GIF and ICO. PSD/PSB, TGA, DDS and QOI are read and
-      written by Kaint itself, so they work everywhere: Photoshop files keep their pixel layers with
+      Paint.NET <b>.pdn</b>, OpenRaster (.ora) and <b>Photoshop (.psd and .psb)</b>, all with layers, PNG,
+      JPEG, WebP, AVIF, JPEG XL, HEIC, JPEG XR, BMP, TIFF, TGA, DDS, QOI, Netpbm (PPM, PGM, PBM, PAM), PCX,
+      SGI, Farbfeld, animated GIF, ICO and CUR (the full list is in <a href="#opening-and-saving">Opening
+      and saving</a>). PSD/PSB, TGA, DDS, QOI, PCX, SGI, Farbfeld and PAM are read and written by Kaint
+      itself, so they work everywhere: Photoshop files keep their pixel layers with
       names, visibility, opacity and the blend modes both programs share (8, 16 and 32 bits per
       channel, RGB, grayscale, indexed or bitmap; masks are applied, and files with clipping masks,
       layer effects or adjustment layers open as their merged image, with a note saying why). AVIF,
@@ -174,6 +183,84 @@ runs on Windows 10 and 11.
   </tr>
 </table>
 
+## Opening and saving
+
+✔ yes · ❌ no · ⚪ depends on the system, the browser or a plugin, and wasn't tested for this
+release. Formats marked ¹ come from Qt's image plugins (`qt6-imageformats` and `kimageformats` on
+Linux) or, on Windows, from the system's codecs: without them they don't appear in **Open** and
+**Save As**. Everything else is read and written by Kaint itself, so it works everywhere.
+
+### Images
+
+| Format | Extensions | Open | Save | Web / Android |
+| --- | --- | :---: | :---: | :---: |
+| Paint.NET, with its layers | `.pdn` | ✔ | ✔ | ✔ / ✔ |
+| OpenRaster, with its layers | `.ora` | ✔ | ✔ | ✔ / ✔ |
+| Photoshop, with its layers | `.psd` | ✔ | ✔ | ✔ / ✔ |
+| Photoshop large document, with its layers | `.psb` | ✔ | ✔ | ✔ / ✔ |
+| PNG (8, 24 or 32 bits, interlaced) | `.png` | ✔ | ✔ | ✔ / ✔ |
+| JPEG | `.jpg` `.jpeg` `.jpe` `.jfif` `.exif` | ✔ | ✔ | ✔ / ✔ |
+| WebP | `.webp` | ✔ | ✔ | ✔ / ✔ |
+| GIF, animated (frames as layers or images) | `.gif` | ✔ | ✔ | ✔ / ✔ |
+| BMP | `.bmp` `.dib` `.rle` | ✔ | ✔ | ✔ / ✔ |
+| TIFF | `.tif` `.tiff` | ✔ | ✔ | ✔ / ✔ |
+| TGA (8, 24 or 32 bits, RLE) | `.tga` | ✔ | ✔ | ✔ / ✔ |
+| DDS (DXT1, DXT3, DXT5 or uncompressed; saved uncompressed 32-bit) | `.dds` | ✔ | ✔ | ✔ / ✔ |
+| Windows icon, several sizes | `.ico` | ✔ | ✔ | ✔ / ✔ |
+| Windows cursor | `.cur` | ✔ | ✔ | ✔ / ✔ |
+| QOI | `.qoi` | ✔ | ✔ | ✔ / ✔ |
+| Netpbm | `.ppm` `.pgm` `.pbm` | ✔ | ✔ | ✔ / ✔ |
+| PAM (Netpbm with transparency) | `.pam` | ✔ | ✔ | ✔ / ✔ |
+| PCX (Paintbrush) | `.pcx` | ✔ | ✔ | ✔ / ✔ |
+| SGI (Silicon Graphics) | `.sgi` `.rgb` `.rgba` `.bw` | ✔ | ✔ | ✔ / ✔ |
+| Farbfeld | `.ff` | ✔ | ✔ | ✔ / ✔ |
+| AVIF ¹ | `.avif` | ✔ | ✔ | ✔ / ⚪ |
+| JPEG XL ¹ | `.jxl` | ✔ | ✔ | ⚪ / ⚪ |
+| HEIC / HEIF ¹ | `.heic` `.heif` `.hif` | ✔ | ✔ | ⚪ / ❌ |
+| JPEG XR ¹ | `.jxr` `.wdp` `.hdp` `.wmp` | ⚪ | ⚪ | ⚪ / ❌ |
+| OpenEXR ¹ | `.exr` | ✔ | ✔ | ❌ / ❌ |
+| JPEG 2000 ¹ | `.jp2` `.j2k` `.jpf` | ✔ | ✔ | ❌ / ❌ |
+| XPM, XBM, WBMP ¹ | `.xpm` `.xbm` `.wbmp` | ✔ | ✔ | ❌ / ❌ |
+| Softimage PIC ¹ | `.pic` | ✔ | ✔ | ❌ / ❌ |
+| macOS icon ¹ | `.icns` | ⚪ | ⚪ | ❌ / ❌ |
+| Radiance HDR ¹ | `.hdr` | ⚪ | ❌ | ❌ / ❌ |
+| Sun Raster ¹ | `.ras` `.sun` | ⚪ | ❌ | ❌ / ❌ |
+| Krita, merged image ¹ | `.kra` | ⚪ | ❌ | ❌ / ❌ |
+| GIMP, merged image ¹ | `.xcf` | ⚪ | ❌ | ❌ / ❌ |
+| Camera RAW ¹ | `.dng` `.cr2` `.cr3` `.nef` `.arw` `.orf` `.rw2` `.raf` `.pef` `.srw` | ⚪ | ❌ | ❌ / ❌ |
+| Animated Windows cursor ¹ | `.ani` | ⚪ | ❌ | ❌ / ❌ |
+| Pixar ¹ | `.pxr` | ⚪ | ❌ | ❌ / ❌ |
+| Amiga IFF ¹ | `.iff` `.ilbm` `.lbm` | ⚪ | ❌ | ❌ / ❌ |
+| PFM (floating point) ¹ | `.pfm` | ⚪ | ❌ | ❌ / ❌ |
+| PlayStation TIM ¹ | `.tim` | ⚪ | ❌ | ❌ / ❌ |
+| SVG, as an image (rasterized at its size) ¹ | `.svg` `.svgz` | ⚪ | ❌ | ⚪ / ❌ |
+| Formats of installed paint.js plugins (Photoshop with layers...) | `.paintjs` | ⚪ | ⚪ | ⚪ / ⚪ |
+
+¹ On Linux with `kimageformats` (and `qt6-imageformats`): the ✔ ones were saved and opened again
+with them. On Windows, JPEG XR is built in and HEIC, AVIF and JPEG XL need their Microsoft Store
+extensions. The web version opens AVIF with the browser and HEIC, JPEG XL and JPEG XR with
+magick-wasm or jpegxr.js when the browser can't; saving AVIF or JPEG XL depends on the browser.
+
+Photoshop files keep each layer's name, visibility, opacity and blend mode (the ones both programs
+share); PNG, JPEG, WebP and TIFF keep their color profile and resolution.
+
+### Other files
+
+| What | Extensions | Where |
+| --- | --- | --- |
+| Paint.NET effect plugins | `.dll` | Settings → Plugins |
+| Kaint native plugins | `.so` (Linux, macOS, FreeBSD), `.dll` (Windows) | Settings → Plugins |
+| PhotoCraft filter plugins | `.wasm` | Settings → Plugins |
+| LightCraft looks and develop presets | `.cube` `.3dl` `.xmp` | Settings → Plugins |
+| paint.js plugins | `.paintjs` | Settings → Plugins, or open it |
+| Paint.NET palettes | `.txt` | Colors window → palette menu |
+| Paint.NET shapes | `.xaml` | Settings → Shapes |
+| Fonts for the Text tool | `.ttf` `.otf` `.ttc` `.otc` `.woff` `.woff2` | Settings → Fonts |
+| Icon packs | `.zip` (with an `asset-pack.json`) | Settings → Icon packs |
+| Custom themes | `.json`, or `.zip` with their background | Settings → User interface → Custom theme |
+| Theme backgrounds | images, animated GIF or WebP, and videos (`.mp4` `.m4v` `.mov` `.webm` `.mkv` `.avi` `.wmv` `.mpg` `.mpeg` `.ogv` `.3gp`) | Custom theme editor |
+| Custom languages | `.kaintlang` | Settings → User interface |
+
 ## Make it yours
 
 Kaint looks the way you want. Almost everything about its appearance can be changed from
@@ -192,8 +279,9 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   a grid of shapes and Paint.NET's Colors window.
 - **Title bar**: Kaint can draw a title bar and window frame of its own (**Settings → User
   interface → Title bar**; on by default on Linux, off on Windows), with the shadow from KWin or
-  from Windows; drag it from anywhere. Its buttons can look like those of **Windows 11, 10, 7, XP or
-  98, or macOS**, on the right or on the left. Turned off, windows get the system's title bar
+  from Windows; drag it from anywhere. Its buttons can be **Automatic** (the theme's: Windows 7, XP or
+  98 with those themes) or look like those of **Windows 11, 10, 7, XP or 98, or macOS** with any theme,
+  on the right or on the left. Turned off, windows get the system's title bar
   (Windows', or your desktop's: Plasma's on KDE). With the Paint.NET style, the
   **Windows recreation** picks Windows 10 or Windows 11 (slightly rounded windows when not
   maximized). The top bar and the window headers can take **a color of your own**, like Windows'
@@ -261,6 +349,120 @@ bars. Effect dialogs have a **Preview** box to compare with the original image.
   </tr>
 </table>
 
+<details>
+<summary><b>🖼️ Every theme</b> (screenshots, with the title bar buttons of each theme)</summary>
+
+<br>
+
+With **Automatic** title bar buttons (the default), each theme brings its own: the blue Luna ones with
+Windows XP, the glass ones with Windows 7 and the raised ones with Windows 98. Any other style can be
+chosen in **Settings → User interface → Title bar** with any theme. The **KDE** theme follows the
+colors of your Plasma desktop. All screenshots are 1920 × 1080, made with
+`./screenpreview.sh --all --win7-colors`.
+
+<table>
+  <tr>
+    <td width="33%"><img src="img/themes/light.png" alt="Light theme"></td>
+    <td width="33%"><img src="img/themes/dark.png" alt="Dark theme"></td>
+    <td width="33%"><img src="img/themes/blue.png" alt="Blue theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Light</sub></td>
+    <td align="center"><sub>Dark</sub></td>
+    <td align="center"><sub>Blue (Paint.NET)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="img/themes/windows7.png" alt="Windows 7 theme"></td>
+    <td><img src="img/themes/windows7-dark.png" alt="Windows 7 Dark theme"></td>
+    <td><img src="img/themes/windowsxp.png" alt="Windows XP theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Windows 7</sub></td>
+    <td align="center"><sub>Windows 7 Dark</sub></td>
+    <td align="center"><sub>Windows XP</sub></td>
+  </tr>
+  <tr>
+    <td><img src="img/themes/windows98.png" alt="Windows 98 theme"></td>
+    <td><img src="img/themes/windows98-alt.png" alt="Windows 98 ALT theme"></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Windows 98</sub></td>
+    <td align="center"><sub>Windows 98 ALT</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+<details>
+<summary><b>Windows 7 window colors</b></summary>
+
+<br>
+
+Like **Personalize → Window Color** in Windows 7: the Windows 7 and Windows 7 Dark themes take the
+color you choose for the glass of the windows (**Settings → User interface**).
+
+**Windows 7**
+
+<table>
+  <tr>
+    <td width="25%"><img src="img/themes/windows7-sky.png" alt="Sky"></td>
+    <td width="25%"><img src="img/themes/windows7-twilight.png" alt="Twilight"></td>
+    <td width="25%"><img src="img/themes/windows7-sea.png" alt="Sea"></td>
+    <td width="25%"><img src="img/themes/windows7-leaf.png" alt="Leaf"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Sky</sub></td>
+    <td align="center"><sub>Twilight</sub></td>
+    <td align="center"><sub>Sea</sub></td>
+    <td align="center"><sub>Leaf</sub></td>
+  </tr>
+  <tr>
+    <td width="25%"><img src="img/themes/windows7-sun.png" alt="Sun"></td>
+    <td width="25%"><img src="img/themes/windows7-pumpkin.png" alt="Pumpkin"></td>
+    <td width="25%"><img src="img/themes/windows7-ruby.png" alt="Ruby"></td>
+    <td width="25%"><img src="img/themes/windows7-violet.png" alt="Violet"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Sun</sub></td>
+    <td align="center"><sub>Pumpkin</sub></td>
+    <td align="center"><sub>Ruby</sub></td>
+    <td align="center"><sub>Violet</sub></td>
+  </tr>
+</table>
+
+**Windows 7 Dark**
+
+<table>
+  <tr>
+    <td width="25%"><img src="img/themes/windows7-dark-sky.png" alt="Sky"></td>
+    <td width="25%"><img src="img/themes/windows7-dark-twilight.png" alt="Twilight"></td>
+    <td width="25%"><img src="img/themes/windows7-dark-sea.png" alt="Sea"></td>
+    <td width="25%"><img src="img/themes/windows7-dark-leaf.png" alt="Leaf"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Sky</sub></td>
+    <td align="center"><sub>Twilight</sub></td>
+    <td align="center"><sub>Sea</sub></td>
+    <td align="center"><sub>Leaf</sub></td>
+  </tr>
+  <tr>
+    <td width="25%"><img src="img/themes/windows7-dark-sun.png" alt="Sun"></td>
+    <td width="25%"><img src="img/themes/windows7-dark-pumpkin.png" alt="Pumpkin"></td>
+    <td width="25%"><img src="img/themes/windows7-dark-ruby.png" alt="Ruby"></td>
+    <td width="25%"><img src="img/themes/windows7-dark-violet.png" alt="Violet"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Sun</sub></td>
+    <td align="center"><sub>Pumpkin</sub></td>
+    <td align="center"><sub>Ruby</sub></td>
+    <td align="center"><sub>Violet</sub></td>
+  </tr>
+</table>
+
+</details>
+
+</details>
+
 ## Web version
 
 [**KaintHTML**](KaintHTML/README.md) is Kaint ported to the web: the same interface, tools,
@@ -303,8 +505,11 @@ chmod +x build-appimage/Kaint-*.AppImage && ./build-appimage/Kaint-*.AppImage
 ```
 
 The AppImage bundles Qt, so it runs on distributions whose glibc is at least as new as the one it
-was built on: build it on the oldest distribution you want to support. Paint.NET plugins use the
-system's mono if it's installed, and the KDE theme option needs the native build or the Flatpak.
+was built on. On a newer system, `build.sh` builds it inside an **Ubuntu 22.04** container (glibc
+2.35, with podman or docker; Qt comes from aqtinstall and everything downloaded is kept in
+`build-appimage-cache/`), so it also runs on the oldest distributions that are still supported;
+`--appimage-native` builds it with this system's Qt instead. Paint.NET plugins use the system's mono
+(or Wine) if it's installed, and the KDE theme option needs the native build or the Flatpak.
 
 </details>
 
@@ -381,7 +586,9 @@ and passwords (or use `--kainthtml`, `--keystore`, `--alias` and the `KAINT_STOR
 to download Temurin 21 if there is none). The Android SDK command-line tools and Gradle are
 downloaded the first time if missing (checked against their checksums), and you accept the Android
 SDK licenses yourself. APKs are signed with a key kept on this computer, so newer versions install
-over older ones.
+over older ones. On phones and tablets two fingers zoom, move and **rotate** the image (tap the angle
+in the corner to straighten it), the scroll bars can be hidden (they are, by default, on phones) and
+**Effects → ibis Paint style** has Extract Line Art, Chromatic Aberration and Glitch.
 
 ```bash
 ./build.sh --apk            # or build.bat --apk on Windows; --aab for Google Play
@@ -412,11 +619,21 @@ and *Exit* leaves.
 | Linux builds from Windows | | `--wsl build`, `deb`, `pkg`, `appimage`, `appimage-avx2`, `tar`, `tar-musl` or `tar-arm64` |
 | Web version (.zip) | `--web` | `--web` |
 | Mobile version (Android) | `--apk` · `--aab` | `--apk` · `--aab` (with WSL) |
+| OpenD2D for Paint.NET plugins | `--opend2d latest`, `main`, a release (`v0.1.0-beta.1`), `local` (`2dlocal/`), a folder or `off` | |
+| AppImage with this system's glibc | `--appimage-native` | |
 | Build threads | `--jobs N` | `--jobs N` |
 | Every option | `--help` | `--help` |
 
 Both scripts use `ccache` or `sccache` when installed (`--no-ccache` turns it off), show how long
 the build took and the size of what they made, and say which step failed.
+
+**OpenD2D**: when `cargo` (Rust) is installed, Kaint builds [OpenD2D](https://github.com/daijro/opend2d)
+together with it (`build/opend2d/`, installed in `lib/kaint/opend2d`) for the OpenD2D plugin system.
+In a terminal `build.sh` asks which version to use: the latest (downloaded, or updated, on every build),
+one of the versions published in its repository, the local copy in `2dlocal/` or none (`--opend2d`
+answers it beforehand; with CMake, `-DKAINT_OPEND2D_REF=...`, `-DKAINT_OPEND2D_SOURCE=...` or
+`-DKAINT_OPEND2D=OFF`). Without cargo, Kaint is built as always and plugins use mono without OpenD2D
+(or Wine).
 
 Packagers can build with `-DKAINT_UPDATE_CHECK=OFF` so that Kaint leaves updates to the package
 manager and never looks for new versions on GitHub (the Flatpak does this).
@@ -432,7 +649,8 @@ Nguyen Duy, [XP.css](https://botoxparty.github.io/XP.css/) by Adam Hammad and Jo
 `third_party/quickjs-ng/` is [QuickJS-ng](https://github.com/quickjs-ng/quickjs) (MIT), the
 JavaScript engine that runs paint.js plugins. Kaint supports the plugins of
 [paint.js](https://github.com/LabyStudio/paintdotjs) by LabyStudio (.paintjs packages and their
-JavaScript API); it doesn't use paint.js's own plugin system. The P2P collaboration uses
+JavaScript API); it doesn't use paint.js's own plugin system. The OpenD2D plugin system uses [OpenD2D](https://github.com/daijro/opend2d) by daijro (GPL-3.0-or-later),
+built from its repository with Kaint. The P2P collaboration uses
 [libdatachannel](https://github.com/paullouisageneau/libdatachannel) (MPL-2.0) with usrsctp
 (BSD-3-Clause), libjuice (MPL-2.0) and plog (MIT), and Mbed TLS (Apache-2.0) where there is no
 OpenSSL. The PhotoCraft features and tools reimplement algorithms of PhotoCraft by the ArtCraft Team

@@ -30,6 +30,63 @@ struct PluginManager::Loaded {
 
 namespace {
 
+// Examina un .dll de Paint.NET con el sistema elegido y, con el respaldo de Wine, también con Wine
+// si con mono no carga o algún efecto falla: los efectos que solo van con Wine se añaden marcados
+// ("wine": true; el complemento entero, "runtime": "Wine"), así solo esa parte usa Wine.
+QJsonObject inspectWithFallback(const QString& path, QString* error)
+{
+    QJsonObject reply = PdnBridge::instance().inspect(path, error);
+    if (!PdnBridge::wineFallback() || reply.value(QStringLiteral("library")).toBool())
+        return reply;
+    const QJsonArray effects = reply.value(QStringLiteral("effects")).toArray();
+    const bool failed = reply.isEmpty() || !reply.value(QStringLiteral("ok")).toBool(true) || effects.isEmpty();
+    if (!failed && reply.value(QStringLiteral("errors")).toArray().isEmpty())
+        return reply;
+    QString wineError;
+    QJsonObject wine = PdnBridge::forRuntime(PdnBridge::Runtime::Wine).inspect(path, &wineError);
+    const QJsonArray wineEffects = wine.value(QStringLiteral("effects")).toArray();
+    if (wine.isEmpty() || !wine.value(QStringLiteral("ok")).toBool(true) || wineEffects.isEmpty())
+        return reply;
+    if (failed) {
+        // Con mono no carga: todo con Wine.
+        QJsonArray marked;
+        for (const QJsonValue& e : wineEffects) {
+            QJsonObject o = e.toObject();
+            o.insert(QStringLiteral("wine"), true);
+            marked.append(o);
+        }
+        wine.insert(QStringLiteral("effects"), marked);
+        wine.insert(QStringLiteral("runtime"), QStringLiteral("Wine"));
+        if (error)
+            error->clear();
+        return wine;
+    }
+    // Carga, pero algún efecto no: esos, con Wine.
+    QSet<QString> known;
+    for (const QJsonValue& e : effects)
+        known.insert(e.toObject().value(QStringLiteral("id")).toString());
+    QJsonArray merged = effects;
+    bool added = false;
+    for (const QJsonValue& e : wineEffects) {
+        QJsonObject o = e.toObject();
+        if (known.contains(o.value(QStringLiteral("id")).toString()))
+            continue;
+        o.insert(QStringLiteral("wine"), true);
+        merged.append(o);
+        added = true;
+    }
+    if (added) {
+        reply.insert(QStringLiteral("effects"), merged);
+        // Lo que tampoco funciona con Wine.
+        reply.insert(QStringLiteral("errors"), wine.value(QStringLiteral("errors")).toArray());
+    }
+    return reply;
+}
+
+} // namespace
+
+namespace {
+
 #ifdef Q_OS_WIN
 // Ensamblado de .NET (complemento de Paint.NET): un PE con la cabecera CLI rellena. Se lee la
 // cabecera en vez de cargar el archivo, que podría ejecutar código.
@@ -235,11 +292,11 @@ PluginManager::Check PluginManager::check(const QString& path) const
         library.unload();
         return result;
     }
-    // Paint.NET: lo examina el proceso auxiliar.
+    // Paint.NET: lo examina el proceso auxiliar (y, si con mono no carga, Wine).
     if (!PdnBridge::available())
         return Check::Incompatible;
     QString error;
-    const QJsonObject reply = PdnBridge::instance().inspect(path, &error);
+    const QJsonObject reply = inspectWithFallback(path, &error);
     if (reply.isEmpty())
         return Check::Incompatible;
     if (reply.value(QStringLiteral("library")).toBool())
@@ -451,6 +508,7 @@ void PluginManager::loadCache()
     const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
     if (root.value(QStringLiteral("version")).toInt() != kCacheVersion
         || root.value(QStringLiteral("host")).toString() != fileStamp(PdnBridge::hostPath())
+        || root.value(QStringLiteral("runtime")).toString() != PdnBridge::cacheTag()
         || root.value(QStringLiteral("lang")).toString() != qEnvironmentVariable("KAINT_LANG"))
         return;
     m_cache = root.value(QStringLiteral("plugins")).toObject();
@@ -466,6 +524,8 @@ void PluginManager::saveCache() const
         return;
     const QJsonObject root{{QStringLiteral("version"), kCacheVersion},
                            {QStringLiteral("host"), fileStamp(PdnBridge::hostPath())},
+                           // Un complemento puede cargar con Wine y no con OpenD2D (o al revés).
+                           {QStringLiteral("runtime"), PdnBridge::cacheTag()},
                            {QStringLiteral("lang"), qEnvironmentVariable("KAINT_LANG")},
                            {QStringLiteral("plugins"), m_cache}};
     f.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
@@ -487,8 +547,17 @@ void PluginManager::storeReply(const QString& path, const QJsonObject& reply)
 
 // --- Búsqueda ----------------------------------------------------------------
 
+void PluginManager::runtimeChanged()
+{
+    m_cacheLoaded = false;
+    m_cache = {};
+    if (m_scanned)
+        scan();
+}
+
 void PluginManager::scan()
 {
+    m_scanned = true;
     loadCache();
     const QList<Candidate> candidates = findCandidates();
     QSet<QString> present;
@@ -700,10 +769,13 @@ void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& repl
     info.effects.clear();
     info.effectIds.clear();
     info.effectIcons.clear();
+    info.wineEffectIds.clear();
     for (const QJsonValue& e : reply.value(QStringLiteral("effects")).toArray()) {
         const QJsonObject o = e.toObject();
         info.effects << o.value(QStringLiteral("name")).toString().simplified();
         info.effectIds << PdnEffect::makeId(info.id, o.value(QStringLiteral("id")).toString());
+        if (o.value(QStringLiteral("wine")).toBool())
+            info.wineEffectIds << info.effectIds.last();
         QImage icon;
         const QByteArray png = QByteArray::fromBase64(o.value(QStringLiteral("icon")).toString().toLatin1());
         if (!png.isEmpty())
@@ -860,7 +932,7 @@ void PluginManager::startInspection(const QStringList& paths)
             if (m_stopInspection)
                 break;
             QString error;
-            const QJsonObject reply = PdnBridge::instance().inspect(path, &error);
+            const QJsonObject reply = inspectWithFallback(path, &error);
             if (m_stopInspection)
                 break;
             QMetaObject::invokeMethod(this, [this, path, reply, error] { onInspected(path, reply, error); },
@@ -931,8 +1003,8 @@ void PluginManager::waitForInspection()
 void PluginManager::shutdown()
 {
     m_stopInspection = true;
-    PdnBridge::instance().abort();
+    PdnBridge::abortAll();
     if (m_inspector.joinable())
         m_inspector.join();
-    PdnBridge::instance().shutdown();
+    PdnBridge::shutdownAll();
 }

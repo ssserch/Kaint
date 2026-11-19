@@ -16,11 +16,16 @@ optdepends=('qt6-wayland: Wayland'
             'qt6-imageformats: WebP, TIFF and more formats'
             'kimageformats: AVIF, JPEG XL, PSD and more formats'
             'qt6-translations: translated Qt dialogs'
-            'mono: Paint.NET plugins'
+            'mono: Paint.NET plugins (with OpenD2D)'
+            'wine: Paint.NET plugins through Wine'
             'libgdiplus: Paint.NET plugins that use System.Drawing')
 
 build() {
-    cmake -S "$_src" -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+    # OpenD2D (Direct2D de código abierto para los complementos de Paint.NET): build.sh elige la
+    # versión (la última, una publicada o la copia de 2dlocal/); se compila con cargo si está.
+    cmake -S "$_src" -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF \
+        -DKAINT_OPEND2D="${KAINT_OPEND2D:-AUTO}" -DKAINT_OPEND2D_REF="${KAINT_OPEND2D_REF:-latest}" \
+        -DKAINT_OPEND2D_SOURCE="${KAINT_OPEND2D_SOURCE:-}"
     cmake --build build
 }
 

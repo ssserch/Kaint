@@ -713,6 +713,31 @@ async function gifAdvancedDialog(frames, initial, { image, ext, dpi, icc, delay,
         button(tr("Omitir cada N.º"), "skip", () => mark(true, isNth)), button(tr("Activar cada N.º"), "enable", () => mark(false, isNth)),
     ])]);
 
+    // Orden y velocidad: al revés, ida y vuelta (como un bumerán) y más rápido o más lento sin perder
+    // la duración propia de cada fotograma.
+    const scaleSpeed = (factor) => {
+        for (const e of adv.entries)
+            e.delay = clamp(Math.round((e.delay > 0 ? e.delay : allDelay) * factor), MIN_DELAY, 60000);
+        rebuild();
+    };
+    const reverse = button(tr("Invertir el orden"), "enable", () => {
+        adv.entries.reverse();
+        rebuild();
+    });
+    reverse.title = tr("El último fotograma pasa a ser el primero.");
+    const boomerang = button(tr("Ida y vuelta"), "enable", () => {
+        const forward = adv.entries.map((e) => ({ ...e }));
+        for (let i = forward.length - 2; i >= 1; --i)
+            adv.entries.push({ ...forward[i] });
+        rebuild();
+    });
+    boomerang.title = tr("Añade los fotogramas al revés al final (sin repetir el último ni el primero): la animación va y vuelve, como un bumerán.");
+    const faster = button(tr("Más rápido (×2)"), "enable", () => scaleSpeed(0.5));
+    faster.title = tr("La mitad de duración en cada fotograma (cada uno conserva su proporción).");
+    const slower = button(tr("Más lento (×½)"), "enable", () => scaleSpeed(2));
+    slower.title = tr("El doble de duración en cada fotograma.");
+    const orderBox = group(tr("Orden y velocidad"), [el("div", { className: "gif-order" }, [reverse, boomerang, faster, slower])]);
+
     // Opciones del GIF
     const delayAll = spin(MIN_DELAY, 60000, allDelay, 10), fps = el("span");
     const loopsEdit = el("input", { type: "text", style: { width: "90px" }, inputMode: "numeric" });
@@ -795,11 +820,32 @@ async function gifAdvancedDialog(frames, initial, { image, ext, dpi, icc, delay,
                 rebuild();
             });
             twin.title = tr("Repite este fotograma justo después");
+            // Mover el fotograma a un lado (cambia el orden del GIF) y quitar las copias.
+            const move = (dir, label) => {
+                const b = button(dir < 0 ? "◀" : "▶", "move", () => {
+                    const [moved] = adv.entries.splice(i, 1);
+                    adv.entries.splice(i + dir, 0, moved);
+                    rebuild();
+                });
+                b.title = label;
+                b.disabled = dir < 0 ? i === 0 : i === adv.entries.length - 1;
+                return b;
+            };
+            const buttons = [move(-1, tr("Mover este fotograma antes")), button(e.skip ? tr("Activar") : tr("Omitir"), e.skip ? "enable" : "skip", toggle), twin];
+            if (adv.entries.filter((x) => x.source === e.source).length > 1) {
+                const remove = button("✕", "skip", () => {
+                    adv.entries.splice(i, 1);
+                    rebuild();
+                });
+                remove.title = tr("Quitar esta copia del fotograma");
+                buttons.push(remove);
+            }
+            buttons.push(move(1, tr("Mover este fotograma después")));
             framesRow.appendChild(el("div", { className: `gif-card${e.skip ? " skipped" : ""}` }, [
                 el("div", { className: "row" }, [el("span", { textContent: fromHidden ? tr("%1 · capa oculta", i + 1) : String(i + 1) }), el("span", { style: { flex: 1 } }), eye]),
                 thumb,
                 el("div", { className: "row" }, [el("span", { textContent: tr("Duración:") }), d, el("span", { textContent: tr("ms") })]),
-                el("div", { className: "row" }, [button(e.skip ? tr("Activar") : tr("Omitir"), e.skip ? "enable" : "skip", toggle), twin]),
+                el("div", { className: "row" }, buttons),
             ]));
         });
         const n = Math.max(1, adv.entries.length);
@@ -866,7 +912,7 @@ async function gifAdvancedDialog(frames, initial, { image, ext, dpi, icc, delay,
     on(firstOnly, () => (adv.effects.firstOnlyAsBackground = firstOnly.firstChild.checked));
 
     dlg.body.appendChild(el("div", { className: "gif-columns" }, [
-        el("div", { className: "gif-page" }, [framesRow, rangeBox, gifBox, effectsBox]),
+        el("div", { className: "gif-page" }, [framesRow, rangeBox, orderBox, gifBox, effectsBox]),
         el("div", { className: "gif-side" }, [preview.element, status]),
     ]));
     const defaults = el("button", { className: "pushbutton push-left", type: "button", textContent: tr("Predeterminado") });

@@ -27,7 +27,10 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QLineEdit>
 #include <QTabWidget>
+
+#include <algorithm>
 #include <QTemporaryDir>
 #include <QVBoxLayout>
 
@@ -176,15 +179,24 @@ PluginCatalogDialog::PluginCatalogDialog(QWidget* parent, Section initial)
                              this);
     intro->setWordWrap(true);
     layout->addWidget(intro);
+    // Buscar en todas las secciones a la vez.
+    m_search = new QLineEdit(this);
+    m_search->setPlaceholderText(tr("Buscar complementos (nombre, autor, efecto…)"));
+    m_search->setClearButtonEnabled(true);
+    m_search->addAction(Icons::theme({"edit-find", "search"}), QLineEdit::LeadingPosition);
+    connect(m_search, &QLineEdit::textChanged, this, &PluginCatalogDialog::applyFilter);
+    layout->addWidget(m_search);
     m_tabs = new QTabWidget(this);
     const QString titles[3] = {tr("Kaint.HTML"), tr("PhotoCraft"), tr("Paint.NET")};
+    for (int i = 0; i < 3; ++i)
+        m_titles[i] = titles[i];
     const QString notes[3] = {
         tr("Complementos de paint.js del catálogo que usa la versión web de Kaint (Kaint.HTML). Se ejecutan sin acceso a tus "
            "archivos ni a internet. Los que abren una ventana propia hecha para el navegador solo funcionan en la versión web."),
         tr("Filtros de PhotoCraft (.wasm) de la tienda ArtCraft. Se ejecutan en el intérprete de WebAssembly de Kaint, sin acceso "
            "a nada de fuera."),
-        tr("Complementos de efectos de Paint.NET (.dll) que funcionan en Kaint, con la capa de compatibilidad (mono en Linux y el "
-           ".NET Framework de Windows)."),
+        tr("Complementos de efectos de Paint.NET (.dll) que funcionan en Kaint, con su capa de compatibilidad (en Windows, con "
+           "el .NET Framework; en Linux, macOS y FreeBSD, con el sistema de complementos elegido: OpenD2D o Wine)."),
     };
     for (int i = 0; i < 3; ++i) {
         auto* page = new QWidget(m_tabs);
@@ -393,12 +405,45 @@ void PluginCatalogDialog::showEntries(Section section)
             connect(button, &QPushButton::clicked, this, [this, i, button, status] { install(i, button, status); });
         }
         h->addWidget(button, 0, Qt::AlignTop);
+        row->setProperty("kaintSearch", QStringList{e.name, e.author, e.description, e.effects.join(QLatin1Char(' ')), e.id}
+                                            .join(QLatin1Char(' ')));
         rows(section)->insertWidget(rows(section)->count() - 1, row);
     }
     if (shown)
         message(section)->hide();
     else
         message(section)->setText(tr("El catálogo está vacío."));
+    message(section)->setProperty("kaintEmpty", shown == 0);
+    applyFilter();
+}
+
+void PluginCatalogDialog::applyFilter()
+{
+    const QStringList words = m_search ? m_search->text().simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts) : QStringList();
+    for (int s = 0; s < 3; ++s) {
+        QVBoxLayout* list = m_rows[s];
+        if (!list)
+            continue;
+        int total = 0, visible = 0;
+        for (int i = 0; i < list->count(); ++i) {
+            QWidget* row = list->itemAt(i)->widget();
+            if (!row || !row->property("kaintSearch").isValid())
+                continue;
+            ++total;
+            const QString text = row->property("kaintSearch").toString();
+            const bool match = std::all_of(words.cbegin(), words.cend(),
+                                           [&](const QString& w) { return text.contains(w, Qt::CaseInsensitive); });
+            row->setVisible(match);
+            if (match)
+                ++visible;
+        }
+        // Sin resultados: un aviso en la sección; con búsqueda, cuántos hay en cada pestaña.
+        if (total > 0) {
+            m_message[s]->setText(tr("Ningún complemento coincide con la búsqueda."));
+            m_message[s]->setVisible(visible == 0);
+        }
+        m_tabs->setTabText(s, words.isEmpty() || total == 0 ? m_titles[s] : QStringLiteral("%1 (%2)").arg(m_titles[s]).arg(visible));
+    }
 }
 
 void PluginCatalogDialog::install(int index, QPushButton* button, QLabel* status)

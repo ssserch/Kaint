@@ -28,9 +28,13 @@
 #include "app/dialogs/PluginCatalogDialog.h"
 #include "app/CustomLanguages.h"
 #include "app/dialogs/LanguageEditorDialog.h"
+#include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginManager.h"
 
 #include <QApplication>
+#include <QMetaObject>
+#include <QJsonObject>
+#include <QPointer>
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QClipboard>
@@ -151,6 +155,10 @@ AppSettings AppSettings::load()
     a.pluginMenuIcons = get("pluginMenuIcons", a.pluginMenuIcons);
     a.browsePlugins = get("browsePlugins", a.browsePlugins);
     a.photocraftExtras = get("photocraftExtras", a.photocraftExtras);
+    a.pluginRuntime = std::clamp(get("pluginRuntime", a.pluginRuntime), 0, 1);
+    a.pluginWineFallback = get("pluginWineFallback", a.pluginWineFallback);
+    a.wheelChangesValues = get("wheelChangesValues", a.wheelChangesValues);
+    a.wheelStep = std::clamp(get("wheelStep", a.wheelStep), 0, 3);
     a.stripFullHeight = get("stripFullHeight", a.stripFullHeight);
     a.boltBaitEffects = s.value(QStringLiteral("boltBaitEffects")).toStringList();
     a.paletteTranslucent = get("paletteTranslucent", a.paletteTranslucent);
@@ -166,9 +174,13 @@ AppSettings AppSettings::load()
     a.windowsVersion = get("windowsVersion", a.windowsVersion) == 11 ? 11 : 10;
     // La barra de título de Kaint o la del sistema. Antes no había casilla: los botones -1 («Los del
     // escritorio») eran la del sistema; sin nada elegido, lo de cada sistema.
-    const int defaultButtons = a.windowsVersion == 11 ? 1 : 0;
-    const int buttons = s.contains(QStringLiteral("titleButtons")) ? std::clamp(get("titleButtons", defaultButtons), -1, 5)
-                                                                   : defaultButtons;
+    // Los automáticos (6) son los de siempre; antes los hacían los de Windows 10 (0): esos pasan a
+    // automáticos una vez (titleButtonsAuto), para que con Windows 7 o XP sigan siendo los del tema.
+    const int defaultButtons = 6;
+    int buttons = s.contains(QStringLiteral("titleButtons")) ? std::clamp(get("titleButtons", defaultButtons), -1, 6)
+                                                             : defaultButtons;
+    if (buttons == 0 && !s.contains(QStringLiteral("titleButtonsAuto")))
+        buttons = 6;
     if (s.contains(QStringLiteral("customWindowFrame")))
         a.customFrame = get("customWindowFrame", a.customFrame);
     else if (buttons < 0)
@@ -260,6 +272,10 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("pluginMenuIcons"), pluginMenuIcons);
     s.setValue(QStringLiteral("browsePlugins"), browsePlugins);
     s.setValue(QStringLiteral("photocraftExtras"), photocraftExtras);
+    s.setValue(QStringLiteral("pluginRuntime"), pluginRuntime);
+    s.setValue(QStringLiteral("pluginWineFallback"), pluginWineFallback);
+    s.setValue(QStringLiteral("wheelChangesValues"), wheelChangesValues);
+    s.setValue(QStringLiteral("wheelStep"), wheelStep);
     s.setValue(QStringLiteral("stripFullHeight"), stripFullHeight);
     s.setValue(QStringLiteral("boltBaitEffects"), boltBaitEffects);
     s.setValue(QStringLiteral("paletteTranslucent"), paletteTranslucent);
@@ -275,6 +291,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("customWindowFrame"), customFrame);
     s.setValue(QStringLiteral("windows10Frame"), customFrame);
     s.setValue(QStringLiteral("titleButtons"), titleButtons);
+    s.setValue(QStringLiteral("titleButtonsAuto"), true);
     s.setValue(QStringLiteral("titleButtonsLeft"), titleButtonsLeft);
     s.setValue(QStringLiteral("win7PanelClose"), win7PanelClose);
     s.setValue(QStringLiteral("windowsVersion"), windowsVersion);
@@ -1096,6 +1113,9 @@ QWidget* SettingsDialog::createInterfacePage()
     titleForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
     auto* buttonsStyle = new QComboBox(page.widget);
     const struct { int id; QString name; QString tip; } styles[] = {
+        {6, tr("Automáticos (los del tema)"), tr("Los del tema: de cristal con Windows 7, los azules de Luna con Windows XP, "
+                                                 "en relieve con Windows 98 y, con los demás, los de Windows 10 (o los de "
+                                                 "Windows 11 con «Bordes: Redondeados»).")},
         {1, QStringLiteral("Windows 11"), tr("Finos, con el cuadrado de maximizar redondeado.")},
         {0, QStringLiteral("Windows 10"), tr("Los de siempre de Paint.NET: 46 píxeles de ancho y cerrar en rojo.")},
         {2, QStringLiteral("macOS"), tr("Los tres círculos de colores (cerrar, minimizar y zoom).")},
@@ -1108,8 +1128,8 @@ QWidget* SettingsDialog::createInterfacePage()
         buttonsStyle->setItemData(buttonsStyle->count() - 1, st.tip, Qt::ToolTipRole);
     }
     buttonsStyle->setCurrentIndex(std::max(0, buttonsStyle->findData(m_settings.titleButtons)));
-    buttonsStyle->setToolTip(tr("Los botones de cerrar, maximizar o restaurar y minimizar. Con el tema Windows 98, «Windows 10» "
-                                "usa los de Windows 98."));
+    buttonsStyle->setToolTip(tr("Los botones de cerrar, maximizar o restaurar y minimizar. «Automáticos» usa los del tema "
+                                "(Windows 7, XP o 98); los demás se ven igual con cualquier tema."));
     auto* buttonsSide = new QComboBox(page.widget);
     buttonsSide->addItem(tr("A la derecha"), false);
     buttonsSide->addItem(tr("A la izquierda"), true);
@@ -1564,6 +1584,40 @@ QWidget* SettingsDialog::createToolsPage(ToolManager* tools)
           tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo "
              "transparente. Desactivado, se mezclan con lo que hay debajo."));
 
+    // La rueda del ratón sobre los deslizadores (Dureza, Espaciado, Tolerancia, los de los efectos...).
+    page.layout->addWidget(sectionHeader(tr("Rueda del ratón"), page.widget));
+    auto* wheel = new QCheckBox(tr("Cambiar el valor de los deslizadores con la rueda del ratón"), page.widget);
+    wheel->setChecked(m_settings.wheelChangesValues);
+    wheel->setToolTip(tr("Con el puntero encima de un deslizador (Dureza, Espaciado, Tolerancia, los de los efectos...), "
+                         "la rueda sube o baja su valor; con Mayús va de uno en uno y con Ctrl, diez veces más rápido. "
+                         "Desactivado, la rueda desplaza la ventana."));
+    auto* wheelStep = new QComboBox(page.widget);
+    wheelStep->addItem(tr("El 1 % del recorrido"), 0);
+    wheelStep->addItem(tr("Una unidad"), 1);
+    wheelStep->addItem(tr("El 5 % del recorrido"), 2);
+    wheelStep->addItem(tr("El 10 % del recorrido"), 3);
+    wheelStep->setCurrentIndex(std::max(0, wheelStep->findData(m_settings.wheelStep)));
+    wheelStep->setEnabled(m_settings.wheelChangesValues);
+    auto* wheelRow = new QHBoxLayout;
+    auto* wheelStepLabel = new QLabel(tr("Cada paso de la rueda:"), page.widget);
+    wheelStepLabel->setEnabled(m_settings.wheelChangesValues);
+    wheelRow->addSpacing(20);
+    wheelRow->addWidget(wheelStepLabel);
+    wheelRow->addWidget(wheelStep);
+    wheelRow->addStretch();
+    page.layout->addWidget(wheel);
+    page.layout->addLayout(wheelRow);
+    connect(wheel, &QCheckBox::toggled, this, [this, wheelStep, wheelStepLabel](bool on) {
+        m_settings.wheelChangesValues = on;
+        wheelStep->setEnabled(on);
+        wheelStepLabel->setEnabled(on);
+        changed();
+    });
+    connect(wheelStep, &QComboBox::activated, this, [this, wheelStep](int i) {
+        m_settings.wheelStep = wheelStep->itemData(i).toInt();
+        changed();
+    });
+
     m_toolDefaults = new ToolOptionsPanel(defaults, page.widget);
     page.layout->addWidget(m_toolDefaults);
     page.layout->addStretch();
@@ -1683,6 +1737,112 @@ QWidget* SettingsDialog::createPluginsPage()
         QToolTip::hideText();
     });
     page.layout->addWidget(intro);
+
+    // Con qué se cargan los complementos de Paint.NET (.dll): OpenD2D (mono con el Direct2D de
+    // código abierto) o Wine. En Windows, siempre el .NET Framework del sistema.
+    if (PdnBridge::runtimeSelectable()) {
+        auto* runtimeRow = new QHBoxLayout;
+        auto* runtime = new QComboBox(page.widget);
+        runtime->setIconSize(QSize(16, 16));
+        runtime->addItem(Icons::openD2DIcon(), QStringLiteral("OpenD2D"), 0);
+        runtime->setItemData(0, tr("mono con OpenD2D: el Direct2D, DirectWrite y WIC de código abierto en lugar de los de "
+                                   "Windows. No necesita nada más que mono."),
+                             Qt::ToolTipRole);
+        runtime->addItem(Icons::wineIcon(), tr("Wine"), 1);
+        runtime->setItemData(1, tr("Los complementos se ejecutan dentro de Wine (con su wine-mono), como un programa de "
+                                   "Windows: sus ventanas propias se ven como en Windows."),
+                             Qt::ToolTipRole);
+        runtime->setCurrentIndex(std::max(0, runtime->findData(m_settings.pluginRuntime)));
+        runtime->setToolTip(tr("Con qué se cargan los complementos de Paint.NET (.dll)"));
+        auto* test = new QPushButton(Icons::theme({"system-run", "media-playback-start"}), tr("Probar"), page.widget);
+        test->setToolTip(tr("Abre el proceso de los complementos con el sistema elegido y dice si funciona"));
+        runtimeRow->addWidget(new QLabel(tr("Sistema de complementos de Paint.NET:"), page.widget));
+        runtimeRow->addWidget(runtime);
+        runtimeRow->addWidget(test);
+        runtimeRow->addStretch();
+        page.layout->addLayout(runtimeRow);
+        // Con OpenD2D, lo que no funcione con mono (un complemento que no carga o un efecto que falla)
+        // se ejecuta con Wine, solo eso.
+        auto* fallback = new QCheckBox(tr("Usar Wine solo para lo que no funcione con OpenD2D"), page.widget);
+        fallback->setIcon(Icons::wineIcon());
+        fallback->setChecked(m_settings.pluginWineFallback);
+        fallback->setToolTip(tr("Si un complemento no carga con OpenD2D, o uno de sus efectos falla al aplicarse, ese "
+                                "complemento o ese efecto se ejecuta con Wine (y se recuerda para la próxima vez); todo lo "
+                                "demás sigue con OpenD2D. Hace falta Wine instalado."));
+        page.layout->addWidget(fallback);
+        auto syncFallback = [this, fallback] {
+            const bool wine = !PdnBridge::winePath().isEmpty();
+            fallback->setEnabled(m_settings.pluginRuntime == int(PdnBridge::Runtime::OpenD2D) && wine);
+            fallback->setText(wine ? tr("Usar Wine solo para lo que no funcione con OpenD2D")
+                                   : tr("Usar Wine solo para lo que no funcione con OpenD2D (Wine no está instalado)"));
+        };
+        syncFallback();
+        connect(fallback, &QCheckBox::toggled, this, [this](bool on) {
+            m_settings.pluginWineFallback = on;
+            changed();
+        });
+        auto* runtimeStatus = new QLabel(page.widget);
+        runtimeStatus->setWordWrap(true);
+        runtimeStatus->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        page.layout->addWidget(runtimeStatus);
+        auto describe = [this, runtimeStatus] {
+            QStringList parts;
+            if (m_settings.pluginRuntime == int(PdnBridge::Runtime::Wine)) {
+                const QString wine = PdnBridge::winePath();
+                parts << (wine.isEmpty() ? QStringLiteral("⚠ ") + tr("Wine no está instalado (sudo pacman -S wine o sudo apt install wine).")
+                                         : tr("Wine: %1").arg(QDir::toNativeSeparators(wine)));
+            } else {
+                const QString mono = PdnBridge::monoPath();
+                parts << (mono.isEmpty() ? QStringLiteral("⚠ ") + tr("mono no está instalado (sudo pacman -S mono libgdiplus).")
+                                         : tr("mono: %1").arg(QDir::toNativeSeparators(mono)));
+                const QString version = PdnBridge::openD2DVersion();
+                parts << (PdnBridge::openD2DPath().isEmpty()
+                              ? tr("OpenD2D no se compiló con Kaint (hace falta cargo al compilar): los complementos usan mono sin él.")
+                              : tr("OpenD2D %1").arg(version.isEmpty() ? QDir::toNativeSeparators(PdnBridge::openD2DPath()) : version));
+            }
+            runtimeStatus->setText(parts.join(QStringLiteral(" · ")));
+        };
+        describe();
+        connect(runtime, &QComboBox::activated, this, [this, runtime, describe, syncFallback](int i) {
+            m_settings.pluginRuntime = runtime->itemData(i).toInt();
+            describe();
+            syncFallback();
+            changed();
+        });
+        connect(test, &QPushButton::clicked, this, [this, test, runtimeStatus] {
+            test->setEnabled(false);
+            runtimeStatus->setText(tr("Probando…"));
+            PdnBridge::setRuntime(PdnBridge::Runtime(m_settings.pluginRuntime));
+            QPointer<QLabel> label(runtimeStatus);
+            QPointer<QPushButton> button(test);
+            // En otro hilo: la primera vez Wine tarda unos segundos en arrancar.
+            std::thread([label, button] {
+                QString error;
+                const QJsonObject hello = PdnBridge::instance().hello(&error);
+                QString text;
+                if (hello.value(QStringLiteral("ok")).toBool()) {
+                    const QString d2d = hello.value(QStringLiteral("direct2d")).toString();
+                    QString provider = hello.value(QStringLiteral("system")).toString();
+                    if (hello.contains(QStringLiteral("opend2d")))
+                        provider = QStringLiteral("OpenD2D ") + hello.value(QStringLiteral("opend2d")).toString();
+                    text = QStringLiteral("✔ ")
+                           + QCoreApplication::translate("SettingsDialog", "Funciona: %1 · Direct2D: %2")
+                                 .arg(hello.value(QStringLiteral("runtime")).toString(),
+                                      d2d == QLatin1String("ok") ? QStringLiteral("✔ ") + provider
+                                                                 : QStringLiteral("✘ (%1)").arg(d2d));
+                } else {
+                    text = QStringLiteral("✘ ") + (error.isEmpty() ? hello.value(QStringLiteral("error")).toString() : error);
+                }
+                QMetaObject::invokeMethod(qApp, [label, button, text] {
+                    if (label)
+                        label->setText(text);
+                    if (button)
+                        button->setEnabled(true);
+                });
+            }).detach();
+        });
+    }
+
     m_pluginList = new QTreeWidget(page.widget);
     m_pluginList->setHeaderLabels({tr("Complemento"), tr("Tipo"), tr("Estado")});
     // Cada complemento con sus efectos debajo, cada uno con su casilla.
@@ -2114,7 +2274,11 @@ void SettingsDialog::showPluginDetails()
             lines << QString() << tr("Efectos:");
             for (int i = 0; i < p.effects.size(); ++i) {
                 const bool off = i < p.effectIds.size() && !p.effectEnabled(p.effectIds[i]);
-                lines << QStringLiteral("  ") + p.effects[i] + (off ? tr(" (desactivado)") : QString());
+                // Con el respaldo de Wine, los que se ejecutan con Wine.
+                const bool wine = i < p.effectIds.size() && PdnBridge::wineFallback()
+                                  && (p.wineEffectIds.contains(p.effectIds[i]) || PdnBridge::effectNeedsWine(p.effectIds[i]));
+                lines << QStringLiteral("  ") + p.effects[i] + (off ? tr(" (desactivado)") : QString())
+                             + (wine ? tr(" (con Wine)") : QString());
             }
         }
         if (!p.fileTypes.isEmpty())

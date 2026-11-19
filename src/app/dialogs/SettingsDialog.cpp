@@ -155,7 +155,9 @@ AppSettings AppSettings::load()
     a.pluginMenuIcons = get("pluginMenuIcons", a.pluginMenuIcons);
     a.browsePlugins = get("browsePlugins", a.browsePlugins);
     a.photocraftExtras = get("photocraftExtras", a.photocraftExtras);
-    a.pluginRuntime = std::clamp(get("pluginRuntime", a.pluginRuntime), 0, 1);
+    // De fábrica, Wine si está instalado (si no, OpenD2D, que solo necesita mono).
+    const int factoryRuntime = PdnBridge::winePath().isEmpty() ? int(PdnBridge::Runtime::OpenD2D) : int(PdnBridge::Runtime::Wine);
+    a.pluginRuntime = std::clamp(get("pluginRuntime", factoryRuntime), 0, 1);
     a.pluginWineFallback = get("pluginWineFallback", a.pluginWineFallback);
     a.wheelChangesValues = get("wheelChangesValues", a.wheelChangesValues);
     a.wheelStep = std::clamp(get("wheelStep", a.wheelStep), 0, 3);

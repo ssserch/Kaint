@@ -1045,6 +1045,12 @@ namespace Kaint.PdnHost
                     if (Type.GetType("Mono.Runtime") != null)
                         dialog.Load += (sender, e) => MonoFormFixes.Apply(dialog);
                     DialogResult result = dialog.ShowDialog();
+                    // Con mono (X11), la orden de ocultar la ventana se queda en la cola hasta que se
+                    // vuelve a atender a X: mientras se espera a que pare la vista previa (un efecto
+                    // que tarda en cancelarse, una imagen grande...), la ventana seguía en pantalla,
+                    // congelada, como si no se cerrara. Se oculta ya.
+                    dialog.Hide();
+                    Application.DoEvents();
                     Dictionary<string, object> r = Ok();
                     r["accepted"] = result == DialogResult.OK;
                     if (result == DialogResult.OK && dialog.EffectToken != null)

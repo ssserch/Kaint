@@ -278,9 +278,9 @@ color you choose for the glass of the windows (**Settings → User interface**).
       <h4>Plugins</h4>
       Paint.NET effect plugins (.dll), through the .NET Framework built into Windows and, on Linux,
       macOS and FreeBSD, with the plugin system you choose (in <b>Settings → Plugins</b> or the welcome
-      window): <b>OpenD2D</b> (mono with <a href="https://github.com/daijro/opend2d">OpenD2D</a>,
-      the open source Direct2D, DirectWrite and WIC, instead of Windows' own) or <b>Wine</b> 🍷 (the
-      plugins run inside Wine like a Windows program). With OpenD2D, whatever doesn't work with mono
+      window): <b>Wine</b> 🍷 (the plugins run inside Wine like a Windows program) or <b>OpenD2D</b>
+      (mono with <a href="https://github.com/daijro/opend2d">OpenD2D</a>, the open source Direct2D,
+      DirectWrite and WIC, instead of Windows' own). With OpenD2D, whatever doesn't work with mono
       (a plugin that doesn't load, or one of its effects that fails) can run with Wine, only that part,
       and Kaint remembers it. Old Paint.NET 3 plugins are included: the ones that use its standard Amount, Two/Three
       Amounts and Angle windows (early CodeLab plugins) open in Kaint's own effect window, with a live

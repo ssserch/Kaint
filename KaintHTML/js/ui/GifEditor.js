@@ -10,7 +10,7 @@ import { openFile, OpenAccept } from "../core/ImageIO.js";
 import { context, createCanvas, thumbnail } from "../core/Raster.js";
 import { tr, trn } from "../i18n.js";
 import { Action } from "./Actions.js";
-import { el, message } from "./Dialogs.js";
+import { el, message, promptNumber } from "./Dialogs.js";
 import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 
@@ -65,7 +65,8 @@ export class GifEditor {
         this.openDocs = [];
         this.imported = [];
         this.media = [];
-        this.pps = 600;
+        // Con el dedo, los clips más anchos (más fáciles de tocar y de estirar).
+        this.pps = matchMedia("(pointer: coarse)").matches ? 900 : 600;
         this.time = 0;
         this.playing = false;
         this.listeners = [];
@@ -493,10 +494,11 @@ export class GifEditor {
         this.app.toggleGifEditor(false);
     }
 
+    // Con el diálogo de Kaint (en Kaint.APK, el prompt() del navegador no sale).
     async editDelay(i) {
-        const value = prompt(tr("Duración del fotograma %1 (ms):", i + 1), String(this.delay(i)));
-        if (value !== null && +value > 0)
-            this.setDelay(i, +value);
+        const value = await promptNumber(tr("Duración del fotograma"), tr("Duración del fotograma %1 (ms):", i + 1), this.delay(i), MinDelay, 60000);
+        if (value !== null && value > 0)
+            this.setDelay(i, value);
     }
 
     // --- Biblioteca -----------------------------------------------------------------------
@@ -526,8 +528,10 @@ export class GifEditor {
         const items = this.media.map((m, i) => {
             const source = m.doc ? m.doc.flattened() : m.frames[0].image;
             const label = m.doc ? tr("%1 (abierta)", m.name) : m.frames.length > 1 ? trn("%1 (%n fotogramas)", m.frames.length, m.name) : m.name;
-            const item = el("div", { className: "gif-media", draggable: true, title: label, dataset: { index: i } },
-                            [thumbnail(source, 84, 64), el("span", { textContent: label })]);
+            // Con el ratón, arrastrar y soltar del navegador (también desde las carpetas); con el dedo,
+            // el de mediaPointerDown (el del navegador no funciona bien en Android).
+            const item = el("div", { className: "gif-media", draggable: !matchMedia("(pointer: coarse)").matches, title: label, dataset: { index: i } },
+                            [thumbnail(source, 84, 64, true, true), el("span", { textContent: label })]);
             item.addEventListener("click", (e) => {
                 if (!e.ctrlKey && !e.metaKey && !e.shiftKey)
                     for (const other of this.mediaList.querySelectorAll(".gif-media.selected"))
@@ -535,6 +539,7 @@ export class GifEditor {
                 item.classList.toggle("selected");
             });
             item.addEventListener("dblclick", () => this.insertMedia(i, -1));
+            item.addEventListener("pointerdown", (e) => this.mediaPointerDown(e, item, i));
             item.addEventListener("dragstart", (e) => {
                 if (!item.classList.contains("selected")) {
                     for (const other of this.mediaList.querySelectorAll(".gif-media.selected"))
@@ -548,6 +553,72 @@ export class GifEditor {
             return item;
         });
         this.mediaList.replaceChildren(...items);
+    }
+
+    // Con el dedo o el lápiz: deslizar desplaza la biblioteca; mantener pulsado un medio lo levanta
+    // y se lleva a la línea de tiempo (sale una miniatura bajo el dedo y la marca de dónde caerá).
+    mediaPointerDown(e, item, index) {
+        if (e.pointerType === "mouse")
+            return;
+        const list = this.mediaList;
+        const d = { id: e.pointerId, startX: e.clientX, startY: e.clientY, left: list.scrollLeft, top: list.scrollTop, kind: "press" };
+        item.setPointerCapture(e.pointerId);
+        d.timer = setTimeout(() => {
+            if (d.kind !== "press")
+                return;
+            d.kind = "drag";
+            navigator.vibrate?.(15);
+            const thumb = item.querySelector("canvas");
+            d.ghost = el("div", { className: "gif-ghost" }, [thumb ? thumbnail(thumb, 64, 48) : el("span", { textContent: "+" })]);
+            document.body.append(d.ghost);
+            move(e);
+        }, 350);
+        const overLane = (ev) => {
+            const r = this.scroller.getBoundingClientRect();
+            return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top - 20 && ev.clientY <= r.bottom + 20;
+        };
+        const move = (ev) => {
+            if (ev.pointerId !== d.id)
+                return;
+            if (d.kind === "press" && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) > 8) {
+                clearTimeout(d.timer);
+                d.kind = "pan";
+            }
+            if (d.kind === "pan") {
+                list.scrollLeft = d.left - (ev.clientX - d.startX);
+                list.scrollTop = d.top - (ev.clientY - d.startY);
+            } else if (d.kind === "drag") {
+                d.ghost.style.left = `${ev.clientX}px`;
+                d.ghost.style.top = `${ev.clientY}px`;
+                if (overLane(ev)) {
+                    this.showDropMark(this.insertionAt(this.laneX(ev)));
+                    this.autoScroll(ev.clientX);
+                } else {
+                    this.dropMark.hidden = true;
+                }
+            }
+        };
+        const up = (ev) => {
+            if (ev.pointerId !== d.id)
+                return;
+            clearTimeout(d.timer);
+            item.removeEventListener("pointermove", move);
+            item.removeEventListener("pointerup", up);
+            item.removeEventListener("pointercancel", up);
+            d.ghost?.remove();
+            this.dropMark.hidden = true;
+            if (d.kind === "press" && ev.type === "pointerup") {
+                // Un toque: lo elige (para «Añadir»).
+                for (const other of list.querySelectorAll(".gif-media.selected"))
+                    other.classList.remove("selected");
+                item.classList.add("selected");
+            } else if (d.kind === "drag" && ev.type === "pointerup" && overLane(ev)) {
+                this.insertMedia(index, this.insertionAt(this.laneX(ev)));
+            }
+        };
+        item.addEventListener("pointermove", move);
+        item.addEventListener("pointerup", up);
+        item.addEventListener("pointercancel", up);
     }
 
     // --- Línea de tiempo --------------------------------------------------------------------
@@ -572,56 +643,124 @@ export class GifEditor {
         return e.clientX - this.lane.getBoundingClientRect().left;
     }
 
+    frameMenu(i, clientX, clientY) {
+        const item = (id, text, iconName, run, enabled = null) => new Action({ id, text, icon: iconName, run, enabled });
+        popupMenu([
+            item("gif-delay", tr("Duración..."), null, () => this.editDelay(i)),
+            item("gif-dup", tr("Duplicar"), "layer-duplicate", () => this.duplicate(i)),
+            item("gif-hide", this.hidden(i) ? tr("Mostrar") : tr("Ocultar"), "layer-visible-on", () => this.toggleHidden(i)),
+            item("gif-edit", tr("Editar con las herramientas"), null, () => this.editFrame(i)),
+            "-",
+            item("gif-del", tr("Eliminar"), "edit-delete", () => this.remove(i), () => this.count() > 1),
+        ], clientX, clientY);
+    }
+
+    // Al llevar un clip o un medio cerca de un borde de la línea de tiempo, se desplaza sola.
+    autoScroll(clientX) {
+        const r = this.scroller.getBoundingClientRect(), margin = 40;
+        if (clientX < r.left + margin)
+            this.scroller.scrollLeft -= Math.ceil((r.left + margin - clientX) / 4);
+        else if (clientX > r.right - margin)
+            this.scroller.scrollLeft += Math.ceil((clientX - (r.right - margin)) / 4);
+    }
+
     installTimeline() {
         const lane = this.lane;
         let drag = null;
+        // Con el dedo (o el lápiz), como en los editores de vídeo del móvil: deslizar desplaza la
+        // línea de tiempo, mantener pulsado un clip lo levanta para moverlo (o, sin moverlo, abre su
+        // menú) y su borde derecho, más ancho, lo estira. El navegador no se queda el gesto
+        // (touch-action: none): antes cancelaba el arrastre a medias y todo funcionaba raro.
         lane.addEventListener("pointerdown", (e) => {
-            if (!this.doc || e.button > 2)
+            if (!this.doc || e.button > 2 || drag)
                 return;
-            const x = this.laneX(e), clip = e.target.closest(".gif-clip");
+            const x = this.laneX(e), clip = e.target.closest(".gif-clip"), touch = e.pointerType !== "mouse";
+            if (touch)
+                this.lastTouch = performance.now();
+            lane.setPointerCapture(e.pointerId);
             if (!clip || e.target === this.ruler) {
-                if (e.button === 0) {
-                    drag = { kind: "scrub" };
-                    lane.setPointerCapture(e.pointerId);
+                if (touch && e.target !== this.ruler) {
+                    drag = { kind: "pan", id: e.pointerId, startX: e.clientX, scroll: this.scroller.scrollLeft };
+                } else if (e.button === 0) {
+                    drag = { kind: "scrub", id: e.pointerId };
                     this.seek(this.msAt(x));
                 }
                 return;
             }
             const i = +clip.dataset.index;
-            this.select(i);
-            if (e.button === 2)
+            const r = clip.getBoundingClientRect();
+            const edge = e.target.classList.contains("gif-clip-edge") || (touch && e.clientX >= r.right - 18);
+            if (edge) {
+                this.select(i);
+                drag = { kind: "resize", id: e.pointerId, index: i, start: this.starts()[i], delay: this.delay(i) };
                 return;
-            lane.setPointerCapture(e.pointerId);
-            if (e.target.classList.contains("gif-clip-edge"))
-                drag = { kind: "resize", index: i, start: this.starts()[i], delay: this.delay(i) };
-            else
-                drag = { kind: "press", index: i, x };
+            }
+            if (!touch) {
+                this.select(i);
+                if (e.button === 0)
+                    drag = { kind: "press", id: e.pointerId, index: i, x };
+                return;
+            }
+            drag = { kind: "touch", id: e.pointerId, index: i, x, startX: e.clientX, scroll: this.scroller.scrollLeft, clientY: e.clientY };
+            drag.timer = setTimeout(() => {
+                if (drag?.kind !== "touch")
+                    return;
+                drag.kind = "hold";
+                this.select(i);
+                navigator.vibrate?.(15);
+                this.lane.querySelector(`.gif-clip[data-index="${i}"]`)?.classList.add("lifted");
+            }, 380);
         });
         lane.addEventListener("pointermove", (e) => {
-            if (!drag)
+            if (!drag || e.pointerId !== drag.id)
                 return;
             const x = this.laneX(e);
-            if (drag.kind === "scrub") {
+            if (drag.kind === "touch" && Math.abs(e.clientX - drag.startX) > 8) {
+                clearTimeout(drag.timer);
+                drag.kind = "pan";
+            }
+            if (drag.kind === "pan") {
+                this.scroller.scrollLeft = drag.scroll - (e.clientX - drag.startX);
+            } else if (drag.kind === "scrub") {
                 this.seek(this.msAt(x));
             } else if (drag.kind === "resize") {
                 // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
                 drag.delay = Math.max(MinDelay, Math.round((this.msAt(x) - drag.start) / 10) * 10);
                 this.renderTimeline(drag);
-            } else if (drag.kind === "press" && Math.abs(x - drag.x) > 4) {
+            } else if ((drag.kind === "press" && Math.abs(x - drag.x) > 4) || (drag.kind === "hold" && Math.abs(x - drag.x) > 6)) {
                 drag.kind = "reorder";
             }
             if (drag.kind === "reorder") {
                 drag.to = this.insertionAt(x);
                 this.showDropMark(drag.to);
+                this.autoScroll(e.clientX);
             }
         });
-        const end = () => {
-            if (!drag)
+        const end = (e) => {
+            if (!drag || (e && e.pointerId !== drag.id))
                 return;
             const d = drag;
             drag = null;
+            clearTimeout(d.timer);
             this.dropMark.hidden = true;
-            if (d.kind === "resize")
+            if (e?.type === "pointercancel") {
+                this.renderTimeline();
+                return;
+            }
+            if (d.kind === "touch")
+                this.select(d.index);
+            else if (d.kind === "hold") {
+                // El clic que sigue a soltar el dedo caería en una opción del menú recién abierto
+                // (salía del editor con «Editar con las herramientas»): se descarta.
+                const swallow = (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                };
+                document.addEventListener("click", swallow, true);
+                setTimeout(() => document.removeEventListener("click", swallow, true), 450);
+                this.frameMenu(d.index, e.clientX, e.clientY);
+            }
+            else if (d.kind === "resize")
                 this.setDelay(d.index, d.delay);
             else if (d.kind === "reorder") {
                 let to = d.to;
@@ -640,19 +779,13 @@ export class GifEditor {
         });
         lane.addEventListener("contextmenu", (e) => {
             const clip = e.target.closest(".gif-clip");
-            if (!clip)
+            // Con el dedo, el menú lo abre la pulsación larga (arriba) al soltar.
+            if (!clip || e.pointerType === "touch" || performance.now() - (this.lastTouch || -1e9) < 1500) {
+                e.preventDefault();
                 return;
+            }
             e.preventDefault();
-            const i = +clip.dataset.index;
-            const item = (id, text, iconName, run, enabled = null) => new Action({ id, text, icon: iconName, run, enabled });
-            popupMenu([
-                item("gif-delay", tr("Duración..."), null, () => this.editDelay(i)),
-                item("gif-dup", tr("Duplicar"), "layer-duplicate", () => this.duplicate(i)),
-                item("gif-hide", this.hidden(i) ? tr("Mostrar") : tr("Ocultar"), "layer-visible-on", () => this.toggleHidden(i)),
-                item("gif-edit", tr("Editar con las herramientas"), null, () => this.editFrame(i)),
-                "-",
-                item("gif-del", tr("Eliminar"), "edit-delete", () => this.remove(i), () => this.count() > 1),
-            ], e.clientX, e.clientY);
+            this.frameMenu(+clip.dataset.index, e.clientX, e.clientY);
         });
         lane.addEventListener("wheel", (e) => {
             if (!e.ctrlKey)
@@ -718,11 +851,13 @@ export class GifEditor {
     thumbFor(layer, w, h) {
         let t = this.thumbs.get(layer);
         if (!t || t.w !== w || t.h !== h || t.canvas !== layer.canvas) {
-            t = { w, h, canvas: layer.canvas, image: thumbnail(layer.canvas, w, h) };
+            t = { w, h, canvas: layer.canvas, image: thumbnail(layer.canvas, w, h, true, true) };
             this.thumbs.set(layer, t);
         }
         // Un mismo elemento no puede estar en dos clips: se clona el lienzo de la miniatura.
         const copy = createCanvas(t.image.width, t.image.height);
+        copy.style.width = t.image.style.width;
+        copy.style.height = t.image.style.height;
         context(copy).drawImage(t.image, 0, 0);
         return copy;
     }

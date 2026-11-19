@@ -247,8 +247,66 @@ export class CanvasView extends EventTarget {
                 transformPixels(part.data, doc.colorProfile, null);
                 ctx.putImageData(part, dirty.x, dirty.y);
             }
+            this.updateDisplay(doc, dirty);
         }
         doc.compositeDirty = null;
+    }
+
+    // Lo que se dibuja en pantalla: una copia de la composición en un lienzo acelerado (la
+    // composición, para leer y escribir píxeles, vive en la memoria del procesador, y dibujarla en
+    // cada fotograma la volvía a subir entera a la GPU mientras se pintaba) y, al alejar el zum,
+    // sus reducciones a la mitad, a un cuarto... (como los mipmaps): se escala desde la más cercana
+    // en vez de desde la imagen entera. Solo se copia y se reduce la zona que cambia.
+    updateDisplay(doc, rect) {
+        const source = doc.compositeCanvas;
+        let d = doc.display;
+        if (!d || d.source !== source) {
+            const canvas = document.createElement("canvas");
+            canvas.width = source.width;
+            canvas.height = source.height;
+            d = doc.display = { source, canvas, ctx: canvas.getContext("2d"), levels: [] };
+            rect = { x: 0, y: 0, w: source.width, h: source.height };
+        }
+        const part = context(source).getImageData(rect.x, rect.y, rect.w, rect.h);
+        d.ctx.putImageData(part, rect.x, rect.y);
+        for (const level of d.levels)
+            if (level)
+                level.dirty = unionRect(level.dirty, rect);
+    }
+
+    // La reducción 'k' (0: la imagen entera), al día.
+    displayLevel(doc, k) {
+        const d = doc.display;
+        if (!d)
+            return doc.compositeCanvas;
+        let prev = d.canvas;
+        for (let i = 1; i <= k; i++) {
+            const w = Math.max(1, Math.ceil(prev.width / 2)), h = Math.max(1, Math.ceil(prev.height / 2));
+            let level = d.levels[i];
+            if (!level) {
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                level = d.levels[i] = { canvas, ctx: canvas.getContext("2d"), dirty: { x: 0, y: 0, w: d.canvas.width, h: d.canvas.height } };
+            }
+            if (level.dirty) {
+                // La zona (en píxeles de la imagen) en los de esta reducción, desde la anterior.
+                const s = 2 ** i, r = level.dirty;
+                const x0 = Math.max(0, Math.floor(r.x / s)), y0 = Math.max(0, Math.floor(r.y / s));
+                const x1 = Math.min(w, Math.ceil((r.x + r.w) / s)), y1 = Math.min(h, Math.ceil((r.y + r.h) / s));
+                if (x1 > x0 && y1 > y0) {
+                    const sw = Math.min(prev.width - x0 * 2, (x1 - x0) * 2), sh = Math.min(prev.height - y0 * 2, (y1 - y0) * 2);
+                    const c = level.ctx;
+                    c.clearRect(x0, y0, x1 - x0, y1 - y0);
+                    c.imageSmoothingEnabled = true;
+                    c.imageSmoothingQuality = "medium";
+                    c.drawImage(prev, x0 * 2, y0 * 2, sw, sh, x0, y0, sw / 2, sh / 2);
+                }
+                level.dirty = null;
+            }
+            prev = level.canvas;
+        }
+        return prev;
     }
 
     // --- Zum y desplazamiento --------------------------------------------------------------
@@ -553,6 +611,10 @@ export class CanvasView extends EventTarget {
         if (!selection && !this.overlayAnts)
             return;
         this.antsOffset = (this.antsOffset + 1) % 8;
+        // (Las hormigas no cuentan como movimiento: con ellas, la imagen no se vería siempre con la
+        // calidad rápida.)
+        if (!this.pending)
+            this.antsOnly = true;
         this.update();
     }
 
@@ -575,6 +637,23 @@ export class CanvasView extends EventTarget {
             return;
         }
         this.updateComposite();
+        // Mientras algo se mueve (dedos, zum, rueda, un trazo: un fotograma tras otro), el escalado
+        // rápido; al pararse, se vuelve a dibujar con el de calidad alta. El de calidad alta de una
+        // imagen grande en cada fotograma era lo que más tardaba.
+        const now = performance.now();
+        if (!this.antsOnly) {
+            const moving = now - (this.lastRenderAt || -1e9) < 120;
+            this.lastRenderAt = now;
+            this.moving = moving;
+            clearTimeout(this.settleTimer);
+            if (moving)
+                this.settleTimer = setTimeout(() => {
+                    this.lastRenderAt = -1e9;
+                    this.moving = false;
+                    this.update();
+                }, 160);
+        }
+        this.antsOnly = false;
         const x = this.origin.x, y = this.origin.y, w = doc.width * this.scale, h = doc.height * this.scale;
         this.reportImageRect({ x, y, w, h }, v);
         // Con la vista girada, todo lo de encima (imagen, selección, herramientas) se dibuja girado
@@ -592,15 +671,16 @@ export class CanvasView extends EventTarget {
         // de toda la imagen (miles de píxeles fuera de la vista) costaban en cada fotograma.
         const vx0 = Math.max(x, view0.x - 24), vy0 = Math.max(y, view0.y - 24);
         const vx1 = Math.min(x + w, view1.x + 24), vy1 = Math.min(y + h, view1.y + 24);
-        // Sombra bajo el lienzo, como Paint.NET.
+        // Sombra bajo el lienzo, como Paint.NET: unos marcos cada vez más claros, como la de Kaint
+        // (el desenfoque de una sombra del tamaño de la vista en cada fotograma costaba mucho al
+        // girar o pellizcar).
         if (Settings.get("dropShadow") && vx1 > vx0 && vy1 > vy0) {
             ctx.save();
-            ctx.shadowColor = "rgba(0,0,0,0.35)";
-            ctx.shadowBlur = 8;
-            ctx.shadowOffsetX = 1;
-            ctx.shadowOffsetY = 2;
-            ctx.fillStyle = "#808080";
-            ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
+            ctx.lineWidth = 1;
+            for (let i = 1; i <= 6; i++) {
+                ctx.strokeStyle = `rgba(0,0,0,${(0.3 * (7 - i)) / 6})`;
+                ctx.strokeRect(vx0 - i + 1.5, vy0 - i + 2.5, vx1 - vx0 + 2 * i - 2, vy1 - vy0 + 2 * i - 2);
+            }
             ctx.restore();
         }
         ctx.save();
@@ -614,9 +694,12 @@ export class CanvasView extends EventTarget {
         const cx0 = Math.max(0, Math.floor((view0.x - x) / 16) * 16), cy0 = Math.max(0, Math.floor((view0.y - y) / 16) * 16);
         ctx.fillRect(cx0, cy0, Math.max(0, Math.min(w + 1, view1.x - x + 16) - cx0), Math.max(0, Math.min(h + 1, view1.y - y + 16) - cy0));
         ctx.restore();
+        // Al alejar, desde la reducción más cercana que aún tenga al menos la resolución de la pantalla.
+        const device = this.scale * this.dpr;
+        const level = device < 1 ? Math.max(0, Math.floor(Math.log2(1 / device))) : 0;
         ctx.imageSmoothingEnabled = this.zoom < 1;
-        ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(doc.compositeCanvas, x, y, w, h);
+        ctx.imageSmoothingQuality = this.moving ? "low" : "high";
+        ctx.drawImage(this.displayLevel(doc, level), x, y, w, h);
         ctx.restore();
         if (this.pixelGrid && this.zoom >= 2)
             this.drawPixelGrid(ctx, v);
@@ -1321,7 +1404,13 @@ export class CanvasView extends EventTarget {
             return false;
         this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (this.gesture) {
-            this.updateGesture();
+            // Una vez por fotograma: cada dedo manda varios movimientos por fotograma y cada uno
+            // recolocaba la vista, las barras y el zum de la barra de estado (iba a tirones).
+            if (!this.gestureFrame)
+                this.gestureFrame = requestAnimationFrame(() => {
+                    this.gestureFrame = 0;
+                    this.updateGesture();
+                });
             return true;
         }
         if (this.touchBlocked)
@@ -1466,6 +1555,11 @@ export class CanvasView extends EventTarget {
     }
 
     endGesture() {
+        if (this.gestureFrame) {
+            cancelAnimationFrame(this.gestureFrame);
+            this.gestureFrame = 0;
+            this.updateGesture();
+        }
         const g = this.gesture;
         this.gesture = null;
         if (!g)
@@ -1555,6 +1649,8 @@ export class CanvasView extends EventTarget {
                 return;
             this.mouse = null;
             this.placeMini();
+            cancelAnimationFrame(this.cursorFrame);
+            this.cursorFrame = 0;
             this.dispatchEvent(new CustomEvent("cursor", { detail: null }));
             this.update();
         });
@@ -1614,6 +1710,18 @@ export class CanvasView extends EventTarget {
         this.tool.onPointerMove?.({ ...this.mouse, buttons: 0 });
     }
 
+    // La posición del puntero para la barra de estado y las reglas, una vez por fotograma (con el
+    // lápiz o el dedo llegan muchos movimientos por fotograma).
+    emitCursor(te) {
+        this.cursorEvent = te;
+        if (this.cursorFrame)
+            return;
+        this.cursorFrame = requestAnimationFrame(() => {
+            this.cursorFrame = 0;
+            this.dispatchEvent(new CustomEvent("cursor", { detail: this.cursorEvent }));
+        });
+    }
+
     // Como Kaint (y Paint.NET): con las herramientas de pintar, las flechas mueven el pincel de un
     // píxel al siguiente (con Ctrl, diez); si se está pintando, el trazo sigue. El navegador no deja
     // mover el puntero del sistema: lo sigue el contorno del pincel.
@@ -1648,7 +1756,7 @@ export class CanvasView extends EventTarget {
         this.lastMouse = { x: te.x, y: te.y };
         this.placeMini();
         this.checkOutlineEdge(e);
-        this.dispatchEvent(new CustomEvent("cursor", { detail: te }));
+        this.emitCursor(te);
         if (this.panning) {
             this.scrollByScreen(this.panning.x - e.clientX, this.panning.y - e.clientY);
             this.panning.x = e.clientX;

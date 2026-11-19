@@ -5001,10 +5001,12 @@ html, body {
     display: none;
 }
 
-/* La vista girada con dos dedos: su ángulo, abajo a la izquierda; al tocarlo, la imagen vuelve derecha. */
+/* La vista girada con dos dedos: su ángulo, abajo en el centro (a la izquierda lo tapaba la pestaña
+   de Colores en el teléfono); al tocarlo, la imagen vuelve derecha. */
 .rotation-chip {
     position: absolute;
-    left: 10px;
+    left: 50%;
+    transform: translateX(-50%);
     bottom: 14px;
     z-index: 5;
     display: none;
@@ -5173,6 +5175,30 @@ html, body {
     border-color: var(--selection-border);
 }
 
+/* Con el dedo, los medios se llevan con una pulsación larga (GifEditor.mediaPointerDown). */
+@media (pointer: coarse) {
+    .gif-media {
+        touch-action: none;
+    }
+}
+
+.gif-ghost {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    transform: translate(-50%, -115%);
+    padding: 3px;
+    background: var(--base);
+    border: 1px solid var(--selection-border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    opacity: 0.92;
+}
+
+.gif-ghost canvas {
+    display: block;
+}
+
 .gif-preview-box {
     flex: 1;
     min-height: 120px;
@@ -5240,7 +5266,8 @@ html, body {
 .gif-lane {
     position: relative;
     height: 112px;
-    touch-action: pan-x;
+    /* Los gestos los lleva GifEditor.js (deslizar desplaza, mantener pulsado levanta un clip). */
+    touch-action: none;
 }
 
 .gif-ruler {
@@ -5277,6 +5304,12 @@ html, body {
     background: var(--accent);
     border-color: var(--selection-border);
     color: #ffffff;
+}
+
+.gif-clip.lifted {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    z-index: 2;
 }
 
 .gif-clip.hidden-frame {
@@ -5355,12 +5388,90 @@ html, body {
     display: none;
 }
 
-/* En el teléfono: la biblioteca debajo de la vista previa. */
+/* En el teléfono: la biblioteca, una tira debajo de la vista previa; las barras, de una sola fila
+   que se desliza (partidas en tres filas se comían la pantalla), y sin la barra de estado, que
+   aquí no sirve. */
+:root.phone .gif-editor {
+    padding: 4px;
+    gap: 4px;
+}
+
+:root.phone.gif-editing #status-bar {
+    display: none;
+}
+
+:root.phone .gif-head .gif-title {
+    font-size: 0.95em;
+}
+
+:root.phone .gif-head .gif-button {
+    padding: 2px 6px;
+}
+
 :root.phone .gif-top {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 3fr) minmax(90px, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 4px;
 }
 
 :root.phone .gif-top > .gif-bin {
     order: 2;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+:root.phone .gif-bin > .gif-section-title {
+    display: none;
+}
+
+:root.phone .gif-media-list {
+    flex: 1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 0;
+    height: 92px;
+    padding: 3px;
+}
+
+:root.phone .gif-media {
+    width: 76px;
+    flex: none;
+    padding: 2px;
+}
+
+:root.phone .gif-media canvas {
+    max-width: 64px;
+    max-height: 52px;
+}
+
+:root.phone .gif-bin > .gif-row {
+    flex-direction: column;
+    justify-content: center;
+}
+
+:root.phone .gif-toolbar,
+:root.phone .gif-transport {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+:root.phone .gif-toolbar > *,
+:root.phone .gif-transport > * {
+    flex: none;
+}
+
+:root.phone .gif-transport .gif-button {
+    min-width: 34px;
+    min-height: 34px;
+}
+
+:root.phone .gif-time {
+    margin-left: 4px;
+    font-size: 0.82em;
+}
+
+:root.phone .gif-stretch {
+    flex: 0 0 4px;
 }

@@ -5475,3 +5475,59 @@ html, body {
 :root.phone .gif-stretch {
     flex: 0 0 4px;
 }
+
+/* --- Chat de la sesión colaborativa (Archivo > Colaboración > Chat de la sesión) ----------- */
+
+.collab-chat {
+    position: fixed;
+    right: 12px;
+    bottom: 44px;
+    z-index: 900;
+    width: min(340px, calc(100vw - 24px));
+    height: min(380px, calc(100vh - 120px));
+    display: flex;
+    flex-direction: column;
+    background: var(--window);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+}
+
+.collab-chat .chat-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px 4px 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.collab-chat .chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 10px;
+    background: var(--base);
+    word-wrap: break-word;
+    user-select: text;
+}
+
+.collab-chat .chat-line {
+    margin: 2px 0;
+}
+
+.collab-chat .chat-time {
+    opacity: 0.55;
+    font-size: 0.85em;
+}
+
+.collab-chat .chat-input {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border-top: 1px solid var(--line);
+}
+
+.collab-chat .chat-input input {
+    flex: 1;
+    min-width: 0;
+}

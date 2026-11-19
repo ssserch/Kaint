@@ -3180,6 +3180,15 @@ QWidget* SettingsDialog::createCollabView(QWidget* parent, const std::shared_ptr
     QVBoxLayout* viewSection = moreSection(tr("Vista"));
     option(viewSection, tr("Mostrar los punteros de los demás"), &Collab::Settings::showCursors,
            tr("Un triángulo del color de cada participante, con su nombre y el icono de su herramienta."));
+    option(viewSection, tr("Ver en vivo lo que dibujan los demás"), &Collab::Settings::liveStrokes,
+           tr("Mientras alguien pinta, traza una línea o una forma, se ve un esbozo bajo su puntero hasta que llega el "
+              "cambio (con los pinceles, el lápiz, la goma, las líneas y las formas)."));
+    QVBoxLayout* chatSection = moreSection(tr("Chat"));
+    option(chatSection, tr("Chat de la sesión"), &Collab::Settings::chat,
+           tr("Mensajes entre los participantes (Archivo > Colaboración > Chat de la sesión, o el botón de la barra de "
+              "estado)."));
+    option(chatSection, tr("Globos con los mensajes"), &Collab::Settings::chatBubbles,
+           tr("Cada mensaje sale un momento en un globo junto al puntero de quien lo escribió."));
 
     connect(modeGroup, &QButtonGroup::idClicked, view, [settings, apply, refreshSession](int id) {
         settings->mode = Mode(id);

@@ -80,6 +80,9 @@ public:
     void setHistoryJumper(std::function<void(Document*, int)> jumper) { m_historyJumper = std::move(jumper); }
     // El historial del anfitrión (con los permisos, si se es el anfitrión).
     void showSessionHistory();
+    // El chat de la sesión (Archivo > Colaboración y el botón de la barra de estado).
+    void showChat();
+    bool chatAvailable() const;
 
 signals:
     // Invitado: la imagen de la sesión, para abrirla en una pestaña.
@@ -96,6 +99,8 @@ private:
     void sendCursor();
     void askAdmission(const Collab::Peer& peer);
     void updateStatusWidget();
+    void onChat(const Collab::ChatMessage& message);
+    void appendChat(const Collab::ChatMessage& message);
 
     QPointer<QWidget> m_window;
     Canvas* m_canvas;
@@ -113,4 +118,12 @@ private:
     std::function<Document*()> m_currentDocument;
     std::function<void(Document*, int)> m_historyJumper;
     QPointer<QDialog> m_historyDialog;
+    QToolButton* m_chatButton = nullptr;
+    QPointer<QDialog> m_chatDialog;
+    QPointer<class QTextBrowser> m_chatLog;
+    int m_unread = 0;
+    // El último mensaje de cada participante y hasta cuándo se ve su globo.
+    QHash<int, QPair<QString, qint64>> m_bubbles;
+    // Vuelve a dibujar los punteros mientras queda algún trazo terminado o globo por desaparecer.
+    QTimer m_expireTimer;
 };

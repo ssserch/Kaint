@@ -484,12 +484,11 @@ void Session::onHostMessage(const QJsonObject& m)
     const int from = m.value(QStringLiteral("from")).toInt();
     const Peer p = m_server->peer(from);
     if (t == QLatin1String("cursor")) {
-        RemoteCursor& c = m_cursors[from];
-        c.pos = QPointF(m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble());
-        c.tool = m.value(QStringLiteral("tool")).toString();
-        c.inside = m.value(QStringLiteral("inside")).toBool();
-        c.time = QDateTime::currentMSecsSinceEpoch();
-        emit cursorsChanged();
+        updateCursor(from, m);
+        return;
+    }
+    if (t == QLatin1String("chat")) {
+        receiveChat(from, m.value(QStringLiteral("text")).toString());
         return;
     }
     if (t == QLatin1String("revert")) {
@@ -740,12 +739,11 @@ void Session::onGuestText(const QByteArray& text)
         const int from = m.value(QStringLiteral("from")).toInt();
         if (from == m_myId)
             return;
-        RemoteCursor& c = m_cursors[from];
-        c.pos = QPointF(m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble());
-        c.tool = m.value(QStringLiteral("tool")).toString();
-        c.inside = m.value(QStringLiteral("inside")).toBool();
-        c.time = QDateTime::currentMSecsSinceEpoch();
-        emit cursorsChanged();
+        updateCursor(from, m);
+    } else if (t == QLatin1String("chat")) {
+        const int from = m.value(QStringLiteral("from")).toInt();
+        if (from != m_myId)
+            receiveChat(from, m.value(QStringLiteral("text")).toString());
     } else if (t == QLatin1String("commit")) {
         if (m_state != State::Joined)
             return;
@@ -1563,7 +1561,62 @@ void Session::applyToWork(const Canon& before, const Canon& after, const QJsonOb
 
 // ---------------------------------------------------------------------------
 
-void Session::setCursor(QPointF pos, bool inside, const QString& tool)
+void Session::updateCursor(int from, const QJsonObject& m)
+{
+    RemoteCursor& c = m_cursors[from];
+    c.pos = QPointF(m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble());
+    c.tool = m.value(QStringLiteral("tool")).toString();
+    c.inside = m.value(QStringLiteral("inside")).toBool();
+    c.time = QDateTime::currentMSecsSinceEpoch();
+    const bool down = m.value(QStringLiteral("down")).toBool();
+    if (down) {
+        // Un trazo nuevo empieza de cero; los puntos llegan unas 30 veces por segundo.
+        if (!c.down) {
+            c.path.clear();
+            c.releasedAt = 0;
+        }
+        c.color = m.value(QStringLiteral("color")).toString();
+        c.size = m.value(QStringLiteral("size")).toDouble();
+        if (c.path.size() < 4000)
+            c.path.append(c.pos);
+    } else if (c.down) {
+        c.releasedAt = c.time;
+    }
+    c.down = down;
+    emit cursorsChanged();
+}
+
+void Session::receiveChat(int from, const QString& raw)
+{
+    const QString text = raw.trimmed().left(500);
+    if (text.isEmpty())
+        return;
+    const Peer p = peer(from);
+    ChatMessage msg{from, p.name.isEmpty() ? tr("Participante %1").arg(from) : p.name, p.color, text,
+                    QDateTime::currentMSecsSinceEpoch()};
+    m_chat.append(msg);
+    if (m_chat.size() > 300)
+        m_chat.removeFirst();
+    emit chatReceived(msg);
+}
+
+void Session::sendChat(const QString& raw)
+{
+    const QString text = raw.trimmed().left(500);
+    if (text.isEmpty() || m_state != State::Joined)
+        return;
+    const QJsonObject out{{QStringLiteral("t"), QStringLiteral("chat")}, {QStringLiteral("text"), text}};
+    if (isHost()) {
+        QJsonObject all = out;
+        all.insert(QStringLiteral("from"), 0);
+        m_server->broadcast(all);
+    } else {
+        send(out);
+    }
+    receiveChat(m_myId, text);
+}
+
+void Session::setCursor(QPointF pos, bool inside, const QString& tool, bool down, const QString& color, double size)
 {
     if (m_state != State::Joined)
         return;
@@ -1572,6 +1625,11 @@ void Session::setCursor(QPointF pos, bool inside, const QString& tool)
                               {QStringLiteral("y"), std::round(pos.y() * 10) / 10},
                               {QStringLiteral("tool"), tool},
                               {QStringLiteral("inside"), inside}};
+    if (down) {
+        m_cursorOut.insert(QStringLiteral("down"), true);
+        m_cursorOut.insert(QStringLiteral("color"), color);
+        m_cursorOut.insert(QStringLiteral("size"), std::round(size * 10) / 10);
+    }
     if (m_cursorTimer.isActive()) {
         m_cursorDirty = true;
         return;

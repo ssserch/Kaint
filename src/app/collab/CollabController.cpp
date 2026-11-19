@@ -1,5 +1,6 @@
 #include "app/collab/CollabController.h"
 
+#include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
 #include "app/collab/CollabDialogs.h"
@@ -9,11 +10,20 @@
 #include "core/Document.h"
 
 #include <QApplication>
+#include <QDateTime>
+#include <QDialog>
+#include <QLineEdit>
+#include <QPainter>
+#include <QPainterPath>
+#include <QTextBrowser>
+#include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTimer>
 #include <QToolButton>
+
+static QIcon chatBubbleIcon();
 
 namespace {
 CollabController* g_instance = nullptr;
@@ -67,9 +77,22 @@ CollabController::CollabController(QWidget* window, Canvas* canvas, ToolManager*
     layout->addWidget(m_statusButton);
     layout->addWidget(m_proposeButton);
     layout->addWidget(m_discardButton);
+    // El chat, con los mensajes sin leer.
+    m_chatButton = new QToolButton(m_status);
+    m_chatButton->setAutoRaise(true);
+    m_chatButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_chatButton->setIcon(chatBubbleIcon());
+    m_chatButton->setToolTip(tr("Chat de la sesión"));
+    connect(m_chatButton, &QToolButton::clicked, this, &CollabController::showChat);
+    layout->addWidget(m_chatButton);
     m_status->hide();
 
+    m_expireTimer.setSingleShot(true);
+    m_expireTimer.setInterval(250);
+    connect(&m_expireTimer, &QTimer::timeout, this, &CollabController::refreshPointers);
+
     connect(canvas, &Canvas::cursorMoved, this, &CollabController::sendCursor);
+    connect(canvas, &Canvas::toolButtonChanged, this, &CollabController::sendCursor);
     connect(canvas, &Canvas::viewChanged, this, &CollabController::refreshPointers);
     connect(tools, &ToolManager::toolChanged, this, &CollabController::sendCursor);
 }
@@ -333,6 +356,7 @@ void CollabController::attach(Collab::Session* session)
     connect(session, &Collab::Session::ended, this, &CollabController::onEnded);
     connect(session, &Collab::Session::notice, this, &CollabController::message);
     connect(session, &Collab::Session::cursorsChanged, this, &CollabController::refreshPointers);
+    connect(session, &Collab::Session::chatReceived, this, &CollabController::onChat);
     connect(session, &Collab::Session::joinRequested, this, &CollabController::askAdmission);
     for (auto signal : {&Collab::Session::peersChanged, &Collab::Session::proposalsChanged, &Collab::Session::draftChanged,
                         &Collab::Session::stateChanged}) {
@@ -416,6 +440,10 @@ void CollabController::onEnded(const QString& reason)
             box->deleteLater();
     m_requests.clear();
     m_canvas->setRemotePointers({});
+    m_bubbles.clear();
+    m_unread = 0;
+    if (m_chatDialog)
+        m_chatDialog->close();
     if (!reason.isEmpty()) {
         emit message(reason);
         // Si se estaba dentro, se avisa con una ventana (al intentar entrar, el diálogo lo muestra).
@@ -436,9 +464,43 @@ void CollabController::onEnded(const QString& reason)
     emit changed();
 }
 
+// Un globo de texto pequeño (el acceso directo al chat en la barra de estado), dibujado aquí para
+// que se vea igual con cualquier tema de iconos.
+static QIcon chatBubbleIcon()
+{
+    QIcon icon;
+    for (int side : {16, 24, 32}) {
+        QPixmap pm(side, side);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        const qreal u = side / 16.0;
+        QPainterPath bubble;
+        bubble.addRoundedRect(QRectF(1 * u, 1.5 * u, 14 * u, 9.5 * u), 3 * u, 3 * u);
+        QPainterPath tail;
+        tail.moveTo(4 * u, 10.5 * u);
+        tail.lineTo(3.5 * u, 14.5 * u);
+        tail.lineTo(8 * u, 10.5 * u);
+        tail.closeSubpath();
+        bubble = bubble.united(tail);
+        p.setPen(QPen(QColor(40, 90, 170), 1.2 * u));
+        p.setBrush(QColor(235, 244, 255));
+        p.drawPath(bubble);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(40, 90, 170));
+        for (int i = 0; i < 3; ++i)
+            p.drawEllipse(QPointF((5 + i * 3) * u, 6.25 * u), 1.05 * u, 1.05 * u);
+        p.end();
+        icon.addPixmap(pm);
+    }
+    return icon;
+}
+
 void CollabController::refreshPointers()
 {
     QList<Canvas::RemotePointer> pointers;
+    bool pending = false;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (isActive() && m_settings.showCursors && m_canvas->document() && m_canvas->document() == m_session->document()) {
         const auto& cursors = m_session->cursors();
         for (auto it = cursors.cbegin(); it != cursors.cend(); ++it) {
@@ -447,10 +509,103 @@ void CollabController::refreshPointers()
             const Collab::Peer p = m_session->peer(it.key());
             if (p.name.isEmpty())
                 continue;
-            pointers.append({it->pos, p.color, p.name, toolIcon(it->tool)});
+            Canvas::RemotePointer r{it->pos, p.color, p.name, toolIcon(it->tool)};
+            // Lo que está dibujando y, al soltar, un momento más (hasta que llega el cambio).
+            const bool recent = it->down || (it->releasedAt > 0 && now - it->releasedAt < 1500);
+            if (m_settings.liveStrokes && recent && !it->path.isEmpty()) {
+                r.liveKind = Collab::liveStrokeKind(it->tool);
+                r.path = it->path;
+                r.liveColor = it->color.isEmpty() ? QColor() : QColor(it->color);
+                r.liveSize = it->size;
+                pending = pending || !it->down;
+            }
+            const auto bubble = m_bubbles.value(it.key());
+            if (m_settings.chat && m_settings.chatBubbles && !bubble.first.isEmpty() && now < bubble.second) {
+                r.bubble = bubble.first;
+                pending = true;
+            }
+            pointers.append(r);
         }
     }
     m_canvas->setRemotePointers(pointers);
+    if (pending && !m_expireTimer.isActive())
+        m_expireTimer.start();
+}
+
+bool CollabController::chatAvailable() const
+{
+    return isActive() && m_session->state() == Collab::Session::State::Joined && m_settings.chat;
+}
+
+void CollabController::onChat(const Collab::ChatMessage& message)
+{
+    if (!m_settings.chat)
+        return;
+    appendChat(message);
+    if (!m_session || message.from == m_session->myId())
+        return;
+    // Un globo junto a su puntero, más tiempo cuanto más largo es el mensaje.
+    const qint64 ms = std::clamp<qint64>(4000 + 60 * message.text.size(), 5000, 15000);
+    m_bubbles.insert(message.from, {message.text, QDateTime::currentMSecsSinceEpoch() + ms});
+    refreshPointers();
+    if (!m_chatDialog || !m_chatDialog->isVisible()) {
+        ++m_unread;
+        updateStatusWidget();
+        emit this->message(QStringLiteral("%1: %2").arg(message.name, message.text));
+    }
+}
+
+void CollabController::appendChat(const Collab::ChatMessage& message)
+{
+    if (!m_chatLog)
+        return;
+    const QString time = QDateTime::fromMSecsSinceEpoch(message.time).toString(QStringLiteral("HH:mm"));
+    m_chatLog->append(QStringLiteral("<span style=\"color:gray\">%1</span> <b style=\"color:%2\">%3</b>: %4")
+                          .arg(time, message.color.isValid() ? message.color.name() : QStringLiteral("#808080"),
+                               message.name.toHtmlEscaped(), message.text.toHtmlEscaped()));
+}
+
+void CollabController::showChat()
+{
+    if (!chatAvailable())
+        return;
+    if (!m_chatDialog) {
+        auto* dlg = new QDialog(m_window, Qt::Tool);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->setWindowTitle(tr("Chat de la sesión"));
+        dlg->resize(340, 380);
+        auto* layout = new QVBoxLayout(dlg);
+        m_chatLog = new QTextBrowser(dlg);
+        m_chatLog->setOpenExternalLinks(false);
+        auto* row = new QHBoxLayout;
+        auto* input = new QLineEdit(dlg);
+        input->setMaxLength(500);
+        input->setPlaceholderText(tr("Escribe un mensaje…"));
+        auto* send = new QPushButton(tr("Enviar"), dlg);
+        send->setDefault(true);
+        row->addWidget(input, 1);
+        row->addWidget(send);
+        layout->addWidget(m_chatLog, 1);
+        layout->addLayout(row);
+        auto submit = [this, input] {
+            if (m_session && !input->text().trimmed().isEmpty())
+                m_session->sendChat(input->text());
+            input->clear();
+            input->setFocus();
+        };
+        connect(send, &QPushButton::clicked, dlg, submit);
+        connect(input, &QLineEdit::returnPressed, dlg, submit);
+        m_chatDialog = dlg;
+        if (m_session)
+            for (const Collab::ChatMessage& msg : m_session->chat())
+                appendChat(msg);
+        dlg->findChild<QLineEdit*>()->setFocus();
+    }
+    m_unread = 0;
+    updateStatusWidget();
+    m_chatDialog->show();
+    m_chatDialog->raise();
+    m_chatDialog->activateWindow();
 }
 
 void CollabController::sendCursor()
@@ -463,7 +618,21 @@ void CollabController::sendCursor()
         return;
     m_cursorWasInside = inside;
     const Tool* t = m_tools->current();
-    m_session->setCursor(m_canvas->cursorImagePos(), inside, t ? Collab::toolName(int(t->id())) : QString());
+    const QString tool = t ? Collab::toolName(int(t->id())) : QString();
+    // Con el botón pulsado en una herramienta de pintar, los demás ven el trazo en vivo: su color (el
+    // principal o, con el derecho, el secundario; nada al borrar) y su grosor.
+    const Qt::MouseButton button = m_canvas->toolButton();
+    bool down = false;
+    QString color;
+    double size = 0;
+    if (inside && button != Qt::NoButton && Collab::liveStrokeKind(tool) != 0) {
+        const AppState* state = AppState::instance();
+        down = true;
+        if (tool != QLatin1String("eraser"))
+            color = (button == Qt::RightButton ? state->secondary() : state->primary()).name(QColor::HexRgb);
+        size = tool == QLatin1String("pencil") ? 1 : state->tools().brushSize;
+    }
+    m_session->setCursor(m_canvas->cursorImagePos(), inside, tool, down, color, size);
 }
 
 void CollabController::askAdmission(const Collab::Peer& peer)
@@ -512,5 +681,10 @@ void CollabController::updateStatusWidget()
     m_proposeButton->setEnabled(s->hasDraft() && !s->proposalPending());
     m_proposeButton->setText(s->proposalPending() ? tr("Esperando al anfitrión…") : tr("Sugerir cambios"));
     m_discardButton->setEnabled(s->hasDraft());
+    m_chatButton->setVisible(chatAvailable());
+    // Solo el globo; con mensajes sin leer, cuántos al lado.
+    m_chatButton->setToolButtonStyle(m_unread > 0 ? Qt::ToolButtonTextBesideIcon : Qt::ToolButtonIconOnly);
+    m_chatButton->setText(m_unread > 0 ? QString::number(m_unread) : QString());
+    m_chatButton->setToolTip(m_unread > 0 ? tr("Chat de la sesión (%n sin leer)", nullptr, m_unread) : tr("Chat de la sesión"));
     m_status->show();
 }

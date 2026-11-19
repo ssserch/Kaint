@@ -3,10 +3,11 @@
 // (a través de tools/collab-server.mjs), la ventana de la sesión, los punteros de los demás y la
 // sección Colaboración de Configuración.
 import { Settings } from "../Settings.js";
+import { AppState } from "../AppState.js";
 import { checkbox, closeSettingsDialog, Dialog, el, select, TaskDialog } from "../ui/Dialogs.js";
 import { icon } from "../ui/Icons.js";
 import { updateActions } from "../ui/Actions.js";
-import { plain, tr } from "../i18n.js";
+import { plain, tr, trn } from "../i18n.js";
 import { DEFAULT_PORT, DefaultIceServers, DefaultSignalServers, normalizedCode, normalizedSessionCode, prettyCode } from "./Protocol.js";
 import { p2pSupported } from "./P2P.js";
 import { CollabSession, deviceCode, regenerateDeviceCode } from "./Session.js";
@@ -26,10 +27,24 @@ export function collabSettings() {
         autoAccept: !!s.collabAutoAccept,
         announce: s.collabAnnounce !== false,
         showCursors: s.collabShowCursors !== false,
+        // Ver en vivo lo que dibujan los demás; el chat de la sesión y sus globos junto al puntero.
+        liveStrokes: s.collabLiveStrokes !== false,
+        chat: s.collabChat !== false,
+        chatBubbles: s.collabChatBubbles !== false,
         mode: s.collabMode === "lan" ? "lan" : "p2p",
         signalServers: lines(s.collabSignalServers, DefaultSignalServers),
         iceServers: lines(s.collabIceServers, DefaultIceServers),
     };
+}
+
+// Cómo se ve en vivo lo que dibuja otro con esa herramienta (como Collab::liveStrokeKind de Kaint):
+// 0 nada, 1 un trazo, 2 una línea (del primer punto al último), 3 un rectángulo (formas).
+export function liveStrokeKind(tool) {
+    if (["paintbrush", "eraser", "pencil", "clonestamp", "recolor"].includes(tool))
+        return 1;
+    if (tool === "linecurve" || tool === "gradient")
+        return 2;
+    return tool === "shapes" ? 3 : 0;
 }
 
 // ws://… a partir de lo que se escriba: «192.168.1.20», «192.168.1.20:47913», «http://…».
@@ -114,6 +129,9 @@ export class CollabController extends EventTarget {
         this.requests = new Map();
         this.createStatus();
         app.view.addEventListener("cursor", (e) => this.sendCursor(e.detail));
+        // Al pulsar y al soltar también (empieza o termina el trazo que ven los demás).
+        for (const type of ["pointerdown", "pointerup", "pointercancel"])
+            app.view.canvas.addEventListener(type, () => setTimeout(() => this.sendCursor(app.view.mouse), 0));
         app.tools.addEventListener("changed", () => this.sendCursor(app.view.mouse));
         app.addEventListener("document", () => this.refreshPointers());
         window.addEventListener("kaint-settings", (e) => {
@@ -219,7 +237,16 @@ export class CollabController extends EventTarget {
         this.discardButton = el("button", { className: "tbutton", title: tr("Descartar el borrador (vuelve a la imagen de la sesión)") },
                                 [icon("edit-undo", 16)]);
         this.discardButton.addEventListener("click", () => this.discardDraft());
-        this.statusElement = el("span", { className: "collab-bar" }, [this.statusButton, this.proposeButton, this.discardButton]);
+        // Un globo de texto pequeño: el acceso directo al chat (con mensajes sin leer, cuántos al lado).
+        const bubble = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        bubble.setAttribute("viewBox", "0 0 16 16");
+        bubble.setAttribute("width", "16");
+        bubble.setAttribute("height", "16");
+        bubble.innerHTML = '<path d="M4 1.5h8a3 3 0 0 1 3 3v3.5a3 3 0 0 1-3 3H8l-4.5 4 .5-4a3 3 0 0 1-3-3V4.5a3 3 0 0 1 3-3z" fill="#ebf4ff" stroke="#285aaa" stroke-width="1.2" stroke-linejoin="round"/>'
+                         + '<circle cx="5" cy="6.25" r="1.05" fill="#285aaa"/><circle cx="8" cy="6.25" r="1.05" fill="#285aaa"/><circle cx="11" cy="6.25" r="1.05" fill="#285aaa"/>';
+        this.chatButton = el("button", { className: "tbutton collab-chat-button", title: tr("Chat de la sesión") }, [bubble, el("span")]);
+        this.chatButton.addEventListener("click", () => this.toggleChat());
+        this.statusElement = el("span", { className: "collab-bar" }, [this.statusButton, this.proposeButton, this.discardButton, this.chatButton]);
         this.statusElement.hidden = true;
         const bar = document.getElementById("status-bar");
         const anchor = bar?.querySelector(".effect-progress");
@@ -247,6 +274,89 @@ export class CollabController extends EventTarget {
         this.proposeButton.disabled = !s.hasDraft || !!s.pendingPid;
         this.proposeButton.querySelector("span").textContent = s.pendingPid ? tr("Esperando al anfitrión…") : tr("Sugerir cambios");
         this.discardButton.disabled = !s.hasDraft;
+        this.chatButton.hidden = !this.chatAvailable();
+        this.chatButton.querySelector("span").textContent = this.unread ? String(this.unread) : "";
+        this.chatButton.title = this.unread ? trn("Chat de la sesión (%n sin leer)", this.unread) : tr("Chat de la sesión");
+        if (this.chatPanel && !this.chatAvailable())
+            this.closeChat();
+    }
+
+    // --- Chat ------------------------------------------------------------------------------------
+
+    chatAvailable() {
+        return this.active && this.session.state === "joined" && collabSettings().chat;
+    }
+
+    onChat(m) {
+        if (!collabSettings().chat)
+            return;
+        this.appendChat(m);
+        if (m.from === this.session?.myId)
+            return;
+        // Un globo junto a su puntero, más tiempo cuanto más largo es el mensaje.
+        this.bubbles.set(m.from, { text: m.text, until: performance.now() + Math.max(5000, Math.min(15000, 4000 + 60 * m.text.length)) });
+        this.refreshPointers();
+        if (!this.chatPanel) {
+            this.unread = (this.unread || 0) + 1;
+            this.updateStatus();
+            this.app.showMessage(`${m.name}: ${m.text}`);
+        }
+    }
+
+    appendChat(m) {
+        if (!this.chatLog)
+            return;
+        const time = new Date(m.time).toTimeString().slice(0, 5);
+        this.chatLog.append(el("div", { className: "chat-line" }, [
+            el("span", { className: "chat-time", textContent: time }), " ",
+            el("b", { textContent: m.name, style: { color: m.color } }), `: ${m.text}`,
+        ]));
+        this.chatLog.scrollTop = this.chatLog.scrollHeight;
+    }
+
+    toggleChat() {
+        if (this.chatPanel) {
+            this.closeChat();
+            return;
+        }
+        if (!this.chatAvailable())
+            return;
+        this.chatLog = el("div", { className: "chat-log" });
+        const input = el("input", { type: "text", maxLength: 500, placeholder: tr("Escribe un mensaje…") });
+        const send = () => {
+            if (input.value.trim())
+                this.session?.sendChat(input.value);
+            input.value = "";
+            input.focus();
+        };
+        input.addEventListener("keydown", (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter")
+                send();
+            else if (e.key === "Escape")
+                this.closeChat();
+        });
+        const close = el("button", { className: "tbutton", title: tr("Cerrar"), textContent: "×" });
+        close.addEventListener("click", () => this.closeChat());
+        const sendButton = el("button", { className: "pushbutton", textContent: tr("Enviar") });
+        sendButton.addEventListener("click", send);
+        this.chatPanel = el("div", { className: "collab-chat" }, [
+            el("div", { className: "chat-head" }, [el("b", { textContent: tr("Chat de la sesión") }), close]),
+            this.chatLog,
+            el("div", { className: "chat-input" }, [input, sendButton]),
+        ]);
+        document.body.append(this.chatPanel);
+        for (const m of this.session?.chat || [])
+            this.appendChat(m);
+        this.unread = 0;
+        this.updateStatus();
+        setTimeout(() => input.focus(), 0);
+    }
+
+    closeChat() {
+        this.chatPanel?.remove();
+        this.chatPanel = null;
+        this.chatLog = null;
     }
 
     // --- Sesión ----------------------------------------------------------------------------------
@@ -278,6 +388,9 @@ export class CollabController extends EventTarget {
         for (const type of ["state", "peers", "proposals", "draft"])
             session.addEventListener(type, refresh);
         session.addEventListener("cursors", () => this.refreshPointers());
+        session.addEventListener("chat", (e) => this.onChat(e.detail));
+        this.bubbles = new Map();
+        this.unread = 0;
         // La pestaña de la imagen (corona, copia propia) y el historial del anfitrión.
         const tab = () => {
             if (session.doc && this.app.docs.includes(session.doc))
@@ -304,6 +417,9 @@ export class CollabController extends EventTarget {
             for (const toast of this.requests.values())
                 toast.remove();
             this.requests.clear();
+            this.closeChat();
+            this.bubbles.clear();
+            this.unread = 0;
             const reason = e.detail.reason;
             this.app.showMessage(reason || tr("La sesión colaborativa terminó."));
             tab();
@@ -446,21 +562,48 @@ export class CollabController extends EventTarget {
             return;
         this.wasInside = inside;
         const p = e || this.app.view.lastMouse || { x: 0, y: 0 };
-        s.setCursor(p.x, p.y, inside, this.app.tools.current?.id || "");
+        const tool = this.app.tools.current?.id || "";
+        // Con el botón pulsado en una herramienta de pintar, los demás ven el trazo en vivo: su color
+        // (el principal o, con el derecho, el secundario; nada al borrar) y su grosor.
+        let paint = null;
+        const drag = this.app.view.dragEvent;
+        if (inside && drag && liveStrokeKind(tool)) {
+            const c = drag.button === "right" ? AppState.secondary : AppState.primary;
+            const hex = (v) => Math.round(v).toString(16).padStart(2, "0");
+            paint = { color: tool === "eraser" ? "" : `#${hex(c.r)}${hex(c.g)}${hex(c.b)}`, size: tool === "pencil" ? 1 : AppState.tools.brushSize || 1 };
+        }
+        s.setCursor(p.x, p.y, inside, tool, paint);
     }
 
     refreshPointers() {
-        const view = this.app.view, s = this.session, list = [];
-        if (this.active && collabSettings().showCursors && this.app.doc && this.app.doc === s.doc) {
+        const view = this.app.view, s = this.session, list = [], settings = collabSettings(), now = performance.now();
+        let pending = false;
+        if (this.active && settings.showCursors && this.app.doc && this.app.doc === s.doc) {
             for (const [id, c] of s.cursors) {
                 const p = s.peer(id);
                 if (!c.inside || id === s.myId || !p)
                     continue;
-                list.push({ x: c.x, y: c.y, color: p.color, name: p.name, tool: c.tool });
+                const pointer = { x: c.x, y: c.y, color: p.color, name: p.name, tool: c.tool };
+                // Lo que está dibujando y, al soltar, un momento más (hasta que llega el cambio).
+                const recent = c.down || (c.releasedAt && now - c.releasedAt < 1500);
+                if (settings.liveStrokes && recent && c.path?.length) {
+                    pointer.live = { kind: liveStrokeKind(c.tool), path: c.path, color: c.color, size: c.size };
+                    pending ||= !c.down;
+                }
+                const bubble = this.bubbles?.get(id);
+                if (settings.chat && settings.chatBubbles && bubble && now < bubble.until) {
+                    pointer.bubble = bubble.text;
+                    pending = true;
+                }
+                list.push(pointer);
             }
         }
         view.remotePointers = list;
         view.update();
+        // Vuelve a mirar mientras quede un trazo terminado o un globo por desaparecer.
+        clearTimeout(this.expireTimer);
+        if (pending)
+            this.expireTimer = setTimeout(() => this.refreshPointers(), 250);
     }
 
     // --- Diálogos --------------------------------------------------------------------------------
@@ -1009,8 +1152,9 @@ export function collabSettingsPage(app, refresh) {
             box.append(el("div", { className: "collab-field" }, [el("b", { textContent: label.replace(/:$/, "") }), control, help ? note(help) : null]));
         }
     };
+    const defaultOn = ["collabRealtime", "collabAnnounce", "collabShowCursors", "collabLiveStrokes", "collabChat", "collabChatBubbles"];
     const check = (box, text, key, help, onChange = null) => {
-        const c = checkbox(text, key === "collabRealtime" || key === "collabAnnounce" || key === "collabShowCursors" ? Settings.get(key) !== false : !!Settings.get(key));
+        const c = checkbox(text, defaultOn.includes(key) ? Settings.get(key) !== false : !!Settings.get(key));
         c.input.addEventListener("change", () => {
             set(key, c.input.checked);
             onChange?.();
@@ -1233,6 +1377,12 @@ export function collabSettingsPage(app, refresh) {
     lan.append(note(tr("Para hospedar en la red local desde el navegador hace falta el servidor de Kaint para la web (node tools/collab-server.mjs); por P2P no.")));
     const view = section(tr("Vista"), more);
     check(view, tr("Mostrar los punteros de los demás"), "collabShowCursors", tr("Un triángulo del color de cada participante, con su nombre y el icono de su herramienta."));
+    check(view, tr("Ver en vivo lo que dibujan los demás"), "collabLiveStrokes",
+          tr("Mientras alguien pinta, traza una línea o una forma, se ve un esbozo bajo su puntero hasta que llega el cambio (con los pinceles, el lápiz, la goma, las líneas y las formas)."));
+    const chatBox = section(tr("Chat"), more);
+    check(chatBox, tr("Chat de la sesión"), "collabChat",
+          tr("Mensajes entre los participantes (Archivo > Colaboración > Chat de la sesión, o el botón de la barra de estado)."), () => collab?.updateStatus?.());
+    check(chatBox, tr("Globos con los mensajes"), "collabChatBubbles", tr("Cada mensaje sale un momento en un globo junto al puntero de quien lo escribió."));
 
     // «Configuración P2P…» y «Configuración LAN…» (Archivo > Colaboración) llevan a su sección.
     if (collab?.revealSection) {

@@ -1067,6 +1067,7 @@ export class App extends EventTarget {
         A("collabJoinLan", tr("&Unirse a una sesión..."), "collab", null, () => this.collab.joinDialog("lan"), () => !collabActive());
         A("collabSettingsLan", tr("C&onfiguración LAN..."), "configure", null, () => collabSettingsAt("lan"));
         A("collabWindow", tr("&Ventana de la sesión..."), "collab", null, () => this.collab.sessionDialog(), collabActive);
+        A("collabChat", tr("C&hat de la sesión..."), "collab", null, () => this.collab.toggleChat(), () => !!this.collab?.chatAvailable());
         A("collabHistory", tr("&Historial de la sesión..."), "collab", null, () => this.collab.historyDialog(), collabActive);
         A("collabLeave", tr("&Salir de la sesión"), "application-exit", null, () => this.collab.leave(true), collabActive);
         A("collabSettings", tr("&Configuración de colaboración..."), "configure", null, () => settingsDialog(this, "collab"));
@@ -1238,7 +1239,7 @@ export class App extends EventTarget {
         const collab = { text: tr("C&olaboración"), icon: "collab",
                          submenu: () => [{ text: tr("&P2P (por Internet)"), icon: "collab", submenu: () => [a("collabHost"), a("collabJoin"), "-", a("collabSettingsP2P")] },
                                          { text: tr("&Red local (LAN)"), icon: "collab", submenu: () => [a("collabHostLan"), a("collabJoinLan"), "-", a("collabSettingsLan")] },
-                                         "-", a("collabWindow"), a("collabHistory"), a("collabLeave"), "-", a("collabSettings")] };
+                                         "-", a("collabWindow"), a("collabChat"), a("collabHistory"), a("collabLeave"), "-", a("collabSettings")] };
         return [a("new"), a("open"), "-", a("save"), a("saveAs"), a("saveAll"), a("saveAllAs"), "-", a("gifEditor"), "-", a("print"), "-", collab, "-",
                 a("close"), a("closeAll")];
     }

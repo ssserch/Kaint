@@ -368,8 +368,12 @@ color you choose for the glass of the windows (**Settings → User interface**).
       edit a private draft with its own history and suggest it, and the host accepts it (or accepts
       everything automatically): the change then shows up for everyone and in the host's history
       as "Change made by…". Layer properties are shared too, everyone's pointer is shown as a
-      colored triangle with their name and tool, and only the host saves the image (guests export a
-      copy). The session image's tab turns yellow and shows whether the host's image is saved (the
+      colored triangle with their name and tool, and <b>you see what the others draw as they draw
+      it</b> (brushes, pencil, eraser, lines and shapes show a live sketch under their pointer until
+      the change arrives). A <b>session chat</b> (<b>File → Collaboration → Session chat</b>, or the
+      button in the status bar) shows each message for a moment in a bubble next to its writer's
+      pointer; the live sketches, the chat and the bubbles can each be turned off. Only the host saves
+      the image (guests export a copy). The session image's tab turns yellow and shows whether the host's image is saved (the
       crown) and whether a guest's exported copy is up to date (the computer); from the History
       window everyone can see the host's history, and the host (and the guests it allows) can go
       back to an earlier version for everyone. Sessions can be open, approved one by one, password protected or limited to the

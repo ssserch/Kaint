@@ -99,7 +99,16 @@ public:
         QColor color;
         QString name;
         QIcon tool;
+        // Lo que está dibujando (modo colaborativo): 1 trazo, 2 línea (del primer punto al último),
+        // 3 rectángulo; con su color (no válido: borra) y grosor (píxeles de la imagen).
+        int liveKind = 0;
+        QVector<QPointF> path;
+        QColor liveColor;
+        qreal liveSize = 0;
+        // Su último mensaje del chat, en un globo junto al puntero.
+        QString bubble;
     };
+    Qt::MouseButton toolButton() const { return m_toolButton; }
     void setRemotePointers(const QList<RemotePointer>& pointers);
 
     // Ajustes del lienzo (diálogo Configuración)
@@ -115,6 +124,9 @@ signals:
     void viewChanged();
     void rulersVisibilityChanged(bool visible);
     void cursorMoved(QPoint imagePos, bool inside);
+    // Se pulsó o se soltó el botón con el que trabaja la herramienta (el modo colaborativo manda
+    // el trazo en vivo).
+    void toolButtonChanged();
     void deselectRequested();
     void tabletEraserChanged(bool eraser);
     // Se pulsó la unidad en la esquina de las reglas: la que se pide.

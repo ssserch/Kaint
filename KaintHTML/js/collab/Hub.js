@@ -9,6 +9,24 @@ import { VERSION, bytesToBase64, cleanName, deviceTag, normalizedCode, peerColor
 
 const MAX_MESSAGE = 512 * 1024 * 1024;
 
+// El puntero de un participante: dónde está y su herramienta y, mientras tiene el botón pulsado, el
+// color y el grosor de lo que dibuja (los demás ven el trazo en vivo).
+function cursorMessage(from, m) {
+    const out = { t: "cursor", from, x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || "").slice(0, 32), inside: !!m.inside };
+    if (m.down) {
+        out.down = true;
+        out.color = /^#[0-9a-f]{6}$/i.test(m.color || "") ? m.color : "";
+        out.size = Math.max(0, Math.min(2000, +m.size || 0));
+    }
+    return out;
+}
+
+// Un mensaje del chat de la sesión (sin texto, nada).
+function chatMessage(from, m) {
+    const text = String(m.text || "").trim().slice(0, 500);
+    return text ? { t: "chat", from, text } : null;
+}
+
 export class Hub {
     // trustHost(link): si puede hospedar sin la clave (el mismo equipo); hostKey: la clave para los
     // demás; log(texto); server: lo que se dice en el saludo ("relay" o "web").
@@ -200,7 +218,11 @@ export class Hub {
         case "end":
             return this.end("closed");
         case "cursor":
-            return this.broadcast({ t: "cursor", from: 0, x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || "").slice(0, 32), inside: !!m.inside });
+            return this.broadcast(cursorMessage(0, m));
+        case "chat": {
+            const out = chatMessage(0, m);
+            return out && this.broadcast(out);
+        }
         default:
             if (m.to !== undefined) {
                 const c = target(m.to);
@@ -220,7 +242,14 @@ export class Hub {
         case "propose":
             return this.toHost({ ...m, from: id });
         case "cursor": {
-            const out = { t: "cursor", from: id, x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || "").slice(0, 32), inside: !!m.inside };
+            const out = cursorMessage(id, m);
+            this.broadcast(out, client);
+            return this.toHost(out);
+        }
+        case "chat": {
+            const out = chatMessage(id, m);
+            if (!out)
+                return;
             this.broadcast(out, client);
             return this.toHost(out);
         }

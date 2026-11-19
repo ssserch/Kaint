@@ -58,6 +58,11 @@ struct Settings {
     // Los navegadores de la red pueden abrir Kaint para la web desde esta sesión.
     bool serveWeb = true;
     bool showCursors = true;
+    // Ver en vivo lo que dibujan los demás (un esbozo bajo su puntero hasta que llega el cambio).
+    bool liveStrokes = true;
+    // El chat de la sesión y los globos con cada mensaje junto al puntero de quien lo escribe.
+    bool chat = true;
+    bool chatBubbles = true;
     // Configuración > Colaboración: la vista compacta (todo en un formulario) en vez de la simplificada.
     bool compactView = false;
     // P2P o red local (lo que usan «Hospedar» y «Unirse» sin más).
@@ -101,5 +106,8 @@ QColor peerColor(int index);
 
 // Nombres de las herramientas (los de los iconos, iguales en la web).
 QString toolName(int toolId);
+// Cómo se ve en vivo lo que dibuja otro con esa herramienta: 0 nada (no se dibuja con ella), 1 un
+// trazo, 2 una línea (del primer punto al último), 3 un rectángulo (formas).
+int liveStrokeKind(const QString& tool);
 
 } // namespace Collab

@@ -516,6 +516,10 @@
         <translation>The host accepted your changes.</translation>
     </message>
     <message>
+        <source>Participante %1</source>
+        <translation>Participant %1</translation>
+    </message>
+    <message>
         <source>Conectado; entrando en la sesión…</source>
         <translation>Connected; joining the session…</translation>
     </message>
@@ -739,6 +743,10 @@
         <translation>Keep the draft.</translation>
     </message>
     <message>
+        <source>Chat de la sesión</source>
+        <translation>Session chat</translation>
+    </message>
+    <message>
         <source>No estás en ninguna sesión.</source>
         <translation>You are not in a session.</translation>
     </message>
@@ -841,6 +849,14 @@ Try another port in Settings &gt; Collaboration.</translation>
         <translation>The collaborative session ended.</translation>
     </message>
     <message>
+        <source>Escribe un mensaje…</source>
+        <translation>Type a message…</translation>
+    </message>
+    <message>
+        <source>Enviar</source>
+        <translation>Send</translation>
+    </message>
+    <message>
         <source>%1 quiere unirse a tu sesión (%2).</source>
         <translation>%1 wants to join your session (%2).</translation>
     </message>
@@ -871,6 +887,13 @@ Try another port in Settings &gt; Collaboration.</translation>
     <message>
         <source>Esperando al anfitrión…</source>
         <translation>Waiting for the host…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Chat de la sesión (%n sin leer)</source>
+        <translation>
+            <numerusform>Session chat (%n unread)</numerusform>
+            <numerusform>Session chat (%n unread)</numerusform>
+        </translation>
     </message>
     <message>
         <source>Buscando la sesión…</source>
@@ -2266,6 +2289,10 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Edita esta imagen como un GIF animado, con una línea de tiempo (vuelve a elegirlo para volver al editor de imágenes)</source>
         <translation>Edit this image as an animated GIF, on a timeline (choose it again to go back to the image editor)</translation>
+    </message>
+    <message>
+        <source>C&amp;hat de la sesión...</source>
+        <translation>Session c&amp;hat...</translation>
     </message>
     <message>
         <source>&amp;Cerrar</source>
@@ -9126,6 +9153,34 @@ Do you want to replace them?</translation>
     <message>
         <source>Quita la casilla para que no salga en los menús</source>
         <translation>Uncheck it to remove it from the menus</translation>
+    </message>
+    <message>
+        <source>Ver en vivo lo que dibujan los demás</source>
+        <translation>See live what the others draw</translation>
+    </message>
+    <message>
+        <source>Mientras alguien pinta, traza una línea o una forma, se ve un esbozo bajo su puntero hasta que llega el cambio (con los pinceles, el lápiz, la goma, las líneas y las formas).</source>
+        <translation>While someone paints or draws a line or a shape, a sketch of it shows under their pointer until the change arrives (with the brushes, the pencil, the eraser, lines and shapes).</translation>
+    </message>
+    <message>
+        <source>Chat</source>
+        <translation>Chat</translation>
+    </message>
+    <message>
+        <source>Chat de la sesión</source>
+        <translation>Session chat</translation>
+    </message>
+    <message>
+        <source>Mensajes entre los participantes (Archivo &gt; Colaboración &gt; Chat de la sesión, o el botón de la barra de estado).</source>
+        <translation>Messages between the participants (File &gt; Collaboration &gt; Session chat, or the button in the status bar).</translation>
+    </message>
+    <message>
+        <source>Globos con los mensajes</source>
+        <translation>Message bubbles</translation>
+    </message>
+    <message>
+        <source>Cada mensaje sale un momento en un globo junto al puntero de quien lo escribió.</source>
+        <translation>Each message shows for a moment in a bubble next to its writer’s pointer.</translation>
     </message>
     <message>
         <source>Muestra en tu perfil de Discord en qué estás trabajando con Kaint (Rich Presence). Funciona con la aplicación de Discord abierta en este equipo, también la versión Flatpak o Snap.</source>

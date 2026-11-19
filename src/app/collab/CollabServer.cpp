@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkInterface>
+#include <QRegularExpression>
 #include <QUdpSocket>
 
 #include <algorithm>
@@ -359,6 +360,22 @@ void Server::onText(Link* socket, const QByteArray& text)
                         {QStringLiteral("y"), m.value(QStringLiteral("y")).toDouble()},
                         {QStringLiteral("tool"), m.value(QStringLiteral("tool")).toString().left(32)},
                         {QStringLiteral("inside"), m.value(QStringLiteral("inside")).toBool()}};
+        // Mientras dibuja: el color y el grosor, para que los demás vean el trazo en vivo.
+        if (m.value(QStringLiteral("down")).toBool()) {
+            static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+            const QString color = m.value(QStringLiteral("color")).toString();
+            out.insert(QStringLiteral("down"), true);
+            out.insert(QStringLiteral("color"), hex.match(color).hasMatch() ? color : QString());
+            out.insert(QStringLiteral("size"), std::clamp(m.value(QStringLiteral("size")).toDouble(), 0.0, 2000.0));
+        }
+        broadcastExcept(out, id);
+        emit hostMessage(out);
+    } else if (t == QLatin1String("chat")) {
+        // El chat de la sesión: a todos los demás (y al anfitrión).
+        const QString text = m.value(QStringLiteral("text")).toString().trimmed().left(500);
+        if (text.isEmpty())
+            return;
+        const QJsonObject out{{QStringLiteral("t"), t}, {QStringLiteral("from"), id}, {QStringLiteral("text"), text}};
         broadcastExcept(out, id);
         emit hostMessage(out);
     } else if (t == QLatin1String("rename")) {

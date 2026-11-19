@@ -440,10 +440,13 @@ export class CollabSession extends EventTarget {
         case "cursor": {
             if (m.from === this.myId)
                 return;
-            this.cursors.set(m.from, { x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || ""), inside: !!m.inside });
-            this.emit("cursors");
+            this.updateCursor(m.from, m);
             return;
         }
+        case "chat":
+            if (m.from !== this.myId)
+                this.receiveChat(m.from, m.text);
+            return;
         case "commit":
             if (this.state !== "joined" || this.isHost)
                 return;
@@ -1384,10 +1387,61 @@ export class CollabSession extends EventTarget {
 
     // --- Puntero ----------------------------------------------------------------------------------
 
-    setCursor(x, y, inside, tool) {
+    // El puntero de otro y, mientras tiene el botón pulsado, los puntos de lo que dibuja (con su color
+    // y grosor); al soltar se sigue viendo un momento, hasta que llega el cambio.
+    updateCursor(from, m) {
+        const prev = this.cursors.get(from);
+        const c = { x: +m.x || 0, y: +m.y || 0, tool: String(m.tool || ""), inside: !!m.inside, down: !!m.down,
+                    path: prev?.path || [], color: prev?.color || "", size: prev?.size || 0, releasedAt: prev?.releasedAt || 0 };
+        if (c.down) {
+            if (!prev?.down) {
+                c.path = [];
+                c.releasedAt = 0;
+            }
+            c.color = typeof m.color === "string" ? m.color : "";
+            c.size = +m.size || 0;
+            if (c.path.length < 4000)
+                c.path.push({ x: c.x, y: c.y });
+        } else if (prev?.down) {
+            c.releasedAt = performance.now();
+        }
+        this.cursors.set(from, c);
+        this.emit("cursors");
+    }
+
+    // --- Chat ------------------------------------------------------------------------------------
+
+    receiveChat(from, raw) {
+        const text = String(raw || "").trim().slice(0, 500);
+        if (!text)
+            return;
+        const p = this.peer(from);
+        const message = { from, name: p?.name || tr("Participante %1", from), color: p?.color || "#808080", text, time: Date.now() };
+        this.chat ??= [];
+        this.chat.push(message);
+        if (this.chat.length > 300)
+            this.chat.shift();
+        this.emit("chat", message);
+    }
+
+    sendChat(raw) {
+        const text = String(raw || "").trim().slice(0, 500);
+        if (!text || this.state !== "joined")
+            return;
+        this.send({ t: "chat", text });
+        this.receiveChat(this.myId, text);
+    }
+
+    // 'paint': con el botón pulsado en una herramienta de pintar, {color, size} de lo que dibuja.
+    setCursor(x, y, inside, tool, paint = null) {
         if (this.state !== "joined")
             return;
         this.cursorOut = { t: "cursor", x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, tool: tool || "", inside: !!inside };
+        if (paint) {
+            this.cursorOut.down = true;
+            this.cursorOut.color = paint.color || "";
+            this.cursorOut.size = Math.round((paint.size || 0) * 10) / 10;
+        }
         if (this.cursorTimer) {
             this.cursorDirty = true;
             return;

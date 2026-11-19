@@ -29,6 +29,23 @@ struct RemoteCursor {
     QString tool;
     bool inside = false;
     qint64 time = 0;
+    // Lo que está dibujando (el botón pulsado): los puntos del trazo hasta ahora, su color (vacío:
+    // borra) y su grosor en píxeles de la imagen. Al soltar, el trazo se sigue viendo un momento,
+    // hasta que llega el cambio de verdad.
+    bool down = false;
+    QVector<QPointF> path;
+    QString color;
+    double size = 0;
+    qint64 releasedAt = 0;
+};
+
+// Un mensaje del chat de la sesión.
+struct ChatMessage {
+    int from = 0;
+    QString name;
+    QColor color;
+    QString text;
+    qint64 time = 0;
 };
 
 // Cambio que un invitado sugiere al anfitrión.
@@ -100,7 +117,12 @@ public:
     // herramienta por ello).
     bool applyingRemote() const { return m_applying; }
 
-    void setCursor(QPointF imagePos, bool inside, const QString& tool);
+    // 'down': con el botón pulsado, el color (vacío al borrar) y el grosor de lo que dibuja.
+    void setCursor(QPointF imagePos, bool inside, const QString& tool, bool down = false, const QString& color = {},
+                   double size = 0);
+    // Chat de la sesión: envía un mensaje (también queda en la lista propia).
+    void sendChat(const QString& text);
+    const QList<ChatMessage>& chat() const { return m_chat; }
     void rename(const QString& name);
     // Anfitrión: cambia la configuración de la sesión en marcha.
     void updateSettings(const Settings& settings);
@@ -161,6 +183,8 @@ signals:
     void indicatorsChanged();
     // Anfitrión: volver a ese punto del historial (él mismo o un invitado con permiso).
     void revertRequested(int index);
+    // Llegó un mensaje del chat (también los propios).
+    void chatReceived(const Collab::ChatMessage& message);
 
 private:
     struct CanonLayer {
@@ -252,6 +276,9 @@ private:
     QMap<int, Peer> m_peers;
     QMap<int, Peer> m_waiting;
     QHash<int, RemoteCursor> m_cursors;
+    QList<ChatMessage> m_chat;
+    void updateCursor(int from, const QJsonObject& m);
+    void receiveChat(int from, const QString& text);
     QString m_mode = QStringLiteral("confirm");
     bool m_autoAccept = false;
 

@@ -749,6 +749,41 @@ export class CanvasView extends EventTarget {
             return element.tagName === "SPAN" || (element.tagName === "IMG" && !element.complete) ? null : element;
         };
         ctx.save();
+        // Primero, debajo de todos los punteros, lo que cada uno está dibujando (un esbozo: el cambio de
+        // verdad llega al terminar).
+        for (const p of list) {
+            const live = p.live;
+            if (!live?.kind || !live.path?.length)
+                continue;
+            const erase = !live.color;
+            const width = Math.max(1, live.size * this.scale);
+            ctx.save();
+            ctx.globalAlpha = erase ? 0.45 : 0.85;
+            ctx.strokeStyle = ctx.fillStyle = erase ? p.color : live.color;
+            ctx.lineCap = ctx.lineJoin = "round";
+            ctx.lineWidth = live.kind === 1 ? width : Math.max(1.5, Math.min(width, 6));
+            if (erase)
+                ctx.setLineDash([6, 4]);
+            const pts = live.path.map((q) => this.imageToView(q.x, q.y));
+            const a = pts[0], b = pts[pts.length - 1];
+            ctx.beginPath();
+            if (live.kind === 2) {
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            } else if (live.kind === 3) {
+                ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+            } else if (pts.length === 1) {
+                ctx.arc(a.x, a.y, width / 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.moveTo(a.x, a.y);
+                for (let i = 1; i < pts.length; i++)
+                    ctx.lineTo(pts[i].x, pts[i].y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
         const font = getComputedStyle(document.documentElement).getPropertyValue("--font").trim() || "sans-serif";
         ctx.font = `12px ${font}`;
         ctx.textBaseline = "middle";
@@ -795,7 +830,52 @@ export class CanvasView extends EventTarget {
             const gray = (parseInt(c.slice(0, 2), 16) * 11 + parseInt(c.slice(2, 4), 16) * 16 + parseInt(c.slice(4, 6), 16) * 5) / 32;
             ctx.fillStyle = gray > 165 ? "#000000" : "#ffffff";
             ctx.fillText(p.name, tx, y + h / 2 + 0.5);
+            if (p.bubble)
+                this.drawBubble(ctx, v, p.bubble, p.color);
         }
+        ctx.restore();
+    }
+
+    // Su último mensaje del chat: un globo encima del puntero, con un pico hacia él (hasta 5 líneas).
+    drawBubble(ctx, v, text, color) {
+        const maxWidth = 240, lineHeight = 16, lines = [];
+        let line = "";
+        for (const word of text.split(/\s+/)) {
+            const next = line ? `${line} ${word}` : word;
+            if (ctx.measureText(next).width > maxWidth && line) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = next;
+            }
+        }
+        if (line)
+            lines.push(line);
+        if (lines.length > 5) {
+            lines.length = 5;
+            lines[4] += "…";
+        }
+        const w = Math.min(maxWidth, Math.max(...lines.map((l) => ctx.measureText(l).width))) + 16;
+        const h = lines.length * lineHeight + 10;
+        const x = v.x + 4, y = v.y - 12 - h;
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, w, h, 8); else ctx.rect(x, y, w, h);
+        ctx.moveTo(x + 10, y + h - 1);
+        ctx.lineTo(v.x + 2, v.y - 2);
+        ctx.lineTo(x + 22, y + h - 1);
+        ctx.shadowColor = "rgba(0,0,0,0.25)";
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 1;
+        ctx.fillStyle = "rgba(255,255,255,0.96)";
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = "#141414";
+        ctx.textBaseline = "top";
+        lines.forEach((l, i) => ctx.fillText(l, x + 8, y + 6 + i * lineHeight, maxWidth));
         ctx.restore();
     }
 

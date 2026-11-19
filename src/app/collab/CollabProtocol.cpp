@@ -114,6 +114,9 @@ Settings Settings::load()
     c.announce = s.value(QStringLiteral("announce"), true).toBool();
     c.serveWeb = s.value(QStringLiteral("serveWeb"), true).toBool();
     c.showCursors = s.value(QStringLiteral("showCursors"), true).toBool();
+    c.liveStrokes = s.value(QStringLiteral("liveStrokes"), true).toBool();
+    c.chat = s.value(QStringLiteral("chat"), true).toBool();
+    c.chatBubbles = s.value(QStringLiteral("chatBubbles"), true).toBool();
     c.compactView = s.value(QStringLiteral("compactView"), false).toBool();
     c.mode = modeFromName(s.value(QStringLiteral("mode"), QStringLiteral("p2p")).toString());
     if (s.contains(QStringLiteral("signalServers")))
@@ -139,6 +142,9 @@ void Settings::save() const
     s.setValue(QStringLiteral("announce"), announce);
     s.setValue(QStringLiteral("serveWeb"), serveWeb);
     s.setValue(QStringLiteral("showCursors"), showCursors);
+    s.setValue(QStringLiteral("liveStrokes"), liveStrokes);
+    s.setValue(QStringLiteral("chat"), chat);
+    s.setValue(QStringLiteral("chatBubbles"), chatBubbles);
     s.setValue(QStringLiteral("compactView"), compactView);
     s.setValue(QStringLiteral("mode"), modeName(mode));
     // Solo si se cambiaron: así, si cambian los predeterminados, los demás los reciben.
@@ -281,6 +287,20 @@ QString toolName(int toolId)
         QStringLiteral("eraser"), QStringLiteral("pencil"), QStringLiteral("colorpicker"), QStringLiteral("clonestamp"),
         QStringLiteral("recolor"), QStringLiteral("text"), QStringLiteral("linecurve"), QStringLiteral("shapes")};
     return names.value(toolId);
+}
+
+int liveStrokeKind(const QString& tool)
+{
+    // Solo las que pintan sin tocar lo de los demás (nada de selecciones ni de mover píxeles).
+    static const QStringList strokes{QStringLiteral("paintbrush"), QStringLiteral("eraser"), QStringLiteral("pencil"),
+                                     QStringLiteral("clonestamp"), QStringLiteral("recolor")};
+    if (strokes.contains(tool))
+        return 1;
+    if (tool == QLatin1String("linecurve") || tool == QLatin1String("gradient"))
+        return 2;
+    if (tool == QLatin1String("shapes"))
+        return 3;
+    return 0;
 }
 
 } // namespace Collab

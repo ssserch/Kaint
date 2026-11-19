@@ -111,8 +111,19 @@ guest the pixels it changed itself and hasn't sent yet are kept.
 
 ## Other messages
 
-- `cursor {x, y, tool, inside}`: where each participant's pointer is (image coordinates) and which tool
-  it uses; relayed to everybody (about 30 per second at most).
+- `cursor {x, y, tool, inside, down?, color?, size?}`: where each participant's pointer is (image
+  coordinates) and which tool it uses; relayed to everybody (about 30 per second at most). While the
+  tool's button is held with a painting tool (`paintbrush`, `eraser`, `pencil`, `clonestamp`,
+  `recolor`, `linecurve`, `gradient`, `shapes`) it also carries `down: true`, the `color` it paints
+  with (`#rrggbb`, empty for the eraser) and the brush `size` in image pixels; it is also sent when the
+  button is pressed and released. Receivers collect the points of a `down` run and draw a sketch of
+  it under the pointer (a stroke; a line from the first point to the last for lines and gradients; a
+  rectangle for shapes) until about 1.5 s after the release, when the real change has arrived. Relays
+  copy these fields (color checked, size clamped to 0–2000).
+- `chat {text}`: a chat message (trimmed, at most 500 characters). The server relays it to everybody
+  else as `chat {from, text}` (and to the host); the host sends its own with `from: 0`. Receivers list
+  it in the session chat and show it for a few seconds in a bubble next to the writer's pointer; both
+  can be turned off locally.
 - `rename {name}`: a participant changes its display name.
 - host → server: `admit {peer, ok}`, `kick {peer}`; host → guests: `settings {mode, autoAccept}`.
 - server → all: `end {reason}` when the session finishes (`closed`, or `kicked` for one guest).

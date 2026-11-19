@@ -802,7 +802,19 @@ QRect Canvas::remotePointerRect(const RemotePointer& r) const
     const QFontMetrics fm(font());
     const qreal width = 10 + 8 + (r.tool.isNull() ? 0 : 19) + fm.horizontalAdvance(r.name) + 4;
     const qreal height = 16 + std::max(18, fm.height() + 4) + 2;
-    return QRectF(v.x() - 3, v.y() - 3, width + 6, height + 6).toAlignedRect();
+    QRectF rect(v.x() - 3, v.y() - 3, width + 6, height + 6);
+    // El globo del chat, encima.
+    if (!r.bubble.isEmpty())
+        rect |= QRectF(v.x(), v.y() - 12 - fm.lineSpacing() * 5 - 20, 270, fm.lineSpacing() * 5 + 32);
+    // Lo que está dibujando, con su grosor.
+    if (r.liveKind != 0 && !r.path.isEmpty()) {
+        QRectF bounds(imageToView(r.path.first()), QSizeF(0, 0));
+        for (const QPointF& pt : r.path)
+            bounds |= QRectF(imageToView(pt), QSizeF(0.01, 0.01));
+        const qreal pad = std::max<qreal>(4, r.liveSize * scale() / 2 + 4);
+        rect |= bounds.adjusted(-pad, -pad, pad, pad);
+    }
+    return rect.toAlignedRect();
 }
 
 void Canvas::setRemotePointers(const QList<RemotePointer>& pointers)
@@ -824,6 +836,35 @@ void Canvas::drawRemotePointers(QPainter& p) const
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
     const QFontMetrics fm(font());
+    // Primero, debajo de todos los punteros, lo que cada uno está dibujando (un esbozo: el cambio de
+    // verdad llega al terminar).
+    for (const RemotePointer& r : m_remotePointers) {
+        if (r.liveKind == 0 || r.path.isEmpty())
+            continue;
+        const bool erase = !r.liveColor.isValid();
+        QColor c = erase ? r.color : r.liveColor;
+        c.setAlpha(erase ? 110 : 215);
+        const qreal width = std::max<qreal>(1.0, r.liveSize * scale());
+        QPen pen(c, r.liveKind == 1 ? width : std::max<qreal>(1.5, std::min<qreal>(width, 6)), erase ? Qt::DashLine : Qt::SolidLine,
+                 Qt::RoundCap, Qt::RoundJoin);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        const QPointF a = imageToView(r.path.first()), b = imageToView(r.path.last());
+        if (r.liveKind == 2) {
+            p.drawLine(a, b);
+        } else if (r.liveKind == 3) {
+            p.drawRect(QRectF(a, b).normalized());
+        } else if (r.path.size() == 1) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(c);
+            p.drawEllipse(a, width / 2, width / 2);
+        } else {
+            QPainterPath line(a);
+            for (int i = 1; i < r.path.size(); ++i)
+                line.lineTo(imageToView(r.path[i]));
+            p.drawPath(line);
+        }
+    }
     for (const RemotePointer& r : m_remotePointers) {
         const QPointF v = imageToView(r.pos);
         // El puntero: un triángulo de su color con borde blanco y una sombra suave.
@@ -860,6 +901,30 @@ void Canvas::drawRemotePointers(QPainter& p) const
         }
         p.setPen(light ? Qt::black : Qt::white);
         p.drawText(QRectF(x, label.top(), label.right() - x, label.height()), Qt::AlignVCenter | Qt::AlignLeft, r.name);
+
+        // Su último mensaje del chat: un globo encima del puntero, con un pico hacia él.
+        if (!r.bubble.isEmpty()) {
+            const int maxWidth = 240;
+            const QRect textRect = fm.boundingRect(QRect(0, 0, maxWidth, 400), Qt::TextWordWrap, r.bubble);
+            const qreal bw = textRect.width() + 16, bh = std::min(textRect.height(), fm.lineSpacing() * 5) + 10;
+            const QRectF bubble(v.x() + 4, v.y() - 12 - bh, bw, bh);
+            QPainterPath shape;
+            shape.addRoundedRect(bubble, 8, 8);
+            QPainterPath tail;
+            tail.moveTo(bubble.left() + 10, bubble.bottom() - 1);
+            tail.lineTo(v.x() + 2, v.y() - 2);
+            tail.lineTo(bubble.left() + 22, bubble.bottom() - 1);
+            tail.closeSubpath();
+            shape = shape.united(tail);
+            p.setPen(QPen(QColor(0, 0, 0, 50), 3));
+            p.setBrush(Qt::NoBrush);
+            p.drawPath(shape.translated(1, 1));
+            p.setPen(QPen(r.color, 1.5));
+            p.setBrush(QColor(255, 255, 255, 245));
+            p.drawPath(shape);
+            p.setPen(QColor(20, 20, 20));
+            p.drawText(bubble.adjusted(8, 5, -8, -5), Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, r.bubble);
+        }
     }
     p.restore();
 }
@@ -1335,6 +1400,7 @@ void Canvas::mousePressEvent(QMouseEvent* e)
     m_lastModifiers = e->modifiers();
     if (m_tool)
         m_tool->mousePress(makeEvent(e));
+    emit toolButtonChanged();
 }
 
 void Canvas::mouseDoubleClickEvent(QMouseEvent* e)
@@ -1451,6 +1517,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent* e)
     m_extraButtons.clear();
     if (m_tool && m_doc)
         m_tool->mouseRelease(makeEvent(e));
+    emit toolButtonChanged();
 }
 
 void Canvas::wheelEvent(QWheelEvent* e)

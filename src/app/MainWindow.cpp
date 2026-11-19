@@ -1350,6 +1350,8 @@ void MainWindow::createActions()
     A["collabSettingsLan"] = makeAction(tr("C&onfiguración LAN..."), {"configure", "settings-configure"}, {},
                                         [this] { showSettings(SettingsDialog::Page::Collaboration, QStringLiteral("collabLanSection")); });
     A["collabWindow"] = makeAction(tr("&Ventana de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionWindow(); });
+    A["collabChat"] = makeAction(tr("C&hat de la sesión..."), {"dialog-messages", "im-message-new", "mail-message"}, {},
+                                 [this] { m_collab->showChat(); });
     A["collabHistory"] = makeAction(tr("&Historial de la sesión..."), {"collab"}, {}, [this] { m_collab->showSessionHistory(); });
     A["collabHistory"]->setToolTip(tr("El historial del anfitrión: volver a una versión anterior para todos"));
     A["collabHistory"]->setVisible(false);
@@ -1632,7 +1634,7 @@ void MainWindow::createMenus()
     lan->addSeparator();
     lan->addAction(A["collabSettingsLan"]);
     collab->addSeparator();
-    collab->addActions({A["collabWindow"], A["collabHistory"], A["collabLeave"]});
+    collab->addActions({A["collabWindow"], A["collabChat"], A["collabHistory"], A["collabLeave"]});
     collab->addSeparator();
     collab->addAction(A["collabSettings"]);
     file->addSeparator();
@@ -3546,6 +3548,8 @@ void MainWindow::updateCollabActions()
     for (const char* id : {"collabJoin", "collabJoinLan"})
         m_act[QLatin1String(id)]->setEnabled(!active);
     m_act["collabWindow"]->setEnabled(active);
+    m_act["collabChat"]->setEnabled(m_collab->chatAvailable());
+    m_act["collabChat"]->setVisible(m_collab->settings().chat);
     m_act["collabHistory"]->setEnabled(active);
     m_act["collabHistory"]->setVisible(active);
     m_act["collabLeave"]->setEnabled(active);

@@ -85,7 +85,17 @@ namespace Kaint.PdnHost
                 }
                 catch (Exception ex)
                 {
-                    Send(Error(Describe(ex)));
+                    // Lo que falle al describir el error tampoco debe cerrar el proceso.
+                    string text;
+                    try
+                    {
+                        text = Describe(ex);
+                    }
+                    catch (Exception)
+                    {
+                        text = ex.GetType().Name + ": " + ex.Message;
+                    }
+                    Send(Error(text));
                 }
             }
             if (renderThread != null)
@@ -192,7 +202,7 @@ namespace Kaint.PdnHost
             if (ex is InvalidProgramException || ex is MissingMethodException)
                 return L("Usa partes de Paint.NET que la capa de compatibilidad no tiene (",
                          "It uses parts of Paint.NET that the compatibility layer does not have (")
-                       + ex.Message.Split('\n')[0].Trim() + ").";
+                       + ex.Message.Split(new[] { '\n' })[0].Trim() + ").";
             return ex.GetType().Name + ": " + ex.Message;
         }
 
@@ -1074,7 +1084,9 @@ namespace Kaint.PdnHost
                     }
                 }
                 HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (string line in list.Split('\n'))
+                // (Split con un char[]: Split(char) solo está en mono y en .NET moderno; con el .NET
+                // Framework de Wine faltaba el método y se cerraba el proceso.)
+                foreach (string line in list.Split(new[] { '\n' }))
                 {
                     string path = line.Trim();
                     if (path.Length == 0 || !File.Exists(path) || !names.Add(Path.GetFileName(path)))
@@ -1108,6 +1120,9 @@ namespace Kaint.PdnHost
             private readonly SharedPixels pixels;
             private readonly Rectangle roi;
             private readonly Surface scratch;
+            // Su propia copia del origen: si un complemento tarda más de lo que se le espera al cerrar
+            // el diálogo, la memoria compartida ya no existe y no la debe leer.
+            private readonly Surface source;
             private readonly object sync = new object();
             private readonly Thread thread;
             private EffectConfigToken pending;
@@ -1122,6 +1137,7 @@ namespace Kaint.PdnHost
                 this.pixels = pixels;
                 this.roi = roi;
                 this.scratch = new Surface(pixels.Source.Width, pixels.Source.Height);
+                this.source = pixels.Source.Clone();
                 this.thread = new Thread(Loop);
                 this.thread.IsBackground = true;
                 this.thread.Priority = ThreadPriority.BelowNormal;
@@ -1159,10 +1175,10 @@ namespace Kaint.PdnHost
                         continue;
                     try
                     {
-                        this.scratch.CopySurface(this.pixels.Source, this.roi.Location, this.roi);
+                        this.scratch.CopySurface(this.source, this.roi.Location, this.roi);
                         this.effect.KaintResetCancel();
                         using (RenderArgs dstArgs = new RenderArgs(this.scratch))
-                        using (RenderArgs srcArgs = new RenderArgs(this.pixels.Source))
+                        using (RenderArgs srcArgs = new RenderArgs(this.source))
                         {
                             this.effect.SetRenderInfo(token, dstArgs, srcArgs);
                             if (this.effect.CheckForEffectFlags(EffectFlags.SingleRenderCall))
@@ -1180,12 +1196,23 @@ namespace Kaint.PdnHost
                         // Una vista previa que falla no se muestra (al aceptar, el error se ve).
                         continue;
                     }
-                    if (this.cancel)
-                        continue;
-                    this.pixels.Destination.CopySurface(this.scratch, this.roi.Location, this.roi);
-                    Dictionary<string, object> message = new Dictionary<string, object>();
-                    message["preview"] = ++this.sequence;
-                    Send(message);
+                    // A la memoria compartida solo mientras el diálogo sigue abierto (Dispose lo cambia
+                    // con el mismo cerrojo), y nada de esto puede cerrar el proceso.
+                    try
+                    {
+                        lock (this.sync)
+                        {
+                            if (this.cancel || this.disposed)
+                                continue;
+                            this.pixels.Destination.CopySurface(this.scratch, this.roi.Location, this.roi);
+                            Dictionary<string, object> message = new Dictionary<string, object>();
+                            message["preview"] = ++this.sequence;
+                            Send(message);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                    }
                 }
             }
 
@@ -1200,9 +1227,13 @@ namespace Kaint.PdnHost
                 this.effect.SignalCancelRequest();
                 // Un complemento que no atiende la cancelación puede tardar: se espera un tiempo
                 // razonable (después ya no se usa nada de esto).
-                this.thread.Join(30000);
+                // Si sigue calculando, termina con sus propias copias (no se liberan aquí).
+                if (this.thread.Join(30000))
+                {
+                    this.scratch.Dispose();
+                    this.source.Dispose();
+                }
                 this.effect.KaintResetCancel();
-                this.scratch.Dispose();
             }
         }
     }

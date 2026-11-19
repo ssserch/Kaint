@@ -108,7 +108,7 @@ private:
     QPointer<Collab::Session> m_session;
     Collab::Settings m_settings;
     QPointer<Collab::SessionDialog> m_dialog;
-    QHash<int, QPointer<QMessageBox>> m_requests;
+    QHash<int, QPointer<QDialog>> m_requests;
 
     QPointer<QWidget> m_status;
     QToolButton* m_statusButton = nullptr;

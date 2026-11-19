@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPainter>
 #include <QPainterPath>
@@ -435,7 +436,7 @@ void CollabController::showSessionHistory()
 
 void CollabController::onEnded(const QString& reason)
 {
-    for (const QPointer<QMessageBox>& box : std::as_const(m_requests))
+    for (const QPointer<QDialog>& box : std::as_const(m_requests))
         if (box)
             box->deleteLater();
     m_requests.clear();
@@ -637,23 +638,49 @@ void CollabController::sendCursor()
 
 void CollabController::askAdmission(const Collab::Peer& peer)
 {
-    auto* box = new QMessageBox(QMessageBox::Question, tr("Sesión colaborativa"),
-                                tr("%1 quiere unirse a tu sesión (%2).").arg(peer.name, peer.app.isEmpty() ? peer.platform : peer.app),
-                                QMessageBox::NoButton, m_window);
+    // Un diálogo normal (con el marco de Kaint; el QMessageBox salía con dos barras de título) y
+    // modal: encima de la ventana modal que haya (Configuración...), que si no lo bloqueaba y no se
+    // podía ni aceptar ni cerrar. Se muestra sin esperar (show), así que no detiene nada.
+    QWidget* parent = QApplication::activeModalWidget() ? QApplication::activeModalWidget() : m_window.data();
+    auto* box = new QDialog(parent);
     box->setAttribute(Qt::WA_DeleteOnClose);
-    box->setWindowModality(Qt::NonModal);
-    QPushButton* yes = box->addButton(tr("Dejar entrar"), QMessageBox::AcceptRole);
-    box->addButton(tr("Rechazar"), QMessageBox::RejectRole);
-    box->setDefaultButton(yes);
+    box->setWindowTitle(tr("Sesión colaborativa"));
+    box->setWindowModality(Qt::ApplicationModal);
+    auto* layout = new QVBoxLayout(box);
+    auto* row = new QHBoxLayout;
+    auto* iconLabel = new QLabel(box);
+    iconLabel->setPixmap(Icons::theme({"dialog-question", "help-about"}).pixmap(32, 32));
+    iconLabel->setAlignment(Qt::AlignTop);
+    auto* text = new QLabel(tr("%1 quiere unirse a tu sesión (%2).").arg(peer.name, peer.app.isEmpty() ? peer.platform : peer.app), box);
+    text->setWordWrap(true);
+    row->addWidget(iconLabel);
+    row->addWidget(text, 1);
+    layout->addLayout(row);
+    auto* buttons = new QHBoxLayout;
+    auto* yes = new QPushButton(tr("Dejar entrar"), box);
+    auto* no = new QPushButton(tr("Rechazar"), box);
+    yes->setDefault(true);
+    buttons->addStretch(1);
+    buttons->addWidget(yes);
+    buttons->addWidget(no);
+    layout->addLayout(buttons);
     const int id = peer.id;
-    connect(box, &QMessageBox::buttonClicked, this, [this, box, yes, id](QAbstractButton* b) {
+    auto answer = [this, box, id](bool ok) {
+        if (!m_requests.contains(id))
+            return;
         m_requests.remove(id);
         if (m_session)
-            m_session->admit(id, b == yes);
+            m_session->admit(id, ok);
         box->close();
-    });
+    };
+    connect(yes, &QPushButton::clicked, box, [answer] { answer(true); });
+    connect(no, &QPushButton::clicked, box, [answer] { answer(false); });
+    // Cerrarlo con la ✕ o Esc es rechazar.
+    connect(box, &QDialog::rejected, this, [answer] { answer(false); });
     m_requests.insert(id, box);
     box->show();
+    box->raise();
+    box->activateWindow();
     emit message(tr("%1 quiere unirse a tu sesión.").arg(peer.name));
 }
 

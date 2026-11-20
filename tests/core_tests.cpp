@@ -6,6 +6,7 @@
 #include "core/ExtraFormats.h"
 #include "core/FloodFill.h"
 #include "core/Gif.h"
+#include "core/Motion.h"
 #include "core/ImageIO.h"
 #include "core/Ora.h"
 #include "core/Palette.h"
@@ -1244,6 +1245,43 @@ static void testGifAndIco()
               && under[1].image.pixel(15, 5) == qRgba(0, 0, 255, 255));
         bg.firstOnlyAsBackground = true;
         CHECK(Gif::applyEffects(two, bg).size() == 1);
+    }
+
+    // Puntos clave del editor de GIF (Motion): interpolación, ida y vuelta en JSON, el fotograma
+    // que se convierte en varios al exportar y la animación guardada en el .ora.
+    {
+        Motion::Clip clip;
+        CHECK(clip.isEmpty() && !clip.animated());
+        clip.tracks[Motion::PosX].setKey(0, 0);
+        clip.tracks[Motion::PosX].setKey(400, 100);
+        CHECK(clip.animated() && std::abs(clip.sample(200).x - 50) < 1e-9);
+        clip.setInterp(0, Motion::Interp::Freeze);
+        CHECK(clip.sample(399).x == 0 && clip.sample(400).x == 100);
+        clip.setInterp(0, Motion::Interp::Curve);
+        CHECK(clip.sample(100).x < 25 && std::abs(clip.sample(200).x - 50) < 1e-9);
+        clip.setInterp(0, Motion::Interp::Linear);
+        clip.setEase(0, false, true);
+        CHECK(clip.sample(200).x < 50);
+        clip.tracks[Motion::Opacity].base = 50;
+        CHECK(Motion::Clip::fromJson(clip.toJson()) == clip);
+        clip.moveKeys(400, 800);
+        CHECK(clip.keyTimes() == (QList<int>{0, 800}));
+        clip.stepMs = 100;
+        // 1 s a 100 ms por imagen: 10 fotogramas, la bola movida.
+        QImage dot(40, 20, kLayerFormat);
+        dot.fill(kTransparent);
+        dot.setPixel(20, 10, qRgba(255, 0, 0, 255));
+        std::unique_ptr<Document> anim(Document::createFromImage(dot, Gif::nameWithDelay(QStringLiteral("F1"), 1000)));
+        LayerProps props = anim->layer(0)->props;
+        props.motion = std::make_shared<const Motion::Clip>(clip);
+        anim->setLayerProps(0, props);
+        const QList<Gif::Frame> expanded = ImageIO::animationFrames(anim.get(), 100);
+        CHECK(expanded.size() == 10 && expanded[0].delayMs == 100);
+        CHECK(qAlpha(expanded[0].image.pixel(20, 10)) > 0 && qAlpha(expanded.last().image.pixel(20, 10)) == 0);
+        const QString ora = dir.filePath(QStringLiteral("animado.ora"));
+        CHECK(ImageIO::save(anim.get(), ora, ImageIO::SaveOptions(), &error));
+        std::unique_ptr<Document> back(ImageIO::load(ora, &error));
+        CHECK(back && back->layer(0)->props.motion && *back->layer(0)->props.motion == clip);
     }
 
     // Un GIF quieto (sin bloque de repeticiones) se abre con «repetir sin fin»: si se anima en el

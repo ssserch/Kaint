@@ -1,5 +1,10 @@
 #include "core/Ora.h"
 
+#include "core/Motion.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #include "core/Document.h"
 #include "core/Raster.h"
 #include "core/Zip.h"
@@ -53,6 +58,10 @@ bool save(const Document* doc, const QString& path, QString* error)
         xml.writeAttribute(QStringLiteral("opacity"), QString::number(l->props.opacity / 255.0, 'f', 3));
         xml.writeAttribute(QStringLiteral("visibility"), l->props.visible ? QStringLiteral("visible") : QStringLiteral("hidden"));
         xml.writeAttribute(QStringLiteral("composite-op"), blendModeOraName(l->props.blend));
+        // Kaint: la animación por puntos clave del editor de GIF (los demás programas la ignoran).
+        if (l->props.motion && !l->props.motion->isEmpty())
+            xml.writeAttribute(QStringLiteral("kaint-motion"),
+                               QString::fromUtf8(QJsonDocument(l->props.motion->toJson()).toJson(QJsonDocument::Compact)));
         xml.writeEndElement();
         zip.add(src, encodePng(l->image));
     }
@@ -123,6 +132,12 @@ Document* load(const QString& path, QString* error)
             info.props.opacity = opacity.isEmpty() ? 255 : std::clamp(int(opacity.toDouble() * 255 + 0.5), 0, 255);
             info.props.visible = attrs.value(QLatin1String("visibility")) != QLatin1String("hidden");
             info.props.blend = blendModeFromOra(attrs.value(QLatin1String("composite-op")).toString());
+            const auto motion = attrs.value(QLatin1String("kaint-motion"));
+            if (!motion.isEmpty()) {
+                const QJsonObject o = QJsonDocument::fromJson(motion.toUtf8()).object();
+                if (!o.isEmpty())
+                    info.props.motion = std::make_shared<const Motion::Clip>(Motion::Clip::fromJson(o));
+            }
             infos.append(info);
         }
     }

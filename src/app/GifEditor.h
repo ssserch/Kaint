@@ -9,6 +9,8 @@
 #include <QTimer>
 #include <QWidget>
 
+#include "core/Motion.h"
+
 #include <memory>
 
 class Document;
@@ -51,6 +53,7 @@ int delayOf(const Layer* layer);
 
 class Preview;
 class Timeline;
+class Inspector;
 
 class MediaList : public QListWidget {
     Q_OBJECT
@@ -112,6 +115,25 @@ public:
     static const char* clipboardMimeType();
     // El fotograma que se ve: el elegido o, mientras se reproduce, el del cabezal.
     int shownFrame() const;
+
+    // Animación por puntos clave del fotograma (GifMotion): se guarda en sus propiedades, así que
+    // cada cambio es un paso del historial.
+    Motion::Clip motion(int index) const;
+    void setMotion(int index, const Motion::Clip& clip, const QString& text);
+    // Tiempo (ms) del cabezal dentro del fotograma elegido.
+    int localTime() const;
+    void seekLocal(int ms);
+    // El punto clave elegido (su tiempo dentro del fotograma; -1 ninguno): lleva el cabezal allí.
+    int selectedKeyTime() const { return m_selectedKey; }
+    void selectKeyTime(int ms);
+    // Mueve los puntos de un tiempo a otro (si pasa del final, el fotograma dura más).
+    void moveKeyTime(int from, int to);
+    void removeKeyTime(int ms);
+    void showKeyMenu(int ms, const QPoint& globalPos);
+    // Sustituye el fotograma por los que salen de su animación.
+    void bakeMotion(int index);
+    // Arrastrar la imagen en la vista previa: la mueve (Posición X e Y) en el cabezal.
+    void previewDragged(QPointF delta, bool finished);
     void toggleHidden(int index);
     void showFrameMenu(int index, const QPoint& globalPos);
     void editDelay(int index);
@@ -165,6 +187,7 @@ private:
     QLabel* m_title = nullptr;
     GifEdit::MediaList* m_mediaList = nullptr;
     GifEdit::Preview* m_preview = nullptr;
+    GifEdit::Inspector* m_inspector = nullptr;
     GifEdit::Timeline* m_timeline = nullptr;
     QScrollArea* m_timelineScroll = nullptr;
     QToolButton* m_play = nullptr;
@@ -187,4 +210,10 @@ private:
     mutable QList<int> m_starts;
     mutable bool m_startsValid = false;
     mutable QHash<qint64, QImage> m_opacityCache;
+    int m_selectedKey = -1;
+    QPointF m_dragOffset;
+    // La última imagen animada que se calculó (fotograma, tiempo, animación) para no repetirla.
+    mutable QString m_motionKey;
+    mutable QImage m_motionImage;
+    void updateMotionPath();
 };

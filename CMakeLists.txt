@@ -173,6 +173,7 @@ add_library(kaintcore STATIC
     src/core/FillPattern.cpp
     src/core/FloodFill.cpp
     src/core/Gif.cpp
+    src/core/Motion.cpp
     src/core/ImageIO.cpp
     src/core/LayerEdit.cpp
     src/core/Ora.cpp
@@ -239,6 +240,7 @@ add_library(kaintui STATIC
     src/app/UserFonts.cpp
     src/app/VideoFrames.cpp
     src/app/GifEditor.cpp
+    src/app/GifMotion.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp

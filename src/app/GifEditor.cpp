@@ -1,5 +1,7 @@
 #include "app/GifEditor.h"
 
+#include "app/GifMotion.h"
+
 #include "app/Icons.h"
 #include "core/Commands.h"
 #include "core/Document.h"
@@ -15,6 +17,7 @@
 #include <QComboBox>
 #include <QDrag>
 #include <QDragEnterEvent>
+#include <QFrame>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
@@ -50,6 +53,9 @@ constexpr int kDefaultDelay = 100;
 constexpr int kRulerHeight = 22;
 constexpr int kTrackTop = kRulerHeight + 6;
 constexpr int kTrackHeight = 74;
+// Debajo de los clips, el carril con los rombos de los puntos clave del fotograma elegido.
+constexpr int kKeyLaneTop = kTrackTop + kTrackHeight + 4;
+constexpr int kKeyLaneHeight = 18;
 constexpr int kLeftMargin = 12;
 constexpr int kEdgeGrab = 6;
 
@@ -209,15 +215,24 @@ void MediaList::dropEvent(QDropEvent* e)
 
 class Preview : public QWidget {
 public:
-    explicit Preview(QWidget* parent)
+    explicit Preview(GifEditor* editor, QWidget* parent)
         : QWidget(parent)
+        , m_editor(editor)
     {
         setMinimumSize(200, 150);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        setToolTip(GifEditor::tr("Arrastra la imagen para moverla (con puntos clave de posición, se pone uno en el cabezal)"));
     }
     void setImage(const QImage& image)
     {
         m_image = image;
+        update();
+    }
+    // El recorrido de la imagen (su centro, en píxeles de la imagen) y dónde están los puntos.
+    void setPath(const QList<QPointF>& path, const QList<QPointF>& keys)
+    {
+        m_path = path;
+        m_keys = keys;
         update();
     }
 
@@ -231,15 +246,69 @@ protected:
             p.drawText(rect(), Qt::AlignCenter, GifEditor::tr("Sin fotogramas: arrastra imágenes o GIF a la línea de tiempo"));
             return;
         }
-        const QSize s = m_image.size().scaled(rect().size() - QSize(16, 16), Qt::KeepAspectRatio);
-        const QRect target(QPoint((width() - s.width()) / 2, (height() - s.height()) / 2), s);
+        const QRect target = targetRect();
         paintChecker(p, target);
-        p.setRenderHint(QPainter::SmoothPixmapTransform, s.width() < m_image.width());
+        p.setRenderHint(QPainter::SmoothPixmapTransform, target.width() < m_image.width());
         p.drawImage(target, m_image);
+        // El recorrido del movimiento, punteado, con los puntos clave (como «Path Curve» de Filmora).
+        if (m_path.size() > 1) {
+            const double k = double(target.width()) / std::max(1, m_image.width());
+            auto map = [&](QPointF pt) { return QPointF(target.left() + pt.x() * k, target.top() + pt.y() * k); };
+            p.setRenderHint(QPainter::Antialiasing);
+            QPolygonF line;
+            for (const QPointF& pt : std::as_const(m_path))
+                line << map(pt);
+            p.setPen(QPen(QColor(255, 255, 255, 200), 1.5, Qt::DashLine));
+            p.drawPolyline(line);
+            p.setPen(QPen(QColor(0, 0, 0, 120), 1.5, Qt::DotLine));
+            p.drawPolyline(line.translated(1, 1));
+            for (const QPointF& pt : std::as_const(m_keys))
+                paintDiamond(p, map(pt), 5, false, true, palette());
+        }
+    }
+    void mousePressEvent(QMouseEvent* e) override
+    {
+        if (e->button() == Qt::LeftButton && !m_image.isNull() && targetRect().contains(e->position().toPoint())) {
+            m_dragging = true;
+            m_pressPos = e->position();
+            setCursor(Qt::ClosedHandCursor);
+        }
+    }
+    void mouseMoveEvent(QMouseEvent* e) override
+    {
+        if (m_dragging)
+            m_editor->previewDragged(toImage(e->position() - m_pressPos), false);
+        else
+            setCursor(!m_image.isNull() && targetRect().contains(e->position().toPoint()) ? Qt::OpenHandCursor : Qt::ArrowCursor);
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override
+    {
+        if (!m_dragging)
+            return;
+        m_dragging = false;
+        setCursor(Qt::OpenHandCursor);
+        m_editor->previewDragged(toImage(e->position() - m_pressPos), true);
     }
 
 private:
+    QRect targetRect() const
+    {
+        const QSize s = m_image.size().scaled(rect().size() - QSize(16, 16), Qt::KeepAspectRatio);
+        return QRect(QPoint((width() - s.width()) / 2, (height() - s.height()) / 2), s);
+    }
+    QPointF toImage(QPointF widgetDelta) const
+    {
+        const QRect t = targetRect();
+        const double k = t.width() > 0 ? double(m_image.width()) / t.width() : 1.0;
+        return widgetDelta * k;
+    }
+
+    GifEditor* m_editor;
     QImage m_image;
+    QList<QPointF> m_path;
+    QList<QPointF> m_keys;
+    bool m_dragging = false;
+    QPointF m_pressPos;
 };
 
 // ---------------------------------------------------------------------------
@@ -255,7 +324,7 @@ public:
         setAcceptDrops(true);
         setMouseTracking(true);
         setFocusPolicy(Qt::ClickFocus);
-        setMinimumHeight(kTrackTop + kTrackHeight + 14);
+        setMinimumHeight(kKeyLaneTop + kKeyLaneHeight + 6);
     }
 
     void setPixelsPerSecond(int pps)
@@ -272,7 +341,7 @@ public:
         const QList<int> starts = m_editor->frameStarts();
         const int total = starts.isEmpty() ? 0 : starts.last();
         const int w = kLeftMargin * 2 + int(std::ceil(total * pxPerMs())) + 160;
-        return {std::max(w, parentWidget() ? parentWidget()->width() : 400), kTrackTop + kTrackHeight + 14};
+        return {std::max(w, parentWidget() ? parentWidget()->width() : 400), kKeyLaneTop + kKeyLaneHeight + 6};
     }
 
     int xForTime(int ms) const { return kLeftMargin + int(std::round(ms * pxPerMs())); }
@@ -421,6 +490,23 @@ protected:
             const int x = m_dropAt < s.size() ? xForTime(s[m_dropAt]) - 1 : xForTime(s.last());
             p.fillRect(QRect(x - 1, kTrackTop - 4, 3, kTrackHeight + 8), pal.color(QPalette::Highlight));
         }
+        // Los puntos clave del fotograma elegido, en su carril.
+        {
+            const QRect lane(0, kKeyLaneTop, width(), kKeyLaneHeight);
+            p.fillRect(lane, pal.color(QPalette::AlternateBase));
+            const int sel = m_editor->selectedFrame();
+            if (sel >= 0 && sel + 1 < s.size()) {
+                const QRect clip = clipRect(sel, s);
+                p.fillRect(QRect(clip.left(), kKeyLaneTop, clip.width(), kKeyLaneHeight), pal.color(QPalette::Highlight).lighter(170));
+                for (int t : m_editor->motion(sel).keyTimes()) {
+                    int shown = t;
+                    if (m_keyDrag >= 0 && t == m_keyDrag)
+                        shown = m_keyDragTo;
+                    const bool chosen = t == m_editor->selectedKeyTime() || (m_keyDrag >= 0 && t == m_keyDrag);
+                    paintDiamond(p, QPointF(xForTime(s[sel] + shown), kKeyLaneTop + kKeyLaneHeight / 2.0), 6, chosen, true, pal);
+                }
+            }
+        }
         // Cabezal
         const int px = xForTime(m_editor->playTime());
         p.setPen(QPen(QColor(230, 60, 60), 2));
@@ -443,10 +529,42 @@ protected:
         return t;
     }
 
+    // El punto clave (su tiempo dentro del fotograma elegido) bajo 'pos' en el carril, o -1.
+    int keyAtLane(QPoint pos, const QList<int>& s) const
+    {
+        const int sel = m_editor->selectedFrame();
+        if (sel < 0 || sel + 1 >= s.size() || pos.y() < kKeyLaneTop || pos.y() > kKeyLaneTop + kKeyLaneHeight)
+            return -1;
+        for (int t : m_editor->motion(sel).keyTimes())
+            if (std::abs(xForTime(s[sel] + t) - pos.x()) <= 7)
+                return t;
+        return -1;
+    }
+
     void mousePressEvent(QMouseEvent* e) override
     {
         const QPoint pos = e->position().toPoint();
         const QList<int> s = starts();
+        if (const int key = keyAtLane(pos, s); key >= 0) {
+            m_editor->selectKeyTime(key);
+            if (e->button() == Qt::RightButton) {
+                m_editor->showKeyMenu(key, e->globalPosition().toPoint());
+                return;
+            }
+            if (e->button() == Qt::LeftButton) {
+                m_keyDrag = key;
+                m_keyDragTo = key;
+            }
+            return;
+        }
+        if (pos.y() >= kKeyLaneTop) {
+            // En el carril, fuera de un rombo: el cabezal va ahí.
+            if (e->button() == Qt::LeftButton) {
+                m_scrubbing = true;
+                m_editor->seek(timeForX(pos.x()));
+            }
+            return;
+        }
         if (pos.y() < kRulerHeight || (e->button() == Qt::LeftButton && clipAt(pos, s) < 0)) {
             m_scrubbing = e->button() == Qt::LeftButton;
             m_editor->seek(timeForX(pos.x()));
@@ -486,6 +604,17 @@ protected:
     void mouseMoveEvent(QMouseEvent* e) override
     {
         const QPoint pos = e->position().toPoint();
+        if (m_keyDrag >= 0) {
+            // Más lejos un rombo del otro, más dura el movimiento entre ellos (de 10 en 10 ms). Más allá
+            // del final, el fotograma dura más.
+            const QList<int> s = m_editor->frameStarts();
+            const int sel = m_editor->selectedFrame();
+            if (sel >= 0 && sel + 1 < s.size())
+                m_keyDragTo = std::max(0, int(std::round((timeForX(pos.x()) - s[sel]) / 10.0)) * 10);
+            setToolTip(QStringLiteral("%1 ms").arg(m_keyDragTo));
+            update();
+            return;
+        }
         if (m_scrubbing) {
             m_editor->seek(timeForX(pos.x()));
             return;
@@ -517,6 +646,15 @@ protected:
 
     void mouseReleaseEvent(QMouseEvent* e) override
     {
+        if (m_keyDrag >= 0) {
+            const int from = m_keyDrag, to = m_keyDragTo;
+            m_keyDrag = -1;
+            setToolTip({});
+            if (from != to)
+                m_editor->moveKeyTime(from, to);
+            update();
+            return;
+        }
         if (m_scrubbing) {
             m_scrubbing = false;
             return;
@@ -628,6 +766,8 @@ private:
     bool m_reordering = false;
     bool m_scrubbing = false;
     int m_dropAt = -1;
+    int m_keyDrag = -1;
+    int m_keyDragTo = 0;
     QHash<QString, QImage> m_thumbs;
 };
 
@@ -725,7 +865,7 @@ void GifEditor::buildUi()
     auto* player = new QWidget(top);
     auto* playerLayout = new QVBoxLayout(player);
     playerLayout->setContentsMargins(0, 0, 0, 0);
-    m_preview = new Preview(player);
+    m_preview = new Preview(this, player);
     auto* transport = new QHBoxLayout;
     auto button = [this, player](std::initializer_list<const char*> icons, const QString& tip, auto fn) {
         auto* b = new QToolButton(player);
@@ -764,10 +904,21 @@ void GifEditor::buildUi()
     playerLayout->addWidget(m_preview, 1);
     playerLayout->addLayout(transport);
 
+    // A la derecha, como en Filmora: la animación del fotograma elegido.
+    auto* inspectorScroll = new QScrollArea(top);
+    inspectorScroll->setWidgetResizable(true);
+    inspectorScroll->setFrameShape(QFrame::NoFrame);
+    inspectorScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_inspector = new Inspector(this, inspectorScroll);
+    inspectorScroll->setWidget(m_inspector);
+    inspectorScroll->setMinimumWidth(240);
+
     top->addWidget(bin);
     top->addWidget(player);
+    top->addWidget(inspectorScroll);
     top->setStretchFactor(0, 2);
     top->setStretchFactor(1, 5);
+    top->setStretchFactor(2, 2);
 
     // Línea de tiempo con su barra
     auto* timelineBox = new QWidget(vertical);
@@ -1005,6 +1156,8 @@ void GifEditor::selectFrame(int index)
     if (!m_doc || index < 0 || index >= m_doc->layerCount())
         return;
     m_extraSelection.clear();
+    if (index != m_doc->activeIndex())
+        m_selectedKey = -1;
     m_doc->setActiveIndex(index);
     if (!m_playing) {
         const QList<int> s = frameStarts();
@@ -1159,10 +1312,12 @@ void GifEditor::showPlayingFrame(int index)
 {
     // Solo lo que cambia: la imagen (si es otro fotograma), el cabezal y el tiempo. Sin tocar la
     // capa activa (eso movía el panel de capas, la ventana y el editor en cada fotograma).
-    if (index != m_playFrame) {
+    if (index != m_playFrame || (m_doc && index >= 0 && index < m_doc->layerCount() && m_doc->layer(index)->props.motion)) {
         m_playFrame = index;
         m_preview->setImage(frameImage(index));
     }
+    if (index == selectedFrame())
+        m_inspector->refreshValues();
     updateTimeLabel();
     m_timeline->update();
     m_timelineScroll->ensureVisible(m_timeline->xForTime(m_time), kTrackTop, 60, 0);
@@ -1178,6 +1333,35 @@ QImage GifEditor::frameImage(int index) const
     if (!m_doc || index < 0 || index >= m_doc->layerCount())
         return {};
     const Layer* layer = m_doc->layer(index);
+    // Con su animación (en el tiempo del cabezal), como en el GIF exportado.
+    if ((layer->props.motion && !layer->props.motion->isEmpty()) || (index == selectedFrame() && !m_dragOffset.isNull())) {
+        const Motion::Clip clip = layer->props.motion ? *layer->props.motion : Motion::Clip();
+        const QList<int> s = frameStarts();
+        const int duration = s[index + 1] - s[index];
+        int t = std::clamp(m_time - s[index], 0, std::max(0, duration - 1));
+        if (clip.animated())
+            t = t / std::max(10, clip.stepMs) * std::max(10, clip.stepMs);
+        Motion::Transform tr = clip.sample(t);
+        if (index == selectedFrame()) {
+            tr.x += m_dragOffset.x();
+            tr.y += m_dragOffset.y();
+        }
+        const QString key = QStringLiteral("%1:%2:%3:%4:%5:%6:%7").arg(layer->image.cacheKey()).arg(layer->props.opacity)
+                                .arg(tr.x).arg(tr.y).arg(tr.scaleX).arg(tr.scaleY).arg(tr.rotation) + QString::number(tr.opacity);
+        if (key == m_motionKey)
+            return m_motionImage;
+        QImage base = layer->image;
+        if (layer->props.opacity < 255) {
+            base = QImage(layer->image.size(), kLayerFormat);
+            base.fill(kTransparent);
+            QPainter p(&base);
+            p.setOpacity(layer->props.opacity / 255.0);
+            p.drawImage(0, 0, layer->image);
+        }
+        m_motionKey = key;
+        m_motionImage = Motion::render(base, tr);
+        return m_motionImage;
+    }
     // Con la opacidad de la capa, como en el GIF exportado.
     if (layer->props.opacity >= 255)
         return layer->image;
@@ -1211,6 +1395,9 @@ void GifEditor::updateState()
     }
     updateTimeLabel();
     m_timeline->refresh();
+    if (m_inspector)
+        m_inspector->refresh();
+    updateMotionPath();
     // El cabezal siempre a la vista mientras se reproduce.
     if (m_playing)
         m_timelineScroll->ensureVisible(m_timeline->xForTime(m_time), kTrackTop, 60, 0);
@@ -1367,6 +1554,198 @@ void GifEditor::duplicateFrame(int index)
     layers.insert(index + 1, copy);
     props.insert(index + 1, copy->props);
     applyFrames(layers, props, index + 1, tr("Duplicar fotograma"), QStringLiteral("edit-copy"));
+}
+
+Motion::Clip GifEditor::motion(int index) const
+{
+    if (!m_doc || index < 0 || index >= m_doc->layerCount() || !m_doc->layer(index)->props.motion)
+        return Motion::Clip();
+    return *m_doc->layer(index)->props.motion;
+}
+
+void GifEditor::setMotion(int index, const Motion::Clip& clip, const QString& text)
+{
+    if (!m_doc || index < 0 || index >= m_doc->layerCount())
+        return;
+    const Motion::Clip before = motion(index);
+    if (before == clip)
+        return;
+    const int time = m_time;
+    QList<LayerProps> props;
+    for (const LayerPtr& l : m_doc->layers())
+        props << l->props;
+    props[index].motion = clip.isEmpty() ? nullptr : std::make_shared<const Motion::Clip>(clip);
+    applyFrames(m_doc->layers(), props, index, text, QStringLiteral("chronometer"));
+    // El cabezal se queda donde estaba (dentro del fotograma).
+    m_time = time;
+    updateState();
+}
+
+int GifEditor::localTime() const
+{
+    const int index = selectedFrame();
+    const QList<int> s = frameStarts();
+    if (index < 0 || index + 1 >= s.size())
+        return 0;
+    return std::clamp(m_time - s[index], 0, std::max(0, s[index + 1] - s[index] - 1));
+}
+
+void GifEditor::seekLocal(int ms)
+{
+    const int index = selectedFrame();
+    const QList<int> s = frameStarts();
+    if (index < 0 || index + 1 >= s.size())
+        return;
+    stop();
+    m_time = s[index] + std::clamp(ms, 0, std::max(0, s[index + 1] - s[index] - 1));
+    updateState();
+}
+
+void GifEditor::selectKeyTime(int ms)
+{
+    m_selectedKey = ms;
+    seekLocal(ms);
+}
+
+void GifEditor::moveKeyTime(int from, int to)
+{
+    const int index = selectedFrame();
+    if (!m_doc || index < 0)
+        return;
+    Motion::Clip clip = motion(index);
+    to = std::max(0, to);
+    clip.moveKeys(from, to);
+    QList<LayerProps> props;
+    for (const LayerPtr& l : m_doc->layers())
+        props << l->props;
+    props[index].motion = clip.isEmpty() ? nullptr : std::make_shared<const Motion::Clip>(clip);
+    // Un punto más allá del final: el fotograma dura hasta él (y un poco más, para que se vea).
+    if (to >= frameDelay(index))
+        props[index].name = Gif::nameWithDelay(props[index].name, to + 10);
+    const int start = frameStarts()[index];
+    applyFrames(m_doc->layers(), props, index, tr("Mover punto clave"), QStringLiteral("transform-move"));
+    m_selectedKey = to;
+    m_time = start + to;
+    updateState();
+}
+
+void GifEditor::removeKeyTime(int ms)
+{
+    const int index = selectedFrame();
+    Motion::Clip clip = motion(index);
+    clip.removeKeys(ms);
+    m_selectedKey = -1;
+    setMotion(index, clip, tr("Quitar punto clave"));
+}
+
+void GifEditor::showKeyMenu(int ms, const QPoint& globalPos)
+{
+    const int index = selectedFrame();
+    const Motion::Clip clip = motion(index);
+    // La forma del primer punto que haya en ese tiempo (se aplica a todos los de ese tiempo).
+    Motion::Interp interp = Motion::Interp::Linear;
+    bool easeIn = false, easeOut = false;
+    for (const Motion::Track& track : clip.tracks)
+        if (const int i = track.keyAt(ms); i >= 0) {
+            interp = track.keys[i].interp;
+            easeIn = track.keys[i].easeIn;
+            easeOut = track.keys[i].easeOut;
+            break;
+        }
+    QMenu menu(this);
+    fillInterpMenu(
+        &menu, interp, easeIn, easeOut,
+        [this, index, ms](Motion::Interp kind) {
+            Motion::Clip c = motion(index);
+            c.setInterp(ms, kind);
+            setMotion(index, c, tr("Forma del movimiento"));
+        },
+        [this, index, ms](bool in, bool on) {
+            Motion::Clip c = motion(index);
+            c.setEase(ms, in, on);
+            setMotion(index, c, tr("Forma del movimiento"));
+        });
+    menu.addSeparator();
+    menu.addAction(Icons::theme({"edit-delete"}), tr("Quitar el punto clave"), QKeySequence::Delete, this,
+                   [this, ms] { removeKeyTime(ms); });
+    menu.exec(globalPos);
+}
+
+void GifEditor::bakeMotion(int index)
+{
+    if (!m_doc || index < 0 || index >= m_doc->layerCount())
+        return;
+    const Motion::Clip clip = motion(index);
+    if (clip.isEmpty())
+        return;
+    const auto parts = Motion::expand(m_doc->layer(index)->image, clip, frameDelay(index));
+    QList<LayerPtr> layers = m_doc->layers();
+    QList<LayerProps> props;
+    for (const LayerPtr& l : std::as_const(layers))
+        props << l->props;
+    const LayerProps original = props[index];
+    layers.removeAt(index);
+    props.removeAt(index);
+    for (int i = 0; i < parts.size(); ++i) {
+        LayerProps p = original;
+        p.motion = nullptr;
+        p.name = Gif::nameWithDelay(tr("Fotograma %1").arg(index + i + 1), parts[i].second);
+        auto layer = std::make_shared<Layer>(p.name, parts[i].first);
+        layer->props = p;
+        layers.insert(index + i, layer);
+        props.insert(index + i, p);
+    }
+    m_selectedKey = -1;
+    applyFrames(layers, props, index, tr("Convertir la animación en fotogramas"), QStringLiteral("insert-image"));
+}
+
+void GifEditor::previewDragged(QPointF delta, bool finished)
+{
+    const int index = selectedFrame();
+    if (!m_doc || index < 0)
+        return;
+    stop();
+    if (!finished) {
+        m_dragOffset = delta;
+        m_preview->setImage(frameImage(index));
+        return;
+    }
+    m_dragOffset = QPointF();
+    if (std::abs(delta.x()) < 0.5 && std::abs(delta.y()) < 0.5) {
+        m_preview->setImage(frameImage(index));
+        return;
+    }
+    Motion::Clip clip = motion(index);
+    const int t = localTime();
+    for (const auto& [prop, d] : {std::pair{Motion::PosX, delta.x()}, std::pair{Motion::PosY, delta.y()}}) {
+        Motion::Track& track = clip.tracks[prop];
+        const double v = std::round(track.value(t) + d);
+        if (track.animated())
+            track.setKey(t, v);
+        else
+            track.base = v;
+    }
+    setMotion(index, clip, tr("Mover la imagen"));
+}
+
+void GifEditor::updateMotionPath()
+{
+    const int index = selectedFrame();
+    const Motion::Clip clip = motion(index);
+    QList<QPointF> path, keys;
+    if (m_doc && index >= 0 && (clip.tracks[Motion::PosX].keys.size() > 1 || clip.tracks[Motion::PosY].keys.size() > 1)) {
+        const QPointF center(m_doc->size().width() / 2.0, m_doc->size().height() / 2.0);
+        const int duration = frameDelay(index);
+        for (int t = 0; t <= duration; t += 10) {
+            const Motion::Transform tr = clip.sample(t);
+            path << center + QPointF(tr.x, tr.y);
+        }
+        for (int t : clip.keyTimes()) {
+            const Motion::Transform tr = clip.sample(t);
+            keys << center + QPointF(tr.x, tr.y);
+        }
+    }
+    m_preview->setPath(path, keys);
 }
 
 QList<int> GifEditor::selectedFrames() const
@@ -1709,7 +2088,13 @@ void GifEditor::keyPressEvent(QKeyEvent* e)
     case Qt::Key_Left: step(-1); break;
     case Qt::Key_Right: step(1); break;
     case Qt::Key_Home: seek(0); break;
-    case Qt::Key_Delete: removeFrames(selectedFrames()); break;
+    case Qt::Key_Delete:
+        // Con un punto clave elegido, se quita ese; si no, los fotogramas elegidos.
+        if (m_selectedKey >= 0)
+            removeKeyTime(m_selectedKey);
+        else
+            removeFrames(selectedFrames());
+        break;
     default: break;
     }
     e->accept();

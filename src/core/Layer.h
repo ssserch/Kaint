@@ -9,6 +9,10 @@
 
 #include <memory>
 
+namespace Motion {
+struct Clip;
+}
+
 // Formato interno de todas las capas: RGBA de 8 bits con alfa directo (sin premultiplicar),
 // como ColorBgra de Paint.NET.
 constexpr QImage::Format kLayerFormat = QImage::Format_ARGB32;
@@ -23,6 +27,9 @@ struct LayerProps {
     bool visible = true;
     int opacity = 255;
     BlendMode blend = BlendMode::Normal;
+    // Editor de GIF: la animación por puntos clave de este fotograma (nula: ninguna). Inmutable:
+    // para cambiarla se pone otra (así entra en el historial como el resto).
+    std::shared_ptr<const Motion::Clip> motion;
 
     bool operator==(const LayerProps&) const = default;
 };

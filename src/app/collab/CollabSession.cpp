@@ -1,5 +1,7 @@
 #include "app/collab/CollabSession.h"
 
+#include "core/Motion.h"
+
 #include "app/collab/P2P.h"
 #include "app/collab/WebSocket.h"
 #include "core/Commands.h"
@@ -55,11 +57,14 @@ QStringList mergeOrder(const QStringList& current, const QStringList& listed, co
 
 QJsonObject propsJson(const QString& id, const LayerProps& p)
 {
-    return QJsonObject{{QStringLiteral("id"), id},
-                       {QStringLiteral("name"), p.name},
-                       {QStringLiteral("visible"), p.visible},
-                       {QStringLiteral("opacity"), p.opacity},
-                       {QStringLiteral("blend"), blendName(p.blend)}};
+    QJsonObject o{{QStringLiteral("id"), id},
+                  {QStringLiteral("name"), p.name},
+                  {QStringLiteral("visible"), p.visible},
+                  {QStringLiteral("opacity"), p.opacity},
+                  {QStringLiteral("blend"), blendName(p.blend)}};
+    // La animación del editor de GIF (null si no hay: así se quita también en los demás).
+    o.insert(QStringLiteral("motion"), p.motion && !p.motion->isEmpty() ? QJsonValue(p.motion->toJson()) : QJsonValue());
+    return o;
 }
 
 LayerProps propsFrom(const QJsonObject& o, LayerProps p = {})
@@ -72,6 +77,10 @@ LayerProps propsFrom(const QJsonObject& o, LayerProps p = {})
         p.opacity = std::clamp(o.value(QStringLiteral("opacity")).toInt(255), 0, 255);
     if (o.contains(QStringLiteral("blend")))
         p.blend = blendFromName(o.value(QStringLiteral("blend")).toString());
+    if (o.contains(QStringLiteral("motion"))) {
+        const QJsonObject m = o.value(QStringLiteral("motion")).toObject();
+        p.motion = m.isEmpty() ? nullptr : std::make_shared<const Motion::Clip>(Motion::Clip::fromJson(m));
+    }
     return p;
 }
 

@@ -28,6 +28,7 @@
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
 #include "app/GifEditor.h"
+#include "core/Motion.h"
 #include "app/dialogs/TaskDialog.h"
 #include "app/dialogs/WelcomeDialog.h"
 #include "app/panels/ColorsPanel.h"
@@ -3730,6 +3731,31 @@ int main(int argc, char** argv)
                 while (current->undoStack()->index() > steps)
                     current->undoStack()->undo();
                 CHECK(current->layerCount() == layersBefore && current->selection().isEmpty());
+            }
+
+            // Puntos clave (como en Filmora): dos rombos de posición, el de la derecha arrastrado
+            // más allá del final alarga el fotograma, y «Convertir en fotogramas» lo parte.
+            {
+                const int steps = current->undoStack()->index();
+                gif->selectFrame(0);
+                const int delay = gif->frameDelay(0);
+                Motion::Clip clip;
+                clip.tracks[Motion::PosX].setKey(0, 0);
+                clip.tracks[Motion::PosX].setKey(delay / 2 / 10 * 10, 30);
+                clip.stepMs = 20;
+                gif->setMotion(0, clip, QStringLiteral("prueba"));
+                CHECK(gif->motion(0) == clip && current->undoStack()->index() == steps + 1);
+                CHECK(gif->motion(0).keyTimes().size() == 2);
+                gif->selectKeyTime(clip.keyTimes().last());
+                CHECK(gif->localTime() == clip.keyTimes().last());
+                gif->moveKeyTime(clip.keyTimes().last(), delay + 200);
+                CHECK(gif->frameDelay(0) >= delay + 200 && gif->motion(0).lastKeyTime() == delay + 200);
+                const int framesBefore = gif->frameCount();
+                gif->bakeMotion(0);
+                CHECK(gif->frameCount() > framesBefore + 5 && !gif->motion(0).animated());
+                while (current->undoStack()->index() > steps)
+                    current->undoStack()->undo();
+                CHECK(current->layerCount() == layersBefore && !current->layer(0)->props.motion);
             }
             gifAction->trigger();
             settle();

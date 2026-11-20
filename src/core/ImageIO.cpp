@@ -1,4 +1,5 @@
 #include "core/ImageIO.h"
+#include "core/Motion.h"
 
 #include "core/Document.h"
 #include "core/ExtraFormats.h"
@@ -707,19 +708,28 @@ QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay, bool wi
     for (const LayerPtr& layer : doc->layers()) {
         if (!layer->props.visible && !withHidden)
             continue;
-        Gif::Frame f;
-        f.hidden = !layer->props.visible;
-        f.delayMs = Gif::delayFromName(layer->props.name, defaultDelay);
-        f.image = layer->image;
-        if (layer->props.opacity < 255) {
-            f.image = layer->image.copy();
-            for (int y = 0; y < f.image.height(); ++y) {
-                QRgb* row = reinterpret_cast<QRgb*>(f.image.scanLine(y));
-                for (int x = 0; x < f.image.width(); ++x)
-                    row[x] = (row[x] & 0x00ffffffu) | (quint32(qAlpha(row[x]) * layer->props.opacity / 255) << 24);
+        const int delay = Gif::delayFromName(layer->props.name, defaultDelay);
+        // Un fotograma con puntos clave (editor de GIF): varios, uno cada poco, con la imagen movida.
+        QList<std::pair<QImage, int>> parts;
+        if (layer->props.motion && !layer->props.motion->isEmpty())
+            parts = Motion::expand(layer->image, *layer->props.motion, std::max(Gif::kMinDelayMs, delay));
+        else
+            parts.append({layer->image, delay});
+        for (const auto& [image, length] : std::as_const(parts)) {
+            Gif::Frame f;
+            f.hidden = !layer->props.visible;
+            f.delayMs = length;
+            f.image = image;
+            if (layer->props.opacity < 255) {
+                f.image = image.copy();
+                for (int y = 0; y < f.image.height(); ++y) {
+                    QRgb* row = reinterpret_cast<QRgb*>(f.image.scanLine(y));
+                    for (int x = 0; x < f.image.width(); ++x)
+                        row[x] = (row[x] & 0x00ffffffu) | (quint32(qAlpha(row[x]) * layer->props.opacity / 255) << 24);
+                }
             }
+            frames << f;
         }
-        frames << f;
     }
     if (frames.isEmpty())
         frames << Gif::Frame{doc->flattened(), defaultDelay};

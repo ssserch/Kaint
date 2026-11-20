@@ -448,6 +448,9 @@ LayerPropertiesDialog::LayerPropertiesDialog(const LayerProps& props, std::funct
     m_name = new QLineEdit(props.name, this);
     m_visible = new QCheckBox(tr("Visible"), this);
     m_visible->setChecked(props.visible);
+    m_alphaLock = new QCheckBox(tr("Bloquear la transparencia"), this);
+    m_alphaLock->setChecked(props.alphaLock);
+    m_alphaLock->setToolTip(tr("Al pintar, solo cambia el color de lo que ya hay; lo transparente sigue transparente."));
     m_blend = new QComboBox(this);
     for (BlendMode m : layerBlendModes())
         m_blend->addItem(blendModeName(m), int(m));
@@ -477,6 +480,7 @@ LayerPropertiesDialog::LayerPropertiesDialog(const LayerProps& props, std::funct
     blendRow->addWidget(m_blend, 1);
     layout->addLayout(blendRow);
     layout->addWidget(m_visible);
+    layout->addWidget(m_alphaLock);
     layout->addSpacing(6);
     layout->addWidget(okCancel(this));
     setMinimumWidth(320);
@@ -496,6 +500,7 @@ LayerProps LayerPropertiesDialog::props() const
     p.visible = m_visible->isChecked();
     p.blend = BlendMode(m_blend->currentData().toInt());
     p.opacity = m_opacity->value();
+    p.alphaLock = m_alphaLock->isChecked();
     return p;
 }
 

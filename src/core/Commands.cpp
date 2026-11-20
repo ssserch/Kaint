@@ -141,10 +141,14 @@ PixelPatchCommand::PixelPatchCommand(Document* doc, LayerPtr layer, const QImage
     , m_doc(doc)
     , m_layer(std::move(layer))
 {
-    const QImage& after = m_layer->image;
-    const QRect area = rect.intersected(after.rect()).intersected(before.rect());
-    if (area.isEmpty() || before.size() != after.size())
+    const QRect area = rect.intersected(m_layer->image.rect()).intersected(before.rect());
+    if (area.isEmpty() || before.size() != m_layer->image.size())
         return;
+    // Alpha-Lock: el cambio (pincel, relleno, degradado, texto, efecto, pegar...) solo cambia el
+    // color; el alfa de cada píxel se queda como estaba.
+    if (m_layer->props.alphaLock)
+        Raster::preserveAlpha(m_layer->image, before, area);
+    const QImage& after = m_layer->image;
 
     const int tx0 = area.left() / kTile;
     const int ty0 = area.top() / kTile;

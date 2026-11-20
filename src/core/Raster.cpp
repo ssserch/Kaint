@@ -36,6 +36,24 @@ void copyRect(QImage& dst, const QImage& src, const QRect& area)
     }, 128);
 }
 
+void preserveAlpha(QImage& image, const QImage& before, const QRect& rect)
+{
+    const QRect r = rect.intersected(image.rect()).intersected(before.rect());
+    if (r.isEmpty() || image.size() != before.size())
+        return;
+    for (int y = r.top(); y <= r.bottom(); ++y) {
+        const QRgb* src = reinterpret_cast<const QRgb*>(before.constScanLine(y));
+        QRgb* dst = reinterpret_cast<QRgb*>(image.scanLine(y));
+        for (int x = r.left(); x <= r.right(); ++x) {
+            const QRgb a = src[x] & 0xff000000u;
+            if (a == 0)
+                dst[x] = src[x];
+            else
+                dst[x] = (dst[x] & 0x00ffffffu) | a;
+        }
+    }
+}
+
 void blit(QImage& dst, const QImage& src, QPoint at)
 {
     const QRect target = QRect(at, src.size()).intersected(dst.rect());

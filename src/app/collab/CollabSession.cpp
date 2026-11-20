@@ -62,6 +62,7 @@ QJsonObject propsJson(const QString& id, const LayerProps& p)
                   {QStringLiteral("visible"), p.visible},
                   {QStringLiteral("opacity"), p.opacity},
                   {QStringLiteral("blend"), blendName(p.blend)}};
+    o.insert(QStringLiteral("alphaLock"), p.alphaLock);
     // La animación del editor de GIF (null si no hay: así se quita también en los demás).
     o.insert(QStringLiteral("motion"), p.motion && !p.motion->isEmpty() ? QJsonValue(p.motion->toJson()) : QJsonValue());
     return o;
@@ -77,6 +78,8 @@ LayerProps propsFrom(const QJsonObject& o, LayerProps p = {})
         p.opacity = std::clamp(o.value(QStringLiteral("opacity")).toInt(255), 0, 255);
     if (o.contains(QStringLiteral("blend")))
         p.blend = blendFromName(o.value(QStringLiteral("blend")).toString());
+    if (o.contains(QStringLiteral("alphaLock")))
+        p.alphaLock = o.value(QStringLiteral("alphaLock")).toBool();
     if (o.contains(QStringLiteral("motion"))) {
         const QJsonObject m = o.value(QStringLiteral("motion")).toObject();
         p.motion = m.isEmpty() ? nullptr : std::make_shared<const Motion::Clip>(Motion::Clip::fromJson(m));

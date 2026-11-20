@@ -30,6 +30,8 @@ struct LayerProps {
     // Editor de GIF: la animación por puntos clave de este fotograma (nula: ninguna). Inmutable:
     // para cambiarla se pone otra (así entra en el historial como el resto).
     std::shared_ptr<const Motion::Clip> motion;
+    // Bloquear la transparencia (Alpha-Lock): lo que se pinta solo cambia el color, no el alfa.
+    bool alphaLock = false;
 
     bool operator==(const LayerProps&) const = default;
 };

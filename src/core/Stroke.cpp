@@ -431,6 +431,9 @@ void StrokeEngine::composite(const QRect& area)
         break;
     }
     }
+    // Alpha-Lock, también mientras se pinta (no solo al terminar el trazo).
+    if (m_layer->props.alphaLock)
+        Raster::preserveAlpha(img, m_before, r);
     m_doc->notifyPixelsChanged(m_layer.get(), r);
 }
 

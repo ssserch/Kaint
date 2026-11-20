@@ -1486,6 +1486,13 @@ void MainWindow::createActions()
                                 QKeySequence(QStringLiteral("Ctrl+M")), [this] { mergeLayerDown(); });
     A["toggleLayer"] = makeAction(tr("Alternar &visibilidad de capa"), {"layer-visible-on"}, QKeySequence(QStringLiteral("Ctrl+,")),
                                   [this] { if (m_doc) toggleLayerVisibility(m_doc->activeIndex()); }, doc);
+    // Alpha-Lock (como en Ibis Paint, FireAlpaca o Krita): pintar solo cambia el color de lo que ya
+    // hay en la capa, no su transparencia.
+    A["alphaLock"] = makeAction(tr("&Bloquear la transparencia"), {"object-locked", "lock", "transparency"}, {},
+                                [this] { toggleAlphaLock(); }, doc);
+    A["alphaLock"]->setCheckable(true);
+    A["alphaLock"]->setToolTip(tr("Bloquear la transparencia de la capa (Alpha-Lock): al pintar, rellenar o aplicar efectos "
+                                  "solo cambia el color de lo que ya hay; lo transparente sigue transparente."));
     A["importLayer"] = makeAction(tr("&Importar desde archivo..."), {"layer-import", "document-import", "insert-image"}, {},
                                   [this] { importLayer(); }, doc);
     A["flipLayerH"] = makeAction(tr("Voltear &horizontalmente"), {"layer-flip-horizontal", "object-flip-horizontal"}, {},
@@ -1684,7 +1691,7 @@ void MainWindow::createMenus()
     image->addAction(A["flatten"]);
 
     QMenu* layers = bar->addMenu(tr("&Capas"));
-    layers->addActions({A["addLayer"], A["deleteLayer"], A["duplicateLayer"], A["mergeDown"], A["toggleLayer"]});
+    layers->addActions({A["addLayer"], A["deleteLayer"], A["duplicateLayer"], A["mergeDown"], A["toggleLayer"], A["alphaLock"]});
     layers->addSeparator();
     layers->addAction(A["importLayer"]);
     layers->addSeparator();
@@ -2044,7 +2051,7 @@ void MainWindow::createPanels()
                                            QPoint(8, 8), QSize(210, 240));
 
     m_layers = new LayersPanel({m_act["addLayer"], m_act["deleteLayer"], m_act["duplicateLayer"], m_act["mergeDown"],
-                                m_act["layerUp"], m_act["layerDown"], m_act["layerProps"]});
+                                m_act["layerUp"], m_act["layerDown"], m_act["alphaLock"], m_act["layerProps"]});
     connect(m_layers, &LayersPanel::visibilityToggled, this, &MainWindow::toggleLayerVisibility);
     connect(m_layers, &LayersPanel::propertiesRequested, this, &MainWindow::layerProperties);
     m_layersPanel = m_workspace->addPanel(QStringLiteral("layers"), tr("Capas"), m_layers, Corner::BottomRight,
@@ -2608,6 +2615,10 @@ void MainWindow::updateActions()
     m_act["redo"]->setEnabled(m_undoGroup->canRedo());
     m_act["repeatEffect"]->setEnabled(has && m_lastEffect);
     m_act["repeatEffect"]->setVisible(m_lastEffect != nullptr);
+    {
+        const QSignalBlocker block(m_act["alphaLock"]);
+        m_act["alphaLock"]->setChecked(has && m_doc->activeLayer() && m_doc->activeLayer()->props.alphaLock);
+    }
     // En el editor de GIF, lo que trabaja con la selección o las herramientas no se ve y cambiaba
     // la imagen a escondidas (un pegado flotante que quedaba como una capa vieja al volver):
     // desactivado. Copiar, cortar y pegar trabajan con fotogramas (GifEditor).
@@ -4275,6 +4286,21 @@ void MainWindow::layerProperties()
     if (accepted && after != before)
         push(new LayerPropsCommand(doc, index, before, after, tr("Propiedades de la capa")),
              QStringLiteral("layer-properties"));
+}
+
+void MainWindow::toggleAlphaLock()
+{
+    if (!m_doc || !m_doc->activeLayer())
+        return;
+    finishTool();
+    const int index = m_doc->activeIndex();
+    const LayerProps before = m_doc->layer(index)->props;
+    LayerProps after = before;
+    after.alphaLock = !before.alphaLock;
+    push(new LayerPropsCommand(m_doc, index, before, after,
+                               after.alphaLock ? tr("Bloquear la transparencia") : tr("Desbloquear la transparencia")),
+         QStringLiteral("object-locked"));
+    updateActions();
 }
 
 void MainWindow::toggleLayerVisibility(int index)

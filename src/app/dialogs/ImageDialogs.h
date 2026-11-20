@@ -123,6 +123,7 @@ private:
     LayerProps m_base;
     QLineEdit* m_name;
     QCheckBox* m_visible;
+    QCheckBox* m_alphaLock;
     QComboBox* m_blend;
     QSlider* m_opacitySlider;
     QSpinBox* m_opacity;

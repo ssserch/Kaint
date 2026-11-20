@@ -172,6 +172,7 @@ private:
     void selectLayer(int index);
     void layerProperties();
     void toggleLayerVisibility(int index);
+    void toggleAlphaLock();
     void soloLayer(int index);
     void rotateZoomLayer();
 

@@ -1049,6 +1049,7 @@ Document* build(const Parsed& p, QString* warning)
         const Record& rec = *b.record;
         auto layer = std::make_shared<Layer>(rec.name.isEmpty() ? doc->nextLayerName() : rec.name, layerImage(p, rec, changes));
         layer->props.visible = !b.hidden;
+        layer->props.alphaLock = rec.flags & 0x01;
         layer->props.blend = blendFromKey(rec.blend).value_or(BlendMode::Normal);
         layer->props.opacity = rec.opacity;
         if (rec.fillOpacity < 255) {
@@ -1400,7 +1401,8 @@ QByteArray encode(const Document* doc, QString* error, bool psb)
         out.append(keyFromBlend(layer->props.blend), 4);
         out.append(char(std::clamp(layer->props.opacity, 0, 255)));
         out.append('\0');                                    // sin recorte
-        out.append(char(0x08 | (layer->props.visible ? 0 : 0x02))); // el bit 4 tiene sentido (y es 0)
+        // Bit 0: transparencia protegida (Alpha-Lock); bit 1: oculta.
+        out.append(char(0x08 | (layer->props.visible ? 0 : 0x02) | (layer->props.alphaLock ? 0x01 : 0))); // el bit 4 tiene sentido (y es 0)
         out.append('\0');
         const qsizetype extraAt = out.size();
         put32(out, 0);

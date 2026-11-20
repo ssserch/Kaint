@@ -15,6 +15,9 @@ void copyRect(QImage& dst, const QImage& src, const QRect& r);
 
 // Copia todo 'src' dentro de 'dst' en la posición 'at' (recortando).
 void blit(QImage& dst, const QImage& src, QPoint at);
+// Alpha-Lock: en 'rect', 'image' vuelve a tener el alfa de 'before' (del mismo tamaño); donde era
+// transparente, queda como estaba.
+void preserveAlpha(QImage& image, const QImage& before, const QRect& rect);
 
 // "Calidad de selección" de la barra de herramientas: con el borde suavizado o pixelado
 // (umbral al 50 %).

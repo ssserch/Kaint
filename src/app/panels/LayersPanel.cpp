@@ -1,5 +1,7 @@
 #include "app/panels/LayersPanel.h"
 
+#include "app/Icons.h"
+
 #include "app/Animations.h"
 #include "core/Document.h"
 #include "core/Raster.h"
@@ -30,6 +32,8 @@ constexpr int LinkedRole = Qt::UserRole + 3;
 constexpr int OffsetRole = Qt::UserRole + 4;
 // Fila que se arrastra en vivo: no se pinta (la sustituye su imagen, que sigue al ratón).
 constexpr int DraggedRole = Qt::UserRole + 5;
+// La capa tiene la transparencia bloqueada (Alpha-Lock): un candado junto a la casilla.
+constexpr int AlphaLockRole = Qt::UserRole + 6;
 
 class LayerDelegate : public QStyledItemDelegate {
 public:
@@ -81,7 +85,12 @@ public:
 
         const bool selected = option.state & QStyle::State_Selected;
         p->setPen(option.palette.color(selected ? QPalette::HighlightedText : QPalette::Text));
-        const QRect textRect(thumbBox.right() + 8, r.top(), r.width() - kThumb - 44, r.height());
+        const bool locked = index.data(AlphaLockRole).toBool();
+        const QRect textRect(thumbBox.right() + 8, r.top(), r.width() - kThumb - (locked ? 64 : 44), r.height());
+        if (locked) {
+            const QRect lock(checkRect(r).left() - 20, r.top() + (r.height() - 16) / 2, 16, 16);
+            Icons::theme({"object-locked", "lock"}).paint(p, lock);
+        }
         p->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft,
                     option.fontMetrics.elidedText(index.data().toString(), Qt::ElideRight, textRect.width()));
 
@@ -438,10 +447,12 @@ void LayersPanel::rebuild()
         m_rowLayers.append(l);
         auto* item = new QListWidgetItem(l->props.name, m_list);
         item->setData(VisibleRole, l->props.visible);
+        item->setData(AlphaLockRole, l->props.alphaLock);
         item->setToolTip(tr("%1\nOpacidad: %2 · Fusión: %3")
                              .arg(l->props.name)
                              .arg(l->props.opacity)
-                             .arg(blendModeName(l->props.blend)));
+                             .arg(blendModeName(l->props.blend))
+                         + (l->props.alphaLock ? QStringLiteral("\n") + tr("Transparencia bloqueada") : QString()));
         m_dirty.insert(layerForRow(row));
     }
     updateThumbnails();

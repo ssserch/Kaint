@@ -1247,6 +1247,34 @@ static void testGifAndIco()
         CHECK(Gif::applyEffects(two, bg).size() == 1);
     }
 
+    // Alpha-Lock: con la transparencia bloqueada, un cambio (aquí, rellenarlo todo de azul) solo
+    // cambia el color de lo que ya había; se guarda en el .ora y en el .psd.
+    {
+        QImage half(20, 10, kLayerFormat);
+        half.fill(kTransparent);
+        for (int y = 0; y < 10; ++y)
+            for (int x = 0; x < 10; ++x)
+                half.setPixel(x, y, qRgba(255, 0, 0, x < 5 ? 255 : 128));
+        std::unique_ptr<Document> locked(Document::createFromImage(half, QStringLiteral("Capa")));
+        LayerProps lp = locked->layer(0)->props;
+        lp.alphaLock = true;
+        locked->setLayerProps(0, lp);
+        const QImage before = locked->layer(0)->image.copy();
+        locked->layerPtr(0)->image.fill(qRgba(0, 0, 255, 255));
+        CHECK(pushPixelPatch(locked.get(), locked->layerPtr(0), before, locked->rect(), QStringLiteral("Rellenar")));
+        const QImage& after = locked->layer(0)->image;
+        CHECK(after.pixel(2, 2) == qRgba(0, 0, 255, 255) && qAlpha(after.pixel(7, 2)) == 128 && qBlue(after.pixel(7, 2)) == 255);
+        CHECK(qAlpha(after.pixel(15, 5)) == 0);
+        locked->undoStack()->undo();
+        CHECK(locked->layer(0)->image.pixel(2, 2) == qRgba(255, 0, 0, 255));
+        for (const char* ext : {"ora", "psd"}) {
+            const QString path = dir.filePath(QStringLiteral("bloqueada.") + QLatin1String(ext));
+            CHECK(ImageIO::save(locked.get(), path, ImageIO::SaveOptions(), &error));
+            std::unique_ptr<Document> back(ImageIO::load(path, &error));
+            CHECK(back && back->layer(0)->props.alphaLock);
+        }
+    }
+
     // Puntos clave del editor de GIF (Motion): interpolación, ida y vuelta en JSON, el fotograma
     // que se convierte en varios al exportar y la animación guardada en el .ora.
     {

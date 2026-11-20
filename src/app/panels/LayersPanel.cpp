@@ -255,16 +255,24 @@ bool LayersPanel::eventFilter(QObject* obj, QEvent* e)
             const int target = m_ghost ? m_liveTarget : targetRowAt(me->position().toPoint().y());
             const int from = layerForRow(m_dragRow);
             const int to = layerForRow(target);
+            // Como la tira de imágenes de arriba: al soltar, la capa se desliza desde donde quedó la
+            // fila que se arrastraba hasta su sitio (antes aparecía allí de golpe).
+            const Layer* dragged = m_doc->layer(from);
+            qreal glide = 0;
+            if (m_ghost && target >= 0 && target < m_list->count())
+                glide = m_ghost->y() - m_list->visualRect(m_list->model()->index(target, 0)).top();
             if (m_ghost)
                 finishLiveDrag();
             m_dragging = false;
             m_dragRow = -1;
             if (from != to) {
-                // Las filas ya se ven en su sitio nuevo: al rehacer la lista no se deslizan.
+                // Las demás filas ya se ven en su sitio nuevo: al rehacer la lista no se deslizan.
                 if (!m_dropLineMode)
                     m_rowLayers.clear();
                 emit moveRequested(from, to);
             }
+            if (!m_dropLineMode && dragged && std::abs(glide) >= 1)
+                glideRow(dragged, glide);
             return true;
         }
         m_dragRow = -1;
@@ -486,6 +494,22 @@ void LayersPanel::slideMovedRows(const QList<const Layer*>& before)
         for (auto it = start.constBegin(); it != start.constEnd(); ++it)
             if (QListWidgetItem* item = m_list->item(it.key()))
                 item->setData(OffsetRole, it.value() * v);
+        m_list->viewport()->update();
+    });
+}
+
+void LayersPanel::glideRow(const Layer* layer, qreal offset)
+{
+    if (!Animations::enabled())
+        return;
+    const int row = int(m_rowLayers.indexOf(layer));
+    if (row < 0 || row >= m_list->count())
+        return;
+    if (m_slide)
+        m_slide->stop();
+    m_slide = Animations::run(this, 1.0, 0.0, Animations::kListMove + 60, Animations::listMoveCurve(), [this, row, offset](qreal v) {
+        if (QListWidgetItem* item = m_list->item(row))
+            item->setData(OffsetRole, offset * v);
         m_list->viewport()->update();
     });
 }

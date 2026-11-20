@@ -1443,6 +1443,15 @@ void MainWindow::createActions()
     A["zoomSel"] = makeAction(tr("Zum a &selección"), {"zoom-select", "zoom-fit-selection"},
                               QKeySequence(QStringLiteral("Ctrl+Shift+B")),
                               [this] { m_canvas->zoomToRect(QRectF(m_doc->selection().bounds())); }, sel);
+    // Girar la vista (solo se ve girada, como en Kaint.APK); también con Alt + rueda.
+    A["rotateViewLeft"] = makeAction(tr("Girar la vista a la iz&quierda"), {"object-rotate-left", "rotate-left"},
+                                     QKeySequence(QStringLiteral("Ctrl+Alt+Left")),
+                                     [this] { m_canvas->setViewRotation(m_canvas->viewRotation() - 15); }, doc);
+    A["rotateViewRight"] = makeAction(tr("Girar la vista a la de&recha"), {"object-rotate-right", "rotate-right"},
+                                      QKeySequence(QStringLiteral("Ctrl+Alt+Right")),
+                                      [this] { m_canvas->setViewRotation(m_canvas->viewRotation() + 15); }, doc);
+    A["rotateViewReset"] = makeAction(tr("Vista sin &girar"), {"transform-rotate", "view-refresh"},
+                                      QKeySequence(QStringLiteral("Ctrl+Alt+Up")), [this] { m_canvas->setViewRotation(0); }, doc);
     A["actualSize"] = makeAction(tr("&Tamaño real"), {"zoom-original"}, QKeySequence(QStringLiteral("Ctrl+0")),
                                  [this] { m_canvas->actualSize(); }, doc);
     A["actualSize"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+0")), QKeySequence(QStringLiteral("Ctrl+Shift+A"))});
@@ -1689,6 +1698,8 @@ void MainWindow::createMenus()
 
     QMenu* view = bar->addMenu(tr("&Ver"));
     view->addActions({A["zoomIn"], A["zoomOut"], A["zoomFit"], A["zoomSel"], A["actualSize"]});
+    view->addSeparator();
+    view->addActions({A["rotateViewLeft"], A["rotateViewRight"], A["rotateViewReset"]});
     view->addSeparator();
     view->addActions({A["pixelGrid"], A["rulers"]});
     view->addSeparator();

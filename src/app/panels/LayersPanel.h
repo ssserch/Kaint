@@ -45,6 +45,8 @@ private:
     int rowForLayer(int index) const;
     int layerForRow(int row) const;
     void slideMovedRows(const QList<const Layer*>& before);
+    // Desliza la fila de 'layer' desde 'offset' píxeles hasta su sitio (al soltarla).
+    void glideRow(const Layer* layer, qreal offset);
 
     QPointer<Document> m_doc;
     QListWidget* m_list;

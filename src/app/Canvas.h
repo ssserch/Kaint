@@ -34,6 +34,13 @@ public:
 
     qreal zoom() const { return m_zoom; }
     void setZoom(qreal zoom, std::optional<QPointF> anchor = std::nullopt);
+    // Giro de la vista (grados, alrededor del centro), como en Kaint.APK: solo se ve girada; la
+    // imagen no cambia. Alt + rueda (Alt+Mayús, de grado en grado) o Ver > Girar la vista.
+    void setViewRotation(qreal degrees);
+    qreal viewRotation() const { return m_rotation; }
+    // Una posición de la ventana (lo que llega del ratón) en las coordenadas de la vista sin girar,
+    // que son las que usan las herramientas.
+    QPointF toLogical(const QPointF& device) const;
     void zoomIn(std::optional<QPointF> anchor = std::nullopt);
     void zoomOut(std::optional<QPointF> anchor = std::nullopt);
     // Como Paint.NET: «Zum a ventana» deja la imagen como al abrirla (al 100 % si cabe; si no,
@@ -206,6 +213,11 @@ private:
     QImage m_composite;
     QColorTransform m_toDisplay;
     qreal m_zoom = 1.0;
+    qreal m_rotation = 0;
+    // Repinta 'r' (en la vista sin girar); con la vista girada, todo.
+    void updateView(const QRect& r);
+    void updateView(const QRectF& r) { updateView(r.toAlignedRect()); }
+    void updateView(const QRegion& r);
     QPointF m_origin;
     bool m_overscroll = true;
     bool m_syncingBars = false;

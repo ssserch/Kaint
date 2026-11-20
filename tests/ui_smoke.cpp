@@ -3768,6 +3768,23 @@ int main(int argc, char** argv)
         }
     }
 
+    // Vista girada (Alt + rueda, Ver > Girar la vista): el centro se queda, un punto a la derecha del
+    // centro en pantalla es, en la vista sin girar, uno encima (90°), y se pinta sin fallar.
+    {
+        canvas->setViewRotation(90);
+        CHECK(std::abs(canvas->viewRotation() - 90) < 1e-9);
+        const QPointF c = QRectF(canvas->viewport()->rect()).center();
+        const QPointF right = canvas->toLogical(c + QPointF(50, 0));
+        CHECK(std::abs(right.x() - c.x()) < 0.01 && std::abs(right.y() - (c.y() - 50)) < 0.01);
+        canvas->viewport()->repaint();
+        QWheelEvent wheel(c, canvas->viewport()->mapToGlobal(c), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::AltModifier,
+                          Qt::NoScrollPhase, false);
+        QApplication::sendEvent(canvas->viewport(), &wheel);
+        CHECK(std::abs(canvas->viewRotation() - 75) < 1e-9);
+        canvas->setViewRotation(0);
+        CHECK(canvas->toLogical(QPointF(10, 20)) == QPointF(10, 20));
+    }
+
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());
     if (g_failures == 0)
         std::printf("La prueba de humo de la interfaz pasó.\n");

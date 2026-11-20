@@ -59,7 +59,7 @@ Canvas::Canvas(QWidget* parent)
         QRegion area(viewport()->rect());
         if (m_doc)
             area -= imageToView(QRectF(m_doc->rect())).toAlignedRect().adjusted(1, 1, -1, -1);
-        viewport()->update(area);
+        updateView(area);
     });
     m_checker = QPixmap::fromImage(Raster::checkerboard(8, QColor(191, 191, 191), QColor(143, 143, 143)));
     m_hRuler = new Ruler(Qt::Horizontal, this, this);
@@ -121,7 +121,7 @@ Canvas::Canvas(QWidget* parent)
         if (!sel.path().isEmpty())
             area = area.united(sel.path().boundingRect());
         const QRect r = imageToView(area).toAlignedRect().adjusted(-2, -2, 2, 2);
-        viewport()->update(r.intersected(viewport()->rect()));
+        updateView(r.intersected(viewport()->rect()));
     });
 }
 
@@ -234,7 +234,7 @@ void Canvas::onPixelsChanged(const QRect& r)
     if (!m_doc || r.isEmpty())
         return;
     renderRegion(r);
-    viewport()->update(imageToView(QRectF(r)).toAlignedRect().adjusted(-2, -2, 2, 2));
+    updateView(imageToView(QRectF(r)).toAlignedRect().adjusted(-2, -2, 2, 2));
 }
 
 void Canvas::onSizeChanged()
@@ -376,6 +376,50 @@ QTransform Canvas::imageToViewTransform() const
     const QPointF o = origin();
     const qreal s = scale();
     return QTransform(s, 0, 0, s, o.x(), o.y());
+}
+
+void Canvas::setViewRotation(qreal degrees)
+{
+    degrees = std::fmod(degrees, 360.0);
+    if (degrees > 180)
+        degrees -= 360;
+    if (degrees <= -180)
+        degrees += 360;
+    if (std::abs(degrees) < 0.01)
+        degrees = 0;
+    if (degrees == m_rotation)
+        return;
+    m_rotation = degrees;
+    viewport()->update();
+    emit viewChanged();
+}
+
+QPointF Canvas::toLogical(const QPointF& device) const
+{
+    if (m_rotation == 0)
+        return device;
+    const QPointF c = QRectF(viewport()->rect()).center();
+    QTransform t;
+    t.translate(c.x(), c.y());
+    t.rotate(-m_rotation);
+    t.translate(-c.x(), -c.y());
+    return t.map(device);
+}
+
+void Canvas::updateView(const QRect& r)
+{
+    if (m_rotation != 0)
+        viewport()->update();
+    else
+        viewport()->update(r);
+}
+
+void Canvas::updateView(const QRegion& r)
+{
+    if (m_rotation != 0)
+        viewport()->update();
+    else
+        viewport()->update(r);
 }
 
 QRect Canvas::visibleImageRect() const
@@ -743,6 +787,17 @@ void Canvas::paintEvent(QPaintEvent* e)
     if (!m_doc)
         return;
 
+    // Vista girada: todo (la imagen, la selección, lo de las herramientas) se dibuja girado alrededor
+    // del centro; las posiciones siguen siendo las de la vista sin girar.
+    QRect exposed = e->rect();
+    if (m_rotation != 0) {
+        const QPointF c = QRectF(viewport()->rect()).center();
+        p.translate(c);
+        p.rotate(m_rotation);
+        p.translate(-c);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        exposed = p.transform().inverted().mapRect(QRectF(viewport()->rect())).toAlignedRect();
+    }
     const QRectF imgView = imageToView(QRectF(m_doc->rect()));
     if (m_dropShadow) {
         for (int i = 1; i <= 6; ++i) {
@@ -754,7 +809,7 @@ void Canvas::paintEvent(QPaintEvent* e)
     p.setPen(QColor(0, 0, 0, dark ? 160 : 70));
     p.drawRect(imgView.adjusted(-1, -1, 0, 0));
 
-    const QRectF visible = imgView.intersected(QRectF(e->rect()));
+    const QRectF visible = imgView.intersected(QRectF(exposed));
     if (!visible.isEmpty()) {
         // Fijo en la ventana, como en Paint.NET: no cambia con el zum ni al desplazarse.
         p.fillRect(visible, QBrush(m_checker));
@@ -767,7 +822,7 @@ void Canvas::paintEvent(QPaintEvent* e)
         // o escalas fraccionarias el fondo de alrededor parecía moverse un píxel.
         p.save();
         p.setClipRect(visible, Qt::IntersectClip);
-        p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1.0);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1.0 || m_rotation != 0);
         p.drawImage(imgView, m_composite);
         p.restore();
         if (m_pixelGrid && m_zoom >= 2)
@@ -826,7 +881,7 @@ void Canvas::setRemotePointers(const QList<RemotePointer>& pointers)
     for (const RemotePointer& r : std::as_const(m_remotePointers))
         dirty += remotePointerRect(r);
     if (!dirty.isEmpty())
-        viewport()->update(dirty);
+        updateView(dirty);
 }
 
 void Canvas::drawRemotePointers(QPainter& p) const
@@ -1291,8 +1346,8 @@ bool Canvas::nudgePointer(QKeyEvent* e)
     if (m_toolButton != Qt::NoButton)
         m_lastToolPos = m_nudgeView;
     if (m_tool->brushOutlineDiameter() > 0) {
-        viewport()->update(brushOutlineRect(previous));
-        viewport()->update(brushOutlineRect(m_mouseView));
+        updateView(brushOutlineRect(previous));
+        updateView(brushOutlineRect(m_mouseView));
     }
     return true;
 }
@@ -1303,7 +1358,7 @@ ToolEvent Canvas::makeEvent(QMouseEvent* e) const
     // El movimiento que llega de la posición en que dejaron el puntero las flechas: en la exacta
     // (la de la pantalla está redondeada a píxeles de la pantalla).
     const bool nudged = m_nudged && e->globalPosition().toPoint() == m_nudgeGlobal;
-    ev.viewPos = nudged ? m_nudgeView : e->position();
+    ev.viewPos = nudged ? m_nudgeView : toLogical(e->position());
     ev.pos = viewToImage(ev.viewPos);
     ev.button = e->button();
     ev.buttons = e->buttons();
@@ -1363,7 +1418,7 @@ bool Canvas::viewportEvent(QEvent* e)
     case QEvent::NativeGesture: {
         auto* g = static_cast<QNativeGestureEvent*>(e);
         if (g->gestureType() == Qt::ZoomNativeGesture) {
-            setZoom(m_zoom * (1.0 + g->value()), g->position());
+            setZoom(m_zoom * (1.0 + g->value()), toLogical(g->position()));
             return true;
         }
         break;
@@ -1390,7 +1445,7 @@ void Canvas::mousePressEvent(QMouseEvent* e)
         return;
     if (e->button() == Qt::MiddleButton || (m_spaceDown && e->button() == Qt::LeftButton)) {
         m_panning = true;
-        m_panLast = e->position();
+        m_panLast = toLogical(e->position());
         updateCursor();
         return;
     }
@@ -1404,7 +1459,7 @@ void Canvas::mousePressEvent(QMouseEvent* e)
         return;
     }
     m_toolButton = e->button();
-    m_lastToolPos = e->position();
+    m_lastToolPos = toLogical(e->position());
     m_lastButtons = e->buttons();
     m_lastModifiers = e->modifiers();
     if (m_tool)
@@ -1423,7 +1478,7 @@ void Canvas::mouseMoveEvent(QMouseEvent* e)
     // El ratón de verdad se movió: las flechas vuelven a partir de donde esté.
     if (m_nudged && e->globalPosition().toPoint() != m_nudgeGlobal)
         m_nudged = false;
-    m_mouseView = m_nudged ? m_nudgeView : e->position();
+    m_mouseView = m_nudged ? m_nudgeView : toLogical(e->position());
     m_mouseInside = true;
     m_mouseSeen = true;
     if (!m_doc)
@@ -1434,21 +1489,21 @@ void Canvas::mouseMoveEvent(QMouseEvent* e)
     updateRulers();
 
     if (m_panning) {
-        scrollByView(m_panLast - e->position());
-        m_panLast = e->position();
+        scrollByView(m_panLast - toLogical(e->position()));
+        m_panLast = toLogical(e->position());
         return;
     }
     if (m_tool) {
         m_tool->mouseMove(makeEvent(e));
         if (m_tool->brushOutlineDiameter() > 0) {
-            viewport()->update(brushOutlineRect(previous));
-            viewport()->update(brushOutlineRect(m_mouseView));
+            updateView(brushOutlineRect(previous));
+            updateView(brushOutlineRect(m_mouseView));
         }
         if (m_toolButton != Qt::NoButton) {
-            m_lastToolPos = e->position();
+            m_lastToolPos = toLogical(e->position());
             m_lastButtons = e->buttons();
             m_lastModifiers = e->modifiers();
-            updateAutoScroll(e->position());
+            updateAutoScroll(toLogical(e->position()));
         }
     }
 }
@@ -1535,7 +1590,20 @@ void Canvas::wheelEvent(QWheelEvent* e)
     // Con un botón pulsado (seleccionando, pintando...), lo que se hace sigue al puntero sobre la
     // imagen que se desplaza o se acerca debajo.
     if (m_toolButton != Qt::NoButton)
-        m_lastToolPos = e->position();
+        m_lastToolPos = toLogical(e->position());
+    // Alt + rueda: gira la vista (de 15 en 15 grados; con Mayús, de grado en grado), como girar el
+    // lienzo con dos dedos en Kaint.APK.
+    if (e->modifiers() & Qt::AltModifier) {
+        const QPoint ad = e->angleDelta();
+        // (Con Alt, algunos sistemas mandan la rueda vertical como horizontal.)
+        const int delta = ad.y() != 0 ? ad.y() : ad.x();
+        if (delta != 0) {
+            const qreal step = (e->modifiers() & Qt::ShiftModifier) ? 1.0 : 15.0;
+            setViewRotation(m_rotation + (delta > 0 ? -step : step) * std::max(1, std::abs(delta) / 120));
+        }
+        e->accept();
+        return;
+    }
     if (e->modifiers() & Qt::ControlModifier) {
         const QPoint ad = e->angleDelta();
         const int delta = ad.y() != 0 ? ad.y() : ad.x();
@@ -1544,7 +1612,7 @@ void Canvas::wheelEvent(QWheelEvent* e)
             qreal z = m_zoom * std::pow(1.12, delta / 120.0);
             if ((m_zoom < 1.0 && z > 1.0) || (m_zoom > 1.0 && z < 1.0))
                 z = 1.0;
-            setZoom(z, e->position());
+            setZoom(z, toLogical(e->position()));
         }
         e->accept();
         followPointer();

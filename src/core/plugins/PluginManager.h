@@ -11,6 +11,9 @@
 #include <thread>
 
 class Effect;
+namespace PaintJs {
+struct FileType;
+}
 
 // Información de un complemento (Configuración > Complementos).
 struct PluginInfo {
@@ -130,6 +133,8 @@ private:
     void readCraft(PluginInfo& info, bool keepLoaded);
     void readPaintJs(PluginInfo& info, bool keepLoaded);
     void fillFromInspection(PluginInfo& info, const QJsonObject& reply);
+    // Los formatos de archivo (FileType) de un complemento de Paint.NET examinado con .NET.
+    static QList<PaintJs::FileType> pdnFileTypes(const QString& assembly, const QJsonObject& reply);
     void load(PluginInfo& info);
     void unload(PluginInfo& info);
     void startInspection(const QStringList& paths);

@@ -10,6 +10,7 @@
 #include <QPolygonF>
 #include <QSaveFile>
 #include <QSettings>
+#include <QTemporaryFile>
 #include <QStandardPaths>
 
 #include <cstring>
@@ -1200,6 +1201,69 @@ QJsonObject PdnBridge::inspect(const QString& path, QString* error)
     if (!reply.isEmpty() && !reply.value(QStringLiteral("ok")).toBool() && error)
         *error = reply.value(QStringLiteral("error")).toString();
     return reply;
+}
+
+QImage PdnBridge::openFile(const QString& assembly, int index, const QString& file, QString* error)
+{
+    std::lock_guard lock(m_mutex);
+    QTemporaryFile raw(QDir::tempPath() + QStringLiteral("/kaint-pdn-XXXXXX.bgra"));
+    if (!raw.open()) {
+        if (error)
+            *error = raw.errorString();
+        return {};
+    }
+    raw.close();
+    const QJsonObject req{{QStringLiteral("cmd"), QStringLiteral("fileOpen")}, {QStringLiteral("path"), hostSidePath(assembly)},
+                          {QStringLiteral("index"), index}, {QStringLiteral("file"), hostSidePath(file)},
+                          {QStringLiteral("out"), hostSidePath(raw.fileName())}};
+    const QJsonObject reply = request(req, startTimeoutMs(), error);
+    if (reply.isEmpty())
+        return {};
+    if (!reply.value(QStringLiteral("ok")).toBool()) {
+        if (error)
+            *error = reply.value(QStringLiteral("error")).toString();
+        return {};
+    }
+    const int w = reply.value(QStringLiteral("width")).toInt();
+    const int h = reply.value(QStringLiteral("height")).toInt();
+    QFile in(raw.fileName());
+    if (w <= 0 || h <= 0 || !in.open(QIODevice::ReadOnly) || in.size() < qint64(w) * h * 4) {
+        if (error)
+            *error = QCoreApplication::translate("PdnBridge", "El complemento no devolvió una imagen.");
+        return {};
+    }
+    QImage image(w, h, QImage::Format_ARGB32);
+    for (int y = 0; y < h; ++y)
+        in.read(reinterpret_cast<char*>(image.scanLine(y)), qint64(w) * 4);
+    return image;
+}
+
+bool PdnBridge::saveFile(const QString& assembly, int index, const QImage& image, const QString& file, QString* error)
+{
+    std::lock_guard lock(m_mutex);
+    const QImage argb = image.convertToFormat(QImage::Format_ARGB32);
+    QTemporaryFile raw(QDir::tempPath() + QStringLiteral("/kaint-pdn-XXXXXX.bgra"));
+    if (!raw.open()) {
+        if (error)
+            *error = raw.errorString();
+        return false;
+    }
+    for (int y = 0; y < argb.height(); ++y)
+        raw.write(reinterpret_cast<const char*>(argb.constScanLine(y)), qint64(argb.width()) * 4);
+    raw.close();
+    const QJsonObject req{{QStringLiteral("cmd"), QStringLiteral("fileSave")}, {QStringLiteral("path"), hostSidePath(assembly)},
+                          {QStringLiteral("index"), index}, {QStringLiteral("raw"), hostSidePath(raw.fileName())},
+                          {QStringLiteral("width"), argb.width()}, {QStringLiteral("height"), argb.height()},
+                          {QStringLiteral("file"), hostSidePath(file)}};
+    const QJsonObject reply = request(req, startTimeoutMs(), error);
+    if (reply.isEmpty())
+        return false;
+    if (!reply.value(QStringLiteral("ok")).toBool()) {
+        if (error)
+            *error = reply.value(QStringLiteral("error")).toString();
+        return false;
+    }
+    return true;
 }
 
 bool PdnBridge::prepareShared(const QImage& src, QString* error)

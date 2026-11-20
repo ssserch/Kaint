@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Kaint: complemento de formato de archivo de prueba, contra los ensamblados del sistema .NET
+       (PdnHostDir: la carpeta de kaint-pdn5-host). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>KaintTestFileType</AssemblyName>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="KaintTestFileType.cs" />
+    <Reference Include="$(PdnHostDir)/PaintDotNet.*.dll" Private="false" />
+    <Reference Include="$(PdnHostDir)/System.Drawing.Common.dll" Private="false" />
+  </ItemGroup>
+</Project>

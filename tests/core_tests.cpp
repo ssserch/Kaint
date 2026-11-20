@@ -2031,6 +2031,36 @@ static void testPlugins()
             pm->setEnabled(info.id, false);
     }
 
+#ifdef KAINT_TEST_PDN_FILETYPE
+    // Formatos de archivo de Paint.NET (FileType) con el sistema .NET: "Guardar como" y "Abrir" de
+    // una extensión que Kaint no conoce (.kraw) pasan por el complemento.
+    if (PdnBridge::availableFor(PdnBridge::Runtime::DotNet)) {
+        const PdnBridge::Runtime before = PdnBridge::runtime();
+        PdnBridge::setRuntime(PdnBridge::Runtime::DotNet);
+        QTemporaryDir ftDir;
+        QFile::copy(QStringLiteral(KAINT_TEST_PDN_FILETYPE), ftDir.filePath(QStringLiteral("KaintTestFileType.dll")));
+        pm->setPathsForTesting({ftDir.path()}, dir.filePath(QStringLiteral("cache-filetype.json")));
+        pm->runtimeChanged();
+        pm->scan();
+        pm->waitForInspection();
+        CHECK(pm->plugins().size() == 1 && pm->plugins().value(0).fileTypes.size() == 1);
+        if (!pm->plugins().isEmpty()) {
+            pm->setEnabled(pm->plugins().value(0).id, true);
+            std::unique_ptr<Document> doc(Document::createFromImage(testPattern(40, 30), QStringLiteral("Capa")));
+            const QString path = ftDir.filePath(QStringLiteral("prueba.kraw"));
+            QString error;
+            CHECK(ImageIO::save(doc.get(), path, ImageIO::SaveOptions(), &error));
+            CHECK(QFileInfo(path).size() == 12 + 40 * 30 * 4);
+            std::unique_ptr<Document> back(ImageIO::load(path, &error));
+            CHECK(back && back->size() == QSize(40, 30));
+            if (back)
+                CHECK(changedPixels(doc->flattened(), back->flattened()) == 0);
+            pm->setEnabled(pm->plugins().value(0).id, false);
+        }
+        PdnBridge::setRuntime(before);
+    }
+#endif
+
 #ifdef KAINT_TEST_WINE_PLUGIN
     // Respaldo de Wine con OpenD2D: un complemento que llama a kernel32.dll (solo Windows y Wine).
     // Con mono, un efecto no carga y el otro falla al aplicarse; con el respaldo, esos dos (solo esos)

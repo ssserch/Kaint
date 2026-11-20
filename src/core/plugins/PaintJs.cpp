@@ -1957,6 +1957,8 @@ struct Registered {
     PackagePtr pkg;
     QString localId;
     QJsonObject saveDefaults;
+    // Un formato de otro tipo de complemento (Paint.NET): lo leen y escriben estas funciones.
+    std::shared_ptr<ExternalCodec> external;
 };
 
 std::mutex g_typesMutex;
@@ -2171,6 +2173,31 @@ bool registerFileTypes(const QString& plugin, const QList<FileType>& types, QStr
     return true;
 }
 
+bool registerExternalFileTypes(const QString& plugin, const QList<FileType>& types, const ExternalCodec& codec,
+                               QString* conflict)
+{
+    const std::lock_guard lock(g_typesMutex);
+    for (const FileType& t : types)
+        for (const Registered& other : std::as_const(registry()))
+            if (other.type.plugin != plugin)
+                for (const QString& e : t.extensions)
+                    if (other.type.extensions.contains(e)) {
+                        if (conflict)
+                            *conflict = e;
+                        return false;
+                    }
+    registry().erase(std::remove_if(registry().begin(), registry().end(), [&](const Registered& r) { return r.type.plugin == plugin; }),
+                     registry().end());
+    auto shared = std::make_shared<ExternalCodec>(codec);
+    for (const FileType& t : types) {
+        Registered r;
+        r.type = t;
+        r.external = shared;
+        registry() << r;
+    }
+    return true;
+}
+
 void unregisterFileTypes(const QString& plugin)
 {
     const std::lock_guard lock(g_typesMutex);
@@ -2208,6 +2235,8 @@ Document* decode(const FileType& type, const QString& path, QString* error)
         *error = QObject::tr("El complemento de este formato ya no está activado.");
         return nullptr;
     }
+    if (reg->external)
+        return reg->external->decode(type, path, error);
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         *error = file.errorString();
@@ -2301,6 +2330,8 @@ bool encode(const FileType& type, const Document* doc, const QString& path, QStr
         *error = QObject::tr("El complemento de este formato ya no está activado.");
         return false;
     }
+    if (reg->external)
+        return reg->external->encode(type, doc, path, error);
     Sandbox box(reg->pkg, nullptr, kFileTimeoutMs);
     if (!box.load(error))
         return false;

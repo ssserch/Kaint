@@ -7,6 +7,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <optional>
 
 class Document;
@@ -69,6 +70,15 @@ std::optional<FileType> fileTypeFor(const QString& path, bool forWriting);
 
 Document* decode(const FileType& type, const QString& path, QString* error);
 bool encode(const FileType& type, const Document* doc, const QString& path, QString* error);
+
+// Formatos de complementos que no son de paint.js (los FileType de Paint.NET): se registran con
+// las funciones que los leen y escriben, y ImageIO los usa igual que los de paint.js.
+struct ExternalCodec {
+    std::function<Document*(const FileType&, const QString&, QString*)> decode;
+    std::function<bool(const FileType&, const Document*, const QString&, QString*)> encode;
+};
+bool registerExternalFileTypes(const QString& plugin, const QList<FileType>& types, const ExternalCodec& codec,
+                               QString* conflict = nullptr);
 
 // Pruebas: ejecuta 'code' en un entorno como el de los complementos (sin paquete) y devuelve el
 // resultado como texto (o "Error: ...").

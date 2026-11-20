@@ -157,6 +157,36 @@ namespace Kaint.PdnHost5
                 case "cancel":
                     cancelRequested = true;
                     break;
+                case "fileOpen":
+                {
+                    // Un formato de archivo (FileType) del complemento: abre "file" y deja la imagen
+                    // aplanada en "out" (BGRA de alfa directo).
+                    PluginContext ctx = Plugin(Str(r, "path"));
+                    int index = (int)Num(r, "index");
+                    byte[] bytes = File.ReadAllBytes(Str(r, "file"));
+                    var (bgra, w, h) = PluginHost.In(ctx, () => FileTypeDriver.Open(ctx, index, bytes, null));
+                    File.WriteAllBytes(Str(r, "out"), bgra);
+                    JsonObject opened = Ok();
+                    opened["width"] = w;
+                    opened["height"] = h;
+                    Send(opened);
+                    break;
+                }
+                case "fileSave":
+                {
+                    PluginContext ctx = Plugin(Str(r, "path"));
+                    int index = (int)Num(r, "index");
+                    int w = (int)Num(r, "width"), h = (int)Num(r, "height");
+                    byte[] bgra = File.ReadAllBytes(Str(r, "raw"));
+                    byte[] encoded = PluginHost.In(ctx, () => FileTypeDriver.Save(ctx, index, null, bgra, w, h));
+                    // A un temporal que se renombra: un error no destruye el archivo que había.
+                    string file = Str(r, "file");
+                    string temp = file + ".kaint-tmp";
+                    File.WriteAllBytes(temp, encoded);
+                    File.Move(temp, file, true);
+                    Send(Ok());
+                    break;
+                }
                 case "dialog":
                     // Las ventanas propias se leen sin mostrarlas (inspect): las que Kaint no puede
                     // mostrar en su diálogo las abre mono o Wine.
@@ -193,6 +223,9 @@ namespace Kaint.PdnHost5
                 ex = ex.InnerException;
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KAINT_PDN_DEBUG")))
                 Console.Error.WriteLine(ex.ToString());
+            if (ex.Message.StartsWith("pdn-window:", StringComparison.Ordinal))
+                return L("Este formato muestra una ventana propia al abrir o guardar, y Kaint aún no puede mostrarla.",
+                         "This format shows its own window when opening or saving, which Kaint cannot show yet.");
             if (ex is DllNotFoundException && ex.Message.Contains("gdiplus"))
                 return L("Falta libgdiplus (System.Drawing). Instala el paquete libgdiplus.",
                          "libgdiplus (System.Drawing) is missing. Install the libgdiplus package.");

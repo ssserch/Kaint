@@ -3,6 +3,7 @@
 #include "core/effects/Effect.h"
 #include "core/plugins/CraftPlugins.h"
 #include "core/plugins/KaintPlugin.h"
+#include "core/Document.h"
 #include "core/plugins/PaintJs.h"
 #include "core/plugins/PdnBridge.h"
 #include "core/plugins/PluginEffects.h"
@@ -344,7 +345,9 @@ PluginManager::Check PluginManager::check(const QString& path) const
         return Check::Incompatible;
     if (reply.value(QStringLiteral("library")).toBool())
         return Check::Library;
-    return reply.value(QStringLiteral("effects")).toArray().isEmpty() ? Check::Incompatible : Check::Compatible;
+    return reply.value(QStringLiteral("effects")).toArray().isEmpty() && pdnFileTypes(path, reply).isEmpty()
+               ? Check::Incompatible
+               : Check::Compatible;
 }
 
 PluginManager::DropPlan PluginManager::planDrop(const QStringList& paths, const QHash<QString, Check>& checked) const
@@ -800,6 +803,43 @@ void PluginManager::readPaintJs(PluginInfo& info, bool keepLoaded)
     info.loaded = true;
 }
 
+// Los formatos de archivo de un complemento de Paint.NET que examinó el sistema .NET.
+QList<PaintJs::FileType> PluginManager::pdnFileTypes(const QString& assembly, const QJsonObject& reply)
+{
+    QList<PaintJs::FileType> types;
+    if (reply.value(QStringLiteral("runtime")).toString() != QLatin1String("dotnet"))
+        return types;
+    const QJsonArray list = reply.value(QStringLiteral("fileTypes")).toArray();
+    for (qsizetype i = 0; i < list.size(); ++i) {
+        const QJsonObject o = list[i].toObject();
+        PaintJs::FileType t;
+        t.plugin = assembly;
+        t.id = QString::number(i);
+        t.name = o.value(QStringLiteral("name")).toString();
+        auto exts = [&](const char* key) {
+            QStringList out;
+            for (const QJsonValue& e : o.value(QLatin1String(key)).toArray()) {
+                QString ext = e.toString().toLower();
+                if (!ext.startsWith(QLatin1Char('.')))
+                    ext.prepend(QLatin1Char('.'));
+                out << ext;
+            }
+            return out;
+        };
+        const QStringList load = exts("loadExtensions");
+        const QStringList save = exts("saveExtensions");
+        t.canRead = !load.isEmpty();
+        t.canWrite = !save.isEmpty();
+        t.extensions = load;
+        for (const QString& e : save)
+            if (!t.extensions.contains(e))
+                t.extensions << e;
+        if (!t.extensions.isEmpty())
+            types << t;
+    }
+    return types;
+}
+
 void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& reply)
 {
     auto str = [&](const char* key) { return reply.value(QLatin1String(key)).toString(); };
@@ -824,6 +864,11 @@ void PluginManager::fillFromInspection(PluginInfo& info, const QJsonObject& repl
         if (!png.isEmpty())
             icon.loadFromData(png, "PNG");
         info.effectIcons << icon;
+    }
+    if (info.kind == QLatin1String("Paint.NET")) {
+        info.fileTypes.clear();
+        for (const PaintJs::FileType& t : pdnFileTypes(info.id, reply))
+            info.fileTypes << t.filter();
     }
     info.errors.clear();
     for (const QJsonValue& e : reply.value(QStringLiteral("errors")).toArray())
@@ -863,9 +908,28 @@ void PluginManager::load(PluginInfo& info)
     const QString pluginName = info.name.isEmpty() ? info.file : info.name;
     for (const QJsonValue& e : reply.value(QStringLiteral("effects")).toArray())
         loaded->effects << new PdnEffect(info.id, pluginName, e.toObject());
+    // Sus formatos de archivo (FileType, con el sistema .NET): en Abrir y Guardar como, para las
+    // extensiones que Kaint no lee ni escribe por sí mismo.
+    const QList<PaintJs::FileType> types = pdnFileTypes(info.id, reply);
+    if (!types.isEmpty()) {
+        const QString assembly = info.id;
+        PaintJs::ExternalCodec codec;
+        codec.decode = [assembly](const PaintJs::FileType& type, const QString& path, QString* error) -> Document* {
+            const QImage image = PdnBridge::forRuntime(PdnBridge::Runtime::DotNet).openFile(assembly, type.id.toInt(), path, error);
+            return image.isNull() ? nullptr : Document::createFromImage(image, QFileInfo(path).completeBaseName());
+        };
+        codec.encode = [assembly](const PaintJs::FileType& type, const Document* doc, const QString& path, QString* error) {
+            return PdnBridge::forRuntime(PdnBridge::Runtime::DotNet).saveFile(assembly, type.id.toInt(), doc->flattened(), path, error);
+        };
+        QString conflict;
+        if (PaintJs::registerExternalFileTypes(info.id, types, codec, &conflict))
+            loaded->fileTypes = true;
+        else
+            info.errors << tr("Otro complemento ya abre los archivos %1.").arg(conflict);
+    }
     registerEffects(info, loaded->effects);
     m_loaded << loaded;
-    info.loaded = !loaded->effects.isEmpty();
+    info.loaded = !loaded->effects.isEmpty() || loaded->fileTypes;
 }
 
 void PluginManager::unload(PluginInfo& info)

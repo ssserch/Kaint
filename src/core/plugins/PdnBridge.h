@@ -94,6 +94,10 @@ public:
     bool render(const QString& assembly, const QString& effectId, const QJsonObject& values, const QImage& src,
                 QImage& dst, const QRect& roi, const EffectContext& ctx, const std::atomic_bool& cancel,
                 QString* error, const Selection* selection = nullptr);
+    // Formatos de archivo (FileType) de un complemento, por su posición en "fileTypes" (solo .NET):
+    // abrir da la imagen aplanada (ARGB32 de alfa directo); guardar escribe 'file'.
+    QImage openFile(const QString& assembly, int index, const QString& file, QString* error);
+    bool saveFile(const QString& assembly, int index, const QImage& image, const QString& file, QString* error);
     bool showDialog(const QString& assembly, const QString& effectId, const QString& title, const QImage& src,
                     const QRect& roi, const EffectContext& ctx, bool* accepted, QString* error);
     void shutdown();

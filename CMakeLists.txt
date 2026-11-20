@@ -642,6 +642,19 @@ if(BUILD_TESTING)
         target_compile_definitions(kaint_core_tests PRIVATE KAINT_TEST_PDN_PLUGIN="${PDN_TEST_PLUGIN}"
                                    KAINT_TEST_WINE_PLUGIN="${PDN_WINE_TEST_PLUGIN}")
     endif()
+    # Formato de archivo de prueba para el sistema .NET (FileType clásico de Paint.NET)
+    if(TARGET pdnhost5)
+        set(PDN5_TEST_FILETYPE "${CMAKE_BINARY_DIR}/test-plugins/KaintTestFileType.dll")
+        add_custom_command(OUTPUT "${PDN5_TEST_FILETYPE}"
+            COMMAND ${KAINT_DOTNET} build "${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnfiletype/KaintTestFileType.csproj" -c Release
+                    -m:1 -nodeReuse:false -v:q -clp:ErrorsOnly "-p:PdnHostDir=${PDN5_OUT}"
+                    "-p:BaseIntermediateOutputPath=${CMAKE_BINARY_DIR}/pdnfiletype-obj/" -o "${CMAKE_BINARY_DIR}/test-plugins"
+            DEPENDS tests/pdnfiletype/KaintTestFileType.cs tests/pdnfiletype/KaintTestFileType.csproj "${PDN5_OUT}/PdnBridge.dll"
+            COMMENT "Compilando KaintTestFileType.dll" VERBATIM)
+        add_custom_target(kaint_test_pdn_filetype DEPENDS "${PDN5_TEST_FILETYPE}")
+        add_dependencies(kaint_core_tests pdnhost5 kaint_test_pdn_filetype)
+        target_compile_definitions(kaint_core_tests PRIVATE KAINT_TEST_PDN_FILETYPE="${PDN5_TEST_FILETYPE}")
+    endif()
     add_test(NAME core COMMAND kaint_core_tests)
 
     # Prueba de la interfaz (sin pantalla)

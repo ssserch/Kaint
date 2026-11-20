@@ -49,6 +49,8 @@ struct AppSettings {
     bool aeroTransparency = true;
     // Windows 7: el color de las ventanas de sus temas (no válido: el de siempre).
     QColor win7Glass;
+    // Windows 8: el color de las ventanas (no válido: el de fábrica).
+    QColor win8Color;
     bool translucentPanels = true;
     // Como Paint.NET: las ventanas translúcidas solo lo son mientras tapan la imagen (al cruzar
     // su borde o encima de ella); fuera de la imagen, opacas.

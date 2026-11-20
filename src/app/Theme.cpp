@@ -83,11 +83,19 @@ namespace {
 bool retroScheme(Scheme scheme)
 {
     return scheme == Scheme::Windows98 || scheme == Scheme::Windows98Alt || scheme == Scheme::WindowsXP
-        || scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark;
+        || scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark || int(scheme) >= int(Scheme::Windows8);
+}
+
+// Los temas con el estilo de Windows 7 (cristal o Basic).
+bool win7Scheme(Scheme scheme)
+{
+    return scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark || scheme == Scheme::Windows7Basic
+        || scheme == Scheme::Windows7BasicDark;
 }
 
 bool g_aeroTransparency = true;
 QColor g_win7Glass;
+QColor g_win8Color;
 
 QString g_systemIconTheme;
 QString g_configStamp;
@@ -1111,6 +1119,98 @@ Spec blue()
     return s;
 }
 
+// Windows 8, como el diálogo de la primera captura: el marco ancho y la barra de título planos del
+// color de las ventanas (de fábrica, el celeste), el título centrado y Segoe UI. El oscuro, con el
+// interior oscuro de Paint.NET.
+Spec windows8(bool dark, const QColor& window)
+{
+    Spec s = preset(dark);
+    s.metro = true;
+    s.radius = 0;
+    const QColor color = window.isValid() ? window : defaultWin8Color();
+    // (El texto de los menús va sobre su pestaña, del color de las barras: el del tema.)
+    s.menuBar = color;
+    s.panelTitle = s.panelTitleEnd = color;
+    s.panelTitleText = color.lightness() < 150 ? QColor(Qt::white) : QColor(Qt::black);
+    s.accent = rgb(0x3399ff);
+    if (!dark) {
+        s.selection = rgb(0xcce8ff);
+        s.selectionBorder = rgb(0x99d1ff);
+        s.hover = rgb(0xe5f3ff);
+        s.button = rgb(0xe1e1e1);
+        s.border = rgb(0xacacac);
+        s.toolBar = rgb(0xf5f6f7);
+        s.statusBar = rgb(0xf0f0f0);
+    }
+    s.fontFamily = QStringLiteral("Segoe UI");
+    s.fontSize = 9;
+    return s;
+}
+
+// Windows 7 Basic: sin Aero, el marco opaco en el celeste de Windows 7 Basic (o el gris azulado
+// oscuro), con los mismos controles que el de cristal.
+Spec windows7Basic(bool dark)
+{
+    Spec s = dark ? windows7Dark() : windows7();
+    s.basic = true;
+    s.glass = dark ? rgb(0x46505e) : rgb(0xb9d1ea);
+    s.menuBar = dark ? rgb(0x323b47) : rgb(0xc9dcf2);
+    s.panelTitle = dark ? rgb(0x46505e) : rgb(0xc4d8ee);
+    s.panelTitleEnd = dark ? rgb(0x39424e) : rgb(0xb2cbe8);
+    return s;
+}
+
+// Los escritorios de Linux: sus colores de ventana, de la barra de título (headerbar), de la vista
+// y del texto, su color de acento y su fuente; los botones redondos los dibuja WindowFrame.
+Spec linuxDesktop(const QString& desktop, bool dark)
+{
+    struct Colors {
+        QRgb accent, window, header, base, text, button, border, workspace;
+        const char* font;
+        int radius;
+    };
+    Colors c{};
+    if (desktop == QLatin1String("yaru"))
+        c = dark ? Colors{0xe95420, 0x2c2c2c, 0x303030, 0x232323, 0xf7f7f7, 0x3c3c3c, 0x4a4a4a, 0x1e1e1e, "Ubuntu", 6}
+                 : Colors{0xe95420, 0xfafafa, 0xebebeb, 0xffffff, 0x3d3d3d, 0xf2f2f2, 0xcdc7c2, 0xc8c8c8, "Ubuntu", 6};
+    else if (desktop == QLatin1String("mint"))
+        c = dark ? Colors{0x35a854, 0x383838, 0x2f2f2f, 0x404040, 0xdadada, 0x444444, 0x525252, 0x262626, "Ubuntu", 4}
+                 : Colors{0x35a854, 0xf2f2f2, 0xe8e8e8, 0xffffff, 0x303030, 0xf7f7f7, 0xcfcfcf, 0xc4c4c4, "Ubuntu", 4};
+    else if (desktop == QLatin1String("elementary"))
+        c = dark ? Colors{0x3689e6, 0x333333, 0x2b2b2b, 0x292929, 0xfafafa, 0x404040, 0x4d4d4d, 0x1f1f1f, "Inter", 4}
+                 : Colors{0x3689e6, 0xfafafa, 0xf0f0f0, 0xffffff, 0x333333, 0xfafafa, 0xc3c3c3, 0xcfcfcf, "Inter", 4};
+    else  // adwaita
+        c = dark ? Colors{0x3584e4, 0x242424, 0x303030, 0x1e1e1e, 0xffffff, 0x3a3a3a, 0x444444, 0x1a1a1a, "Adwaita Sans", 6}
+                 : Colors{0x3584e4, 0xfafafa, 0xebebeb, 0xffffff, 0x2e3436, 0xebebeb, 0xd8d4d0, 0xc0bfbc, "Adwaita Sans", 6};
+    Spec s;
+    s.dark = dark;
+    s.desktop = desktop;
+    s.accent = rgb(c.accent);
+    s.window = rgb(c.window);
+    s.text = rgb(c.text);
+    s.base = rgb(c.base);
+    s.button = rgb(c.button);
+    s.border = rgb(c.border);
+    s.menuBar = rgb(c.header);
+    s.menuBarText = rgb(c.text);
+    s.toolBar = rgb(c.window);
+    s.statusBar = rgb(c.window);
+    s.panel = rgb(c.window);
+    s.panelTitle = s.panelTitleEnd = rgb(c.header);
+    s.panelTitleText = rgb(c.text);
+    s.panelClose = rgb(0xc01c28);
+    // La selección con el acento suavizado (el texto sigue siendo el normal) y su borde con el acento.
+    s.selection = mix(rgb(c.accent), rgb(c.base), dark ? 0.55 : 0.75);
+    s.selectionBorder = rgb(c.accent);
+    s.hover = mix(rgb(c.accent), rgb(c.window), dark ? 0.82 : 0.88);
+    s.workspace = rgb(c.workspace);
+    s.radius = c.radius;
+    s.panelOpacity = 90;
+    s.fontFamily = QString::fromLatin1(c.font);
+    s.fontSize = 10;
+    return s;
+}
+
 Spec customBase(const Spec& custom)
 {
     if (custom.xp && !custom.classic) {
@@ -1737,6 +1837,24 @@ QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 
 QTabBar::tab:selected { background: {base:#ffffff}; border-bottom-color: {base:#ffffff}; }
 QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #e4e5f0); color: #575757;
            border: 1px solid #767676; border-radius: 2px; }
+QScrollBar:vertical { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #e5e5e5, stop:0.2 #f0f0f0, stop:1 #f0f0f0); width: 17px; margin: 0; }
+QScrollBar:horizontal { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e5e5e5, stop:0.2 #f0f0f0, stop:1 #f0f0f0); height: 17px; margin: 0; }
+QScrollBar::handle { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f5f5f5, stop:0.45 #f0f0f0, stop:0.4501 #e6e6e6, stop:1 #dedede);
+                     border: 1px solid #8e8f8f; border-radius: 3px; min-height: 18px; min-width: 18px; margin: 1px; }
+QScrollBar::handle:horizontal { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f5f5f5, stop:0.45 #f0f0f0, stop:0.4501 #e6e6e6, stop:1 #dedede); }
+QScrollBar::handle:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #eaf6fd, stop:0.45 #eaf6fd, stop:0.4501 #bee6fd, stop:1 #a7d9f5);
+                           border-color: #3c7fb1; }
+QScrollBar::handle:horizontal:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd, stop:0.45 #eaf6fd, stop:0.4501 #bee6fd, stop:1 #a7d9f5); }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: transparent; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+QSlider::groove:horizontal { height: 3px; background: #f0f0f0; border: 1px solid #999999; border-bottom-color: #ffffff; }
+QSlider::groove:vertical { width: 3px; background: #f0f0f0; border: 1px solid #999999; border-right-color: #ffffff; }
+QSlider::handle:horizontal { width: 10px; margin: -8px 0; border: 1px solid #8e8f8f; border-radius: 2px;
+                             background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb, stop:1 #cfcfcf); }
+QSlider::handle:vertical { height: 10px; margin: 0 -8px; border: 1px solid #8e8f8f; border-radius: 2px;
+                           background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f2f2f2, stop:0.45 #f2f2f2, stop:0.4501 #ebebeb, stop:1 #cfcfcf); }
+QSlider::handle:hover { border-color: #3c7fb1; background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eaf6fd, stop:0.45 #eaf6fd,
+                        stop:0.4501 #bee6fd, stop:1 #a7d9f5); }
 )"), s, windows7());
 }
 
@@ -1803,6 +1921,23 @@ QTabBar::tab:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 
 QTabBar::tab:selected { background: {base:#1e1f22}; border-bottom-color: {base:#1e1f22}; }
 QToolTip { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3d41, stop:1 #2b2d30); color: #e0e0e0;
            border: 1px solid #6a6f76; border-radius: 2px; }
+QScrollBar:vertical { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #232528, stop:0.2 #2b2d30, stop:1 #2b2d30); width: 17px; margin: 0; }
+QScrollBar:horizontal { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #232528, stop:0.2 #2b2d30, stop:1 #2b2d30); height: 17px; margin: 0; }
+QScrollBar::handle { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44, stop:1 #33363b);
+                     border: 1px solid #5f646b; border-radius: 3px; min-height: 18px; min-width: 18px; margin: 1px; }
+QScrollBar::handle:horizontal { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44, stop:1 #33363b); }
+QScrollBar::handle:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3f5a78, stop:0.45 #3a5470, stop:0.4501 #2f4862, stop:1 #284057);
+                           border-color: #5c95d0; }
+QScrollBar::handle:horizontal:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3f5a78, stop:0.45 #3a5470, stop:0.4501 #2f4862, stop:1 #284057); }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: transparent; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+QSlider::groove:horizontal { height: 3px; background: #26282b; border: 1px solid #5f646b; }
+QSlider::groove:vertical { width: 3px; background: #26282b; border: 1px solid #5f646b; }
+QSlider::handle:horizontal { width: 10px; margin: -8px 0; border: 1px solid #5f646b; border-radius: 2px;
+                             background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44, stop:1 #2e3136); }
+QSlider::handle:vertical { height: 10px; margin: 0 -8px; border: 1px solid #5f646b; border-radius: 2px;
+                           background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4a4e54, stop:0.45 #44484e, stop:0.4501 #3a3e44, stop:1 #2e3136); }
+QSlider::handle:hover { border-color: #5c95d0; }
 )"), s, windows7Dark());
 }
 
@@ -2149,6 +2284,18 @@ void apply(Scheme scheme)
         g_active = withTitleBarColor(withWin7Glass(windows7(), g_win7Glass), g_titleBar);
     else if (scheme == Scheme::Windows7Dark)
         g_active = withTitleBarColor(withWin7Glass(windows7Dark(), g_win7Glass), g_titleBar);
+    else if (scheme == Scheme::Windows7Basic || scheme == Scheme::Windows7BasicDark)
+        g_active = withWin7Glass(windows7Basic(scheme == Scheme::Windows7BasicDark), g_win7Glass);
+    else if (scheme == Scheme::Windows8 || scheme == Scheme::Windows8Dark)
+        g_active = windows8(scheme == Scheme::Windows8Dark, g_win8Color);
+    else if (scheme == Scheme::Ubuntu || scheme == Scheme::UbuntuDark)
+        g_active = linuxDesktop(QStringLiteral("yaru"), scheme == Scheme::UbuntuDark);
+    else if (scheme == Scheme::Gnome || scheme == Scheme::GnomeDark)
+        g_active = linuxDesktop(QStringLiteral("adwaita"), scheme == Scheme::GnomeDark);
+    else if (scheme == Scheme::Mint || scheme == Scheme::MintDark)
+        g_active = linuxDesktop(QStringLiteral("mint"), scheme == Scheme::MintDark);
+    else if (scheme == Scheme::Elementary || scheme == Scheme::ElementaryDark)
+        g_active = linuxDesktop(QStringLiteral("elementary"), scheme == Scheme::ElementaryDark);
     else if (scheme == Scheme::Blue)
         g_active = withTitleBarColor(blue(), g_titleBar);
     else
@@ -2189,9 +2336,9 @@ void apply(Scheme scheme)
         QFont font = g_baseFont;
         // Si no está la fuente (Microsoft Sans Serif o Segoe UI en Linux), las más parecidas.
         if (ownFont && !g_active.fontFamily.isEmpty())
-            font.setFamilies(g_active.win7
-                                 ? QStringList{g_active.fontFamily, QStringLiteral("Noto Sans"), QStringLiteral("Open Sans"),
-                                               g_baseFont.family()}
+            font.setFamilies(g_active.win7 || g_active.metro || !g_active.desktop.isEmpty()
+                                 ? QStringList{g_active.fontFamily, QStringLiteral("Cantarell"), QStringLiteral("Noto Sans"),
+                                               QStringLiteral("Open Sans"), g_baseFont.family()}
                                  : QStringList{g_active.fontFamily, QStringLiteral("Tahoma"), QStringLiteral("DejaVu Sans"),
                                                QStringLiteral("Arial"), QStringLiteral("Liberation Sans"), g_baseFont.family()});
         if (ownFont && g_active.fontSize > 0)
@@ -2282,7 +2429,7 @@ QColor titleBarColor()
     // barras son las suyas (el color de énfasis sobre la franja de Luna se veía mal, y con Windows 7
     // el título de las ventanas flotantes salía blanco sobre el cristal claro de Aero).
     if (g_current == Scheme::Windows98 || g_current == Scheme::Windows98Alt || g_current == Scheme::WindowsXP
-        || g_current == Scheme::Windows7 || g_current == Scheme::Windows7Dark)
+        || g_current == Scheme::Windows7 || g_current == Scheme::Windows7Dark || int(g_current) >= int(Scheme::Windows8))
         return {};
     // El personalizado con el estilo de Windows 7 o XP, igual.
     if (g_current == Scheme::Custom && (custom().win7 || custom().xp) && !custom().classic)
@@ -2365,9 +2512,60 @@ const std::array<Win7Color, 16>& win7Colors()
     return colors;
 }
 
+bool setWin8Color(const QColor& color)
+{
+    const QColor rgbColor = color.isValid() ? QColor(color.rgb()) : QColor();
+    const bool changed = g_win8Color != rgbColor;
+    g_win8Color = rgbColor;
+    return changed;
+}
+
+QColor win8Color()
+{
+    return g_win8Color;
+}
+
+QColor defaultWin8Color()
+{
+    return rgb(0x6badf6);
+}
+
+const std::array<Win7Color, 15>& win8WindowColors()
+{
+    // Los de «Color y apariencia» de Windows 8 (la tercera captura), sin negro: el negro solo con
+    // «Personalizado».
+    static const std::array<Win7Color, 15> colors{{
+        {QT_TRANSLATE_NOOP("Theme", "Gris"), 0xababab},       {QT_TRANSLATE_NOOP("Theme", "Celeste"), 0x8acfff},
+        {QT_TRANSLATE_NOOP("Theme", "Rosa"), 0xf598d6},       {QT_TRANSLATE_NOOP("Theme", "Amarillo"), 0xf3d240},
+        {QT_TRANSLATE_NOOP("Theme", "Lima"), 0xadd85f},       {QT_TRANSLATE_NOOP("Theme", "Turquesa"), 0x78d9d9},
+        {QT_TRANSLATE_NOOP("Theme", "Naranja"), 0xffaf51},    {QT_TRANSLATE_NOOP("Theme", "Coral"), 0xff6f6f},
+        {QT_TRANSLATE_NOOP("Theme", "Fucsia"), 0xf359a8},     {QT_TRANSLATE_NOOP("Theme", "Verde"), 0x47cf74},
+        {QT_TRANSLATE_NOOP("Theme", "Lila"), 0xc48aff},       {QT_TRANSLATE_NOOP("Theme", "Azul"), 0x58b1fc},
+        {QT_TRANSLATE_NOOP("Theme", "Lavanda"), 0x9898ff},    {QT_TRANSLATE_NOOP("Theme", "Topo"), 0xc3b5a8},
+        {QT_TRANSLATE_NOOP("Theme", "Blanco"), 0xfcfcfc},
+    }};
+    return colors;
+}
+
+const std::array<Win7Color, 16>& win8StartColors()
+{
+    // Los de la pantalla Inicio de Windows 8 (la segunda captura).
+    static const std::array<Win7Color, 16> colors{{
+        {QT_TRANSLATE_NOOP("Theme", "Verde azulado"), 0x008299}, {QT_TRANSLATE_NOOP("Theme", "Turquesa intenso"), 0x00a0b1},
+        {QT_TRANSLATE_NOOP("Theme", "Azul cobalto"), 0x2672ec},  {QT_TRANSLATE_NOOP("Theme", "Azul cielo"), 0x2e8def},
+        {QT_TRANSLATE_NOOP("Theme", "Morado"), 0x8c0095},        {QT_TRANSLATE_NOOP("Theme", "Magenta"), 0xa700ae},
+        {QT_TRANSLATE_NOOP("Theme", "Índigo"), 0x5133ab},        {QT_TRANSLATE_NOOP("Theme", "Violeta"), 0x643ebf},
+        {QT_TRANSLATE_NOOP("Theme", "Granate"), 0xac193d},       {QT_TRANSLATE_NOOP("Theme", "Carmesí"), 0xbf1e4b},
+        {QT_TRANSLATE_NOOP("Theme", "Teja"), 0xd24726},          {QT_TRANSLATE_NOOP("Theme", "Mandarina"), 0xdc572e},
+        {QT_TRANSLATE_NOOP("Theme", "Verde bosque"), 0x008a00},  {QT_TRANSLATE_NOOP("Theme", "Verde hoja"), 0x00a600},
+        {QT_TRANSLATE_NOOP("Theme", "Azul marino"), 0x094ab2},   {QT_TRANSLATE_NOOP("Theme", "Azul real"), 0x0a5bc4},
+    }};
+    return colors;
+}
+
 bool aeroTransparency()
 {
-    return g_aeroTransparency && active().win7 && g_current != Scheme::Kde;
+    return g_aeroTransparency && active().win7 && !active().basic && g_current != Scheme::Kde;
 }
 
 QColor inactiveTitleBarColor()

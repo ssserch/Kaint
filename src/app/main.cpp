@@ -61,7 +61,11 @@ Theme::Scheme startupScheme(int argc, char** argv)
         const QStringList names{QStringLiteral("system"), QStringLiteral("light"), QStringLiteral("dark"),
                                 QStringLiteral("kde"), QStringLiteral("custom"), QStringLiteral("windows98"),
                                 QStringLiteral("blue"), QStringLiteral("windows7"), QStringLiteral("windowsxp"),
-                                QStringLiteral("windows98alt"), QStringLiteral("windows7dark")};
+                                QStringLiteral("windows98alt"), QStringLiteral("windows7dark"), QStringLiteral("windows8"),
+                                QStringLiteral("windows8dark"), QStringLiteral("windows7basic"), QStringLiteral("windows7basicdark"),
+                                QStringLiteral("ubuntu"), QStringLiteral("ubuntudark"), QStringLiteral("gnome"),
+                                QStringLiteral("gnomedark"), QStringLiteral("mint"), QStringLiteral("mintdark"),
+                                QStringLiteral("elementary"), QStringLiteral("elementarydark")};
         settings.setValue(QStringLiteral("colorScheme"), std::max(0, int(names.indexOf(value))));
     }
     const auto scheme = Theme::Scheme(std::clamp(settings.value(QStringLiteral("colorScheme"), 0).toInt(), 0, Theme::kLastScheme));
@@ -151,6 +155,9 @@ int main(int argc, char** argv)
         const QColor win7Glass = QColor::fromString(rawOption(argc, argv, QStringLiteral("--preview-win7-color")));
         if (win7Glass.isValid())
             preset.setValue(QStringLiteral("settings/win7Glass"), win7Glass);
+        const QColor win8Color = QColor::fromString(rawOption(argc, argv, QStringLiteral("--preview-win8-color")));
+        if (win8Color.isValid())
+            preset.setValue(QStringLiteral("settings/win8Color"), win8Color);
         // La herramienta elegida al empezar (su número).
         const QString tool = rawOption(argc, argv, QStringLiteral("--preview-tool"));
         if (!tool.isEmpty())
@@ -241,8 +248,10 @@ int main(int argc, char** argv)
     parser.addPositionalArgument(QStringLiteral("archivos"), QObject::tr("Imágenes que abrir."),
                                  QStringLiteral("[archivos...]"));
     parser.addOption(QCommandLineOption(QStringLiteral("color-scheme"),
-                                        QObject::tr("Tema: system, light, dark, blue, kde, custom, windows7, windows7dark, windowsxp, "
-                                                    "windows98 o windows98alt (se guarda)."),
+                                        QObject::tr("Tema: system, light, dark, blue, kde, custom, windows8, windows8dark, windows7, "
+                                                    "windows7dark, windows7basic, windows7basicdark, windowsxp, windows98, "
+                                                    "windows98alt, ubuntu, ubuntudark, gnome, gnomedark, mint, mintdark, "
+                                                    "elementary o elementarydark (se guarda)."),
                                         QStringLiteral("scheme")));
     parser.addOption(QCommandLineOption(QStringLiteral("screenpreview"),
                                         QObject::tr("Guarda una captura de la ventana con la configuración de fábrica "
@@ -274,6 +283,9 @@ int main(int argc, char** argv)
                                         QStringLiteral("json")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-win7-color"),
                                         QObject::tr("El color de las ventanas de los temas Windows 7 en la captura (#rrggbb)."),
+                                        QStringLiteral("color")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-win8-color"),
+                                        QObject::tr("El color de las ventanas de los temas Windows 8 en la captura (#rrggbb)."),
                                         QStringLiteral("color")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-tool"),
                                         QObject::tr("La herramienta elegida en la captura (su número)."), QStringLiteral("n")));
@@ -309,9 +321,10 @@ int main(int argc, char** argv)
 #endif
     Theme::setAeroTransparency(startup.aeroTransparency);
     Theme::setWin7Glass(startup.win7Glass);
+    Theme::setWin8Color(startup.win8Color);
     Theme::setSelectionColors(startup.selectionColorLight, startup.selectionColorDark);
     Theme::apply(scheme);
-    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 6)));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 8)));
     WindowFrame::setAutoFallback(startup.windowsVersion == 11 ? WindowFrame::Buttons::Windows11 : WindowFrame::Buttons::Windows10);
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(startup.win7PanelClose, 0, 2)));

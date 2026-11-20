@@ -29,7 +29,9 @@ bool isDecorated(const QWidget* window);
 
 // Estilo de los botones de la barra de título (minimizar, maximizar o restaurar y cerrar).
 // Auto: los del tema (Windows 7, XP o 98 con sus temas) y, con los demás, los de autoFallback.
-enum class Buttons { Windows10, Windows11, MacOS, Windows7, WindowsXP, Windows98, Auto };
+// Windows8 y Gnome (los redondos de los escritorios de Linux) van detrás de Auto: los números de los
+// de antes se guardan en la configuración.
+enum class Buttons { Windows10, Windows11, MacOS, Windows7, WindowsXP, Windows98, Auto, Windows8, Gnome };
 void setButtons(Buttons style);
 Buttons buttons();
 // Los automáticos con un tema sin botones propios (los de Windows 10, o los de 11 con «Bordes:

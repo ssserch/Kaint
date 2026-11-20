@@ -25,8 +25,10 @@ class QWidget;
 namespace Theme {
 
 enum class Scheme { System = 0, Light = 1, Dark = 2, Kde = 3, Custom = 4, Windows98 = 5, Blue = 6, Windows7 = 7, WindowsXP = 8,
-                    Windows98Alt = 9, Windows7Dark = 10 };
-constexpr int kLastScheme = 10;
+                    Windows98Alt = 9, Windows7Dark = 10, Windows8 = 11, Windows8Dark = 12, Windows7Basic = 13,
+                    Windows7BasicDark = 14, Ubuntu = 15, UbuntuDark = 16, Gnome = 17, GnomeDark = 18, Mint = 19, MintDark = 20,
+                    Elementary = 21, ElementaryDark = 22 };
+constexpr int kLastScheme = 22;
 enum class ImageMode { Tile = 0, Center = 1, Stretch = 2, Fit = 3, Fill = 4 };
 enum class ButtonStyle { Flat = 0, Framed = 1, Rounded = 2 };
 enum class Density { Compact = 0, Normal = 1, Comfortable = 2 };
@@ -104,6 +106,14 @@ struct Spec {
     // Con el color de selección propio de los temas Claro y Oscuro (no se guarda): la pestaña de
     // la imagen y los botones de las ventanas también lo llevan.
     bool ownSelection = false;
+    // Windows 8 (Metro): el marco ancho y la barra de título planos, del color de las ventanas, y sus
+    // botones (no se guarda).
+    bool metro = false;
+    // Windows 7 Basic: el estilo de Windows 7 con el marco opaco, sin cristal (no se guarda).
+    bool basic = false;
+    // Un escritorio de Linux (sus botones redondos y su barra): "yaru" (Ubuntu), "adwaita" (GNOME),
+    // "mint" o "elementary"; vacío, ninguno (no se guarda).
+    QString desktop;
 
     bool operator==(const Spec&) const = default;
 };
@@ -128,6 +138,12 @@ Spec windowsXP();
 Spec windows98Alt();
 // El tema Azul de Paint.NET 5: el claro con las barras en degradado azulado.
 Spec blue();
+// Windows 8 (claro u oscuro) con el color de las ventanas 'window' (no válido: el de fábrica).
+Spec windows8(bool dark, const QColor& window = QColor());
+// Windows 7 Basic: el de Windows 7 sin cristal (claro u oscuro).
+Spec windows7Basic(bool dark);
+// Los de escritorios de Linux: "yaru" (Ubuntu), "adwaita" (GNOME), "mint" y "elementary".
+Spec linuxDesktop(const QString& desktop, bool dark);
 // El tema del que salen los colores sin cambiar del personalizado: el claro o el oscuro de
 // Paint.NET o, con su estilo, Windows 7 (claro u oscuro) o Windows XP.
 Spec customBase(const Spec& custom);
@@ -202,6 +218,14 @@ struct Win7Color {
     QRgb rgb;
 };
 const std::array<Win7Color, 16>& win7Colors();
+// Windows 8: el color de las ventanas (marco y barra de título) de sus temas; no válido: el de
+// fábrica (#6badf6, el celeste de Windows 8). Devuelve si cambió.
+bool setWin8Color(const QColor& color);
+QColor win8Color();
+QColor defaultWin8Color();
+// Los de «Color y apariencia» de Windows 8 (sin negro) y los de la pantalla Inicio.
+const std::array<Win7Color, 15>& win8WindowColors();
+const std::array<Win7Color, 16>& win8StartColors();
 // Color de selección propio de los temas Claro y Oscuro (y Seguir al sistema, según el modo):
 // el fondo de lo elegido en las ventanas (herramientas, capas, historial...), en la barra
 // superior y en las listas; el borde y lo de bajo el puntero salen de él. No válido: el azul de

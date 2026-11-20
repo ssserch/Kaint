@@ -4680,7 +4680,7 @@ void MainWindow::applySettings()
     m_canvas->viewport()->update();
     FloatingPanel::setSnapping(m_settings.snapPanels);
     // Botones de la barra de título: el estilo y el lado cambian al momento.
-    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 6)));
+    WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 8)));
     // Los automáticos con los temas que no traen botones propios: los de Windows 11 con «Bordes:
     // redondeados» (como antes, cuando la recreación de Windows 11 los elegía), si no los de 10.
     WindowFrame::setAutoFallback(m_settings.windowsVersion == 11 ? WindowFrame::Buttons::Windows11
@@ -4706,6 +4706,7 @@ void MainWindow::applySettings()
     Theme::setCustomTitleBarColor(ownTitle);
     bool glassChanged = Theme::setAeroTransparency(m_settings.aeroTransparency);
     glassChanged = Theme::setWin7Glass(m_settings.win7Glass) || glassChanged;
+    glassChanged = Theme::setWin8Color(m_settings.win8Color) || glassChanged;
     const bool selectionChanged = Theme::setSelectionColors(m_settings.selectionColorLight, m_settings.selectionColorDark);
     if (Theme::current() != Theme::Scheme(m_settings.colorScheme) || Theme::look() != Theme::Look(m_settings.uiStyle)
         || fontChanged || titleChanged || glassChanged || selectionChanged) {

@@ -59,11 +59,23 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
 #ifndef Q_OS_WIN
     scheme->addItem(tr("KDE"), int(Theme::Scheme::Kde));
 #endif
+    scheme->addItem(tr("Windows 8"), int(Theme::Scheme::Windows8));
+    scheme->addItem(tr("Windows 8 oscuro"), int(Theme::Scheme::Windows8Dark));
     scheme->addItem(tr("Windows 7"), int(Theme::Scheme::Windows7));
     scheme->addItem(tr("Windows 7 oscuro"), int(Theme::Scheme::Windows7Dark));
+    scheme->addItem(tr("Windows 7 Basic"), int(Theme::Scheme::Windows7Basic));
+    scheme->addItem(tr("Windows 7 Basic oscuro"), int(Theme::Scheme::Windows7BasicDark));
     scheme->addItem(tr("Windows XP"), int(Theme::Scheme::WindowsXP));
     scheme->addItem(tr("Windows 98"), int(Theme::Scheme::Windows98));
     scheme->addItem(tr("Windows 98 ALT"), int(Theme::Scheme::Windows98Alt));
+    scheme->addItem(tr("Ubuntu"), int(Theme::Scheme::Ubuntu));
+    scheme->addItem(tr("Ubuntu oscuro"), int(Theme::Scheme::UbuntuDark));
+    scheme->addItem(tr("GNOME"), int(Theme::Scheme::Gnome));
+    scheme->addItem(tr("GNOME oscuro"), int(Theme::Scheme::GnomeDark));
+    scheme->addItem(tr("Linux Mint"), int(Theme::Scheme::Mint));
+    scheme->addItem(tr("Linux Mint oscuro"), int(Theme::Scheme::MintDark));
+    scheme->addItem(tr("elementary OS"), int(Theme::Scheme::Elementary));
+    scheme->addItem(tr("elementary OS oscuro"), int(Theme::Scheme::ElementaryDark));
     scheme->addItem(tr("Personalizado"), int(Theme::Scheme::Custom));
     scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
     auto* look = new QComboBox(this);

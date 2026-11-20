@@ -76,6 +76,19 @@ bool luna()
     return s.xp && !s.classic;
 }
 
+// Windows 8 (Metro): el marco ancho y plano del color de las ventanas.
+bool metro()
+{
+    const Theme::Spec s = Theme::active();
+    return s.metro && !s.classic;
+}
+
+// Un escritorio de Linux (Ubuntu, GNOME, Mint, elementary): "yaru", "adwaita", "mint" o "elementary".
+QString desktopStyle()
+{
+    return Theme::active().desktop;
+}
+
 QColor overlay(int alpha)
 {
     const QColor title = titleColor();
@@ -84,6 +97,8 @@ QColor overlay(int alpha)
 
 QColor borderColor()
 {
+    if (metro())
+        return Theme::active().menuBar.darker(125);
     const QColor title = Theme::titleBarColor();
     if (title.isValid())
         return title;
@@ -93,7 +108,8 @@ QColor borderColor()
 // Grosor del borde: el fino de Windows 10 o el de cuatro píxeles en relieve de Windows 98.
 int borderWidth()
 {
-    return classic() ? 4 : luna() ? 3 : 1;
+    // Windows 8: el marco ancho (8 px) del color de las ventanas.
+    return classic() ? 4 : luna() ? 3 : metro() ? 8 : 1;
 }
 
 // --- Windows 98 ------------------------------------------------------------------------------
@@ -1249,6 +1265,22 @@ private:
                 bevel98(p, f, true);
             } else if (luna()) {
                 frameXP(p, f, active);
+            } else if (metro()) {
+                // Windows 8: todo el marco del color de las ventanas (más apagado inactiva), con una
+                // línea más oscura por fuera.
+                QColor color = titleColor();
+                if (!active) {
+                    const QColor w = m_window->palette().color(QPalette::Window);
+                    color = QColor((color.red() * 55 + w.red() * 45) / 100, (color.green() * 55 + w.green() * 45) / 100,
+                                   (color.blue() * 55 + w.blue() * 45) / 100);
+                }
+                const int b = border();
+                p.fillRect(QRect(f.left(), f.top(), f.width(), b), color);
+                p.fillRect(QRect(f.left(), f.bottom() - b + 1, f.width(), b), color);
+                p.fillRect(QRect(f.left(), f.top(), b, f.height()), color);
+                p.fillRect(QRect(f.right() - b + 1, f.top(), b, f.height()), color);
+                p.setPen(borderColor());
+                p.drawRect(f.adjusted(0, 0, -1, -1));
             } else {
                 p.setPen(borderColor());
                 p.drawRect(f.adjusted(0, 0, -1, -1));
@@ -1285,7 +1317,8 @@ private:
             return;
         }
         p.setPen(titleTextColor(active));
-        p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, title);
+        // Windows 8 centra el título.
+        p.drawText(text, Qt::AlignVCenter | (metro() ? Qt::AlignHCenter : Qt::AlignLeft), title);
     }
 
     // La ventana principal con Windows 7: el cristal de 7.css en todo el marco (la fila de la barra de
@@ -1472,6 +1505,10 @@ Buttons effectiveButtons()
         return Buttons::Windows7;
     if (Theme::active().xp)
         return Buttons::WindowsXP;
+    if (metro())
+        return Buttons::Windows8;
+    if (!desktopStyle().isEmpty())
+        return Buttons::Gnome;
     return g_autoFallback;
 }
 
@@ -1664,6 +1701,13 @@ Metrics metricsFor(Buttons style, int h)
         return {side, side, side, 2, 0, 4, false};
     }
     case Buttons::Windows98: return {16, 16, 14, 0, 2, 2, false};
+    // Windows 8: minimizar y maximizar estrechos y cerrar rojo y ancho, colgando del borde de arriba.
+    case Buttons::Windows8: return {26, 45, std::min(21, h), 0, 0, 0, true};
+    // Los redondos de GNOME y compañía (24 px, con aire entre ellos).
+    case Buttons::Gnome: {
+        const int d = std::min(24, std::max(14, h - 6));
+        return {d, d, d, 6, 0, 8, false};
+    }
     }
     return {kButton, kButton, h, 0, 0, 0, false};
 }
@@ -1764,6 +1808,68 @@ void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool 
             p.fillRect(box, overlay(down ? 51 : 26));
         }
         paintGlyph(p, box, which, maximized, glyph);
+        return;
+    }
+    case Buttons::Windows8: {
+        // Cerrar, siempre rojo (más claro bajo el puntero, más oscuro al pulsarlo; apagado en una
+        // ventana inactiva) con la X blanca; los demás, planos sobre el color de las ventanas.
+        QColor glyph = titleTextColor(active);
+        if (which == 2) {
+            QColor red = down ? QColor(0x99, 0x3d, 0x3d) : hot ? QColor(0xe0, 0x43, 0x43) : QColor(0xc7, 0x50, 0x50);
+            if (!active && !hot && !down)
+                red = QColor(0xc7, 0x50, 0x50, 150);
+            p.fillRect(box, red);
+            glyph = Qt::white;
+        } else if (hot || down) {
+            p.fillRect(box, overlay(down ? 60 : 32));
+        }
+        paintGlyph(p, box, which, maximized, glyph);
+        return;
+    }
+    case Buttons::Gnome: {
+        // Círculos de GNOME (Adwaita): un gris suave que se marca bajo el puntero; con Ubuntu (Yaru),
+        // el de cerrar es naranja; con Mint, sin fondo hasta que se pasa por encima.
+        const QString desktop = desktopStyle();
+        const QColor text = titleTextColor(active);
+        QColor fill = text;
+        fill.setAlpha(down ? 70 : hot ? 45 : desktop == QLatin1String("mint") ? 0 : 25);
+        QColor glyph = text;
+        if (which == 2 && desktop == QLatin1String("yaru")) {
+            fill = down ? QColor(0xc7, 0x44, 0x1a) : hot ? QColor(0xf0, 0x6a, 0x3a) : QColor(0xe9, 0x54, 0x20);
+            if (!active && !hot)
+                fill.setAlpha(150);
+            glyph = Qt::white;
+        } else if (which == 2 && desktop == QLatin1String("mint") && (hot || down)) {
+            fill = Theme::active().accent;
+            glyph = Qt::white;
+        }
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        const int d = std::min(box.width(), box.height());
+        const QRectF circle(box.left() + (box.width() - d) / 2.0, box.top() + (box.height() - d) / 2.0, d, d);
+        p.setPen(Qt::NoPen);
+        p.setBrush(fill);
+        p.drawEllipse(circle);
+        // Los símbolos finos de GNOME, a la mitad del círculo.
+        const QPointF c = circle.center();
+        const double r = d * 0.2;
+        p.setPen(QPen(glyph, std::max(1.2, d / 14.0), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        if (which == 0) {
+            p.drawLine(QPointF(c.x() - r, c.y() + r * 0.6), QPointF(c.x() + r, c.y() + r * 0.6));
+        } else if (which == 1) {
+            if (maximized) {
+                p.drawRect(QRectF(c.x() - r, c.y() - r * 0.5, r * 1.5, r * 1.5));
+                p.drawLine(QPointF(c.x() - r * 0.5, c.y() - r), QPointF(c.x() + r, c.y() - r));
+                p.drawLine(QPointF(c.x() + r, c.y() - r), QPointF(c.x() + r, c.y() + r * 0.5));
+            } else {
+                p.drawRect(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r));
+            }
+        } else {
+            p.drawLine(QPointF(c.x() - r, c.y() - r), QPointF(c.x() + r, c.y() + r));
+            p.drawLine(QPointF(c.x() + r, c.y() - r), QPointF(c.x() - r, c.y() + r));
+        }
+        p.restore();
         return;
     }
     }
@@ -1949,7 +2055,8 @@ void CaptionTitle::paintEvent(QPaintEvent*)
         return;
     }
     p.setPen(WindowFrame::titleTextColor(active));
-    p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, title);
+    // Windows 8 centra el título.
+    p.drawText(text, Qt::AlignVCenter | (Theme::active().metro ? Qt::AlignHCenter : Qt::AlignLeft), title);
 }
 
 void CaptionTitle::mousePressEvent(QMouseEvent* e)

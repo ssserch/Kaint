@@ -142,6 +142,7 @@ AppSettings AppSettings::load()
         a.windowAnimationMs = AppSettings().windowAnimationMs;
     a.aeroTransparency = get("aeroTransparency", a.aeroTransparency);
     a.win7Glass = s.value(QStringLiteral("win7Glass"), QColor()).value<QColor>();
+    a.win8Color = s.value(QStringLiteral("win8Color"), QColor()).value<QColor>();
     a.translucentPanels = get("translucentPanels", a.translucentPanels);
     a.translucentOverImage = get("translucentOverImage", a.translucentOverImage);
     a.overscroll = get("overscroll", a.overscroll);
@@ -183,7 +184,7 @@ AppSettings AppSettings::load()
     // Los automáticos (6) son los de siempre; antes los hacían los de Windows 10 (0): esos pasan a
     // automáticos una vez (titleButtonsAuto), para que con Windows 7 o XP sigan siendo los del tema.
     const int defaultButtons = 6;
-    int buttons = s.contains(QStringLiteral("titleButtons")) ? std::clamp(get("titleButtons", defaultButtons), -1, 6)
+    int buttons = s.contains(QStringLiteral("titleButtons")) ? std::clamp(get("titleButtons", defaultButtons), -1, 8)
                                                              : defaultButtons;
     if (buttons == 0 && !s.contains(QStringLiteral("titleButtonsAuto")))
         buttons = 6;
@@ -265,6 +266,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("windowAnimationMs2"), true);
     s.setValue(QStringLiteral("aeroTransparency"), aeroTransparency);
     s.setValue(QStringLiteral("win7Glass"), win7Glass);
+    s.setValue(QStringLiteral("win8Color"), win8Color);
     s.setValue(QStringLiteral("translucentPanels"), translucentPanels);
     s.setValue(QStringLiteral("translucentOverImage"), translucentOverImage);
     s.setValue(QStringLiteral("overscroll"), overscroll);
@@ -679,13 +681,29 @@ QWidget* SettingsDialog::createInterfacePage()
 #ifndef Q_OS_WIN
     addScheme(tr("KDE"), Theme::Scheme::Kde, tr("El estilo y los colores reales de Plasma."));
 #endif
+    addScheme(tr("Windows 8"), Theme::Scheme::Windows8,
+              tr("Plano, con el marco ancho y la barra de título del color de las ventanas (se elige abajo) y el título centrado."));
+    addScheme(tr("Windows 8 oscuro"), Theme::Scheme::Windows8Dark, tr("El de Windows 8 con el interior oscuro."));
     addScheme(tr("Windows 7"), Theme::Scheme::Windows7, tr("Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css."));
     addScheme(tr("Windows 7 oscuro"), Theme::Scheme::Windows7Dark,
               tr("El de Windows 7 en grises oscuros, con el cristal ahumado."));
+    addScheme(tr("Windows 7 Basic"), Theme::Scheme::Windows7Basic,
+              tr("El tema básico de Windows 7: los mismos controles con el marco opaco, sin cristal."));
+    addScheme(tr("Windows 7 Basic oscuro"), Theme::Scheme::Windows7BasicDark, tr("El Basic de Windows 7 en grises oscuros."));
     addScheme(tr("Windows XP"), Theme::Scheme::WindowsXP, tr("El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css."));
     addScheme(tr("Windows 98"), Theme::Scheme::Windows98, tr("El clásico gris con relieve. También es una plantilla del personalizado."));
     addScheme(tr("Windows 98 ALT"), Theme::Scheme::Windows98Alt,
               tr("El clásico de Windows 2000 y XP, como Paint.NET en Windows XP: gris claro, cabeceras de azul oscuro a celeste y Tahoma."));
+    scheme->insertSeparator(scheme->count());
+    addScheme(tr("Ubuntu"), Theme::Scheme::Ubuntu, tr("Yaru: el naranja de Ubuntu, botones redondos y la fuente Ubuntu."));
+    addScheme(tr("Ubuntu oscuro"), Theme::Scheme::UbuntuDark, tr("Yaru oscuro."));
+    addScheme(tr("GNOME"), Theme::Scheme::Gnome, tr("Adwaita: el azul de GNOME y sus botones redondos grises."));
+    addScheme(tr("GNOME oscuro"), Theme::Scheme::GnomeDark, tr("Adwaita oscuro."));
+    addScheme(tr("Linux Mint"), Theme::Scheme::Mint, tr("Mint-Y: el verde de Linux Mint."));
+    addScheme(tr("Linux Mint oscuro"), Theme::Scheme::MintDark, tr("Mint-Y oscuro."));
+    addScheme(tr("elementary OS"), Theme::Scheme::Elementary, tr("El azul arándano de elementary y sus botones redondos."));
+    addScheme(tr("elementary OS oscuro"), Theme::Scheme::ElementaryDark, tr("elementary oscuro."));
+    scheme->insertSeparator(scheme->count());
     addScheme(tr("Personalizado"), Theme::Scheme::Custom, tr("Colores, fondo del lienzo y diseño a tu gusto."));
     scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
     auto* customize = new QPushButton(tr("Personalizar…"), page.widget);
@@ -786,13 +804,68 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.win7Glass = glassColor->color();
         changed();
     });
+    // Windows 8: el color de las ventanas (el marco y la barra de título), como «Color y apariencia»
+    // de Windows 8: sus colores (sin negro), los de la pantalla Inicio o uno propio (con negro).
+    auto* win8Row = new QWidget(page.widget);
+    auto* win8Combo = new QComboBox(win8Row);
+    auto* win8Own = new ColorButton(win8Row);
+    {
+        auto* l = new QHBoxLayout(win8Row);
+        l->setContentsMargins(20, 0, 0, 0);
+        l->addWidget(new QLabel(tr("Color de las ventanas:"), win8Row));
+        l->addWidget(win8Combo);
+        l->addWidget(win8Own);
+        l->addStretch();
+        page.layout->addWidget(win8Row);
+    }
+    win8Row->setToolTip(tr("Como «Color y apariencia» de Windows 8: el marco y la barra de título de las ventanas. Solo con "
+                           "los temas Windows 8."));
+    win8Combo->addItem(swatch(Theme::defaultWin8Color()), tr("Predeterminado"), QColor());
+    for (const Theme::Win7Color& c : Theme::win8WindowColors())
+        win8Combo->addItem(swatch(QColor(c.rgb)), QCoreApplication::translate("Theme", c.name), QColor(c.rgb));
+    win8Combo->insertSeparator(win8Combo->count());
+    for (const Theme::Win7Color& c : Theme::win8StartColors())
+        win8Combo->addItem(swatch(QColor(c.rgb)), QCoreApplication::translate("Theme", c.name), QColor(c.rgb));
+    win8Combo->addItem(tr("Personalizado"), QStringLiteral("custom"));
+    {
+        int index = 0;
+        if (m_settings.win8Color.isValid()) {
+            index = win8Combo->count() - 1;
+            for (int i = 1; i + 1 < win8Combo->count(); ++i)
+                if (win8Combo->itemData(i).canConvert<QColor>() && win8Combo->itemData(i).value<QColor>().isValid()
+                    && win8Combo->itemData(i).value<QColor>().rgb() == m_settings.win8Color.rgb())
+                    index = i;
+        }
+        win8Combo->setCurrentIndex(index);
+    }
+    win8Own->setColor(m_settings.win8Color.isValid() ? m_settings.win8Color : Theme::defaultWin8Color());
+    win8Own->setVisible(win8Combo->currentIndex() == win8Combo->count() - 1);
+    connect(win8Combo, &QComboBox::activated, this, [this, win8Combo, win8Own](int i) {
+        const bool own = i == win8Combo->count() - 1;
+        win8Own->setVisible(own);
+        m_settings.win8Color = own ? win8Own->color() : win8Combo->itemData(i).value<QColor>();
+        changed();
+    });
+    connect(win8Own, &ColorButton::colorChanged, this, [this, win8Own] {
+        m_settings.win8Color = win8Own->color();
+        changed();
+    });
+    auto syncWin8 = [this, win8Row] {
+        win8Row->setVisible(m_settings.colorScheme == int(Theme::Scheme::Windows8)
+                            || m_settings.colorScheme == int(Theme::Scheme::Windows8Dark));
+    };
+    syncWin8();
+    connect(this, &SettingsDialog::settingsChanged, this, syncWin8);
     auto syncAeroGlass = [this, aeroGlass, panelCloseRow, glassRow] {
         // (También el personalizado con el estilo de Windows 7.)
-        const bool win7 = m_settings.colorScheme == int(Theme::Scheme::Windows7)
+        const bool basic = m_settings.colorScheme == int(Theme::Scheme::Windows7Basic)
+                           || m_settings.colorScheme == int(Theme::Scheme::Windows7BasicDark);
+        const bool win7 = basic || m_settings.colorScheme == int(Theme::Scheme::Windows7)
                           || m_settings.colorScheme == int(Theme::Scheme::Windows7Dark)
                           || (m_settings.colorScheme == int(Theme::Scheme::Custom) && Theme::custom().win7 && !Theme::custom().classic);
-        aeroGlass->setEnabled(win7);
-        aeroGlass->setVisible(win7);
+        // El Basic no tiene cristal: sin «Habilitar transparencia».
+        aeroGlass->setEnabled(win7 && !basic);
+        aeroGlass->setVisible(win7 && !basic);
         panelCloseRow->setVisible(win7);
         glassRow->setVisible(win7);
     };
@@ -1128,6 +1201,8 @@ QWidget* SettingsDialog::createInterfacePage()
         {3, QStringLiteral("Windows 7"), tr("De cristal, colgando del borde de arriba, con cerrar en rojo.")},
         {4, QStringLiteral("Windows XP"), tr("Los azules de Luna con las esquinas redondeadas y cerrar en naranja.")},
         {5, QStringLiteral("Windows 98"), tr("Grises en relieve.")},
+        {7, QStringLiteral("Windows 8"), tr("Planos, con cerrar rojo y ancho colgando del borde de arriba.")},
+        {8, tr("GNOME"), tr("Círculos grises, como los de GNOME, Ubuntu, Mint y elementary.")},
     };
     for (const auto& st : styles) {
         buttonsStyle->addItem(st.name, st.id);

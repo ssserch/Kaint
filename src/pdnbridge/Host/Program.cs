@@ -1102,6 +1102,8 @@ namespace Kaint.PdnHost
                         };
                     if (Type.GetType("Mono.Runtime") != null)
                         dialog.Load += (sender, e) => MonoFormFixes.Apply(dialog);
+                    if (OnWindows())
+                        KeepInFront(dialog);
                     DialogResult result = dialog.ShowDialog();
                     // Con mono (X11), la orden de ocultar la ventana se queda en la cola hasta que se
                     // vuelve a atender a X: mientras se espera a que pare la vista previa (un efecto
@@ -1116,6 +1118,41 @@ namespace Kaint.PdnHost
                     return r;
                 }
             }
+        }
+
+        // Windows: el diálogo, delante de Kaint al abrirse (Kaint le deja pasar al frente con
+        // AllowSetForegroundWindow), y también las ventanas que el complemento abre por su cuenta
+        // mientras tanto: Random Effect muestra el diálogo del efecto elegido con Show(), sin
+        // TopMost, y salía detrás de la ventana de Kaint.
+        private static void KeepInFront(Form dialog)
+        {
+            System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
+            timer.Interval = 100;
+            timer.Tick += (sender, e) =>
+            {
+                try
+                {
+                    List<Form> open = new List<Form>();
+                    foreach (Form f in Application.OpenForms)
+                        open.Add(f);
+                    foreach (Form f in open)
+                        if (f != dialog && !f.IsDisposed && f.Visible && !f.TopMost)
+                        {
+                            f.TopMost = true;
+                            f.BringToFront();
+                        }
+                }
+                catch (Exception)
+                {
+                }
+            };
+            dialog.Shown += (sender, e) =>
+            {
+                dialog.Activate();
+                dialog.BringToFront();
+                timer.Start();
+            };
+            dialog.FormClosed += (sender, e) => timer.Dispose();
         }
 
         private static bool effectsFolderReady;

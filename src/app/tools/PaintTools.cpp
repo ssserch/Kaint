@@ -63,6 +63,24 @@ StrokeParams StrokeTool::baseParams() const
     p.pressureSize = s.pressure;
     p.spacing = s.spacing / 100.0;
     p.smoothing = s.smoothing;
+    if (s.advancedBrush) {
+        p.advanced = true;
+        p.tipShape = s.tipShape;
+        p.angle = s.tipAngle;
+        p.roundness = s.tipRoundness / 100.0;
+        p.flow = s.flow / 100.0;
+        p.sizeJitter = s.sizeJitter / 100.0;
+        p.opacityJitter = s.opacityJitter / 100.0;
+        p.angleJitter = s.angleJitter / 100.0;
+        p.scatter = s.scatter / 100.0;
+        p.pressureGamma = s.pressureCurve / 100.0;
+        p.minSize = s.minSize / 100.0;
+        p.pressureOpacity = s.pressureOpacity;
+        p.stabilizer = s.stabilizer;
+        p.taperIn = s.taperIn;
+        p.taperOut = s.taperOut;
+        p.speedPressure = s.speedPressure;
+    }
     return p;
 }
 

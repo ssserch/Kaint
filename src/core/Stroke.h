@@ -29,6 +29,28 @@ struct StrokeParams {
     qreal tolerance = 0.5;
     bool toleranceStraight = false;
     bool recolorSampleOnce = false;
+
+    // Opciones avanzadas del pincel (Configuración → Herramientas), como en Ibis Paint y FireAlpaca.
+    // Sin 'advanced', no cuentan.
+    bool advanced = false;
+    int tipShape = 0;            // 0 redonda, 1 cuadrada
+    qreal angle = 0;             // grados
+    qreal roundness = 1;         // 0.05..1: la punta, aplastada (elipse o rectángulo)
+    qreal flow = 1;              // opacidad de cada toque
+    qreal sizeJitter = 0;        // 0..1: cuánto puede encoger cada toque al azar
+    qreal opacityJitter = 0;     // 0..1
+    qreal angleJitter = 0;       // 0..1 (hasta media vuelta)
+    qreal scatter = 0;           // 0..1: desplazamiento al azar, en diámetros
+    qreal pressureGamma = 1;     // curva de la presión (<1 más sensible, >1 menos)
+    qreal minSize = 0.05;        // con la presión, el tamaño más pequeño (fracción)
+    bool pressureOpacity = false;  // la presión también controla la opacidad
+    int stabilizer = 0;          // 0..20: corrección del trazo (cuanto más, más se queda atrás y más suave)
+    // Entrada y salida (manga, como en Clip Studio e Ibis Paint): el trazo empieza y acaba en punta a lo
+    // largo de estos píxeles. La salida se ve al soltar (el trazo se vuelve a dibujar).
+    qreal taperIn = 0;
+    qreal taperOut = 0;
+    // Sin presión (ratón o dedo): la velocidad hace de presión (más rápido, más fino).
+    bool speedPressure = false;
 };
 
 // Trazo con máscara de cobertura, como el pincel de Paint.NET: cada toque del pincel se acumula
@@ -72,7 +94,14 @@ private:
         bool started = false;
         Point last;
         qreal next = 0;
+        qreal distance = 0;  // recorrido hasta 'last' (para la entrada y la salida)
     };
+    // Lo que encoge el toque a 'distance' del principio (entrada) y, con la longitud total conocida
+    // (al terminar), del final (salida).
+    qreal taperFactor(qreal distance) const;
+    qreal m_strokeLength = -1;
+    qreal m_speedPressure = 1;
+    bool m_speedStarted = false;
     void buildProfile();
     float profile(qreal u) const;
     qreal diameterFor(qreal pressure) const;
@@ -94,6 +123,16 @@ private:
     QImage m_mask;
     QRect m_total;
     QPointF m_last;
+    // Estabilizador: el punto suavizado y el último del ratón (al terminar, el trazo llega a él).
+    QPointF m_stable;
+    qreal m_stablePressure = 1;
+    QPointF m_raw;
+    qreal m_rawPressure = 1;
+    bool m_stabilized = false;
+    // La presión del toque que se dibuja (opacidad por presión).
+    qreal m_dabPressure = 1;
+    void lineToPoint(QPointF pos, qreal pressure);
+    QRect dabAdvanced(QPointF c, qreal diameter);
     QList<Point> m_points;
     int m_drySegments = 0;
     Walker m_walker;

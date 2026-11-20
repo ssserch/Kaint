@@ -56,6 +56,26 @@ struct ToolSettings {
     bool sampleImage = false;
     // Cubo de pintura: rellenar varias veces seguidas acumula los bordes suavizados.
     bool fillAccumulate = true;
+    // Pincel avanzado (Configuración → Herramientas → Opciones avanzadas del pincel), como Ibis Paint y
+    // FireAlpaca: punta, variación al azar, presión, estabilizador, entrada y salida, y los deslizadores
+    // de tamaño y opacidad al lado del lienzo. Apagado de fábrica.
+    bool advancedBrush = false;
+    int tipShape = 0;
+    int tipAngle = 0;
+    int tipRoundness = 100;
+    int flow = 100;
+    int sizeJitter = 0;
+    int opacityJitter = 0;
+    int angleJitter = 0;
+    int scatter = 0;
+    int pressureCurve = 100;
+    int minSize = 5;
+    bool pressureOpacity = false;
+    int stabilizer = 0;
+    int taperIn = 0;
+    int taperOut = 0;
+    bool speedPressure = false;
+    bool sideSliders = false;
     bool pickerSampleImage = false;
     SelectionMode selectionMode = SelectionMode::Replace;
     RectSelectMode rectMode = RectSelectMode::Normal;

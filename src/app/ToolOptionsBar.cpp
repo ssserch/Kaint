@@ -1,5 +1,7 @@
 #include "app/ToolOptionsBar.h"
 
+#include "app/widgets/BrushAdvanced.h"
+
 #include "app/AppState.h"
 #include "app/Icons.h"
 #include "app/tools/RetouchTools.h"
@@ -112,6 +114,9 @@ bool ToolOptionsEditor::groupApplies(const QString& key, const ToolSettings& s)
         return s.patchMode == 0;
     if (key == QLatin1String("patch.ca"))
         return s.patchMode == 1;
+    // «Avanzado…», solo con las opciones avanzadas del pincel activadas (Configuración).
+    if (key == QLatin1String("advanced"))
+        return s.advancedBrush;
     return true;
 }
 
@@ -743,6 +748,7 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_pressure->setAutoRaise(true);
     connect(m_pressure, &QToolButton::toggled, this, [update](bool on) { update([on](ToolSettings& s) { s.pressure = on; }); });
     add(QStringLiteral("pressure"), Tool::OptPressure, Options, {m_pressure});
+    add(QStringLiteral("advanced"), Tool::OptPressure, Options, {new AdvancedBrushButton(parent)});
 
     m_antialias = new ChoiceButton(tr("Suavizado"), parent);
     m_antialias->addChoice(Icons::antialias(true), tr("Suavizado activado"), 1);
@@ -896,11 +902,11 @@ QStringList ToolOptionsBar::order(ToolId id)
     case ToolId::MoveSelection: return list("selQuality");
     case ToolId::PaintBucket: return list("flood | fill | tolerance tolAlpha | sampling | aa accumulate blend selQuality");
     case ToolId::Gradient: return list("gradient.types | gradient.mode gradient.repeat | aa blend selQuality");
-    case ToolId::Paintbrush: return list("size hardness spacing fill | smoothing pressure aa blend selQuality");
-    case ToolId::Eraser: return list("size hardness spacing | smoothing pressure aa selQuality");
+    case ToolId::Paintbrush: return list("size hardness spacing fill | smoothing pressure advanced aa blend selQuality");
+    case ToolId::Eraser: return list("size hardness spacing | smoothing pressure advanced aa selQuality");
     case ToolId::Pencil: return list("blend selQuality");
     case ToolId::ColorPicker: return list("picker.sampling | picker.after | selQuality");
-    case ToolId::CloneStamp: return list("size hardness spacing | smoothing pressure aa blend selQuality");
+    case ToolId::CloneStamp: return list("size hardness spacing | smoothing pressure advanced aa blend selQuality");
     case ToolId::Recolor:
         return list("size hardness spacing tolerance tolAlpha | recolor | smoothing pressure aa selQuality");
     case ToolId::Text: return list("text.font | text.style | text.align | aa blend selQuality");

@@ -68,6 +68,10 @@ void StrokeEngine::begin(Document* doc, LayerPtr layer, const StrokeParams& para
     m_wetRect = QRect();
     m_wetBackup = QImage();
     m_recolorTarget = params.background.rgba();
+    m_stabilized = false;
+    m_strokeLength = -1;
+    m_speedPressure = 1;
+    m_speedStarted = false;
     buildProfile();
 }
 
@@ -104,8 +108,16 @@ float StrokeEngine::profile(qreal u) const
 qreal StrokeEngine::diameterFor(qreal pressure) const
 {
     qreal d = m_params.diameter;
-    if (m_params.pressureSize)
-        d *= std::clamp(pressure, 0.05, 1.0);
+    if (m_params.pressureSize) {
+        if (m_params.advanced) {
+            // Con la curva de la presión y el tamaño mínimo elegidos.
+            const qreal p = std::pow(std::clamp(pressure, 0.0, 1.0), std::clamp(m_params.pressureGamma, 0.2, 5.0));
+            const qreal lo = std::clamp(m_params.minSize, 0.01, 1.0);
+            d *= lo + (1 - lo) * p;
+        } else {
+            d *= std::clamp(pressure, 0.05, 1.0);
+        }
+    }
     return std::max(d, 0.1);
 }
 
@@ -133,10 +145,52 @@ void StrokeEngine::moveTo(QPointF pos, qreal pressure)
     composite(walk(m_walker, m_points));
 }
 
+qreal StrokeEngine::taperFactor(qreal distance) const
+{
+    if (!m_params.advanced)
+        return 1;
+    qreal f = 1;
+    if (m_params.taperIn > 0)
+        f = std::min(f, 0.08 + 0.92 * std::clamp(distance / m_params.taperIn, 0.0, 1.0));
+    if (m_params.taperOut > 0 && m_strokeLength >= 0)
+        f = std::min(f, 0.08 + 0.92 * std::clamp((m_strokeLength - distance) / m_params.taperOut, 0.0, 1.0));
+    return f;
+}
+
 void StrokeEngine::lineTo(QPointF pos, qreal pressure)
 {
     if (!m_doc)
         return;
+    // Presión por la velocidad (ratón o dedo, que dan siempre 1): los tramos largos entre dos puntos
+    // (movimiento rápido) adelgazan el trazo, suavizado para que no salte.
+    if (m_params.advanced && m_params.speedPressure && pressure >= 0.999) {
+        const qreal step = QLineF(m_last, pos).length();
+        const qreal target = std::clamp(1.15 - step / 45.0, 0.25, 1.0);
+        m_speedPressure = m_speedStarted ? m_speedPressure + (target - m_speedPressure) * 0.3 : target;
+        m_speedStarted = true;
+        pressure = m_speedPressure;
+    }
+    // Estabilizador (como la corrección de FireAlpaca): el trazo sigue al puntero con retraso; cuanto
+    // más alto, más suave y más atrás se queda. Al terminar llega hasta el último punto.
+    if (m_params.advanced && m_params.stabilizer > 0 && !m_params.pixelExact) {
+        if (!m_stabilized) {
+            m_stabilized = true;
+            m_stable = m_last;
+            m_stablePressure = pressure;
+        }
+        m_raw = pos;
+        m_rawPressure = pressure;
+        const qreal k = 1.0 / (1.0 + m_params.stabilizer * 0.6);
+        m_stable += (pos - m_stable) * k;
+        m_stablePressure += (pressure - m_stablePressure) * k;
+        lineToPoint(m_stable, m_stablePressure);
+        return;
+    }
+    lineToPoint(pos, pressure);
+}
+
+void StrokeEngine::lineToPoint(QPointF pos, qreal pressure)
+{
     if (m_params.pixelExact) {
         const QPoint a(int(std::floor(m_last.x())), int(std::floor(m_last.y())));
         const QPoint b(int(std::floor(pos.x())), int(std::floor(pos.y())));
@@ -199,7 +253,9 @@ QRect StrokeEngine::walk(Walker& w, const QList<Point>& path)
         if (!w.started) {
             w.started = true;
             w.last = p;
-            const qreal d = diameterFor(p.pressure);
+            w.distance = 0;
+            const qreal d = diameterFor(p.pressure) * taperFactor(0);
+            m_dabPressure = p.pressure;
             dirty |= dab(p.pos, d);
             w.next = spacingFor(d);
             continue;
@@ -208,11 +264,13 @@ QRect StrokeEngine::walk(Walker& w, const QList<Point>& path)
         qreal at = w.next;
         while (at <= len) {
             const qreal t = len > 0 ? at / len : 1.0;
-            const qreal d = diameterFor(w.last.pressure + (p.pressure - w.last.pressure) * t);
+            m_dabPressure = w.last.pressure + (p.pressure - w.last.pressure) * t;
+            const qreal d = diameterFor(m_dabPressure) * taperFactor(w.distance + at);
             dirty |= dab(w.last.pos + (p.pos - w.last.pos) * t, d);
             at += spacingFor(d);
         }
         w.next = at - len;
+        w.distance += len;
         w.last = p;
     }
     return dirty;
@@ -221,7 +279,10 @@ QRect StrokeEngine::walk(Walker& w, const QList<Point>& path)
 QRect StrokeEngine::reach(const QList<Point>& path) const
 {
     QRectF r;
-    const qreal margin = m_params.diameter / 2 * m_extent + 2;
+    qreal margin = m_params.diameter / 2 * m_extent + 2;
+    // Con la punta cuadrada y la dispersión, los toques llegan más lejos.
+    if (m_params.advanced)
+        margin = m_params.diameter / 2 * m_extent * (m_params.tipShape == 1 ? M_SQRT2 : 1.0) + m_params.scatter * m_params.diameter + 2;
     for (const Point& p : path)
         r |= QRectF(p.pos.x() - margin, p.pos.y() - margin, 2 * margin, 2 * margin);
     return r.toAlignedRect().intersected(m_mask.rect());
@@ -261,6 +322,8 @@ QRect StrokeEngine::drawWet()
 
 QRect StrokeEngine::dab(QPointF c, qreal diameter)
 {
+    if (m_params.advanced && m_params.antialias)
+        return dabAdvanced(c, diameter);
     // Como Paint.NET: por debajo de un píxel, un toque de un píxel más transparente.
     qreal opacity = 1;
     if (diameter < 1) {
@@ -321,6 +384,71 @@ QRect StrokeEngine::dab(QPointF c, qreal diameter)
                 v = profile(d / radius);
             }
             put(row[x], int(v * k + 0.5f));
+        }
+    }
+    return bounds;
+}
+
+namespace {
+// Un número al azar (0..1) fijo para cada toque y cada uso: el tramo provisional se vuelve a
+// dibujar al llegar el siguiente punto y debe salir igual.
+qreal stableRandom(QPointF c, int salt)
+{
+    quint32 h = quint32(qRound(c.x() * 8)) * 73856093u ^ quint32(qRound(c.y() * 8)) * 19349663u ^ quint32(salt) * 83492791u;
+    h ^= h >> 13;
+    h *= 0x5bd1e995u;
+    h ^= h >> 15;
+    return (h & 0xffffff) / double(0xffffff);
+}
+}  // namespace
+
+QRect StrokeEngine::dabAdvanced(QPointF c, qreal diameter)
+{
+    // El toque con las opciones avanzadas: variación al azar de tamaño, opacidad, ángulo y sitio;
+    // punta redonda o cuadrada, girada y aplastada; flujo y opacidad por presión.
+    const QPointF key = c;
+    diameter *= 1 - std::clamp(m_params.sizeJitter, 0.0, 1.0) * stableRandom(key, 1);
+    if (m_params.scatter > 0) {
+        const qreal a = stableRandom(key, 2) * 2 * M_PI;
+        const qreal dist = stableRandom(key, 3) * m_params.scatter * diameter;
+        c += QPointF(std::cos(a) * dist, std::sin(a) * dist);
+    }
+    qreal opacity = std::clamp(m_params.flow, 0.01, 1.0) * (1 - std::clamp(m_params.opacityJitter, 0.0, 1.0) * stableRandom(key, 4));
+    if (m_params.pressureOpacity)
+        opacity *= std::clamp(m_dabPressure, 0.0, 1.0);
+    if (diameter < 1) {
+        opacity *= diameter * diameter;
+        diameter = 1;
+    }
+    const qreal angle = (m_params.angle + std::clamp(m_params.angleJitter, 0.0, 1.0) * 180 * (stableRandom(key, 5) * 2 - 1)) * M_PI / 180;
+    const qreal roundness = std::clamp(m_params.roundness, 0.05, 1.0);
+    const bool square = m_params.tipShape == 1;
+    const qreal radius = diameter / 2;
+    // Lo que puede abarcar (la diagonal de la punta cuadrada).
+    const qreal extent = radius * m_extent * (square ? M_SQRT2 : 1.0);
+    const QRect bounds = QRectF(c.x() - extent - 1, c.y() - extent - 1, extent * 2 + 2, extent * 2 + 2).toAlignedRect().intersected(m_mask.rect());
+    if (bounds.isEmpty())
+        return {};
+    const qreal ca = std::cos(angle), sa = std::sin(angle);
+    const float k = float(opacity * 255);
+    const int samples = radius < 3 ? 4 : 1;
+    for (int y = bounds.top(); y <= bounds.bottom(); ++y) {
+        uchar* row = m_mask.scanLine(y);
+        for (int x = bounds.left(); x <= bounds.right(); ++x) {
+            float v = 0;
+            for (int j = 0; j < samples; ++j)
+                for (int i = 0; i < samples; ++i) {
+                    const qreal dx = x + (i + 0.5) / samples - c.x(), dy = y + (j + 0.5) / samples - c.y();
+                    // En los ejes de la punta: girada y aplastada.
+                    const qreal u = (dx * ca + dy * sa) / radius;
+                    const qreal w = (-dx * sa + dy * ca) / (radius * roundness);
+                    const qreal d = square ? std::max(std::abs(u), std::abs(w)) : std::sqrt(u * u + w * w);
+                    v += profile(d);
+                }
+            v /= samples * samples;
+            const int s = int(v * k + 0.5f);
+            if (s > 0)
+                row[x] = uchar(s + ((255 - s) * row[x] + 127) / 255);
         }
     }
     return bounds;
@@ -449,6 +577,12 @@ QRect StrokeEngine::finishPath()
 {
     if (!m_doc)
         return {};
+    // Con el estabilizador, el trazo acaba donde se soltó el puntero (unos pasos hasta allí).
+    if (m_stabilized) {
+        m_stabilized = false;
+        for (int i = 1; i <= 4; ++i)
+            lineToPoint(m_stable + (m_raw - m_stable) * (i / 4.0), m_stablePressure + (m_rawPressure - m_stablePressure) * (i / 4.0));
+    }
     if (!m_params.pixelExact) {
         // El tramo provisional pasa a definitivo (con el final de la curva reflejado).
         QRect dirty = restoreWet();
@@ -457,6 +591,18 @@ QRect StrokeEngine::finishPath()
             path.clear();
             segment(m_drySegments++, path);
             dirty |= walk(m_walker, path);
+        }
+        // Salida (manga): ya se sabe dónde acaba; el trazo se vuelve a dibujar entero, afinándose
+        // hacia el final.
+        if (m_params.advanced && m_params.taperOut > 0 && m_points.size() > 1) {
+            m_strokeLength = m_walker.distance;
+            dirty |= m_total;
+            m_mask.fill(0);
+            Walker w;
+            QList<Point> all{m_points.first()};
+            for (int i = 0; i + 1 < m_points.size(); ++i)
+                segment(i, all);
+            dirty |= walk(w, all);
         }
         composite(dirty);
     }

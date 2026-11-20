@@ -1247,6 +1247,51 @@ static void testGifAndIco()
         CHECK(Gif::applyEffects(two, bg).size() == 1);
     }
 
+    // Pincel avanzado: entrada y salida en punta (más fino al principio y al final que en medio), el
+    // estabilizador llega hasta el final al soltar y la punta cuadrada llena las esquinas.
+    {
+        auto column = [](const QImage& img, int x) {
+            int n = 0;
+            for (int y = 0; y < img.height(); ++y)
+                n += qAlpha(img.pixel(x, y)) > 128;
+            return n;
+        };
+        std::unique_ptr<Document> canvas(Document::createBlank(QSize(200, 60), QColor()));
+        StrokeParams sp;
+        sp.diameter = 20;
+        sp.hardness = 1;
+        sp.color = Qt::black;
+        sp.advanced = true;
+        sp.taperIn = 60;
+        sp.taperOut = 60;
+        StrokeEngine stroke;
+        stroke.begin(canvas.get(), canvas->layerPtr(0), sp);
+        stroke.moveTo(QPointF(10, 30), 1);
+        for (int x = 20; x <= 190; x += 10)
+            stroke.lineTo(QPointF(x, 30), 1);
+        stroke.end(QStringLiteral("Pincel"));
+        const QImage& tapered = canvas->layer(0)->image;
+        CHECK(column(tapered, 100) >= 18 && column(tapered, 14) < column(tapered, 100) / 2 && column(tapered, 186) < column(tapered, 100) / 2);
+
+        std::unique_ptr<Document> stable(Document::createBlank(QSize(200, 60), QColor()));
+        sp.taperIn = sp.taperOut = 0;
+        sp.stabilizer = 20;
+        stroke.begin(stable.get(), stable->layerPtr(0), sp);
+        stroke.moveTo(QPointF(10, 30), 1);
+        stroke.lineTo(QPointF(190, 30), 1);
+        stroke.end(QStringLiteral("Pincel"));
+        CHECK(qAlpha(stable->layer(0)->image.pixel(188, 30)) > 128);
+
+        std::unique_ptr<Document> square(Document::createBlank(QSize(60, 60), QColor()));
+        sp.stabilizer = 0;
+        sp.tipShape = 1;
+        sp.diameter = 30;
+        stroke.begin(square.get(), square->layerPtr(0), sp);
+        stroke.moveTo(QPointF(30, 30), 1);
+        stroke.end(QStringLiteral("Pincel"));
+        CHECK(qAlpha(square->layer(0)->image.pixel(18, 18)) > 128);
+    }
+
     // Alpha-Lock: con la transparencia bloqueada, un cambio (aquí, rellenarlo todo de azul) solo
     // cambia el color de lo que ya había; se guarda en el .ora y en el .psd.
     {

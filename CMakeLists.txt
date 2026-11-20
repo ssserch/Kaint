@@ -241,6 +241,7 @@ add_library(kaintui STATIC
     src/app/VideoFrames.cpp
     src/app/GifEditor.cpp
     src/app/GifMotion.cpp
+    src/app/widgets/BrushAdvanced.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp

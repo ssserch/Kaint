@@ -1646,6 +1646,25 @@ QWidget* SettingsDialog::createToolsPage(ToolManager* tools)
     startRow->addStretch();
     page.layout->addLayout(startRow);
 
+    // Pincel avanzado (como Ibis Paint y FireAlpaca): apagado de fábrica; con él, «Avanzado…» en la
+    // barra del pincel, la goma y el tampón, y los deslizadores al lado del lienzo.
+    {
+        page.layout->addWidget(sectionHeader(tr("Pincel"), page.widget));
+        auto* advanced = new QCheckBox(tr("Opciones avanzadas del pincel (como Ibis Paint y FireAlpaca)"), page.widget);
+        advanced->setToolTip(tr("Añade «Avanzado…» a la barra del pincel, la goma y el tampón: forma y ángulo de la punta, "
+                                "flujo, curva de la presión, estabilizador, entrada y salida en punta (manga), presión por "
+                                "la velocidad para el dedo o el ratón, variación al azar y los deslizadores de tamaño y "
+                                "opacidad al lado del lienzo."));
+        advanced->setChecked(AppState::instance()->tools().advancedBrush);
+        connect(advanced, &QCheckBox::toggled, this, [defaults](bool on) {
+            AppState::instance()->updateTools([on](ToolSettings& t) { t.advancedBrush = on; });
+            ToolSettings d = defaults->tools();
+            d.advancedBrush = on;
+            defaults->set(d);
+        });
+        page.layout->addWidget(advanced);
+    }
+
     page.layout->addWidget(sectionHeader(tr("Mover y pegar"), page.widget));
     auto check = [&](const QString& text, bool AppSettings::*field, const QString& tip) {
         auto* c = new QCheckBox(text, page.widget);

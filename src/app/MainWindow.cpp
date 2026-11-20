@@ -22,6 +22,7 @@
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/GifFramesDialog.h"
 #include "app/GifEditor.h"
+#include "app/widgets/BrushAdvanced.h"
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveAllDialog.h"
 #include "app/widgets/BarSlider.h"
@@ -1126,6 +1127,21 @@ MainWindow::MainWindow()
 
     m_tools = new ToolManager(m_canvas, this);
     m_workspace = new Workspace(m_canvas, this);
+    // Pincel avanzado: los deslizadores de tamaño y opacidad sobre el borde izquierdo del lienzo.
+    {
+        auto* sliders = new BrushSideSliders(m_canvas);
+        struct Follow : QObject {
+            BrushSideSliders* sliders;
+            Follow(QObject* parent, BrushSideSliders* s) : QObject(parent), sliders(s) {}
+            bool eventFilter(QObject* watched, QEvent* e) override
+            {
+                if (e->type() == QEvent::Resize || e->type() == QEvent::Show)
+                    sliders->place(static_cast<QWidget*>(watched)->rect());
+                return false;
+            }
+        };
+        m_canvas->installEventFilter(new Follow(m_canvas, sliders));
+    }
     // Modo colaborativo: la imagen que llega al unirse se abre en una pestaña.
     m_collab = new CollabController(this, m_canvas, m_tools);
     m_collab->setDocumentProvider([this] { return m_doc; });

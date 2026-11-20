@@ -6,6 +6,7 @@
 #include "core/ExtraFormats.h"
 #include "core/FloodFill.h"
 #include "core/Gif.h"
+#include "core/ModernFormats.h"
 #include "core/Motion.h"
 #include "core/ImageIO.h"
 #include "core/Ora.h"
@@ -1378,6 +1379,30 @@ static void testGifAndIco()
             CHECK(ImageIO::save(icon.get(), again, ImageIO::SaveOptions(), &error));
             const QList<QImage> back = Ico::readAll(again, &error);
             CHECK(back.size() == 2);
+        }
+    }
+
+    // Códecs propios (si Kaint se compiló con libwebp, libavif y libjxl): guardar y volver a abrir,
+    // sin pérdida con calidad 100 (WebP, JPEG XL) y parecido con AVIF; con la transparencia.
+    for (const char* ext : {"webp", "jxl", "avif"}) {
+        if (!ModernFormats::canWrite(QLatin1String(ext)))
+            continue;
+        QImage pattern(33, 21, kLayerFormat);
+        for (int y = 0; y < pattern.height(); ++y)
+            for (int x = 0; x < pattern.width(); ++x)
+                pattern.setPixel(x, y, qRgba(x * 7, y * 11, 128, x < 10 ? 0 : 255));
+        std::unique_ptr<Document> modern(Document::createFromImage(pattern, QStringLiteral("Capa")));
+        const QString path = dir.filePath(QStringLiteral("moderno.") + QLatin1String(ext));
+        ImageIO::SaveOptions o;
+        o.quality = QLatin1String(ext) == QLatin1String("avif") ? 95 : 100;
+        CHECK(ImageIO::save(modern.get(), path, o, &error));
+        std::unique_ptr<Document> back(ImageIO::load(path, &error));
+        CHECK(back && back->size() == pattern.size());
+        if (back) {
+            const QRgb c = back->layer(0)->image.pixel(20, 10), want = pattern.pixel(20, 10);
+            const int tolerance = QLatin1String(ext) == QLatin1String("avif") ? 12 : 0;
+            CHECK(std::abs(qRed(c) - qRed(want)) <= tolerance && std::abs(qGreen(c) - qGreen(want)) <= tolerance
+                  && qAlpha(back->layer(0)->image.pixel(3, 3)) <= tolerance);
         }
     }
 

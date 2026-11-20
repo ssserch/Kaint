@@ -174,6 +174,7 @@ add_library(kaintcore STATIC
     src/core/FloodFill.cpp
     src/core/Gif.cpp
     src/core/Motion.cpp
+    src/core/ModernFormats.cpp
     src/core/ImageIO.cpp
     src/core/LayerEdit.cpp
     src/core/Ora.cpp
@@ -220,6 +221,27 @@ add_library(kaintcore STATIC
 )
 target_include_directories(kaintcore PUBLIC src)
 target_link_libraries(kaintcore PUBLIC Qt6::Gui ZLIB::ZLIB Threads::Threads PRIVATE kaintquickjs)
+
+# Códecs propios de los formatos modernos (opcionales): con ellos, WebP, AVIF, JPEG XL y HEIC se abren
+# (y los tres primeros se guardan) sin depender de qt6-imageformats ni kimageformats.
+option(KAINT_MODERN_CODECS "Usar libwebp, libavif, libjxl y libheif si están" ON)
+if(KAINT_MODERN_CODECS)
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        set(_kaint_codecs "")
+        foreach(codec IN ITEMS "WEBP;libwebp" "AVIF;libavif" "JXL;libjxl" "HEIF;libheif")
+            list(GET codec 0 name)
+            list(GET codec 1 module)
+            pkg_check_modules(KAINT_${name} QUIET IMPORTED_TARGET ${module})
+            if(KAINT_${name}_FOUND)
+                target_link_libraries(kaintcore PRIVATE PkgConfig::KAINT_${name})
+                target_compile_definitions(kaintcore PRIVATE KAINT_HAVE_${name})
+                list(APPEND _kaint_codecs ${module})
+            endif()
+        endforeach()
+        message(STATUS "Kaint: códecs propios: ${_kaint_codecs}")
+    endif()
+endif()
 # Windows: JPEG XR, HEIC, AVIF y JPEG XL con los códecs del sistema (Windows Imaging Component).
 if(WIN32)
     target_link_libraries(kaintcore PRIVATE windowscodecs ole32 oleaut32 shlwapi)

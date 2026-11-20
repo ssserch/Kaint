@@ -1,4 +1,5 @@
 #include "core/ImageIO.h"
+#include "core/ModernFormats.h"
 #include "core/Motion.h"
 #include "core/Raster.h"
 
@@ -149,6 +150,8 @@ const FormatInfo kSaveFormats[] = {
 // (kimageformats).
 bool ownWriter(const QByteArray& suffix)
 {
+    if (ModernFormats::canWrite(QString::fromLatin1(suffix)))
+        return true;
     return suffix == "ora" || suffix == "pdn" || suffix == "psd" || suffix == "psb" || suffix == "gif" || suffix == "ico"
            || suffix == "cur" || suffix == "tga" || suffix == "dds" || suffix == "qoi" || suffix == "pcx" || suffix == "sgi"
            || suffix == "ff" || suffix == "pam";
@@ -271,6 +274,10 @@ QStringList supportedReadSuffixes()
     for (const QString& s : Wic::readableSuffixes())
         if (!list.contains(s))
             list.append(s);
+    // Los de los códecs propios (WebP, AVIF, JPEG XL, HEIC), aunque Qt no los tenga.
+    for (const char* s : {"webp", "avif", "jxl", "heic", "heif"})
+        if (ModernFormats::canRead(QLatin1String(s)) && !list.contains(QLatin1String(s)))
+            list.append(QLatin1String(s));
     for (const PaintJs::FileType& t : PaintJs::fileTypes())
         if (t.canRead)
             for (const QString& e : t.extensions)
@@ -383,6 +390,15 @@ QImage readImage(const QString& path, QString* error)
     if (isPsd(suffix))
         return Psd::readComposite(path, error);
     QString ownError;
+    // WebP, AVIF, JPEG XL y HEIC con los códecs propios (si no pueden, como un WebP animado, Qt).
+    if (ModernFormats::canRead(suffix)) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly)) {
+            const QImage image = ModernFormats::decode(suffix, file.readAll(), &ownError);
+            if (!image.isNull())
+                return image;
+        }
+    }
     const bool wic = wicReads(suffix);
     if (ownReader(suffix) || wic) {
         QFile file(path);
@@ -439,6 +455,11 @@ QImage decode(const QByteArray& data, const QString& path)
         return Psd::decodeComposite(data);
     if (ownReader(suffix))
         return decodeOwn(suffix, data, nullptr);
+    if (ModernFormats::canRead(suffix)) {
+        const QImage modern = ModernFormats::decode(suffix, data, nullptr);
+        if (!modern.isNull())
+            return modern;
+    }
     if (wicReads(suffix))
         return Wic::decode(data, nullptr);
     QImage image;
@@ -640,6 +661,8 @@ QByteArray encode(const QImage& prepared, const QString& path, const SaveOptions
         return png;
     }
     const QString format = suffixOf(path);
+    if (ModernFormats::canWrite(format))
+        return ModernFormats::encode(format, prepared, options.quality, error);
     if (wicWrites(format))
         return Wic::encode(prepared, format, options.quality, error);
     if (ownReader(format)) {

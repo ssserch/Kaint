@@ -387,42 +387,60 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
         QPainter p(&square);
         p.drawImage((side - image.width()) / 2, (side - image.height()) / 2, image.convertToFormat(QImage::Format_ARGB32_Premultiplied));
     }
-    QList<QByteArray> entries;
+    QList<QImage> images;
     QList<int> used;
     for (int s : sizes) {
         s = std::clamp(s, 1, 256);
         if (used.contains(s))
             continue;
         used << s;
-        const QImage scaled = (s == side ? square : Resample::scale(square, QSize(s, s), Resample::Method::Adaptive))
-                                  .convertToFormat(QImage::Format_ARGB32);
+        images << (s == side ? square : Resample::scale(square, QSize(s, s), Resample::Method::Adaptive));
+    }
+    return encodeImages(images, error);
+}
+
+QByteArray encodeImages(const QList<QImage>& images, QString* error)
+{
+    if (images.isEmpty()) {
+        if (error)
+            *error = QObject::tr("No hay tamaños que guardar en el icono.");
+        return {};
+    }
+    QList<QByteArray> entries;
+    QList<QSize> sizes;
+    for (const QImage& source : images) {
+        const QImage img = source.convertToFormat(QImage::Format_ARGB32);
+        const int w = std::clamp(img.width(), 1, 256), h = std::clamp(img.height(), 1, 256);
+        const QImage scaled = img.size() == QSize(w, h) ? img : img.copy(0, 0, w, h);
+        sizes << QSize(w, h);
         QByteArray data;
-        if (s == 256) {
+        if (w >= 256 || h >= 256) {
+            // Los de 256 van comprimidos en PNG, como en los iconos de Windows.
             QBuffer buffer(&data);
             buffer.open(QIODevice::WriteOnly);
             scaled.save(&buffer, "PNG");
         } else {
             put32(data, 40);
-            put32(data, quint32(s));
-            put32(data, quint32(s * 2));
+            put32(data, quint32(w));
+            put32(data, quint32(h * 2));
             put16(data, 1);
             put16(data, 32);
             put32(data, 0);
-            const int maskStride = ((s + 31) / 32) * 4;
-            put32(data, quint32(s * s * 4 + maskStride * s));
+            const int maskStride = ((w + 31) / 32) * 4;
+            put32(data, quint32(w * h * 4 + maskStride * h));
             put32(data, 0);
             put32(data, 0);
             put32(data, 0);
             put32(data, 0);
-            for (int y = s - 1; y >= 0; --y) {
+            for (int y = h - 1; y >= 0; --y) {
                 const QRgb* row = reinterpret_cast<const QRgb*>(scaled.constScanLine(y));
-                for (int x = 0; x < s; ++x)
+                for (int x = 0; x < w; ++x)
                     put32(data, row[x]);
             }
-            for (int y = s - 1; y >= 0; --y) {
+            for (int y = h - 1; y >= 0; --y) {
                 QByteArray mask(maskStride, char(0));
                 const QRgb* row = reinterpret_cast<const QRgb*>(scaled.constScanLine(y));
-                for (int x = 0; x < s; ++x)
+                for (int x = 0; x < w; ++x)
                     if (qAlpha(row[x]) == 0)
                         mask[x / 8] = char(uchar(mask[x / 8]) | (0x80 >> (x % 8)));
                 data.append(mask);
@@ -436,9 +454,9 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
     put16(out, int(entries.size()));
     quint32 offset = 6 + 16 * quint32(entries.size());
     for (int i = 0; i < entries.size(); ++i) {
-        const int s = used[i];
-        out.append(char(s >= 256 ? 0 : s));
-        out.append(char(s >= 256 ? 0 : s));
+        const QSize sz = sizes[i];
+        out.append(char(sz.width() >= 256 ? 0 : sz.width()));
+        out.append(char(sz.height() >= 256 ? 0 : sz.height()));
         out.append(char(0));
         out.append(char(0));
         put16(out, 1);
@@ -450,6 +468,45 @@ QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error)
     for (const QByteArray& e : std::as_const(entries))
         out.append(e);
     return out;
+}
+
+QList<QImage> readAll(const QString& path, QString* error)
+{
+    QImageReader reader(path);
+    QList<QImage> images;
+    const int count = std::max(1, reader.imageCount());
+    for (int i = 0; i < count; ++i) {
+        if (i > 0 && !reader.jumpToImage(i))
+            break;
+        QImage img = reader.read();
+        if (img.isNull())
+            continue;
+        img.setDevicePixelRatio(1.0);
+        // Una versión repetida (el mismo tamaño dos veces, con menos colores): la primera basta.
+        bool repeated = false;
+        for (const QImage& other : std::as_const(images))
+            repeated = repeated || other.size() == img.size();
+        if (!repeated)
+            images << img;
+    }
+    if (images.isEmpty() && error)
+        *error = reader.errorString();
+    return images;
+}
+
+QString layerName(QSize size)
+{
+    return QStringLiteral("%1 × %2").arg(size.width()).arg(size.height());
+}
+
+bool sizeFromLayerName(const QString& name, QSize* size)
+{
+    static const QRegularExpression re(QStringLiteral("^\\s*(\\d+)\\s*[×x]\\s*(\\d+)\\s*$"));
+    const QRegularExpressionMatch m = re.match(name);
+    if (!m.hasMatch())
+        return false;
+    *size = QSize(m.captured(1).toInt(), m.captured(2).toInt());
+    return size->width() > 0 && size->height() > 0 && size->width() <= 256 && size->height() <= 256;
 }
 
 QImage readLargest(const QString& path, QString* error)

@@ -1081,14 +1081,19 @@ if (( DO_APPIMAGE )); then
     avx2_suffix=""
     (( DO_AVX2 )) && avx2_suffix="-avx2"
     output="Kaint-$version-$arch$avx2_suffix.AppImage"
-    rm -f "$BUILD_DIR/$output"
+    rm -f "$BUILD_DIR/$output" "$BUILD_DIR/$output.zsync"
+    # Información de actualización (AppImageUpdate y compañía): la última versión publicada en GitHub,
+    # con su .zsync (se crea junto al AppImage; hay que subirlo también a la versión publicada).
+    update_info="gh-releases-zsync|ssserch|Kaint|latest|Kaint-*-$arch$avx2_suffix.AppImage.zsync"
     (cd "$BUILD_DIR" && PATH="$tools:$PATH" LD_LIBRARY_PATH="$qt_libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
         QMAKE="$qmake" EXTRA_QT_MODULES="svg;waylandcompositor" \
         EXTRA_PLATFORM_PLUGINS="$extra_platforms" APPIMAGE_EXTRACT_AND_RUN=1 LDAI_OUTPUT="$output" \
+        LDAI_UPDATE_INFORMATION="$update_info" \
         "$tools/linuxdeploy-$arch.AppImage" --appdir "$appdir" --plugin qt --output appimage \
             --desktop-file "$appdir/usr/share/applications/$APP_ID.desktop" \
             --icon-file "$appdir/usr/share/icons/hicolor/256x256/apps/$APP_ID.png")
     report "AppImage" "$BUILD_DIR/$output"
+    [[ -f "$BUILD_DIR/$output.zsync" ]] && report "AppImage (.zsync, para las actualizaciones)" "$BUILD_DIR/$output.zsync"
     echo "  Ejecútalo con: chmod +x $BUILD_DIR/$output && ./$BUILD_DIR/$output"
 fi
 

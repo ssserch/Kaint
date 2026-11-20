@@ -1357,6 +1357,40 @@ static void testGifAndIco()
         CHECK(back && back->layer(0)->props.motion && *back->layer(0)->props.motion == clip);
     }
 
+    // Un .ico con varias versiones se abre con una capa por tamaño (como GIMP), y al guardarlo cada
+    // capa vuelve a ser su versión.
+    {
+        QImage big(48, 48, kLayerFormat), small(16, 16, kLayerFormat);
+        big.fill(qRgba(255, 0, 0, 255));
+        small.fill(qRgba(0, 0, 255, 255));
+        const QByteArray ico2 = Ico::encodeImages({small, big}, &error);
+        const QString icoMulti = dir.filePath(QStringLiteral("varios.ico"));
+        {
+            QFile f(icoMulti);
+            CHECK(f.open(QIODevice::WriteOnly) && f.write(ico2) == ico2.size());
+        }
+        std::unique_ptr<Document> icon(ImageIO::load(icoMulti, &error));
+        CHECK(icon && icon->layerCount() == 2 && icon->size() == QSize(48, 48));
+        if (icon && icon->layerCount() == 2) {
+            CHECK(icon->layer(0)->props.name == QStringLiteral("16 × 16") && icon->layer(1)->props.name == QStringLiteral("48 × 48"));
+            CHECK(icon->layer(0)->image.pixel(5, 5) == qRgba(0, 0, 255, 255) && qAlpha(icon->layer(0)->image.pixel(30, 30)) == 0);
+            const QString again = dir.filePath(QStringLiteral("varios2.ico"));
+            CHECK(ImageIO::save(icon.get(), again, ImageIO::SaveOptions(), &error));
+            const QList<QImage> back = Ico::readAll(again, &error);
+            CHECK(back.size() == 2);
+        }
+    }
+
+    // «circle@2x.png»: Qt le pone escala 2 por el nombre; en Kaint, la capa es de píxeles normales.
+    {
+        QImage dot(16, 8, QImage::Format_ARGB32);
+        dot.fill(Qt::red);
+        const QString retina = dir.filePath(QStringLiteral("circle@2x.png"));
+        CHECK(dot.save(retina));
+        std::unique_ptr<Document> opened(ImageIO::load(retina, &error));
+        CHECK(opened && opened->size() == QSize(16, 8) && opened->layer(0)->image.devicePixelRatio() == 1.0);
+    }
+
     // Un GIF quieto (sin bloque de repeticiones) se abre con «repetir sin fin»: si se anima en el
     // editor de GIF, el GIF que sale se repite (antes se veía una vez y se quedaba quieto).
     {
@@ -1371,7 +1405,7 @@ static void testGifAndIco()
         CHECK(opened && opened->gifLoops() == 0);
     }
 
-    // Icono con tres tamaños; al abrirlo se usa el más grande.
+    // Icono con tres tamaños; al abrirlo, una capa por tamaño, la más grande arriba.
     QImage logo(40, 30, kLayerFormat);
     logo.fill(qRgba(0, 128, 255, 200));
     const QByteArray ico = Ico::encode(logo, {16, 32, 256}, &error);
@@ -1383,11 +1417,12 @@ static void testGifAndIco()
     QImageReader reader(icoPath);
     CHECK(reader.imageCount() == 3);
     std::unique_ptr<Document> icon(ImageIO::load(icoPath, &error));
-    CHECK(icon && icon->size() == QSize(256, 256));
+    CHECK(icon && icon->size() == QSize(256, 256) && icon->layerCount() == 3);
     if (icon) {
-        const QRgb c = icon->layer(0)->image.pixel(128, 128);
+        const Layer* largest = icon->layer(icon->layerCount() - 1);
+        const QRgb c = largest->image.pixel(128, 128);
         CHECK(std::abs(qBlue(c) - 255) <= 2 && std::abs(qAlpha(c) - 200) <= 2);
-        CHECK(qAlpha(icon->layer(0)->image.pixel(128, 5)) == 0);
+        CHECK(qAlpha(largest->image.pixel(128, 5)) == 0);
     }
     ImageIO::SaveOptions io;
     io.icoSizes = {16, 48};
@@ -2788,6 +2823,8 @@ paintDotJs.registerPlugin({
         { id: "chain", name: "Chain JS",
           render({ source, destination, width, height }) { destination.set(paintDotJs.effects.apply("invert", source, width, height)); } },
         { id: "forever", name: "Forever JS", render() { for (;;) {} } },
+        { id: "center", name: "Center JS",
+          render({ destination, width, height }) { const i = ((height >> 1) * width + (width >> 1)) * 4; destination.set([255, 0, 0, 255], i); } },
     ],
     fileTypes: [{
         id: "kraw", name: "Kaint raw", extensions: [".kraw"], supportsLayers: true,
@@ -2826,7 +2863,7 @@ paintDotJs.registerPlugin({
     PaintJs::Info info = PaintJs::load(path);
     CHECK(info.errors.isEmpty());
     CHECK(info.id == QLatin1String("kaint.test") && info.version == QLatin1String("2.0.0"));
-    CHECK(info.effects.size() == 6);
+    CHECK(info.effects.size() == 7);
     CHECK(info.browserOnly == QStringList{QStringLiteral("Window JS")});
     CHECK(info.fileTypes.size() == 1 && info.fileTypes.value(0).layers && info.fileTypes.value(0).canRead && info.fileTypes.value(0).canWrite);
     auto effect = [&](const char* id) -> Effect* {
@@ -2886,6 +2923,17 @@ paintDotJs.registerPlugin({
     } else {
         CHECK(false);
     }
+    if (Effect* e = effect("plugin.kaint.test.center")) {
+        // Un efecto que no mira la selección (como Object Align): con una selección, trabaja dentro de
+        // ella (su centro), no en toda la imagen.
+        const Selection sel = Selection::fromRect(QRect(2, 0, 4, 4), src.size());
+        const QImage out = Effects::apply(*e, src, sel, {}, ctx, never);
+        CHECK(out.pixel(4, 2) == qRgba(255, 0, 0, 255) && out.pixel(3, 2) == src.pixel(3, 2));
+        const QImage whole = Effects::apply(*e, src, Selection(), {}, ctx, never);
+        CHECK(whole.pixel(3, 2) == qRgba(255, 0, 0, 255));
+    } else {
+        CHECK(false);
+    }
     if (Effect* e = effect("plugin.kaint.test.forever")) {
         // Un bucle sin fin se detiene al cancelar.
         std::atomic_bool cancel{false};
@@ -2916,7 +2964,7 @@ paintDotJs.registerPlugin({
         if (p.id == installed)
             found = &p;
     CHECK(found && found->kind == QLatin1String("paint.js") && found->loaded && found->packageId == QLatin1String("kaint.test"));
-    CHECK(found && found->effects.size() == 6 && found->webOnlyEffects.size() == 1 && found->fileTypes.size() == 1);
+    CHECK(found && found->effects.size() == 7 && found->webOnlyEffects.size() == 1 && found->fileTypes.size() == 1);
     CHECK(Effects::find(QStringLiteral("plugin.kaint.test.fill")) != nullptr);
     CHECK(ImageIO::isWritable(QStringLiteral("x.kraw")) && ImageIO::isLayered(QStringLiteral("x.kraw")));
     CHECK(ImageIO::openFilter().contains(QLatin1String("*.kraw")) && ImageIO::saveFilter().contains(QLatin1String("*.kraw")));

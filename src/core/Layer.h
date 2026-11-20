@@ -56,6 +56,9 @@ struct Layer {
         props.name = name;
         image = source.convertToFormat(kLayerFormat);
         image.setColorSpace(QColorSpace());
+        // Qt lee «nombre@2x.png» como imagen de doble densidad (devicePixelRatio 2) y se dibujaba a
+        // la mitad: en una capa, cada píxel es un píxel.
+        image.setDevicePixelRatio(1.0);
     }
 };
 

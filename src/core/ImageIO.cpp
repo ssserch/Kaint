@@ -1,5 +1,6 @@
 #include "core/ImageIO.h"
 #include "core/Motion.h"
+#include "core/Raster.h"
 
 #include "core/Document.h"
 #include "core/ExtraFormats.h"
@@ -403,6 +404,8 @@ QImage readImage(const QString& path, QString* error)
     QImageReader reader(path);
     reader.setAutoTransform(true);
     QImage image = reader.read();
+    // «circle@2x.png»: Qt le pone devicePixelRatio 2 por el nombre; en Kaint, un píxel es un píxel.
+    image.setDevicePixelRatio(1.0);
     // Lo que Qt no entiende (un HEIC llamado .jpg, por ejemplo): en Windows, con sus códecs, que
     // miran el contenido y no la extensión.
 #ifdef Q_OS_WIN
@@ -477,10 +480,28 @@ Document* load(const QString& path, QString* error)
         // se veía una vez y se quedaba quieto.
         doc->setGifLoops(anim.frames.size() > 1 ? anim.loops : 0);
     } else if (isIcon(path) || suffixOf(path) == QLatin1String("cur")) {
-        const QImage image = Ico::readLargest(path, error);
-        if (image.isNull())
+        // Como GIMP: cada versión del icono (cada tamaño) es una capa, de la más pequeña (abajo) a la
+        // más grande (arriba), arriba a la izquierda del lienzo del tamaño de la más grande.
+        QList<QImage> images = Ico::readAll(path, error);
+        if (images.isEmpty())
             return nullptr;
-        doc = Document::createFromImage(image, QObject::tr("Fondo"));
+        std::sort(images.begin(), images.end(),
+                  [](const QImage& a, const QImage& b) { return qint64(a.width()) * a.height() < qint64(b.width()) * b.height(); });
+        if (images.size() == 1) {
+            doc = Document::createFromImage(images.first(), QObject::tr("Fondo"));
+        } else {
+            QSize canvas;
+            for (const QImage& img : std::as_const(images))
+                canvas = canvas.expandedTo(img.size());
+            QList<LayerPtr> layers;
+            for (const QImage& img : std::as_const(images)) {
+                auto layer = std::make_shared<Layer>(Ico::layerName(img.size()), canvas);
+                Raster::blit(layer->image, img.convertToFormat(kLayerFormat), QPoint(0, 0));
+                layers << layer;
+            }
+            doc = new Document(canvas);
+            doc->replaceState(canvas, layers, int(layers.size()) - 1);
+        }
     } else {
         const QImage image = readImage(path, error);
         if (image.isNull())
@@ -666,6 +687,30 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
         return Ora::save(doc, path, error);
 
     QByteArray data;
+    // Un icono con una capa por versión (como al abrirlo, «32 × 32»...): cada capa, su tamaño.
+    if (isIcon(path) && doc->layerCount() > 1) {
+        QList<QImage> versions;
+        for (const LayerPtr& layer : doc->layers()) {
+            QSize size;
+            if (!Ico::sizeFromLayerName(layer->props.name, &size)) {
+                versions.clear();
+                break;
+            }
+            if (layer->props.visible)
+                versions << layer->image.copy(QRect(QPoint(0, 0), size));
+        }
+        if (!versions.isEmpty()) {
+            data = Ico::encodeImages(versions, error);
+            if (suffixOf(path) == QLatin1String("cur") && data.size() >= 6) {
+                data[2] = 2;
+                const int entries = uchar(data[4]) | uchar(data[5]) << 8;
+                for (int i = 0; i < entries && 6 + i * 16 + 8 <= data.size(); ++i)
+                    for (int k = 4; k < 8; ++k)
+                        data[6 + i * 16 + k] = 0;
+            }
+            return !data.isEmpty() && writeFile(path, data, error);
+        }
+    }
     if (isAnimation(path) && options.animation && doc->layerCount() > 1)
         return saveAnimation(animationFrames(doc, options.frameDelay, options.gifHiddenLayers), path, options, error);
     QImage image = prepare(doc->flattened(), path, options);

@@ -962,17 +962,38 @@ return Object.freeze({
                 }
             return d;
         }
-        const source = new Uint8ClampedArray(src), destination = new Uint8ClampedArray(source);
-        const result = e.render({ source, destination, width: w, height: h, values, selection, selectionBounds: bounds });
-        if (result && typeof result.then === "function")
-            throw new Error(`${e.name}: render() must be synchronous.`);
-        if (result === undefined || result === destination)
-            return destination;
-        if (result instanceof ImageData && result.width === w && result.height === h)
-            return result.data;
-        if (result instanceof Uint8ClampedArray && result.length === destination.length)
-            return result;
-        throw new Error(`${e.name}: render() returned a value that is not valid.`);
+        const full = new Uint8ClampedArray(src);
+        const normalize = (result, destination, rw, rh) => {
+            if (result && typeof result.then === "function")
+                throw new Error(`${e.name}: render() must be synchronous.`);
+            if (result === undefined || result === destination)
+                return destination;
+            if (result instanceof ImageData && result.width === rw && result.height === rh)
+                return result.data;
+            if (result instanceof Uint8ClampedArray && result.length === destination.length)
+                return result;
+            throw new Error(`${e.name}: render() returned a value that is not valid.`);
+        };
+        // Un efecto que no mira la selección (Object Align, que alinea en toda la imagen): con una
+        // selección más pequeña que la imagen, trabaja dentro de ella, como en Paint.NET (el
+        // rectángulo de la selección es su imagen). Los que sí la miran reciben la imagen entera.
+        if (selection && bounds && (bounds.width < w || bounds.height < h) && !/selection/.test(String(e.render))) {
+            const bw = bounds.width, bh = bounds.height;
+            const sub = new Uint8ClampedArray(bw * bh * 4);
+            for (let y = 0; y < bh; ++y)
+                sub.set(full.subarray(((bounds.y + y) * w + bounds.x) * 4, ((bounds.y + y) * w + bounds.x + bw) * 4), y * bw * 4);
+            const subDestination = new Uint8ClampedArray(sub);
+            const subResult = normalize(e.render({ source: sub, destination: subDestination, width: bw, height: bh, values,
+                                                   selection: null, selectionBounds: { x: 0, y: 0, width: bw, height: bh } }),
+                                        subDestination, bw, bh);
+            const out = new Uint8ClampedArray(full);
+            for (let y = 0; y < bh; ++y)
+                out.set(subResult.subarray(y * bw * 4, (y + 1) * bw * 4), ((bounds.y + y) * w + bounds.x) * 4);
+            return out;
+        }
+        const source = full, destination = new Uint8ClampedArray(source);
+        return normalize(e.render({ source, destination, width: w, height: h, values, selection, selectionBounds: bounds }),
+                         destination, w, h);
     },
     // renderPixel() en un bloque de filas (src tiene solo esas filas): Kaint reparte los bloques
     // entre los núcleos. Cada píxel solo depende de sí mismo, así que da lo mismo que de una vez.

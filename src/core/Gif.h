@@ -76,7 +76,15 @@ const QList<int>& standardSizes();
 // Un icono con la imagen en cada tamaño de 'sizes' (cuadrada, centrada). El de 256 va
 // comprimido en PNG y el resto como mapa de bits de 32 bits.
 QByteArray encode(const QImage& image, const QList<int>& sizes, QString* error);
+// Un icono con una entrada por imagen (cada una con su tamaño, hasta 256).
+QByteArray encodeImages(const QList<QImage>& images, QString* error);
 // La imagen más grande del archivo.
 QImage readLargest(const QString& path, QString* error);
+// Todas las versiones del archivo (una por tamaño), como las enseña GIMP.
+QList<QImage> readAll(const QString& path, QString* error);
+// Las capas de un icono abierto se llaman así («32 × 32»); al guardar como icono, si todas lo son,
+// cada capa es una versión del icono.
+QString layerName(QSize size);
+bool sizeFromLayerName(const QString& name, QSize* size);
 
 } // namespace Ico

@@ -10,6 +10,10 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QImageReader>
 #include <QLibraryInfo>
 #include <QLocale>
@@ -47,6 +51,77 @@ QString rawOption(int argc, char** argv, const QString& name)
 
 // Tema guardado o el de --color-scheme (system, light, dark, kde, custom, windows98, blue, windows7,
 // windowsxp, windows98alt o windows7dark), que también se guarda: así se puede recuperar el tema sin abrir la configuración.
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
+// Desde un AppImage (no instalado), el escritorio no encuentra el .desktop de Kaint y en Wayland la
+// ventana salía con el icono genérico (el compositor saca el icono del .desktop según el app_id).
+// Se copian su .desktop (apuntando al AppImage) y su icono a ~/.local/share, marcados como de Kaint:
+// no se toca uno instalado por el sistema ni uno que haya hecho el usuario, y se pone al día si el
+// AppImage cambia de sitio.
+void integrateAppImage()
+{
+    const QString appImage = qEnvironmentVariable("APPIMAGE");
+    const QString appDir = qEnvironmentVariable("APPDIR");
+    if (appImage.isEmpty() || appDir.isEmpty())
+        return;
+    const QString id = QStringLiteral(KAINT_APP_ID);
+    const QString home = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (home.isEmpty())
+        return;
+    for (const QString& dir : QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation))
+        if (QFileInfo(dir).canonicalFilePath() != QFileInfo(home).canonicalFilePath()
+            && QFileInfo::exists(dir + QStringLiteral("/applications/") + id + QStringLiteral(".desktop")))
+            return;  // instalado (paquete, Flatpak...): ese manda
+    const QString target = home + QStringLiteral("/applications/") + id + QStringLiteral(".desktop");
+    QFile current(target);
+    QByteArray before;
+    if (current.open(QIODevice::ReadOnly)) {
+        before = current.readAll();
+        current.close();
+        if (!before.contains("X-Kaint-AppImage=true"))
+            return;  // uno propio del usuario
+    }
+    QFile source(appDir + QStringLiteral("/usr/share/applications/") + id + QStringLiteral(".desktop"));
+    if (!source.open(QIODevice::ReadOnly))
+        return;
+    QStringList lines;
+    const QString exec = QStringLiteral("\"%1\"").arg(appImage);
+    for (const QString& line : QString::fromUtf8(source.readAll()).split(QLatin1Char('\n'))) {
+        if (line.startsWith(QLatin1String("Exec=")))
+            lines << QStringLiteral("Exec=") + exec + QStringLiteral(" %F");
+        else if (line.startsWith(QLatin1String("TryExec=")))
+            lines << QStringLiteral("TryExec=") + appImage;
+        else
+            lines << line;
+    }
+    while (!lines.isEmpty() && lines.last().trimmed().isEmpty())
+        lines.removeLast();
+    lines << QStringLiteral("X-Kaint-AppImage=true") << QString();
+    const QByteArray after = lines.join(QLatin1Char('\n')).toUtf8();
+    if (after != before) {
+        QDir().mkpath(QFileInfo(target).absolutePath());
+        QSaveFile out(target);
+        if (out.open(QIODevice::WriteOnly) && out.write(after) == after.size())
+            out.commit();
+    }
+    // Los iconos (el PNG de 256 y el SVG), si faltan o cambiaron.
+    for (const QString& rel : {QStringLiteral("/icons/hicolor/256x256/apps/") + id + QStringLiteral(".png"),
+                               QStringLiteral("/icons/hicolor/scalable/apps/") + id + QStringLiteral(".svg")}) {
+        QFile from(appDir + QStringLiteral("/usr/share") + rel);
+        if (!from.open(QIODevice::ReadOnly))
+            continue;
+        const QByteArray data = from.readAll();
+        QFile existing(home + rel);
+        if (existing.open(QIODevice::ReadOnly) && existing.readAll() == data)
+            continue;
+        existing.close();
+        QDir().mkpath(QFileInfo(home + rel).absolutePath());
+        QSaveFile out(home + rel);
+        if (out.open(QIODevice::WriteOnly) && out.write(data) == data.size())
+            out.commit();
+    }
+}
+#endif
+
 Theme::Scheme startupScheme(int argc, char** argv)
 {
     QSettings settings(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"));
@@ -211,8 +286,14 @@ int main(int argc, char** argv)
     QApplication::setOrganizationName(QStringLiteral("Kaint"));
     QApplication::setApplicationVersion(QStringLiteral(KAINT_VERSION));
     QGuiApplication::setDesktopFileName(QStringLiteral(KAINT_APP_ID));
+#if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
+    integrateAppImage();
+#endif
 
     Icons::setupTheme();
+    // El icono de todas las ventanas (también los diálogos), para los escritorios que lo toman de
+    // la ventana (Wayland con xdg-toplevel-icon, X11).
+    QApplication::setWindowIcon(Icons::app());
     Animations::install();
     QImageReader::setAllocationLimit(4096);
 

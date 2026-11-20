@@ -2,21 +2,26 @@
 
 #include "core/effects/Effect.h"
 
+#include <QList>
+
 #include <QJsonObject>
 #include <QString>
 
 #include <atomic>
 #include <mutex>
 
-// Comunicación con el proceso auxiliar kaint-pdn-host.exe, que carga los complementos de efectos
-// de Paint.NET (.dll). En Windows lo ejecuta el .NET Framework del sistema; en Linux, macOS y
-// FreeBSD, según el sistema de complementos elegido (Configuración → Complementos):
-//   - OpenD2D: mono, con las bibliotecas de OpenD2D (Direct2D, DirectWrite y
-//     WIC de código abierto) en lugar de las de Windows que piden los complementos.
-//   - Wine: el mismo proceso dentro de Wine (con su wine-mono), como un programa de Windows.
+// Comunicación con los procesos auxiliares que cargan los complementos de efectos de Paint.NET
+// (.dll), según el sistema de complementos elegido (Configuración → Complementos):
+//   - .NET: kaint-pdn5-host (PdnBridge.dll) con el .NET moderno (CoreCLR) y los ensamblados de
+//     Paint.NET 5 de paint.rs (third_party/pdn5): complementos de 3.x, 4.x y 5.x, también los de GPU
+//     (con OpenD2D) y las ventanas propias leídas sin mostrarlas. Es el de fábrica.
+//   - OpenD2D: kaint-pdn-host.exe con mono (en Windows, con su .NET Framework) y las bibliotecas de
+//     OpenD2D (Direct2D, DirectWrite y WIC de código abierto).
+//   - Wine: kaint-pdn-host.exe dentro de Wine (con su wine-mono), como un programa de Windows.
+// Con .NET, lo que no funcione se ejecuta con mono y, con el respaldo de Wine, con Wine (chain()).
 class PdnBridge {
 public:
-    enum class Runtime { OpenD2D = 0, Wine = 1 };
+    enum class Runtime { OpenD2D = 0, Wine = 1, DotNet = 2 };
 
     // El proceso del sistema elegido; forRuntime, el de otro (con el respaldo de Wine pueden estar
     // abiertos los dos a la vez). En Windows hay uno solo.
@@ -32,6 +37,12 @@ public:
     static void setEffectsFolder(const QStringList& assemblies);
     static QString monoPath();
     static QString winePath();
+    // dotnet y el proceso auxiliar de .NET (PdnBridge.dll en pdnhost5/, share/kaint/pdnhost5 o
+    // KAINT_PDN5_HOST); vacías si no están.
+    static QString dotnetPath();
+    // El prefijo de Wine que se usa (vacío: el de siempre, WINEPREFIX o ~/.wine).
+    static QString winePrefix();
+    static QString dotnetHostPath();
     // Carpeta con las bibliotecas de OpenD2D (libd2d1, libdwrite y libwindowscodecs) que se
     // compilaron con Kaint (o la de KAINT_OPEND2D); vacía si no están.
     static QString openD2DPath();
@@ -46,6 +57,12 @@ public:
     static void setRuntime(Runtime runtime);
     static Runtime runtime();
     static QString runtimeName(Runtime runtime);
+    // Nombre corto para guardar en la caché y en la configuración: "dotnet", "mono" o "wine".
+    static QString runtimeKey(Runtime runtime);
+    static Runtime runtimeFromKey(const QString& key, Runtime fallback);
+    // Los sistemas que se prueban, en orden: el elegido y, detrás, los de respaldo (con .NET, mono
+    // si está; con el respaldo de Wine, Wine).
+    static QList<Runtime> chain();
 
     // Respaldo de Wine (con OpenD2D): lo que no funciona con mono (un complemento que no carga, o
     // un efecto que falla al aplicarse) se ejecuta con Wine, solo eso. Activo si se pidió, el
@@ -58,6 +75,11 @@ public:
     // Los efectos que ya se sabe que necesitan Wine (se recuerdan entre sesiones).
     static bool effectNeedsWine(const QString& effectId);
     static void rememberWineEffect(const QString& effectId);
+    // El sistema con el que funcionó un efecto que no va con el primero de chain() (-1 si ninguno).
+    static int rememberedRuntime(const QString& effectId);
+    static void rememberEffectRuntime(const QString& effectId, Runtime runtime);
+    // Una cadena que cambia cuando cambia algún proceso auxiliar (para la caché de PluginManager).
+    static QString hostStamp();
     // Cierra (o mata) los procesos de los dos sistemas.
     static void shutdownAll();
     static void abortAll();
@@ -68,9 +90,10 @@ public:
 
     // Descripción de un ensamblado: efectos, parámetros, autor... (bloquea).
     QJsonObject inspect(const QString& path, QString* error);
+    // 'selection', si no es nula, va como polígonos (los complementos que miran su forma la ven).
     bool render(const QString& assembly, const QString& effectId, const QJsonObject& values, const QImage& src,
                 QImage& dst, const QRect& roi, const EffectContext& ctx, const std::atomic_bool& cancel,
-                QString* error);
+                QString* error, const Selection* selection = nullptr);
     bool showDialog(const QString& assembly, const QString& effectId, const QString& title, const QImage& src,
                     const QRect& roi, const EffectContext& ctx, bool* accepted, QString* error);
     void shutdown();
@@ -82,6 +105,8 @@ private:
     {
     }
     bool ensureStarted(QString* error);
+    // Plazo para examinar o saludar: más largo si Wine aún tiene que crear su prefijo.
+    int startTimeoutMs() const;
     void stop();
     bool writeLine(const QByteArray& line);
     bool readResponse(QJsonObject* out, int timeoutMs, const std::atomic_bool* cancel, EffectProgress* progress,

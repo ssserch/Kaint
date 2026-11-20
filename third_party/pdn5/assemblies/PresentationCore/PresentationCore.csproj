@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The geometry plugins use from WPF's PresentationCore (toe_head2001's Radius Corners hit-tests an ellipse), for
+       hosts without WPF. publish.sh builds it into plugin-shims/ beside its WindowsBase. -->
+  <PropertyGroup>
+    <AssemblyName>PresentationCore</AssemblyName>
+    <RootNamespace>System.Windows.Media</RootNamespace>
+    <Version>4.0.0.0</Version>
+    <AssemblyVersion>4.0.0.0</AssemblyVersion>
+    <FileVersion>4.0.0.0</FileVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../WindowsBase/WindowsBase.csproj" />
+    <!-- WPF-Media (WpfMediaRender.cs) renders through the host Direct2D/DirectWrite reached via WindowsCore.
+         WindowsCore pulls the host's PaintDotNet.* and System.Windows.Forms in transitively; publish.sh strips
+         those from plugin-shims, since the plugin load context resolves them to the host's own copies. A second
+         System.Windows.Forms in plugin-shims would split assembly identity and crash a WinForms/GDI+ paint. -->
+    <ProjectReference Include="../WindowsCore/WindowsCore.csproj" />
+  </ItemGroup>
+</Project>

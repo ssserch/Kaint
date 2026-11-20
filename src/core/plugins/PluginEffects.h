@@ -5,6 +5,7 @@
 
 #include <QHash>
 #include <QJsonObject>
+#include <QSet>
 
 #include <atomic>
 #include <mutex>
@@ -50,10 +51,15 @@ private:
     QString m_help;
     QList<EffectParam> m_params;
     QHash<QString, bool> m_colorAlpha;
+    // Colores de una ventana propia leída por el proceso de .NET: van como "#rrggbb".
+    QSet<QString> m_colorHex;
     mutable std::mutex m_errorMutex;
     mutable QString m_error;
-    // Con el respaldo de Wine: este efecto se ejecuta con Wine (no carga con mono, o falló con él).
-    mutable std::atomic_bool m_wine{false};
+    // El sistema con que se ejecuta este efecto (PdnBridge::Runtime): el primero de la cadena en el
+    // que carga y funciona; cambia (y se recuerda) si falla con él y funciona con uno de respaldo.
+    mutable std::atomic_int m_runtime{0};
+    // Los sistemas que se prueban para este efecto, desde el suyo.
+    QList<int> runtimesToTry() const;
 };
 
 // Efecto 'index' de un complemento nativo: con la versión 1 de la API la tabla tiene la

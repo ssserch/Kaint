@@ -4602,15 +4602,19 @@ void MainWindow::applySettings()
         else
             m_topLayout->addWidget(m_listButton, m_menuRow, 2, 2, 1);
     }
-    // El sistema de complementos de Paint.NET (OpenD2D o Wine): al cambiar, se revisan otra vez.
+    // El sistema de complementos de Paint.NET (.NET, OpenD2D o Wine): al cambiar, se revisan otra vez.
     // (Se compara con el aplicado antes: «Probar», en Configuración, ya cambia el de PdnBridge.)
     // (El respaldo de Wine también cambia lo que se sabe de cada complemento.)
-    const int pluginSystem = m_settings.pluginRuntime | (m_settings.pluginWineFallback ? 2 : 0);
+    // .NET elegido pero no disponible (sin el runtime): OpenD2D.
+    int chosenRuntime = std::clamp(m_settings.pluginRuntime, 0, 2);
+    if (chosenRuntime == int(PdnBridge::Runtime::DotNet) && !PdnBridge::availableFor(PdnBridge::Runtime::DotNet))
+        chosenRuntime = int(PdnBridge::Runtime::OpenD2D);
+    const int pluginSystem = chosenRuntime * 2 + (m_settings.pluginWineFallback ? 1 : 0);
     if (PdnBridge::runtimeSelectable() && m_appliedPluginRuntime != pluginSystem) {
         const bool first = m_appliedPluginRuntime < 0;
         m_appliedPluginRuntime = pluginSystem;
         PdnBridge::setWineFallback(m_settings.pluginWineFallback);
-        PdnBridge::setRuntime(PdnBridge::Runtime(std::clamp(m_settings.pluginRuntime, 0, 1)));
+        PdnBridge::setRuntime(PdnBridge::Runtime(chosenRuntime));
         if (!first)
             PluginManager::instance()->runtimeChanged();
     }

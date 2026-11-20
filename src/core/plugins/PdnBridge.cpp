@@ -5,7 +5,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QDateTime>
 #include <QJsonDocument>
+#include <QPolygonF>
 #include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
@@ -38,12 +40,18 @@ extern char** environ;
 
 namespace {
 
-// El de fábrica, OpenD2D; KAINT_PDN_SYSTEM=wine (o opend2d) elige otro al empezar (pruebas).
+// KAINT_PDN_SYSTEM=dotnet, mono (u opend2d) o wine elige uno al empezar (pruebas); si no, -1: el de
+// fábrica, que se decide al pedirlo (.NET si está; si no, OpenD2D).
 int initialRuntime()
 {
-    return qEnvironmentVariable("KAINT_PDN_SYSTEM").compare(QLatin1String("wine"), Qt::CaseInsensitive) == 0
-               ? int(PdnBridge::Runtime::Wine)
-               : int(PdnBridge::Runtime::OpenD2D);
+    const QString env = qEnvironmentVariable("KAINT_PDN_SYSTEM").toLower();
+    if (env == QLatin1String("wine"))
+        return int(PdnBridge::Runtime::Wine);
+    if (env == QLatin1String("mono") || env == QLatin1String("opend2d"))
+        return int(PdnBridge::Runtime::OpenD2D);
+    if (env == QLatin1String("dotnet") || env == QLatin1String(".net"))
+        return int(PdnBridge::Runtime::DotNet);
+    return -1;
 }
 
 std::atomic_int g_runtime{initialRuntime()};
@@ -211,14 +219,14 @@ PdnBridge& PdnBridge::instance()
 
 PdnBridge& PdnBridge::forRuntime(Runtime runtime)
 {
-#ifdef Q_OS_WIN
-    Q_UNUSED(runtime);
-    static PdnBridge bridge(Runtime::OpenD2D);
-    return bridge;
-#else
     static PdnBridge openD2D(Runtime::OpenD2D);
+    static PdnBridge dotnet(Runtime::DotNet);
+#ifdef Q_OS_WIN
+    // En Windows no hay Wine: el proceso de .NET Framework hace de respaldo.
+    return runtime == Runtime::DotNet ? dotnet : openD2D;
+#else
     static PdnBridge wine(Runtime::Wine);
-    return runtime == Runtime::Wine ? wine : openD2D;
+    return runtime == Runtime::Wine ? wine : runtime == Runtime::DotNet ? dotnet : openD2D;
 #endif
 }
 
@@ -237,19 +245,88 @@ bool PdnBridge::wineFallback()
 #ifdef Q_OS_WIN
     return false;
 #else
-    return g_wineFallback && runtime() == Runtime::OpenD2D && !winePath().isEmpty() && !hostPath().isEmpty();
+    return g_wineFallback && runtime() != Runtime::Wine && !winePath().isEmpty() && !hostPath().isEmpty();
 #endif
+}
+
+QList<PdnBridge::Runtime> PdnBridge::chain()
+{
+    QList<Runtime> list{runtime()};
+    if (runtime() == Runtime::DotNet && availableFor(Runtime::OpenD2D))
+        list << Runtime::OpenD2D;
+    if (wineFallback())
+        list << Runtime::Wine;
+    return list;
 }
 
 QString PdnBridge::cacheTag()
 {
-    return runtimeName(runtime()) + (wineFallback() ? QStringLiteral("+Wine") : QString());
+    QStringList names;
+    for (Runtime r : chain())
+        names << runtimeName(r);
+    return names.join(QLatin1Char('+'));
+}
+
+QString PdnBridge::hostStamp()
+{
+    QStringList parts;
+    for (const QString& path : {hostPath(), dotnetHostPath()}) {
+        const QFileInfo f(path);
+        parts << (path.isEmpty() ? QString() : QStringLiteral("%1:%2").arg(f.size()).arg(f.lastModified().toMSecsSinceEpoch()));
+    }
+    return parts.join(QLatin1Char('|'));
+}
+
+QString PdnBridge::runtimeKey(Runtime runtime)
+{
+    switch (runtime) {
+    case Runtime::DotNet: return QStringLiteral("dotnet");
+    case Runtime::Wine: return QStringLiteral("wine");
+    default: return QStringLiteral("mono");
+    }
+}
+
+PdnBridge::Runtime PdnBridge::runtimeFromKey(const QString& key, Runtime fallback)
+{
+    if (key == QLatin1String("dotnet"))
+        return Runtime::DotNet;
+    if (key == QLatin1String("wine") || key == QLatin1String("Wine"))
+        return Runtime::Wine;
+    if (key == QLatin1String("mono") || key == QLatin1String("OpenD2D"))
+        return Runtime::OpenD2D;
+    return fallback;
+}
+
+int PdnBridge::rememberedRuntime(const QString& effectId)
+{
+    std::lock_guard lock(g_wineEffectsMutex);
+    QSettings settings;
+    const QString key = settings.value(QStringLiteral("plugins/effectRuntimes")).toMap().value(effectId).toString();
+    if (!key.isEmpty())
+        return int(runtimeFromKey(key, Runtime::DotNet));
+    if (settings.value(QStringLiteral("plugins/wineEffects")).toStringList().contains(effectId))
+        return int(Runtime::Wine);
+    return -1;
+}
+
+void PdnBridge::rememberEffectRuntime(const QString& effectId, Runtime runtime)
+{
+    if (runtime == Runtime::Wine) {
+        rememberWineEffect(effectId);
+        return;
+    }
+    std::lock_guard lock(g_wineEffectsMutex);
+    QSettings settings;
+    QVariantMap map = settings.value(QStringLiteral("plugins/effectRuntimes")).toMap();
+    if (map.value(effectId).toString() == runtimeKey(runtime))
+        return;
+    map.insert(effectId, runtimeKey(runtime));
+    settings.setValue(QStringLiteral("plugins/effectRuntimes"), map);
 }
 
 bool PdnBridge::effectNeedsWine(const QString& effectId)
 {
-    std::lock_guard lock(g_wineEffectsMutex);
-    return QSettings().value(QStringLiteral("plugins/wineEffects")).toStringList().contains(effectId);
+    return rememberedRuntime(effectId) == int(Runtime::Wine);
 }
 
 void PdnBridge::rememberWineEffect(const QString& effectId)
@@ -265,14 +342,20 @@ void PdnBridge::rememberWineEffect(const QString& effectId)
 
 void PdnBridge::shutdownAll()
 {
+    forRuntime(Runtime::DotNet).shutdown();
     forRuntime(Runtime::OpenD2D).shutdown();
+#ifndef Q_OS_WIN
     forRuntime(Runtime::Wine).shutdown();
+#endif
 }
 
 void PdnBridge::abortAll()
 {
+    forRuntime(Runtime::DotNet).abort();
     forRuntime(Runtime::OpenD2D).abort();
+#ifndef Q_OS_WIN
     forRuntime(Runtime::Wine).abort();
+#endif
 }
 
 PdnBridge::~PdnBridge()
@@ -369,6 +452,65 @@ QString PdnBridge::monoPath()
     return QStandardPaths::findExecutable(QStringLiteral("mono"));
 }
 
+QString PdnBridge::winePrefix()
+{
+#ifdef Q_OS_WIN
+    return {};
+#else
+    // KAINT_WINEPREFIX manda; si no, el WINEPREFIX de quien abre Kaint, y si no, ~/.wine si ya
+    // existe (puede tener cosas instaladas para los complementos: .NET con winetricks...). Si no
+    // hay ninguno, uno propio de Kaint, en vez de crear ~/.wine.
+    const QString own = qEnvironmentVariable("KAINT_WINEPREFIX");
+    if (!own.isEmpty())
+        return own;
+    if (!qEnvironmentVariableIsEmpty("WINEPREFIX"))
+        return {};
+    if (QFileInfo::exists(QDir::homePath() + QStringLiteral("/.wine/system.reg")))
+        return {};
+    const QString data = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    return data.isEmpty() ? QString() : data + QStringLiteral("/wine");
+#endif
+}
+
+QString PdnBridge::dotnetPath()
+{
+    QString dotnet = QStandardPaths::findExecutable(QStringLiteral("dotnet"));
+    if (!dotnet.isEmpty())
+        return dotnet;
+    QStringList candidates;
+    const QString root = qEnvironmentVariable("DOTNET_ROOT");
+    if (!root.isEmpty())
+        candidates << root + QStringLiteral("/dotnet");
+#ifdef Q_OS_WIN
+    candidates << qEnvironmentVariable("ProgramFiles") + QStringLiteral("/dotnet/dotnet.exe");
+#else
+    candidates << QDir::homePath() + QStringLiteral("/.dotnet/dotnet") << QStringLiteral("/usr/share/dotnet/dotnet")
+               << QStringLiteral("/usr/lib/dotnet/dotnet") << QStringLiteral("/usr/local/share/dotnet/dotnet")
+               << QStringLiteral("/opt/dotnet/dotnet");
+#endif
+    for (const QString& c : candidates)
+        if (QFileInfo(c).isExecutable())
+            return c;
+    return {};
+}
+
+QString PdnBridge::dotnetHostPath()
+{
+    const QString env = qEnvironmentVariable("KAINT_PDN5_HOST");
+    if (!env.isEmpty() && QFileInfo::exists(env))
+        return env;
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates{
+        appDir + QStringLiteral("/pdnhost5/PdnBridge.dll"),
+        appDir + QStringLiteral("/../share/kaint/pdnhost5/PdnBridge.dll"),
+        appDir + QStringLiteral("/../lib/kaint/pdnhost5/PdnBridge.dll"),
+    };
+    for (const QString& c : candidates)
+        if (QFileInfo::exists(c))
+            return QFileInfo(c).canonicalFilePath();
+    return {};
+}
+
 QString PdnBridge::winePath()
 {
     QString wine = QStandardPaths::findExecutable(QStringLiteral("wine"));
@@ -427,24 +569,39 @@ bool PdnBridge::runtimeSelectable()
 
 void PdnBridge::setRuntime(Runtime runtime)
 {
-    const auto before = Runtime(g_runtime.exchange(int(runtime)));
-    if (before == runtime)
+    const int previous = g_runtime.exchange(int(runtime));
+    const auto before = Runtime(previous);
+    if (previous < 0 || before == runtime)
         return;
-#ifndef Q_OS_WIN
-    // El proceso del sistema de antes ya no hace falta (salvo el de Wine, si sigue de respaldo).
-    if (!(before == Runtime::Wine && wineFallback()))
+    // El proceso del sistema de antes ya no hace falta (salvo si sigue de respaldo).
+    if (!chain().contains(before))
         forRuntime(before).shutdown();
-#endif
 }
 
 PdnBridge::Runtime PdnBridge::runtime()
 {
-    return Runtime(g_runtime.load());
+    int r = g_runtime.load();
+    if (r < 0) {
+        // El de fábrica: .NET si está; si no, OpenD2D (mono).
+        r = int(availableFor(Runtime::DotNet) ? Runtime::DotNet : Runtime::OpenD2D);
+        int expected = -1;
+        g_runtime.compare_exchange_strong(expected, r);
+        r = g_runtime.load();
+    }
+    return Runtime(r);
 }
 
 QString PdnBridge::runtimeName(Runtime runtime)
 {
-    return runtime == Runtime::Wine ? QStringLiteral("Wine") : QStringLiteral("OpenD2D");
+    switch (runtime) {
+    case Runtime::DotNet: return QStringLiteral(".NET");
+    case Runtime::Wine: return QStringLiteral("Wine");
+#ifdef Q_OS_WIN
+    default: return QStringLiteral(".NET Framework");
+#else
+    default: return QStringLiteral("OpenD2D");
+#endif
+    }
 }
 
 bool PdnBridge::available(QString* why)
@@ -454,6 +611,22 @@ bool PdnBridge::available(QString* why)
 
 bool PdnBridge::availableFor(Runtime runtime, QString* why)
 {
+    if (runtime == Runtime::DotNet) {
+        if (dotnetHostPath().isEmpty()) {
+            if (why)
+                *why = QCoreApplication::translate("PdnBridge", "Kaint se compiló sin el sistema de complementos .NET "
+                                                                "(hace falta el SDK de .NET al compilar).");
+            return false;
+        }
+        if (dotnetPath().isEmpty()) {
+            if (why)
+                *why = QCoreApplication::translate("PdnBridge", "El sistema de complementos .NET necesita el runtime de "
+                                                                ".NET 10 (sudo pacman -S dotnet-runtime o sudo apt install "
+                                                                "dotnet-runtime-10.0).");
+            return false;
+        }
+        return true;
+    }
 #ifdef Q_OS_WIN
     Q_UNUSED(runtime);
 #else
@@ -519,8 +692,10 @@ bool PdnBridge::ensureStarted(QString* error)
     // Ya, para que hostSidePath dé las rutas como las verá este proceso.
     m_startedWith = chosen;
     SpawnEnvironment env;
-    const QByteArray runner = QFile::encodeName(chosen == Runtime::Wine ? winePath() : monoPath());
-    const QByteArray host = QFile::encodeName(launchHostPath(hostPath()));
+    const QByteArray runner = QFile::encodeName(chosen == Runtime::Wine     ? winePath()
+                                                : chosen == Runtime::DotNet ? dotnetPath()
+                                                                            : monoPath());
+    const QByteArray host = QFile::encodeName(chosen == Runtime::DotNet ? dotnetHostPath() : launchHostPath(hostPath()));
     {
         // Los complementos de la carpeta Effects (como los ve el proceso auxiliar), uno por línea.
         std::lock_guard lock(effectsFolderMutex());
@@ -536,13 +711,22 @@ bool PdnBridge::ensureStarted(QString* error)
         // OpenD2D para Windows si se compilaron junto al proceso auxiliar.
         if (!debug)
             env.set("WINEDEBUG", "-all");
+        const QString prefix = winePrefix();
+        if (!prefix.isEmpty()) {
+            QDir().mkpath(QFileInfo(prefix).absolutePath());
+            env.set("WINEPREFIX", QFile::encodeName(prefix));
+        }
         const QDir hostDir = QFileInfo(hostPath()).absoluteDir();
         QStringList native;
         for (const char* dll : {"d2d1", "dwrite"})
             if (hostDir.exists(QLatin1String(dll) + QStringLiteral(".dll")))
                 native << QString::fromLatin1(dll);
+        // winemenubuilder desactivado: Wine no crea accesos directos ni asociaciones de archivos en
+        // el escritorio por los programas de los complementos.
+        QByteArray overrides = "winemenubuilder.exe=d";
         if (!native.isEmpty())
-            env.set("WINEDLLOVERRIDES", native.join(QLatin1Char(',')).toUtf8() + "=n,b");
+            overrides += ';' + native.join(QLatin1Char(',')).toUtf8() + "=n,b";
+        env.set("WINEDLLOVERRIDES", overrides);
     } else if (!openD2D.isEmpty()) {
         // OpenD2D: sus bibliotecas, antes que nada, para los DllImport de d2d1, dwrite y windowscodecs.
 #ifdef Q_OS_MACOS
@@ -550,9 +734,11 @@ bool PdnBridge::ensureStarted(QString* error)
 #else
         env.prepend("LD_LIBRARY_PATH", QFile::encodeName(openD2D));
 #endif
-        const QString config = monoConfigFor(openD2D);
-        if (!config.isEmpty())
-            env.set("MONO_CONFIG", QFile::encodeName(config));
+        if (chosen != Runtime::DotNet) {
+            const QString config = monoConfigFor(openD2D);
+            if (!config.isEmpty())
+                env.set("MONO_CONFIG", QFile::encodeName(config));
+        }
         env.set("KAINT_OPEND2D", QFile::encodeName(openD2D));
         const QString version = openD2DVersion();
         if (!version.isEmpty())
@@ -715,7 +901,7 @@ bool PdnBridge::ensureStarted(QString* error)
         stop();
     }
     QString why;
-    if (!available(&why)) {
+    if (!availableFor(m_runtime, &why)) {
         if (error)
             *error = why;
         return false;
@@ -746,7 +932,10 @@ bool PdnBridge::ensureStarted(QString* error)
     startup.hStdOutput = childOut;
     startup.hStdError = errors;
     PROCESS_INFORMATION info{};
-    std::wstring command = L"\"" + QDir::toNativeSeparators(hostPath()).toStdWString() + L"\"";
+    std::wstring command = m_runtime == Runtime::DotNet
+                               ? L"\"" + QDir::toNativeSeparators(dotnetPath()).toStdWString() + L"\" \""
+                                     + QDir::toNativeSeparators(dotnetHostPath()).toStdWString() + L"\""
+                               : L"\"" + QDir::toNativeSeparators(hostPath()).toStdWString() + L"\"";
     const BOOL started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
                                         nullptr, &startup, &info);
     const DWORD code = GetLastError();
@@ -899,10 +1088,26 @@ QString PdnBridge::hostSidePath(const QString& path) const
 #endif
 }
 
+int PdnBridge::startTimeoutMs() const
+{
+#ifndef Q_OS_WIN
+    // La primera vez, Wine crea su prefijo (y wine-mono): puede tardar bastante más.
+    if (m_runtime == Runtime::Wine) {
+        QString prefix = winePrefix();
+        if (prefix.isEmpty())
+            prefix = qEnvironmentVariableIsEmpty("WINEPREFIX") ? QDir::homePath() + QStringLiteral("/.wine")
+                                                               : qEnvironmentVariable("WINEPREFIX");
+        if (!QFileInfo::exists(prefix + QStringLiteral("/system.reg")))
+            return 4 * kInspectTimeoutMs;
+    }
+#endif
+    return kInspectTimeoutMs;
+}
+
 QJsonObject PdnBridge::hello(QString* error)
 {
     std::lock_guard lock(m_mutex);
-    return request(QJsonObject{{QStringLiteral("cmd"), QStringLiteral("hello")}}, kInspectTimeoutMs, error);
+    return request(QJsonObject{{QStringLiteral("cmd"), QStringLiteral("hello")}}, startTimeoutMs(), error);
 }
 
 void PdnBridge::shutdown()
@@ -991,7 +1196,7 @@ QJsonObject PdnBridge::inspect(const QString& path, QString* error)
     if (!ensureStarted(error))
         return {};
     QJsonObject req{{QStringLiteral("cmd"), QStringLiteral("inspect")}, {QStringLiteral("path"), hostSidePath(path)}};
-    const QJsonObject reply = request(req, kInspectTimeoutMs, error);
+    const QJsonObject reply = request(req, startTimeoutMs(), error);
     if (!reply.isEmpty() && !reply.value(QStringLiteral("ok")).toBool() && error)
         *error = reply.value(QStringLiteral("error")).toString();
     return reply;
@@ -1018,12 +1223,12 @@ bool PdnBridge::prepareShared(const QImage& src, QString* error)
 
 bool PdnBridge::render(const QString& assembly, const QString& effectId, const QJsonObject& values, const QImage& src,
                        QImage& dst, const QRect& roi, const EffectContext& ctx, const std::atomic_bool& cancel,
-                       QString* error)
+                       QString* error, const Selection* selection)
 {
     std::lock_guard lock(m_mutex);
     if (!ensureStarted(error) || !prepareShared(src, error))
         return false;
-    const QJsonObject req{
+    QJsonObject req{
         {QStringLiteral("cmd"), QStringLiteral("render")},
         {QStringLiteral("path"), hostSidePath(assembly)},
         {QStringLiteral("effect"), effectId},
@@ -1036,6 +1241,20 @@ bool PdnBridge::render(const QString& assembly, const QString& effectId, const Q
         {QStringLiteral("palette"), paletteJson(ctx)},
         {QStringLiteral("values"), values},
     };
+    // La forma de la selección (polígonos par-impar en píxeles de la imagen): con .NET, los efectos
+    // la ven como en Paint.NET (su PdnRegion y, los de GPU, su geometría).
+    if (selection && !selection->isEmpty() && selection->isPathBased() && !selection->isRectangular()) {
+        QJsonArray polygons;
+        for (const QPolygonF& poly : selection->path().toSubpathPolygons()) {
+            QJsonArray points;
+            for (const QPointF& pt : poly)
+                points << pt.x() << pt.y();
+            if (points.size() >= 6)
+                polygons.append(points);
+        }
+        if (!polygons.isEmpty())
+            req.insert(QStringLiteral("selection"), polygons);
+    }
     if (!writeLine(QJsonDocument(req).toJson(QJsonDocument::Compact))) {
         stop();
         if (error)

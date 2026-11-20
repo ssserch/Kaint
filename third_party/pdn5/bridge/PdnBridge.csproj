@@ -1,0 +1,92 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Exe so the managed logic can be self-tested with `dotnet exec`; the C ABI
+         exports are reached by the Rust side through hostfxr function pointers
+         regardless of output type. -->
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PdnBridge</AssemblyName>
+    <RootNamespace>PaintDotNet.Bridge</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The BB worktree masks .gitmodules as a device node; SourceLink's git query
+         chokes on it, so disable all source-control queries. -->
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <EnableSourceLink>false</EnableSourceLink>
+    <DeterministicSourcePaths>false</DeterministicSourcePaths>
+    <!-- Plugins' BinaryFormatter-serialized resources (see System.Runtime.Serialization.Formatters below). -->
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The ONE unified replacement set: effects + the FileTypes surface. -->
+    <ProjectReference Include="../assemblies/Primitives/Primitives.csproj" />
+    <ProjectReference Include="../assemblies/Fundamentals/Fundamentals.csproj" />
+    <ProjectReference Include="../assemblies/SystemLayer/SystemLayer.csproj" />
+    <ProjectReference Include="../assemblies/PaintDotNetApp/PaintDotNetApp.csproj" />
+    <ProjectReference Include="../assemblies/ComponentModel/ComponentModel.csproj" />
+    <ProjectReference Include="../assemblies/PropertySystem/PropertySystem.csproj" />
+    <ProjectReference Include="../assemblies/Core/Core.csproj" />
+    <ProjectReference Include="../assemblies/Windows/Windows.csproj" />
+    <ProjectReference Include="../assemblies/WindowsCore/WindowsCore.csproj" />
+    <ProjectReference Include="../assemblies/WindowsFramework/WindowsFramework.csproj" />
+    <ProjectReference Include="../assemblies/Framework/Framework.csproj" />
+    <ProjectReference Include="../assemblies/Effects.Gpu/Effects.Gpu.csproj" />
+    <ProjectReference Include="../assemblies/FileTypes/FileTypes.csproj" />
+    <ProjectReference Include="../assemblies/Effects.Core/Effects.Core.csproj" />
+    <ProjectReference Include="../assemblies/Effects.Legacy/Effects.Legacy.csproj" />
+    <!-- PaintDotNet.Data repeats 5.0 type names that 5.2 moved to PaintDotNet.FileTypes; alias it. -->
+    <ProjectReference Include="../assemblies/Data/Data.csproj" Aliases="pdndata" />
+    <ProjectReference Include="../assemblies/WindowsForms/WindowsForms.csproj" />
+    <ProjectReference Include="../assemblies/WindowsFormsPrimitives/WindowsFormsPrimitives.csproj" />
+    <!-- System.Windows.Forms.Design designer base types a plug-in's control references (CodeLab's ScintillaDesigner). -->
+    <ProjectReference Include="../assemblies/WindowsFormsDesign/WindowsFormsDesign.csproj" />
+    <!-- Microsoft's MIT chart control over that stand-in, for plugins that draw a Chart (BoltBait's
+         Chart or Graph). -->
+    <ProjectReference Include="../assemblies/WindowsFormsDataVisualization/WindowsFormsDataVisualization.csproj" />
+    <!-- Compatibility shims so pre-5.2 plugins resolve types from the assemblies that used to
+         own them (PaintDotNet.Effects / PaintDotNet.Base -> Effects.Core / PropertySystem). -->
+    <ProjectReference Include="../assemblies/Effects/Effects.csproj" />
+    <ProjectReference Include="../assemblies/Base/Base.csproj" />
+    <!-- Inert WinRT.Runtime / Windows SDK projection stand-ins so CodeLab 6.x's editor UI (built on the Windows
+         Runtime projection) type-loads in the host; there is no Windows Runtime here. -->
+    <ProjectReference Include="../assemblies/WinRTRuntime/WinRTRuntime.csproj" />
+    <!-- System.Media's sounds, which .NET has only on the Windows desktop: played as silence (eer's StickMan). -->
+    <ProjectReference Include="../assemblies/WindowsExtensions/WindowsExtensions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reuse the FileType host's document/host/metadata plumbing, don't duplicate it. -->
+    <Compile Include="../filetypes-host/HostDocument.cs" />
+    <Compile Include="../filetypes-host/LoadSupport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Classic effect ctors take System.Drawing.Image; plugins expect it at runtime. -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+    <!-- Paint.NET 5 ships ComputeSharp.D2D1 (MIT) for plugins' pixel shaders; they bind the genuine
+         3.2.0 assembly, which drives Direct2D (here opend2d) through its own COM interop. -->
+    <PackageReference Include="ComputeSharp.D2D1" Version="3.2.0" />
+    <!-- Plugins keep their icons and images (a WinForms plugin's button bitmaps too) as serialized
+         resources: BinaryFormatter-serialized (read by the runtime's ResourceReader) or preserialized
+         (read by System.Resources.Extensions' DeserializingResourceReader). .NET 9+ ships BinaryFormatter
+         as this package only (MIT), enabled by the switch above. Both resolve through the plugin's load
+         context (PluginHost enters it), so it reaches the bridge's copies. -->
+    <PackageReference Include="System.Resources.Extensions" Version="10.0.0" />
+    <PackageReference Include="System.Runtime.Serialization.Formatters" Version="10.0.0" />
+    <!-- A plug-in's user.config (ApplicationSettingsBase) needs System.Configuration.ConfigurationManager, which is
+         not in the shared framework. The browser host fetches it on demand; the desktop ships it (with its notice). -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.0" />
+    <!-- Mono.Cecil (MIT) rewrites CodeLab's embedded Scintilla to the managed HostScintilla as the plug-in loads
+         (ScintillaRewrite.cs), so paint.rs draws the editor and no native Scintilla is loaded. Bundled on the desktop
+         (unlike the browser, which fetches it on demand). -->
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+  </ItemGroup>
+  <!-- Off Windows, publish.sh swaps in System.Drawing.Common 6.0's unix build over libgdiplus
+       (pdn-host/README.md "GDI+"), which refuses to run without this switch. Windows ignores it. -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Drawing.EnableUnixSupport" Value="true" />
+  </ItemGroup>
+</Project>

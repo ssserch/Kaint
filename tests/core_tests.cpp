@@ -1993,6 +1993,44 @@ static void testPlugins()
     }
 #endif
 
+    // Sistema .NET: un complemento que no carga con él (Floyd-Steinberg Dithering, de los incluidos)
+    // se examina y se ejecuta con mono, solo ese; y una ventana propia de WinForms (TextPlus) se lee
+    // sin mostrarla y sus ajustes salen en el diálogo de Kaint.
+    if (PdnBridge::runtime() == PdnBridge::Runtime::DotNet && PdnBridge::availableFor(PdnBridge::Runtime::OpenD2D)) {
+        const QString bundled = QStringLiteral(KAINT_SOURCE_DIR "/plugins/paintnet/");
+        QTemporaryDir netDir;
+        QFile::copy(bundled + QStringLiteral("FloydSteinbergDithering.dll"), netDir.filePath(QStringLiteral("FloydSteinbergDithering.dll")));
+        QFile::copy(bundled + QStringLiteral("Textplus.dll"), netDir.filePath(QStringLiteral("Textplus.dll")));
+        pm->setPathsForTesting({netDir.path()}, dir.filePath(QStringLiteral("cache-dotnet.json")));
+        pm->runtimeChanged();
+        pm->scan();
+        pm->waitForInspection();
+        CHECK(pm->plugins().size() == 2);
+        for (const PluginInfo& info : pm->plugins()) {
+            CHECK(!info.effectIds.isEmpty());
+            pm->setEnabled(info.id, true);
+        }
+        const Effect* dither = nullptr;
+        const Effect* text = nullptr;
+        for (const Effect* e : Effects::all()) {
+            if (e->id().startsWith(QLatin1String("pdn:FloydSteinbergDithering.dll:")))
+                dither = e;
+            if (e->id().startsWith(QLatin1String("pdn:Textplus.dll:")))
+                text = e;
+        }
+        CHECK(dither && text);
+        if (dither) {
+            const QImage out = Effects::apply(*dither, src, Selection(), Effects::defaults(*dither), EffectContext(), cancel);
+            CHECK(!out.isNull() && dither->takeError().isEmpty());
+        }
+        if (text) {
+            // Con mono era una ventana de WinForms; con .NET, ajustes en el diálogo de Kaint.
+            CHECK(!text->hasCustomDialog() && !text->params().isEmpty());
+        }
+        for (const PluginInfo& info : pm->plugins())
+            pm->setEnabled(info.id, false);
+    }
+
 #ifdef KAINT_TEST_WINE_PLUGIN
     // Respaldo de Wine con OpenD2D: un complemento que llama a kernel32.dll (solo Windows y Wine).
     // Con mono, un efecto no carga y el otro falla al aplicarse; con el respaldo, esos dos (solo esos)

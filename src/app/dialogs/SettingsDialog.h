@@ -82,7 +82,7 @@ struct AppSettings {
     // (PdnBridge::Runtime): 0, OpenD2D (mono con el Direct2D de código abierto); 1, Wine.
     // Sistema de los complementos de Paint.NET: 0 OpenD2D, 1 Wine (de fábrica, si está instalado;
     // ver load()).
-    int pluginRuntime = 1;
+    int pluginRuntime = 2;
     // Con OpenD2D, lo que no funcione con mono (un complemento o un efecto) se ejecuta con Wine.
     bool pluginWineFallback = true;
     // La rueda del ratón cambia el valor de los deslizadores (Dureza, Tolerancia, los de los

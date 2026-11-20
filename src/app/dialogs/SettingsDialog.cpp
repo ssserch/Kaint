@@ -155,9 +155,13 @@ AppSettings AppSettings::load()
     a.pluginMenuIcons = get("pluginMenuIcons", a.pluginMenuIcons);
     a.browsePlugins = get("browsePlugins", a.browsePlugins);
     a.photocraftExtras = get("photocraftExtras", a.photocraftExtras);
-    // De fábrica, Wine si está instalado (si no, OpenD2D, que solo necesita mono).
-    const int factoryRuntime = PdnBridge::winePath().isEmpty() ? int(PdnBridge::Runtime::OpenD2D) : int(PdnBridge::Runtime::Wine);
-    a.pluginRuntime = std::clamp(get("pluginRuntime", factoryRuntime), 0, 1);
+    // De fábrica, .NET si está (Kaint compilado con él y el runtime instalado); si no, Wine si está
+    // instalado, y si no, OpenD2D (que solo necesita mono). "pluginSystem" sustituye a
+    // "pluginRuntime" (de antes de .NET): quien tenía guardado OpenD2D o Wine pasa a .NET.
+    const int factoryRuntime = PdnBridge::availableFor(PdnBridge::Runtime::DotNet) ? int(PdnBridge::Runtime::DotNet)
+                               : PdnBridge::winePath().isEmpty()                    ? int(PdnBridge::Runtime::OpenD2D)
+                                                                                    : int(PdnBridge::Runtime::Wine);
+    a.pluginRuntime = std::clamp(get("pluginSystem", factoryRuntime), 0, 2);
     a.pluginWineFallback = get("pluginWineFallback", a.pluginWineFallback);
     a.wheelChangesValues = get("wheelChangesValues", a.wheelChangesValues);
     a.wheelStep = std::clamp(get("wheelStep", a.wheelStep), 0, 3);
@@ -274,7 +278,7 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("pluginMenuIcons"), pluginMenuIcons);
     s.setValue(QStringLiteral("browsePlugins"), browsePlugins);
     s.setValue(QStringLiteral("photocraftExtras"), photocraftExtras);
-    s.setValue(QStringLiteral("pluginRuntime"), pluginRuntime);
+    s.setValue(QStringLiteral("pluginSystem"), pluginRuntime);
     s.setValue(QStringLiteral("pluginWineFallback"), pluginWineFallback);
     s.setValue(QStringLiteral("wheelChangesValues"), wheelChangesValues);
     s.setValue(QStringLiteral("wheelStep"), wheelStep);
@@ -1746,12 +1750,17 @@ QWidget* SettingsDialog::createPluginsPage()
         auto* runtimeRow = new QHBoxLayout;
         auto* runtime = new QComboBox(page.widget);
         runtime->setIconSize(QSize(16, 16));
-        runtime->addItem(Icons::openD2DIcon(), QStringLiteral("OpenD2D"), 0);
-        runtime->setItemData(0, tr("mono con OpenD2D: el Direct2D, DirectWrite y WIC de código abierto en lugar de los de "
+        runtime->addItem(Icons::theme({"applications-development", "system-run"}), tr(".NET (recomendado)"), 2);
+        runtime->setItemData(0, tr("El .NET moderno con la capa de Paint.NET 5: carga también los complementos de Paint.NET 5 "
+                                   "(los de GPU, con OpenD2D) y muestra sus ventanas propias en el diálogo de Kaint. Lo que "
+                                   "no funcione con él se ejecuta con mono y, si se pide, con Wine."),
+                             Qt::ToolTipRole);
+        runtime->addItem(Icons::openD2DIcon(), QStringLiteral("OpenD2D (mono)"), 0);
+        runtime->setItemData(1, tr("mono con OpenD2D: el Direct2D, DirectWrite y WIC de código abierto en lugar de los de "
                                    "Windows. No necesita nada más que mono."),
                              Qt::ToolTipRole);
         runtime->addItem(Icons::wineIcon(), tr("Wine"), 1);
-        runtime->setItemData(1, tr("Los complementos se ejecutan dentro de Wine (con su wine-mono), como un programa de "
+        runtime->setItemData(2, tr("Los complementos se ejecutan dentro de Wine (con su wine-mono), como un programa de "
                                    "Windows: sus ventanas propias se ven como en Windows."),
                              Qt::ToolTipRole);
         runtime->setCurrentIndex(std::max(0, runtime->findData(m_settings.pluginRuntime)));
@@ -1765,7 +1774,7 @@ QWidget* SettingsDialog::createPluginsPage()
         page.layout->addLayout(runtimeRow);
         // Con OpenD2D, lo que no funcione con mono (un complemento que no carga o un efecto que falla)
         // se ejecuta con Wine, solo eso.
-        auto* fallback = new QCheckBox(tr("Usar Wine solo para lo que no funcione con OpenD2D"), page.widget);
+        auto* fallback = new QCheckBox(tr("Usar Wine solo para lo que no funcione con los demás"), page.widget);
         fallback->setIcon(Icons::wineIcon());
         fallback->setChecked(m_settings.pluginWineFallback);
         fallback->setToolTip(tr("Si un complemento no carga con OpenD2D, o uno de sus efectos falla al aplicarse, ese "
@@ -1774,9 +1783,9 @@ QWidget* SettingsDialog::createPluginsPage()
         page.layout->addWidget(fallback);
         auto syncFallback = [this, fallback] {
             const bool wine = !PdnBridge::winePath().isEmpty();
-            fallback->setEnabled(m_settings.pluginRuntime == int(PdnBridge::Runtime::OpenD2D) && wine);
-            fallback->setText(wine ? tr("Usar Wine solo para lo que no funcione con OpenD2D")
-                                   : tr("Usar Wine solo para lo que no funcione con OpenD2D (Wine no está instalado)"));
+            fallback->setEnabled(m_settings.pluginRuntime != int(PdnBridge::Runtime::Wine) && wine);
+            fallback->setText(wine ? tr("Usar Wine solo para lo que no funcione con los demás")
+                                   : tr("Usar Wine solo para lo que no funcione con los demás (Wine no está instalado)"));
         };
         syncFallback();
         connect(fallback, &QCheckBox::toggled, this, [this](bool on) {
@@ -1789,7 +1798,19 @@ QWidget* SettingsDialog::createPluginsPage()
         page.layout->addWidget(runtimeStatus);
         auto describe = [this, runtimeStatus] {
             QStringList parts;
-            if (m_settings.pluginRuntime == int(PdnBridge::Runtime::Wine)) {
+            if (m_settings.pluginRuntime == int(PdnBridge::Runtime::DotNet)) {
+                const QString dotnet = PdnBridge::dotnetPath();
+                if (PdnBridge::dotnetHostPath().isEmpty())
+                    parts << QStringLiteral("⚠ ") + tr("Kaint se compiló sin el sistema .NET (hace falta el SDK de .NET al compilar).");
+                else
+                    parts << (dotnet.isEmpty() ? QStringLiteral("⚠ ") + tr(".NET no está instalado (sudo pacman -S dotnet-runtime o sudo apt install dotnet-runtime-10.0).")
+                                               : tr(".NET: %1").arg(QDir::toNativeSeparators(dotnet)));
+                const QString mono = PdnBridge::monoPath();
+                parts << (mono.isEmpty() ? tr("sin mono de respaldo") : tr("respaldo: mono"));
+                const QString version = PdnBridge::openD2DVersion();
+                if (!PdnBridge::openD2DPath().isEmpty())
+                    parts << tr("OpenD2D %1").arg(version.isEmpty() ? QDir::toNativeSeparators(PdnBridge::openD2DPath()) : version);
+            } else if (m_settings.pluginRuntime == int(PdnBridge::Runtime::Wine)) {
                 const QString wine = PdnBridge::winePath();
                 parts << (wine.isEmpty() ? QStringLiteral("⚠ ") + tr("Wine no está instalado (sudo pacman -S wine o sudo apt install wine).")
                                          : tr("Wine: %1").arg(QDir::toNativeSeparators(wine)));

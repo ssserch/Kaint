@@ -30,55 +30,89 @@ struct PluginManager::Loaded {
 
 namespace {
 
-// Examina un .dll de Paint.NET con el sistema elegido y, con el respaldo de Wine, también con Wine
-// si con mono no carga o algún efecto falla: los efectos que solo van con Wine se añaden marcados
-// ("wine": true; el complemento entero, "runtime": "Wine"), así solo esa parte usa Wine.
+// Examina un .dll de Paint.NET con los sistemas de PdnBridge::chain(), en orden: con el primero y,
+// si no carga, algún efecto falla o tiene una ventana que ese sistema no muestra, también con los
+// siguientes. Cada efecto queda marcado con el sistema que lo ejecuta ("runtime": "dotnet", "mono"
+// o "wine"; los de Wine, también "wine": true), así solo esa parte usa el de respaldo.
 QJsonObject inspectWithFallback(const QString& path, QString* error)
 {
-    QJsonObject reply = PdnBridge::instance().inspect(path, error);
-    if (!PdnBridge::wineFallback() || reply.value(QStringLiteral("library")).toBool())
-        return reply;
-    const QJsonArray effects = reply.value(QStringLiteral("effects")).toArray();
-    const bool failed = reply.isEmpty() || !reply.value(QStringLiteral("ok")).toBool(true) || effects.isEmpty();
-    if (!failed && reply.value(QStringLiteral("errors")).toArray().isEmpty())
-        return reply;
-    QString wineError;
-    QJsonObject wine = PdnBridge::forRuntime(PdnBridge::Runtime::Wine).inspect(path, &wineError);
-    const QJsonArray wineEffects = wine.value(QStringLiteral("effects")).toArray();
-    if (wine.isEmpty() || !wine.value(QStringLiteral("ok")).toBool(true) || wineEffects.isEmpty())
-        return reply;
-    if (failed) {
-        // Con mono no carga: todo con Wine.
-        QJsonArray marked;
-        for (const QJsonValue& e : wineEffects) {
-            QJsonObject o = e.toObject();
+    using Runtime = PdnBridge::Runtime;
+    const QList<Runtime> chain = PdnBridge::chain();
+    auto mark = [](QJsonObject o, Runtime r) {
+        o.insert(QStringLiteral("runtime"), PdnBridge::runtimeKey(r));
+        if (r == Runtime::Wine)
             o.insert(QStringLiteral("wine"), true);
-            marked.append(o);
-        }
-        wine.insert(QStringLiteral("effects"), marked);
-        wine.insert(QStringLiteral("runtime"), QStringLiteral("Wine"));
-        if (error)
-            error->clear();
-        return wine;
+        return o;
+    };
+    auto failedReply = [](const QJsonObject& r) {
+        return r.isEmpty() || !r.value(QStringLiteral("ok")).toBool(true) || r.value(QStringLiteral("effects")).toArray().isEmpty();
+    };
+    QJsonObject reply = PdnBridge::forRuntime(chain.first()).inspect(path, error);
+    {
+        QJsonArray marked;
+        for (const QJsonValue& e : reply.value(QStringLiteral("effects")).toArray())
+            marked.append(mark(e.toObject(), chain.first()));
+        if (!reply.isEmpty())
+            reply.insert(QStringLiteral("effects"), marked);
     }
-    // Carga, pero algún efecto no: esos, con Wine.
-    QSet<QString> known;
-    for (const QJsonValue& e : effects)
-        known.insert(e.toObject().value(QStringLiteral("id")).toString());
-    QJsonArray merged = effects;
-    bool added = false;
-    for (const QJsonValue& e : wineEffects) {
-        QJsonObject o = e.toObject();
-        if (known.contains(o.value(QStringLiteral("id")).toString()))
+    for (qsizetype step = 1; step < chain.size(); ++step) {
+        if (reply.value(QStringLiteral("library")).toBool())
+            break;
+        const Runtime next = chain[step];
+        const QJsonArray effects = reply.value(QStringLiteral("effects")).toArray();
+        const bool failed = failedReply(reply);
+        // Ventanas que este sistema no puede mostrar (las del proceso de .NET que Kaint no sabe
+        // dibujar): con el siguiente, que las abre de verdad.
+        bool needsWindow = false;
+        for (const QJsonValue& e : effects)
+            needsWindow = needsWindow || e.toObject().value(QStringLiteral("needsWindow")).toBool();
+        if (!failed && !needsWindow && reply.value(QStringLiteral("errors")).toArray().isEmpty())
+            break;
+        QString otherError;
+        QJsonObject other = PdnBridge::forRuntime(next).inspect(path, &otherError);
+        const QJsonArray otherEffects = other.value(QStringLiteral("effects")).toArray();
+        if (failedReply(other))
             continue;
-        o.insert(QStringLiteral("wine"), true);
-        merged.append(o);
-        added = true;
-    }
-    if (added) {
-        reply.insert(QStringLiteral("effects"), merged);
-        // Lo que tampoco funciona con Wine.
-        reply.insert(QStringLiteral("errors"), wine.value(QStringLiteral("errors")).toArray());
+        if (failed) {
+            // Con el anterior no carga: todo con este.
+            QJsonArray marked;
+            for (const QJsonValue& e : otherEffects)
+                marked.append(mark(e.toObject(), next));
+            other.insert(QStringLiteral("effects"), marked);
+            if (error)
+                error->clear();
+            reply = other;
+            continue;
+        }
+        // Carga, pero algún efecto no (o no puede mostrar su ventana): esos, con este.
+        QHash<QString, QJsonObject> byId;
+        for (const QJsonValue& e : otherEffects)
+            byId.insert(e.toObject().value(QStringLiteral("id")).toString(), e.toObject());
+        QSet<QString> known;
+        QJsonArray merged;
+        bool changed = false;
+        for (const QJsonValue& e : effects) {
+            QJsonObject o = e.toObject();
+            const QString id = o.value(QStringLiteral("id")).toString();
+            known.insert(id);
+            if (o.value(QStringLiteral("needsWindow")).toBool() && byId.contains(id)) {
+                o = mark(byId.value(id), next);
+                changed = true;
+            }
+            merged.append(o);
+        }
+        for (const QJsonValue& e : otherEffects) {
+            const QJsonObject o = e.toObject();
+            if (known.contains(o.value(QStringLiteral("id")).toString()))
+                continue;
+            merged.append(mark(o, next));
+            changed = true;
+        }
+        if (changed) {
+            reply.insert(QStringLiteral("effects"), merged);
+            // Lo que tampoco funciona con este.
+            reply.insert(QStringLiteral("errors"), other.value(QStringLiteral("errors")).toArray());
+        }
     }
     return reply;
 }
@@ -126,7 +160,7 @@ bool isNativePlugin(const QString& path)
 }
 
 // Versión del formato de la caché: al cambiarla se vuelven a examinar todos.
-constexpr int kCacheVersion = 1;
+constexpr int kCacheVersion = 2;
 
 QStringList pluginFiles(const QString& dir)
 {
@@ -516,7 +550,7 @@ void PluginManager::loadCache()
         return;
     const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
     if (root.value(QStringLiteral("version")).toInt() != kCacheVersion
-        || root.value(QStringLiteral("host")).toString() != fileStamp(PdnBridge::hostPath())
+        || root.value(QStringLiteral("host")).toString() != PdnBridge::hostStamp()
         || root.value(QStringLiteral("runtime")).toString() != PdnBridge::cacheTag()
         || root.value(QStringLiteral("lang")).toString() != qEnvironmentVariable("KAINT_LANG"))
         return;
@@ -532,7 +566,7 @@ void PluginManager::saveCache() const
     if (!f.open(QIODevice::WriteOnly))
         return;
     const QJsonObject root{{QStringLiteral("version"), kCacheVersion},
-                           {QStringLiteral("host"), fileStamp(PdnBridge::hostPath())},
+                           {QStringLiteral("host"), PdnBridge::hostStamp()},
                            // Un complemento puede cargar con Wine y no con OpenD2D (o al revés).
                            {QStringLiteral("runtime"), PdnBridge::cacheTag()},
                            {QStringLiteral("lang"), qEnvironmentVariable("KAINT_LANG")},

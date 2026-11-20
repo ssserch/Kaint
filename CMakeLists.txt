@@ -517,6 +517,33 @@ else()
     message(STATUS "Kaint: sin compilador de C#; no se compila la capa de compatibilidad con Paint.NET")
 endif()
 
+# Sistema de complementos .NET (kaint-pdn5-host, PdnBridge.dll): el .NET moderno con los ensamblados
+# de Paint.NET 5 de paint.rs (third_party/pdn5). Carga los complementos de Paint.NET 3.x, 4.x y 5.x
+# (también los de GPU, con OpenD2D); mono y Wine quedan de respaldo. Necesita el SDK de .NET 10 al
+# compilar (la primera vez descarga sus paquetes de nuget.org) y el runtime de .NET 10 al usarlo.
+option(KAINT_PDN5_HOST "Compilar el sistema de complementos .NET (Paint.NET 5)" ON)
+find_program(KAINT_DOTNET dotnet)
+if(KAINT_PDN5_HOST AND KAINT_DOTNET AND NOT WIN32)
+    set(PDN5_OUT "${CMAKE_BINARY_DIR}/pdnhost5")
+    file(GLOB_RECURSE PDN5_SOURCES CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/pdnhost5/*.cs" "${CMAKE_CURRENT_SOURCE_DIR}/src/pdnhost5/*.csproj"
+         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdn5/*.cs" "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdn5/*.csproj"
+         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdn5/*.c")
+    list(FILTER PDN5_SOURCES EXCLUDE REGEX "/(obj|bin)/")
+    add_custom_command(OUTPUT "${PDN5_OUT}/PdnBridge.dll"
+        COMMAND ${CMAKE_COMMAND} -E env "DOTNET=${KAINT_DOTNET}" sh "${CMAKE_CURRENT_SOURCE_DIR}/src/pdnhost5/publish.sh" "${PDN5_OUT}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${PDN5_OUT}/PdnBridge.dll"
+        DEPENDS ${PDN5_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/src/pdnhost5/publish.sh"
+        COMMENT "Compilando el sistema de complementos .NET (kaint-pdn5-host)" VERBATIM USES_TERMINAL)
+    add_custom_target(pdnhost5 ALL DEPENDS "${PDN5_OUT}/PdnBridge.dll")
+    install(DIRECTORY "${PDN5_OUT}/" DESTINATION ${CMAKE_INSTALL_DATADIR}/kaint/pdnhost5 USE_SOURCE_PERMISSIONS
+            PATTERN "*.pdb" EXCLUDE)
+    install(FILES third_party/pdn5/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/kaint/pdnhost5 RENAME LICENSE-paint.rs.txt)
+    message(STATUS "Kaint: sistema de complementos .NET activado (${KAINT_DOTNET})")
+else()
+    message(STATUS "Kaint: sin el SDK de .NET; no se compila el sistema de complementos .NET")
+endif()
+
 # OpenD2D (https://github.com/daijro/opend2d): Direct2D, DirectWrite y WIC de código abierto para
 # los complementos de Paint.NET en Linux, macOS y FreeBSD (el sistema de complementos «OpenD2D»,
 # el predeterminado). Se compila con cargo en cada compilación: por defecto, lo último de su

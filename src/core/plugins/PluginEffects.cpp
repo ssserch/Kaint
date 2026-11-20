@@ -60,7 +60,18 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
     , m_help(d.value(QStringLiteral("help")).toString())
 {
     m_id = makeId(assembly, m_typeId);
-    m_wine = d.value(QStringLiteral("wine")).toBool() || PdnBridge::effectNeedsWine(m_id);
+    {
+        // Con qué sistema: el que lo examinó ("runtime"; los de antes marcaban "wine") o el que se
+        // recuerda de una vez que falló con ese.
+        using Runtime = PdnBridge::Runtime;
+        Runtime r = d.value(QStringLiteral("wine")).toBool()
+                        ? Runtime::Wine
+                        : PdnBridge::runtimeFromKey(d.value(QStringLiteral("runtime")).toString(), PdnBridge::runtime());
+        const int remembered = PdnBridge::rememberedRuntime(m_id);
+        if (remembered >= 0)
+            r = Runtime(remembered);
+        m_runtime = int(r);
+    }
     if (!m_adjustment)
         m_category = kaintCategory(d.value(QStringLiteral("subMenu")).toString());
     const QByteArray icon = QByteArray::fromBase64(d.value(QStringLiteral("icon")).toString().toLatin1());
@@ -121,6 +132,11 @@ PdnEffect::PdnEffect(const QString& assembly, const QString& pluginName, const Q
             p = EffectParam::text(key, label, o.value(QStringLiteral("default")).toString(),
                                   o.value(QStringLiteral("multiline")).toBool());
             p.max = o.value(QStringLiteral("maxLength")).toDouble();
+        } else if (type == QLatin1String("color")) {
+            // El color de una ventana propia (0xRRGGBB), leída por el proceso de .NET.
+            m_colorHex.insert(key);
+            p = EffectParam::color(key, label, EffectParam::ColorDefault::Primary);
+            p.defaultValue = QColor::fromRgb(QRgb(uint32_t(o.value(QStringLiteral("default")).toDouble())) | 0xff000000u);
         } else {
             continue;
         }
@@ -185,6 +201,10 @@ QJsonObject PdnEffect::toHostValues(const ParamValues& values) const
         case EffectParam::Type::Offset: out.insert(p.key, QJsonArray{v.toPointF().x(), v.toPointF().y()}); break;
         case EffectParam::Type::Text: out.insert(p.key, v.toString()); break;
         case EffectParam::Type::Color: {
+            if (m_colorHex.contains(p.key)) {
+                out.insert(p.key, v.value<QColor>().name(QColor::HexRgb));
+                break;
+            }
             const QRgb c = v.value<QColor>().rgba();
             out.insert(p.key, m_colorAlpha.value(p.key) ? qint64(int32_t(c)) : qint64(c & 0xffffffu));
             break;
@@ -195,35 +215,53 @@ QJsonObject PdnEffect::toHostValues(const ParamValues& values) const
     return out;
 }
 
+QList<int> PdnEffect::runtimesToTry() const
+{
+    const QList<PdnBridge::Runtime> chain = PdnBridge::chain();
+    QList<int> list;
+    const int own = chain.indexOf(PdnBridge::Runtime(m_runtime.load()));
+    // El suyo (si sigue en la cadena) y los de después; si no está, toda la cadena.
+    for (qsizetype i = std::max<qsizetype>(0, own); i < chain.size(); ++i)
+        list << int(chain[i]);
+    return list;
+}
+
 void PdnEffect::render(const RenderArgs& a) const
 {
     using Runtime = PdnBridge::Runtime;
-    // Con el respaldo de Wine, lo que ya se sabe que necesita Wine va directo allí.
-    const bool viaWine = m_wine && PdnBridge::wineFallback();
-    PdnBridge& bridge = viaWine ? PdnBridge::forRuntime(Runtime::Wine) : PdnBridge::instance();
-    QString error;
     const QJsonObject values = toHostValues(a.values);
-    bool ok = bridge.render(m_assembly, m_typeId, values, a.src, a.dst, a.roi, a.ctx, a.cancel, &error);
-    // Falló con mono (no al cancelar): se prueba con Wine y, si funciona, este efecto se queda con
-    // Wine (también las próximas veces). Los que tienen ventana propia no: lo elegido en ella está en
-    // el proceso de mono; se usará Wine la próxima vez que se abra.
-    if (!ok && !a.cancel && !viaWine && PdnBridge::wineFallback() && PdnBridge::runtime() == Runtime::OpenD2D) {
-        if (m_customDialog) {
-            m_wine = true;
-            PdnBridge::rememberWineEffect(m_id);
-            error += QLatin1Char('\n')
-                     + QCoreApplication::translate("PdnEffect", "La próxima vez este efecto se abrirá con Wine.");
-        } else {
-            QString wineError;
-            if (PdnBridge::forRuntime(Runtime::Wine)
-                    .render(m_assembly, m_typeId, values, a.src, a.dst, a.roi, a.ctx, a.cancel, &wineError)) {
-                ok = true;
+    const QList<int> runtimes = runtimesToTry();
+    QString error;
+    bool ok = false;
+    for (qsizetype i = 0; i < runtimes.size() && !ok; ++i) {
+        const auto runtime = Runtime(runtimes[i]);
+        QString attempt;
+        ok = PdnBridge::forRuntime(runtime).render(m_assembly, m_typeId, values, a.src, a.dst, a.roi, a.ctx, a.cancel,
+                                                    &attempt, a.selection);
+        if (ok) {
+            // Falló con el suyo y funcionó con uno de respaldo: este efecto se queda con ese (también
+            // las próximas veces).
+            if (i > 0) {
                 error.clear();
-                m_wine = true;
-                PdnBridge::rememberWineEffect(m_id);
-            } else if (!wineError.isEmpty()) {
-                error += QStringLiteral("\n(Wine: %1)").arg(wineError);
+                m_runtime = int(runtime);
+                PdnBridge::rememberEffectRuntime(m_id, runtime);
             }
+            break;
+        }
+        if (a.cancel)
+            break;
+        if (!attempt.isEmpty())
+            error += (error.isEmpty() ? QString() : QStringLiteral("\n(%1: ").arg(PdnBridge::runtimeName(runtime))) + attempt
+                     + (error.isEmpty() ? QString() : QStringLiteral(")"));
+        // Los que tienen ventana propia no: lo elegido en ella está en el proceso que la mostró; se
+        // usará el siguiente la próxima vez que se abra.
+        if (m_customDialog && i + 1 < runtimes.size()) {
+            m_runtime = runtimes[i + 1];
+            PdnBridge::rememberEffectRuntime(m_id, Runtime(runtimes[i + 1]));
+            error += QLatin1Char('\n')
+                     + QCoreApplication::translate("PdnEffect", "La próxima vez este efecto se abrirá con %1.")
+                           .arg(PdnBridge::runtimeName(Runtime(runtimes[i + 1])));
+            break;
         }
     }
     if (!ok && !error.isEmpty()) {
@@ -243,26 +281,34 @@ QString PdnEffect::takeError() const
 bool PdnEffect::showCustomDialog(const QImage& src, const QRect& roi, const EffectContext& ctx, QString* error) const
 {
     using Runtime = PdnBridge::Runtime;
-    bool accepted = false;
-    const bool viaWine = m_wine && PdnBridge::wineFallback();
-    PdnBridge& bridge = viaWine ? PdnBridge::forRuntime(Runtime::Wine) : PdnBridge::instance();
-    if (bridge.showDialog(m_assembly, m_typeId, m_name, src, roi, ctx, &accepted, error))
-        return accepted;
-    // Su ventana no abre con mono (WinForms): con el respaldo de Wine, se abre con Wine, y el efecto
-    // se queda con Wine (lo elegido en la ventana está en ese proceso).
-    if (viaWine || !PdnBridge::wineFallback() || PdnBridge::runtime() != Runtime::OpenD2D)
-        return false;
-    QString wineError;
-    if (!PdnBridge::forRuntime(Runtime::Wine).showDialog(m_assembly, m_typeId, m_name, src, roi, ctx, &accepted, &wineError)) {
-        if (error && !wineError.isEmpty())
-            *error += QStringLiteral("\n(Wine: %1)").arg(wineError);
-        return false;
+    const QList<int> runtimes = runtimesToTry();
+    QString errors;
+    for (qsizetype i = 0; i < runtimes.size(); ++i) {
+        const auto runtime = Runtime(runtimes[i]);
+        // El proceso de .NET no muestra ventanas: las que Kaint no puede mostrar en su diálogo, con
+        // mono o Wine.
+        if (runtime == Runtime::DotNet && i + 1 < runtimes.size())
+            continue;
+        bool accepted = false;
+        QString attempt;
+        if (PdnBridge::forRuntime(runtime).showDialog(m_assembly, m_typeId, m_name, src, roi, ctx, &accepted, &attempt)) {
+            // Su ventana se abrió con este sistema: el efecto se queda con él (lo elegido en la
+            // ventana está en ese proceso).
+            if (m_runtime != int(runtime)) {
+                m_runtime = int(runtime);
+                PdnBridge::rememberEffectRuntime(m_id, runtime);
+            }
+            if (error)
+                error->clear();
+            return accepted;
+        }
+        if (!attempt.isEmpty())
+            errors += (errors.isEmpty() ? QString() : QStringLiteral("\n(%1: ").arg(PdnBridge::runtimeName(runtime))) + attempt
+                      + (errors.isEmpty() ? QString() : QStringLiteral(")"));
     }
     if (error)
-        error->clear();
-    m_wine = true;
-    PdnBridge::rememberWineEffect(m_id);
-    return accepted;
+        *error = errors;
+    return false;
 }
 
 // ---------------------------------------------------------------------------

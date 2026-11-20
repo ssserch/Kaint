@@ -101,16 +101,20 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     form->addRow(tr("Estilo de la interfaz:"), look);
     form->addRow(tr("Cursores:"), cursors);
     form->addRow(tr("Idioma:"), language);
-    // Con qué se cargan los complementos de Paint.NET (.dll): OpenD2D o Wine.
+    // Con qué se cargan los complementos de Paint.NET (.dll): .NET, OpenD2D o Wine.
     // En Windows no hay que elegir (los carga el .NET Framework del sistema).
     if (PdnBridge::runtimeSelectable()) {
         auto* plugins = new QComboBox(this);
         plugins->setIconSize(QSize(16, 16));
-        plugins->addItem(Icons::openD2DIcon(), QStringLiteral("OpenD2D"), 0);
-        plugins->setItemData(0, tr("mono con OpenD2D, el Direct2D de código abierto: no necesita nada más que mono."),
+        plugins->addItem(Icons::theme({"applications-development", "system-run"}), tr(".NET (recomendado)"), 2);
+        plugins->setItemData(0, tr("El .NET moderno: también los complementos de Paint.NET 5 y sus ventanas en el diálogo de "
+                                   "Kaint (hace falta el runtime de .NET)."),
+                             Qt::ToolTipRole);
+        plugins->addItem(Icons::openD2DIcon(), QStringLiteral("OpenD2D (mono)"), 0);
+        plugins->setItemData(1, tr("mono con OpenD2D, el Direct2D de código abierto: no necesita nada más que mono."),
                              Qt::ToolTipRole);
         plugins->addItem(Icons::wineIcon(), tr("Wine"), 1);
-        plugins->setItemData(1, tr("Los complementos se ejecutan dentro de Wine, como un programa de Windows (hace falta Wine)."),
+        plugins->setItemData(2, tr("Los complementos se ejecutan dentro de Wine, como un programa de Windows (hace falta Wine)."),
                              Qt::ToolTipRole);
         plugins->setCurrentIndex(std::max(0, plugins->findData(m_settings.pluginRuntime)));
         plugins->setToolTip(tr("Con qué se cargan los complementos de Paint.NET (.dll). Se puede cambiar en Configuración → "

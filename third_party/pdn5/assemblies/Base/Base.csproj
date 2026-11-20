@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compatibility shim: pre-5.2 plugins reference the property-system (and a few utility) types
+       from the PaintDotNet.Base *assembly*; PDN 5.2 / this replacement set keep them in
+       PaintDotNet.PropertySystem and PaintDotNet.Fundamentals. Forward the moved types. -->
+  <PropertyGroup>
+    <AssemblyName>PaintDotNet.Base</AssemblyName>
+    <RootNamespace>PaintDotNet</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PropertySystem/PropertySystem.csproj" />
+    <ProjectReference Include="../Fundamentals/Fundamentals.csproj" />
+    <ProjectReference Include="../ComponentModel/ComponentModel.csproj" />
+    <!-- PaintDotNet.Rendering's Int32Point/Size/Rect helpers convert to/from WPF's Point/Size/Rect/Int32Rect. -->
+    <ProjectReference Include="../WindowsBase/WindowsBase.csproj" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+  </ItemGroup>
+</Project>

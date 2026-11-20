@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Kaint: proceso auxiliar de .NET (CoreCLR) para los complementos de Paint.NET 3.x, 4.x y 5.x
+       (también los de GPU, con OpenD2D). Usa el puente y los ensamblados PaintDotNet.* de paint.rs
+       (third_party/pdn5) y habla con Kaint con el mismo protocolo que kaint-pdn-host.exe (mono).
+       El ensamblado se llama PdnBridge porque los ensamblados de third_party/pdn5 le abren sus
+       partes internas con ese nombre (InternalsVisibleTo). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PdnBridge</AssemblyName>
+    <RootNamespace>Kaint.PdnHost5</RootNamespace>
+    <StartupObject>Kaint.PdnHost5.Program</StartupObject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <EnableSourceLink>false</EnableSourceLink>
+    <DeterministicSourcePaths>false</DeterministicSourcePaths>
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
+    <!-- Avisos del código de paint.rs (plataforma de System.Drawing...): no son de Kaint. -->
+    <NoWarn>$(NoWarn);CA1416;CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8619;CS8620;CS8625;CS8629;CS8714;CS0168;CS0219;CS0649;CS0414</NoWarn>
+    <PdnRoot>$(MSBuildThisFileDirectory)../../third_party/pdn5/</PdnRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(PdnRoot)bridge/*.cs" />
+    <Compile Include="$(PdnRoot)filetypes-host/HostDocument.cs" />
+    <Compile Include="$(PdnRoot)filetypes-host/LoadSupport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(PdnRoot)assemblies/Primitives/Primitives.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Fundamentals/Fundamentals.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/SystemLayer/SystemLayer.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/PaintDotNetApp/PaintDotNetApp.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/ComponentModel/ComponentModel.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/PropertySystem/PropertySystem.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Core/Core.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Windows/Windows.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsCore/WindowsCore.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsFramework/WindowsFramework.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Framework/Framework.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Effects.Gpu/Effects.Gpu.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/FileTypes/FileTypes.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Effects.Core/Effects.Core.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Effects.Legacy/Effects.Legacy.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Data/Data.csproj" Aliases="pdndata" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsForms/WindowsForms.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsFormsPrimitives/WindowsFormsPrimitives.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsFormsDesign/WindowsFormsDesign.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsFormsDataVisualization/WindowsFormsDataVisualization.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Effects/Effects.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/Base/Base.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WinRTRuntime/WinRTRuntime.csproj" />
+    <ProjectReference Include="$(PdnRoot)assemblies/WindowsExtensions/WindowsExtensions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+    <PackageReference Include="ComputeSharp.D2D1" Version="3.2.0" />
+    <PackageReference Include="System.Resources.Extensions" Version="10.0.0" />
+    <PackageReference Include="System.Runtime.Serialization.Formatters" Version="10.0.0" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.0" />
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+    <!-- Fuera de Windows, System.Drawing.Common 10 no funciona: publish.sh pone en su lugar el de
+         la versión 6.0 para Unix (sobre libgdiplus), como paint.rs. -->
+    <PackageDownload Include="System.Drawing.Common" Version="[6.0.0]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Drawing.EnableUnixSupport" Value="true" />
+  </ItemGroup>
+</Project>

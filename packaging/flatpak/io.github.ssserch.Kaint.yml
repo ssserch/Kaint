@@ -86,6 +86,9 @@ modules:
       # OpenD2D is downloaded and built with cargo, which needs the network: Paint.NET plugins use
       # mono without it (the Flatpak includes mono)
       - -DKAINT_OPEND2D=OFF
+      # The .NET plugin system restores its NuGet packages from the network at build time (Flathub
+      # builds have none; it needs generated nuget sources first): the Flatpak keeps using mono
+      - -DKAINT_PDN5_HOST=OFF
     sources:
       - type: git
         url: https://github.com/ssserch/Kaint.git

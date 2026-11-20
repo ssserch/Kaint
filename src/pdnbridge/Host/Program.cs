@@ -59,6 +59,19 @@ namespace Kaint.PdnHost
             // Lo que escriban los complementos en la consola no debe romper el protocolo.
             Console.SetOut(Console.Error);
             AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
+            if (OnWindows())
+            {
+                // Como Paint.NET al empezar: los diálogos propios de los complementos, con el
+                // aspecto de Windows (antes de que se cree ninguna ventana).
+                try
+                {
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                }
+                catch (Exception)
+                {
+                }
+            }
 
             TextReader input = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false));
             string line;
@@ -987,7 +1000,50 @@ namespace Kaint.PdnHost
 
         // --- Diálogos propios de los complementos (WinForms de mono) ---
 
+        // Windows de verdad (ni mono ni Wine): Kaint solo pone KAINT_PDN_RUNTIME fuera de Windows.
+        private static bool OnWindows()
+        {
+            return Environment.OSVersion.Platform == PlatformID.Win32NT
+                && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KAINT_PDN_RUNTIME"));
+        }
+
+        // En Windows, WinForms necesita un hilo STA, como el de la interfaz de Paint.NET (OLE:
+        // diálogos de abrir y guardar, portapapeles, arrastrar y soltar...), y el principal de este
+        // proceso no lo es: el diálogo va en un hilo propio y se espera a que se cierre (mientras,
+        // como antes, no se atienden otras peticiones).
         private static Dictionary<string, object> ShowDialog(Dictionary<string, object> request)
+        {
+            if (!OnWindows() || Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+                return ShowDialogHere(request);
+            Dictionary<string, object> result = null;
+            Thread ui = new Thread(() =>
+            {
+                try
+                {
+                    result = ShowDialogHere(request);
+                }
+                catch (Exception ex)
+                {
+                    string text;
+                    try
+                    {
+                        text = Describe(ex);
+                    }
+                    catch (Exception)
+                    {
+                        text = ex.GetType().Name + ": " + ex.Message;
+                    }
+                    result = Error(text);
+                }
+            });
+            ui.SetApartmentState(ApartmentState.STA);
+            ui.IsBackground = true;
+            ui.Start();
+            ui.Join();
+            return result ?? Error(L("El diálogo del complemento se cerró sin responder.", "The plugin's dialog closed without an answer."));
+        }
+
+        private static Dictionary<string, object> ShowDialogHere(Dictionary<string, object> request)
         {
             LoadedEffect le = FindEffect(request);
             Effect effect = le.Instance;
@@ -995,7 +1051,9 @@ namespace Kaint.PdnHost
             int height = (int)Json.Num(request, "height");
             Rectangle bounds = new Rectangle(0, 0, width, height);
             Rectangle roi = Rectangle.Intersect(bounds, RectFrom(request, "roi", bounds));
-            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
+            // X11 solo hace falta fuera de Windows (mono y Wine); en Windows, WinForms usa las
+            // ventanas del sistema y DISPLAY no existe: con esta comprobación no se abría ninguno.
+            if (!OnWindows() && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
             {
                 // En Flatpak, X11 solo llega si se da el permiso a mano.
                 string flatpak = Environment.GetEnvironmentVariable("FLATPAK_ID");
@@ -1064,9 +1122,10 @@ namespace Kaint.PdnHost
 
         // Como en Paint.NET, la carpeta Effects junto al programa tiene los complementos: algunos
         // la recorren desde su diálogo (Random Effect de pyrochild elige allí un efecto al azar).
-        // Kaint ejecuta este proceso desde una copia en la caché del usuario y pasa los complementos
-        // activados en KAINT_PDN_EFFECTS; se copian la primera vez que se abre un diálogo propio
-        // (los de .NET moderno, ya corregidos, como los carga Kaint).
+        // Kaint ejecuta este proceso desde una copia en la caché del usuario (en Windows, desde su
+        // carpeta, bin\pdnbridge) y pasa los complementos activados en KAINT_PDN_EFFECTS; se copian
+        // la primera vez que se abre un diálogo propio (los de .NET moderno, ya corregidos, como
+        // los carga Kaint).
         private static void PrepareEffectsFolder()
         {
             if (effectsFolderReady)

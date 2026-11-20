@@ -696,6 +696,128 @@ input[type="checkbox"] {
     gap: 2px;
 }
 
+/* «Avanzado…» del pincel (ToolOptions.js): un panel bajo el botón. */
+.popup-menu.brush-advanced {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 8px;
+    padding: 8px 10px;
+    width: min(360px, calc(100vw - 16px));
+    box-sizing: border-box;
+    overflow: auto;
+}
+
+.brush-advanced .section {
+    grid-column: 1 / -1;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.brush-advanced .row {
+    display: contents;
+}
+
+.brush-advanced .row > span {
+    text-align: right;
+}
+
+.brush-advanced .barslider {
+    width: 100%;
+}
+
+.brush-advanced .check {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.brush-advanced .buttons {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+/* Deslizadores verticales de tamaño y opacidad al lado del lienzo (BrushSliders.js), como en Ibis
+   Paint: una píldora translúcida en el borde izquierdo. */
+.brush-sliders {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 6px;
+    background: rgba(30, 30, 34, 0.6);
+    border-radius: 22px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    touch-action: none;
+    user-select: none;
+}
+
+.brush-sliders[hidden] {
+    display: none;
+}
+
+.workspace.rulers .brush-sliders {
+    left: 30px;
+}
+
+.brush-sliders .vslider {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.brush-sliders .value {
+    min-width: 32px;
+    color: #ffffff;
+    font-size: 11px;
+    text-align: center;
+}
+
+.brush-sliders .track {
+    position: relative;
+    width: 8px;
+    height: clamp(80px, 16vh, 150px);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.25);
+    cursor: ns-resize;
+}
+
+/* Un área de toque más ancha que la barra. */
+.brush-sliders .track::before {
+    content: "";
+    position: absolute;
+    inset: -6px -14px;
+}
+
+.brush-sliders .fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 4px;
+    background: var(--accent);
+}
+
+.brush-sliders .knob {
+    position: absolute;
+    left: 50%;
+    width: 18px;
+    height: 18px;
+    margin: 0 0 -9px -9px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
 /* --- Menús ------------------------------------------------------------------------------ */
 
 .popup-menu {

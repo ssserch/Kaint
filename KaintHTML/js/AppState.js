@@ -75,6 +75,28 @@ export const defaultTools = () => ({
     fillAccumulate: true,
     // Trama de relleno del pincel, el cubo, la línea y las formas (0: color sólido).
     fill: 0,
+    // Pincel avanzado (Configuración > Herramientas, apagado de fábrica), como Ibis Paint y
+    // FireAlpaca: punta (redonda o cuadrada, ángulo, redondez), flujo, curva de la presión y tamaño
+    // mínimo, opacidad por presión, presión por la velocidad, estabilizador (0..20), entrada y salida
+    // en punta (px), variación al azar (%) y los deslizadores verticales al lado del lienzo (de
+    // fábrica, con pantalla táctil).
+    advancedBrush: false,
+    tipShape: 0,
+    tipAngle: 0,
+    tipRoundness: 100,
+    flow: 100,
+    sizeJitter: 0,
+    opacityJitter: 0,
+    angleJitter: 0,
+    scatter: 0,
+    pressureCurve: 100,
+    minSize: 5,
+    pressureOpacity: false,
+    speedPressure: false,
+    stabilizer: 0,
+    taperIn: 0,
+    taperOut: 0,
+    sideSliders: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches,
 });
 
 // Opciones predeterminadas de las herramientas (Configuración > Herramientas), como

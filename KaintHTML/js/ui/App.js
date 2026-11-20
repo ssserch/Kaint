@@ -33,6 +33,7 @@ import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
 import { isPhone, MobilePanels } from "./Mobile.js";
 import { ToolOptions } from "./ToolOptions.js";
+import { BrushSliders } from "./BrushSliders.js";
 import { saveConfigDialog } from "./SaveDialog.js";
 import { saveAllDialog } from "./SaveAllDialog.js";
 import { installRangeWheel } from "./Wheel.js";
@@ -106,6 +107,7 @@ export class App extends EventTarget {
         // Modo colaborativo (Archivo > Colaboración y Configuración > Colaboración).
         this.collab = new CollabController(this);
         this.toolOptions = new ToolOptions(document.getElementById("tool-options"), this);
+        this.brushSliders = new BrushSliders(this, document.getElementById("workspace"));
         this.tools.addEventListener("changed", () => {
             this.view.tool = this.tools.current;
             this.view.updateCursor();

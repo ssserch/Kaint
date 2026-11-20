@@ -1221,6 +1221,52 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `editor de GIF con puntos clave (${JSON.stringify(gif)})`);
 }
 
+// Pincel avanzado (Configuración > Herramientas): flujo, punta cuadrada, entrada y salida en punta,
+// estabilizador y opacidad por presión; el botón «Avanzado…» y los deslizadores al lado del lienzo.
+{
+    const r = await page.evaluate(async () => {
+        const { Document } = await import("./js/core/Document.js");
+        const { Stroke } = await import("./js/tools/Stroke.js");
+        const doc = new Document(220, 60, { background: null });
+        const run = (advanced, pressure = 1) => {
+            const layer = doc.layers[0];
+            layer.ctx.clearRect(0, 0, 220, 60);
+            const s = new Stroke(doc, layer, { mode: "paint", color: { r: 0, g: 0, b: 0, a: 255 }, hardness: 100, spacing: 15, advanced });
+            for (let x = 20; x <= 180; x += 4)
+                s.lineTo(x, 30, 20, pressure);
+            s.commit("Pincel", "paintbrush");
+            const a = (x, y) => layer.ctx.getImageData(x, y, 1, 1).data[3];
+            return { mid: a(100, 30), start: a(22, 37), end: a(178, 37), corner: a(188, 38), tip: a(180, 30) };
+        };
+        return { plain: run(null), flow: run({ flow: 0.3 }), taper: run({ taperIn: 60, taperOut: 60 }), square: run({ tipShape: 1 }),
+                 stable: run({ stabilizer: 12 }), pressure: run({ pressureOpacity: true, flow: 0.5 }, 0.2) };
+    });
+    check(r.plain.mid === 255 && r.flow.mid < 250 && r.flow.mid > 100 && r.plain.start > 0 && r.taper.start === 0 && r.taper.end === 0
+          && r.plain.corner === 0 && r.square.corner > 0 && r.stable.tip > 0 && r.pressure.mid < r.flow.mid,
+          `trazo del pincel avanzado (${JSON.stringify(r)})`);
+
+    await tool("paintbrush");
+    const ui = await page.evaluate(async () => {
+        const { AppState } = await import("./js/AppState.js");
+        const button = () => [...document.querySelectorAll("#tool-options button")].find((b) => b.textContent.includes("Avanzado"));
+        const out = { before: !!button() };
+        AppState.updateTools({ advancedBrush: true, sideSliders: true });
+        out.after = !!button();
+        button()?.click();
+        out.panel = document.querySelectorAll(".brush-advanced .barslider").length;
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        out.closed = !document.querySelector(".brush-advanced");
+        const sliders = document.querySelector(".brush-sliders");
+        out.sliders = !!sliders && !sliders.hidden;
+        out.size = sliders?.querySelector(".value")?.textContent;
+        AppState.updateTools({ advancedBrush: false, sideSliders: false });
+        out.gone = !button() && sliders.hidden;
+        return out;
+    });
+    check(!ui.before && ui.after && ui.panel === 12 && ui.closed && ui.sliders && ui.size === String(Math.round(await page.evaluate(async () => (await import("./js/AppState.js")).AppState.tools.brushSize)))
+          && ui.gone, `botón «Avanzado…» y deslizadores laterales (${JSON.stringify(ui)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

@@ -63,11 +63,23 @@ function brushProfile(hardness) {
     return p;
 }
 
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// Un número al azar (0..1) fijo para cada toque y cada uso: el tramo provisional se vuelve a
+// dibujar al llegar el siguiente punto y debe salir igual (stableRandom de Kaint).
+function stableRandom(x, y, salt) {
+    let h = (Math.imul(Math.round(x * 8), 73856093) ^ Math.imul(Math.round(y * 8), 19349663) ^ Math.imul(salt, 83492791)) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0x5bd1e995) >>> 0;
+    h ^= h >>> 15;
+    return (h & 0xffffff) / 0xffffff;
+}
+
 export class Stroke {
     // mode: "paint" | "erase" | "clone" | "recolor"
     constructor(doc, layer, { mode = "paint", color = null, blend = "normal", antialias = true, hardness = 100, spacing = 15,
                              smoothing = false, cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50,
-                             recolorStraight = false, fill = 0, background = null } = {}) {
+                             recolorStraight = false, fill = 0, background = null, advanced = null } = {}) {
         this.doc = doc;
         this.layer = layer;
         this.mode = mode;
@@ -84,6 +96,14 @@ export class Stroke {
         this.recolorStraight = recolorStraight;
         this.fill = fill;
         this.background = background;
+        // Opciones avanzadas del pincel (Configuración > Herramientas), como en Ibis Paint y FireAlpaca:
+        // { tipShape (0 redonda, 1 cuadrada), angle, roundness, flow, sizeJitter, opacityJitter,
+        // angleJitter, scatter, pressureOpacity, stabilizer (0..20), taperIn, taperOut } o null.
+        this.advanced = advanced;
+        this.strokeLength = -1;
+        this.dabPressure = 1;
+        this.stable = null;
+        this.raw = null;
         const w = doc.width, h = doc.height;
         this.width = w;
         this.height = h;
@@ -105,6 +125,8 @@ export class Stroke {
 
     // Toque redondo de diámetro 'size' en (x, y), acumulado "encima" en la máscara.
     stamp(x, y, size) {
+        if (this.advanced && this.antialias)
+            return this.stampAdvanced(x, y, size);
         // Como Paint.NET: por debajo de un píxel, un toque de un píxel más transparente.
         let opacity = 1;
         if (size < 1) {
@@ -153,6 +175,79 @@ export class Stroke {
         return rect;
     }
 
+    // El toque con las opciones avanzadas (StrokeEngine::dabAdvanced de Kaint): variación al azar de
+    // tamaño, opacidad, ángulo y sitio; punta redonda o cuadrada, girada y aplastada; flujo y opacidad
+    // por presión.
+    stampAdvanced(x, y, size) {
+        const A = this.advanced, kx = x, ky = y;
+        size *= 1 - clamp(A.sizeJitter || 0, 0, 1) * stableRandom(kx, ky, 1);
+        if (A.scatter > 0) {
+            const a = stableRandom(kx, ky, 2) * 2 * Math.PI, dist = stableRandom(kx, ky, 3) * A.scatter * size;
+            x += Math.cos(a) * dist;
+            y += Math.sin(a) * dist;
+        }
+        let opacity = clamp(A.flow ?? 1, 0.01, 1) * (1 - clamp(A.opacityJitter || 0, 0, 1) * stableRandom(kx, ky, 4));
+        if (A.pressureOpacity)
+            opacity *= clamp(this.dabPressure, 0, 1);
+        if (size < 1) {
+            opacity *= size * size;
+            size = 1;
+        }
+        const angle = (((A.angle || 0) + clamp(A.angleJitter || 0, 0, 1) * 180 * (stableRandom(kx, ky, 5) * 2 - 1)) * Math.PI) / 180;
+        const roundness = clamp(A.roundness ?? 1, 0.05, 1), square = A.tipShape === 1, r = size / 2, P = this.profile;
+        // Lo que puede abarcar (la diagonal de la punta cuadrada).
+        const extent = r * P.extent * (square ? Math.SQRT2 : 1);
+        const x0 = Math.floor(x - extent - 1), y0 = Math.floor(y - extent - 1);
+        const rect = clampRect({ x: x0, y: y0, w: Math.ceil(x + extent + 1) - x0, h: Math.ceil(y + extent + 1) - y0 }, this.width, this.height);
+        if (rect.w <= 0 || rect.h <= 0)
+            return rect;
+        const clip = this.doc.selection.clipMask(AppState.selectionAntialias()), mask = this.mask;
+        const ca = Math.cos(angle), sa = Math.sin(angle), k = opacity * 255, samples = r < 3 ? 4 : 1, rw = r * roundness;
+        for (let py = rect.y; py < rect.y + rect.h; ++py)
+            for (let px = rect.x; px < rect.x + rect.w; ++px) {
+                let c = 0;
+                for (let j = 0; j < samples; ++j)
+                    for (let i = 0; i < samples; ++i) {
+                        const dx = px + (i + 0.5) / samples - x, dy = py + (j + 0.5) / samples - y;
+                        // En los ejes de la punta: girada y aplastada.
+                        const u = (dx * ca + dy * sa) / r, w = (-dx * sa + dy * ca) / rw;
+                        c += P.at(square ? Math.max(Math.abs(u), Math.abs(w)) : Math.hypot(u, w));
+                    }
+                let v = Math.round((c / (samples * samples)) * k);
+                if (v <= 0)
+                    continue;
+                const idx = py * this.width + px;
+                if (clip)
+                    v = Math.round((v * clip[idx]) / 255);
+                if (v > 0)
+                    mask[idx] = v + (((255 - v) * mask[idx] + 127) / 255 | 0);
+            }
+        this.dirty = unionRect(this.dirty, rect);
+        return rect;
+    }
+
+    // Lo que encoge el toque a 'distance' del principio (entrada) y, con la longitud total conocida
+    // (al terminar), del final (salida): las líneas en punta del manga.
+    taperFactor(distance) {
+        const A = this.advanced;
+        if (!A)
+            return 1;
+        let f = 1;
+        if (A.taperIn > 0)
+            f = Math.min(f, 0.08 + 0.92 * clamp(distance / A.taperIn, 0, 1));
+        if (A.taperOut > 0 && this.strokeLength >= 0)
+            f = Math.min(f, 0.08 + 0.92 * clamp((this.strokeLength - distance) / A.taperOut, 0, 1));
+        return f;
+    }
+
+    // Hasta dónde llega un toque de diámetro 'size' (con la punta cuadrada y la dispersión, más lejos).
+    reach(size) {
+        const A = this.advanced;
+        if (!A)
+            return (size / 2) * this.profile.extent + 2;
+        return (size / 2) * this.profile.extent * (A.tipShape === 1 ? Math.SQRT2 : 1) + (A.scatter || 0) * size + 2;
+    }
+
     // Separación entre toques: una fracción del diámetro (15 % por defecto), nunca menos de un
     // píxel, como en Paint.NET.
     step(size) {
@@ -165,18 +260,24 @@ export class Stroke {
         for (const p of path) {
             if (!walker.last) {
                 walker.last = p;
-                changed = unionRect(changed, this.stamp(p.x, p.y, p.size));
-                walker.next = this.step(p.size);
+                walker.distance = 0;
+                this.dabPressure = p.pressure ?? 1;
+                const size = p.size * this.taperFactor(0);
+                changed = unionRect(changed, this.stamp(p.x, p.y, size));
+                walker.next = this.step(size);
                 continue;
             }
-            const a = walker.last, len = Math.hypot(p.x - a.x, p.y - a.y);
+            const a = walker.last, len = Math.hypot(p.x - a.x, p.y - a.y), pa = a.pressure ?? 1, pb = p.pressure ?? 1;
             let at = walker.next;
             while (at <= len) {
-                const t = len > 0 ? at / len : 1, size = a.size + (p.size - a.size) * t;
+                const t = len > 0 ? at / len : 1;
+                this.dabPressure = pa + (pb - pa) * t;
+                const size = (a.size + (p.size - a.size) * t) * this.taperFactor(walker.distance + at);
                 changed = unionRect(changed, this.stamp(a.x + (p.x - a.x) * t, a.y + (p.y - a.y) * t, size));
                 at += this.step(size);
             }
             walker.next = at - len;
+            walker.distance = (walker.distance || 0) + len;
             walker.last = p;
         }
         return changed;
@@ -198,7 +299,8 @@ export class Stroke {
             const t = t1 + ((t2 - t1) * j) / steps;
             const a1 = lerp(p0, a, 0, t1, t), a2 = lerp(a, b, t1, t2, t), a3 = lerp(b, p3, t2, t3, t);
             const b1 = lerp(a1, a2, 0, t2, t), b2 = lerp(a2, a3, t1, t3, t), c = lerp(b1, b2, t1, t2, t);
-            out.push({ x: c.x, y: c.y, size: a.size + ((b.size - a.size) * j) / steps });
+            out.push({ x: c.x, y: c.y, size: a.size + ((b.size - a.size) * j) / steps,
+                       pressure: (a.pressure ?? 1) + (((b.pressure ?? 1) - (a.pressure ?? 1)) * j) / steps });
         }
         return out;
     }
@@ -220,10 +322,10 @@ export class Stroke {
         const i = this.points.length - 2;
         if (i < this.drySegments || i < 0)
             return null;
-        const path = this.segment(i), margin = (this.points[0].size / 2) * this.profile.extent + 2;
+        const path = this.segment(i), margin = this.reach(this.points[0].size);
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
         for (const p of [this.walker.last, ...path]) {
-            const m = Math.max(margin, (p.size / 2) * this.profile.extent + 2);
+            const m = Math.max(margin, this.reach(p.size));
             x0 = Math.min(x0, p.x - m); y0 = Math.min(y0, p.y - m); x1 = Math.max(x1, p.x + m); y1 = Math.max(y1, p.y + m);
         }
         const rect = clampRect({ x: Math.floor(x0), y: Math.floor(y0), w: Math.ceil(x1) - Math.floor(x0), h: Math.ceil(y1) - Math.floor(y0) },
@@ -238,10 +340,30 @@ export class Stroke {
         return rect;
     }
 
-    // Sigue el trazo hasta (x, y) con el diámetro 'size' (con la presión ya aplicada).
-    lineTo(x, y, size) {
+    // Sigue el trazo hasta (x, y) con el diámetro 'size' (con la presión ya aplicada); 'pressure'
+    // (0..1) es para la opacidad por presión del pincel avanzado.
+    lineTo(x, y, size, pressure = 1) {
+        // Estabilizador (como la corrección de FireAlpaca): el trazo sigue al puntero con retraso;
+        // cuanto más alto, más suave y más atrás se queda. Al terminar llega hasta el último punto.
+        const level = this.advanced?.stabilizer || 0;
+        if (level > 0 && this.walker) {
+            if (!this.stable)
+                this.stable = { ...this.points.at(-1), pressure: this.points.at(-1).pressure ?? 1 };
+            this.raw = { x, y, size, pressure };
+            const s = this.stable, k = 1 / (1 + level * 0.6);
+            s.x += (x - s.x) * k;
+            s.y += (y - s.y) * k;
+            s.size += (size - s.size) * k;
+            s.pressure += (pressure - s.pressure) * k;
+            this.lineToPoint(s.x, s.y, s.size, s.pressure);
+            return;
+        }
+        this.lineToPoint(x, y, size, pressure);
+    }
+
+    lineToPoint(x, y, size, pressure = 1) {
         if (!this.walker) {
-            this.points = [{ x, y, size }];
+            this.points = [{ x, y, size, pressure }];
             this.walker = {};
             this.refresh(this.walk(this.walker, this.points));
             return;
@@ -249,7 +371,7 @@ export class Stroke {
         const last = this.points.at(-1);
         if (last.x === x && last.y === y)
             return;
-        this.points.push({ x, y, size });
+        this.points.push({ x, y, size, pressure });
         let changed = this.restoreWet();
         // Sin suavizar, cada tramo es recto y definitivo; suavizado, un tramo es definitivo cuando
         // ya se conoce el punto que lo sigue, y el último se dibuja provisional.
@@ -266,9 +388,28 @@ export class Stroke {
     finishPath() {
         if (!this.walker)
             return;
+        // Con el estabilizador, el trazo acaba donde se soltó el puntero (unos pasos hasta allí).
+        if (this.stable && this.raw) {
+            const s = this.stable, r = this.raw;
+            this.stable = this.raw = null;
+            for (let i = 1; i <= 4; i++)
+                this.lineToPoint(s.x + ((r.x - s.x) * i) / 4, s.y + ((r.y - s.y) * i) / 4, s.size + ((r.size - s.size) * i) / 4,
+                                 s.pressure + ((r.pressure - s.pressure) * i) / 4);
+        }
         let changed = this.restoreWet();
         while (this.drySegments <= this.points.length - 2)
             changed = unionRect(changed, this.walk(this.walker, this.segment(this.drySegments++)));
+        // Salida (manga): ya se sabe dónde acaba; el trazo se vuelve a dibujar entero, afinándose
+        // hacia el final.
+        if (this.advanced?.taperOut > 0 && this.points.length > 1 && this.strokeLength < 0) {
+            this.strokeLength = this.walker.distance || 0;
+            changed = unionRect(changed, this.dirty);
+            this.mask.fill(0);
+            let all = [this.points[0]];
+            for (let i = 0; i + 1 < this.points.length; i++)
+                all = all.concat(this.segment(i));
+            changed = unionRect(changed, this.walk({}, all));
+        }
         if (changed)
             this.refresh(changed);
     }

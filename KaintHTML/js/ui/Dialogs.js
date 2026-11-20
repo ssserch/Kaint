@@ -1249,6 +1249,18 @@ export async function settingsDialog(app = null, startPage = "interface") {
                       tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.")),
                 check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
                       tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
+                heading(tr("Pincel")),
+                (() => {
+                    // Las opciones avanzadas (AdvancedBrushPanel de Kaint): «Avanzado…» en la barra del
+                    // pincel, la goma y el tampón. Para esta sesión y las siguientes.
+                    const c = checkbox(tr("Opciones avanzadas del pincel (como Ibis Paint y FireAlpaca)"), !!AppState.tools.advancedBrush);
+                    c.title = tr("Punta, flujo, curva de la presión, estabilizador, entrada y salida en punta (líneas de manga), variación al azar y deslizadores de tamaño y opacidad al lado del lienzo.");
+                    c.input.addEventListener("change", () => {
+                        AppState.updateTools({ advancedBrush: c.input.checked });
+                        defaults.updateTools({ advancedBrush: c.input.checked });
+                    });
+                    return c;
+                })(),
                 heading(tr("Rueda del ratón")),
                 check(tr("Cambiar el valor de los deslizadores con la rueda del ratón"), "wheelChangesValues",
                       tr("Con el puntero encima de un deslizador (Dureza, Espaciado, Tolerancia, los de los efectos...), la rueda sube o baja su valor; con Mayús va de uno en uno y con Ctrl, diez veces más rápido. Desactivado, la rueda desplaza la ventana.")),

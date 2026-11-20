@@ -1,6 +1,6 @@
 // Segunda fila de la barra de herramientas (src/app/ToolOptionsBar.cpp): "Herramienta: [icono]"
 // y las opciones que use la herramienta actual. Los iconos son los dibujados por código de Kaint.
-import { AppState } from "../AppState.js";
+import { AppState, defaultTools } from "../AppState.js";
 import { BlendModes, BlendNames } from "../core/Raster.js";
 import { FillPatterns } from "../core/FillPattern.js";
 import { el } from "./Dialogs.js";
@@ -136,7 +136,96 @@ function kit(model) {
         set({ [key]: next ?? v });
     }
 
-    return { set, tools, choice, toggles, barSlider, editableCombo, stepPreset };
+    return { set, tools, choice, toggles, barSlider, editableCombo, stepPreset, model };
+}
+
+// «Avanzado…» del pincel, la goma y el tampón (AdvancedBrushPanel de Kaint): la punta, la presión,
+// el estabilizador, la entrada y la salida en punta, la variación al azar y los deslizadores al lado
+// del lienzo, en un panel que se abre bajo el botón.
+function openAdvancedBrush(kitObj, anchor) {
+    const old = document.querySelector(".brush-advanced");
+    old?.close?.();
+    if (old?.anchor === anchor)
+        return;
+    const { set, tools, barSlider, model } = kitObj, controls = [], rows = [];
+    const section = (text) => rows.push(el("div", { className: "section", textContent: text }));
+    const slider = (text, key, min, max, unit, tip = "") => {
+        const bar = barSlider(key, min, max, (v) => `${v}${unit}`);
+        controls.push(bar);
+        rows.push(el("label", { className: "row", title: tip }, [el("span", { textContent: text }), bar]));
+    };
+    const check = (text, key, tip = "") => {
+        const input = el("input", { type: "checkbox" });
+        input.addEventListener("change", () => set({ [key]: input.checked }));
+        const row = el("label", { className: "check", title: tip }, [input, el("span", { textContent: text })]);
+        row.refresh = () => { input.checked = !!tools()[key]; };
+        controls.push(row);
+        rows.push(row);
+    };
+    section(tr("Punta"));
+    const shape = el("select", {}, [el("option", { value: 0, textContent: tr("Redonda") }), el("option", { value: 1, textContent: tr("Cuadrada") })]);
+    shape.addEventListener("change", () => set({ tipShape: Number(shape.value) }));
+    shape.refresh = () => { shape.value = tools().tipShape || 0; };
+    controls.push(shape);
+    rows.push(el("label", { className: "row" }, [el("span", { textContent: tr("Forma:") }), shape]));
+    slider(tr("Ángulo:"), "tipAngle", -180, 180, "°", tr("El giro de la punta"));
+    slider(tr("Redondez:"), "tipRoundness", 5, 100, "%", tr("100 %: la punta entera; menos, aplastada (como una pluma o un rotulador de punta biselada)"));
+    slider(tr("Flujo:"), "flow", 1, 100, "%", tr("La opacidad de cada toque: con menos, el color se acumula al repasar"));
+    section(tr("Presión"));
+    slider(tr("Curva:"), "pressureCurve", 20, 400, "%", tr("100 %: lineal; menos, responde antes (trazos gruesos con poca fuerza); más, hace falta más fuerza"));
+    slider(tr("Tamaño mínimo:"), "minSize", 1, 100, "%", tr("El tamaño con la presión más leve"));
+    check(tr("La presión también cambia la opacidad"), "pressureOpacity");
+    check(tr("Simular la presión con la velocidad (ratón o dedo)"), "speedPressure",
+          tr("Sin lápiz con presión: cuanto más rápido, más fino el trazo, como una pluma de tinta"));
+    section(tr("Trazo"));
+    slider(tr("Corrección:"), "stabilizer", 0, 20, "", tr("Estabilizador (como la corrección de FireAlpaca): el trazo sigue al puntero con retraso y sale más suave. Útil para líneas de manga y para dibujar con el dedo"));
+    slider(tr("Entrada:"), "taperIn", 0, 400, " px", tr("El trazo empieza en punta a lo largo de estos píxeles (líneas de manga)"));
+    slider(tr("Salida:"), "taperOut", 0, 400, " px", tr("El trazo acaba en punta a lo largo de estos píxeles (se ve al soltar)"));
+    section(tr("Variación al azar"));
+    slider(tr("Tamaño:"), "sizeJitter", 0, 100, "%");
+    slider(tr("Opacidad:"), "opacityJitter", 0, 100, "%");
+    slider(tr("Ángulo:"), "angleJitter", 0, 100, "%");
+    slider(tr("Dispersión:"), "scatter", 0, 300, "%", tr("Cuánto se separa cada toque del trazo"));
+    section(tr("Lienzo"));
+    check(tr("Deslizadores de tamaño y opacidad al lado del lienzo"), "sideSliders",
+          tr("Como en Ibis Paint: dos barras verticales en el borde izquierdo, cómodas con el dedo o el lápiz"));
+    const reset = el("button", { className: "pushbutton", type: "button", textContent: tr("Restablecer") });
+    reset.addEventListener("click", () => {
+        const d = defaultTools();
+        set(Object.fromEntries(["tipShape", "tipAngle", "tipRoundness", "flow", "sizeJitter", "opacityJitter", "angleJitter", "scatter", "pressureCurve",
+                                "minSize", "pressureOpacity", "speedPressure", "stabilizer", "taperIn", "taperOut"].map((k) => [k, d[k]])));
+    });
+    rows.push(el("div", { className: "buttons" }, [reset]));
+
+    const panel = el("div", { className: "popup-menu brush-advanced" }, rows);
+    panel.anchor = anchor;
+    const refresh = () => controls.forEach((c) => c.refresh?.());
+    const outside = (e) => {
+        if (!panel.contains(e.target) && !anchor.contains(e.target))
+            close();
+    };
+    const key = (e) => {
+        if (e.key === "Escape")
+            close();
+    };
+    function close() {
+        panel.remove();
+        model.removeEventListener("tools", refresh);
+        document.removeEventListener("pointerdown", outside, true);
+        document.removeEventListener("keydown", key, true);
+        anchor.classList.remove("checked");
+    }
+    panel.close = close;
+    model.addEventListener("tools", refresh);
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", key, true);
+    document.body.append(panel);
+    refresh();
+    anchor.classList.add("checked");
+    const r = anchor.getBoundingClientRect(), w = panel.offsetWidth;
+    panel.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+    panel.style.top = `${r.bottom + 2}px`;
+    panel.style.maxHeight = `${Math.max(160, innerHeight - r.bottom - 10)}px`;
 }
 
 export class ToolOptions {
@@ -146,7 +235,13 @@ export class ToolOptions {
         this.model = model;
         this.kit = kit(model);
         this.controls = [];
-        model.addEventListener("tools", () => this.refresh());
+        // Al encender o apagar el pincel avanzado aparece o se va su botón.
+        model.addEventListener("tools", () => {
+            if (!!model.tools.advancedBrush !== this.advancedShown && this.app.tools.current?.options.includes("advanced"))
+                this.rebuild();
+            else
+                this.refresh();
+        });
         if (model !== AppState) {
             this.rebuild();
             return;
@@ -192,6 +287,7 @@ export class ToolOptions {
         const tool = this.app.tools.current;
         this.element.replaceChildren();
         this.controls = [];
+        this.advancedShown = !!this.model.tools.advancedBrush;
         if (!tool)
             return;
         this.updateToggle();
@@ -248,6 +344,16 @@ export class ToolOptions {
         case "tolerance":
             this.group(label(tr("Tolerancia:")), barSlider("tolerance", 0, 100, (v) => `${v}%`));
             break;
+        case "advanced": {
+            // Solo con el pincel avanzado encendido (Configuración > Herramientas).
+            if (!this.model.tools.advancedBrush)
+                break;
+            const b = button([icon("configure", 16), el("span", { textContent: tr("Avanzado…") })],
+                             tr("Opciones avanzadas del pincel: punta, presión, estabilizador, entrada y salida y variación al azar"),
+                             () => openAdvancedBrush(this.kit, b));
+            this.group(b);
+            break;
+        }
         case "fill":
             this.group(label(tr("Relleno:")), choice(tr("Relleno"), "fill", FillPatterns.map(([name], i) => [i, `opt-fill:${i}`, tr(name)]),
                                                      { showText: true }));

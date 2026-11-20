@@ -552,9 +552,12 @@ export function layersPanel(app, actionIds) {
             const check = el("input", { type: "checkbox", checked: layer.visible, title: tr("Visible") });
             check.addEventListener("pointerdown", (e) => e.stopPropagation());
             check.addEventListener("change", (e) => app.toggleLayerVisibility(i, e.ctrlKey));
+            // Con la transparencia bloqueada, un candado junto a la casilla.
+            const lock = layer.alphaLock ? el("span", { className: "alpha-lock", title: tr("Transparencia bloqueada") },
+                                              [icon("object-locked", 16)]) : null;
             const row = el("div", { className: "row" + (i === doc.active ? " selected" : ""), dataset: { key: String(layer.id) },
                                     title: tr("%1\nOpacidad: %2 · Fusión: %3", layer.name, layer.opacity, layer.blend) },
-                           [thumbBox, el("span", { className: "name", textContent: layer.name }), check]);
+                           [thumbBox, el("span", { className: "name", textContent: layer.name }), lock, check].filter(Boolean));
             row.layer = layer;
             row.index = i;
             row.addEventListener("dblclick", () => app.layerProperties());

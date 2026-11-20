@@ -800,6 +800,7 @@ async function build(p) {
         if (rec === target)
             result.active = result.layers.length;
         result.layers.push({ name: rec.name || tr("Capa %1", result.layers.length + 1), visible: !b.hidden, opacity,
+                             alphaLock: !!(rec.flags & 0x01),
                              blend: BLEND_FROM_KEY[rec.blend] || "normal", data: await layerPixels(p, rec, changes) });
     }
     if (changes.masked)
@@ -1039,7 +1040,8 @@ export function encodePsd(doc, psb = false) {
         info.text(BLEND_KEYS[layer.blend]);
         info.u8(Math.min(255, Math.max(0, layer.opacity ?? 255)));
         info.u8(0);
-        info.u8(0x08 | (layer.visible === false ? 0x02 : 0));
+        // Bit 0: transparencia protegida (Alpha-Lock); bit 1: oculta.
+        info.u8(0x08 | (layer.visible === false ? 0x02 : 0) | (layer.alphaLock ? 0x01 : 0));
         info.u8(0);
         const extra = new Writer();
         extra.u32(0);

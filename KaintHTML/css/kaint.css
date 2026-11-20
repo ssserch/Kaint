@@ -1205,6 +1205,13 @@ input[type="checkbox"] {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 35%, transparent);
 }
 
+.layer-list .row .alpha-lock {
+    display: inline-flex;
+    flex: none;
+    margin-right: 2px;
+    opacity: .9;
+}
+
 .layer-list .row .name {
     flex: 1;
     overflow: hidden;
@@ -3650,6 +3657,28 @@ fieldset.group > legend {
     display: none;
 }
 
+/* Táctil (Kaint.APK, tabletas): Guardar y su flecha, un solo botón con todas las opciones. */
+.tbutton.touch-save {
+    display: none;
+}
+
+:root.touch:not(.phone) #main-toolbar .tbutton[data-action="save"],
+:root.touch:not(.phone) #main-toolbar .tbutton.menu-arrow {
+    display: none;
+}
+
+:root.touch:not(.phone) #main-toolbar .tbutton.touch-save {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    width: auto;
+    padding: 0 3px;
+}
+
+:root.touch .tbutton.touch-save .arrow {
+    font-size: 9px;
+}
+
 :root.phone .phone-file {
     display: inline-flex;
     align-items: center;
@@ -5112,7 +5141,7 @@ html, body {
 
 .gif-top {
     display: grid;
-    grid-template-columns: minmax(150px, 2fr) minmax(0, 5fr);
+    grid-template-columns: minmax(150px, 2fr) minmax(0, 5fr) minmax(230px, 2fr);
     gap: 6px;
     min-height: 0;
 }
@@ -5265,7 +5294,7 @@ html, body {
 
 .gif-lane {
     position: relative;
-    height: 112px;
+    height: 134px;
     /* Los gestos los lleva GifEditor.js (deslizar desplaza, mantener pulsado levanta un clip). */
     touch-action: none;
 }
@@ -5385,6 +5414,156 @@ html, body {
 }
 
 .gif-empty[hidden], .gif-drop-mark[hidden] {
+    display: none;
+}
+
+.gif-clip.selected.current {
+    box-shadow: inset 0 0 0 2px var(--selection-border);
+}
+
+/* Los puntos clave del fotograma elegido (bajo los clips): blancos y, el elegido, del color de acento. */
+.gif-keylane {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 106px;
+    height: 22px;
+    background: var(--window);
+    border-top: 1px solid var(--line);
+}
+
+.gif-keylane-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--selection);
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.gif-key {
+    position: absolute;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    margin-left: -6px;
+    box-sizing: border-box;
+    transform: rotate(45deg);
+    background: #fafafa;
+    border: 1.5px solid #3c3c3c;
+    cursor: ew-resize;
+    touch-action: none;
+}
+
+.gif-key.selected {
+    background: var(--accent);
+    border-color: rgba(0, 0, 0, 0.55);
+}
+
+@media (pointer: coarse) {
+    .gif-key {
+        width: 14px;
+        height: 14px;
+        top: 3px;
+        margin-left: -8px;
+    }
+}
+
+.gif-preview {
+    cursor: move;
+    touch-action: none;
+}
+
+/* El panel de la animación (derecha) */
+.gif-inspector {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.gif-props {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 3px 4px;
+}
+
+.gif-prop-section {
+    grid-column: 1 / -1;
+    font-weight: bold;
+    margin-top: 2px;
+}
+
+.gif-prop-wide {
+    grid-column: 2 / -1;
+}
+
+.gif-prop-input {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+}
+
+.gif-prop-value {
+    width: 100%;
+    min-width: 0;
+}
+
+.gif-key-nav, .gif-key-toggle {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 4px;
+    justify-content: center;
+    font-size: 0.8em;
+}
+
+.gif-diamond {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 2px;
+    box-sizing: border-box;
+    transform: rotate(45deg);
+    border: 1.5px solid currentColor;
+}
+
+.gif-key-toggle.filled .gif-diamond {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.gif-graph-box {
+    position: relative;
+    flex: 1 0 110px;
+    min-height: 110px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.gif-graph {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+.gif-wrap {
+    flex-wrap: wrap;
+}
+
+.gif-hint {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+.gif-inspector-toggle {
     display: none;
 }
 
@@ -5519,4 +5698,33 @@ html, body {
 .collab-chat .chat-input input {
     flex: 1;
     min-width: 0;
+}
+
+/* En el teléfono, el panel de la animación es una hoja que sube desde abajo (botón «Animación»). */
+:root.phone .gif-inspector-toggle {
+    display: inline-flex;
+}
+
+:root.phone .gif-top > .gif-inspector {
+    display: none;
+}
+
+:root.phone .gif-editor.inspector-open .gif-top > .gif-inspector {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    max-height: 50vh;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--window);
+    border-top: 1px solid var(--line);
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.3);
+}
+
+:root.phone .gif-editor.inspector-open .gif-inspector-toggle {
+    background: var(--selection);
+    border-color: var(--selection-border);
 }

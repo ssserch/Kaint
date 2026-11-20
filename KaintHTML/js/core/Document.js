@@ -7,6 +7,19 @@ import { tr } from "../i18n.js";
 
 let nextLayerId = 1;
 
+// Alpha-Lock: 'pixels' vuelve a tener el alfa de 'before' (RGBA del mismo tamaño); donde era
+// transparente, queda como estaba.
+export function preserveAlpha(pixels, before) {
+    for (let i = 0; i < pixels.length; i += 4) {
+        const a = before[i + 3];
+        if (a === 0) {
+            pixels[i] = before[i]; pixels[i + 1] = before[i + 1]; pixels[i + 2] = before[i + 2]; pixels[i + 3] = 0;
+        } else {
+            pixels[i + 3] = a;
+        }
+    }
+}
+
 export class Layer {
     constructor(width, height, name) {
         this.canvas = createCanvas(width, height);
@@ -15,11 +28,16 @@ export class Layer {
         this.visible = true;
         this.opacity = 255;
         this.blend = "normal";
+        // Bloquear la transparencia (Alpha-Lock): lo que se pinta solo cambia el color, no el alfa.
+        this.alphaLock = false;
+        // Editor de GIF: la animación por puntos clave de este fotograma (Motion.js; null: ninguna).
+        this.motion = null;
         this.id = nextLayerId++;
     }
 
     props() {
-        return { name: this.name, visible: this.visible, opacity: this.opacity, blend: this.blend };
+        return { name: this.name, visible: this.visible, opacity: this.opacity, blend: this.blend, alphaLock: this.alphaLock,
+                 motion: this.motion };
     }
 
     setProps(p) {
@@ -29,7 +47,7 @@ export class Layer {
     duplicate(name) {
         const copy = new Layer(this.canvas.width, this.canvas.height, name);
         copy.ctx.drawImage(this.canvas, 0, 0);
-        copy.setProps({ visible: this.visible, opacity: this.opacity, blend: this.blend });
+        copy.setProps({ visible: this.visible, opacity: this.opacity, blend: this.blend, alphaLock: this.alphaLock, motion: this.motion });
         return copy;
     }
 
@@ -203,6 +221,13 @@ export class Document extends EventTarget {
         if (!rect || rect.w <= 0 || rect.h <= 0)
             return;
         const after = layer.ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
+        // Alpha-Lock: el cambio (pincel, relleno, efecto, pegar...) solo cambia el color; el alfa de
+        // cada píxel se queda como estaba.
+        if (layer.alphaLock) {
+            preserveAlpha(after.data, before.data);
+            layer.ctx.putImageData(after, rect.x, rect.y);
+            this.pixelsChanged(layer, rect);
+        }
         const apply = (data) => {
             layer.ctx.putImageData(data, rect.x, rect.y);
             this.pixelsChanged(layer, rect);

@@ -980,8 +980,33 @@ function drawCollab(ctx) {
     person(5.8, 6.2, 2.9, 0.8, 10.2, 10, 5.3, rgb(58, 132, 216), rgb(30, 76, 130));
 }
 
+// Candado (Alpha-Lock y otros bloqueos): el arco y el cuerpo, con el ojo de la cerradura.
+function drawLock(ctx) {
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = "#5a6470";
+    ctx.beginPath();
+    ctx.arc(8, 6.5, 3.2, Math.PI, 0);
+    ctx.lineTo(11.2, 8);
+    ctx.moveTo(4.8, 8);
+    ctx.lineTo(4.8, 6.5);
+    ctx.stroke();
+    const g = ctx.createLinearGradient(0, 7.5, 0, 14.5);
+    g.addColorStop(0, "#f7c94a");
+    g.addColorStop(1, "#d79a12");
+    ctx.fillStyle = g;
+    ctx.strokeStyle = "#8a6208";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(3.5, 7.5, 9, 7, 1.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#6b4a05";
+    ctx.fillRect(7.4, 9.8, 1.2, 2.6);
+}
+
 const drawn = {
     collab: [16, drawCollab],
+    "object-locked": [16, drawLock],
     "eye-open": [16, (ctx) => drawEye(ctx, true)], "eye-closed": [16, (ctx) => drawEye(ctx, false)],
     "media-playback-start": [16, (ctx) => drawPlay(ctx, false)], "media-playback-pause": [16, (ctx) => drawPlay(ctx, true)],
     "opt-accumulate:1": [16, (ctx) => drawAccumulate(ctx, true)], "opt-accumulate:0": [16, (ctx) => drawAccumulate(ctx, false)],

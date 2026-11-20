@@ -8,7 +8,7 @@ import { animationFrames, baseName, download, embeddedProfile, encode, flattened
 import { defaultSaveOptions, hasOptions as hasSaveOptions } from "../core/Encode.js";
 import { Plugins, kaintValues, pluginValues } from "../plugins/Plugins.js";
 import { isCraftFile } from "../plugins/Craft.js";
-import { BlendModes, cloneCanvas, context, createCanvas, drawBlended, thumbnail } from "../core/Raster.js";
+import { BlendModes, cloneCanvas, context, createCanvas, drawBlended, imageSignature, thumbnail } from "../core/Raster.js";
 import { scaleImage } from "../core/Resample.js";
 import { transformPixels } from "../core/ColorProfiles.js";
 import { Selection, SelectionMode } from "../core/Selection.js";
@@ -19,7 +19,7 @@ import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action, keyCombo, toolButton, updateActions } from "./Actions.js";
 import { applySetting as applyAnimations, enabled as animationsEnabled } from "./Animations.js";
 import { CanvasView, ZoomPresets } from "./Canvas.js";
-import { GifEditor } from "./GifEditor.js";
+import { forgetCopiedFrames, GifEditor } from "./GifEditor.js";
 import { applyThemeColors, applyWindowButtons } from "./Themes.js";
 import { applyBackground } from "./Background.js";
 import {
@@ -58,6 +58,10 @@ function setWindowTitle(text) {
         caption.textContent = text;
 }
 
+// Lo que en el editor de GIF no se usa con el teclado (es del lienzo, que no se ve).
+const GifBlockedActions = new Set(["copyMerged", "copySelection", "pasteImage", "growSel", "shrinkSel", "featherSel", "eraseSel", "fillSel", "invertSel",
+                                   "selectAll", "deselect", "zoomIn", "zoomOut", "zoomFit", "zoomSel", "actualSize", "crop", "pixelGrid", "rulers"]);
+
 // Las funciones de PhotoCraft (Configuración > Complementos, desactivadas por defecto) y los efectos
 // que siguen complementos de BoltBait (cada uno se activa desde Explorar complementos).
 function extraVisible(e) {
@@ -66,21 +70,6 @@ function extraVisible(e) {
     if (e.origin === "BoltBait")
         return (Settings.get("boltBaitEffects") || []).includes(e.id);
     return Settings.get("photocraftExtras") === true;
-}
-
-// Firma de una imagen (tamaño y un resumen de sus píxeles) para reconocer al pegar una copia hecha en
-// Kaint, como imageSignature de Kaint. Los semitransparentes solo cuentan por su alfa: al pasar por el
-// portapapeles (PNG) su color puede cambiar un poco.
-function imageSignature(image) {
-    const c = createCanvas(image.width, image.height), g = context(c);
-    g.drawImage(image, 0, 0);
-    const d = g.getImageData(0, 0, c.width, c.height).data;
-    let h = 2166136261;
-    for (let i = 0; i < d.length; i += 4 * 7) {
-        const v = d[i + 3] === 255 ? d[i] | (d[i + 1] << 8) | (d[i + 2] << 16) : d[i + 3] << 24;
-        h = Math.imul(h ^ v, 16777619);
-    }
-    return `${c.width}x${c.height}:${h >>> 0}`;
 }
 
 export class App extends EventTarget {
@@ -303,6 +292,11 @@ export class App extends EventTarget {
         updateActions();
         setWindowTitle(doc ? `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint` : "Kaint");
         this.updateCentralView();
+    }
+
+    // La imagen actual se ve en el editor de GIF (no en el lienzo).
+    inGifEditor() {
+        return !!this.doc && this.gifDocs.has(this.doc);
     }
 
     // Archivo > Editor de GIF: la imagen actual pasa de una vista a otra ('on' la fuerza).
@@ -1038,7 +1032,8 @@ export class App extends EventTarget {
 
     createActions() {
         const has = () => !!this.doc;
-        const sel = () => !!this.doc && !this.doc.selection.isEmpty();
+        // En el editor de GIF no hay selección (el lienzo no se ve).
+        const sel = () => !!this.doc && !this.inGifEditor() && !this.doc.selection.isEmpty();
         const c = (fn) => this.command(fn);
         const A = (...args) => this.action(...args);
         // Archivo
@@ -1075,11 +1070,14 @@ export class App extends EventTarget {
         // Edición
         A("undo", tr("&Deshacer"), "edit-undo", "Ctrl+Z", () => this.undo(), () => this.doc?.history.canUndo() || this.tools.current?.isBusy());
         A("redo", tr("&Rehacer"), "edit-redo", "Ctrl+Y", () => this.redo(), () => this.doc?.history.canRedo());
-        A("cut", tr("Cor&tar"), "edit-cut", "Ctrl+X", c(() => this.cut()), sel);
-        A("copy", tr("&Copiar"), "edit-copy", "Ctrl+C", c(() => this.copy(false)), has);
+        // En el editor de GIF, copiar, cortar y pegar son de fotogramas.
+        A("cut", tr("Cor&tar"), "edit-cut", "Ctrl+X", c(() => (this.inGifEditor() ? this.gifEditor.cutFrames() : this.cut())),
+          () => this.inGifEditor() || sel());
+        A("copy", tr("&Copiar"), "edit-copy", "Ctrl+C", c(() => (this.inGifEditor() ? this.gifEditor.copyFrames() : this.copy(false))), has);
         A("copyMerged", tr("Copiar co&mbinado"), "edit-copy-merged", "Ctrl+Shift+C", c(() => this.copy(true)), has);
-        A("paste", tr("&Pegar"), "edit-paste", "Ctrl+V", c(() => this.pasteFromClipboard("layer")));
-        A("pasteLayer", tr("Pegar en capa &nueva"), "edit-paste-new-layer", "Ctrl+Shift+V", c(() => this.pasteFromClipboard("newLayer")), has);
+        A("paste", tr("&Pegar"), "edit-paste", "Ctrl+V", c(() => (this.inGifEditor() ? this.gifEditor.pasteFrames() : this.pasteFromClipboard("layer"))));
+        A("pasteLayer", tr("Pegar en capa &nueva"), "edit-paste-new-layer", "Ctrl+Shift+V",
+          c(() => (this.inGifEditor() ? this.gifEditor.pasteFrames() : this.pasteFromClipboard("newLayer"))), has);
         A("pasteImage", tr("Pegar en una &imagen nueva"), "edit-paste-new-image", "Ctrl+Alt+V", c(() => this.pasteFromClipboard("newImage")));
         A("copySelection", tr("Copiar &selección"), "edit-copy-selection", "Ctrl+Alt+Shift+C", c(() => this.copySelection()), sel);
         for (const [mode, text, key] of [[SelectionMode.Replace, tr("&Reemplazar"), "Ctrl+Alt+Shift+V"], [SelectionMode.Union, tr("&Sumar (unión)")],
@@ -1136,6 +1134,9 @@ export class App extends EventTarget {
         A("duplicateLayer", tr("&Duplicar la capa"), "layer-duplicate", "Ctrl+Shift+D", c(() => this.duplicateLayer()), has);
         A("mergeDown", tr("&Combinar capa con la inferior"), "layer-merge-down", "Ctrl+M", c(() => this.mergeDown()), notBottom);
         A("toggleLayer", tr("Alternar &visibilidad de capa"), "layer-visible-on", "Ctrl+,", c(() => this.toggleLayerVisibility(this.doc.active)), has);
+        // Alpha-Lock (como Ibis Paint, FireAlpaca o Krita): pintar solo cambia el color de lo que ya hay.
+        A("alphaLock", tr("&Bloquear la transparencia"), "object-locked", null, c(() => this.toggleAlphaLock()), has,
+          () => !!this.doc?.layers[this.doc.active]?.alphaLock);
         A("importLayer", tr("&Importar desde archivo..."), "layer-import", null, c(() => this.importLayer()), has);
         A("flipLayerH", tr("Voltear &horizontalmente"), "layer-flip-horizontal", null, c(() => this.transformLayer("flipH")), has);
         A("flipLayerV", tr("Voltear &verticalmente"), "layer-flip-vertical", null, c(() => this.transformLayer("flipV")), has);
@@ -1192,7 +1193,7 @@ export class App extends EventTarget {
                                                   a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
                                                      a("rot180"), "-", a("colorProfile"), a("animation"), "-", a("flatten")] },
-            { id: "layers", title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), "-",
+            { id: "layers", title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), a("alphaLock"), "-",
                                                     a("importLayer"), "-", a("flipLayerH"), a("flipLayerV"), a("rotateLayer180"), a("rotateZoom"), "-", a("layerTop"),
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
                                                     a("layerDown"), a("layerToBottom"), "-", a("layerProps")] },
@@ -1276,10 +1277,23 @@ export class App extends EventTarget {
                         popupMenu([this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("saveAll"), this.actions.get("saveAllAs")],
                                   r.left, r.bottom + 1);
                     });
-                    const sync = () => (arrow.disabled = !this.actions.get("save").isEnabled());
+                    // En Kaint.APK y las pantallas táctiles (sin el modo teléfono, que ya tiene el suyo):
+                    // Guardar y su flecha son un solo botón con todas las opciones de guardado.
+                    const merged = el("button", { className: "tbutton touch-save", type: "button", title: tr("Guardar") },
+                                      [icon("document-save", 16), el("span", { className: "arrow", textContent: "▾" })]);
+                    merged.addEventListener("click", () => {
+                        const r = merged.getBoundingClientRect();
+                        popupMenu([this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("saveAll"), this.actions.get("saveAllAs")],
+                                  r.left, r.bottom + 1);
+                    });
+                    const sync = () => {
+                        arrow.disabled = !this.actions.get("save").isEnabled();
+                        merged.disabled = arrow.disabled;
+                    };
                     window.addEventListener("kaint-update", sync);
                     sync();
                     bar.appendChild(arrow);
+                    bar.appendChild(merged);
                 }
                 // En el teléfono, junto a Anular la selección, la papelera: borra la selección como
                 // Supr, que el teléfono no tiene (ocupa el sitio de Reglas, que ahí no se ve).
@@ -1314,7 +1328,7 @@ export class App extends EventTarget {
             tools: new FloatingPanel(ws, "tools", tr("Herramientas"), toolsPanel(this), { corner: "tl", onClose: closed }),
             history: new FloatingPanel(ws, "history", tr("Historial"), historyPanel(this), { corner: "tr", size: { w: 210, h: 240 }, onClose: closed }),
             layers: new FloatingPanel(ws, "layers", tr("Capas"), layersPanel(this, ["addLayer", "deleteLayer", "duplicateLayer", "mergeDown",
-                                                                                         "layerUp", "layerDown", "layerProps"]),
+                                                                                         "layerUp", "layerDown", "alphaLock", "layerProps"]),
                                       { corner: "br", size: { w: 230, h: 260 }, onClose: closed }),
             colors: new FloatingPanel(ws, "colors", tr("Colores"), colorsPanel(this), { corner: "bl", onClose: closed }),
         };
@@ -1519,6 +1533,18 @@ export class App extends EventTarget {
             const typing = target.matches?.("input, select, textarea") && target.id !== "view";
             if (typing)
                 return;
+            // En el editor de GIF, las teclas del lienzo (herramientas, selección, zum) no hacen nada:
+            // antes editaban el lienzo oculto y, al volver, quedaba una capa o un pegado de más.
+            if (this.inGifEditor()) {
+                const combo = keyCombo(e);
+                const action = combo && [...this.actions.values()].find((a) => a.shortcuts.includes(combo));
+                if (action && !GifBlockedActions.has(action.id)) {
+                    e.preventDefault();
+                    action.trigger();
+                    updateActions();
+                }
+                return;
+            }
             const tool = this.tools.current;
             if (!this.view.spaceDown && this.view.nudgePointer(e)) {
                 e.preventDefault();
@@ -2004,6 +2030,12 @@ export class App extends EventTarget {
             if (dialogOpen() || e.target.matches?.("input, textarea"))
                 return;
             const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+            if (this.inGifEditor()) {
+                // Ctrl+V en el editor de GIF: fotogramas (los copiados en él o la imagen que traiga).
+                e.preventDefault();
+                this.gifEditor.pasteFrames(item ? await createImageBitmap(item.getAsFile()) : null);
+                return;
+            }
             if (!item)
                 return;
             e.preventDefault();
@@ -2030,6 +2062,7 @@ export class App extends EventTarget {
     async copy(merged) {
         const canvas = this.selectedPixels(merged);
         this.clipboard = canvas;
+        forgetCopiedFrames();
         // Como Kaint: se recuerda dónde estaba lo copiado (para pegarlo en el mismo sitio) y una
         // firma de la imagen (para saber si lo que se pega es esta copia).
         const b = this.doc.selection.isEmpty() ? null : this.doc.selection.bounds();
@@ -2465,6 +2498,17 @@ export class App extends EventTarget {
     }
 
     // Ctrl+clic en la casilla: solo esa capa visible (o todas otra vez).
+    toggleAlphaLock() {
+        const doc = this.doc, layer = doc?.layers[doc.active];
+        if (!layer)
+            return;
+        const before = doc.layerState();
+        layer.alphaLock = !layer.alphaLock;
+        doc.layersChanged();
+        doc.pushLayers(before, layer.alphaLock ? tr("Bloquear la transparencia") : tr("Desbloquear la transparencia"), "object-locked");
+        this.updateActions?.();
+    }
+
     toggleLayerVisibility(index, solo = false) {
         const doc = this.doc, before = doc.layerState(), layer = doc.layers[index];
         if (solo) {

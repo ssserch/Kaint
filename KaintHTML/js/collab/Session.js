@@ -71,16 +71,21 @@ export function reasonText(reason) {
     }
 }
 
-const props = (l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend });
-const sameProps = (a, b) => a.name === b.name && a.visible === b.visible && a.opacity === b.opacity && a.blend === b.blend;
-const propsJson = (id, p) => ({ id, name: p.name, visible: p.visible, opacity: p.opacity, blend: p.blend });
+// (Con el Alpha-Lock y la animación del editor de GIF, como en Kaint.)
+const props = (l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend, alphaLock: !!l.alphaLock, motion: l.motion ?? null });
+const sameProps = (a, b) => a.name === b.name && a.visible === b.visible && a.opacity === b.opacity && a.blend === b.blend
+    && !!a.alphaLock === !!b.alphaLock && JSON.stringify(a.motion ?? null) === JSON.stringify(b.motion ?? null);
+const propsJson = (id, p) => ({ id, name: p.name, visible: p.visible, opacity: p.opacity, blend: p.blend, alphaLock: !!p.alphaLock,
+                                motion: p.motion ?? null });
 
-function propsFrom(o, p = { name: "", visible: true, opacity: 255, blend: "normal" }) {
+function propsFrom(o, p = { name: "", visible: true, opacity: 255, blend: "normal", alphaLock: false, motion: null }) {
     const out = { ...p };
     if (o.name !== undefined) out.name = String(o.name).slice(0, 256);
     if (o.visible !== undefined) out.visible = !!o.visible;
     if (o.opacity !== undefined) out.opacity = Math.max(0, Math.min(255, Math.round(+o.opacity || 0)));
     if (o.blend !== undefined) out.blend = String(o.blend);
+    if (o.alphaLock !== undefined) out.alphaLock = !!o.alphaLock;
+    if (o.motion !== undefined) out.motion = o.motion && typeof o.motion === "object" ? o.motion : null;
     return out;
 }
 

@@ -600,16 +600,20 @@ export async function layerPropertiesDialog(props, onPreview) {
     const dlg = new Dialog(tr("Propiedades de la capa"), { iconName: "layer-properties" });
     const name = el("input", { type: "text", value: props.name });
     const visible = checkbox(tr("Visible"), props.visible);
+    const alphaLock = checkbox(tr("Bloquear la transparencia"), !!props.alphaLock);
+    alphaLock.title = tr("Al pintar, solo cambia el color de lo que ya hay; lo transparente sigue transparente.");
     const blend = select(BlendModes.map((m) => [m, tr(BlendNames[m][0])]), props.blend);
     const opacity = slider(props.opacity, 0, 255, 1);
-    const current = () => ({ name: name.value || props.name, visible: visible.input.checked, blend: blend.value, opacity: opacity.value() });
-    for (const c of [name, visible.input, blend, ...opacity.querySelectorAll("input")])
+    const current = () => ({ name: name.value || props.name, visible: visible.input.checked, blend: blend.value, opacity: opacity.value(),
+                             alphaLock: alphaLock.input.checked });
+    for (const c of [name, visible.input, alphaLock.input, blend, ...opacity.querySelectorAll("input")])
         c.addEventListener("input", () => onPreview(current()));
     dlg.body.appendChild(el("div", { className: "layer-props" }, [
         el("label", { textContent: tr("Nombre") }), name,
         el("label", { textContent: tr("Opacidad") }), opacity,
         el("div", { className: "row" }, [el("label", { textContent: tr("Modo de fusión:") }), blend]),
         visible,
+        alphaLock,
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);

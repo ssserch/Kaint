@@ -111,6 +111,8 @@ export class MobilePanels {
     apply() {
         const phone = isPhone(), docked = this.active;
         document.documentElement.classList.toggle("phone", phone);
+        // Táctil (Kaint.APK, tabletas): algunos controles se juntan (Guardar con sus opciones).
+        document.documentElement.classList.toggle("touch", !!window.KaintAndroid || matchMedia("(pointer: coarse)").matches);
         this.workspace.classList.toggle("mobile-autohide", docked);
         for (const [id, panel] of Object.entries(this.app.panels)) {
             const wasDocked = !!panel.dock;

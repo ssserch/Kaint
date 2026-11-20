@@ -1102,6 +1102,125 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `formas personalizadas (${JSON.stringify(custom)})`);
 }
 
+// Alpha-Lock: con la transparencia bloqueada, un cambio solo pinta lo que ya tenía alfa; se guarda
+// en el .ora.
+{
+    const r = await page.evaluate(async () => {
+        const { Document, Layer } = await import("./js/core/Document.js");
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const doc = new Document(20, 10, { background: null });
+        const layer = doc.layers[0];
+        layer.ctx.fillStyle = "#ff0000";
+        layer.ctx.fillRect(0, 0, 10, 10);
+        layer.alphaLock = true;
+        const before = layer.ctx.getImageData(0, 0, 20, 10);
+        layer.ctx.fillStyle = "#0000ff";
+        layer.ctx.fillRect(0, 0, 20, 10);
+        doc.pushPixels(layer, { x: 0, y: 0, w: 20, h: 10 }, before, "Rellenar", "edit-fill");
+        const px = (x, y) => [...layer.ctx.getImageData(x, y, 1, 1).data].join(",");
+        const ora = await openFile(new File([await encode(doc, SaveFormats.find((f) => f.ext === "ora"))], "bloqueada.ora"));
+        return { inside: px(5, 5), outside: px(15, 5), ora: ora.layers[0].alphaLock };
+    });
+    check(r.inside === "0,0,255,255" && r.outside.endsWith(",0") && r.ora === true, `Alpha-Lock (${JSON.stringify(r)})`);
+}
+
+// Editor de GIF: puntos clave (Motion.js, el mismo JSON que Kaint), copiar y pegar fotogramas, la
+// reproducción sin tocar la capa activa y las teclas del lienzo desactivadas.
+{
+    const model = await page.evaluate(async () => {
+        const Motion = await import("./js/core/Motion.js");
+        const clip = Motion.emptyClip();
+        Motion.setKey(Motion.editTrack(clip, "x"), 0, 0);
+        Motion.setKey(Motion.editTrack(clip, "x"), 100, 50);
+        const linear = Motion.sample(clip, 50).x;
+        Motion.setInterp(clip, 0, Motion.Interp.Freeze);
+        const freeze = Motion.sample(clip, 50).x;
+        Motion.setInterp(clip, 0, Motion.Interp.Linear);
+        Motion.setEase(clip, 0, "out", true);
+        const easeOut = Motion.sample(clip, 50).x;
+        const source = document.createElement("canvas");
+        source.width = 10;
+        source.height = 10;
+        const parts = Motion.expand(source, clip, 200);
+        return { linear, freeze, easeOut, parts: parts.length, total: parts.reduce((a, p) => a + p.delay, 0) };
+    });
+    check(model.linear === 25 && model.freeze === 0 && model.easeOut < 25 && model.parts === 4 && model.total === 200,
+          `modelo de puntos clave (${JSON.stringify(model)})`);
+
+    const gif = await page.evaluate(async () => {
+        const { Document, Layer } = await import("./js/core/Document.js");
+        const { animationFrames } = await import("./js/core/ImageIO.js");
+        const k = window.kaint, doc = new Document(40, 30, { background: null });
+        doc.layers[0].name = "Fotograma 1 (100ms)";
+        for (const [i, color] of [[2, "#00ff00"], [3, "#0000ff"]]) {
+            const l = new Layer(40, 30, `Fotograma ${i} (100ms)`);
+            l.ctx.fillStyle = color;
+            l.ctx.fillRect(0, 0, 40, 30);
+            doc.layers.push(l);
+        }
+        doc.layers[0].ctx.fillStyle = "#ff0000";
+        doc.layers[0].ctx.fillRect(0, 0, 40, 30);
+        k.addDocument(doc);
+        k.toggleGifEditor(true);
+        const ge = k.gifEditor, r = {};
+        ge.select(0);
+        // Ctrl+C y Ctrl+V: un fotograma más, detrás del elegido.
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true }));
+        await ge.pasteFrames(null);
+        r.afterPaste = doc.layers.map((l) => l.name.replace(/Fotograma /, "")).join("|");
+        r.pastedRed = [...doc.layers[1].ctx.getImageData(5, 5, 1, 1).data].join(",");
+        // Varios a la vez: Ctrl+A y Ctrl+D duplican los cuatro.
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true }));
+        r.selected = ge.selectedFrames().length;
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true }));
+        r.afterDup = doc.layers.length;
+        k.undo();
+        k.undo();
+        r.afterUndo = doc.layers.length;
+        // Las teclas de las herramientas no hacen nada aquí.
+        const tool = k.tools.current?.id;
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
+        r.tool = k.tools.current?.id === tool;
+        // Puntos clave: el rombo pone uno al comienzo, cambiar X en otro momento pone otro.
+        ge.select(0);
+        ge.toggleKey("x");
+        ge.seekLocal(80);
+        ge.valueEdited("x", 10);
+        r.keys = JSON.stringify(doc.layers[0].motion.tracks.x.keys);
+        r.diamonds = ge.keyLane.querySelectorAll(".gif-key").length;
+        // Llevar el rombo más allá del final alarga el fotograma.
+        ge.moveKeyTime(80, 200);
+        r.name = doc.layers[0].name;
+        r.frames = animationFrames(doc, 100).length;
+        r.graph = ge.graph.width > 0;
+        // Reproducir no cambia la capa activa.
+        let changes = 0;
+        const count = () => changes++;
+        doc.addEventListener("active", count);
+        ge.seek(0);
+        ge.togglePlay();
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        r.playingChanges = changes;
+        ge.stop();
+        doc.removeEventListener("active", count);
+        r.activeAfterStop = doc.active === ge.frameAt(ge.time);
+        // Convertir la animación en fotogramas.
+        ge.select(0);
+        const before = doc.layers.length;
+        ge.bakeMotion(0);
+        r.baked = doc.layers.length - before;
+        k.undo();
+        k.toggleGifEditor(false);
+        r.layers = doc.layers.length;
+        r.motionKept = !!doc.layers[0].motion;
+        return r;
+    });
+    check(gif.afterPaste === "1 (100ms)|1 (100ms)|2 (100ms)|3 (100ms)" && gif.pastedRed === "255,0,0,255" && gif.selected === 4 && gif.afterDup === 8
+          && gif.afterUndo === 3 && gif.tool && gif.keys === '[{"t":0,"v":0},{"t":80,"v":10}]' && gif.diamonds === 2 && gif.name === "Fotograma 1 (210ms)"
+          && gif.frames === 6 && gif.graph && gif.playingChanges === 0 && gif.activeAfterStop && gif.baked === 3 && gif.layers === 3 && gif.motionKept,
+          `editor de GIF con puntos clave (${JSON.stringify(gif)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

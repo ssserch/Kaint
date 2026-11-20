@@ -300,3 +300,18 @@ export function hsvToRgb(h, s, v, a = 255) {
 export function sameColor(a, b) {
     return a.r === b.r && a.g === b.g && a.b === b.b && (a.a ?? 255) === (b.a ?? 255);
 }
+
+// Firma de una imagen (tamaño y un resumen de sus píxeles) para reconocer al pegar una copia hecha en
+// Kaint, como imageSignature de Kaint. Los semitransparentes solo cuentan por su alfa: al pasar por el
+// portapapeles (PNG) su color puede cambiar un poco.
+export function imageSignature(image) {
+    const c = createCanvas(image.width, image.height), g = context(c);
+    g.drawImage(image, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let h = 2166136261;
+    for (let i = 0; i < d.length; i += 4 * 7) {
+        const v = d[i + 3] === 255 ? d[i] | (d[i + 1] << 8) | (d[i + 2] << 16) : d[i + 3] << 24;
+        h = Math.imul(h ^ v, 16777619);
+    }
+    return `${c.width}x${c.height}:${h >>> 0}`;
+}

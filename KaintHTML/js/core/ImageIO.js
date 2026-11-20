@@ -6,6 +6,7 @@ import { Document, Layer } from "./Document.js";
 import { context, createCanvas, OraNames } from "./Raster.js";
 import { unzip, zip } from "./Zip.js";
 import * as Codecs from "./Codecs.js";
+import * as Motion from "./Motion.js";
 import { iccFromImage, isSrgb, readIcc } from "./ColorProfiles.js";
 import { canvasEncodes, defaultSaveOptions, encodeAnimation, encodeImage, prepare } from "./Encode.js";
 import { decodePsd, encodePsd } from "./Psd.js";
@@ -90,6 +91,7 @@ function documentFrom(width, height, name, layers) {
         const layer = new Layer(width, height, l.name);
         layer.ctx.putImageData(new ImageData(new Uint8ClampedArray(l.data), width, height), 0, 0);
         layer.visible = l.visible ?? true;
+        layer.alphaLock = !!l.alphaLock;
         layer.opacity = l.opacity ?? 255;
         layer.blend = l.blend || "normal";
         return layer;
@@ -140,7 +142,9 @@ export async function openFile(file) {
             ? documentFrom(width, height, name, [{ name: tr("Fondo"), data: anim.frames[0].data }])
             : documentFrom(width, height, name, anim.frames.map((f, i) => ({ name: Codecs.nameWithDelay(tr("Fotograma %1", i + 1), f.delay), data: f.data })));
         doc.active = 0;
-        doc.gifLoops = anim.loops;
+        // Un GIF de un solo fotograma «se repite» siempre: si luego se le añaden fotogramas, la
+        // animación no debe quedarse en una sola pasada.
+        doc.gifLoops = anim.frames.length > 1 ? anim.loops : 0;
     } else if (["jxr", "wdp", "hdp", "wmp"].includes(ext) || (head[0] === 0x49 && head[1] === 0x49 && head[2] === 0xbc)) {
         // JPEG XR (ExternalCodecs.js, se carga solo ahora).
         const image = await decodeJxr(new Uint8Array(await file.arrayBuffer()));
@@ -272,6 +276,12 @@ async function openOra(file) {
         layer.visible = node.getAttribute("visibility") !== "hidden";
         layer.opacity = Math.round(parseFloat(node.getAttribute("opacity") ?? "1") * 255);
         layer.blend = blendFromOra[node.getAttribute("composite-op")] || "normal";
+        layer.alphaLock = node.getAttribute("kaint-alpha-lock") === "true";
+        try {
+            const motion = node.getAttribute("kaint-motion");
+            if (motion)
+                layer.motion = JSON.parse(motion);
+        } catch {}
         doc.layers.push(layer);
     }
     if (!doc.layers.length)
@@ -298,11 +308,18 @@ export function animationFrames(doc, defaultDelay, withHidden = false) {
     for (const layer of doc.layers) {
         if (!layer.visible && !withHidden)
             continue;
-        const data = layer.ctx.getImageData(0, 0, doc.width, doc.height).data;
-        if (layer.opacity < 255)
-            for (let i = 3; i < data.length; i += 4)
-                data[i] = Math.trunc((data[i] * layer.opacity) / 255);
-        frames.push({ width: doc.width, height: doc.height, data, delay: Codecs.delayFromName(layer.name, defaultDelay), hidden: !layer.visible });
+        const delay = Codecs.delayFromName(layer.name, defaultDelay);
+        // Un fotograma con puntos clave (editor de GIF): varios, uno cada poco, con la imagen movida.
+        const parts = layer.motion && !Motion.isEmpty(layer.motion)
+            ? Motion.expand(layer.canvas, layer.motion, Math.max(20, delay))
+            : [{ canvas: layer.canvas, delay }];
+        for (const part of parts) {
+            const data = context(part.canvas).getImageData(0, 0, doc.width, doc.height).data;
+            if (layer.opacity < 255)
+                for (let i = 3; i < data.length; i += 4)
+                    data[i] = Math.trunc((data[i] * layer.opacity) / 255);
+            frames.push({ width: doc.width, height: doc.height, data, delay: part.delay, hidden: !layer.visible });
+        }
     }
     if (!frames.length)
         frames.push({ ...flattenedImage(doc), delay: defaultDelay });
@@ -352,7 +369,7 @@ async function encodePlugin(doc, format) {
 
 // Photoshop con todas las capas y la imagen combinada (Psd.js).
 function encodePsdFile(doc, psb = false) {
-    const layers = doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend,
+    const layers = doc.layers.map((l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend, alphaLock: l.alphaLock,
                                             data: l.ctx.getImageData(0, 0, doc.width, doc.height).data }));
     const bytes = encodePsd({ width: doc.width, height: doc.height, dpi: doc.dpi, active: doc.active, icc: embeddedProfile(doc), layers,
                               composite: flattenedImage(doc).data }, psb);
@@ -385,7 +402,9 @@ async function encodeOra(doc) {
         const src = `data/layer${i}.png`;
         entries.push({ name: src, data: await bytes(await canvasBlob(layer.canvas)) });
         xml += `  <layer name="${escape(layer.name)}" src="${src}" x="0" y="0" opacity="${(layer.opacity / 255).toFixed(3)}"` +
-               ` visibility="${layer.visible ? "visible" : "hidden"}" composite-op="${OraNames[layer.blend]}"/>\n`;
+               ` visibility="${layer.visible ? "visible" : "hidden"}" composite-op="${OraNames[layer.blend]}"` +
+               (layer.alphaLock ? ` kaint-alpha-lock="true"` : "") +
+               (layer.motion ? ` kaint-motion="${escape(JSON.stringify(layer.motion))}"` : "") + `/>\n`;
     }
     xml += " </stack>\n</image>\n";
     entries.push({ name: "stack.xml", data: enc.encode(xml) });

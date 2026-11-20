@@ -377,6 +377,19 @@ export class Stroke {
                     lerpStraight(o, j, c.r, c.g, c.b, o[j + 3], Math.trunc((m * opacity) / 255));
                 }
         }
+        // Alpha-Lock, también mientras se pinta.
+        if (this.layer.alphaLock)
+            for (let y = 0; y < rect.h; ++y) {
+                const row = (rect.y + y) * w + rect.x;
+                for (let x = 0; x < rect.w; ++x) {
+                    const i = (row + x) * 4, j = (y * rect.w + x) * 4;
+                    if (src[i + 3] === 0) {
+                        o[j] = src[i]; o[j + 1] = src[i + 1]; o[j + 2] = src[i + 2]; o[j + 3] = 0;
+                    } else {
+                        o[j + 3] = src[i + 3];
+                    }
+                }
+            }
         this.previewCtx.putImageData(out, rect.x, rect.y);
         this.doc.pixelsChanged(this.layer, rect);
     }

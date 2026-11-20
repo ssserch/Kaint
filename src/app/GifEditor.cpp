@@ -8,6 +8,9 @@
 #include "core/Layer.h"
 
 #include <QApplication>
+#include <QBuffer>
+#include <QClipboard>
+#include <QDataStream>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDrag>
@@ -357,7 +360,7 @@ protected:
         }
         // Clips
         const QList<int> s = starts();
-        const int selected = m_editor->selectedFrame();
+        const int active = m_editor->selectedFrame();
         Document* doc = m_editor->document();
         p.setFont(small);
         for (int i = 0; i + 1 < s.size(); ++i) {
@@ -365,14 +368,18 @@ protected:
             if (!r.intersects(e->rect()))
                 continue;
             const bool hidden = m_editor->frameHidden(i);
+            const bool selected = m_editor->isFrameSelected(i);
             QPainterPath path;
             path.addRoundedRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
-            QColor fill = i == selected ? pal.color(QPalette::Highlight) : pal.color(QPalette::Button);
+            QColor fill = selected ? pal.color(QPalette::Highlight) : pal.color(QPalette::Button);
+            if (selected && i != active)
+                fill = fill.lighter(125);
             if (hidden)
                 fill.setAlpha(110);
             p.setRenderHint(QPainter::Antialiasing);
             p.fillPath(path, fill);
-            p.setPen(QPen(i == selected ? pal.color(QPalette::Highlight).darker(130) : pal.color(QPalette::Mid), 1));
+            p.setPen(QPen(selected ? pal.color(QPalette::Highlight).darker(i == active ? 150 : 120) : pal.color(QPalette::Mid),
+                          i == active ? 2 : 1));
             p.drawPath(path);
             p.setRenderHint(QPainter::Antialiasing, false);
             // La miniatura (la de la capa), dentro del clip.
@@ -390,7 +397,7 @@ protected:
                     p.setOpacity(1.0);
                 }
             }
-            p.setPen(i == selected ? pal.color(QPalette::HighlightedText) : pal.color(QPalette::ButtonText));
+            p.setPen(selected ? pal.color(QPalette::HighlightedText) : pal.color(QPalette::ButtonText));
             const QRect label = r.adjusted(4, r.height() - 18, -4, -2);
             const QString text = r.width() > 70 ? QStringLiteral("%1 · %2 ms").arg(i + 1).arg(s[i + 1] - s[i])
                                  : r.width() > 26 ? QString::number(i + 1) : QString();
@@ -448,7 +455,18 @@ protected:
         const int index = clipAt(pos, s);
         if (index < 0)
             return;
-        m_editor->selectFrame(index);
+        // Ctrl+clic añade o quita de la selección; Mayús+clic elige desde el elegido hasta aquí.
+        if (e->button() == Qt::LeftButton && (e->modifiers() & Qt::ControlModifier)) {
+            m_editor->toggleFrameSelection(index);
+            return;
+        }
+        if (e->button() == Qt::LeftButton && (e->modifiers() & Qt::ShiftModifier)) {
+            m_editor->selectFrameRange(index);
+            return;
+        }
+        // El clic derecho sobre uno de los elegidos conserva la selección (el menú es para todos).
+        if (!(e->button() == Qt::RightButton && m_editor->isFrameSelected(index)))
+            m_editor->selectFrame(index);
         if (e->button() == Qt::RightButton) {
             m_editor->showFrameMenu(index, e->globalPosition().toPoint());
             return;
@@ -627,7 +645,9 @@ GifEditor::GifEditor(QWidget* parent)
     setObjectName(QStringLiteral("GifEditor"));
     setAcceptDrops(false);
     buildUi();
-    m_ticker.setInterval(15);
+    // Preciso: con el de grano grueso, en algunos sistemas los fotogramas cortos se saltaban.
+    m_ticker.setTimerType(Qt::PreciseTimer);
+    m_ticker.setInterval(10);
     connect(&m_ticker, &QTimer::timeout, this, &GifEditor::tick);
 }
 
@@ -768,19 +788,16 @@ void GifEditor::buildUi()
             m_frameButtons << b;
         return b;
     };
-    bar->addWidget(tool({"edit-undo"}, {}, tr("Deshacer"), [this] {
-        if (m_doc)
-            m_doc->undoStack()->undo();
-    }, false));
-    bar->addWidget(tool({"edit-redo"}, {}, tr("Rehacer"), [this] {
-        if (m_doc)
-            m_doc->undoStack()->redo();
-    }, false));
+    bar->addWidget(tool({"edit-undo"}, {}, tr("Deshacer (Ctrl+Z)"), [this] { emit undoRequested(); }, false));
+    bar->addWidget(tool({"edit-redo"}, {}, tr("Rehacer (Ctrl+Y)"), [this] { emit redoRequested(); }, false));
     bar->addSpacing(8);
-    bar->addWidget(tool({"edit-copy", "edit-duplicate"}, tr("Duplicar"), tr("Duplica el fotograma elegido"),
-                        [this] { duplicateFrame(selectedFrame()); }, true));
-    bar->addWidget(tool({"edit-delete", "list-remove"}, tr("Eliminar"), tr("Quita el fotograma elegido (Supr)"),
-                        [this] { removeFrame(selectedFrame()); }, true));
+    bar->addWidget(tool({"edit-copy"}, {}, tr("Copiar los fotogramas elegidos (Ctrl+C)"), [this] { copyFrames(); }, true));
+    bar->addWidget(tool({"edit-paste"}, {}, tr("Pegar fotogramas o una imagen detrás de los elegidos (Ctrl+V)"),
+                        [this] { pasteFrames(); }, false));
+    bar->addWidget(tool({"edit-copy", "edit-duplicate"}, tr("Duplicar"), tr("Duplica los fotogramas elegidos (Ctrl+D)"),
+                        [this] { duplicateFrames(selectedFrames()); }, true));
+    bar->addWidget(tool({"edit-delete", "list-remove"}, tr("Eliminar"), tr("Quita los fotogramas elegidos (Supr)"),
+                        [this] { removeFrames(selectedFrames()); }, true));
     bar->addWidget(tool({"view-hidden", "visibility"}, {}, tr("Ocultar o mostrar el fotograma (los ocultos no van en el GIF)"),
                         [this] { toggleHidden(selectedFrame()); }, true));
     bar->addWidget(tool({"draw-brush", "edit-image"}, {}, tr("Editar el fotograma con las herramientas"), [this] {
@@ -847,9 +864,17 @@ void GifEditor::setDocument(Document* doc)
         m_doc->disconnect(this);
     m_doc = doc;
     m_time = 0;
+    m_extraSelection.clear();
+    invalidateStarts();
     if (m_doc) {
         auto refresh = [this] { updateState(); };
-        connect(m_doc, &Document::layersChanged, this, refresh);
+        auto relayout = [this] {
+            invalidateStarts();
+            // Otras capas: la selección de varios ya no vale.
+            m_extraSelection.removeIf([this](int i) { return i >= frameCount(); });
+            updateState();
+        };
+        connect(m_doc, &Document::layersChanged, this, relayout);
         connect(m_doc, &Document::layerPixelsChanged, this, refresh);
         connect(m_doc, &Document::pixelsChanged, this, refresh);
         connect(m_doc, &Document::activeLayerChanged, this, [this] {
@@ -862,7 +887,7 @@ void GifEditor::setDocument(Document* doc)
             }
             updateState();
         });
-        connect(m_doc, &Document::sizeChanged, this, refresh);
+        connect(m_doc, &Document::sizeChanged, this, relayout);
         connect(m_doc, &QObject::destroyed, this, [this] { setDocument(nullptr); });
     }
     rebuildMedia();
@@ -979,6 +1004,7 @@ void GifEditor::selectFrame(int index)
 {
     if (!m_doc || index < 0 || index >= m_doc->layerCount())
         return;
+    m_extraSelection.clear();
     m_doc->setActiveIndex(index);
     if (!m_playing) {
         const QList<int> s = frameStarts();
@@ -999,12 +1025,23 @@ bool GifEditor::frameHidden(int index) const
 
 QList<int> GifEditor::frameStarts() const
 {
+    // Se calcula una vez por cambio de capas (cada nombre lleva su duración): la reproducción lo
+    // pide en cada paso.
+    if (m_startsValid && m_doc && m_starts.size() == m_doc->layerCount() + 1)
+        return m_starts;
     QList<int> starts{0};
-    if (!m_doc)
-        return starts;
-    for (int i = 0; i < m_doc->layerCount(); ++i)
-        starts << starts.last() + delayOf(m_doc->layer(i));
+    if (m_doc)
+        for (int i = 0; i < m_doc->layerCount(); ++i)
+            starts << starts.last() + delayOf(m_doc->layer(i));
+    m_starts = starts;
+    m_startsValid = m_doc != nullptr;
     return starts;
+}
+
+void GifEditor::invalidateStarts()
+{
+    m_startsValid = false;
+    m_opacityCache.clear();
 }
 
 int GifEditor::frameAt(int ms) const
@@ -1026,6 +1063,11 @@ void GifEditor::seek(int ms)
     }
     m_time = std::clamp(ms, 0, std::max(0, s.last() - 1));
     const int index = frameAt(m_time);
+    if (m_playing) {
+        showPlayingFrame(index);
+        return;
+    }
+    m_extraSelection.clear();
     if (m_doc && index >= 0 && index != m_doc->activeIndex())
         m_doc->setActiveIndex(index);
     updateState();
@@ -1058,6 +1100,7 @@ void GifEditor::togglePlay()
     if (m_time >= s.last() - 1)
         m_time = 0;
     m_playing = true;
+    m_playFrame = frameAt(m_time);
     m_clock.start();
     m_lastTick = 0;
     m_ticker.start();
@@ -1067,9 +1110,20 @@ void GifEditor::togglePlay()
 void GifEditor::stop()
 {
     m_ticker.stop();
+    const bool wasPlaying = m_playing;
     m_playing = false;
     if (m_play)
         m_play->setIcon(Icons::theme({"media-playback-start"}));
+    // Al parar, el fotograma del cabezal pasa a ser el elegido (la capa activa).
+    const int frame = m_playFrame;
+    m_playFrame = -1;
+    if (wasPlaying && m_doc && frame >= 0 && frame < m_doc->layerCount()) {
+        m_extraSelection.clear();
+        if (frame != m_doc->activeIndex())
+            m_doc->setActiveIndex(frame);
+        else
+            updateState();
+    }
 }
 
 void GifEditor::tick()
@@ -1098,10 +1152,49 @@ void GifEditor::tick()
         index = (index + 1) % count;
         m_time = s[index];
     }
-    if (index != m_doc->activeIndex())
-        m_doc->setActiveIndex(index);
-    else
-        updateState();
+    showPlayingFrame(index);
+}
+
+void GifEditor::showPlayingFrame(int index)
+{
+    // Solo lo que cambia: la imagen (si es otro fotograma), el cabezal y el tiempo. Sin tocar la
+    // capa activa (eso movía el panel de capas, la ventana y el editor en cada fotograma).
+    if (index != m_playFrame) {
+        m_playFrame = index;
+        m_preview->setImage(frameImage(index));
+    }
+    updateTimeLabel();
+    m_timeline->update();
+    m_timelineScroll->ensureVisible(m_timeline->xForTime(m_time), kTrackTop, 60, 0);
+}
+
+int GifEditor::shownFrame() const
+{
+    return m_playing && m_playFrame >= 0 ? m_playFrame : selectedFrame();
+}
+
+QImage GifEditor::frameImage(int index) const
+{
+    if (!m_doc || index < 0 || index >= m_doc->layerCount())
+        return {};
+    const Layer* layer = m_doc->layer(index);
+    // Con la opacidad de la capa, como en el GIF exportado.
+    if (layer->props.opacity >= 255)
+        return layer->image;
+    const qint64 key = layer->image.cacheKey() ^ (qint64(layer->props.opacity) << 56);
+    auto it = m_opacityCache.constFind(key);
+    if (it != m_opacityCache.constEnd())
+        return *it;
+    QImage out(layer->image.size(), kLayerFormat);
+    out.fill(kTransparent);
+    QPainter p(&out);
+    p.setOpacity(layer->props.opacity / 255.0);
+    p.drawImage(0, 0, layer->image);
+    p.end();
+    if (m_opacityCache.size() > 64)
+        m_opacityCache.clear();
+    m_opacityCache.insert(key, out);
+    return out;
 }
 
 void GifEditor::updateState()
@@ -1109,7 +1202,7 @@ void GifEditor::updateState()
     const bool has = m_doc && m_doc->layerCount() > 0;
     m_title->setText(m_doc ? tr("Editor de GIF: %1").arg(m_doc->displayName()) : tr("Editor de GIF"));
     const int index = selectedFrame();
-    m_preview->setImage(has && index >= 0 ? m_doc->layer(index)->image : QImage());
+    m_preview->setImage(has ? frameImage(shownFrame()) : QImage());
     for (QWidget* w : std::as_const(m_frameButtons))
         w->setEnabled(has && index >= 0);
     if (has && index >= 0 && !m_delay->hasFocus()) {
@@ -1126,7 +1219,7 @@ void GifEditor::updateState()
 void GifEditor::updateTimeLabel()
 {
     const QList<int> s = frameStarts();
-    const int index = selectedFrame();
+    const int index = shownFrame();
     QString text = QStringLiteral("%1 / %2").arg(timeText(m_time), timeText(s.last()));
     if (index >= 0)
         text += QStringLiteral("   ") + tr("Fotograma %1 de %2").arg(index + 1).arg(frameCount());
@@ -1139,6 +1232,8 @@ void GifEditor::applyFrames(const QList<LayerPtr>& layers, const QList<LayerProp
     if (!m_doc)
         return;
     stop();
+    m_extraSelection.clear();
+    invalidateStarts();
     const DocumentState before = DocumentState::capture(m_doc);
     DocumentState after = before;
     after.layers = layers;
@@ -1274,6 +1369,216 @@ void GifEditor::duplicateFrame(int index)
     applyFrames(layers, props, index + 1, tr("Duplicar fotograma"), QStringLiteral("edit-copy"));
 }
 
+QList<int> GifEditor::selectedFrames() const
+{
+    QList<int> list;
+    const int active = selectedFrame();
+    if (active >= 0)
+        list << active;
+    for (int i : m_extraSelection)
+        if (i >= 0 && i < frameCount() && !list.contains(i))
+            list << i;
+    std::sort(list.begin(), list.end());
+    return list;
+}
+
+bool GifEditor::isFrameSelected(int index) const
+{
+    return index >= 0 && (index == selectedFrame() || m_extraSelection.contains(index));
+}
+
+void GifEditor::toggleFrameSelection(int index)
+{
+    if (!m_doc || index < 0 || index >= frameCount())
+        return;
+    if (index == selectedFrame()) {
+        // Quitar el elegido: pasa a serlo otro de la selección (si queda alguno).
+        if (m_extraSelection.isEmpty())
+            return;
+        const int next = m_extraSelection.takeFirst();
+        m_doc->setActiveIndex(next);
+    } else if (m_extraSelection.contains(index)) {
+        m_extraSelection.removeAll(index);
+    } else {
+        m_extraSelection << index;
+    }
+    updateState();
+}
+
+void GifEditor::selectFrameRange(int index)
+{
+    if (!m_doc || index < 0 || index >= frameCount())
+        return;
+    const int anchor = std::max(0, selectedFrame());
+    m_extraSelection.clear();
+    for (int i = std::min(anchor, index); i <= std::max(anchor, index); ++i)
+        if (i != anchor)
+            m_extraSelection << i;
+    updateState();
+}
+
+void GifEditor::selectAllFrames()
+{
+    m_extraSelection.clear();
+    for (int i = 0; i < frameCount(); ++i)
+        if (i != selectedFrame())
+            m_extraSelection << i;
+    updateState();
+}
+
+void GifEditor::removeFrames(const QList<int>& indexes)
+{
+    if (!m_doc || indexes.isEmpty())
+        return;
+    if (indexes.size() == 1) {
+        removeFrame(indexes.first());
+        return;
+    }
+    // Una imagen necesita al menos una capa.
+    if (indexes.size() >= m_doc->layerCount()) {
+        QApplication::beep();
+        return;
+    }
+    QList<LayerPtr> layers;
+    QList<LayerProps> props;
+    for (int i = 0; i < m_doc->layerCount(); ++i)
+        if (!indexes.contains(i)) {
+            layers << m_doc->layers()[i];
+            props << m_doc->layers()[i]->props;
+        }
+    const int first = *std::min_element(indexes.begin(), indexes.end());
+    applyFrames(layers, props, std::min(first, int(layers.size()) - 1), tr("Eliminar fotogramas"), QStringLiteral("edit-delete"));
+}
+
+void GifEditor::duplicateFrames(const QList<int>& indexes)
+{
+    if (!m_doc || indexes.isEmpty())
+        return;
+    if (indexes.size() == 1) {
+        duplicateFrame(indexes.first());
+        return;
+    }
+    // Las copias, juntas, detrás del último elegido.
+    QList<LayerPtr> layers = m_doc->layers();
+    QList<LayerProps> props;
+    for (const LayerPtr& l : std::as_const(layers))
+        props << l->props;
+    const int at = *std::max_element(indexes.begin(), indexes.end()) + 1;
+    int offset = 0;
+    for (int i : indexes) {
+        auto copy = std::make_shared<Layer>(layers[i]->props.name, layers[i]->image);
+        copy->props = layers[i]->props;
+        layers.insert(at + offset, copy);
+        props.insert(at + offset, copy->props);
+        ++offset;
+    }
+    applyFrames(layers, props, at, tr("Duplicar fotogramas"), QStringLiteral("edit-copy"));
+    for (int i = 1; i < offset; ++i)
+        m_extraSelection << at + i;
+    updateState();
+}
+
+const char* GifEditor::clipboardMimeType()
+{
+    return "application/x-kaint-gif-frames";
+}
+
+void GifEditor::copyFrames()
+{
+    const QList<int> indexes = selectedFrames();
+    if (!m_doc || indexes.isEmpty())
+        return;
+    // Los fotogramas con su nombre (la duración va en él), si se ven, su opacidad y su fusión;
+    // además, el primero como imagen para pegarlo en otros programas.
+    QByteArray bytes;
+    QDataStream out(&bytes, QIODevice::WriteOnly);
+    out << quint32(1) << qint32(indexes.size());
+    for (int i : indexes) {
+        const Layer* l = m_doc->layer(i);
+        out << l->image << l->props.name << l->props.visible << qint32(l->props.opacity) << qint32(l->props.blend);
+    }
+    auto* data = new QMimeData;
+    data->setData(QString::fromLatin1(clipboardMimeType()), bytes);
+    const QImage first = m_doc->layer(indexes.first())->image;
+    data->setImageData(first);
+    QByteArray png;
+    QBuffer buffer(&png);
+    if (buffer.open(QIODevice::WriteOnly) && first.save(&buffer, "PNG"))
+        data->setData(QStringLiteral("image/png"), png);
+    QApplication::clipboard()->setMimeData(data);
+}
+
+void GifEditor::cutFrames()
+{
+    const QList<int> indexes = selectedFrames();
+    if (!m_doc || indexes.isEmpty())
+        return;
+    if (indexes.size() >= frameCount()) {
+        // No se pueden quitar todos: se copian.
+        copyFrames();
+        QApplication::beep();
+        return;
+    }
+    copyFrames();
+    removeFrames(indexes);
+}
+
+void GifEditor::pasteFrames()
+{
+    if (!m_doc)
+        return;
+    const QMimeData* data = QApplication::clipboard()->mimeData();
+    if (!data)
+        return;
+    const QList<int> selected = selectedFrames();
+    const int at = selected.isEmpty() ? frameCount() : selected.last() + 1;
+    QList<LayerPtr> layers = m_doc->layers();
+    QList<LayerProps> props;
+    for (const LayerPtr& l : std::as_const(layers))
+        props << l->props;
+    int added = 0;
+    if (data->hasFormat(QString::fromLatin1(clipboardMimeType()))) {
+        QDataStream in(data->data(QString::fromLatin1(clipboardMimeType())));
+        quint32 version = 0;
+        qint32 count = 0;
+        in >> version >> count;
+        for (int i = 0; i < count && in.status() == QDataStream::Ok; ++i) {
+            QImage image;
+            LayerProps p;
+            qint32 opacity = 255, blend = 0;
+            in >> image >> p.name >> p.visible >> opacity >> blend;
+            if (in.status() != QDataStream::Ok || image.isNull())
+                break;
+            p.opacity = std::clamp(int(opacity), 0, 255);
+            p.blend = BlendMode(blend);
+            auto layer = std::make_shared<Layer>(p.name, fitted(image, m_doc->size()));
+            layer->props = p;
+            layers.insert(at + added, layer);
+            props.insert(at + added, p);
+            ++added;
+        }
+    } else if (data->hasImage()) {
+        // Una imagen de otro programa (o de Kaint): un fotograma con la duración del elegido.
+        const QImage image = qvariant_cast<QImage>(data->imageData());
+        if (!image.isNull()) {
+            const int delay = selected.isEmpty() ? kDefaultDelay : frameDelay(selected.last());
+            const QString name = Gif::nameWithDelay(tr("Fotograma %1").arg(at + 1), delay);
+            auto layer = std::make_shared<Layer>(name, fitted(image, m_doc->size()));
+            layers.insert(at, layer);
+            props.insert(at, layer->props);
+            added = 1;
+        }
+    }
+    if (added == 0) {
+        QApplication::beep();
+        return;
+    }
+    applyFrames(layers, props, at, added == 1 ? tr("Pegar fotograma") : tr("Pegar fotogramas"), QStringLiteral("edit-paste"));
+    for (int i = 1; i < added; ++i)
+        m_extraSelection << at + i;
+    updateState();
+}
+
 void GifEditor::toggleHidden(int index)
 {
     if (!m_doc || index < 0 || index >= m_doc->layerCount())
@@ -1332,15 +1637,22 @@ void GifEditor::editDelay(int index)
 void GifEditor::showFrameMenu(int index, const QPoint& globalPos)
 {
     QMenu menu(this);
+    const QList<int> chosen = isFrameSelected(index) ? selectedFrames() : QList<int>{index};
+    menu.addAction(Icons::theme({"edit-cut"}), tr("Cortar"), QKeySequence::Cut, this, [this] { cutFrames(); });
+    menu.addAction(Icons::theme({"edit-copy"}), tr("Copiar"), QKeySequence::Copy, this, [this] { copyFrames(); });
+    menu.addAction(Icons::theme({"edit-paste"}), tr("Pegar detrás"), QKeySequence::Paste, this, [this] { pasteFrames(); });
+    menu.addSeparator();
     menu.addAction(Icons::theme({"chronometer", "clock"}), tr("Duración..."), this, [this, index] { editDelay(index); });
-    menu.addAction(Icons::theme({"edit-copy"}), tr("Duplicar"), this, [this, index] { duplicateFrame(index); });
+    menu.addAction(Icons::theme({"edit-copy"}), tr("Duplicar"), QKeySequence(Qt::CTRL | Qt::Key_D), this,
+                   [this, chosen] { duplicateFrames(chosen); });
     menu.addAction(Icons::theme({"view-hidden", "visibility"}), frameHidden(index) ? tr("Mostrar") : tr("Ocultar"), this,
                    [this, index] { toggleHidden(index); });
     menu.addAction(Icons::theme({"draw-brush", "edit-image"}), tr("Editar con las herramientas"), this,
                    [this, index] { emit editFrameRequested(index); });
     menu.addSeparator();
-    QAction* del = menu.addAction(Icons::theme({"edit-delete"}), tr("Eliminar"), this, [this, index] { removeFrame(index); });
-    del->setEnabled(frameCount() > 1);
+    QAction* del = menu.addAction(Icons::theme({"edit-delete"}), tr("Eliminar"), QKeySequence::Delete, this,
+                                  [this, chosen] { removeFrames(chosen); });
+    del->setEnabled(frameCount() > chosen.size());
     menu.exec(globalPos);
 }
 
@@ -1349,6 +1661,10 @@ void GifEditor::showFrameMenu(int index, const QPoint& globalPos)
 // misma tecla en los dos sitios no hacía nada. Un campo de texto (la duración) se queda las suyas.
 static bool isEditorKey(const QKeyEvent* e)
 {
+    // Ctrl+C, Ctrl+X, Ctrl+V (fotogramas, no la imagen), Ctrl+D (duplicar) y Ctrl+A (todos).
+    if ((e->modifiers() & ~Qt::KeypadModifier) == Qt::ControlModifier)
+        return e->key() == Qt::Key_C || e->key() == Qt::Key_X || e->key() == Qt::Key_V || e->key() == Qt::Key_D
+               || e->key() == Qt::Key_A;
     if (e->modifiers() & ~Qt::KeypadModifier)
         return false;
     switch (e->key()) {
@@ -1376,12 +1692,24 @@ void GifEditor::keyPressEvent(QKeyEvent* e)
         QWidget::keyPressEvent(e);
         return;
     }
+    if (e->modifiers() & Qt::ControlModifier) {
+        switch (e->key()) {
+        case Qt::Key_C: copyFrames(); break;
+        case Qt::Key_X: cutFrames(); break;
+        case Qt::Key_V: pasteFrames(); break;
+        case Qt::Key_D: duplicateFrames(selectedFrames()); break;
+        case Qt::Key_A: selectAllFrames(); break;
+        default: break;
+        }
+        e->accept();
+        return;
+    }
     switch (e->key()) {
     case Qt::Key_Space: togglePlay(); break;
     case Qt::Key_Left: step(-1); break;
     case Qt::Key_Right: step(1); break;
     case Qt::Key_Home: seek(0); break;
-    case Qt::Key_Delete: removeFrame(selectedFrame()); break;
+    case Qt::Key_Delete: removeFrames(selectedFrames()); break;
     default: break;
     }
     e->accept();

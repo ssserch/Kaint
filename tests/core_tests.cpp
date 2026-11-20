@@ -1246,6 +1246,20 @@ static void testGifAndIco()
         CHECK(Gif::applyEffects(two, bg).size() == 1);
     }
 
+    // Un GIF quieto (sin bloque de repeticiones) se abre con «repetir sin fin»: si se anima en el
+    // editor de GIF, el GIF que sale se repite (antes se veía una vez y se quedaba quieto).
+    {
+        QImage still(20, 10, kLayerFormat);
+        still.fill(qRgba(10, 200, 30, 255));
+        const QByteArray one = Gif::encode({Gif::Frame{still, 100}}, Gif::Options(), &error);
+        const QString stillPath = dir.filePath(QStringLiteral("quieto.gif"));
+        QFile f(stillPath);
+        CHECK(f.open(QIODevice::WriteOnly) && f.write(one) == one.size());
+        f.close();
+        std::unique_ptr<Document> opened(ImageIO::load(stillPath, &error));
+        CHECK(opened && opened->gifLoops() == 0);
+    }
+
     // Icono con tres tamaños; al abrirlo se usa el más grande.
     QImage logo(40, 30, kLayerFormat);
     logo.fill(qRgba(0, 128, 255, 200));

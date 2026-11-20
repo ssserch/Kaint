@@ -122,6 +122,8 @@ void Document::replaceState(QSize size, const QList<LayerPtr>& layers, int activ
     m_size = size;
     m_layers = layers;
     m_active = std::clamp(active, 0, int(m_layers.size()) - 1);
+    // Las capas enlazadas que ya no están (un deshacer, el editor de GIF) no siguen enlazadas.
+    m_linked.removeIf([this](const LayerPtr& l) { return !m_layers.contains(l); });
     if (resized)
         emit sizeChanged(m_size);
     emit layersChanged();

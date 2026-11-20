@@ -3690,9 +3690,55 @@ int main(int argc, char** argv)
             current->undoStack()->undo();
             current->undoStack()->undo();
             CHECK(current->layerCount() == layersBefore && !current->layer(0)->props.name.contains(QStringLiteral("ms)")));
+
+            // Ctrl+C / Ctrl+V copian y pegan fotogramas (no un pegado flotante en la capa oculta
+            // que quedaba al volver), Mayús+clic elige varios y las letras de las herramientas
+            // están desactivadas mientras tanto.
+            {
+                auto key = [](QWidget* target, int k, Qt::KeyboardModifiers mods) {
+                    QKeyEvent over(QEvent::ShortcutOverride, k, mods);
+                    QApplication::sendEvent(target, &over);
+                    QKeyEvent press(QEvent::KeyPress, k, mods);
+                    QApplication::sendEvent(target, &press);
+                    settle();
+                };
+                const int steps = current->undoStack()->index();
+                gif->selectFrame(0);
+                key(gif, Qt::Key_C, Qt::ControlModifier);
+                const QMimeData* clip = QApplication::clipboard()->mimeData();
+                CHECK(clip && clip->hasFormat(QString::fromLatin1(GifEditor::clipboardMimeType())));
+                key(gif, Qt::Key_V, Qt::ControlModifier);
+                CHECK(gif->frameCount() == layersBefore + 1 && gif->selectedFrame() == 1);
+                // Edición > Pegar (el menú) también pega fotogramas.
+                if (QAction* pasteAction = findAction(&w, QStringLiteral("Pegar")))
+                    pasteAction->trigger();
+                CHECK(gif->frameCount() == layersBefore + 2);
+                gif->selectFrame(0);
+                gif->selectFrameRange(2);
+                CHECK(gif->selectedFrames() == (QList<int>{0, 1, 2}));
+                key(gif, Qt::Key_D, Qt::ControlModifier);
+                CHECK(gif->frameCount() == layersBefore + 5);
+                key(gif, Qt::Key_Delete, Qt::NoModifier);
+                CHECK(gif->frameCount() == layersBefore + 2);
+                bool toolKeyEnabled = false;
+                for (QAction* a : w.actions())
+                    if (a->shortcut() == QKeySequence(Qt::Key_M) || a->shortcut() == QKeySequence(Qt::Key_E))
+                        toolKeyEnabled = toolKeyEnabled || a->isEnabled();
+                CHECK(!toolKeyEnabled);
+                if (QAction* selectAll = findAction(&w, QStringLiteral("Seleccionar todo")))
+                    CHECK(!selectAll->isEnabled());
+                while (current->undoStack()->index() > steps)
+                    current->undoStack()->undo();
+                CHECK(current->layerCount() == layersBefore && current->selection().isEmpty());
+            }
             gifAction->trigger();
             settle();
             CHECK(!gif->isVisible() && !gifAction->isChecked() && canvas->isVisible());
+            bool toolKeyEnabled = false;
+            for (QAction* a : w.actions())
+                if (a->shortcut() == QKeySequence(Qt::Key_M))
+                    toolKeyEnabled = toolKeyEnabled || a->isEnabled();
+            CHECK(toolKeyEnabled);
         }
     }
 

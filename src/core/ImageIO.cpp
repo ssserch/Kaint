@@ -471,7 +471,10 @@ Document* load(const QString& path, QString* error)
             }
             doc->setActiveIndex(0);
         }
-        doc->setGifLoops(anim.loops);
+        // Un GIF quieto no trae el bloque de repeticiones (y Qt lo da como «una sola vez»): si se
+        // anima después (el editor de GIF), debe repetirse sin fin, como cualquier GIF nuevo; si no,
+        // se veía una vez y se quedaba quieto.
+        doc->setGifLoops(anim.frames.size() > 1 ? anim.loops : 0);
     } else if (isIcon(path) || suffixOf(path) == QLatin1String("cur")) {
         const QImage image = Ico::readLargest(path, error);
         if (image.isNull())

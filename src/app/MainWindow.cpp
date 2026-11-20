@@ -1150,9 +1150,12 @@ MainWindow::MainWindow()
     m_central->addWidget(m_gifEditor);
     connect(m_gifEditor, &GifEditor::exportRequested, this, [this] { saveAs(m_doc, QStringLiteral("gif")); });
     connect(m_gifEditor, &GifEditor::imageEditorRequested, this, [this] { toggleGifEditor(); });
+    connect(m_gifEditor, &GifEditor::undoRequested, this, &MainWindow::undo);
+    connect(m_gifEditor, &GifEditor::redoRequested, this, &MainWindow::redo);
     connect(m_gifEditor, &GifEditor::editFrameRequested, this, [this](int layer) {
         if (!m_doc)
             return;
+        finishTool();
         m_doc->setActiveIndex(layer);
         m_gifDocs.remove(m_doc);
         updateCentralView();
@@ -1581,6 +1584,8 @@ void MainWindow::createActions()
         back->setShortcut(QKeySequence(Qt::SHIFT | key[0].key()));
         connect(back, &QAction::triggered, this, [this, key] { m_tools->activateShortcut(key, true); });
         addActions({a, back});
+        // En el editor de GIF no hay herramientas: sus letras no cambian nada a escondidas.
+        m_imageOnlyActions << a << back;
     }
     auto* swap = new QAction(tr("Intercambiar colores"), this);
     swap->setShortcut(QKeySequence(Qt::Key_X));
@@ -2603,6 +2608,23 @@ void MainWindow::updateActions()
     m_act["redo"]->setEnabled(m_undoGroup->canRedo());
     m_act["repeatEffect"]->setEnabled(has && m_lastEffect);
     m_act["repeatEffect"]->setVisible(m_lastEffect != nullptr);
+    // En el editor de GIF, lo que trabaja con la selección o las herramientas no se ve y cambiaba
+    // la imagen a escondidas (un pegado flotante que quedaba como una capa vieja al volver):
+    // desactivado. Copiar, cortar y pegar trabajan con fotogramas (GifEditor).
+    const bool gif = inGifEditor();
+    for (QAction* a : std::as_const(m_imageOnlyActions))
+        a->setEnabled(!gif);
+    if (gif) {
+        for (QAction* a : std::as_const(m_selActions))
+            a->setEnabled(false);
+        for (const char* name : {"selectAll", "deselect", "invertSel", "copySelection", "copyMerged", "pasteImage"})
+            if (QAction* a = m_act.value(QLatin1String(name)))
+                a->setEnabled(false);
+        m_act["copy"]->setEnabled(true);
+        m_act["cut"]->setEnabled(true);
+        m_act["paste"]->setEnabled(true);
+        m_act["pasteLayer"]->setEnabled(true);
+    }
 }
 
 void MainWindow::showToolHint(const QString& hint)
@@ -2994,6 +3016,11 @@ bool MainWindow::saveAs(Document* doc, const QString& suffix)
     return writeFile(doc, path);
 }
 
+bool MainWindow::inGifEditor() const
+{
+    return m_doc && m_gifDocs.contains(m_doc) && m_central && m_central->currentWidget() == m_gifEditor;
+}
+
 void MainWindow::toggleGifEditor()
 {
     if (!m_doc)
@@ -3032,6 +3059,7 @@ void MainWindow::updateCentralView()
         m_gifEditor->setFocus();
     else
         m_canvas->setFocus();
+    updateActions();
     updatePresence();
 }
 
@@ -3602,6 +3630,10 @@ void MainWindow::copy(bool merged)
 {
     if (!m_doc)
         return;
+    if (inGifEditor()) {
+        m_gifEditor->copyFrames();
+        return;
+    }
     finishTool();
     const QImage source = merged ? m_doc->flattened() : m_doc->activeLayer()->image;
     const QImage out = Raster::extractSelection(source, m_doc->selection()).convertToFormat(QImage::Format_ARGB32);
@@ -3645,6 +3677,10 @@ void MainWindow::cut()
 {
     if (!m_doc)
         return;
+    if (inGifEditor()) {
+        m_gifEditor->cutFrames();
+        return;
+    }
     copy(false);
     eraseSelection(tr("Cortar"));
 }
@@ -3736,6 +3772,10 @@ bool MainWindow::ensureCanvasFits(const QImage& image, const QString& title, boo
 
 void MainWindow::paste()
 {
+    if (inGifEditor()) {
+        m_gifEditor->pasteFrames();
+        return;
+    }
     finishTool();
     const QImage img = clipboardImage();
     if (img.isNull()) {
@@ -3754,6 +3794,10 @@ void MainWindow::paste()
 
 void MainWindow::pasteIntoNewLayer()
 {
+    if (inGifEditor()) {
+        m_gifEditor->pasteFrames();
+        return;
+    }
     finishTool();
     const QImage img = clipboardImage();
     if (!m_doc || img.isNull())

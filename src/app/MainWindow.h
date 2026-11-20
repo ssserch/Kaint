@@ -109,6 +109,8 @@ private:
     bool saveAs(Document* doc, const QString& suffix = {});
     // Archivo > Editor de GIF: la imagen actual pasa de una vista a otra.
     void toggleGifEditor();
+    // La imagen actual se ve en el editor de GIF.
+    bool inGifEditor() const;
     void updateCentralView();
     bool saveAll();
     // "Guardar todos": nombre, formato y orden de todas las imágenes abiertas en un diálogo.
@@ -274,6 +276,8 @@ private:
     AppSettings m_settings;
 
     QList<QAction*> m_docActions;
+    // Atajos que solo tienen sentido en el editor de imágenes (las letras de las herramientas).
+    QList<QAction*> m_imageOnlyActions;
     QList<QAction*> m_selActions;
     QHash<QString, QAction*> m_act;
     QMenu* m_recentMenu = nullptr;

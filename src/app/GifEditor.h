@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QElapsedTimer>
+#include <QHash>
 #include <QImage>
 #include <QList>
 #include <QListWidget>
@@ -95,6 +96,22 @@ public:
     void setFrameDelay(int index, int delayMs);
     void removeFrame(int index);
     void duplicateFrame(int index);
+    // Selección de varios fotogramas (Ctrl+clic, Mayús+clic): el elegido (la capa activa) y los demás.
+    QList<int> selectedFrames() const;
+    bool isFrameSelected(int index) const;
+    void toggleFrameSelection(int index);
+    void selectFrameRange(int index);
+    void selectAllFrames();
+    void removeFrames(const QList<int>& indexes);
+    void duplicateFrames(const QList<int>& indexes);
+    // Portapapeles: copiar, cortar y pegar fotogramas (con su duración); pegar una imagen de otro
+    // programa la añade como fotograma.
+    void copyFrames();
+    void cutFrames();
+    void pasteFrames();
+    static const char* clipboardMimeType();
+    // El fotograma que se ve: el elegido o, mientras se reproduce, el del cabezal.
+    int shownFrame() const;
     void toggleHidden(int index);
     void showFrameMenu(int index, const QPoint& globalPos);
     void editDelay(int index);
@@ -107,6 +124,9 @@ signals:
     void exportRequested();
     void imageEditorRequested();
     void editFrameRequested(int layerIndex);
+    // Deshacer y rehacer como los de la ventana (que avisan a la herramienta antes).
+    void undoRequested();
+    void redoRequested();
 
 protected:
     bool event(QEvent* e) override;
@@ -133,6 +153,9 @@ private:
     void step(int delta);
     void tick();
     int frameAt(int ms) const;
+    void invalidateStarts();
+    QImage frameImage(int index) const;
+    void showPlayingFrame(int index);
 
     QPointer<Document> m_doc;
     QList<QPointer<Document>> m_openDocs;
@@ -157,4 +180,11 @@ private:
     bool m_playing = false;
     int m_time = 0;
     qint64 m_lastTick = 0;
+    // Mientras se reproduce, el fotograma del cabezal (la capa activa no cambia en cada uno).
+    int m_playFrame = -1;
+    // Los otros fotogramas elegidos (además de la capa activa).
+    QList<int> m_extraSelection;
+    mutable QList<int> m_starts;
+    mutable bool m_startsValid = false;
+    mutable QHash<qint64, QImage> m_opacityCache;
 };

@@ -1,6 +1,7 @@
 // Temas de Kaint (src/app/Theme.cpp): claro, oscuro y azul de Paint.NET, Windows 7 y Windows 7
-// oscuro (con los de 7.css), Windows XP, Windows 98 (con los colores de 98.css y botones en relieve)
-// y el personalizado, que parte de uno de ellos (también de Windows 7, claro u oscuro, o de XP, con
+// oscuro (con los de 7.css), Windows 7 Basic (sin cristal), Windows 8 (el marco plano y ancho del color
+// de las ventanas), Windows XP, Windows 98 (con los colores de 98.css y botones en relieve), los de
+// los escritorios de Linux (Ubuntu, GNOME, Linux Mint y elementary OS, claros y oscuros) y el personalizado, que parte de uno de ellos (también de Windows 7, claro u oscuro, o de XP, con
 // su estilo), cambia sus colores y puede llevar una imagen, un GIF o un vídeo de fondo.
 import { Settings } from "../Settings.js";
 
@@ -68,6 +69,82 @@ const Win98AltColors = { accent: "#0a246a", window: "#d4d0c8", text: "#000000", 
                          menuBar: "#d4d0c8", menuBarText: "#000000", toolBar: "#d4d0c8", statusBar: "#d4d0c8", panel: "#d4d0c8",
                          panelTitle: "#0a246a", panelTitleEnd: "#a6caf0", panelTitleText: "#ffffff", panelClose: "#d4d0c8",
                          selection: "#0a246a", selectionBorder: "#0a246a", hover: "#d4d0c8", workspace: "#808080" };
+
+// Windows 7 Basic (Theme::windows7Basic de Kaint): sin Aero, el marco opaco en el celeste de Windows 7
+// Basic (o el gris azulado oscuro), con los mismos controles que el de cristal.
+const Win7BasicColors = { ...Win7Colors, glass: "#b9d1ea", menuBar: "#c9dcf2", panelTitle: "#c4d8ee", panelTitleEnd: "#b2cbe8" };
+const Win7BasicDarkColors = { ...Win7DarkColors, glass: "#46505e", menuBar: "#323b47", panelTitle: "#46505e", panelTitleEnd: "#39424e" };
+
+// Windows 8 (Theme::windows8 de Kaint): el marco ancho y la barra de título planos del color de las
+// ventanas (de fábrica, el celeste de la primera captura), el título centrado y Segoe UI.
+export const Win8DefaultColor = "#6badf6";
+// Los de «Color y apariencia» de Windows 8, sin negro (el negro, solo con «Personalizado»).
+export const Win8WindowColors = [
+    ["Gris", "#ababab"], ["Celeste", "#8acfff"], ["Rosa", "#f598d6"], ["Amarillo", "#f3d240"], ["Lima", "#add85f"],
+    ["Turquesa", "#78d9d9"], ["Naranja", "#ffaf51"], ["Coral", "#ff6f6f"], ["Fucsia", "#f359a8"], ["Verde", "#47cf74"],
+    ["Lila", "#c48aff"], ["Azul", "#58b1fc"], ["Lavanda", "#9898ff"], ["Topo", "#c3b5a8"], ["Blanco", "#fcfcfc"],
+];
+// Los de la pantalla Inicio de Windows 8.
+export const Win8StartColors = [
+    ["Verde azulado", "#008299"], ["Turquesa intenso", "#00a0b1"], ["Azul cobalto", "#2672ec"], ["Azul cielo", "#2e8def"],
+    ["Morado", "#8c0095"], ["Magenta", "#a700ae"], ["Índigo", "#5133ab"], ["Violeta", "#643ebf"], ["Granate", "#ac193d"],
+    ["Carmesí", "#bf1e4b"], ["Teja", "#d24726"], ["Mandarina", "#dc572e"], ["Verde bosque", "#008a00"], ["Verde hoja", "#00a600"],
+    ["Azul marino", "#094ab2"], ["Azul real", "#0a5bc4"],
+];
+
+const lightness = (hex) => {
+    const [r, g, b] = rgbOf(hex);
+    return (Math.max(r, g, b) + Math.min(r, g, b)) / 2;
+};
+const mixHex = (a, b, t) => {
+    const x = rgbOf(a), y = rgbOf(b);
+    return hexOf(x.map((v, i) => v * t + y[i] * (1 - t)));
+};
+
+function win8Colors(dark, color) {
+    const window = /^#[0-9a-f]{6}$/i.test(color || "") ? color.toLowerCase() : Win8DefaultColor;
+    const out = { accent: "#3399ff", menuBar: window, panelTitle: window, panelTitleEnd: window,
+                  panelTitleText: lightness(window) < 150 ? "#ffffff" : "#000000", menuBarText: dark ? Presets.dark.menuBarText : "#000000",
+                  win8: window, panelClose: "#c75050" };
+    if (!dark)
+        Object.assign(out, { selection: "#cce8ff", selectionBorder: "#99d1ff", hover: "#e5f3ff", button: "#e1e1e1", border: "#acacac",
+                             toolBar: "#f5f6f7", statusBar: "#f0f0f0" });
+    return out;
+}
+
+// Los escritorios de Linux (Theme::linuxDesktop de Kaint): sus colores de ventana, de la barra de
+// título (headerbar), de la vista y del texto, su color de acento, su fuente y su redondeo.
+const LinuxDesktops = {
+    yaru: { light: ["#e95420", "#fafafa", "#ebebeb", "#ffffff", "#3d3d3d", "#f2f2f2", "#cdc7c2", "#c8c8c8"],
+            dark: ["#e95420", "#2c2c2c", "#303030", "#232323", "#f7f7f7", "#3c3c3c", "#4a4a4a", "#1e1e1e"], font: "Ubuntu", radius: 6 },
+    adwaita: { light: ["#3584e4", "#fafafa", "#ebebeb", "#ffffff", "#2e3436", "#ebebeb", "#d8d4d0", "#c0bfbc"],
+               dark: ["#3584e4", "#242424", "#303030", "#1e1e1e", "#ffffff", "#3a3a3a", "#444444", "#1a1a1a"], font: "Adwaita Sans", radius: 6 },
+    mint: { light: ["#35a854", "#f2f2f2", "#e8e8e8", "#ffffff", "#303030", "#f7f7f7", "#cfcfcf", "#c4c4c4"],
+            dark: ["#35a854", "#383838", "#2f2f2f", "#404040", "#dadada", "#444444", "#525252", "#262626"], font: "Ubuntu", radius: 4 },
+    elementary: { light: ["#3689e6", "#fafafa", "#f0f0f0", "#ffffff", "#333333", "#fafafa", "#c3c3c3", "#cfcfcf"],
+                  dark: ["#3689e6", "#333333", "#2b2b2b", "#292929", "#fafafa", "#404040", "#4d4d4d", "#1f1f1f"], font: "Inter", radius: 4 },
+};
+
+function linuxColors(desktop, dark) {
+    const d = LinuxDesktops[desktop] || LinuxDesktops.adwaita;
+    const [accent, window, header, base, text, button, border, workspace] = dark ? d.dark : d.light;
+    return { accent, window, text, base, button, border, menuBar: header, menuBarText: text, toolBar: window, statusBar: window, panel: window,
+             panelTitle: header, panelTitleEnd: header, panelTitleText: text, panelClose: "#c01c28",
+             // La selección con el acento suavizado (el texto sigue siendo el normal) y su borde con el acento.
+             selection: mixHex(accent, base, dark ? 0.45 : 0.25), selectionBorder: accent, hover: mixHex(accent, window, dark ? 0.18 : 0.12), workspace };
+}
+
+// Los temas 11 a 22 (los mismos números que en Kaint): Windows 8, Windows 7 Basic y los de Linux.
+const LinuxSchemes = { 15: "yaru", 16: "yaru", 17: "adwaita", 18: "adwaita", 19: "mint", 20: "mint", 21: "elementary", 22: "elementary" };
+
+// La lista de temas de Configuración y de la bienvenida (como la de Kaint), agrupados.
+export function themeChoices(tr) {
+    return [[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")],
+            [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [13, tr("Windows 7 Basic")], [14, tr("Windows 7 Basic oscuro")],
+            [11, tr("Windows 8")], [12, tr("Windows 8 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")],
+            [15, "Ubuntu"], [16, tr("Ubuntu oscuro")], [17, "GNOME"], [18, tr("GNOME oscuro")], [19, "Linux Mint"], [20, tr("Linux Mint oscuro")],
+            [21, "elementary OS"], [22, tr("elementary OS oscuro")], [5, tr("Personalizado")]];
+}
 
 // De qué parte el tema personalizado: el modo de la hoja de estilo, los colores y el estilo de los
 // controles (Windows 7, XP o el clásico de 98).
@@ -155,6 +232,14 @@ function glassFrame(glass, dark) {
 
 // Esquema guardado → { base: "light" | "dark" | "win98", colors, estilo... }.
 export function resolveScheme(scheme, systemDark) {
+    if (scheme === 11 || scheme === 12)
+        return { base: scheme === 12 ? "dark" : "light", colors: win8Colors(scheme === 12, Settings.get("win8Color")), win8: true };
+    if (scheme === 13 || scheme === 14)
+        return { base: scheme === 14 ? "dark" : "light", colors: scheme === 14 ? Win7BasicDarkColors : Win7BasicColors, win7: true, basic: true };
+    if (LinuxSchemes[scheme]) {
+        const dark = scheme % 2 === 0, desktop = LinuxSchemes[scheme];
+        return { base: dark ? "dark" : "light", colors: linuxColors(desktop, dark), linux: desktop };
+    }
     if (scheme === 4)
         return { base: "win98" };
     if (scheme === 10)
@@ -185,11 +270,14 @@ export function resolveScheme(scheme, systemDark) {
 // Botones de las ventanas (Configuración > Interfaz de usuario), como los de la barra de título de
 // Kaint: Windows 10 (los predeterminados), 11, macOS, 7, XP o 98, a la derecha o a la izquierda. Con
 // los temas Windows 98, 7 y XP, «Windows 10» son los suyos.
-export const WindowButtons = ["win10", "win11", "macos", "win7", "xp", "win98"];
+// (Los mismos números que WindowFrame::Buttons de Kaint: Windows 8 y GNOME van después de «Auto»,
+// el 6, que aquí es «Windows 10».)
+export const WindowButtons = ["win10", "win11", "macos", "win7", "xp", "win98", "win10", "win8", "gnome"];
 export function applyWindowButtons(root) {
-    let style = WindowButtons[Math.max(0, Math.min(5, Number(Settings.get("titleButtons")) || 0))];
+    let style = WindowButtons[Math.max(0, Math.min(WindowButtons.length - 1, Number(Settings.get("titleButtons")) || 0))];
     if (style === "win10")
-        style = root.classList.contains("classic") ? "win98" : root.classList.contains("win7") ? "win7" : root.classList.contains("xp") ? "xp" : style;
+        style = root.classList.contains("classic") ? "win98" : root.classList.contains("win7") ? "win7" : root.classList.contains("xp") ? "xp"
+              : root.classList.contains("win8") ? "win8" : root.classList.contains("linux") ? "gnome" : style;
     for (const name of WindowButtons)
         root.classList.toggle(`btn-${name}`, name === style);
     root.classList.toggle("btn-left", !!Settings.get("titleButtonsLeft"));
@@ -202,14 +290,31 @@ export function applyWindowButtons(root) {
 // Aplica el tema: clases del documento (oscuro, clásico) y, con Windows 98 y el personalizado, los
 // colores en las variables de CSS.
 export function applyThemeColors(root, scheme, systemDark) {
-    const { base, colors, blue, win7, xp, alt } = resolveScheme(scheme, systemDark);
+    const { base, colors, blue, win7, xp, alt, win8, basic, linux } = resolveScheme(scheme, systemDark);
     const classic = base === "win98";
     root.classList.toggle("dark", base === "dark");
     root.classList.toggle("classic", classic);
     root.classList.toggle("blue", !!blue);
     root.classList.toggle("win7", !!win7);
+    root.classList.toggle("win7basic", !!basic);
+    root.classList.toggle("win8", !!win8);
+    root.classList.toggle("linux", !!linux);
+    for (const desktop of Object.keys(LinuxDesktops))
+        root.classList.toggle(`desk-${desktop}`, linux === desktop);
     root.classList.toggle("xp", !!xp);
     root.classList.toggle("alt", !!alt);
+    // Windows 8: el color de las ventanas (el marco y las cabeceras); los de Linux, su letra y su redondeo.
+    if (win8)
+        root.style.setProperty("--win8", colors.win8);
+    else
+        root.style.removeProperty("--win8");
+    if (linux) {
+        root.style.setProperty("--linux-font", `"${LinuxDesktops[linux].font}"`);
+        root.style.setProperty("--linux-radius", `${LinuxDesktops[linux].radius}px`);
+    } else {
+        root.style.removeProperty("--linux-font");
+        root.style.removeProperty("--linux-radius");
+    }
     applyDesign(root, scheme === 5 ? Settings.get("customTheme")?.design || null : null);
     applyWindowButtons(root);
     for (const [key, cssVar] of ColorRoles) {
@@ -219,8 +324,8 @@ export function applyThemeColors(root, scheme, systemDark) {
         else
             root.style.removeProperty(cssVar);
     }
-    // Windows 7: el cristal de los marcos, del tono del color de las ventanas.
-    if (win7 && colors?.glass)
+    // Windows 7: el cristal de los marcos, del tono del color de las ventanas (Basic: opaco, el suyo).
+    if (win7 && colors?.glass && !basic)
         root.style.setProperty("--glass-frame", glassFrame(colors.glass, base === "dark"));
     else
         root.style.removeProperty("--glass-frame");

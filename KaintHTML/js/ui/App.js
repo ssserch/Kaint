@@ -115,6 +115,7 @@ export class App extends EventTarget {
             this.view.update();
         });
         this.installKeyboard();
+        this.installCaptionButtons();
         // La rueda sobre los deslizadores de los diálogos (configurable, como en Kaint).
         installRangeWheel();
         this.installClipboard();
@@ -182,7 +183,7 @@ export class App extends EventTarget {
     applyTheme() {
         const root = document.documentElement;
         const key = JSON.stringify([Settings.get("colorScheme"), Settings.get("customTheme"), Settings.get("canvasBorderLight"),
-                                    Settings.get("canvasBorderDark"), Settings.get("titleBarColor"), Settings.get("win7Glass"),
+                                    Settings.get("canvasBorderDark"), Settings.get("titleBarColor"), Settings.get("win7Glass"), Settings.get("win8Color"),
                                     Settings.get("selectionColorLight"), Settings.get("selectionColorDark"),
                                     matchMedia("(prefers-color-scheme: dark)").matches]);
         if (this.themeKey !== key) {
@@ -1603,6 +1604,31 @@ export class App extends EventTarget {
                 this.view.updateCursor();
             }
         });
+    }
+
+    // Los botones de la ventana en la barra de título simulada (como los de Kaint para el
+    // escritorio, con el estilo del tema): maximizar pasa a pantalla completa y cerrar solo sale en
+    // la aplicación instalada (una pestaña del navegador no se puede cerrar desde la página).
+    installCaptionButtons() {
+        const max = el("button", { className: "caption-button max", type: "button", title: tr("Pantalla completa") });
+        max.addEventListener("click", () => {
+            if (document.fullscreenElement)
+                document.exitFullscreen?.();
+            else
+                document.documentElement.requestFullscreen?.().catch(() => {});
+        });
+        const close = el("button", { className: "caption-button close", type: "button", title: tr("Cerrar") });
+        close.addEventListener("click", () => window.close());
+        const standalone = () => matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: window-controls-overlay)").matches;
+        const sync = () => {
+            max.classList.toggle("restore", !!document.fullscreenElement);
+            max.title = document.fullscreenElement ? tr("Salir de la pantalla completa") : tr("Pantalla completa");
+            max.hidden = !document.documentElement.requestFullscreen;
+            close.hidden = !standalone();
+        };
+        document.addEventListener("fullscreenchange", sync);
+        sync();
+        document.getElementById("top-row").append(el("div", { className: "caption-buttons" }, [max, close]));
     }
 
     // --- Historial ---------------------------------------------------------------------------

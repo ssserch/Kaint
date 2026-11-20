@@ -1087,3 +1087,455 @@
     background: linear-gradient(rgb(from var(--selection) calc(r + 14) calc(g + 17) calc(b + 20)), rgb(from var(--selection) calc(r + 2) g calc(b - 3)));
     outline-color: var(--selection-border);
 }
+
+/* --- Botones de la ventana en la barra de título simulada (App.installCaptionButtons) ------------ */
+/* Como los de Kaint para el escritorio, en la franja del título: maximizar pasa a pantalla completa
+   y cerrar solo sale en la aplicación instalada (en una pestaña no se puede cerrar). */
+.caption-buttons {
+    display: none;
+}
+
+:root.fake-title:not(.phone) .caption-buttons {
+    display: flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 4;
+    height: 24px;
+}
+
+:root.fake-title #top-row {
+    position: relative;
+}
+
+.caption-button {
+    position: relative;
+    width: 46px;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--menubar-text);
+}
+
+.caption-button:hover {
+    background: color-mix(in srgb, var(--menubar-text) 12%, transparent);
+}
+
+.caption-button.close:hover {
+    background: #e81123;
+    color: #ffffff;
+}
+
+.caption-button[hidden] {
+    display: none;
+}
+
+/* Los dibujos: el cuadro de maximizar (dos, para restaurar) y la cruz. */
+.caption-button.max::before,
+.caption-button.max.restore::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    margin: -5px 0 0 -5px;
+    border: 1px solid currentColor;
+    box-sizing: border-box;
+}
+
+.caption-button.max.restore::before {
+    margin: -3px 0 0 -6px;
+    width: 8px;
+    height: 8px;
+}
+
+.caption-button.max.restore::after {
+    margin: -6px 0 0 -3px;
+    width: 8px;
+    height: 8px;
+    border-left: none;
+    border-bottom: none;
+}
+
+.caption-button.close::before,
+.caption-button.close::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 1px;
+    margin: -0.5px 0 0 -6px;
+    background: currentColor;
+    transform: rotate(45deg);
+}
+
+.caption-button.close::after {
+    transform: rotate(-45deg);
+}
+
+/* --- Windows 7 (y Basic): la ventana como la de Kaint para el escritorio ------------------------- */
+/* El marco de cristal alrededor (los bordes de los lados y de abajo, del color de las ventanas), el
+   título más alto con el brillo blanco de Aero y los botones de la ventana colgando del borde de
+   arriba: el pequeño de maximizar y el rojo de cerrar. */
+:root.win7.fake-title:not(.phone):not(#k) #app {
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.65);
+    padding: 0 6px 6px;
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0.3) 0 9%, rgba(255, 255, 255, 0.08) 16%, transparent 28%),
+                linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08) 90px, transparent 180px), var(--menubar);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+:root.win7.dark.fake-title:not(.phone):not(#k) #app {
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0.14) 0 9%, rgba(255, 255, 255, 0.04) 16%, transparent 28%),
+                linear-gradient(rgba(255, 255, 255, 0.12), transparent 120px), var(--menubar);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+:root.win7.fake-title:not(.phone):not(#k) #top-row {
+    background: transparent;
+    margin: 0 -6px;
+    padding-left: 6px;
+    padding-right: 10px;
+}
+
+:root.win7.fake-title:not(.phone):not(#k) :is(#tool-options, #workspace, #status-bar) {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+:root.win7.fake-title:not(#k) .caption-title {
+    height: 28px;
+    color: #000000;
+    text-shadow: 0 0 10px #ffffff, 0 0 8px #ffffff, 0 0 4px #ffffff;
+}
+
+:root.win7.dark.fake-title:not(#k) .caption-title {
+    color: #ffffff;
+    text-shadow: 0 0 8px #000000, 0 0 4px #000000;
+}
+
+:root.win7.fake-title:not(#k) .corner-buttons {
+    margin-top: 28px;
+}
+
+:root.win7.fake-title:not(#k) .caption-buttons {
+    right: 4px;
+    height: 19px;
+    gap: 0;
+}
+
+:root.win7:not(#k) .caption-button {
+    width: 27px;
+    border: 1px solid rgba(0, 0, 0, 0.62);
+    border-top: none;
+    color: #ffffff;
+    background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25) 45%, rgba(0, 0, 0, 0.08) 50%, rgba(255, 255, 255, 0.35));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+}
+
+:root.win7:not(#k) .caption-button:first-child {
+    border-radius: 0 0 0 5px;
+}
+
+:root.win7:not(#k) .caption-button.close {
+    width: 46px;
+    border-left: none;
+    border-radius: 0 0 5px 0;
+    background: linear-gradient(#ffffff80, #ffffff4d 45%, #0000001a 50%, #0000001a 75%, #ffffff80),
+                linear-gradient(#e0a197e5, #cf796a 25% 50%, #d54f36 50%);
+}
+
+:root.win7:not(#k) .caption-button.close:only-child {
+    border-left: 1px solid rgba(0, 0, 0, 0.62);
+    border-radius: 0 0 5px 5px;
+}
+
+:root.win7:not(#k) .caption-button:hover {
+    background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(180, 225, 255, 0.5) 45%, rgba(60, 160, 230, 0.35) 50%, rgba(160, 230, 255, 0.6));
+}
+
+:root.win7:not(#k) .caption-button.close:hover {
+    background: linear-gradient(#ffffff80, #ffffff4d 45%, #0000001a 50%, #0000001a 75%, #ffffff80),
+                radial-gradient(circle at 50% 170%, #f4e676 10% 20%, #0000 60%), linear-gradient(#fb9d8b, #ee6d56 25% 50%, #d42809 50%);
+}
+
+:root.win7:not(#k) .caption-button.close::before,
+:root.win7:not(#k) .caption-button.close::after {
+    width: 11px;
+    height: 2px;
+    margin: -1px 0 0 -5.5px;
+}
+
+/* Windows 7 Basic: sin cristal. El marco y las cabeceras opacos, sin reflejo ni desenfoque. */
+:root.win7basic:not(#k) .floating-panel,
+:root.win7basic:not(#k) .dialog {
+    background: linear-gradient(var(--glass), color-mix(in srgb, var(--glass) 85%, #000) 60px, var(--glass) 61px, var(--glass));
+    backdrop-filter: none;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+:root.win7basic.dark:not(#k) .floating-panel,
+:root.win7basic.dark:not(#k) .dialog {
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+:root.win7basic:not(.classic):not(#k) #top-row,
+:root.win7basic.fake-title:not(.phone):not(#k) #app {
+    background: linear-gradient(rgba(255, 255, 255, 0.25), transparent 40px), var(--menubar);
+}
+
+/* --- Windows 8: el marco plano y ancho del color de las ventanas --------------------------------- */
+:root.win8 {
+    --radius: 0px;
+    font-family: var(--ui-font, "Segoe UI", "Noto Sans", sans-serif);
+}
+
+:root.win8.fake-title:not(.phone):not(#k) #app {
+    box-sizing: border-box;
+    border: 8px solid var(--win8);
+    border-top: none;
+    background: var(--win8);
+    outline: 1px solid color-mix(in srgb, var(--win8) 70%, #000);
+    outline-offset: -1px;
+}
+
+:root.win8:not(.classic):not(#k) #top-row {
+    background: var(--win8);
+}
+
+/* El título, centrado en la barra (el icono, a la izquierda). */
+:root.win8.fake-title:not(#k) .caption-title {
+    height: 30px;
+    color: var(--panel-title-text);
+}
+
+:root.win8.fake-title:not(.phone):not(#k) .caption-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    line-height: 30px;
+    text-align: center;
+    pointer-events: none;
+}
+
+:root.win8.fake-title:not(#k) .corner-buttons {
+    margin-top: 30px;
+}
+
+:root.win8:not(#k) .caption-buttons {
+    height: 21px;
+    right: -2px;
+}
+
+:root.win8:not(#k) .caption-button {
+    width: 27px;
+    color: var(--panel-title-text);
+}
+
+:root.win8:not(#k) .caption-button:hover {
+    background: color-mix(in srgb, var(--win8) 75%, #fff);
+}
+
+:root.win8:not(#k) .caption-button.close {
+    width: 46px;
+    background: #c75050;
+    color: #ffffff;
+}
+
+:root.win8:not(#k) .caption-button.close:hover {
+    background: #e04343;
+}
+
+/* Las ventanas y los diálogos: el borde y la cabecera planos del color de las ventanas. */
+:root.win8:not(#k) .floating-panel {
+    border: 1px solid var(--win8);
+    border-radius: 0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+:root.win8:not(#k) .floating-panel > .title {
+    background: var(--win8);
+    color: var(--panel-title-text);
+    border-radius: 0;
+}
+
+:root.win8:not(#k) .dialog {
+    border: 8px solid var(--win8);
+    border-top-width: 0;
+    border-radius: 0;
+    background: var(--window);
+}
+
+:root.win8:not(#k) .dialog > .title {
+    margin: 0 -8px;
+    padding: 0 0 0 8px;
+    min-height: 30px;
+    background: var(--win8);
+    color: var(--panel-title-text);
+    border: none;
+}
+
+:root.win8:not(#k) .dialog > .title span {
+    text-align: center;
+}
+
+/* La X: el rectángulo rojo pegado al borde de arriba. */
+:root.btn-win8:not(#k) .floating-panel > .title .close {
+    width: 26px;
+    height: 18px;
+    border-radius: 0;
+    background: #c75050;
+}
+
+:root.btn-win8:not(#k) .dialog > .title .close {
+    align-self: flex-start;
+    width: 46px;
+    height: 21px;
+    border-radius: 0;
+    background: #c75050;
+}
+
+:root.btn-win8:not(#k) :is(.floating-panel, .dialog) > .title .close:hover {
+    background: #e04343;
+}
+
+/* --- Los escritorios de Linux: Ubuntu (Yaru), GNOME (Adwaita), Linux Mint (Mint-Y), elementary OS -- */
+/* Su letra, sus esquinas redondeadas y la barra de título (headerbar) con el título centrado y los
+   botones redondos. */
+:root.linux {
+    --radius: var(--linux-radius, 6px);
+    font-family: var(--ui-font, var(--linux-font), "Cantarell", "Noto Sans", sans-serif);
+}
+
+:root.linux:not(#k) .floating-panel {
+    border-radius: calc(var(--linux-radius) + 4px);
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+:root.linux:not(#k) .floating-panel > .title {
+    background: var(--panel-title);
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+    min-height: 26px;
+}
+
+:root.linux:not(#k) .dialog {
+    border-radius: calc(var(--linux-radius) + 6px);
+    overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+:root.linux:not(#k) .dialog > .title {
+    min-height: 36px;
+    padding: 4px 8px;
+    font-weight: 700;
+}
+
+:root.linux:not(#k) .dialog > .title span {
+    text-align: center;
+}
+
+:root.linux:not(#k) .pushbutton {
+    border-radius: var(--linux-radius);
+}
+
+:root.linux.fake-title:not(#k) .caption-title {
+    height: 30px;
+    font-weight: 700;
+}
+
+:root.linux.fake-title:not(.phone):not(#k) .caption-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    line-height: 30px;
+    text-align: center;
+    pointer-events: none;
+}
+
+:root.linux.fake-title:not(#k) .corner-buttons {
+    margin-top: 30px;
+}
+
+:root.linux:not(#k) .caption-buttons {
+    height: 30px;
+    align-items: center;
+    gap: 10px;
+    right: 10px;
+}
+
+/* Los botones de GNOME: círculos grises (el de cerrar de Ubuntu, naranja). */
+:root.linux:not(#k) .caption-button,
+:root.btn-gnome:not(#k) .floating-panel > .title .close,
+:root.btn-gnome:not(#k) .dialog > .title .close {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--menubar-text) 10%, transparent);
+    color: var(--menubar-text);
+}
+
+:root.linux:not(#k) .caption-button:hover,
+:root.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close:hover {
+    background: color-mix(in srgb, var(--menubar-text) 20%, transparent);
+}
+
+:root.desk-yaru:not(#k) .caption-button.close,
+:root.desk-yaru.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close {
+    background: #e95420;
+    color: #ffffff;
+}
+
+:root.desk-yaru:not(#k) .caption-button.close:hover,
+:root.desk-yaru.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close:hover {
+    background: #f06d3c;
+}
+
+:root.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close {
+    width: 18px;
+    height: 18px;
+    margin: 0 3px;
+    align-self: center;
+}
+
+/* (También con el estilo Paint.NET, que pone una «x» de texto: aquí la cruz de dos rayas.) */
+:root.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close::before,
+:root.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close::after {
+    content: "";
+    display: block;
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    top: 8.25px;
+    height: 1.5px;
+    background: currentColor;
+    font: inherit;
+    transform: rotate(45deg);
+}
+
+:root.btn-gnome:not(#k) :is(.floating-panel, .dialog) > .title .close::after {
+    transform: rotate(-45deg);
+}
+
+:root.btn-gnome:not(.desk-yaru):not(#k) :is(.floating-panel, .dialog) > .title .close {
+    color: var(--panel-title-text);
+}
+
+:root.linux:not(#k) .caption-button.close::before,
+:root.linux:not(#k) .caption-button.close::after {
+    width: 8px;
+    margin-left: -4px;
+}
+
+:root.linux:not(#k) .caption-button.max::before {
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+}

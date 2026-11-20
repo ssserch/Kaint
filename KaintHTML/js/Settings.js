@@ -51,6 +51,7 @@ const defaults = {
     // Subrayar siempre las letras de acceso de los menús (si no, como en Windows, solo con Alt).
     menuMnemonics: false,
     colorScheme: 0, // 0: sistema · 1: claro · 2: oscuro · 4: Windows 98 · 5: personalizado · 6: azul · 7: Windows 7 · 8: XP · 9: 98 ALT · 10: Windows 7 oscuro
+                    // · 11, 12: Windows 8 (oscuro) · 13, 14: Windows 7 Basic (oscuro) · 15-22: Ubuntu, GNOME, Linux Mint y elementary OS (claro y oscuro)
     // Inglés por defecto (como Kaint); el español se elige en la bienvenida o en Configuración.
     language: "en",
     dropShadow: true,
@@ -129,6 +130,8 @@ const defaults = {
     win7PanelClose: 1,
     // El color de las ventanas de los temas Windows 7 (#rrggbb; vacío, el de siempre).
     win7Glass: "",
+    // El color de las ventanas de los temas Windows 8 (#rrggbb; vacío, el celeste de siempre).
+    win8Color: "",
     // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), si al
     // sacar una se esconden las que tape (en las esquinas) y el tamaño de cada una en el modo
     // Ventanas (en %).

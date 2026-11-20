@@ -14,7 +14,8 @@ import { download } from "../core/ImageIO.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
-import { baseColors, ColorRoles, customColors, readDesign, resolveScheme, themeFromJson, themeToJson, Win7WindowColors } from "./Themes.js";
+import { baseColors, ColorRoles, customColors, readDesign, resolveScheme, themeChoices, themeFromJson, themeToJson, Win7WindowColors, Win8DefaultColor,
+         Win8StartColors, Win8WindowColors } from "./Themes.js";
 import { BackgroundAccept, BackgroundDefaults, backgroundAlignment, backgroundType, clearBackground, isVideoFile, loadBackgroundFile, storeBackground } from "./Background.js";
 import { unzip, zip } from "../core/Zip.js";
 import { CustomLanguages, currentCustomLanguage, currentLanguage, plain, tr, trn } from "../i18n.js";
@@ -839,11 +840,11 @@ export async function settingsDialog(app = null, startPage = "interface") {
     let show = null;
     const pages = [
         ["interface", "settings-interface", tr("Interfaz de usuario"), async () => {
-            const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
+            const scheme = select(themeChoices(tr),
                                   Settings.get("colorScheme"));
             scheme.addEventListener("change", () => {
                 // Los temas de Windows 7 traen los bordes redondeados (se pueden volver a poner rectos).
-                const win7 = (s) => s === 7 || s === 10;
+                const win7 = (s) => s === 7 || s === 10 || s === 13 || s === 14;
                 if (win7(Number(scheme.value)) && !win7(Number(Settings.get("colorScheme")) || 0))
                     Settings.set("windowCorners", 1);
                 Settings.set("colorScheme", Number(scheme.value));
@@ -958,9 +959,10 @@ export async function settingsDialog(app = null, startPage = "interface") {
             });
             // Botones de cerrar de las ventanas y los diálogos (la web no tiene barra de título), como
             // los de la barra de título de Kaint. Con los temas Windows 7, XP y 98, «Windows 10» son los suyos.
-            const buttonsStyle = select([[0, tr("Windows 10")], [1, tr("Windows 11")], [2, "macOS"], [3, tr("Windows 7")], [4, tr("Windows XP")], [5, tr("Windows 98")]],
+            const buttonsStyle = select([[0, tr("Windows 10")], [1, tr("Windows 11")], [2, "macOS"], [3, tr("Windows 7")], [7, tr("Windows 8")], [4, tr("Windows XP")],
+                                         [5, tr("Windows 98")], [8, "GNOME"]],
                                         Settings.get("titleButtons") || 0);
-            buttonsStyle.title = tr("El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, Windows XP y Windows 98, «Windows 10» usa el del tema.");
+            buttonsStyle.title = tr("El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, 8, XP, 98 y los de Linux, «Windows 10» usa el del tema.");
             buttonsStyle.addEventListener("change", () => Settings.set("titleButtons", Number(buttonsStyle.value)));
             // Con los de Windows 7 (elegidos o, con el tema Windows 7, los predeterminados), la forma de
             // la X de las ventanas.
@@ -1018,11 +1020,34 @@ export async function settingsDialog(app = null, startPage = "interface") {
             glassInput.addEventListener("input", () => Settings.set("win7Glass", glassInput.value));
             const themeGlassRow = el("label", { style: { marginLeft: "20px" } }, [tr("Color de las ventanas:"), glassChoice, glassInput]);
             themeGlassRow.title = tr("Como «Color de ventana» de Windows 7: el cristal de los marcos, la franja de los menús y las cabeceras de las ventanas. Solo con los temas Windows 7.");
+            // Windows 8: el color de las ventanas (el marco y las cabeceras), como «Color y apariencia»
+            // de Windows 8: sus colores, los de la pantalla Inicio o uno propio (el único con negro).
+            const win8Value = String(Settings.get("win8Color") || "").toLowerCase();
+            const win8Presets = [...Win8WindowColors, ...Win8StartColors];
+            const win8Choice = select([["", tr("Predeterminado")], ...win8Presets.map(([name, hex]) => [hex, tr(name)]), ["custom", tr("Personalizado")]],
+                                      !win8Value ? "" : win8Presets.some(([, hex]) => hex === win8Value) ? win8Value : "custom");
+            const win8Input = el("input", { type: "color", value: win8Value || Win8DefaultColor });
+            win8Input.hidden = win8Choice.value !== "custom";
+            for (const option of win8Choice.options)
+                if (/^#/.test(option.value)) {
+                    option.style.boxShadow = `inset 14px 0 0 ${option.value}`;
+                    option.style.paddingLeft = "18px";
+                }
+            win8Choice.addEventListener("change", () => {
+                win8Input.hidden = win8Choice.value !== "custom";
+                Settings.set("win8Color", win8Choice.value === "custom" ? win8Input.value : win8Choice.value || null);
+            });
+            win8Input.addEventListener("input", () => Settings.set("win8Color", win8Input.value));
+            const themeWin8Row = el("label", { style: { marginLeft: "20px" } }, [tr("Color de las ventanas:"), win8Choice, win8Input]);
+            themeWin8Row.title = tr("El marco y la barra de título de las ventanas, como en Windows 8. Solo con los temas Windows 8.");
             const syncThemeWin7 = () => {
+                themeWin8Row.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win8 ? "" : "none";
                 themeWin7Row.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win7 ? "" : "none";
                 // (También el personalizado con base Windows 7 u oscuro; si en Personalizar… tiene un
                 // cristal propio, manda ese.)
-                themeGlassRow.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win7 ? "" : "none";
+                // (Windows 7 Basic tiene el suyo, opaco.)
+                const resolved = resolveScheme(Number(Settings.get("colorScheme")) || 0);
+                themeGlassRow.style.display = resolved.win7 && !resolved.basic ? "" : "none";
             };
             syncThemeWin7();
             window.addEventListener("kaint-settings", (e) => (e.detail?.key === "colorScheme" || e.detail?.key === "customTheme") && syncThemeWin7());
@@ -1166,7 +1191,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), "paletteTranslucent",
                       tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de menos colores no se muestra nunca.")),
                 el("label", {}, [tr("Tema:"), scheme, customize]),
-                themeWin7Row, themeGlassRow,
+                themeWin7Row, themeGlassRow, themeWin8Row,
                 el("label", {}, [tr("Estilo de la interfaz:"), look]),
                 el("label", {}, [tr("Cursores:"), cursors]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
@@ -2906,7 +2931,7 @@ export async function aboutDialog(version) {
 export async function welcomeDialog() {
     const dlg = new Dialog(tr("Te damos la bienvenida a Kaint"));
     const startLanguage = Settings.get("language");
-    const scheme = select([[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")], [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")], [5, tr("Personalizado")]],
+    const scheme = select(themeChoices(tr),
                           Settings.get("colorScheme"));
     scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
     const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));

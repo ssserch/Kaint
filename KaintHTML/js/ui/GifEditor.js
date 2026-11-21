@@ -306,6 +306,9 @@ export class GifEditor {
             doc.addEventListener("active", active);
             this.listeners.push(["active", active]);
         }
+        // El cabezal, al principio del fotograma elegido (la capa activa).
+        if (doc && this.selected() >= 0)
+            this.time = this.starts()[this.selected()];
         this.rebuildMedia();
         this.update();
     }

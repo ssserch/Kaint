@@ -36,6 +36,18 @@ THEMES=(
     "windowsxp|Windows XP|windowsxp"
     "windows98|Windows 98|windows98"
     "windows98alt|Windows 98 ALT|windows98-alt"
+    "windows7basic|Windows 7 Basic|windows7-basic"
+    "windows7basicdark|Windows 7 Basic oscuro|windows7-basic-dark"
+    "windows8|Windows 8|windows8"
+    "windows8dark|Windows 8 oscuro|windows8-dark"
+    "ubuntu|Ubuntu|ubuntu"
+    "ubuntudark|Ubuntu oscuro|ubuntu-dark"
+    "gnome|GNOME|gnome"
+    "gnomedark|GNOME oscuro|gnome-dark"
+    "mint|Linux Mint|mint"
+    "mintdark|Linux Mint oscuro|mint-dark"
+    "elementary|elementary OS|elementary"
+    "elementarydark|elementary OS oscuro|elementary-dark"
     "kde|KDE|kde"
 )
 # Los colores de ventana de Windows 7 (Personalizar > Color de ventana), aproximados.

@@ -7,9 +7,25 @@
 
 ---
 
+# Kaint.HTML
+
 **KaintHTML** is the web version of [Kaint](../README.md): the same look, tools, floating
 windows, menus, adjustments and effects, written in plain JavaScript with no dependencies and no
 build step. Everything runs locally in the browser: images never leave your computer.
+
+## New in 1.2.0
+
+- **GIF editor**: keyframes like Filmora (position, scale, rotation and opacity, with their graph and
+  diamonds on the timeline), copy and paste frames, export as animated PNG, animated WebP or **MP4**
+  (WebCodecs), and a bar that warns when the GIF gets too heavy.
+- **Painting**: the advanced brush (tip, flow, pressure curve, stabilizer, tapered ends, jitter and
+  Ibis Paint style side sliders on phones), **symmetry** (mirror and radial), **quick shapes** (hold
+  still at the end of a stroke), Edit → Save Selection as Shape, **Alpha Lock** and view rotation
+  with Alt + wheel.
+- **Themes**: Windows 8, Windows 7 Basic, Ubuntu, GNOME, Linux Mint and elementary OS (light and dark),
+  and the Windows 7 window frame like Kaint's.
+- **Brazilian Portuguese** (by Mildanner), icons with several sizes as layers, a single Save button on
+  phones and smoother painting on images with many layers.
 
 ## Run it
 
@@ -116,8 +132,9 @@ own history and suggest it to the host, who accepts it. The protocol is describe
   durations and **Image > Color Profile** converts or assigns sRGB, Adobe RGB, Display P3 or
   ProPhoto RGB (the profile is read from and embedded in PNG, JPEG, WebP and TIFF files). Drop
   images onto the window to open them.
-- **Themes**: light and dark (or follow the system), Paint.NET's Blue, Windows 7 and Windows 7 Dark (with 7.css's glass
-  windows; smoked glass in the dark one), Windows XP (Luna, with XP.css's), Windows 98 and Windows 98 ALT (with 98.css's)
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, Windows 8 and Windows 8 Dark, Windows 7 and Windows 7
+  Dark (with 7.css's glass windows; smoked glass in the dark one), Windows 7 Basic, Windows XP (Luna, with XP.css's),
+  Windows 98 and Windows 98 ALT (with 98.css's), Ubuntu, GNOME, Linux Mint and elementary OS (light and dark)
   and a custom theme with Kaint's editable colors that can start from any of them (Windows 7 and XP with their style) and
   have an image, an animated GIF or a video (MP4, WebM...) as the canvas background, and the **interface style** of Kaint or the Paint.NET 5 recreation (more
   compact, borderless windows, Windows 10 dialogs, gray and blue bar sliders and hollow handles);

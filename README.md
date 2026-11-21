@@ -21,12 +21,15 @@
 
 ---
 
+# Kaint
+
 **Kaint** recreates the look, the tools and the workflow of [Paint.NET](https://www.getpaint.net/)
 as a native application. It is made for KDE Plasma on Wayland, it also
-runs on Windows 10 and 11.
+runs on Windows 10 and 11, in any browser and on Android.
 
 <table align="center">
   <tr>
+    <td align="center" width="110"><a href="#whats-new-in-120"><img src="data/ui-icons/menu_help_about_icon.png" alt="" width="32"><br><sub><b>What's new</b></sub></a></td>
     <td align="center" width="110"><a href="#make-it-yours"><img src="data/ui-icons/menu_utilities_settings_icon.png" alt="" width="32"><br><sub><b>Make it yours</b></sub></a></td>
     <td align="center" width="110"><a href="#features"><img src="img/kaint-32.png" alt="" width="32"><br><sub><b>Features</b></sub></a></td>
     <td align="center" width="110"><a href="#gif-editor"><img src="data/ui-icons/menu_window_layers_icon.png" alt="" width="32"><br><sub><b>GIF Editor</b></sub></a></td>
@@ -37,21 +40,67 @@ runs on Windows 10 and 11.
   </tr>
 </table>
 
+## What's new in 1.2.0
+
+<table>
+  <tr>
+    <td width="50%"><img src="img/other/gifeditor-keyframes.png" alt="The GIF editor with keyframes, the animation panel and its graph"></td>
+    <td width="50%"><img src="img/other/brush-symmetry.png" alt="A radial symmetry drawing with the advanced brush options open"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>GIF editor keyframes</b>: move, scale, rotate and fade each frame, like Filmora</sub></td>
+    <td align="center"><sub><b>Advanced brush and symmetry</b>: tapered manga lines, mirror and radial drawing</sub></td>
+  </tr>
+  <tr>
+    <td><img src="img/themes/windows8.png" alt="Windows 8 theme"></td>
+    <td><img src="img/themes/ubuntu-dark.png" alt="Ubuntu dark theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Windows 8</b>, Windows 7 Basic and new window colors</sub></td>
+    <td align="center"><sub><b>Linux themes</b>: Ubuntu, GNOME, Linux Mint and elementary OS</sub></td>
+  </tr>
+</table>
+
+- **Paint.NET plugins with modern .NET**: a new host built on [paint.rs](https://github.com/daijro/paint.rs)'s
+  Paint.NET 5 libraries runs GPU effects, `BitmapEffect` and Paint.NET 5 plugins, reads their own
+  windows without showing them (so they work on Wayland too) and opens and saves the formats of
+  FileType plugins. Mono (with OpenD2D) and Wine stay as fallbacks, chosen per effect.
+- **GIF editor**: keyframes like Filmora (position, scale, rotation and opacity with linear, curve,
+  continuous curve, freeze and ease in/out), a graph of each value, draggable diamonds on the
+  timeline, copy and paste of frames (Ctrl+C / Ctrl+V), export as **animated PNG, animated WebP,
+  MP4 or WebM**, and a bar that warns when the GIF gets too heavy (Discord's 10 MB).
+- **Painting**: an advanced brush (tip, flow, pressure curve, stabilizer, tapered ends, random
+  jitter, Ibis Paint style side sliders), **symmetry** (mirror and radial), **quick shapes** (hold
+  still at the end of a stroke and it becomes a perfect line, circle, rectangle or polygon), your
+  **own shapes** (Edit → Save Selection as Shape), **Alpha Lock** and view rotation with Alt + wheel.
+- **Themes**: Windows 8 and Windows 8 Dark, Windows 7 Basic, Ubuntu, GNOME, Linux Mint and elementary
+  OS (light and dark), and Windows 7 polished with 7.css.
+- **Formats**: WebP, AVIF, JPEG XL and HEIC with Kaint's own codecs, and icons with several sizes open
+  as one layer per size, like GIMP.
+- **Languages**: Brazilian Portuguese, translated by **Mildanner**.
+
+> [!NOTE]
+> **New version numbers.** From 1.2.0 on, the **second number** goes up with big updates (1.2.0 → 1.3.0)
+> and the **third number** with bug fixes and small changes (1.2.0 → 1.2.1).
+
 ## Make it yours
 
 <div align="center">
+  <img src="img/themes/windows8.png" alt="Windows 8 theme" width="32%">
   <img src="img/themes/windows7.png" alt="Windows 7 theme" width="32%">
-  <img src="img/themes/blue.png" alt="Blue theme" width="32%">
-  <img src="img/themes/windowsxp.png" alt="Windows XP theme" width="32%">
+  <img src="img/themes/gnome-dark.png" alt="GNOME dark theme" width="32%">
 </div>
 
 Kaint looks the way you want. Almost everything about its appearance can be changed from
 **Settings → User interface**, and every change shows at once:
 
-- **Themes**: light and dark (or follow the system), Paint.NET's Blue, **Windows 7** and **Windows 7
-  Dark** (with 7.css's colors and glass buttons), **Windows XP** (Luna, with XP.css's), the classic gray
-  of **Windows 98** and **Windows 98 ALT** (the classic look of Windows 2000 and XP),
-  the real **KDE** theme on Linux, and a **custom theme** editor with every color,
+- **Themes**: light and dark (or follow the system), Paint.NET's Blue, **Windows 8** and **Windows 8
+  Dark** (the wide flat frame in the window color, with the colors of Windows 8, sky blue by default),
+  **Windows 7** and **Windows 7 Dark** (with 7.css's colors and glass buttons), **Windows 7 Basic**
+  (light and dark, without glass), **Windows XP** (Luna, with XP.css's), the classic gray
+  of **Windows 98** and **Windows 98 ALT** (the classic look of Windows 2000 and XP), the Linux
+  desktops **Ubuntu** (Yaru), **GNOME** (Adwaita), **Linux Mint** (Mint-Y) and **elementary OS**, each
+  light and dark, the real **KDE** theme on Linux, and a **custom theme** editor with every color,
   the toolbar layout and a canvas background (placement, scale, blur and tint), which you can
   export and share. The custom theme can start from any of them, Windows 7 (light or dark) and XP
   included with their style of buttons, menus and windows, and its background can be an image, an
@@ -61,8 +110,9 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   a grid of shapes and Paint.NET's Colors window.
 - **Title bar**: Kaint can draw a title bar and window frame of its own (**Settings → User
   interface → Title bar**; on by default on Linux, off on Windows), with the shadow from KWin or
-  from Windows; drag it from anywhere. Its buttons can be **Automatic** (the theme's: Windows 7, XP or
-  98 with those themes) or look like those of **Windows 11, 10, 7, XP or 98, or macOS** with any theme,
+  from Windows; drag it from anywhere. Its buttons can be **Automatic** (the theme's: Windows 8, 7, XP
+  or 98 with those themes, round GNOME-style ones with the Linux themes and Windows 10's with the
+  rest) or look like those of **Windows 11, 10, 8, 7, XP or 98, macOS or GNOME** with any theme,
   on the right or on the left. Turned off, windows get the system's title bar
   (Windows', or your desktop's: Plasma's on KDE). With the Paint.NET style, the
   **Windows recreation** picks Windows 10 or Windows 11 (slightly rounded windows when not
@@ -136,8 +186,9 @@ bars. Effect dialogs have a **Preview** box to compare with the original image.
 
 <br>
 
-With **Automatic** title bar buttons (the default), each theme brings its own: the blue Luna ones with
-Windows XP, the glass ones with Windows 7 and the raised ones with Windows 98. Any other style can be
+With **Automatic** title bar buttons (the default), each theme brings its own: the flat ones with
+Windows 8, the blue Luna ones with Windows XP, the glass ones with Windows 7, the raised ones with
+Windows 98 and round ones with the Linux themes. Any other style can be
 chosen in **Settings → User interface → Title bar** with any theme. The **KDE** theme follows the
 colors of your Plasma desktop. All screenshots are 1920 × 1080, made with
 `./screenpreview.sh --all --win7-colors`.
@@ -164,14 +215,53 @@ colors of your Plasma desktop. All screenshots are 1920 × 1080, made with
     <td align="center"><sub>Windows XP</sub></td>
   </tr>
   <tr>
-    <td><img src="img/themes/windows98.png" alt="Windows 98 theme"></td>
-    <td><img src="img/themes/windows98-alt.png" alt="Windows 98 ALT theme"></td>
-    <td></td>
+    <td><img src="img/themes/windows7-basic.png" alt="Windows 7 Basic theme"></td>
+    <td><img src="img/themes/windows7-basic-dark.png" alt="Windows 7 Basic Dark theme"></td>
+    <td><img src="img/themes/windows8.png" alt="Windows 8 theme"></td>
   </tr>
   <tr>
+    <td align="center"><sub>Windows 7 Basic</sub></td>
+    <td align="center"><sub>Windows 7 Basic Dark</sub></td>
+    <td align="center"><sub>Windows 8</sub></td>
+  </tr>
+  <tr>
+    <td><img src="img/themes/windows8-dark.png" alt="Windows 8 Dark theme"></td>
+    <td><img src="img/themes/windows98.png" alt="Windows 98 theme"></td>
+    <td><img src="img/themes/windows98-alt.png" alt="Windows 98 ALT theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Windows 8 Dark</sub></td>
     <td align="center"><sub>Windows 98</sub></td>
     <td align="center"><sub>Windows 98 ALT</sub></td>
-    <td></td>
+  </tr>
+</table>
+
+**Linux desktops**
+
+<table>
+  <tr>
+    <td width="25%"><img src="img/themes/ubuntu.png" alt="Ubuntu theme"></td>
+    <td width="25%"><img src="img/themes/gnome.png" alt="GNOME theme"></td>
+    <td width="25%"><img src="img/themes/mint.png" alt="Linux Mint theme"></td>
+    <td width="25%"><img src="img/themes/elementary.png" alt="elementary OS theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Ubuntu</sub></td>
+    <td align="center"><sub>GNOME</sub></td>
+    <td align="center"><sub>Linux Mint</sub></td>
+    <td align="center"><sub>elementary OS</sub></td>
+  </tr>
+  <tr>
+    <td><img src="img/themes/ubuntu-dark.png" alt="Ubuntu Dark theme"></td>
+    <td><img src="img/themes/gnome-dark.png" alt="GNOME Dark theme"></td>
+    <td><img src="img/themes/mint-dark.png" alt="Linux Mint Dark theme"></td>
+    <td><img src="img/themes/elementary-dark.png" alt="elementary OS Dark theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Ubuntu Dark</sub></td>
+    <td align="center"><sub>GNOME Dark</sub></td>
+    <td align="center"><sub>Linux Mint Dark</sub></td>
+    <td align="center"><sub>elementary OS Dark</sub></td>
   </tr>
 </table>
 
@@ -266,7 +356,8 @@ color you choose for the glass of the windows (**Settings → User interface**).
   <tr>
     <td valign="top">
       <h4>Layers</h4>
-      Blend modes, opacity, visibility and properties, with live thumbnails.
+      Blend modes, opacity, visibility and properties, with live thumbnails, <b>Alpha Lock</b> (paint
+      only where there already is something) and layers that glide into place when you drag them.
     </td>
     <td valign="top">
       <h4>Adjustments and effects</h4>
@@ -278,7 +369,10 @@ color you choose for the glass of the windows (**Settings → User interface**).
       <h4>Plugins</h4>
       Paint.NET effect plugins (.dll), through the .NET Framework built into Windows and, on Linux,
       macOS and FreeBSD, with the plugin system you choose (in <b>Settings → Plugins</b> or the welcome
-      window): <b>Wine</b> 🍷 (the plugins run inside Wine like a Windows program) or <b>OpenD2D</b>
+      window): <b>.NET</b> (the default: modern .NET with paint.rs's Paint.NET 5 libraries, for GPU,
+      <code>BitmapEffect</code> and Paint.NET 5 plugins, their own windows shown inside Kaint's effect
+      dialog, and FileType plugins that add formats to Open and Save As), <b>Wine</b> 🍷 (the plugins
+      run inside Wine like a Windows program) or <b>OpenD2D</b>
       (mono with <a href="https://github.com/daijro/opend2d">OpenD2D</a>, the open source Direct2D,
       DirectWrite and WIC, instead of Windows' own). With OpenD2D, whatever doesn't work with mono
       (a plugin that doesn't load, or one of its effects that fails) can run with Wine, only that part,
@@ -359,7 +453,7 @@ color you choose for the glass of the windows (**Settings → User interface**).
   </tr>
   <tr>
     <td colspan="2" valign="top">
-      <h4>Collaborative mode</h4>
+      <h4>Collaborative mode 💻🤝🖥️</h4>
       Host the current image and edit it together with other copies of Kaint or with browsers
       running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
       default: share the session code and the image goes straight from one computer to the other,
@@ -394,13 +488,33 @@ color you choose for the glass of the windows (**Settings → User interface**).
     </td>
   </tr>
   <tr>
+    <td colspan="2" valign="top">
+      <h4>Painting like on a tablet app</h4>
+      <img src="img/other/brush-symmetry.png" alt="Radial symmetry drawing" width="420" align="right">
+      Turn on <b>Settings → Tools → Advanced brush options</b> for an <b>Advanced…</b> button on the
+      paintbrush, eraser and clone stamp: round or square tip with angle and roundness, flow, pressure
+      curve and minimum size, pressure that changes the opacity, <b>pressure from speed</b> for a mouse or
+      a finger, a <b>stabilizer</b> like FireAlpaca's, <b>tapered starts and ends</b> for manga lines,
+      random jitter, and Ibis Paint style vertical size and opacity sliders beside the canvas.
+      <br><br>
+      <b>Symmetry</b> mirrors what you paint with the brush, the eraser and the pencil (left and right, top
+      and bottom, both, or radial with 4, 6, 8 or 12 copies), with guides over the image.
+      <b>Quick shapes</b>: finish a stroke and hold still for a moment, and the line, circle, ellipse,
+      rectangle, triangle or polygon you drew becomes perfect. To keep a shape of your own, draw it (with
+      the lasso, or with the brush and the magic wand) and use <b>Edit → Save Selection as Shape</b>: it
+      appears in the Shapes tool. The view rotates with <b>Alt + wheel</b> (Shift: one degree at a time) or
+      Ctrl+Alt+arrows, like turning the paper.
+    </td>
+  </tr>
+  <tr>
     <td valign="top">
       <h4>Recovery copies</h4>
       Unsaved images are kept safe in case Kaint closes unexpectedly.
     </td>
     <td valign="top">
       <h4>Languages</h4>
-      English and Spanish, and your own: import, create, edit and export <b>custom languages</b>
+      English, Spanish and <b>Brazilian Portuguese</b> (translated by Mildanner), and your own: import,
+      create, edit and export <b>custom languages</b>
       (.kaintlang) in <b>Settings → User interface</b>, with the translator's name and page in
       <b>About</b>. Anything a custom language doesn't translate appears in English.
     </td>
@@ -416,19 +530,31 @@ color you choose for the glass of the windows (**Settings → User interface**).
 **File → GIF Editor** turns the current image into an animation on a timeline, with a screen like
 a simple video editor; choosing it again goes back to the image editor (each image remembers which
 one it is in). Every frame is one of the image's layers, so the History, the tools and **Export
-GIF...** (with the usual palette, loops and effects) all work as always.
+GIF...** (with the usual palette, loops and effects) all work as always. The arrow next to it exports
+an **animated PNG**, an **animated WebP** or an **MP4 or WebM video** (with FFmpeg; repeat the
+animation, enlarge pixel art without blur, pick the quality), and a small bar beside it shows how
+heavy the GIF will be and how long it lasts, turning yellow and red as it gets close to Discord's
+10 MB.
 
 - **Media**: the images open in Kaint and the ones you import or drag in from your folders
   (still images and animated GIFs).
 - **Player**: play and pause, frame by frame, loop and preview speed.
 - **Timeline**: drop media or files on it, drag clips to reorder them, stretch a clip's edge to
   change its duration, duplicate, hide, delete, reverse, back and forth, the same duration for all,
-  and edit any frame with the tools.
+  and edit any frame with the tools. Ctrl+click and Shift+click pick several frames; Ctrl+C, Ctrl+X,
+  Ctrl+V and Ctrl+D copy, cut, paste and duplicate them.
+- **Keyframes**, like Filmora: the panel on the right sets the **scale** (proportional or not),
+  **position**, **rotation** and **opacity** of the selected frame. The diamond next to each value
+  adds a keyframe at the playhead, and the diamonds appear under the clip on the timeline (white, or
+  in your accent color when selected): drag them apart and the motion lasts longer, right-click for
+  **Linear, Curve, Continuous Curve, Freeze, Ease In or Ease Out**. The graph shows how the value
+  changes and its points can be dragged too; drag the image in the preview to move it, along its
+  dotted motion path. **Convert to frames** turns the motion into ordinary frames.
 
 <table>
   <tr>
-    <td width="50%"><img src="img/other/gifeditor.png" alt="GIF editor, dark theme"></td>
-    <td width="50%"><img src="img/other/gifeditor-light.png" alt="GIF editor, light theme"></td>
+    <td width="50%"><img src="img/other/gifeditor-keyframes.png" alt="GIF editor with keyframes, dark theme"></td>
+    <td width="50%"><img src="img/other/gifeditor-keyframes-light.png" alt="GIF editor with keyframes, light theme"></td>
   </tr>
   <tr>
     <td align="center"><sub>Dark</sub></td>
@@ -446,7 +572,10 @@ GIF...** (with the usual palette, loops and effects) all work as always.
 windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
 `KaintHTML` folder with any static web server (`python3 -m http.server`) and open it. Browsers on
 the network can also join a collaborative session hosted by Kaint by opening the address its
-session window shows, and any browser can host or join a P2P session with just its code.
+session window shows, and any browser can host or join a P2P session with just its code. It has
+everything new in 1.2.0 too (keyframes and MP4 export in the GIF editor, the advanced brush with
+symmetry and quick shapes, Alpha Lock and the new themes), Brazilian Portuguese, and on phones a
+single Save button with every option and smoother painting on images with many layers.
 
 ## Opening and saving
 
@@ -467,11 +596,14 @@ Linux) or, on Windows, from the system's codecs: without them they don't appear 
 | JPEG | `.jpg` `.jpeg` `.jpe` `.jfif` `.exif` | ✔ | ✔ | ✔ / ✔ |
 | WebP | `.webp` | ✔ | ✔ | ✔ / ✔ |
 | GIF, animated (frames as layers or images) | `.gif` | ✔ | ✔ | ✔ / ✔ |
+| Animated PNG (exported from the GIF editor) | `.png` `.apng` | ✔ | ✔ | ✔ / ✔ |
+| Animated WebP (exported from the GIF editor) | `.webp` | ✔ | ✔ | ✔ / ✔ |
+| MP4 and WebM video (exported from the GIF editor, with FFmpeg; MP4 in the browser) | `.mp4` `.webm` | ❌ | ✔ | ✔ / ✔ |
 | BMP | `.bmp` `.dib` `.rle` | ✔ | ✔ | ✔ / ✔ |
 | TIFF | `.tif` `.tiff` | ✔ | ✔ | ✔ / ✔ |
 | TGA (8, 24 or 32 bits, RLE) | `.tga` | ✔ | ✔ | ✔ / ✔ |
 | DDS (DXT1, DXT3, DXT5 or uncompressed; saved uncompressed 32-bit) | `.dds` | ✔ | ✔ | ✔ / ✔ |
-| Windows icon, several sizes | `.ico` | ✔ | ✔ | ✔ / ✔ |
+| Windows icon, several sizes (one layer per size) | `.ico` | ✔ | ✔ | ✔ / ✔ |
 | Windows cursor | `.cur` | ✔ | ✔ | ✔ / ✔ |
 | QOI | `.qoi` | ✔ | ✔ | ✔ / ✔ |
 | Netpbm | `.ppm` `.pgm` `.pbm` | ✔ | ✔ | ✔ / ✔ |
@@ -479,9 +611,9 @@ Linux) or, on Windows, from the system's codecs: without them they don't appear 
 | PCX (Paintbrush) | `.pcx` | ✔ | ✔ | ✔ / ✔ |
 | SGI (Silicon Graphics) | `.sgi` `.rgb` `.rgba` `.bw` | ✔ | ✔ | ✔ / ✔ |
 | Farbfeld | `.ff` | ✔ | ✔ | ✔ / ✔ |
-| AVIF ¹ | `.avif` | ✔ | ✔ | ✔ / ⚪ |
-| JPEG XL ¹ | `.jxl` | ✔ | ✔ | ✔ / ⚪ |
-| HEIC / HEIF ¹ | `.heic` `.heif` `.hif` | ✔ | ✔ | ✔ / ❌ |
+| AVIF ² | `.avif` | ✔ | ✔ | ✔ / ⚪ |
+| JPEG XL ² | `.jxl` | ✔ | ✔ | ✔ / ⚪ |
+| HEIC / HEIF ² | `.heic` `.heif` `.hif` | ✔ | ✔ | ✔ / ❌ |
 | JPEG XR ¹ | `.jxr` `.wdp` `.hdp` `.wmp` | ⚪ | ⚪ | ⚪ / ❌ |
 | OpenEXR ¹ | `.exr` | ✔ | ✔ | ✔ / ⚪ |
 | JPEG 2000 ¹ | `.jp2` `.j2k` `.jpf` | ✔ | ✔ | ✔ / ⚪ |
@@ -509,6 +641,9 @@ Store extensions. The web version (tested in Chromium) opens AVIF with the brows
 JPEG XR with jpegxr.js, and HEIC, JPEG XL, OpenEXR, JPEG 2000, Radiance HDR, PFM, Sun Raster, GIMP,
 PlayStation TIM and macOS icons with magick-wasm when the browser can't; saving AVIF or JPEG XL
 depends on the browser.
+
+² With Kaint's own codecs when it is built with libwebp, libavif, libjxl and libheif (the Arch package
+and the AppImage are): HEIC is read only. Without them, from Qt's image plugins, like ¹.
 
 Photoshop files keep each layer's name, visibility, opacity and blend mode (the ones both programs
 share); PNG, JPEG, WebP and TIFF keep their color profile and resolution.
@@ -719,7 +854,10 @@ jxrlib (BSD), and HEIC, JPEG XL, AVIF, OpenEXR, JPEG 2000 and other formats (whe
 [magick-wasm](https://github.com/dlemstra/magick-wasm) by Dirk Lemstra (Apache-2.0). Plugins from
 **Browse Plugins** are the work of their authors, credited next to each one. Some features were
 inspired by [paint.rs](https://github.com/daijro/paint.rs) by daijro, such as having PhotoCraft's
-tools in Kaint.
+tools in Kaint; the .NET plugin system uses paint.rs's Paint.NET 5 replacement libraries and plugin
+bridge (`third_party/pdn5/`, GPL-3.0). WebP, AVIF, JPEG XL and HEIC use libwebp (BSD), libavif
+(BSD), libjxl (BSD) and libheif (LGPL-3.0), and video export runs [FFmpeg](https://ffmpeg.org) when it
+is installed. The Brazilian Portuguese translation is by Mildanner.
 
 ## Disclaimer
 

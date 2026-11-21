@@ -1060,6 +1060,11 @@ void GifEditor::setDocument(Document* doc)
         });
         connect(m_doc, &Document::sizeChanged, this, relayout);
         connect(m_doc, &QObject::destroyed, this, [this] { setDocument(nullptr); });
+        // El cabezal, al principio del fotograma elegido (la capa activa).
+        const QList<int> s = frameStarts();
+        const int i = selectedFrame();
+        if (i >= 0 && i + 1 < s.size())
+            m_time = s[i];
     }
     rebuildMedia();
     updateState();

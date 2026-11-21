@@ -1344,6 +1344,62 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `exportar PNG animado, WebP animado y MP4 (${JSON.stringify(r)})`);
 }
 
+// Simetría, formas rápidas y guardar la selección como forma.
+{
+    const r = await page.evaluate(async () => {
+        const { Document } = await import("./js/core/Document.js");
+        const { Stroke } = await import("./js/tools/Stroke.js");
+        const { recognize, maskOutline } = await import("./js/core/QuickShape.js");
+        const { CustomShapes, polygonsToMarkup } = await import("./js/core/CustomShapes.js");
+        const doc = new Document(100, 60, { background: null });
+        const layer = doc.layers[0];
+        const s = new Stroke(doc, layer, { mode: "paint", color: { r: 0, g: 0, b: 255, a: 255 }, hardness: 100, symmetry: 1 });
+        s.lineTo(20, 30, 6);
+        s.lineTo(40, 30, 6);
+        s.commit("Pincel", "paintbrush");
+        const a = (x, y) => layer.ctx.getImageData(x, y, 1, 1).data[3];
+        const out = { mirrored: a(25, 30) === 255 && a(75, 30) === 255 && a(50, 10) === 0 };
+        const circle = [];
+        for (let i = 0; i <= 80; i++) {
+            const t = (2 * Math.PI * i) / 80, w = 1.5 * Math.sin(i * 1.7);
+            circle.push({ x: 100 + (40 + w) * Math.cos(t), y: 100 + (40 + w) * Math.sin(t) });
+        }
+        const line = [];
+        for (let k = 0; k <= 40; k++)
+            line.push({ x: 10 + k * 3, y: 20 + k * 1.5 + (k % 3 === 0 ? 1.2 : 0) });
+        out.circle = recognize(circle).kind;
+        out.line = recognize(line).kind;
+        // El trazo sustituido por la forma: lo de antes se borra.
+        const doc2 = new Document(200, 200, { background: null }), l2 = doc2.layers[0];
+        const st = new Stroke(doc2, l2, { mode: "paint", color: { r: 0, g: 0, b: 0, a: 255 }, hardness: 100 });
+        for (const p of circle)
+            st.lineTo(p.x, p.y, 4);
+        st.lineTo(5, 5, 4);
+        st.replaceWith(recognize(circle).points);
+        st.commit("Pincel", "paintbrush");
+        out.replaced = l2.ctx.getImageData(5, 5, 1, 1).data[3] === 0 && l2.ctx.getImageData(140, 100, 1, 1).data[3] > 200;
+        // Una selección en forma de L, guardada como forma.
+        const mask = new Uint8Array(20 * 20);
+        for (let y = 2; y < 18; y++)
+            for (let x = 2; x < 18; x++)
+                if (x < 8 || y > 12)
+                    mask[y * 20 + x] = 255;
+        const polys = maskOutline(mask, 20, 20);
+        out.corners = polys.length === 1 ? polys[0].length - 1 : -1;
+        const before = CustomShapes.all().length;
+        const id = CustomShapes.addMarkup("Mi L", polygonsToMarkup(polys));
+        out.saved = CustomShapes.all().length === before + 1 && CustomShapes.find(id)?.name === "Mi L";
+        CustomShapes.remove([id]);
+        // Los botones en la barra del pincel.
+        window.kaint.tools.select("paintbrush");
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        out.button = !![...document.querySelectorAll("#tool-options button")].find((b) => b.title === "Simetría");
+        return out;
+    });
+    check(r.mirrored && r.circle === "circle" && r.line === "line" && r.replaced && r.corners === 6 && r.saved && r.button,
+          `simetría, formas rápidas y formas propias (${JSON.stringify(r)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

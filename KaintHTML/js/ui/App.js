@@ -23,7 +23,7 @@ import { forgetCopiedFrames, GifEditor } from "./GifEditor.js";
 import { applyThemeColors, applyWindowButtons } from "./Themes.js";
 import { applyBackground } from "./Background.js";
 import {
-    aboutDialog, animationDialog, canvasSizeDialog, checkbox, colorProfileDialog, Dialog, dialogOpen, el, gifFramesDialog, layerPropertiesDialog, message, newImageDialog, promptNumber,
+    aboutDialog, animationDialog, canvasSizeDialog, checkbox, colorProfileDialog, Dialog, dialogOpen, el, gifFramesDialog, layerPropertiesDialog, message, newImageDialog, promptNumber, promptText,
     resizeDialog, saveAsDialog, settingsDialog, TaskDialog,
 } from "./Dialogs.js";
 import { delayFromName } from "../core/Codecs.js";
@@ -33,6 +33,8 @@ import { MenuBar, popupMenu } from "./Menu.js";
 import { colorsPanel, FloatingPanel, historyPanel, layersPanel, toolsPanel } from "./Panels.js";
 import { isPhone, MobilePanels } from "./Mobile.js";
 import { ToolOptions } from "./ToolOptions.js";
+import { CustomShapes, polygonsToMarkup } from "../core/CustomShapes.js";
+import { maskOutline } from "../core/QuickShape.js";
 import { BrushSliders } from "./BrushSliders.js";
 import { saveConfigDialog } from "./SaveDialog.js";
 import { saveAllDialog } from "./SaveAllDialog.js";
@@ -1090,6 +1092,9 @@ export class App extends EventTarget {
         A("growSel", tr("A&mpliar la selección..."), "zoom-in", null, c(() => this.reshapeSelection("grow")), sel);
         A("shrinkSel", tr("&Reducir la selección..."), "zoom-out", null, c(() => this.reshapeSelection("shrink")), sel);
         A("featherSel", tr("&Difuminar la selección..."), "effect-gaussianblur", null, c(() => this.reshapeSelection("feather")), sel);
+        // Crear formas propias: se dibuja la figura (con el lazo, o con el pincel y la varita mágica) y
+        // su contorno queda en Formas personalizadas.
+        A("selectionShape", tr("Guardar la selección como &forma..."), "shapes", null, c(() => this.saveSelectionAsShape()), sel);
         A("eraseSel", tr("&Borrar la selección"), "edit-erase-selection", "Del", c(() => this.eraseSelection()), sel);
         A("fillSel", tr("&Rellenar la selección"), "edit-fill-selection", "Backspace", c(() => this.fillSelection()), sel);
         A("invertSel", tr("&Invertir la selección"), "edit-select-invert", "Ctrl+I", c(() => this.invertSelection()), has);
@@ -1196,7 +1201,7 @@ export class App extends EventTarget {
                                                       { text: tr("Pegar s&elección"), icon: "edit-paste-selection", enabled: !!this.doc,
                                                         submenu: () => Object.values(SelectionMode).map((m) => a(`pasteSelection-${m}`)) },
                                                       "-", a("eraseSel"), a("fillSel"), a("invertSel"), a("selectAll"), a("deselect"), "-",
-                                                      a("growSel"), a("shrinkSel"), a("featherSel")] },
+                                                      a("growSel"), a("shrinkSel"), a("featherSel"), a("selectionShape")] },
             { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("rotateViewLeft"), a("rotateViewRight"),
                                                   a("rotateViewReset"), "-", a("pixelGrid"), a("rulers"), "-", a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
@@ -1634,6 +1639,28 @@ export class App extends EventTarget {
         document.addEventListener("fullscreenchange", sync);
         sync();
         document.getElementById("top-row").append(el("div", { className: "caption-buttons" }, [max, close]));
+    }
+
+    // Guarda el contorno de la selección como una forma personalizada (para dibujarla con Formas).
+    async saveSelectionAsShape() {
+        const sel = this.doc?.selection;
+        if (!sel || sel.isEmpty())
+            return;
+        const name = (await promptText(tr("Guardar como forma"), tr("Nombre de la forma:"), tr("Mi forma")))?.trim();
+        if (!name)
+            return;
+        const polygons = sel.rect
+            ? [[{ x: sel.rect.x, y: sel.rect.y }, { x: sel.rect.x + sel.rect.w, y: sel.rect.y }, { x: sel.rect.x + sel.rect.w, y: sel.rect.y + sel.rect.h },
+                { x: sel.rect.x, y: sel.rect.y + sel.rect.h }]]
+            : maskOutline(sel.mask, sel.width, sel.height);
+        if (!polygons.length)
+            return;
+        try {
+            CustomShapes.addMarkup(name, polygonsToMarkup(polygons));
+            this.showHint(tr("Forma «%1» guardada: está en la herramienta Formas, entre las personalizadas.", name));
+        } catch (e) {
+            await message(tr("Guardar como forma"), String(e?.message || e), "dialog-warning");
+        }
     }
 
     // --- Historial ---------------------------------------------------------------------------

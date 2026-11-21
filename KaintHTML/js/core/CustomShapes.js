@@ -819,9 +819,45 @@ export const CustomShapes = {
         return errors;
     },
 
+    // Una forma nueva hecha en Kaint (Edición > Guardar la selección como forma): el trazado con la
+    // sintaxis de WPF; se guarda como una forma de Paint.NET (.xaml). Devuelve su id.
+    addMarkup(name, markup) {
+        const escape = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
+        const xaml = `<ps:SimpleGeometryShape xmlns="clr-namespace:PaintDotNet.UI.Media;assembly=PaintDotNet.Framework"
+                        xmlns:ps="clr-namespace:PaintDotNet.Shapes;assembly=PaintDotNet.Framework"
+                        DisplayName="${escape(name)}"
+                        Geometry="${markup}" />
+`;
+        parseShape(xaml);
+        const stored = remember("customShapes") || [];
+        const base = name.replace(/[^\p{L}\p{N}\- ]+/gu, "_").trim() || "Forma";
+        let file = `${base}.xaml`;
+        for (let n = 2; stored.some((s) => s.file === file); ++n)
+            file = `${base} ${n}.xaml`;
+        const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        stored.push({ id, file, xaml });
+        remember("customShapes", stored);
+        shapes = null;
+        window.dispatchEvent(new Event("kaint-shapes"));
+        return id;
+    },
+
     remove(ids) {
         remember("customShapes", (remember("customShapes") || []).filter((s) => !ids.includes(s.id)));
         shapes = null;
         window.dispatchEvent(new Event("kaint-shapes"));
     },
 };
+
+// Los polígonos [[{ x, y }...]...] como trazado de WPF, con el rincón de arriba a la izquierda en
+// (0, 0) y la regla par-impar (los agujeros quedan huecos).
+export function polygonsToMarkup(polygons) {
+    let x0 = Infinity, y0 = Infinity;
+    for (const poly of polygons)
+        for (const p of poly) {
+            x0 = Math.min(x0, p.x);
+            y0 = Math.min(y0, p.y);
+        }
+    const n = (v) => String(Math.round(v * 100) / 100);
+    return `F0 ${polygons.map((poly) => `M ${poly.map((p) => `${n(p.x - x0)},${n(p.y - y0)}`).join(" L ")} Z`).join(" ")}`;
+}

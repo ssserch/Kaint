@@ -20,6 +20,68 @@ const fonts = ["Noto Sans, Segoe UI, sans-serif", "Arial", "Times New Roman", "C
 
 let lists = 0;
 
+// Los dibujos de la simetría (la línea del espejo o los radios y los puntos reflejados) y de las
+// formas rápidas (un círculo y un cuadrado perfectos).
+function drawnIcon(draw) {
+    const dpr = window.devicePixelRatio || 1, c = document.createElement("canvas");
+    c.width = c.height = Math.round(16 * dpr);
+    c.style.width = c.style.height = "16px";
+    const g = c.getContext("2d");
+    g.scale(dpr, dpr);
+    draw(g);
+    return c;
+}
+
+function symmetryIcon(choice) {
+    return drawnIcon((g) => {
+        const ink = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#555";
+        g.strokeStyle = ink;
+        g.lineWidth = 1;
+        g.setLineDash([2, 1.5]);
+        g.beginPath();
+        if (choice === 1 || choice === 3) { g.moveTo(8, 1); g.lineTo(8, 15); }
+        if (choice === 2 || choice === 3) { g.moveTo(1, 8); g.lineTo(15, 8); }
+        let dots = [[4.5, 5]];
+        if (choice === 1) dots.push([11.5, 5]);
+        else if (choice === 2) dots.push([4.5, 11]);
+        else if (choice === 3) dots.push([11.5, 5], [4.5, 11], [11.5, 11]);
+        else if (choice >= 100) {
+            const n = choice - 100;
+            dots = [];
+            for (let i = 0; i < n; ++i) {
+                const a = (2 * Math.PI * i) / n - Math.PI / 2;
+                g.moveTo(8, 8);
+                g.lineTo(8 + Math.cos(a) * 7, 8 + Math.sin(a) * 7);
+                dots.push([8 + Math.cos(a) * 4.5, 8 + Math.sin(a) * 4.5]);
+            }
+        }
+        g.stroke();
+        g.setLineDash([]);
+        g.fillStyle = "#2878dc";
+        for (const [x, y] of dots) {
+            g.beginPath();
+            g.arc(x, y, choice >= 100 ? 1.2 : 1.7, 0, 2 * Math.PI);
+            g.fill();
+        }
+        if (choice === 0) {
+            g.strokeStyle = ink;
+            g.beginPath();
+            g.moveTo(10, 10);
+            g.lineTo(14, 14);
+            g.stroke();
+        }
+    });
+}
+
+const quickShapeIcon = () => drawnIcon((g) => {
+    g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#555";
+    g.lineWidth = 1.4;
+    g.beginPath();
+    g.arc(5.5, 6, 4, 0, 2 * Math.PI);
+    g.stroke();
+    g.strokeRect(8.5, 8.5, 6, 6);
+});
+
 function label(text) {
     return el("label", { className: "title", textContent: text });
 }
@@ -344,6 +406,28 @@ export class ToolOptions {
         case "tolerance":
             this.group(label(tr("Tolerancia:")), barSlider("tolerance", 0, 100, (v) => `${v}%`));
             break;
+        case "symmetry": {
+            // Simetría (como Ibis Paint) y formas rápidas (como QuickShape de Procreate).
+            const current = () => (tools().symmetry === 4 ? 100 + (tools().symmetryCount || 6) : tools().symmetry || 0);
+            const items = [[0, tr("Sin simetría")], [1, tr("Espejo a izquierda y derecha")], [2, tr("Espejo arriba y abajo")], [3, tr("Espejo en cuatro")],
+                           ...[4, 6, 8, 12].map((n) => [100 + n, tr("Radial de %1", n)])];
+            const sym = el("button", { className: "tbutton choice", title: tr("Simetría") });
+            sym.refresh = () => sym.replaceChildren(symmetryIcon(current()), el("span", { className: "arrow", textContent: "▼" }));
+            sym.addEventListener("click", () => {
+                const r = sym.getBoundingClientRect();
+                popupMenu(items.map(([v, text]) => ({ text, icon: symmetryIcon(v), checked: current() === v, run: () => {
+                    set(v >= 100 ? { symmetry: 4, symmetryCount: v - 100 } : { symmetry: v });
+                    this.app.view?.update();
+                } })), r.left, r.bottom);
+            });
+            sym.refresh();
+            const quick = button([quickShapeIcon()], tr("Formas rápidas: al acabar un trazo, deja el puntero quieto un momento y la línea, el círculo, la elipse, el rectángulo o el polígono que dibujaste se vuelve perfecto"),
+                                 () => set({ quickShape: !tools().quickShape }));
+            quick.refresh = () => quick.classList.toggle("checked", !!tools().quickShape);
+            quick.refresh();
+            this.group(sym, quick);
+            break;
+        }
         case "advanced": {
             // Solo con el pincel avanzado encendido (Configuración > Herramientas).
             if (!this.model.tools.advancedBrush)

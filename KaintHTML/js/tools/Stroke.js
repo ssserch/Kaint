@@ -79,7 +79,7 @@ export class Stroke {
     // mode: "paint" | "erase" | "clone" | "recolor"
     constructor(doc, layer, { mode = "paint", color = null, blend = "normal", antialias = true, hardness = 100, spacing = 15,
                              smoothing = false, cloneOffset = null, cloneSource = null, recolorFrom = null, recolorTolerance = 50,
-                             recolorStraight = false, fill = 0, background = null, advanced = null } = {}) {
+                             recolorStraight = false, fill = 0, background = null, advanced = null, symmetry = 0, symmetryCount = 6 } = {}) {
         this.doc = doc;
         this.layer = layer;
         this.mode = mode;
@@ -100,6 +100,11 @@ export class Stroke {
         // { tipShape (0 redonda, 1 cuadrada), angle, roundness, flow, sizeJitter, opacityJitter,
         // angleJitter, scatter, pressureOpacity, stabilizer (0..20), taperIn, taperOut } o null.
         this.advanced = advanced;
+        // Simetría alrededor del centro de la imagen: 0 ninguna, 1 a izquierda y derecha, 2 arriba y
+        // abajo, 3 las dos, 4 radial ('symmetryCount' copias girando).
+        this.symmetry = symmetry;
+        this.symmetryCount = Math.min(32, Math.max(2, symmetryCount));
+        this.lastPressure = 1;
         this.strokeLength = -1;
         this.dabPressure = 1;
         this.stable = null;
@@ -123,8 +128,37 @@ export class Stroke {
         doc.setPreview({ layer, canvas: this.preview });
     }
 
-    // Toque redondo de diámetro 'size' en (x, y), acumulado "encima" en la máscara.
+    // Los sitios donde va un toque en (x, y) con la simetría (el primero, el mismo).
+    symmetric(x, y) {
+        const cx = this.width / 2, cy = this.height / 2;
+        switch (this.symmetry) {
+        case 1: return [[x, y], [2 * cx - x, y]];
+        case 2: return [[x, y], [x, 2 * cy - y]];
+        case 3: return [[x, y], [2 * cx - x, y], [x, 2 * cy - y], [2 * cx - x, 2 * cy - y]];
+        case 4: {
+            const out = [[x, y]], dx = x - cx, dy = y - cy;
+            for (let i = 1; i < this.symmetryCount; ++i) {
+                const a = (2 * Math.PI * i) / this.symmetryCount, ca = Math.cos(a), sa = Math.sin(a);
+                out.push([cx + dx * ca - dy * sa, cy + dx * sa + dy * ca]);
+            }
+            return out;
+        }
+        default: return [[x, y]];
+        }
+    }
+
+    // Toque redondo de diámetro 'size' en (x, y), acumulado "encima" en la máscara (con la simetría,
+    // en cada sitio: en la misma máscara, donde se cruzan no se oscurece).
     stamp(x, y, size) {
+        if (!this.symmetry)
+            return this.stampAt(x, y, size);
+        let rect = null;
+        for (const [sx, sy] of this.symmetric(x, y))
+            rect = unionRect(rect, this.stampAt(sx, sy, size));
+        return rect;
+    }
+
+    stampAt(x, y, size) {
         if (this.advanced && this.antialias)
             return this.stampAdvanced(x, y, size);
         // Como Paint.NET: por debajo de un píxel, un toque de un píxel más transparente.
@@ -248,6 +282,34 @@ export class Stroke {
         return (size / 2) * this.profile.extent * (A.tipShape === 1 ? Math.SQRT2 : 1) + (A.scatter || 0) * size + 2;
     }
 
+    // Formas rápidas: el trazo hecho hasta ahora se sustituye por esta línea quebrada ([{ x, y }]),
+    // recta entre sus puntos y con la presión del último.
+    replaceWith(path) {
+        if (!this.walker || path.length < 2)
+            return;
+        this.restoreWet();
+        const dirty = this.dirty;
+        this.mask.fill(0);
+        this.stable = this.raw = null;
+        this.smoothing = false;
+        const size = this.points.at(-1)?.size ?? 1, pressure = this.lastPressure;
+        this.points = path.map((p) => ({ x: p.x, y: p.y, size, pressure }));
+        this.walker = {};
+        const changed = this.walk(this.walker, this.points);
+        this.drySegments = this.points.length - 1;
+        this.refresh(unionRect(dirty, changed));
+    }
+
+    // Lo mismo para el lápiz: líneas de píxeles entre los puntos.
+    replacePixelsWith(path) {
+        const dirty = this.dirty;
+        this.mask.fill(0);
+        for (let i = 0; i + 1 < path.length; ++i)
+            this.pixelLine(path[i].x, path[i].y, path[i + 1].x, path[i + 1].y);
+        if (dirty)
+            this.refresh(unionRect(dirty, this.dirty));
+    }
+
     // Separación entre toques: una fracción del diámetro (15 % por defecto), nunca menos de un
     // píxel, como en Paint.NET.
     step(size) {
@@ -328,6 +390,12 @@ export class Stroke {
             const m = Math.max(margin, this.reach(p.size));
             x0 = Math.min(x0, p.x - m); y0 = Math.min(y0, p.y - m); x1 = Math.max(x1, p.x + m); y1 = Math.max(y1, p.y + m);
         }
+        // Con simetría, también donde caen las copias.
+        if (this.symmetry) {
+            const corners = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].flatMap(([x, y]) => this.symmetric(x, y));
+            x0 = Math.min(...corners.map((c) => c[0])); x1 = Math.max(...corners.map((c) => c[0]));
+            y0 = Math.min(...corners.map((c) => c[1])); y1 = Math.max(...corners.map((c) => c[1]));
+        }
         const rect = clampRect({ x: Math.floor(x0), y: Math.floor(y0), w: Math.ceil(x1) - Math.floor(x0), h: Math.ceil(y1) - Math.floor(y0) },
                                this.width, this.height);
         if (rect.w <= 0 || rect.h <= 0)
@@ -343,6 +411,7 @@ export class Stroke {
     // Sigue el trazo hasta (x, y) con el diámetro 'size' (con la presión ya aplicada); 'pressure'
     // (0..1) es para la opacidad por presión del pincel avanzado.
     lineTo(x, y, size, pressure = 1) {
+        this.lastPressure = pressure;
         // Estabilizador (como la corrección de FireAlpaca): el trazo sigue al puntero con retraso;
         // cuanto más alto, más suave y más atrás se queda. Al terminar llega hasta el último punto.
         const level = this.advanced?.stabilizer || 0;
@@ -414,8 +483,16 @@ export class Stroke {
             this.refresh(changed);
     }
 
-    // Píxeles sueltos (lápiz): línea de Bresenham sin suavizado.
+    // Píxeles sueltos (lápiz): línea de Bresenham sin suavizado (con la simetría, en cada sitio, por los
+    // centros de los píxeles).
     pixelLine(x0, y0, x1, y1) {
+        if (!this.symmetry)
+            return this.pixelLineAt(x0, y0, x1, y1);
+        const a = this.symmetric(Math.floor(x0) + 0.5, Math.floor(y0) + 0.5), b = this.symmetric(Math.floor(x1) + 0.5, Math.floor(y1) + 0.5);
+        a.forEach(([ax, ay], i) => this.pixelLineAt(ax, ay, b[i][0], b[i][1]));
+    }
+
+    pixelLineAt(x0, y0, x1, y1) {
         x0 = Math.floor(x0); y0 = Math.floor(y0); x1 = Math.floor(x1); y1 = Math.floor(y1);
         const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
         let err = dx + dy;

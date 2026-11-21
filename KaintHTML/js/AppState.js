@@ -97,6 +97,11 @@ export const defaultTools = () => ({
     taperIn: 0,
     taperOut: 0,
     sideSliders: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches,
+    // Simetría del pincel, la goma y el lápiz (0 ninguna, 1 a izquierda y derecha, 2 arriba y abajo, 3
+    // las dos, 4 radial) y sus copias en la radial; formas rápidas (QuickShape.js).
+    symmetry: 0,
+    symmetryCount: 6,
+    quickShape: false,
 });
 
 // Opciones predeterminadas de las herramientas (Configuración > Herramientas), como

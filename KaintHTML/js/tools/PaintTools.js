@@ -1,16 +1,109 @@
 // Pincel, goma, lápiz, tampón de clonar y volver a colorear (src/app/tools/PaintTools.cpp).
 import { Tool } from "./Tool.js";
 import { Stroke } from "./Stroke.js";
+import { recognize, shapeNames } from "../core/QuickShape.js";
 import { AppState } from "../AppState.js";
 import { Settings } from "../Settings.js";
 import { tr } from "../i18n.js";
+
+// La simetría y las formas rápidas del pincel, la goma y el lápiz (StrokeTool de Kaint).
+const SymmetryAndShapes = {
+    symmetryOptions() {
+        const s = this.settings;
+        return this.options.includes("symmetry") ? { symmetry: s.symmetry || 0, symmetryCount: s.symmetryCount || 6 } : {};
+    },
+
+    // Formas rápidas: quieto un momento al final del trazo, lo dibujado se vuelve la forma perfecta.
+    startShape(e) {
+        this.snapped = false;
+        this.shapePoints = [{ x: e.x, y: e.y }];
+        this.holdAt = { x: e.x, y: e.y };
+        clearTimeout(this.holdTimer);
+        // (Solo las que tienen la opción: el pincel, la goma y el lápiz.)
+        if (this.settings.quickShape && this.options.includes("symmetry"))
+            this.holdTimer = setTimeout(() => this.snapShape(), 550);
+        else
+            this.shapePoints = null;
+    },
+
+    followShape(e) {
+        if (!this.settings.quickShape || !this.shapePoints)
+            return;
+        this.shapePoints.push({ x: e.x, y: e.y });
+        // Quieto (moviéndose menos de unos píxeles en pantalla): sigue contando.
+        if (Math.hypot(e.x - this.holdAt.x, e.y - this.holdAt.y) * (this.view?.zoom || 1) > 3) {
+            this.holdAt = { x: e.x, y: e.y };
+            clearTimeout(this.holdTimer);
+            this.holdTimer = setTimeout(() => this.snapShape(), 550);
+        }
+    },
+
+    endShape() {
+        clearTimeout(this.holdTimer);
+        this.shapePoints = null;
+        this.snapped = false;
+    },
+
+    snapShape() {
+        if (!this.stroke || this.snapped || !this.shapePoints || this.shapePoints.length < 3)
+            return;
+        const shape = recognize(this.shapePoints);
+        if (!shape.kind)
+            return;
+        if (this.pixelShape)
+            this.stroke.replacePixelsWith(shape.points);
+        else
+            this.stroke.replaceWith(shape.points);
+        this.snapped = true;
+        navigator.vibrate?.(10);
+        this.notice(tr(shapeNames[shape.kind]));
+        this.repaint();
+    },
+
+    // Las guías de la simetría (la línea del espejo o los radios) sobre la imagen.
+    paintOverlay(ctx, view) {
+        const s = this.settings, doc = this.doc;
+        if (!s.symmetry || !doc || !this.options.includes("symmetry"))
+            return;
+        const w = doc.width, h = doc.height, cx = w / 2, cy = h / 2, lines = [];
+        if (s.symmetry === 1 || s.symmetry === 3)
+            lines.push([cx, 0, cx, h]);
+        if (s.symmetry === 2 || s.symmetry === 3)
+            lines.push([0, cy, w, cy]);
+        if (s.symmetry === 4) {
+            const n = Math.min(32, Math.max(2, s.symmetryCount || 6)), r = Math.hypot(w, h);
+            for (let i = 0; i < n; ++i) {
+                const a = (2 * Math.PI * i) / n - Math.PI / 2;
+                lines.push([cx, cy, cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+            }
+        }
+        ctx.save();
+        ctx.beginPath();
+        const p0 = view.imageToView(0, 0), p1 = view.imageToView(w, 0), p2 = view.imageToView(w, h), p3 = view.imageToView(0, h);
+        ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.closePath();
+        ctx.clip();
+        for (const [x0, y0, x1, y1] of lines) {
+            const u = view.imageToView(x0, y0), v = view.imageToView(x1, y1);
+            for (const [color, width, dash] of [["rgba(255,255,255,0.65)", 3, []], ["rgba(30,130,230,0.9)", 1.2, [6, 4]]]) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.setLineDash(dash);
+                ctx.beginPath();
+                ctx.moveTo(u.x, u.y);
+                ctx.lineTo(v.x, v.y);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    },
+};
 
 export class StrokeTool extends Tool {
     // Como en Kaint: las flechas mueven el pincel un píxel (Canvas.nudgePointer).
     arrowKeysMovePointer() { return true; }
 
     get options() {
-        return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "blend", "advanced", "selectionQuality"];
+        return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "blend", "advanced", "symmetry", "selectionQuality"];
     }
 
     brushDiameter() {
@@ -67,7 +160,8 @@ export class StrokeTool extends Tool {
     // quedarse por detrás de él).
     strokeOptions(e) {
         return { mode: "paint", color: this.colorFor(e.button), blend: this.settings.blend, antialias: this.settings.antialias,
-                 hardness: this.settings.hardness, spacing: this.settings.spacing, smoothing: !!this.settings.smoothing, advanced: this.advancedOptions() };
+                 hardness: this.settings.hardness, spacing: this.settings.spacing, smoothing: !!this.settings.smoothing, advanced: this.advancedOptions(),
+                 ...this.symmetryOptions() };
     }
 
     onPointerDown(e) {
@@ -76,19 +170,22 @@ export class StrokeTool extends Tool {
         this.speedLast = null;
         this.stroke = new Stroke(this.doc, this.doc.activeLayer, this.strokeOptions(e));
         this.strokeTo(e);
+        this.startShape(e);
     }
 
     onPointerMove(e) {
-        if (!this.stroke)
+        if (!this.stroke || this.snapped)
             return;
         this.strokeTo(e);
+        this.followShape(e);
     }
 
     onPointerUp(e) {
         if (!this.stroke)
             return;
-        if (e)
+        if (e && !this.snapped)
             this.strokeTo(e);
+        this.endShape();
         const stroke = this.stroke;
         this.stroke = null;
         stroke.commit(this.name, this.icon);
@@ -102,6 +199,8 @@ export class StrokeTool extends Tool {
         this.onPointerUp();
     }
 }
+
+Object.assign(StrokeTool.prototype, SymmetryAndShapes);
 
 export class BrushTool extends StrokeTool {
     get id() { return "paintbrush"; }
@@ -121,7 +220,7 @@ export class EraserTool extends StrokeTool {
     get name() { return tr("Goma de borrar"); }
     get icon() { return "eraser"; }
     get letter() { return "E"; }
-    get options() { return ["brushSize", "hardness", "spacing", "smoothing", "pressure", "antialias", "advanced", "selectionQuality"]; }
+    get options() { return ["brushSize", "hardness", "spacing", "smoothing", "pressure", "antialias", "advanced", "symmetry", "selectionQuality"]; }
     hint() { return tr("Arrastra para borrar. La opacidad del color principal (clic derecho: secundario) regula la fuerza."); }
 
     strokeOptions(e) {
@@ -136,28 +235,32 @@ export class PencilTool extends Tool {
     get name() { return tr("Lápiz"); }
     get icon() { return "pencil"; }
     get letter() { return "P"; }
-    get options() { return ["blend", "selectionQuality"]; }
+    get options() { return ["blend", "symmetry", "selectionQuality"]; }
+    get pixelShape() { return true; }
     hint() { return tr("Dibuja píxeles sueltos con el color principal (clic derecho: secundario), ideal para pixel art."); }
 
     onPointerDown(e) {
         if (!this.doc || (e.button !== "left" && e.button !== "right"))
             return;
         this.stroke = new Stroke(this.doc, this.doc.activeLayer, { mode: "paint", color: this.colorFor(e.button),
-                                                                    blend: this.settings.blend, antialias: false });
+                                                                    blend: this.settings.blend, antialias: false, ...this.symmetryOptions() });
         this.last = { x: e.x, y: e.y };
         this.stroke.pixelLine(e.x, e.y, e.x, e.y);
+        this.startShape(e);
     }
 
     onPointerMove(e) {
-        if (!this.stroke)
+        if (!this.stroke || this.snapped)
             return;
         this.stroke.pixelLine(this.last.x, this.last.y, e.x, e.y);
         this.last = { x: e.x, y: e.y };
+        this.followShape(e);
     }
 
     onPointerUp() {
         if (!this.stroke)
             return;
+        this.endShape();
         const stroke = this.stroke;
         this.stroke = null;
         stroke.commit(this.name, this.icon);
@@ -171,6 +274,8 @@ export class PencilTool extends Tool {
         this.onPointerUp();
     }
 }
+
+Object.assign(PencilTool.prototype, SymmetryAndShapes);
 
 export class CloneStampTool extends StrokeTool {
     get id() { return "clonestamp"; }

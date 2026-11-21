@@ -863,7 +863,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 scheme.value = "5";
                 await customThemeDialog();
             });
-            const languageOptions = () => [["en", "English"], ["es", "Español"],
+            const languageOptions = () => [["en", "English"], ["es", "Español"], ["pt-BR", "Português (Brasil)"],
                                            ...CustomLanguages.list().map((l) => [`custom:${l.id}`, l.name])];
             const language = select(languageOptions(), Settings.get("language"));
             const reload = el("button", { className: "pushbutton", textContent: tr("Recargar"), style: { visibility: "hidden" } });
@@ -1075,7 +1075,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
             uiFontSize.addEventListener("input", () => Settings.set("uiFontSize", uiFontSize.read()));
             // Como el color propio de la barra superior de Kaint en Linux (el de énfasis de Windows).
             const fakeTitle = check(tr("Mostrar una barra de título como la de Kaint para el escritorio"), "fakeTitleBar",
-                                    tr("Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint (sin los botones de la ventana)."));
+                                    tr("Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint, con los botones de la ventana del tema (maximizar pasa a pantalla completa). De fábrica, desactivada en Windows."));
             const stripFull = check(tr("Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba"), "stripFullHeight",
                                     tr("Como en Paint.NET: el recuadro de la imagen actual y el de la que tiene el puntero llegan hasta arriba. Desactivado, solo la altura de la miniatura."));
             const titleOn = checkbox(tr("Color propio en la barra superior:"), !!Settings.get("titleBarColor"));
@@ -2940,9 +2940,10 @@ export async function welcomeDialog() {
     const cursors = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("cursorStyle"));
     cursors.title = tr("Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.");
     cursors.addEventListener("change", () => Settings.set("cursorStyle", Number(cursors.value)));
-    const language = select([["en", "English"], ["es", "Español"]], startLanguage);
+    const language = select([["en", "English"], ["es", "Español"], ["pt-BR", "Português (Brasil)"]], startLanguage);
     // El aviso va en el idioma elegido, no en el actual: es el que entiende quien lo cambia.
-    const notes = { en: "The language is applied when the page reloads.", es: "El idioma se aplica al recargar la página." };
+    const notes = { en: "The language is applied when the page reloads.", es: "El idioma se aplica al recargar la página.",
+                    "pt-BR": "O idioma é aplicado ao recarregar a página." };
     const note = el("small", { style: { opacity: 0.7, display: "none" } });
     language.addEventListener("change", () => {
         Settings.set("language", language.value);

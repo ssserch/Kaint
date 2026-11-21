@@ -92,6 +92,8 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     auto* language = new QComboBox(this);
     language->addItem(QStringLiteral("English"), QStringLiteral("en"));
     language->addItem(QStringLiteral("Español"), QStringLiteral("es"));
+    // Traducido por Mildanner.
+    language->addItem(QStringLiteral("Português (Brasil)"), QStringLiteral("pt_BR"));
     language->setCurrentIndex(std::max(0, language->findData(m_settings.language)));
     auto* discord = new QCheckBox(tr("Mostrar en Discord que usas Kaint (Rich Presence)"), this);
     discord->setChecked(m_settings.discordEnabled);
@@ -171,8 +173,10 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     });
     connect(language, &QComboBox::activated, this, [this, language, restartNote, startLanguage](int i) {
         m_settings.language = language->itemData(i).toString();
-        restartNote->setText(m_settings.language == QLatin1String("es") ? QStringLiteral("El idioma se aplica al reiniciar Kaint.")
-                                                                         : QStringLiteral("The language is applied when Kaint restarts."));
+        // En el idioma elegido: es el que entiende quien lo cambia.
+        restartNote->setText(m_settings.language == QLatin1String("es")      ? QStringLiteral("El idioma se aplica al reiniciar Kaint.")
+                             : m_settings.language == QLatin1String("pt_BR") ? QStringLiteral("O idioma é aplicado ao reiniciar o Kaint.")
+                                                                              : QStringLiteral("The language is applied when Kaint restarts."));
         restartNote->setVisible(m_settings.language != startLanguage);
     });
     connect(discord, &QCheckBox::toggled, this, [this](bool on) { m_settings.discordEnabled = on; });

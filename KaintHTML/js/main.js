@@ -2,7 +2,7 @@
 import { Settings } from "./Settings.js";
 import { setLanguage } from "./i18n.js";
 
-setLanguage(Settings.get("language"));
+await setLanguage(Settings.get("language"));
 // El paquete de iconos activo, antes de crear la ventana (así sus iconos ya salen con él).
 const { IconPacks } = await import("./IconPacks.js");
 await IconPacks.load();

@@ -1,7 +1,12 @@
 // Traducciones: los textos están en español, como en el código de Kaint, y el inglés (el idioma
 // predeterminado) sale de translations/kaint_en.ts (js/i18n/en.js) más los textos propios de la
-// web (extra).
+// web (extra). El portugués de Brasil (de Mildanner), de translations/kaint_pt_BR.ts
+// (js/i18n/pt-BR.js, que solo se carga si se elige) y sus textos propios de la web (extraPt); lo
+// que no tenga sale en inglés.
 import en from "./i18n/en.js";
+import extraPt from "./i18n/pt-BR-web.js";
+
+let pt = null;
 
 const extra = {
     // 1.1.9: lo propio de la web y del móvil (Kaint.APK), y textos que Kaint para el escritorio ya no usa.
@@ -355,8 +360,18 @@ export const CustomLanguages = {
     },
 };
 
-export function setLanguage(lang) {
+export async function setLanguage(lang) {
     custom = null;
+    if (lang === "pt-BR") {
+        try {
+            pt ||= (await import("./i18n/pt-BR.js")).default;
+            language = "pt-BR";
+            document.documentElement.lang = "pt-BR";
+            return;
+        } catch {
+            // Sin la tabla (no se pudo cargar), en inglés.
+        }
+    }
     if (typeof lang === "string" && lang.startsWith("custom:")) {
         custom = CustomLanguages.find(lang.slice(7));
         if (custom) {
@@ -385,8 +400,13 @@ export function tr(text, ...args) {
         out = typeof own === "string" && own ? own : en[text] ?? extra[text] ?? text;
         if (Array.isArray(out))
             out = out[0];
-    } else if (language === "en")
+    } else if (language === "en") {
         out = en[text] ?? extra[text] ?? text;
+    } else if (language === "pt-BR") {
+        out = pt[text] ?? extraPt[text] ?? en[text] ?? extra[text] ?? text;
+        if (Array.isArray(out))
+            out = out[0];
+    }
     args.forEach((a, i) => {
         out = out.split(`%${i + 1}`).join(String(a));
     });
@@ -395,9 +415,9 @@ export function tr(text, ...args) {
 
 // Como tr() para un texto con plural: %n es el número (en inglés, con la forma que toca).
 export function trn(text, n, ...args) {
-    const own = language === "custom" ? custom.strings[text] : null;
+    const own = language === "custom" ? custom.strings[text] : language === "pt-BR" ? pt[text] ?? extraPt[text] : null;
     const forms = own && (typeof own === "string" || own.length) ? (typeof own === "string" ? [own] : own)
-        : language === "en" || language === "custom" ? en[text] ?? extra[text] : null;
+        : language !== "es" ? en[text] ?? extra[text] : null;
     let out = Array.isArray(forms) ? forms[n === 1 ? 0 : Math.min(1, forms.length - 1)] : text;
     out = out.split("%n").join(String(n));
     args.forEach((a, i) => {
@@ -410,7 +430,7 @@ export function trn(text, n, ...args) {
 // en Kaint): "V:" es el verde en RGB y el valor en MSV.
 export function trc(comment, text, ...args) {
     const key = `${comment}\u0004${text}`;
-    const own = language === "custom" ? custom.strings[key] : null;
+    const own = language === "custom" ? custom.strings[key] : language === "pt-BR" ? pt[key] : null;
     if (!own && (language === "es" || !(key in en)))
         return tr(text, ...args);
     let out = own || en[key];

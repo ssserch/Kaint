@@ -255,9 +255,11 @@ int main(int argc, char** argv)
         const QString windows = rawOption(argc, argv, QStringLiteral("--preview-windows")).toLower();
         if (windows == QLatin1String("11") || windows == QLatin1String("10"))
             preset.setValue(QStringLiteral("settings/windowsVersion"), windows.toInt());
-        const QString language = rawOption(argc, argv, QStringLiteral("--preview-language")).toLower();
+        const QString language = rawOption(argc, argv, QStringLiteral("--preview-language")).toLower().replace(QLatin1Char('-'), QLatin1Char('_'));
         if (language == QLatin1String("en") || language == QLatin1String("es"))
             preset.setValue(QStringLiteral("settings/language"), language);
+        else if (language == QLatin1String("pt_br") || language == QLatin1String("pt"))
+            preset.setValue(QStringLiteral("settings/language"), QStringLiteral("pt_BR"));
     }
 
     // Antes de crear la aplicación: salvo con el tema de KDE, el escritorio no debe imponer
@@ -348,7 +350,7 @@ int main(int argc, char** argv)
     parser.addOption(QCommandLineOption(QStringLiteral("preview-style"),
                                         QObject::tr("Estilo de la interfaz en la captura (kaint o paintnet)."),
                                         QStringLiteral("kaint|paintnet")));
-    parser.addOption(QCommandLineOption(QStringLiteral("preview-language"), QObject::tr("Idioma de la captura (en o es)."),
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-language"), QObject::tr("Idioma de la captura (en, es o pt_BR)."),
                                         QStringLiteral("en|es")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-rulers"), QObject::tr("Reglas en la captura (yes o no)."),
                                         QStringLiteral("yes|no")));
@@ -406,7 +408,8 @@ int main(int argc, char** argv)
     Theme::setSelectionColors(startup.selectionColorLight, startup.selectionColorDark);
     Theme::apply(scheme);
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(startup.titleButtons, 0, 8)));
-    WindowFrame::setAutoFallback(startup.windowsVersion == 11 ? WindowFrame::Buttons::Windows11 : WindowFrame::Buttons::Windows10);
+    // Automáticos con los temas sin botones propios (Claro, Oscuro, Azul...): los de Windows 10.
+    WindowFrame::setAutoFallback(WindowFrame::Buttons::Windows10);
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(startup.win7PanelClose, 0, 2)));
     // Recreación de Windows 11 (estilo Paint.NET) y temas de Windows 7: esquinas redondeadas en

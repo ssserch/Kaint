@@ -932,6 +932,8 @@ QWidget* SettingsDialog::createInterfacePage()
         language->clear();
         language->addItem(QStringLiteral("English"), QStringLiteral("en"));
         language->addItem(QStringLiteral("Español"), QStringLiteral("es"));
+        // Traducido por Mildanner.
+        language->addItem(QStringLiteral("Português (Brasil)"), QStringLiteral("pt_BR"));
         for (const CustomLanguages::Language& l : CustomLanguages::list())
             language->addItem(l.name, QStringLiteral("custom:") + l.id);
     };
@@ -1192,9 +1194,9 @@ QWidget* SettingsDialog::createInterfacePage()
     titleForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
     auto* buttonsStyle = new QComboBox(page.widget);
     const struct { int id; QString name; QString tip; } styles[] = {
-        {6, tr("Automáticos (los del tema)"), tr("Los del tema: de cristal con Windows 7, los azules de Luna con Windows XP, "
-                                                 "en relieve con Windows 98 y, con los demás, los de Windows 10 (o los de "
-                                                 "Windows 11 con «Bordes: Redondeados»).")},
+        {6, tr("Automáticos (los del tema)"), tr("Los del tema: de cristal con Windows 7, planos con Windows 8, los azules de "
+                                                 "Luna con Windows XP, en relieve con Windows 98, redondos con los de Linux y, "
+                                                 "con los demás (Claro, Oscuro, Azul...), los de Windows 10.")},
         {1, QStringLiteral("Windows 11"), tr("Finos, con el cuadrado de maximizar redondeado.")},
         {0, QStringLiteral("Windows 10"), tr("Los de siempre de Paint.NET: 46 píxeles de ancho y cerrar en rojo.")},
         {2, QStringLiteral("macOS"), tr("Los tres círculos de colores (cerrar, minimizar y zoom).")},

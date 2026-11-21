@@ -1,39 +1,51 @@
-// Copia de Kaint lo que comparte con la web: las traducciones al inglés (translations/kaint_en.ts →
-// js/i18n/en.js; los textos de la web son los mismos que los del programa, en español, como en el
-// código de Kaint) y la versión (version.json → js/version.js).
+// Copia de Kaint lo que comparte con la web: las traducciones al inglés y al portugués de Brasil
+// (translations/kaint_en.ts → js/i18n/en.js y kaint_pt_BR.ts → pt-BR.js; los textos de la web son
+// los mismos que los del programa, en español, como en el código de Kaint) y la versión
+// (version.json → js/version.js).
 //   node tools/sync.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const ts = readFileSync(join(here, "../../translations/kaint_en.ts"), "utf8");
 const decode = (s) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, "&");
-const table = {};
-// Un texto con comentario (el mismo texto con otro sentido) va como "comentario\u0004texto" (trc).
-for (const m of ts.matchAll(/<message>\s*<source>([\s\S]*?)<\/source>\s*(?:<comment>([\s\S]*?)<\/comment>\s*)?<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
-    const source = m[2] ? `${decode(m[2])}\u0004${decode(m[1])}` : decode(m[1]);
-    const translation = decode(m[3]);
-    if (translation && !(source in table))
-        table[source] = translation;
+
+// La tabla de un .ts de Kaint: original en español → traducción (o sus formas con plural).
+function tableOf(ts) {
+    const table = {};
+    // Un texto con comentario (el mismo texto con otro sentido) va como "comentario\u0004texto" (trc).
+    for (const m of ts.matchAll(/<message>\s*<source>([\s\S]*?)<\/source>\s*(?:<comment>([\s\S]*?)<\/comment>\s*)?<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
+        const source = m[2] ? `${decode(m[2])}\u0004${decode(m[1])}` : decode(m[1]);
+        const translation = decode(m[3]);
+        if (translation && !(source in table))
+            table[source] = translation;
+    }
+    // Con plural (%n): la lista de formas (una y varias).
+    for (const m of ts.matchAll(/<message numerus="yes">\s*<source>([\s\S]*?)<\/source>\s*(?:<comment>[\s\S]*?<\/comment>\s*)?<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
+        const forms = [...m[2].matchAll(/<numerusform>([\s\S]*?)<\/numerusform>/g)].map((f) => decode(f[1]));
+        if (forms.length && forms.every(Boolean) && !(decode(m[1]) in table))
+            table[decode(m[1])] = forms;
+    }
+    return table;
 }
-// Con plural (%n): la lista de formas (una y varias).
-for (const m of ts.matchAll(/<message numerus="yes">\s*<source>([\s\S]*?)<\/source>\s*(?:<comment>[\s\S]*?<\/comment>\s*)?<translation(?: type="[^"]*")?>([\s\S]*?)<\/translation>/g)) {
-    const forms = [...m[2].matchAll(/<numerusform>([\s\S]*?)<\/numerusform>/g)].map((f) => decode(f[1]));
-    if (forms.length && forms.every(Boolean) && !(decode(m[1]) in table))
-        table[decode(m[1])] = forms;
+
+// Los idiomas incluidos: el inglés (el predeterminado) y el portugués de Brasil (de Mildanner).
+const counts = [];
+for (const [file, out] of [["kaint_en.ts", "en.js"], ["kaint_pt_BR.ts", "pt-BR.js"]]) {
+    const table = tableOf(readFileSync(join(here, "../../translations", file), "utf8"));
+    const keys = Object.keys(table).sort();
+    let js = `// Generado por tools/sync.mjs a partir de translations/${file}: no se edita a mano.\n`;
+    js += "export default {\n";
+    for (const k of keys)
+        js += `    ${JSON.stringify(k)}: ${JSON.stringify(table[k])},\n`;
+    js += "};\n";
+    writeFileSync(join(here, "../js/i18n", out), js);
+    counts.push(`${out}: ${keys.length}`);
 }
-const keys = Object.keys(table).sort();
-let out = "// Generado por tools/sync.mjs a partir de translations/kaint_en.ts: no se edita a mano.\n";
-out += "export default {\n";
-for (const k of keys)
-    out += `    ${JSON.stringify(k)}: ${JSON.stringify(table[k])},\n`;
-out += "};\n";
-writeFileSync(join(here, "../js/i18n/en.js"), out);
 const version = JSON.parse(readFileSync(join(here, "../../version.json"), "utf8"));
 writeFileSync(join(here, "../js/version.js"),
               "// Generado por tools/sync.mjs a partir de version.json: no se edita a mano.\n" +
               `export const VERSION = ${JSON.stringify(version.version)};\n` +
               `export const REPOSITORY = ${JSON.stringify(version.repository)};\n`);
-console.log(`${keys.length} textos · versión ${version.version}`);
+console.log(`${counts.join(" · ")} textos · versión ${version.version}`);

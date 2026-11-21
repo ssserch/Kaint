@@ -6,9 +6,10 @@ const defaults = {
     // Las funciones de PhotoCraft (desactivadas por defecto) y los efectos que siguen complementos
     // de BoltBait activados desde Explorar complementos (sus identificadores).
     photocraftExtras: false,
-    // La fila de arriba como la de Kaint para el escritorio: el icono y el título de la imagen (sin
-    // los botones de la ventana), y la tira de imágenes a toda la altura de la fila.
-    fakeTitleBar: true,
+    // La fila de arriba como la de Kaint para el escritorio: el icono y el título de la imagen (con
+    // los botones de la ventana del tema), y la tira de imágenes a toda la altura de la fila. Como
+    // Kaint, activada de fábrica salvo en Windows (ahí la ventana ya tiene la suya).
+    fakeTitleBar: typeof navigator === "undefined" || !/Windows/i.test(navigator.userAgentData?.platform || navigator.userAgent || ""),
     stripFullHeight: true,
     boltBaitEffects: [],
     // Modo colaborativo (Configuración > Colaboración; js/collab/CollabUI.js).

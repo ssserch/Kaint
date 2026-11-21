@@ -29,7 +29,6 @@ runs on Windows 10 and 11, in any browser and on Android.
 
 <table align="center">
   <tr>
-    <td align="center" width="110"><a href="#whats-new-in-120"><img src="data/ui-icons/menu_help_about_icon.png" alt="" width="32"><br><sub><b>What's new</b></sub></a></td>
     <td align="center" width="110"><a href="#make-it-yours"><img src="data/ui-icons/menu_utilities_settings_icon.png" alt="" width="32"><br><sub><b>Make it yours</b></sub></a></td>
     <td align="center" width="110"><a href="#features"><img src="img/kaint-32.png" alt="" width="32"><br><sub><b>Features</b></sub></a></td>
     <td align="center" width="110"><a href="#gif-editor"><img src="data/ui-icons/menu_window_layers_icon.png" alt="" width="32"><br><sub><b>GIF Editor</b></sub></a></td>
@@ -39,49 +38,6 @@ runs on Windows 10 and 11, in any browser and on Android.
     <td align="center" width="110"><a href="#license"><img src="data/ui-icons/menu_help_about_icon.png" alt="" width="32"><br><sub><b>License</b></sub></a></td>
   </tr>
 </table>
-
-## What's new in 1.2.0
-
-<table>
-  <tr>
-    <td width="50%"><img src="img/other/gifeditor-keyframes.png" alt="The GIF editor with keyframes, the animation panel and its graph"></td>
-    <td width="50%"><img src="img/other/brush-symmetry.png" alt="A radial symmetry drawing with the advanced brush options open"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub><b>GIF editor keyframes</b>: move, scale, rotate and fade each frame, like Filmora</sub></td>
-    <td align="center"><sub><b>Advanced brush and symmetry</b>: tapered manga lines, mirror and radial drawing</sub></td>
-  </tr>
-  <tr>
-    <td><img src="img/themes/windows8.png" alt="Windows 8 theme"></td>
-    <td><img src="img/themes/ubuntu-dark.png" alt="Ubuntu dark theme"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub><b>Windows 8</b>, Windows 7 Basic and new window colors</sub></td>
-    <td align="center"><sub><b>Linux themes</b>: Ubuntu, GNOME, Linux Mint and elementary OS</sub></td>
-  </tr>
-</table>
-
-- **Paint.NET plugins with modern .NET**: a new host built on [paint.rs](https://github.com/daijro/paint.rs)'s
-  Paint.NET 5 libraries runs GPU effects, `BitmapEffect` and Paint.NET 5 plugins, reads their own
-  windows without showing them (so they work on Wayland too) and opens and saves the formats of
-  FileType plugins. Mono (with OpenD2D) and Wine stay as fallbacks, chosen per effect.
-- **GIF editor**: keyframes like Filmora (position, scale, rotation and opacity with linear, curve,
-  continuous curve, freeze and ease in/out), a graph of each value, draggable diamonds on the
-  timeline, copy and paste of frames (Ctrl+C / Ctrl+V), export as **animated PNG, animated WebP,
-  MP4 or WebM**, and a bar that warns when the GIF gets too heavy (Discord's 10 MB).
-- **Painting**: an advanced brush (tip, flow, pressure curve, stabilizer, tapered ends, random
-  jitter, Ibis Paint style side sliders), **symmetry** (mirror and radial), **quick shapes** (hold
-  still at the end of a stroke and it becomes a perfect line, circle, rectangle or polygon), your
-  **own shapes** (Edit → Save Selection as Shape), **Alpha Lock** and view rotation with Alt + wheel.
-- **Themes**: Windows 8 and Windows 8 Dark, Windows 7 Basic, Ubuntu, GNOME, Linux Mint and elementary
-  OS (light and dark), and Windows 7 polished with 7.css.
-- **Formats**: WebP, AVIF, JPEG XL and HEIC with Kaint's own codecs, and icons with several sizes open
-  as one layer per size, like GIMP.
-- **Languages**: Brazilian Portuguese, translated by **Mildanner**.
-
-> [!NOTE]
-> **New version numbers.** From 1.2.0 on, the **second number** goes up with big updates (1.2.0 → 1.3.0)
-> and the **third number** with bug fixes and small changes (1.2.0 → 1.2.1).
 
 ## Make it yours
 
@@ -119,6 +75,8 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   maximized). The top bar and the window headers can take **a color of your own**, like Windows'
   accent color, and the Light and Dark themes can use **your own selection color** instead of the
   blue (one for each, so "Follow the system" uses the right one).
+- **The program itself**: its **icon** and the **name** in the title bar and the taskbar ("image.png -
+  Kaint") can be your own (**Settings → User interface → Program**), and go back to Kaint's with one click.
 - **Cursors**: Kaint's tool icons or Paint.NET's pixel-art cursors (the default), with the system
   pointer or Kaint's own beside the small tool icon.
 - **Icons and fonts**: install **icon packs** (.zip files with a preview) or create your own with
@@ -454,6 +412,7 @@ color you choose for the glass of the windows (**Settings → User interface**).
   <tr>
     <td colspan="2" valign="top">
       <h4>Collaborative mode 💻🤝🖥️</h4>
+      <p align="center"><img src="img/other/collaboration.png" alt="Two guests drawing together with their pointers, names and chat bubbles" width="820"></p>
       Host the current image and edit it together with other copies of Kaint or with browsers
       running the web version (<b>File → Collaboration</b>): over the Internet with P2P (the
       default: share the session code and the image goes straight from one computer to the other,
@@ -572,10 +531,9 @@ heavy the GIF will be and how long it lasts, turning yellow and red as it gets c
 windows, adjustments and effects in plain JavaScript, running entirely in the browser. Serve the
 `KaintHTML` folder with any static web server (`python3 -m http.server`) and open it. Browsers on
 the network can also join a collaborative session hosted by Kaint by opening the address its
-session window shows, and any browser can host or join a P2P session with just its code. It has
-everything new in 1.2.0 too (keyframes and MP4 export in the GIF editor, the advanced brush with
-symmetry and quick shapes, Alpha Lock and the new themes), Brazilian Portuguese, and on phones a
-single Save button with every option and smoother painting on images with many layers.
+session window shows, and any browser can host or join a P2P session with just its code. It has the
+same GIF editor (keyframes and MP4 export included), brush options, themes and languages, and on
+phones a single Save button with every option.
 
 ## Opening and saving
 

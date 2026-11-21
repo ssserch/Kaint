@@ -13,20 +13,6 @@
 windows, menus, adjustments and effects, written in plain JavaScript with no dependencies and no
 build step. Everything runs locally in the browser: images never leave your computer.
 
-## New in 1.2.0
-
-- **GIF editor**: keyframes like Filmora (position, scale, rotation and opacity, with their graph and
-  diamonds on the timeline), copy and paste frames, export as animated PNG, animated WebP or **MP4**
-  (WebCodecs), and a bar that warns when the GIF gets too heavy.
-- **Painting**: the advanced brush (tip, flow, pressure curve, stabilizer, tapered ends, jitter and
-  Ibis Paint style side sliders on phones), **symmetry** (mirror and radial), **quick shapes** (hold
-  still at the end of a stroke), Edit → Save Selection as Shape, **Alpha Lock** and view rotation
-  with Alt + wheel.
-- **Themes**: Windows 8, Windows 7 Basic, Ubuntu, GNOME, Linux Mint and elementary OS (light and dark),
-  and the Windows 7 window frame like Kaint's.
-- **Brazilian Portuguese** (by Mildanner), icons with several sizes as layers, a single Save button on
-  phones and smoother painting on images with many layers.
-
 ## Run it
 
 KaintHTML is a static site. Serve this folder with any web server (ES modules don't load from

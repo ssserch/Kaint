@@ -127,6 +127,18 @@ export async function openFile(file) {
             doc.fileName = "";
             return doc;
         }
+    } else if (ext === "ico" || ext === "cur") {
+        // Como GIMP (y Kaint): cada versión del icono es una capa, de la más pequeña (abajo) a la
+        // más grande (arriba), arriba a la izquierda del lienzo del tamaño de la más grande.
+        const images = (await Codecs.decodeIcoAll(new Uint8Array(await file.arrayBuffer()))).sort((a, b) => a.width * a.height - b.width * b.height);
+        const width = Math.max(...images.map((i) => i.width)), height = Math.max(...images.map((i) => i.height));
+        doc = documentFrom(width, height, name, images.map((img) => {
+            const data = new Uint8ClampedArray(width * height * 4);
+            for (let y = 0; y < img.height; ++y)
+                data.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), y * width * 4);
+            return { name: images.length === 1 ? tr("Fondo") : Codecs.icoLayerName(img.width, img.height), data };
+        }));
+        doc.active = doc.layers.length - 1;
     } else if (ext === "pdn") {
         // (Faltaba esta rama: un PSD sin avisos seguía como si fuera un .pdn y no se abría, y los
         // .pdn tampoco.)
@@ -339,6 +351,17 @@ export async function encode(doc, format, options = defaultSaveOptions(), frames
         return encodeOra(doc);
     if (format.plugin)
         return encodePlugin(doc, format);
+    // Un icono abierto con sus versiones como capas («32 × 32»...): cada capa visible, una versión.
+    if ((format.ext === "ico" || format.ext === "cur") && doc.layers.length > 1 && doc.layers.every((l) => Codecs.icoSizeFromName(l.name))) {
+        const images = doc.layers.filter((l) => l.visible).map((l) => {
+            const size = Codecs.icoSizeFromName(l.name), w = Math.min(size.width, doc.width), h = Math.min(size.height, doc.height);
+            return { width: w, height: h, data: l.ctx.getImageData(0, 0, w, h).data };
+        });
+        if (images.length) {
+            const ico = await Codecs.encodeIcoImages(images);
+            return new Blob([format.ext === "cur" ? Codecs.icoToCur(ico) : ico], { type: format.mime });
+        }
+    }
     let bytes;
     if (frames?.length)
         bytes = encodeAnimation(frames, options);

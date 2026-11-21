@@ -1267,6 +1267,29 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           && ui.gone, `botón «Avanzado…» y deslizadores laterales (${JSON.stringify(ui)})`);
 }
 
+// Iconos con varias versiones: cada una es una capa («16 × 16», «32 × 32») y se guardan una por capa.
+{
+    const r = await page.evaluate(async () => {
+        const { Document, Layer } = await import("./js/core/Document.js");
+        const { encode, openFile, SaveFormats } = await import("./js/core/ImageIO.js");
+        const doc = new Document(32, 32, { background: null });
+        doc.layers[0].name = "16 × 16";
+        doc.layers[0].ctx.fillStyle = "#ff0000";
+        doc.layers[0].ctx.fillRect(0, 0, 16, 16);
+        const big = new Layer(32, 32, "32 × 32");
+        big.ctx.fillStyle = "#0000ff";
+        big.ctx.fillRect(0, 0, 32, 32);
+        doc.layers.push(big);
+        const blob = await encode(doc, SaveFormats.find((f) => f.ext === "ico"));
+        const back = await openFile(new File([blob], "dos.ico"));
+        const px = (l, x, y) => [...back.layers[l].ctx.getImageData(x, y, 1, 1).data].join(",");
+        return { names: back.layers.map((l) => l.name).join("|"), size: `${back.width}x${back.height}`, small: px(0, 5, 5), outside: px(0, 20, 20),
+                 large: px(1, 20, 20), active: back.active };
+    });
+    check(r.names === "16 × 16|32 × 32" && r.size === "32x32" && r.small === "255,0,0,255" && r.outside.endsWith(",0") && r.large === "0,0,255,255"
+          && r.active === 1, `iconos con sus versiones como capas (${JSON.stringify(r)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

@@ -1101,6 +1101,11 @@ export class App extends EventTarget {
         A("zoomFit", tr("&Zum a ventana"), "zoom-fit-best", "Ctrl+B", () => this.view.toggleZoomToWindow(), has);
         A("zoomSel", tr("Zum a &selección"), "zoom-select", "Ctrl+Shift+B", () => this.view.zoomToRect(this.doc.selection.bounds()), sel);
         A("actualSize", tr("&Tamaño real"), "zoom-original", "Ctrl+0", () => this.view.setZoom(1), has);
+        // Girar la vista (solo se ve girada, como con dos dedos en el teléfono); también con Alt + rueda.
+        const turn = (deg) => this.view.setRotation(Math.round(((this.view.rotation * 180) / Math.PI + deg) / 15) * 15 * (Math.PI / 180));
+        A("rotateViewLeft", tr("Girar la vista a la iz&quierda"), "object-rotate-left", "Ctrl+Alt+ArrowLeft", () => turn(-15), has);
+        A("rotateViewRight", tr("Girar la vista a la de&recha"), "object-rotate-right", "Ctrl+Alt+ArrowRight", () => turn(15), has);
+        A("rotateViewReset", tr("Vista sin &girar"), "image-rotate-180", "Ctrl+Alt+ArrowUp", () => this.view.setRotation(0), () => has() && !!this.view.rotation);
         A("pixelGrid", tr("Cuadrícula de &píxeles"), "view-grid", "Ctrl+'", () => {
             this.view.pixelGrid = !this.view.pixelGrid;
             this.view.update();
@@ -1192,8 +1197,8 @@ export class App extends EventTarget {
                                                         submenu: () => Object.values(SelectionMode).map((m) => a(`pasteSelection-${m}`)) },
                                                       "-", a("eraseSel"), a("fillSel"), a("invertSel"), a("selectAll"), a("deselect"), "-",
                                                       a("growSel"), a("shrinkSel"), a("featherSel")] },
-            { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("pixelGrid"), a("rulers"), "-",
-                                                  a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
+            { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("rotateViewLeft"), a("rotateViewRight"),
+                                                  a("rotateViewReset"), "-", a("pixelGrid"), a("rulers"), "-", a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
                                                      a("rot180"), "-", a("colorProfile"), a("animation"), "-", a("flatten")] },
             { id: "layers", title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), a("alphaLock"), "-",

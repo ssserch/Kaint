@@ -1754,6 +1754,15 @@ export class CanvasView extends EventTarget {
             // Como en Kaint: Ctrl+rueda acerca o aleja hacia el puntero con pasos de 1,12 por
             // muesca (parando en el 100 %), Mayús+rueda desplaza en horizontal y la rueda sola, en
             // vertical.
+            // Alt + rueda gira la vista (de 15 en 15°; con Mayús, de grado en grado), como en Kaint.
+            if (e.altKey && !e.ctrlKey && !e.metaKey) {
+                const delta = e.deltaY || e.deltaX;
+                if (!delta)
+                    return;
+                const step = e.shiftKey ? 1 : 15, deg = (this.rotation * 180) / Math.PI + (delta > 0 ? step : -step);
+                this.setRotation((Math.round(deg / step) * step * Math.PI) / 180);
+                return;
+            }
             if (e.ctrlKey || e.metaKey) {
                 const notches = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaMode === 2 ? e.deltaY : e.deltaY / 100;
                 let z = this.zoom * Math.pow(1.12, -notches);

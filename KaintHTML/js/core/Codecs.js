@@ -872,29 +872,42 @@ export async function encodeIco(image, sizes) {
     const ox = Math.floor((side - image.width) / 2), oy = Math.floor((side - image.height) / 2);
     for (let y = 0; y < image.height; ++y)
         square.data.set(image.data.subarray(y * image.width * 4, (y + 1) * image.width * 4), ((oy + y) * side + ox) * 4);
-    const entries = [], used = [];
+    const images = [], used = [];
     for (let s of sizes) {
         s = Math.min(256, Math.max(1, s));
         if (used.includes(s))
             continue;
         used.push(s);
         const scaled = s === side ? square : scaleImage(new ImageData(square.data, side, side), s, s, "adaptive");
-        if (s === 256) {
-            entries.push(await encodePng({ width: s, height: s, data: scaled.data }));
+        images.push({ width: s, height: s, data: scaled.data });
+    }
+    return encodeIcoImages(images);
+}
+
+// Un icono con estas versiones tal cual (Ico::encodeImages de Kaint): cada capa «N × N» de una
+// imagen abierta de un icono. Las de 256 o más, en PNG; el resto, mapas de bits de 32 bits.
+export async function encodeIcoImages(images) {
+    if (!images.length)
+        throw new Error("No hay tamaños que guardar en el icono.");
+    const entries = [];
+    for (const img of images) {
+        const w = Math.min(256, img.width), h = Math.min(256, img.height);
+        if (w >= 256 || h >= 256) {
+            entries.push(await encodePng({ width: img.width, height: img.height, data: img.data }));
             continue;
         }
-        const maskStride = Math.ceil(s / 32) * 4, out = new Writer(40 + s * s * 4 + maskStride * s);
-        out.u32(40); out.u32(s); out.u32(s * 2); out.u16(1); out.u16(32); out.u32(0); out.u32(s * s * 4 + maskStride * s);
+        const maskStride = Math.ceil(w / 32) * 4, out = new Writer(40 + w * h * 4 + maskStride * h);
+        out.u32(40); out.u32(w); out.u32(h * 2); out.u16(1); out.u16(32); out.u32(0); out.u32(w * h * 4 + maskStride * h);
         out.u32(0); out.u32(0); out.u32(0); out.u32(0);
-        for (let y = s - 1; y >= 0; --y)
-            for (let x = 0; x < s; ++x) {
-                const o = (y * s + x) * 4;
-                out.u8(scaled.data[o + 2]); out.u8(scaled.data[o + 1]); out.u8(scaled.data[o]); out.u8(scaled.data[o + 3]);
+        for (let y = h - 1; y >= 0; --y)
+            for (let x = 0; x < w; ++x) {
+                const o = (y * img.width + x) * 4;
+                out.u8(img.data[o + 2]); out.u8(img.data[o + 1]); out.u8(img.data[o]); out.u8(img.data[o + 3]);
             }
-        for (let y = s - 1; y >= 0; --y) {
+        for (let y = h - 1; y >= 0; --y) {
             const mask = new Uint8Array(maskStride);
-            for (let x = 0; x < s; ++x)
-                if (scaled.data[(y * s + x) * 4 + 3] === 0)
+            for (let x = 0; x < w; ++x)
+                if (img.data[(y * img.width + x) * 4 + 3] === 0)
                     mask[x >> 3] |= 0x80 >> (x & 7);
             out.bytes(mask);
         }
@@ -904,14 +917,88 @@ export async function encodeIco(image, sizes) {
     out.u16(0); out.u16(1); out.u16(entries.length);
     let offset = 6 + 16 * entries.length;
     entries.forEach((e, i) => {
-        const s = used[i];
-        out.u8(s >= 256 ? 0 : s); out.u8(s >= 256 ? 0 : s); out.u8(0); out.u8(0);
+        const w = images[i].width, h = images[i].height;
+        out.u8(w >= 256 ? 0 : w); out.u8(h >= 256 ? 0 : h); out.u8(0); out.u8(0);
         out.u16(1); out.u16(32); out.u32(e.length); out.u32(offset);
         offset += e.length;
     });
     for (const e of entries)
         out.bytes(e);
     return out.result();
+}
+
+// Todas las versiones de un icono o un cursor (Ico::readAll de Kaint): [{ width, height, data }].
+// Las comprimidas en PNG y los mapas de bits de 1, 4, 8, 24 y 32 bits (con la máscara AND).
+export async function decodeIcoAll(bytes) {
+    const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (bytes.length < 6 || v.getUint16(0, true) !== 0 || ![1, 2].includes(v.getUint16(2, true)))
+        throw new Error("No es un icono.");
+    const count = v.getUint16(4, true), out = [];
+    for (let i = 0; i < count; ++i) {
+        const e = 6 + i * 16;
+        if (e + 16 > bytes.length)
+            break;
+        const size = v.getUint32(e + 8, true), offset = v.getUint32(e + 12, true);
+        if (offset + size > bytes.length || size < 8)
+            continue;
+        const blob = bytes.subarray(offset, offset + size);
+        try {
+            if (blob[0] === 0x89 && blob[1] === 0x50) {
+                const bitmap = await createImageBitmap(new Blob([blob], { type: "image/png" }));
+                const c = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(bitmap.width, bitmap.height)
+                    : Object.assign(document.createElement("canvas"), { width: bitmap.width, height: bitmap.height });
+                const g = c.getContext("2d");
+                g.drawImage(bitmap, 0, 0);
+                out.push({ width: bitmap.width, height: bitmap.height, data: g.getImageData(0, 0, bitmap.width, bitmap.height).data });
+                continue;
+            }
+            const d = new DataView(blob.buffer, blob.byteOffset, blob.byteLength);
+            const header = d.getUint32(0, true), w = d.getInt32(4, true), h = Math.abs(d.getInt32(8, true)) / 2, bits = d.getUint16(14, true);
+            if (w <= 0 || h <= 0 || w > 1024 || h > 1024 || ![1, 4, 8, 24, 32].includes(bits))
+                continue;
+            const colors = bits <= 8 ? (d.getUint32(32, true) || 1 << bits) : 0;
+            const palette = header, pixels = palette + colors * 4, stride = Math.ceil((w * bits) / 32) * 4;
+            const maskAt = pixels + stride * h, maskStride = Math.ceil(w / 32) * 4;
+            const img = newImage(w, h), data = img.data;
+            let anyAlpha = false;
+            for (let y = 0; y < h; ++y) {
+                const row = pixels + (h - 1 - y) * stride;
+                for (let x = 0; x < w; ++x) {
+                    const o = (y * w + x) * 4;
+                    if (bits === 32 || bits === 24) {
+                        const p = row + x * (bits / 8);
+                        data[o] = blob[p + 2]; data[o + 1] = blob[p + 1]; data[o + 2] = blob[p];
+                        data[o + 3] = bits === 32 ? blob[p + 3] : 255;
+                    } else {
+                        const bit = x * bits, byte = blob[row + (bit >> 3)];
+                        const index = (byte >> (8 - bits - (bit & 7))) & ((1 << bits) - 1), c = palette + index * 4;
+                        data[o] = blob[c + 2]; data[o + 1] = blob[c + 1]; data[o + 2] = blob[c]; data[o + 3] = 255;
+                    }
+                    anyAlpha ||= bits === 32 && data[o + 3] > 0;
+                }
+            }
+            // La máscara AND: transparente donde tiene bit (en los de 32 bits, solo si no traen alfa).
+            if (maskAt + maskStride * h <= blob.length && (bits !== 32 || !anyAlpha))
+                for (let y = 0; y < h; ++y) {
+                    const row = maskAt + (h - 1 - y) * maskStride;
+                    for (let x = 0; x < w; ++x)
+                        data[(y * w + x) * 4 + 3] = blob[row + (x >> 3)] & (0x80 >> (x & 7)) ? 0 : 255;
+                }
+            out.push(img);
+        } catch {
+            // Una versión que no se entiende: se salta.
+        }
+    }
+    if (!out.length)
+        throw new Error("El icono no tiene imágenes que se puedan leer.");
+    return out;
+}
+
+// El nombre de la capa de una versión de un icono («32 × 32») y su tamaño (o null).
+export const icoLayerName = (w, h) => `${w} × ${h}`;
+export function icoSizeFromName(name) {
+    const m = /^\s*(\d+)\s*[×x]\s*(\d+)\s*$/.exec(name || "");
+    return m ? { width: +m[1], height: +m[2] } : null;
 }
 
 // --- GIF (Gif.cpp de Kaint) ---------------------------------------------------------------
@@ -2094,7 +2181,11 @@ export function decodePam(b) {
 // Cursor de Windows: un icono de tipo 2 con el punto activo (arriba a la izquierda) en lugar de los
 // planos y los bits por píxel de cada entrada.
 export async function encodeCur(image, sizes) {
-    const ico = await encodeIco(image, sizes);
+    return icoToCur(await encodeIco(image, sizes));
+}
+
+// Un icono pasado a cursor: tipo 2 y el punto activo en (0, 0).
+export function icoToCur(ico) {
     ico[2] = 2;
     const n = ico[4] | (ico[5] << 8);
     for (let i = 0; i < n; ++i)

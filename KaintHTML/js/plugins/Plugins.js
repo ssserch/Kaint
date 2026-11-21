@@ -185,8 +185,30 @@ function toEffect(plugin, def) {
             }
             const source = new Uint8ClampedArray(src.data), destination = new ImageData(new Uint8ClampedArray(source), w, h);
             const selection = info?.selection ? new Uint8Array(info.selection) : null;
+            const bounds = pixels.selectionBounds(selection, w, h);
+            // Un efecto que no mira la selección (Object Align, que alinea en toda la imagen): con una
+            // selección más pequeña que la imagen, trabaja dentro de ella, como en Paint.NET (el
+            // rectángulo de la selección es su imagen). Los que sí la miran reciben la imagen entera.
+            if (selection && bounds.width > 0 && bounds.height > 0 && (bounds.width < w || bounds.height < h) && !/selection/.test(String(def.render))) {
+                const bw = bounds.width, bh = bounds.height, sub = new Uint8ClampedArray(bw * bh * 4);
+                for (let y = 0; y < bh; ++y)
+                    sub.set(source.subarray(((bounds.y + y) * w + bounds.x) * 4, ((bounds.y + y) * w + bounds.x + bw) * 4), y * bw * 4);
+                const subDestination = new Uint8ClampedArray(sub);
+                const r = def.render({ source: sub, destination: subDestination, width: bw, height: bh, values: vals, selection: null,
+                                       selectionBounds: { x: 0, y: 0, width: bw, height: bh } });
+                if (r instanceof Promise)
+                    throw new Error(tr("%1: render() debe ser síncrono.", name));
+                const data = r === undefined || r === subDestination ? subDestination
+                    : r instanceof ImageData && r.width === bw && r.height === bh ? r.data
+                    : r instanceof Uint8ClampedArray && r.length === subDestination.length ? r : null;
+                if (!data)
+                    throw new Error(tr("%1: render() devolvió un valor que no vale.", name));
+                for (let y = 0; y < bh; ++y)
+                    destination.data.set(data.subarray(y * bw * 4, (y + 1) * bw * 4), ((bounds.y + y) * w + bounds.x) * 4);
+                return destination;
+            }
             const result = def.render({ source, destination: destination.data, width: w, height: h, values: vals, selection,
-                                        selectionBounds: pixels.selectionBounds(selection, w, h) });
+                                        selectionBounds: bounds });
             if (result instanceof Promise)
                 throw new Error(tr("%1: render() debe ser síncrono.", name));
             if (result === undefined || result === destination || result === destination.data)

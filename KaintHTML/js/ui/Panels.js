@@ -533,15 +533,20 @@ export function historyPanel(app) {
 export function layersPanel(app, actionIds) {
     const list = el("div", { className: "list layer-list" });
     const dropLine = el("div", { className: "drop-line", style: { display: "none" } });
-    let lastDoc = null;
+    let lastDoc = null, glideFrom = null;
     const thumbs = new Map();
     const refresh = () => {
         const doc = app.doc;
         // Posiciones anteriores (para deslizar las filas que cambian de sitio).
-        const before = new Map();
-        if (doc && doc === lastDoc)
+        let before = new Map();
+        if (glideFrom && doc === lastDoc) {
+            // La capa que se soltó: se desliza desde donde se soltó hasta su sitio (las demás ya están).
+            before = glideFrom;
+        } else if (doc && doc === lastDoc) {
             for (const row of list.querySelectorAll(".row"))
                 before.set(row.dataset.key, row.offsetTop);
+        }
+        glideFrom = null;
         lastDoc = doc;
         list.replaceChildren(dropLine);
         if (!doc)
@@ -737,12 +742,14 @@ export function layersPanel(app, actionIds) {
         if (!drag)
             return;
         const { row, from, slot, moving, live } = drag;
+        const glideTop = row.offsetTop + Number(row.dataset.shift || 0);
         endDrag();
         if (!moving || slot === from)
             return;
-        // Las filas ya se ven en su sitio nuevo: al rehacer la lista no se deslizan.
+        // Las filas ya se ven en su sitio nuevo: al rehacer la lista solo se desliza la soltada, desde
+        // donde se soltó (como la tira de imágenes de arriba).
         if (live)
-            lastDoc = null;
+            glideFrom = new Map([[row.dataset.key, glideTop]]);
         const layers = app.doc.layers.length;
         app.moveLayerTo(row.index, layers - 1 - slot);
     });

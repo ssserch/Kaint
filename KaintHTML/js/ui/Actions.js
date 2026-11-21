@@ -48,7 +48,8 @@ export class Action {
 
 export function shortcutLabel(s) {
     return s.split("+").map((k) => ({ Ctrl: isMac ? "⌘" : tr("Ctrl"), Shift: tr("Mayús"), Alt: "Alt", Del: tr("Supr"),
-                                       PgUp: tr("RePág"), PgDown: tr("AvPág"), Backspace: "⌫" })[k] ?? k).join("+");
+                                       PgUp: tr("RePág"), PgDown: tr("AvPág"), Backspace: "⌫",
+                                       ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" })[k] ?? k).join("+");
 }
 
 // La combinación de una pulsación, con el mismo formato que los atajos ("Ctrl+Shift+N").

@@ -2591,7 +2591,8 @@ void setCustomTitleBarColor(const QColor& color)
 void setUiFont(const QString& family, int pointSize)
 {
     g_uiFontFamily = family.trimmed();
-    g_uiFontSize = std::clamp(pointSize, 0, 24);
+    // (Menos de 6 puntos no se lee: el del sistema o del tema.)
+    g_uiFontSize = pointSize < 6 ? 0 : std::min(pointSize, 24);
 }
 
 QString uiFontFamily()

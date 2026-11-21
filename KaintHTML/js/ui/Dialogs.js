@@ -1072,7 +1072,17 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const uiFontSize = numberInput(Settings.get("uiFontSize") || 0, 0, 24);
             uiFontSize.style.width = "60px";
             uiFontSize.title = tr("Tamaño de la letra en puntos (Automático: el del sistema o del tema).");
-            uiFontSize.addEventListener("input", () => Settings.set("uiFontSize", uiFontSize.read()));
+            // De 0 (automático) se pasa a 6 y de 6 a 0: menos de 6 puntos no se lee.
+            let lastFontSize = Number(Settings.get("uiFontSize")) || 0;
+            uiFontSize.addEventListener("input", () => {
+                let v = uiFontSize.read();
+                if (v > 0 && v < 6) {
+                    v = lastFontSize >= 6 ? 0 : 6;
+                    uiFontSize.value = v;
+                }
+                lastFontSize = v;
+                Settings.set("uiFontSize", v);
+            });
             // Como el color propio de la barra superior de Kaint en Linux (el de énfasis de Windows).
             // El programa: el nombre de la barra de título (y de la pestaña) y su icono (Kaint o los propios).
             const programName = el("input", { type: "text", value: Settings.get("programTitle") || "", placeholder: "Kaint", maxLength: 60,

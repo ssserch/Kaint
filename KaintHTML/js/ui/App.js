@@ -250,7 +250,8 @@ export class App extends EventTarget {
             root.style.setProperty("--ui-font", `"${family}"`);
         else
             root.style.removeProperty("--ui-font");
-        const points = Math.max(0, Math.min(24, Number(Settings.get("uiFontSize")) || 0));
+        // (Menos de 6 puntos no se lee: el del sistema o del tema.)
+        const stored = Math.max(0, Math.min(24, Number(Settings.get("uiFontSize")) || 0)), points = stored < 6 ? 0 : stored;
         if (points)
             root.style.setProperty("--ui-font-size", `${Math.round((points * 96) / 72)}px`);
         else

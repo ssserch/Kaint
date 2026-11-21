@@ -173,7 +173,11 @@ AppSettings AppSettings::load()
     a.panelBorder = std::clamp(get("panelBorder", a.panelBorder), 1, 12);
     a.snapPanels = get("snapPanels", a.snapPanels);
     a.uiFontFamily = get("uiFontFamily", a.uiFontFamily);
+    // (Menos de 6 puntos no se lee: es «Automático». Antes, un clic en la flecha desde «Automático»
+    // dejaba 1 punto y la ventana quedaba ilegible.)
     a.uiFontSize = std::clamp(get("uiFontSize", a.uiFontSize), 0, 24);
+    if (a.uiFontSize < 6)
+        a.uiFontSize = 0;
     a.titleBarColor = s.value(QStringLiteral("titleBarColor"), QColor()).value<QColor>();
     a.programTitle = s.value(QStringLiteral("programTitle")).toString().left(60);
     a.programIcon = s.value(QStringLiteral("programIcon")).toString();
@@ -1062,9 +1066,10 @@ QWidget* SettingsDialog::createInterfacePage()
     uiFont->setToolTip(tr("Letra de los menús, las ventanas y los diálogos. «La del sistema» usa la del escritorio "
                           "(o la del tema personalizado)."));
     auto* uiFontSize = new QSpinBox(page.widget);
-    uiFontSize->setRange(0, 24);
+    // El mínimo (5) es «Automático»: de ahí, la flecha pasa directamente a 6 puntos.
+    uiFontSize->setRange(5, 24);
     uiFontSize->setSpecialValueText(tr("Automático"));
-    uiFontSize->setValue(m_settings.uiFontSize);
+    uiFontSize->setValue(m_settings.uiFontSize < 6 ? 5 : m_settings.uiFontSize);
     uiFontSize->setToolTip(tr("Tamaño de la letra en puntos (Automático: el del sistema o del tema)."));
     fontRow->addWidget(new QLabel(tr("Fuente de la interfaz:"), page.widget));
     fontRow->addWidget(uiFont);
@@ -1076,7 +1081,7 @@ QWidget* SettingsDialog::createInterfacePage()
         changed();
     });
     connect(uiFontSize, &QSpinBox::valueChanged, this, [this](int v) {
-        m_settings.uiFontSize = v;
+        m_settings.uiFontSize = v < 6 ? 0 : v;
         changed();
     });
 

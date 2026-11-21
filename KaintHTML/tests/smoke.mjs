@@ -1461,6 +1461,28 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `portugués de Brasil (${JSON.stringify(r)})`);
 }
 
+// El programa personalizado: su nombre en el título y su icono en la pestaña y en la barra de título.
+{
+    const r = await page.evaluate(async () => {
+        const { Settings } = await import("./js/Settings.js");
+        const c = document.createElement("canvas");
+        c.width = c.height = 16;
+        c.getContext("2d").fillRect(0, 0, 16, 16);
+        const icon = c.toDataURL("image/png");
+        Settings.set("programTitle", "Mi Paint");
+        Settings.set("programIcon", icon);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const out = { title: document.title, favicon: document.querySelector('link[rel="icon"]').href === icon,
+                      caption: document.querySelector("#caption-title .caption-icon").src === icon };
+        Settings.set("programTitle", "");
+        Settings.set("programIcon", null);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        out.back = document.title.endsWith("Kaint") && document.querySelector('link[rel="icon"]').href.endsWith("assets/kaint-32.png");
+        return out;
+    });
+    check(r.title.endsWith(" - Mi Paint") && r.favicon && r.caption && r.back, `icono y nombre del programa (${JSON.stringify(r)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

@@ -3786,6 +3786,20 @@ int main(int argc, char** argv)
         CHECK(canvas->toLogical(QPointF(10, 20)) == QPointF(10, 20));
     }
 
+    // El programa personalizado: el icono y el nombre propios, y de vuelta a los de Kaint.
+    {
+        QTemporaryDir dir;
+        QImage square(32, 32, QImage::Format_ARGB32);
+        square.fill(QColor(10, 200, 30));
+        const QString file = dir.filePath(QStringLiteral("icono.png"));
+        CHECK(square.save(file));
+        Icons::setProgram(file, QStringLiteral("  Mi Paint  "));
+        CHECK(Icons::programTitle() == QStringLiteral("Mi Paint"));
+        CHECK(Icons::app().pixmap(32).toImage().pixelColor(16, 16) == QColor(10, 200, 30));
+        Icons::setProgram(QString(), QString());
+        CHECK(Icons::programTitle() == QStringLiteral("Kaint") && Icons::app().pixmap(32).toImage() == Icons::kaint().pixmap(32).toImage());
+    }
+
     // Exportar la animación como vídeo (con FFmpeg, si está): MP4 y WebM con la duración de los
     // fotogramas y las repeticiones.
     if (!GifExport::ffmpegPath().isEmpty()) {

@@ -295,6 +295,11 @@ int main(int argc, char** argv)
     Icons::setupTheme();
     // El icono de todas las ventanas (también los diálogos), para los escritorios que lo toman de
     // la ventana (Wayland con xdg-toplevel-icon, X11).
+    // El icono y el nombre del programa (los de Kaint o los propios, en Configuración).
+    {
+        const AppSettings program = AppSettings::load();
+        Icons::setProgram(program.programIcon, program.programTitle);
+    }
     QApplication::setWindowIcon(Icons::app());
     Animations::install();
     QImageReader::setAllocationLimit(4096);

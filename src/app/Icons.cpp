@@ -506,7 +506,33 @@ QIcon tool(const QString& name, const QIcon& fallback)
     return icon.isNull() ? fallback : icon;
 }
 
+namespace {
+QIcon g_programIcon;
+QString g_programTitle;
+} // namespace
+
 QIcon app()
+{
+    return g_programIcon.isNull() ? kaint() : g_programIcon;
+}
+
+void setProgram(const QString& iconFile, const QString& title)
+{
+    g_programIcon = QIcon();
+    if (!iconFile.isEmpty()) {
+        const QPixmap pm(iconFile);
+        if (!pm.isNull())
+            g_programIcon = QIcon(pm);
+    }
+    g_programTitle = title.trimmed();
+}
+
+QString programTitle()
+{
+    return g_programTitle.isEmpty() ? QStringLiteral("Kaint") : g_programTitle;
+}
+
+QIcon kaint()
 {
     // El icono de img/ (o el de emergencia de data/) va incluido en el programa.
     QIcon icon;

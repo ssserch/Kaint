@@ -9600,6 +9600,38 @@ Do you want to replace them?</translation>
         <translation>Like Windows 8&apos;s “Color and Appearance”: the window frame and title bar. Only with the Windows 8 themes.</translation>
     </message>
     <message>
+        <source>El nombre que sale en la barra de título y en la barra de tareas («imagen.png - Kaint»).</source>
+        <translation>The name shown in the title bar and the taskbar (“image.png - Kaint”).</translation>
+    </message>
+    <message>
+        <source>Elegir el icono de las ventanas (una imagen PNG, JPEG, ICO, SVG...)</source>
+        <translation>Choose the window icon (a PNG, JPEG, ICO, SVG... image)</translation>
+    </message>
+    <message>
+        <source>El nombre y el icono de Kaint.</source>
+        <translation>Kaint&apos;s name and icon.</translation>
+    </message>
+    <message>
+        <source>Icono del programa</source>
+        <translation>Program icon</translation>
+    </message>
+    <message>
+        <source>Imágenes (*.png *.jpg *.jpeg *.bmp *.ico *.svg *.webp *.gif)</source>
+        <translation>Images (*.png *.jpg *.jpeg *.bmp *.ico *.svg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir «%1».</source>
+        <translation>Couldn’t open “%1”.</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir «%1».</source>
+        <translation>Couldn’t write “%1”.</translation>
+    </message>
+    <message>
+        <source>Programa:</source>
+        <translation>Program:</translation>
+    </message>
+    <message>
         <source>Los del tema: de cristal con Windows 7, planos con Windows 8, los azules de Luna con Windows XP, en relieve con Windows 98, redondos con los de Linux y, con los demás (Claro, Oscuro, Azul...), los de Windows 10.</source>
         <translation>The theme&apos;s: glass with Windows 7, flat with Windows 8, Luna blue with Windows XP, raised with Windows 98, round with the Linux ones and, with the rest (Light, Dark, Blue...), Windows 10&apos;s.</translation>
     </message>

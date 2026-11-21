@@ -1074,6 +1074,41 @@ export async function settingsDialog(app = null, startPage = "interface") {
             uiFontSize.title = tr("Tamaño de la letra en puntos (Automático: el del sistema o del tema).");
             uiFontSize.addEventListener("input", () => Settings.set("uiFontSize", uiFontSize.read()));
             // Como el color propio de la barra superior de Kaint en Linux (el de énfasis de Windows).
+            // El programa: el nombre de la barra de título (y de la pestaña) y su icono (Kaint o los propios).
+            const programName = el("input", { type: "text", value: Settings.get("programTitle") || "", placeholder: "Kaint", maxLength: 60,
+                                              style: { width: "180px" }, title: tr("El nombre que sale en la barra de título y en la barra de tareas («imagen.png - Kaint»).") });
+            programName.addEventListener("input", () => Settings.set("programTitle", programName.value.trim()));
+            const programPreview = el("img", { width: 24, height: 24, alt: "", style: { imageRendering: "auto", verticalAlign: "middle" } });
+            const programFile = el("input", { type: "file", accept: "image/*,.ico,.svg", hidden: true });
+            const syncProgram = () => (programPreview.src = Settings.get("programIcon") || "assets/kaint-32.png");
+            syncProgram();
+            programFile.addEventListener("change", async () => {
+                const f = programFile.files?.[0];
+                programFile.value = "";
+                if (!f)
+                    return;
+                try {
+                    // Una copia cuadrada de 256 píxeles como mucho, guardada en el navegador.
+                    const bitmap = await createImageBitmap(f);
+                    const side = Math.min(256, Math.max(bitmap.width, bitmap.height)), scale = side / Math.max(bitmap.width, bitmap.height);
+                    const c = el("canvas", { width: side, height: side }), g = c.getContext("2d");
+                    g.imageSmoothingQuality = "high";
+                    g.drawImage(bitmap, (side - bitmap.width * scale) / 2, (side - bitmap.height * scale) / 2, bitmap.width * scale, bitmap.height * scale);
+                    Settings.set("programIcon", c.toDataURL("image/png"));
+                    syncProgram();
+                } catch {
+                    await message(tr("Icono del programa"), tr("No se pudo abrir «%1».", f.name), "dialog-warning");
+                }
+            });
+            const programIconButton = el("button", { className: "pushbutton", type: "button", title: tr("Elegir el icono de las ventanas (una imagen PNG, JPEG, ICO, SVG...)") }, [programPreview]);
+            programIconButton.addEventListener("click", () => programFile.click());
+            const programReset = button(tr("Restablecer"), tr("El nombre y el icono de Kaint."), () => {
+                Settings.set("programIcon", null);
+                Settings.set("programTitle", "");
+                programName.value = "";
+                syncProgram();
+            });
+            const programRow = el("label", {}, [tr("Programa:"), programIconButton, programName, programReset, programFile]);
             const fakeTitle = check(tr("Mostrar una barra de título como la de Kaint para el escritorio"), "fakeTitleBar",
                                     tr("Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint, con los botones de la ventana del tema (maximizar pasa a pantalla completa). De fábrica, desactivada en Windows."));
             const stripFull = check(tr("Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba"), "stripFullHeight",
@@ -1204,6 +1239,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 el("label", {}, [tr("Paquete de iconos:"), pack, button(tr("Administrar…"), tr("Añadir o quitar paquetes de iconos."), () => show("iconpacks"))]),
                 // Como en Kaint: la barra de título y las ventanas juntas (botones, bordes y su grosor).
                 heading(tr("Barra de título y ventanas")),
+                programRow,
                 fakeTitle,
                 el("label", {}, [tr("Botones de las ventanas:"), buttonsStyle, win7Shape, buttonsSide]),
                 el("label", {}, [tr("Bordes:"), panelStyle]),

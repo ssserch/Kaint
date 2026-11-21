@@ -53,6 +53,24 @@ import { LineTool, ShapesTool } from "../tools/ShapeTools.js";
 
 const openUrl = (url) => () => window.open(url, "_blank", "noopener,noreferrer");
 
+// El nombre del programa: «Kaint» o el propio (Configuración > Interfaz de usuario > Programa).
+export function programTitle() {
+    return String(Settings.get("programTitle") || "").trim().slice(0, 60) || "Kaint";
+}
+
+// El icono del programa (el de Kaint o el propio) en la pestaña, en la barra de título simulada y
+// al añadir la página a la pantalla de inicio.
+function applyProgramIcon() {
+    const own = Settings.get("programIcon");
+    const icon = /^data:image\//.test(own || "") ? own : null;
+    const caption = document.querySelector("#caption-title .caption-icon");
+    if (caption)
+        caption.src = icon || "assets/kaint-32.png";
+    for (const [rel, fallback] of [["icon", "assets/kaint-32.png"], ["apple-touch-icon", "assets/kaint-256.png"]])
+        for (const link of document.querySelectorAll(`link[rel="${rel}"]`))
+            link.href = icon || (link.sizes?.value === "64x64" ? "assets/kaint-64.png" : fallback);
+}
+
 // El título de la página y el de la barra de título simulada (como la de Kaint para el escritorio).
 function setWindowTitle(text) {
     document.title = text;
@@ -204,6 +222,8 @@ export class App extends EventTarget {
     }
 
     applySettings() {
+        applyProgramIcon();
+        setWindowTitle(this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - ${programTitle()}` : programTitle());
         this.applyTheme();
         applyAnimations();
         document.getElementById("workspace").classList.toggle("translucent", !!Settings.get("translucentPanels"));
@@ -295,7 +315,7 @@ export class App extends EventTarget {
         this.rebuildTabs();
         this.updateStatus();
         updateActions();
-        setWindowTitle(doc ? `${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint` : "Kaint");
+        setWindowTitle(doc ? `${doc.isModified() ? "*" : ""}${doc.displayName()} - ${programTitle()}` : programTitle());
         this.updateCentralView();
     }
 
@@ -681,7 +701,7 @@ export class App extends EventTarget {
         strip.updateArrows();
         // La imagen actual, a la vista.
         this.doc?.tab?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-        setWindowTitle(this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - Kaint` : "Kaint");
+        setWindowTitle(this.doc ? `${this.doc.isModified() ? "*" : ""}${this.doc.displayName()} - ${programTitle()}` : programTitle());
     }
 
     makeTab(strip, doc) {
@@ -959,7 +979,7 @@ export class App extends EventTarget {
             }
             tab.title = doc.displayName();
             if (doc === this.doc)
-                setWindowTitle(`${doc.isModified() ? "*" : ""}${doc.displayName()} - Kaint`);
+                setWindowTitle(`${doc.isModified() ? "*" : ""}${doc.displayName()} - ${programTitle()}`);
         };
         clearTimeout(doc.tabTimer);
         now ? paint() : (doc.tabTimer = setTimeout(paint, 400));

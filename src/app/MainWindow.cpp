@@ -2629,11 +2629,13 @@ void MainWindow::showImageList()
 
 void MainWindow::updateTitle()
 {
+    // (Con el nombre del programa propio, si se eligió en Configuración.)
+    const QString program = Icons::programTitle();
     if (!m_doc) {
-        setWindowTitle(QStringLiteral("Kaint"));
+        setWindowTitle(program);
         return;
     }
-    setWindowTitle(QStringLiteral("%1%2 - Kaint").arg(m_doc->isModified() ? QStringLiteral("*") : QString(), m_doc->displayName()));
+    setWindowTitle(QStringLiteral("%1%2 - %3").arg(m_doc->isModified() ? QStringLiteral("*") : QString(), m_doc->displayName(), program));
 }
 
 void MainWindow::updateActions()
@@ -4706,6 +4708,11 @@ void MainWindow::alignMainToolBar()
 
 void MainWindow::applySettings()
 {
+    // El icono y el nombre del programa, al momento.
+    Icons::setProgram(m_settings.programIcon, m_settings.programTitle);
+    QApplication::setWindowIcon(Icons::app());
+    setWindowIcon(Icons::app());
+    updateTitle();
     {
         const QSignalBlocker b1(m_act["translucent"]), b2(m_act["rulers"]);
         m_act["translucent"]->setChecked(m_settings.translucentPanels);

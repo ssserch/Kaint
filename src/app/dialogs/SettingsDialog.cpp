@@ -175,6 +175,8 @@ AppSettings AppSettings::load()
     a.uiFontFamily = get("uiFontFamily", a.uiFontFamily);
     a.uiFontSize = std::clamp(get("uiFontSize", a.uiFontSize), 0, 24);
     a.titleBarColor = s.value(QStringLiteral("titleBarColor"), QColor()).value<QColor>();
+    a.programTitle = s.value(QStringLiteral("programTitle")).toString().left(60);
+    a.programIcon = s.value(QStringLiteral("programIcon")).toString();
     a.selectionColorLight = s.value(QStringLiteral("selectionColorLight"), QColor()).value<QColor>();
     a.selectionColorDark = s.value(QStringLiteral("selectionColorDark"), QColor()).value<QColor>();
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
@@ -296,6 +298,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("uiFontFamily"), uiFontFamily);
     s.setValue(QStringLiteral("uiFontSize"), uiFontSize);
     s.setValue(QStringLiteral("titleBarColor"), titleBarColor);
+    s.setValue(QStringLiteral("programTitle"), programTitle);
+    s.setValue(QStringLiteral("programIcon"), programIcon);
     s.setValue(QStringLiteral("selectionColorLight"), selectionColorLight);
     s.setValue(QStringLiteral("selectionColorDark"), selectionColorDark);
     s.setValue(QStringLiteral("customWindowFrame"), customFrame);
@@ -1075,6 +1079,69 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.uiFontSize = v;
         changed();
     });
+
+    // El programa: su nombre en la barra de título y el icono de las ventanas (Kaint o los propios).
+    auto* programRowWidget = new QWidget(page.widget);
+    auto* programRow = new QHBoxLayout(programRowWidget);
+    programRow->setContentsMargins(0, 0, 0, 0);
+    auto* programName = new QLineEdit(m_settings.programTitle, page.widget);
+    programName->setPlaceholderText(QStringLiteral("Kaint"));
+    programName->setMaxLength(60);
+    programName->setToolTip(tr("El nombre que sale en la barra de título y en la barra de tareas («imagen.png - Kaint»)."));
+    auto* programIcon = new QToolButton(page.widget);
+    programIcon->setIconSize(QSize(24, 24));
+    programIcon->setToolTip(tr("Elegir el icono de las ventanas (una imagen PNG, JPEG, ICO, SVG...)"));
+    auto* programReset = new QPushButton(tr("Restablecer"), page.widget);
+    programReset->setToolTip(tr("El nombre y el icono de Kaint."));
+    auto syncProgram = [this, programIcon, programReset] {
+        QIcon icon;
+        if (!m_settings.programIcon.isEmpty())
+            icon = QIcon(QPixmap(m_settings.programIcon));
+        programIcon->setIcon(icon.isNull() ? Icons::kaint() : icon);
+        programReset->setEnabled(!m_settings.programIcon.isEmpty() || !m_settings.programTitle.isEmpty());
+    };
+    syncProgram();
+    connect(programName, &QLineEdit::textChanged, this, [this, syncProgram](const QString& text) {
+        m_settings.programTitle = text.trimmed();
+        syncProgram();
+        changed();
+    });
+    connect(programIcon, &QToolButton::clicked, this, [this, syncProgram] {
+        const QString file = QFileDialog::getOpenFileName(this, tr("Icono del programa"), QString(),
+                                                          tr("Imágenes (*.png *.jpg *.jpeg *.bmp *.ico *.svg *.webp *.gif)"));
+        if (file.isEmpty())
+            return;
+        QImage image(file);
+        if (image.isNull()) {
+            QMessageBox::warning(this, tr("Icono del programa"), tr("No se pudo abrir «%1».").arg(QFileInfo(file).fileName()));
+            return;
+        }
+        // Una copia cuadrada de 256 píxeles como mucho en la carpeta de Kaint (el original puede moverse).
+        if (image.width() > 256 || image.height() > 256)
+            image = image.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir().mkpath(dir);
+        const QString target = QDir(dir).filePath(QStringLiteral("program-icon.png"));
+        if (!image.save(target, "PNG")) {
+            QMessageBox::warning(this, tr("Icono del programa"), tr("No se pudo escribir «%1».").arg(QDir::toNativeSeparators(target)));
+            return;
+        }
+        // (Otro nombre cada vez no hace falta: el icono se vuelve a leer al aplicar.)
+        m_settings.programIcon = target;
+        syncProgram();
+        changed();
+    });
+    connect(programReset, &QPushButton::clicked, this, [this, programName, syncProgram] {
+        m_settings.programIcon.clear();
+        programName->setText(QString());
+        syncProgram();
+        changed();
+    });
+    programRow->addWidget(new QLabel(tr("Programa:"), page.widget));
+    programRow->addWidget(programIcon);
+    programRow->addWidget(programName, 1);
+    programRow->addWidget(programReset);
+    page.layout->addWidget(programRowWidget);
 
     // El color de la barra superior (y de las cabeceras de las ventanas), como el color de énfasis
     // en las barras de título de Windows. En Windows, con la barra de título de Kaint (sin ella, la

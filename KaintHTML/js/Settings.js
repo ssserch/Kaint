@@ -133,6 +133,10 @@ const defaults = {
     win7Glass: "",
     // El color de las ventanas de los temas Windows 8 (#rrggbb; vacío, el celeste de siempre).
     win8Color: "",
+    // El programa personalizado: el nombre de la barra de título y el icono (una imagen data:); vacíos,
+    // los de Kaint.
+    programTitle: "",
+    programIcon: null,
     // Teléfono: las ventanas escondidas en las esquinas ("autohide") o flotantes ("windows"), si al
     // sacar una se esconden las que tape (en las esquinas) y el tamaño de cada una en el modo
     // Ventanas (en %).

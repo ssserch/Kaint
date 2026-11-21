@@ -46,7 +46,7 @@ protected:
         p.setRenderHint(QPainter::Antialiasing);
         p.setRenderHint(QPainter::SmoothPixmapTransform);
         const int top = (height() - kIcon) / 2;
-        Icons::app().paint(&p, QRect(kMargin, top, kIcon, kIcon));
+        Icons::kaint().paint(&p, QRect(kMargin, top, kIcon, kIcon));
         p.setFont(m_font);
         p.setPen(palette().color(QPalette::WindowText));
         p.drawText(QRect(kMargin + kIcon + kGap, 0, width(), height()), Qt::AlignLeft | Qt::AlignVCenter, text());

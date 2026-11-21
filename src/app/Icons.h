@@ -153,6 +153,13 @@ QIcon sampleSize(int pixels);
 QIcon stepper(bool plus);
 QIcon blendMode();
 QIcon swatch(const QColor& color);
+// El icono del programa: el de Kaint o el propio elegido en Configuración (setProgram).
 QIcon app();
+// Siempre el de Kaint (Acerca de).
+QIcon kaint();
+// Personalizar el programa (Configuración > Interfaz de usuario > Programa): el icono de las
+// ventanas (una imagen; vacío, el de Kaint) y el nombre de la barra de título (vacío, «Kaint»).
+void setProgram(const QString& iconFile, const QString& title);
+QString programTitle();
 
 } // namespace Icons

@@ -9600,6 +9600,38 @@ Deseja substituí-los?</translation>
         <translation>Como «Cor e aparência» do Windows 8: a moldura e a barra de título das janelas. Só com os temas Windows 8.</translation>
     </message>
     <message>
+        <source>El nombre que sale en la barra de título y en la barra de tareas («imagen.png - Kaint»).</source>
+        <translation>O nome que aparece na barra de título e na barra de tarefas («imagem.png - Kaint»).</translation>
+    </message>
+    <message>
+        <source>Elegir el icono de las ventanas (una imagen PNG, JPEG, ICO, SVG...)</source>
+        <translation>Escolher o ícone das janelas (uma imagem PNG, JPEG, ICO, SVG...)</translation>
+    </message>
+    <message>
+        <source>El nombre y el icono de Kaint.</source>
+        <translation>O nome e o ícone do Kaint.</translation>
+    </message>
+    <message>
+        <source>Icono del programa</source>
+        <translation>Ícone do programa</translation>
+    </message>
+    <message>
+        <source>Imágenes (*.png *.jpg *.jpeg *.bmp *.ico *.svg *.webp *.gif)</source>
+        <translation>Imagens (*.png *.jpg *.jpeg *.bmp *.ico *.svg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir «%1».</source>
+        <translation>Não foi possível abrir «%1».</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir «%1».</source>
+        <translation>Não foi possível gravar «%1».</translation>
+    </message>
+    <message>
+        <source>Programa:</source>
+        <translation>Programa:</translation>
+    </message>
+    <message>
         <source>Los del tema: de cristal con Windows 7, planos con Windows 8, los azules de Luna con Windows XP, en relieve con Windows 98, redondos con los de Linux y, con los demás (Claro, Oscuro, Azul...), los de Windows 10.</source>
         <translation>Os do tema: de vidro com o Windows 7, planos com o Windows 8, os azuis do Luna com o Windows XP, em relevo com o Windows 98, redondos com os do Linux e, com os demais (Claro, Escuro, Azul...), os do Windows 10.</translation>
     </message>

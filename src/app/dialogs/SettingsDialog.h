@@ -114,6 +114,10 @@ struct AppSettings {
     // Linux: color de la barra superior y de las cabeceras de las ventanas, como el de énfasis de
     // Windows (no válido: el del tema).
     QColor titleBarColor;
+    // El programa personalizado: el nombre de la barra de título y el icono de las ventanas (una copia
+    // en la carpeta de Kaint); vacíos, los de Kaint.
+    QString programTitle;
+    QString programIcon;
     // Color de selección propio de los temas Claro y Oscuro (no válido: el azul de siempre).
     QColor selectionColorLight;
     QColor selectionColorDark;

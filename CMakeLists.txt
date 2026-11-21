@@ -175,6 +175,7 @@ add_library(kaintcore STATIC
     src/core/Gif.cpp
     src/core/Motion.cpp
     src/core/Apng.cpp
+    src/core/QuickShape.cpp
     src/core/ModernFormats.cpp
     src/core/ImageIO.cpp
     src/core/LayerEdit.cpp

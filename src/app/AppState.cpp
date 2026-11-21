@@ -153,6 +153,9 @@ ToolSettings AppState::toolDefaults() const
     t.taperOut = num("taperOut", t.taperOut);
     t.speedPressure = num("speedPressure", t.speedPressure);
     t.sideSliders = num("sideSliders", t.sideSliders);
+    t.symmetry = std::clamp(num("symmetry", t.symmetry), 0, 4);
+    t.symmetryCount = std::clamp(num("symmetryCount", t.symmetryCount), 2, 32);
+    t.quickShape = num("quickShape", t.quickShape);
     t.pickerSampleImage = num("pickerSampleImage", t.pickerSampleImage);
     t.recolorSampling = RecolorSampling(num("recolorSampling", int(t.recolorSampling)));
     t.shape = ShapeType(num("shape", int(t.shape)));
@@ -241,6 +244,9 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.setValue(QStringLiteral("taperOut"), t.taperOut);
     s.setValue(QStringLiteral("speedPressure"), t.speedPressure);
     s.setValue(QStringLiteral("sideSliders"), t.sideSliders);
+    s.setValue(QStringLiteral("symmetry"), t.symmetry);
+    s.setValue(QStringLiteral("symmetryCount"), t.symmetryCount);
+    s.setValue(QStringLiteral("quickShape"), t.quickShape);
     s.setValue(QStringLiteral("pickerSampleImage"), t.pickerSampleImage);
     s.remove(QStringLiteral("sampleImage"));
     s.setValue(QStringLiteral("recolorSampling"), int(t.recolorSampling));

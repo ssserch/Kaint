@@ -25,6 +25,7 @@
 #include <QLayout>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPainter>
 #include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -97,6 +98,51 @@ QStringList ToolOptionsEditor::sectionNames()
 }
 
 namespace {
+
+// Los dibujos de la simetría: la línea del espejo (o los radios) y los puntos reflejados.
+QIcon symmetryIcon(int choice)
+{
+    QPixmap pm(32, 32);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor ink(90, 90, 90), dot(40, 120, 220);
+    const QPointF c(16, 16);
+    p.setPen(QPen(ink, 1.6, Qt::DashLine));
+    if (choice == 1 || choice == 3)
+        p.drawLine(QPointF(16, 3), QPointF(16, 29));
+    if (choice == 2 || choice == 3)
+        p.drawLine(QPointF(3, 16), QPointF(29, 16));
+    QList<QPointF> dots{QPointF(9, 10)};
+    if (choice == 1)
+        dots << QPointF(23, 10);
+    else if (choice == 2)
+        dots << QPointF(9, 22);
+    else if (choice == 3)
+        dots << QPointF(23, 10) << QPointF(9, 22) << QPointF(23, 22);
+    else if (choice >= 100) {
+        const int n = choice - 100;
+        p.setPen(QPen(ink, 1.2, Qt::DotLine));
+        dots.clear();
+        for (int i = 0; i < n; ++i) {
+            const qreal a = 2 * M_PI * i / n - M_PI / 2;
+            const QPointF d(std::cos(a), std::sin(a));
+            p.drawLine(c, c + d * 14);
+            dots << c + d * 9;
+        }
+    }
+    p.setPen(Qt::NoPen);
+    p.setBrush(dot);
+    for (const QPointF& d : dots)
+        p.drawEllipse(d, choice >= 100 ? 2.4 : 3.2, choice >= 100 ? 2.4 : 3.2);
+    if (choice == 0) {
+        p.setPen(QPen(ink, 1.6));
+        p.drawLine(QPointF(20, 20), QPointF(27, 27));
+    }
+    p.end();
+    return QIcon(pm);
+}
+
 enum Section { Brush, Shape, Select, Move, Text, Gradient, Flood, Picker, Sampling, Options };
 
 // Valores del desplegable de formas a partir de los que van las personalizadas.
@@ -750,6 +796,33 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     add(QStringLiteral("pressure"), Tool::OptPressure, Options, {m_pressure});
     add(QStringLiteral("advanced"), Tool::OptPressure, Options, {new AdvancedBrushButton(parent)});
 
+    // Simetría (como Ibis Paint): espejo a izquierda y derecha, arriba y abajo, las dos, o radial.
+    m_symmetry = new ChoiceButton(tr("Simetría"), parent);
+    m_symmetry->addChoice(symmetryIcon(0), tr("Sin simetría"), 0);
+    m_symmetry->addChoice(symmetryIcon(1), tr("Espejo a izquierda y derecha"), 1,
+                          tr("Lo que se pinta a un lado del centro de la imagen sale reflejado al otro."));
+    m_symmetry->addChoice(symmetryIcon(2), tr("Espejo arriba y abajo"), 2);
+    m_symmetry->addChoice(symmetryIcon(3), tr("Espejo en cuatro"), 3, tr("A izquierda y derecha y arriba y abajo a la vez."));
+    for (int n : {4, 6, 8, 12})
+        m_symmetry->addChoice(symmetryIcon(100 + n), tr("Radial de %1").arg(n), 100 + n,
+                              tr("%1 copias girando alrededor del centro de la imagen (como un caleidoscopio o una mandala).").arg(n));
+    m_symmetry->onChosen = [update](int v) {
+        update([v](ToolSettings& s) {
+            s.symmetry = v >= 100 ? 4 : v;
+            if (v >= 100)
+                s.symmetryCount = v - 100;
+        });
+    };
+    // Formas rápidas (como QuickShape de Procreate).
+    m_quickShape = new QToolButton(parent);
+    m_quickShape->setIcon(Icons::theme({"draw-geometry", "shapes", "draw-polygon", "draw-circle"}));
+    m_quickShape->setToolTip(tr("Formas rápidas: al acabar un trazo, deja el puntero quieto un momento y la línea, el círculo, la "
+                                "elipse, el rectángulo o el polígono que dibujaste se vuelve perfecto"));
+    m_quickShape->setCheckable(true);
+    m_quickShape->setAutoRaise(true);
+    connect(m_quickShape, &QToolButton::toggled, this, [update](bool on) { update([on](ToolSettings& s) { s.quickShape = on; }); });
+    add(QStringLiteral("symmetry"), Tool::OptSymmetry, Options, {m_symmetry, m_quickShape});
+
     m_antialias = new ChoiceButton(tr("Suavizado"), parent);
     m_antialias->addChoice(Icons::antialias(true), tr("Suavizado activado"), 1);
     m_antialias->addChoice(Icons::antialias(false), tr("Suavizado desactivado"), 0);
@@ -814,8 +887,9 @@ void ToolOptionsEditor::sync()
         m_fixedHeight->setValue(s.fixedHeight);
     }
     {
-        const QSignalBlocker b1(m_pressure), b2(m_bold), b3(m_italic), b4(m_underline), b5(m_strikeout), b6(m_zalgo);
+        const QSignalBlocker b1(m_pressure), b2(m_bold), b3(m_italic), b4(m_underline), b5(m_strikeout), b6(m_zalgo), b7(m_quickShape);
         m_pressure->setChecked(s.pressure);
+        m_quickShape->setChecked(s.quickShape);
         m_bold->setChecked(s.bold);
         m_italic->setChecked(s.italic);
         m_underline->setChecked(s.underline);
@@ -825,6 +899,7 @@ void ToolOptionsEditor::sync()
             a->setChecked(a->data().toInt() == s.zalgoType);
     }
     m_smoothing->setCurrent(s.smoothing ? 1 : 0);
+    m_symmetry->setCurrent(s.symmetry == 4 ? 100 + s.symmetryCount : s.symmetry);
     int shapeChoice = int(s.shape);
     if (s.shape == ShapeType::Custom) {
         const QList<CustomShapes::Shape>& custom = CustomShapes::all();

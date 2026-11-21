@@ -51,6 +51,11 @@ struct StrokeParams {
     qreal taperOut = 0;
     // Sin presión (ratón o dedo): la velocidad hace de presión (más rápido, más fino).
     bool speedPressure = false;
+
+    // Simetría alrededor del centro de la imagen (como Ibis Paint): 0 ninguna, 1 espejo a izquierda y
+    // derecha, 2 arriba y abajo, 3 las dos (cuatro copias), 4 radial ('symmetryCount' copias girando).
+    int symmetry = 0;
+    int symmetryCount = 6;
 };
 
 // Trazo con máscara de cobertura, como el pincel de Paint.NET: cada toque del pincel se acumula
@@ -66,6 +71,11 @@ public:
     const LayerPtr& layer() const { return m_layer; }
     void moveTo(QPointF pos, qreal pressure);
     void lineTo(QPointF pos, qreal pressure);
+    // Formas rápidas: el trazo hecho hasta ahora se sustituye por esta línea quebrada (la forma
+    // reconocida: línea, elipse, rectángulo, polígono), con la presión del último punto.
+    void replaceWith(const QList<QPointF>& path);
+    // Los sitios donde va un toque en 'p' con la simetría (el primero, 'p').
+    QList<QPointF> symmetric(QPointF p) const;
     bool end(const QString& text, const QString& icon = {});
     QPointF lastPoint() const { return m_last; }
 
@@ -133,6 +143,10 @@ private:
     qreal m_dabPressure = 1;
     void lineToPoint(QPointF pos, qreal pressure);
     QRect dabAdvanced(QPointF c, qreal diameter);
+    QRect dabAt(QPointF c, qreal diameter);
+    QRect pixelLineAt(QPoint a, QPoint b);
+    QPointF m_symCenter;
+    qreal m_lastPressure = 1;
     QList<Point> m_points;
     int m_drySegments = 0;
     Walker m_walker;

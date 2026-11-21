@@ -3,12 +3,14 @@
 #include "app/tools/Tool.h"
 #include "core/Stroke.h"
 
+#include <QTimer>
+
 // Base de las herramientas que pintan con trazos (pincel, goma, lápiz, tampón de clonar y
 // recolorear).
 class StrokeTool : public Tool {
     Q_OBJECT
 public:
-    using Tool::Tool;
+    explicit StrokeTool(QObject* parent = nullptr);
     void mousePress(const ToolEvent& e) override;
     void mouseMove(const ToolEvent& e) override;
     void mouseRelease(const ToolEvent& e) override;
@@ -18,14 +20,25 @@ public:
     const Layer* editingLayer() const override { return m_engine.isActive() ? m_engine.layer().get() : nullptr; }
     qreal brushOutlineDiameter() const override;
     bool arrowKeysMovePointer() const override { return true; }
+    // Las guías de la simetría (la línea del espejo o los radios) sobre la imagen.
+    void paintOverlay(QPainter& p) override;
 
 protected:
     virtual StrokeParams params(const ToolEvent& e) const = 0;
     virtual QString historyIcon() const = 0;
     virtual bool canStart(const ToolEvent&) { return true; }
     StrokeParams baseParams() const;
+    // La simetría elegida (las herramientas que la tienen).
+    bool usesSymmetry() const { return options() & OptSymmetry; }
+    void applySymmetry(StrokeParams& p) const;
+    // Formas rápidas: quieto un momento al final del trazo, la forma se vuelve perfecta.
+    void snapShape();
 
     StrokeEngine m_engine;
+    QTimer m_holdTimer;
+    QList<QPointF> m_raw;
+    QPointF m_holdPos;
+    bool m_snapped = false;
 };
 
 class BrushTool : public StrokeTool {
@@ -40,7 +53,7 @@ public:
     quint64 options() const override
     {
         return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptBlend | OptFill
-             | OptSelectionQuality;
+             | OptSymmetry | OptSelectionQuality;
     }
 
 protected:
@@ -62,7 +75,7 @@ public:
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_E); }
     quint64 options() const override
     {
-        return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptSelectionQuality;
+        return OptBrushSize | OptHardness | OptSpacing | OptSmoothing | OptAntialias | OptPressure | OptSymmetry | OptSelectionQuality;
     }
 
 protected:
@@ -82,7 +95,7 @@ public:
         return tr("Dibuja píxeles sueltos con el color principal (clic derecho: secundario), ideal para pixel art.");
     }
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_P); }
-    quint64 options() const override { return OptBlend | OptSelectionQuality; }
+    quint64 options() const override { return OptBlend | OptSymmetry | OptSelectionQuality; }
     qreal brushOutlineDiameter() const override { return 0; }
 
 protected:

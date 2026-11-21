@@ -36,4 +36,10 @@ const Shape* find(const QString& file);
 // La forma estirada hasta llenar el rectángulo, como las integradas.
 QPainterPath fitted(const QPainterPath& path, const QRectF& rect);
 
+// El trazado con la sintaxis de WPF («F1 M 0,0 L 10,0 ... Z»), en el origen.
+QString toPathMarkup(const QPainterPath& path);
+// Guarda una forma nueva (una de Paint.NET, .xaml) en la carpeta de formas del usuario: la
+// selección hecha a mano, con la varita mágica sobre un dibujo... 'file' es su archivo.
+bool save(const QString& name, const QPainterPath& path, QString* file, QString* error);
+
 } // namespace CustomShapes

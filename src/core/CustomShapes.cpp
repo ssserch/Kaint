@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QHash>
 #include <QPainterPathStroker>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTransform>
 #include <QXmlStreamReader>
@@ -747,6 +748,75 @@ QPainterPath fitted(const QPainterPath& path, const QRectF& rect)
     return (QTransform::fromTranslate(-b.left(), -b.top()) * QTransform::fromScale(sx, sy)
             * QTransform::fromTranslate(r.left(), r.top()))
         .map(path);
+}
+
+
+QString toPathMarkup(const QPainterPath& source)
+{
+    const QPainterPath path = source.translated(-source.boundingRect().topLeft());
+    QString out = path.fillRule() == Qt::WindingFill ? QStringLiteral("F1") : QStringLiteral("F0");
+    auto num = [](qreal v) { return QString::number(std::round(v * 100) / 100, 'g', 8); };
+    auto pt = [&](const QPointF& p) { return num(p.x()) + QLatin1Char(',') + num(p.y()); };
+    QPointF start;
+    bool open = false;
+    for (int i = 0; i < path.elementCount(); ++i) {
+        const QPainterPath::Element e = path.elementAt(i);
+        if (e.isMoveTo()) {
+            if (open)
+                out += QStringLiteral(" Z");
+            out += QStringLiteral(" M ") + pt(e);
+            start = e;
+            open = true;
+        } else if (e.isLineTo()) {
+            out += QStringLiteral(" L ") + pt(e);
+        } else if (e.isCurveTo() && i + 2 < path.elementCount()) {
+            out += QStringLiteral(" C ") + pt(e) + QLatin1Char(' ') + pt(path.elementAt(i + 1)) + QLatin1Char(' ') + pt(path.elementAt(i + 2));
+            i += 2;
+        }
+    }
+    if (open)
+        out += QStringLiteral(" Z");
+    return out;
+}
+
+bool save(const QString& name, const QPainterPath& path, QString* file, QString* error)
+{
+    if (path.isEmpty() || path.boundingRect().width() < 1 || path.boundingRect().height() < 1) {
+        if (error)
+            *error = QObject::tr("La forma está vacía.");
+        return false;
+    }
+    const QString folder = searchPaths().value(0);
+    if (folder.isEmpty() || !QDir().mkpath(folder)) {
+        if (error)
+            *error = QObject::tr("No se pudo crear la carpeta de las formas.");
+        return false;
+    }
+    // Un nombre de archivo a partir del de la forma (sin pisar otra).
+    QString base = name.trimmed();
+    base.replace(QRegularExpression(QStringLiteral("[^\\w\\- ]+")), QStringLiteral("_"));
+    if (base.isEmpty())
+        base = QStringLiteral("Forma");
+    QString target = QDir(folder).filePath(base + QStringLiteral(".xaml"));
+    for (int n = 2; QFileInfo::exists(target); ++n)
+        target = QDir(folder).filePath(QStringLiteral("%1 %2.xaml").arg(base).arg(n));
+    QString display = name.trimmed().toHtmlEscaped();
+    const QString xaml = QStringLiteral("<ps:SimpleGeometryShape xmlns=\"clr-namespace:PaintDotNet.UI.Media;assembly=PaintDotNet.Framework\"\n"
+                                        "                        xmlns:ps=\"clr-namespace:PaintDotNet.Shapes;assembly=PaintDotNet.Framework\"\n"
+                                        "                        DisplayName=\"%1\"\n"
+                                        "                        Geometry=\"%2\" />\n")
+                             .arg(display.isEmpty() ? base.toHtmlEscaped() : display, toPathMarkup(path));
+    QFile f(target);
+    if (!f.open(QIODevice::WriteOnly) || f.write(xaml.toUtf8()) < 0) {
+        if (error)
+            *error = QObject::tr("No se pudo escribir «%1».").arg(QDir::toNativeSeparators(target));
+        return false;
+    }
+    f.close();
+    if (file)
+        *file = target;
+    reload();
+    return true;
 }
 
 } // namespace CustomShapes

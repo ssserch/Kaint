@@ -106,6 +106,8 @@ public:
         OptPatch = 1ull << 37,
         OptHealAligned = 1ull << 38,
         OptSpotType = 1ull << 39,
+        // Simetría y formas rápidas (pincel, goma y lápiz).
+        OptSymmetry = 1ull << 40,
     };
 
     explicit Tool(QObject* parent = nullptr) : QObject(parent) {}

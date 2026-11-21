@@ -1,5 +1,7 @@
 #include "app/tools/PaintTools.h"
 
+#include "core/QuickShape.h"
+
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/Icons.h"
@@ -14,6 +16,19 @@
 
 // ---------------------------------------------------------------------------
 
+StrokeTool::StrokeTool(QObject* parent)
+    : Tool(parent)
+{
+    m_holdTimer.setSingleShot(true);
+    m_holdTimer.setInterval(550);
+    connect(&m_holdTimer, &QTimer::timeout, this, &StrokeTool::snapShape);
+    // Al cambiar la simetría, las guías se ven al momento.
+    connect(AppState::instance(), &AppState::toolSettingsChanged, this, [this] {
+        if (canvas() && usesSymmetry())
+            repaint();
+    });
+}
+
 void StrokeTool::mousePress(const ToolEvent& e)
 {
     Document* doc = document();
@@ -21,14 +36,91 @@ void StrokeTool::mousePress(const ToolEvent& e)
         return;
     if (!canStart(e))
         return;
-    m_engine.begin(doc, doc->activeLayerPtr(), params(e));
+    StrokeParams p = params(e);
+    applySymmetry(p);
+    m_engine.begin(doc, doc->activeLayerPtr(), p);
     m_engine.moveTo(e.pos, e.pressure);
+    m_snapped = false;
+    m_raw = {e.pos};
+    m_holdPos = e.pos;
+    if (usesSymmetry() && AppState::instance()->tools().quickShape)
+        m_holdTimer.start();
 }
 
 void StrokeTool::mouseMove(const ToolEvent& e)
 {
-    if (m_engine.isActive())
-        m_engine.lineTo(e.pos, e.pressure);
+    if (!m_engine.isActive())
+        return;
+    // Ya convertido en una forma: hasta soltar, no sigue.
+    if (m_snapped)
+        return;
+    m_engine.lineTo(e.pos, e.pressure);
+    m_raw << e.pos;
+    // Quieto (moviéndose menos de unos píxeles en pantalla): sigue contando para la forma rápida.
+    if (m_holdTimer.isActive() || (usesSymmetry() && AppState::instance()->tools().quickShape)) {
+        const qreal scale = canvas() ? canvas()->scale() : 1.0;
+        if (QLineF(m_holdPos, e.pos).length() * scale > 3) {
+            m_holdPos = e.pos;
+            m_holdTimer.start();
+        }
+    }
+}
+
+void StrokeTool::applySymmetry(StrokeParams& p) const
+{
+    if (!usesSymmetry())
+        return;
+    const ToolSettings& s = AppState::instance()->tools();
+    p.symmetry = s.symmetry;
+    p.symmetryCount = s.symmetryCount;
+}
+
+void StrokeTool::snapShape()
+{
+    if (!m_engine.isActive() || m_snapped || m_raw.size() < 3)
+        return;
+    const QuickShape::Result shape = QuickShape::recognize(m_raw);
+    if (shape.kind == QuickShape::Kind::None)
+        return;
+    m_engine.replaceWith(shape.points);
+    m_snapped = true;
+    notice(QuickShape::name(shape.kind));
+    repaint();
+}
+
+void StrokeTool::paintOverlay(QPainter& p)
+{
+    const ToolSettings& s = AppState::instance()->tools();
+    Document* doc = document();
+    if (!usesSymmetry() || s.symmetry == 0 || !doc || !canvas())
+        return;
+    const QSizeF size(doc->size());
+    const QPointF c(size.width() / 2, size.height() / 2);
+    QList<QLineF> lines;
+    if (s.symmetry == 1 || s.symmetry == 3)
+        lines << QLineF(c.x(), 0, c.x(), size.height());
+    if (s.symmetry == 2 || s.symmetry == 3)
+        lines << QLineF(0, c.y(), size.width(), c.y());
+    if (s.symmetry == 4) {
+        const int n = std::clamp(s.symmetryCount, 2, 32);
+        const qreal r = std::hypot(size.width(), size.height());
+        for (int i = 0; i < n; ++i) {
+            const qreal a = 2 * M_PI * i / n - M_PI / 2;
+            lines << QLineF(c, c + QPointF(std::cos(a), std::sin(a)) * r);
+        }
+    }
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    const QRectF image(canvas()->imageToView(QPointF(0, 0)), canvas()->imageToView(QPointF(size.width(), size.height())));
+    p.setClipRect(image.normalized());
+    for (const QLineF& l : std::as_const(lines)) {
+        const QLineF v(canvas()->imageToView(l.p1()), canvas()->imageToView(l.p2()));
+        p.setPen(QPen(QColor(255, 255, 255, 170), 3));
+        p.drawLine(v);
+        p.setPen(QPen(QColor(30, 130, 230, 220), 1.2, Qt::DashLine));
+        p.drawLine(v);
+    }
+    p.restore();
 }
 
 void StrokeTool::mouseRelease(const ToolEvent&)
@@ -38,6 +130,9 @@ void StrokeTool::mouseRelease(const ToolEvent&)
 
 void StrokeTool::finish()
 {
+    m_holdTimer.stop();
+    m_snapped = false;
+    m_raw.clear();
     if (m_engine.isActive())
         m_engine.end(name(), historyIcon());
 }
@@ -129,6 +224,7 @@ StrokeParams PencilTool::params(const ToolEvent& e) const
     p.smoothing = false;
     return p;
 }
+
 
 // ---------------------------------------------------------------------------
 

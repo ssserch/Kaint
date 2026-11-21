@@ -39,6 +39,7 @@
 #include "app/widgets/FontChooser.h"
 #include "app/widgets/SliderBehavior.h"
 #include "core/Commands.h"
+#include "core/CustomShapes.h"
 #include "core/Document.h"
 #include "core/ImageIO.h"
 #include "core/Ora.h"
@@ -1448,6 +1449,10 @@ void MainWindow::createActions()
                                  [this] { reshapeSelection(SelectionReshape::Feather); }, sel);
     A["deselect"] = makeAction(tr("&Anular la selección"), {"edit-select-none"}, QKeySequence(QStringLiteral("Ctrl+D")),
                                [this] { deselect(); }, sel);
+    // Crear formas propias: se dibuja la figura (con el lazo, o con el pincel y la varita mágica) y su
+    // contorno queda en Formas personalizadas.
+    A["selectionShape"] = makeAction(tr("Guardar la selección como &forma..."), {"draw-geometry", "shapes", "draw-polygon"}, {},
+                                     [this] { saveSelectionAsShape(); }, sel);
 
     // Ver
     A["zoomIn"] = makeAction(tr("&Acercar"), {"zoom-in"}, QKeySequence::ZoomIn, [this] { m_canvas->zoomIn(); }, doc);
@@ -1709,7 +1714,7 @@ void MainWindow::createMenus()
     edit->addSeparator();
     edit->addActions({A["eraseSel"], A["fillSel"], A["invertSel"], A["selectAll"], A["deselect"]});
     edit->addSeparator();
-    edit->addActions({A["growSel"], A["shrinkSel"], A["featherSel"]});
+    edit->addActions({A["growSel"], A["shrinkSel"], A["featherSel"], A["selectionShape"]});
 
     QMenu* view = bar->addMenu(tr("&Ver"));
     view->addActions({A["zoomIn"], A["zoomOut"], A["zoomFit"], A["zoomSel"], A["actualSize"]});
@@ -3928,6 +3933,25 @@ void MainWindow::pasteSelection(SelectionMode mode)
     const Selection result = mode == SelectionMode::Replace ? pasted : m_doc->selection().combined(pasted, mode);
     push(new SelectionCommand(m_doc, m_doc->selection(), result, tr("Pegar selección")),
          QStringLiteral("edit-paste"));
+}
+
+void MainWindow::saveSelectionAsShape()
+{
+    if (!m_doc || m_doc->selection().isEmpty())
+        return;
+    finishTool();
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, tr("Guardar como forma"), tr("Nombre de la forma:"), QLineEdit::Normal,
+                                               tr("Mi forma"), &ok).trimmed();
+    if (!ok || name.isEmpty())
+        return;
+    QString file, error;
+    if (!CustomShapes::save(name, m_doc->selection().path(), &file, &error)) {
+        QMessageBox::warning(this, tr("Guardar como forma"), error);
+        return;
+    }
+    emit AppState::instance()->customShapesChanged();
+    statusBar()->showMessage(tr("Forma «%1» guardada: está en la herramienta Formas, entre las personalizadas.").arg(name), 7000);
 }
 
 void MainWindow::reshapeSelection(SelectionReshape kind)

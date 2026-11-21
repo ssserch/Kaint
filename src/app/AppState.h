@@ -76,6 +76,11 @@ struct ToolSettings {
     int taperOut = 0;
     bool speedPressure = false;
     bool sideSliders = false;
+    // Simetría del pincel, la goma y el lápiz (StrokeParams::symmetry) y sus copias en la radial.
+    int symmetry = 0;
+    int symmetryCount = 6;
+    // Formas rápidas: al acabar un trazo y dejar el puntero quieto, la forma dibujada se vuelve perfecta.
+    bool quickShape = false;
     bool pickerSampleImage = false;
     SelectionMode selectionMode = SelectionMode::Replace;
     RectSelectMode rectMode = RectSelectMode::Normal;

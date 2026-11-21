@@ -156,6 +156,8 @@ private:
     ChoiceButton* m_moveQuality = nullptr;
     ChoiceButton* m_selectionQuality;
     QToolButton* m_pressure;
+    ChoiceButton* m_symmetry;
+    QToolButton* m_quickShape;
     ChoiceButton* m_blend;
     ChoiceButton* m_fill;
     // Las herramientas de PhotoCraft.

@@ -43,6 +43,7 @@
 #include <QJsonArray>
 #include <QPainter>
 #include "core/Apng.h"
+#include "core/QuickShape.h"
 #include "core/ModernFormats.h"
 
 #include <QSettings>
@@ -3052,6 +3053,120 @@ static void testAnimatedExport()
     }
 }
 
+// Simetría (el trazo reflejado y radial, sin oscurecerse donde se cruza) y formas rápidas (lo dibujado
+// a mano se reconoce y se sustituye por la forma perfecta).
+static void testSymmetryAndQuickShapes()
+{
+    {
+        std::unique_ptr<Document> doc(Document::createBlank(QSize(100, 60), Qt::white));
+        StrokeEngine stroke;
+        StrokeParams p;
+        p.diameter = 6;
+        p.hardness = 1;
+        p.color = QColor(0, 0, 255, 128);
+        p.symmetry = 1;
+        stroke.begin(doc.get(), doc->layerPtr(0), p);
+        stroke.moveTo(QPointF(20, 30), 1);
+        stroke.lineTo(QPointF(50, 30), 1);
+        CHECK(stroke.end(QStringLiteral("Pincel")));
+        const QImage& img = doc->layer(0)->image;
+        // Reflejado al otro lado del centro (x = 50) y, en el centro, donde se juntan, igual que en el resto.
+        CHECK(qBlue(img.pixel(25, 30)) > 200 && qRed(img.pixel(25, 30)) < 140);
+        CHECK(img.pixel(75, 30) == img.pixel(25, 30));
+        CHECK(img.pixel(50, 30) == img.pixel(25, 30));
+        CHECK(img.pixel(25, 10) == qRgb(255, 255, 255));
+    }
+    {
+        std::unique_ptr<Document> doc(Document::createBlank(QSize(80, 80), Qt::white));
+        StrokeEngine stroke;
+        StrokeParams p;
+        p.pixelExact = true;
+        p.antialias = false;
+        p.diameter = 1;
+        p.color = Qt::black;
+        p.symmetry = 4;
+        p.symmetryCount = 4;
+        stroke.begin(doc.get(), doc->layerPtr(0), p);
+        stroke.moveTo(QPointF(40.5, 10.5), 1);
+        CHECK(stroke.end(QStringLiteral("Lápiz")));
+        const QImage& img = doc->layer(0)->image;
+        // Cuatro copias girando: arriba, derecha, abajo e izquierda.
+        CHECK(img.pixel(40, 10) == qRgb(0, 0, 0) && img.pixel(69, 40) == qRgb(0, 0, 0) && img.pixel(39, 69) == qRgb(0, 0, 0)
+              && img.pixel(10, 39) == qRgb(0, 0, 0));
+    }
+    // Un círculo dibujado a mano (tembloroso), un rectángulo, un triángulo y una línea.
+    QList<QPointF> circle, rect, tri, line;
+    for (int i = 0; i <= 80; ++i) {
+        const qreal a = 2 * M_PI * i / 80, wobble = 1.5 * std::sin(i * 1.7);
+        circle << QPointF(100 + (40 + wobble) * std::cos(a), 100 + (40 + wobble) * std::sin(a));
+    }
+    for (const QPointF& corner : {QPointF(10, 10), QPointF(110, 12), QPointF(108, 70), QPointF(11, 68), QPointF(10, 11)})
+        rect << corner;
+    QList<QPointF> denseRect;
+    for (int i = 0; i + 1 < rect.size(); ++i)
+        for (int k = 0; k < 20; ++k)
+            denseRect << rect[i] + (rect[i + 1] - rect[i]) * (k / 20.0) + QPointF(std::sin(k) * 0.8, std::cos(k) * 0.8);
+    for (const auto& [a, b] : {std::pair{QPointF(50, 10), QPointF(90, 80)}, std::pair{QPointF(90, 80), QPointF(10, 80)},
+                               std::pair{QPointF(10, 80), QPointF(50, 11)}})
+        for (int k = 0; k < 20; ++k)
+            tri << a + (b - a) * (k / 20.0);
+    for (int k = 0; k <= 40; ++k)
+        line << QPointF(10 + k * 3, 20 + k * 1.5 + (k % 3 == 0 ? 1.2 : 0));
+    CHECK(QuickShape::recognize(circle).kind == QuickShape::Kind::Circle);
+    CHECK(QuickShape::recognize(denseRect).kind == QuickShape::Kind::Rectangle);
+    CHECK(QuickShape::recognize(tri).kind == QuickShape::Kind::Triangle);
+    const QuickShape::Result l = QuickShape::recognize(line);
+    CHECK(l.kind == QuickShape::Kind::Line && l.points.size() == 2);
+    // Un garabato no es una forma.
+    QList<QPointF> scribble;
+    for (int k = 0; k < 60; ++k)
+        scribble << QPointF(10 + (k * 37 % 50), 10 + (k * 53 % 47));
+    CHECK(QuickShape::recognize(scribble).kind == QuickShape::Kind::None);
+    // Sustituir el trazo por la forma: lo de antes se borra.
+    std::unique_ptr<Document> doc(Document::createBlank(QSize(200, 200), Qt::white));
+    StrokeEngine stroke;
+    StrokeParams p;
+    p.diameter = 4;
+    p.hardness = 1;
+    p.color = Qt::black;
+    stroke.begin(doc.get(), doc->layerPtr(0), p);
+    stroke.moveTo(circle.first(), 1);
+    for (const QPointF& q : circle)
+        stroke.lineTo(q, 1);
+    stroke.lineTo(QPointF(5, 5), 1);
+    stroke.replaceWith(QuickShape::recognize(circle).points);
+    CHECK(stroke.end(QStringLiteral("Pincel")));
+    CHECK(doc->layer(0)->image.pixel(5, 5) == qRgb(255, 255, 255));
+    CHECK(qRed(doc->layer(0)->image.pixel(140, 100)) < 60);
+
+    // Una forma propia: el contorno de una selección (una estrella) se guarda como .xaml de Paint.NET
+    // y se vuelve a leer igual.
+    QTemporaryDir shapesDir;
+    const QStringList oldPaths = CustomShapes::searchPaths();
+    CustomShapes::setSearchPathsForTesting({shapesDir.path()});
+    QPainterPath star;
+    for (int i = 0; i < 10; ++i) {
+        const qreal a = M_PI * i / 5 - M_PI / 2, r = i % 2 ? 20 : 50;
+        const QPointF q(300 + r * std::cos(a), 200 + r * std::sin(a));
+        if (i == 0)
+            star.moveTo(q);
+        else
+            star.lineTo(q);
+    }
+    star.closeSubpath();
+    QString file, error;
+    CHECK(CustomShapes::save(QStringLiteral("Mi estrella"), star, &file, &error));
+    const CustomShapes::Shape* saved = CustomShapes::find(file);
+    CHECK(saved && saved->name == QStringLiteral("Mi estrella"));
+    if (saved) {
+        const QRectF b = saved->path.boundingRect();
+        CHECK(std::abs(b.width() - star.boundingRect().width()) < 0.1 && std::abs(b.left()) < 0.1);
+        // El centro de la estrella está dentro; la punta de arriba, en el borde de arriba.
+        CHECK(saved->path.contains(b.center()));
+    }
+    CustomShapes::setSearchPathsForTesting(oldPaths);
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -3101,6 +3216,7 @@ int main(int argc, char** argv)
     testPluginDrop();
     testPackaging();
     testAnimatedExport();
+    testSymmetryAndQuickShapes();
     if (g_failures == 0)
         std::printf("Todas las pruebas del núcleo pasaron.\n");
     return g_failures == 0 ? 0 : 1;

@@ -136,6 +136,8 @@ private:
     void pasteSelection(SelectionMode mode);
     enum class SelectionReshape { Grow, Shrink, Feather };
     void reshapeSelection(SelectionReshape kind);
+    // Guarda el contorno de la selección como una forma personalizada (para dibujarla con Formas).
+    void saveSelectionAsShape();
     void invertSelection();
     void eraseSelection(const QString& text);
     void fillSelection();

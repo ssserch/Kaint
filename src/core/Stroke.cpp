@@ -72,7 +72,60 @@ void StrokeEngine::begin(Document* doc, LayerPtr layer, const StrokeParams& para
     m_strokeLength = -1;
     m_speedPressure = 1;
     m_speedStarted = false;
+    m_symCenter = QPointF(m_layer->image.width() / 2.0, m_layer->image.height() / 2.0);
+    m_lastPressure = 1;
     buildProfile();
+}
+
+QList<QPointF> StrokeEngine::symmetric(QPointF p) const
+{
+    const QPointF c = m_symCenter;
+    switch (m_params.symmetry) {
+    case 1: return {p, QPointF(2 * c.x() - p.x(), p.y())};
+    case 2: return {p, QPointF(p.x(), 2 * c.y() - p.y())};
+    case 3: return {p, QPointF(2 * c.x() - p.x(), p.y()), QPointF(p.x(), 2 * c.y() - p.y()), 2 * c - p};
+    case 4: {
+        QList<QPointF> out{p};
+        const int n = std::clamp(m_params.symmetryCount, 2, 32);
+        const QPointF d = p - c;
+        for (int i = 1; i < n; ++i) {
+            const qreal a = 2 * M_PI * i / n, ca = std::cos(a), sa = std::sin(a);
+            out << c + QPointF(d.x() * ca - d.y() * sa, d.x() * sa + d.y() * ca);
+        }
+        return out;
+    }
+    default: return {p};
+    }
+}
+
+void StrokeEngine::replaceWith(const QList<QPointF>& path)
+{
+    if (!m_doc || path.size() < 2)
+        return;
+    // Lo pintado hasta ahora se borra de la máscara (la capa vuelve a como estaba en esa zona) y se
+    // dibuja la forma, recta entre sus puntos.
+    restoreWet();
+    QRect dirty = m_total;
+    m_mask.fill(0);
+    m_stabilized = false;
+    if (m_params.pixelExact) {
+        for (int i = 0; i + 1 < path.size(); ++i)
+            dirty |= pixelLine(QPoint(int(std::floor(path[i].x())), int(std::floor(path[i].y()))),
+                               QPoint(int(std::floor(path[i + 1].x())), int(std::floor(path[i + 1].y()))));
+        m_last = path.last();
+        composite(dirty);
+        return;
+    }
+    m_params.smoothing = false;
+    m_points.clear();
+    for (const QPointF& p : path)
+        if (m_points.isEmpty() || m_points.last().pos != p)
+            m_points.append(Point{p, m_lastPressure});
+    m_walker = Walker();
+    dirty |= walk(m_walker, m_points);
+    m_drySegments = int(m_points.size()) - 1;
+    m_last = path.last();
+    composite(dirty);
 }
 
 void StrokeEngine::buildProfile()
@@ -161,6 +214,7 @@ void StrokeEngine::lineTo(QPointF pos, qreal pressure)
 {
     if (!m_doc)
         return;
+    m_lastPressure = pressure;
     // Presión por la velocidad (ratón o dedo, que dan siempre 1): los tramos largos entre dos puntos
     // (movimiento rápido) adelgazan el trazo, suavizado para que no salte.
     if (m_params.advanced && m_params.speedPressure && pressure >= 0.999) {
@@ -284,7 +338,8 @@ QRect StrokeEngine::reach(const QList<Point>& path) const
     if (m_params.advanced)
         margin = m_params.diameter / 2 * m_extent * (m_params.tipShape == 1 ? M_SQRT2 : 1.0) + m_params.scatter * m_params.diameter + 2;
     for (const Point& p : path)
-        r |= QRectF(p.pos.x() - margin, p.pos.y() - margin, 2 * margin, 2 * margin);
+        for (const QPointF& q : symmetric(p.pos))
+            r |= QRectF(q.x() - margin, q.y() - margin, 2 * margin, 2 * margin);
     return r.toAlignedRect().intersected(m_mask.rect());
 }
 
@@ -321,6 +376,17 @@ QRect StrokeEngine::drawWet()
 }
 
 QRect StrokeEngine::dab(QPointF c, qreal diameter)
+{
+    // Con simetría, el mismo toque en cada sitio (en la misma máscara: donde se cruzan no se oscurece).
+    if (m_params.symmetry == 0)
+        return dabAt(c, diameter);
+    QRect r;
+    for (const QPointF& p : symmetric(c))
+        r |= dabAt(p, diameter);
+    return r;
+}
+
+QRect StrokeEngine::dabAt(QPointF c, qreal diameter)
 {
     if (m_params.advanced && m_params.antialias)
         return dabAdvanced(c, diameter);
@@ -455,6 +521,19 @@ QRect StrokeEngine::dabAdvanced(QPointF c, qreal diameter)
 }
 
 QRect StrokeEngine::pixelLine(QPoint a, QPoint b)
+{
+    if (m_params.symmetry == 0)
+        return pixelLineAt(a, b);
+    // Con simetría: la misma línea en cada sitio (por los centros de los píxeles).
+    const QList<QPointF> sa = symmetric(QPointF(a) + QPointF(0.5, 0.5)), sb = symmetric(QPointF(b) + QPointF(0.5, 0.5));
+    QRect r;
+    for (qsizetype i = 0; i < sa.size(); ++i)
+        r |= pixelLineAt(QPoint(int(std::floor(sa[i].x())), int(std::floor(sa[i].y()))),
+                         QPoint(int(std::floor(sb[i].x())), int(std::floor(sb[i].y()))));
+    return r;
+}
+
+QRect StrokeEngine::pixelLineAt(QPoint a, QPoint b)
 {
     // Bresenham.
     int x0 = a.x(), y0 = a.y();

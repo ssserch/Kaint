@@ -304,6 +304,29 @@ const extra = {
         "it didn't answer in time",
     "zona %1×%2 en (%3, %4)":
         "area %1×%2 at (%3, %4)",
+    // 1.2.0
+    "Arriba, el icono de Kaint y el título de la imagen, como la barra de título de Kaint, con los botones de la ventana del tema (maximizar pasa a pantalla completa). De fábrica, desactivada en Windows.":
+        "At the top, Kaint's icon and the image title, like Kaint's title bar, with the theme's window buttons (maximize goes full screen). Off by default on Windows.",
+    "Deshacer": "Undo",
+    "Rehacer": "Redo",
+    "El botón de cerrar de las ventanas y los diálogos. Con los temas Windows 7, 8, XP, 98 y los de Linux, «Windows 10» usa el del tema.":
+        "The close button of windows and dialogs. With the Windows 7, 8, XP, 98 and Linux themes, “Windows 10” uses the theme's.",
+    "El marco y la barra de título de las ventanas, como en Windows 8. Solo con los temas Windows 8.":
+        "The window frame and title bar, like in Windows 8. Only with the Windows 8 themes.",
+    "Elegir todos": "Select All",
+    "Este navegador no sabe comprimir WebP.": "This browser can't compress WebP.",
+    "Exportando… %1 %": "Exporting… %1 %",
+    "Exportar en otro formato: PNG animado, WebP animado o vídeo MP4": "Export in another format: animated PNG, animated WebP or MP4 video",
+    "Guarda la animación como GIF, con la configuración de siempre (paleta, duración, repeticiones, efectos...).":
+        "Saves the animation as a GIF, with the usual settings (palette, duration, loops, effects...).",
+    "No se pudo exportar:\n%1": "Couldn't export:\n%1",
+    "Punta, flujo, curva de la presión, estabilizador, entrada y salida en punta (líneas de manga), variación al azar y deslizadores de tamaño y opacidad al lado del lienzo.":
+        "Tip, flow, pressure curve, stabilizer, tapered ends (manga lines), random jitter and size and opacity sliders beside the canvas.",
+    "Puntos clave del fotograma elegido": "Keyframes of the selected frame",
+    "Puntos clave del fotograma elegido: arrástralos para cambiar cuándo llegan; clic derecho para la forma del movimiento":
+        "Keyframes of the selected frame: drag them to change when they arrive; right-click for the motion's shape",
+    "Salir de la pantalla completa": "Exit full screen",
+    "veces": "times",
 };
 
 let language = "en";

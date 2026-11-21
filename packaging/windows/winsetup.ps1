@@ -1,7 +1,7 @@
 ﻿# Lee winsetup.json (la información del instalador de Windows) y escribe lo que kaint.nsi necesita
 # de él: un archivo de NSIS con sus !define y sus textos. Lo llama "build.bat --setup".
 #
-#   powershell -File winsetup.ps1 -Root <carpeta del código> -Version 1.1.9 -Arch x64
+#   powershell -File winsetup.ps1 -Root <carpeta del código> -Version 1.2.0 -Arch x64
 #              -OutDir <carpeta donde va el instalador> -Nsh <winsetup.nsh> -NameFile <archivo>
 #
 # Todo en winsetup.json es opcional: lo que falte toma el valor de siempre (los de abajo). En los

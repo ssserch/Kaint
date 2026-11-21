@@ -92,7 +92,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/ssserch/Kaint.git
-        tag: v1.1.9
+        tag: v1.2.0
         x-checker-data:
           type: git
           tag-pattern: ^v([\d.]+)$

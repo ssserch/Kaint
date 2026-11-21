@@ -109,6 +109,21 @@
   </keywords>
 
   <releases>
+    <release version="1.2.0" date="2026-11-20">
+      <description>
+        <p>A new .NET host for Paint.NET plugins, a GIF editor with Filmora-style keyframes, new themes, an advanced brush with symmetry and quick shapes, and Brazilian Portuguese. From 1.2.0 on, the second number is for big updates and the third for fixes and small changes.</p>
+        <ul>
+          <li>Paint.NET plugins: a .NET host built on paint.rs's Paint.NET 5 libraries runs GPU, BitmapEffect and Paint.NET 5 plugins and reads plugin windows without showing them; mono (OpenD2D) and Wine stay as fallbacks, chosen per effect; FileType plugins open and save their formats</li>
+          <li>GIF editor: keyframes like Filmora (position, scale, rotation and opacity, with linear, curve, continuous curve, freeze and ease in/out), a graph and draggable diamonds on the timeline, copy and paste frames, export as animated PNG, animated WebP, MP4 or WebM, and a bar that warns when the GIF gets too heavy</li>
+          <li>Themes: Windows 8 and Windows 8 Dark (with the Windows 8 window colors), Windows 7 Basic light and dark, Ubuntu, GNOME, Linux Mint and elementary OS (light and dark); Windows 7 improved with 7.css</li>
+          <li>Advanced brush (Settings → Tools): tip shape, flow, pressure curve, stabilizer, tapered ends for manga lines, random jitter and vertical size and opacity sliders like Ibis Paint</li>
+          <li>Symmetry (mirror and radial) and quick shapes (hold still at the end of a stroke and it becomes a perfect line, circle, rectangle or polygon) for the brush, eraser and pencil; Save Selection as Shape creates your own shapes</li>
+          <li>Alpha Lock, view rotation with Alt + wheel, layers that glide into place, .ico files with several sizes open as layers, and WebP, AVIF, JPEG XL and HEIC with Kaint's own codecs</li>
+          <li>Brazilian Portuguese, translated by Mildanner</li>
+          <li>Web and Android: everything above, a single Save button on phones and smoother painting with many layers</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.9" date="2026-11-18">
       <description>
         <p>A plugin system switch with OpenD2D, more file formats, an image strip like Paint.NET's and many fixes, also in the web and Android versions.</p>

@@ -206,12 +206,14 @@ AppSettings AppSettings::load()
 #endif
     a.autosaveMinutes = std::clamp(get("autosaveMinutes", a.autosaveMinutes), 0, 120);
     {
-        // Inglés, español o un idioma personalizado que siga instalado.
+        // Inglés, español, portugués de Brasil o un idioma personalizado que siga instalado.
         const QString lang = get("language", a.language);
         if (lang.startsWith(QLatin1String("custom:")) && CustomLanguages::find(lang.mid(7)))
             a.language = lang;
+        else if (lang == QLatin1String("es") || lang == QLatin1String("pt_BR"))
+            a.language = lang;
         else
-            a.language = lang == QLatin1String("es") ? QStringLiteral("es") : QStringLiteral("en");
+            a.language = QStringLiteral("en");
     }
     a.reopenLast = get("reopenLast", a.reopenLast);
     a.unit = get("unit", a.unit);

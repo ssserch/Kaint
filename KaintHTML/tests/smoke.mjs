@@ -1445,6 +1445,22 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
     check(r.cached && r.first <= 2 && r.below <= 2 && r.blend <= 2 && r.active <= 2, `composición con las capas ya compuestas (${JSON.stringify(r)})`);
 }
 
+// El portugués de Brasil (de Mildanner): los textos de Kaint y los propios de la web.
+{
+    const r = await page.evaluate(async () => {
+        const i18n = await import("./js/i18n.js");
+        const before = i18n.currentLanguage();
+        await i18n.setLanguage("pt-BR");
+        const out = { lang: i18n.currentLanguage(), layer: i18n.tr("Capa"), web: i18n.tr("Pantalla completa"), frames: i18n.tr("Fotograma %1", 3),
+                      symmetry: i18n.tr("Simetría") };
+        await i18n.setLanguage(before);
+        out.back = i18n.currentLanguage() === before;
+        return out;
+    });
+    check(r.lang === "pt-BR" && r.layer === "Camada" && r.web === "Tela cheia" && r.frames === "Quadro 3" && r.symmetry === "Simetria" && r.back,
+          `portugués de Brasil (${JSON.stringify(r)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

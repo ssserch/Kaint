@@ -41,6 +41,156 @@
     </message>
 </context>
 <context>
+    <name>AdvancedBrushButton</name>
+    <message>
+        <source>Avanzado…</source>
+        <translation>Avançado…</translation>
+    </message>
+    <message>
+        <source>Opciones avanzadas del pincel: punta, presión, estabilizador, entrada y salida y variación al azar</source>
+        <translation>Opções avançadas do pincel: ponta, pressão, estabilizador, entrada e saída e variação aleatória</translation>
+    </message>
+</context>
+<context>
+    <name>AdvancedBrushPanel</name>
+    <message>
+        <source>Punta</source>
+        <translation>Ponta</translation>
+    </message>
+    <message>
+        <source>Redonda</source>
+        <translation>Redonda</translation>
+    </message>
+    <message>
+        <source>Cuadrada</source>
+        <translation>Quadrada</translation>
+    </message>
+    <message>
+        <source>Forma:</source>
+        <translation>Forma:</translation>
+    </message>
+    <message>
+        <source>Ángulo:</source>
+        <translation>Ângulo:</translation>
+    </message>
+    <message>
+        <source>El giro de la punta</source>
+        <translation>O giro da ponta</translation>
+    </message>
+    <message>
+        <source>Redondez:</source>
+        <translation>Arredondamento:</translation>
+    </message>
+    <message>
+        <source>100 %: la punta entera; menos, aplastada (como una pluma o un rotulador de punta biselada)</source>
+        <translation>100 %: a ponta inteira; menos, achatada (como uma pena ou um marcador de ponta chanfrada)</translation>
+    </message>
+    <message>
+        <source>Flujo:</source>
+        <translation>Fluxo:</translation>
+    </message>
+    <message>
+        <source>La opacidad de cada toque: con menos, el color se acumula al repasar</source>
+        <translation>A opacidade de cada toque: com menos, a cor se acumula ao passar de novo</translation>
+    </message>
+    <message>
+        <source>Presión</source>
+        <translation>Pressão</translation>
+    </message>
+    <message>
+        <source>Curva:</source>
+        <translation>Curva:</translation>
+    </message>
+    <message>
+        <source>100 %: lineal; menos, responde antes (trazos gruesos con poca fuerza); más, hace falta más fuerza</source>
+        <translation>100 %: linear; menos, responde antes (traços grossos com pouca força); mais, precisa de mais força</translation>
+    </message>
+    <message>
+        <source>Tamaño mínimo:</source>
+        <translation>Tamanho mínimo:</translation>
+    </message>
+    <message>
+        <source>El tamaño con la presión más leve</source>
+        <translation>O tamanho com a pressão mais leve</translation>
+    </message>
+    <message>
+        <source>La presión también cambia la opacidad</source>
+        <translation>A pressão também muda a opacidade</translation>
+    </message>
+    <message>
+        <source>Simular la presión con la velocidad (ratón o dedo)</source>
+        <translation>Simular a pressão com a velocidade (mouse ou dedo)</translation>
+    </message>
+    <message>
+        <source>Sin lápiz con presión: cuanto más rápido, más fino el trazo, como una pluma de tinta</source>
+        <translation>Sem caneta com pressão: quanto mais rápido, mais fino o traço, como uma caneta-tinteiro</translation>
+    </message>
+    <message>
+        <source>Trazo</source>
+        <translation>Traço</translation>
+    </message>
+    <message>
+        <source>Corrección:</source>
+        <translation>Correção:</translation>
+    </message>
+    <message>
+        <source>Estabilizador (como la corrección de FireAlpaca): el trazo sigue al puntero con retraso y sale más suave. Útil para líneas de manga y para dibujar con el dedo</source>
+        <translation>Estabilizador (como a correção do FireAlpaca): o traço segue o ponteiro com atraso e sai mais suave. Útil para linhas de mangá e para desenhar com o dedo</translation>
+    </message>
+    <message>
+        <source>Entrada:</source>
+        <translation>Entrada:</translation>
+    </message>
+    <message>
+        <source>El trazo empieza en punta a lo largo de estos píxeles (líneas de manga)</source>
+        <translation>O traço começa em ponta ao longo destes pixels (linhas de mangá)</translation>
+    </message>
+    <message>
+        <source>Salida:</source>
+        <translation>Saída:</translation>
+    </message>
+    <message>
+        <source>El trazo acaba en punta a lo largo de estos píxeles (se ve al soltar)</source>
+        <translation>O traço termina em ponta ao longo destes pixels (aparece ao soltar)</translation>
+    </message>
+    <message>
+        <source>Variación al azar</source>
+        <translation>Variação aleatória</translation>
+    </message>
+    <message>
+        <source>Tamaño:</source>
+        <translation>Tamanho:</translation>
+    </message>
+    <message>
+        <source>Opacidad:</source>
+        <translation>Opacidade:</translation>
+    </message>
+    <message>
+        <source>Dispersión:</source>
+        <translation>Dispersão:</translation>
+    </message>
+    <message>
+        <source>Cuánto se separa cada toque del trazo</source>
+        <translation>Quanto cada toque se afasta do traço</translation>
+    </message>
+    <message>
+        <source>Lienzo</source>
+        <translation>Tela</translation>
+    </message>
+    <message>
+        <source>Deslizadores de tamaño y opacidad al lado del lienzo</source>
+        <translation>Controles deslizantes de tamanho e opacidade ao lado da tela</translation>
+    </message>
+    <message>
+        <source>Como en Ibis Paint: dos barras verticales en el borde izquierdo, cómodas con el dedo o el lápiz</source>
+        <translation>Como no Ibis Paint: duas barras verticais na borda esquerda, confortáveis com o dedo ou a caneta</translation>
+    </message>
+    <message>
+        <source>Restablecer</source>
+        <translation>Redefinir</translation>
+    </message>
+</context>
+<context>
     <name>AngleChooser</name>
     <message>
         <source>Arrastra para elegir el ángulo (Mayús: de 15 en 15°)</source>
@@ -88,6 +238,17 @@
     <message>
         <source>Pausa</source>
         <translation>Pausar</translation>
+    </message>
+</context>
+<context>
+    <name>BrushSideSliders</name>
+    <message>
+        <source>Tamaño del pincel</source>
+        <translation>Tamanho do pincel</translation>
+    </message>
+    <message>
+        <source>Opacidad del pincel (flujo)</source>
+        <translation>Opacidade do pincel (fluxo)</translation>
     </message>
 </context>
 <context>
@@ -1414,10 +1575,6 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Exportar GIF...</translation>
     </message>
     <message>
-        <source>Guarda la animación como GIF, con la configuración de siempre (paleta, duración, repeticiones, efectos...).</source>
-        <translation>Salva a animação como GIF, com as configurações habituais (paleta, duração, repetições, efeitos...).</translation>
-    </message>
-    <message>
         <source>Medios</source>
         <translation>Mídia</translation>
     </message>
@@ -1474,28 +1631,64 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Velocidade da visualização (não altera o GIF)</translation>
     </message>
     <message>
-        <source>Deshacer</source>
-        <translation>Desfazer</translation>
-    </message>
-    <message>
-        <source>Rehacer</source>
-        <translation>Refazer</translation>
-    </message>
-    <message>
         <source>Duplicar</source>
         <translation>Duplicar</translation>
-    </message>
-    <message>
-        <source>Duplica el fotograma elegido</source>
-        <translation>Duplica o quadro selecionado</translation>
     </message>
     <message>
         <source>Eliminar</source>
         <translation>Excluir</translation>
     </message>
     <message>
-        <source>Quita el fotograma elegido (Supr)</source>
-        <translation>Remove o quadro selecionado (Del)</translation>
+        <source>Arrastra la imagen para moverla (con puntos clave de posición, se pone uno en el cabezal)</source>
+        <translation>Arraste a imagem para movê-la (com quadros-chave de posição, um é colocado no cursor de reprodução)</translation>
+    </message>
+    <message>
+        <source>Guarda la animación como GIF, con la configuración de siempre (paleta, duración, repeticiones, efectos...). En la flecha, otros formatos: PNG animado, WebP animado y vídeo MP4 o WebM.</source>
+        <translation>Salva a animação como GIF, com as configurações de sempre (paleta, duração, repetições, efeitos...). Na seta, outros formatos: PNG animado, WebP animado e vídeo MP4 ou WebM.</translation>
+    </message>
+    <message>
+        <source>GIF...</source>
+        <translation>GIF...</translation>
+    </message>
+    <message>
+        <source>PNG animado (APNG)...</source>
+        <translation>PNG animado (APNG)...</translation>
+    </message>
+    <message>
+        <source>WebP animado...</source>
+        <translation>WebP animado...</translation>
+    </message>
+    <message>
+        <source>Vídeo MP4...</source>
+        <translation>Vídeo MP4...</translation>
+    </message>
+    <message>
+        <source>Vídeo WebM...</source>
+        <translation>Vídeo WebM...</translation>
+    </message>
+    <message>
+        <source>Deshacer (Ctrl+Z)</source>
+        <translation>Desfazer (Ctrl+Z)</translation>
+    </message>
+    <message>
+        <source>Rehacer (Ctrl+Y)</source>
+        <translation>Refazer (Ctrl+Y)</translation>
+    </message>
+    <message>
+        <source>Copiar los fotogramas elegidos (Ctrl+C)</source>
+        <translation>Copiar os quadros selecionados (Ctrl+C)</translation>
+    </message>
+    <message>
+        <source>Pegar fotogramas o una imagen detrás de los elegidos (Ctrl+V)</source>
+        <translation>Colar quadros ou uma imagem depois dos selecionados (Ctrl+V)</translation>
+    </message>
+    <message>
+        <source>Duplica los fotogramas elegidos (Ctrl+D)</source>
+        <translation>Duplica os quadros selecionados (Ctrl+D)</translation>
+    </message>
+    <message>
+        <source>Quita los fotogramas elegidos (Supr)</source>
+        <translation>Remove os quadros selecionados (Del)</translation>
     </message>
     <message>
         <source>Ocultar o mostrar el fotograma (los ocultos no van en el GIF)</source>
@@ -1619,6 +1812,46 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Duplicar quadro</translation>
     </message>
     <message>
+        <source>Mover punto clave</source>
+        <translation>Mover quadro-chave</translation>
+    </message>
+    <message>
+        <source>Quitar punto clave</source>
+        <translation>Remover quadro-chave</translation>
+    </message>
+    <message>
+        <source>Forma del movimiento</source>
+        <translation>Interpolação do movimento</translation>
+    </message>
+    <message>
+        <source>Quitar el punto clave</source>
+        <translation>Remover o quadro-chave</translation>
+    </message>
+    <message>
+        <source>Convertir la animación en fotogramas</source>
+        <translation>Converter a animação em quadros</translation>
+    </message>
+    <message>
+        <source>Mover la imagen</source>
+        <translation>Mover a imagem</translation>
+    </message>
+    <message>
+        <source>Eliminar fotogramas</source>
+        <translation>Excluir quadros</translation>
+    </message>
+    <message>
+        <source>Duplicar fotogramas</source>
+        <translation>Duplicar quadros</translation>
+    </message>
+    <message>
+        <source>Pegar fotograma</source>
+        <translation>Colar quadro</translation>
+    </message>
+    <message>
+        <source>Pegar fotogramas</source>
+        <translation>Colar quadros</translation>
+    </message>
+    <message>
         <source>Mostrar fotograma</source>
         <translation>Mostrar quadro</translation>
     </message>
@@ -1635,6 +1868,18 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Duração do quadro %1 (ms):</translation>
     </message>
     <message>
+        <source>Cortar</source>
+        <translation>Cortar</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copiar</translation>
+    </message>
+    <message>
+        <source>Pegar detrás</source>
+        <translation>Colar depois</translation>
+    </message>
+    <message>
         <source>Duración...</source>
         <translation>Duração...</translation>
     </message>
@@ -1649,6 +1894,182 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
     <message>
         <source>Editar con las herramientas</source>
         <translation>Editar com as ferramentas</translation>
+    </message>
+    <message>
+        <source>Lineal</source>
+        <translation>Linear</translation>
+    </message>
+    <message>
+        <source>Curva</source>
+        <translation>Curva</translation>
+    </message>
+    <message>
+        <source>Curva continua</source>
+        <translation>Curva contínua</translation>
+    </message>
+    <message>
+        <source>Congelar</source>
+        <translation>Congelar</translation>
+    </message>
+    <message>
+        <source>Entrada suave</source>
+        <translation>Entrada suave</translation>
+    </message>
+    <message>
+        <source>Llega a este punto despacio</source>
+        <translation>Chega a este ponto devagar</translation>
+    </message>
+    <message>
+        <source>Salida suave</source>
+        <translation>Saída suave</translation>
+    </message>
+    <message>
+        <source>Sale de este punto despacio</source>
+        <translation>Sai deste ponto devagar</translation>
+    </message>
+    <message>
+        <source>Cómo cambia el valor a lo largo del fotograma. Arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.</source>
+        <translation>Como o valor muda ao longo do quadro. Arraste um losango para mudar seu valor ou seu momento; clique com o botão direito para a forma da curva.</translation>
+    </message>
+    <message>
+        <source>Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal.</source>
+        <translation>Sem quadros-chave: clique no losango de um valor para colocar um no cursor de reprodução.</translation>
+    </message>
+    <message>
+        <source>Forma de la curva</source>
+        <translation>Forma da curva</translation>
+    </message>
+    <message>
+        <source>Quitar el punto</source>
+        <translation>Remover o ponto</translation>
+    </message>
+    <message>
+        <source>Escala</source>
+        <translation>Escala</translation>
+    </message>
+    <message>
+        <source>Proporcional</source>
+        <translation>Proporcional</translation>
+    </message>
+    <message>
+        <source>Al cambiar la escala X o Y, la otra cambia igual</source>
+        <translation>Ao mudar a escala X ou Y, a outra muda igual</translation>
+    </message>
+    <message>
+        <source>Escala proporcional</source>
+        <translation>Escala proporcional</translation>
+    </message>
+    <message>
+        <source>Posición</source>
+        <translation>Posição</translation>
+    </message>
+    <message>
+        <source>Rotación</source>
+        <translation>Rotação</translation>
+    </message>
+    <message>
+        <source>Opacidad</source>
+        <translation>Opacidade</translation>
+    </message>
+    <message>
+        <source>Gráfica:</source>
+        <translation>Gráfico:</translation>
+    </message>
+    <message>
+        <source>Posición X</source>
+        <translation>Posição X</translation>
+    </message>
+    <message>
+        <source>Posición Y</source>
+        <translation>Posição Y</translation>
+    </message>
+    <message>
+        <source>Escala X</source>
+        <translation>Escala X</translation>
+    </message>
+    <message>
+        <source>Escala Y</source>
+        <translation>Escala Y</translation>
+    </message>
+    <message>
+        <source>Al exportar:</source>
+        <translation>Ao exportar:</translation>
+    </message>
+    <message>
+        <source>%1 fps</source>
+        <translation>%1 fps</translation>
+    </message>
+    <message>
+        <source>Cuántas imágenes por segundo tiene el GIF mientras este fotograma se mueve</source>
+        <translation>Quantas imagens por segundo o GIF tem enquanto este quadro se move</translation>
+    </message>
+    <message>
+        <source>Fotogramas por segundo</source>
+        <translation>Quadros por segundo</translation>
+    </message>
+    <message>
+        <source>Restablecer</source>
+        <translation>Redefinir</translation>
+    </message>
+    <message>
+        <source>Quita la animación de este fotograma</source>
+        <translation>Remove a animação deste quadro</translation>
+    </message>
+    <message>
+        <source>Quitar la animación</source>
+        <translation>Remover a animação</translation>
+    </message>
+    <message>
+        <source>Convertir en fotogramas</source>
+        <translation>Converter em quadros</translation>
+    </message>
+    <message>
+        <source>Sustituye este fotograma por los que salen de su animación (como al exportar), para editarlos uno a uno</source>
+        <translation>Substitui este quadro pelos que saem da sua animação (como ao exportar), para editá-los um por um</translation>
+    </message>
+    <message>
+        <source>El rombo pone o quita un punto clave en el cabezal. Con puntos, cambiar un valor pone uno ahí. En la línea de tiempo, separa los rombos para que el movimiento dure más.</source>
+        <translation>O losango coloca ou remove um quadro-chave no cursor de reprodução. Com quadros-chave, mudar um valor coloca um ali. Na linha do tempo, afaste os losangos para que o movimento dure mais.</translation>
+    </message>
+    <message>
+        <source>Punto clave anterior</source>
+        <translation>Quadro-chave anterior</translation>
+    </message>
+    <message>
+        <source>Pone o quita un punto clave en el cabezal</source>
+        <translation>Coloca ou remove um quadro-chave no cursor de reprodução</translation>
+    </message>
+    <message>
+        <source>Punto clave siguiente</source>
+        <translation>Próximo quadro-chave</translation>
+    </message>
+    <message>
+        <source>Animación del fotograma %1</source>
+        <translation>Animação do quadro %1</translation>
+    </message>
+    <message>
+        <source>Animación</source>
+        <translation>Animação</translation>
+    </message>
+    <message>
+        <source>Cambiar la animación</source>
+        <translation>Alterar a animação</translation>
+    </message>
+    <message>
+        <source>Añadir punto clave</source>
+        <translation>Adicionar quadro-chave</translation>
+    </message>
+    <message>
+        <source>Peso aproximado del GIF exportado: %1 MB, %2 fotogramas, %3 s.</source>
+        <translation>Tamanho aproximado do GIF exportado: %1 MB, %2 quadros, %3 s.</translation>
+    </message>
+    <message>
+        <source>Pesa mucho: Discord no deja enviar más de 10 MB sin Nitro y tarda en cargar. Acorta la animación, reduce el tamaño de la imagen, usa menos fotogramas por segundo o expórtala como vídeo MP4.</source>
+        <translation>Está muito pesado: o Discord não deixa enviar mais de 10 MB sem Nitro e demora para carregar. Encurte a animação, reduza o tamanho da imagem, use menos quadros por segundo ou exporte-a como vídeo MP4.</translation>
+    </message>
+    <message>
+        <source>Se acerca a los 10 MB (el límite de Discord sin Nitro).</source>
+        <translation>Está chegando a 10 MB (o limite do Discord sem Nitro).</translation>
     </message>
 </context>
 <context>
@@ -2112,6 +2533,14 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Visível</translation>
     </message>
     <message>
+        <source>Bloquear la transparencia</source>
+        <translation>Bloquear a transparência</translation>
+    </message>
+    <message>
+        <source>Al pintar, solo cambia el color de lo que ya hay; lo transparente sigue transparente.</source>
+        <translation>Ao pintar, só muda a cor do que já existe; o transparente continua transparente.</translation>
+    </message>
+    <message>
         <source>Nombre</source>
         <translation>Nome</translation>
     </message>
@@ -2131,6 +2560,10 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
 Opacidad: %2 · Fusión: %3</source>
         <translation>%1
 Opacidade: %2 · Mesclagem: %3</translation>
+    </message>
+    <message>
+        <source>Transparencia bloqueada</source>
+        <translation>Transparência bloqueada</translation>
     </message>
 </context>
 <context>
@@ -2403,6 +2836,10 @@ Opacidade: %2 · Mesclagem: %3</translation>
         <translation>&amp;Desmarcar tudo</translation>
     </message>
     <message>
+        <source>Guardar la selección como &amp;forma...</source>
+        <translation>Salvar a seleção como &amp;forma...</translation>
+    </message>
+    <message>
         <source>&amp;Acercar</source>
         <translation>A&amp;umentar zoom</translation>
     </message>
@@ -2417,6 +2854,18 @@ Opacidade: %2 · Mesclagem: %3</translation>
     <message>
         <source>Zum a &amp;selección</source>
         <translation>Ajustar zoom à &amp;seleção</translation>
+    </message>
+    <message>
+        <source>Girar la vista a la iz&amp;quierda</source>
+        <translation>Girar a vista para a &amp;esquerda</translation>
+    </message>
+    <message>
+        <source>Girar la vista a la de&amp;recha</source>
+        <translation>Girar a vista para a &amp;direita</translation>
+    </message>
+    <message>
+        <source>Vista sin &amp;girar</source>
+        <translation>Vista sem &amp;giro</translation>
     </message>
     <message>
         <source>&amp;Tamaño real</source>
@@ -2509,6 +2958,14 @@ Opacidade: %2 · Mesclagem: %3</translation>
     <message>
         <source>Alternar &amp;visibilidad de capa</source>
         <translation>Alternar &amp;visibilidade da camada</translation>
+    </message>
+    <message>
+        <source>&amp;Bloquear la transparencia</source>
+        <translation>&amp;Bloquear a transparência</translation>
+    </message>
+    <message>
+        <source>Bloquear la transparencia de la capa (Alpha-Lock): al pintar, rellenar o aplicar efectos solo cambia el color de lo que ya hay; lo transparente sigue transparente.</source>
+        <translation>Bloquear a transparência da camada (Alpha-Lock): ao pintar, preencher ou aplicar efeitos, só muda a cor do que já existe; o transparente continua transparente.</translation>
     </message>
     <message>
         <source>&amp;Importar desde archivo...</source>
@@ -2607,6 +3064,30 @@ Opacidade: %2 · Mesclagem: %3</translation>
         <translation>Só funcionam na versão web do Kaint, pois abrem uma janela própria feita para o navegador: %1</translation>
     </message>
     <message>
+        <source>Guardar como forma</source>
+        <translation>Salvar como forma</translation>
+    </message>
+    <message>
+        <source>Nombre de la forma:</source>
+        <translation>Nome da forma:</translation>
+    </message>
+    <message>
+        <source>Mi forma</source>
+        <translation>Minha forma</translation>
+    </message>
+    <message>
+        <source>Forma «%1» guardada: está en la herramienta Formas, entre las personalizadas.</source>
+        <translation>Forma «%1» salva: está na ferramenta Formas, entre as personalizadas.</translation>
+    </message>
+    <message>
+        <source>Bloquear la transparencia</source>
+        <translation>Bloquear a transparência</translation>
+    </message>
+    <message>
+        <source>Desbloquear la transparencia</source>
+        <translation>Desbloquear a transparência</translation>
+    </message>
+    <message>
         <source>Recuperar imágenes</source>
         <translation>Recuperar imagens</translation>
     </message>
@@ -2635,6 +3116,10 @@ Opacidade: %2 · Mesclagem: %3</translation>
     <message>
         <source>Intercambiar colores</source>
         <translation>Trocar cores</translation>
+    </message>
+    <message>
+        <source>Exportado: %1</source>
+        <translation>Exportado: %1</translation>
     </message>
     <message>
         <source>Discord</source>
@@ -3604,6 +4089,14 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
 <context>
     <name>PdnBridge</name>
     <message>
+        <source>Kaint se compiló sin el sistema de complementos .NET (hace falta el SDK de .NET al compilar).</source>
+        <translation>O Kaint foi compilado sem o sistema de complementos .NET (é preciso o SDK do .NET ao compilar).</translation>
+    </message>
+    <message>
+        <source>El sistema de complementos .NET necesita el runtime de .NET 10 (sudo pacman -S dotnet-runtime o sudo apt install dotnet-runtime-10.0).</source>
+        <translation>O sistema de complementos .NET precisa do runtime do .NET 10 (sudo pacman -S dotnet-runtime ou sudo apt install dotnet-runtime-10.0).</translation>
+    </message>
+    <message>
         <source>El sistema de complementos Wine necesita wine (sudo pacman -S wine o sudo apt install wine). También puedes elegir OpenD2D en Configuración → Complementos.</source>
         <translation>O sistema de complementos Wine precisa do Wine (sudo pacman -S wine ou sudo apt install wine). Você também pode escolher OpenD2D em Configurações → Complementos.</translation>
     </message>
@@ -3627,12 +4120,16 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <source>No se pudo comunicar con el proceso de compatibilidad.</source>
         <translation>Não foi possível se comunicar com o processo de compatibilidade.</translation>
     </message>
+    <message>
+        <source>El complemento no devolvió una imagen.</source>
+        <translation>O complemento não devolveu uma imagem.</translation>
+    </message>
 </context>
 <context>
     <name>PdnEffect</name>
     <message>
-        <source>La próxima vez este efecto se abrirá con Wine.</source>
-        <translation>Na próxima vez, este efeito será aberto com o Wine.</translation>
+        <source>La próxima vez este efecto se abrirá con %1.</source>
+        <translation>Da próxima vez este efeito será aberto com %1.</translation>
     </message>
 </context>
 <context>
@@ -4303,8 +4800,128 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>OK</translation>
     </message>
     <message>
+        <source>Para exportar en este formato hace falta FFmpeg (https://ffmpeg.org). Instálalo (en Linux, el paquete «ffmpeg») o pon ffmpeg junto a Kaint y vuelve a intentarlo.</source>
+        <translation>Para exportar neste formato é preciso o FFmpeg (https://ffmpeg.org). Instale-o (no Linux, o pacote «ffmpeg») ou coloque o ffmpeg junto ao Kaint e tente de novo.</translation>
+    </message>
+    <message>
+        <source>No se pudo crear una carpeta temporal.</source>
+        <translation>Não foi possível criar uma pasta temporária.</translation>
+    </message>
+    <message>
+        <source>No se pudo ejecutar FFmpeg (%1).</source>
+        <translation>Não foi possível executar o FFmpeg (%1).</translation>
+    </message>
+    <message>
         <source>Cancelar</source>
         <translation>Cancelar</translation>
+    </message>
+    <message>
+        <source>Exportando…</source>
+        <translation>Exportando…</translation>
+    </message>
+    <message>
+        <source>FFmpeg no pudo exportar: %1</source>
+        <translation>O FFmpeg não conseguiu exportar: %1</translation>
+    </message>
+    <message>
+        <source>PNG animado (*.png *.apng)</source>
+        <translation>PNG animado (*.png *.apng)</translation>
+    </message>
+    <message>
+        <source>WebP animado (*.webp)</source>
+        <translation>WebP animado (*.webp)</translation>
+    </message>
+    <message>
+        <source>Vídeo MP4 (*.mp4)</source>
+        <translation>Vídeo MP4 (*.mp4)</translation>
+    </message>
+    <message>
+        <source>Vídeo WebM (*.webm)</source>
+        <translation>Vídeo WebM (*.webm)</translation>
+    </message>
+    <message>
+        <source>Exportar</source>
+        <translation>Exportar</translation>
+    </message>
+    <message>
+        <source>Para exportar vídeo hace falta FFmpeg (https://ffmpeg.org). Instálalo (en Linux, el paquete «ffmpeg») o pon ffmpeg junto a Kaint y vuelve a intentarlo.</source>
+        <translation>Para exportar vídeo é preciso o FFmpeg (https://ffmpeg.org). Instale-o (no Linux, o pacote «ffmpeg») ou coloque o ffmpeg junto ao Kaint e tente de novo.</translation>
+    </message>
+    <message>
+        <source>Exportar como %1</source>
+        <translation>Exportar como %1</translation>
+    </message>
+    <message>
+        <source>PNG animado</source>
+        <translation>PNG animado</translation>
+    </message>
+    <message>
+        <source>WebP animado</source>
+        <translation>WebP animado</translation>
+    </message>
+    <message>
+        <source> veces</source>
+        <translation> vezes</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 s</translation>
+    </message>
+    <message>
+        <source>Más grande sin suavizar (para pixel art: los vídeos pequeños se ven borrosos).</source>
+        <translation>Maior sem suavizar (para pixel art: os vídeos pequenos ficam borrados).</translation>
+    </message>
+    <message>
+        <source>Alta</source>
+        <translation>Alta</translation>
+    </message>
+    <message>
+        <source>Baja (archivo más pequeño)</source>
+        <translation>Baixa (arquivo menor)</translation>
+    </message>
+    <message>
+        <source>100: sin pérdida.</source>
+        <translation>100: sem perda.</translation>
+    </message>
+    <message>
+        <source>Repetir la animación:</source>
+        <translation>Repetir a animação:</translation>
+    </message>
+    <message>
+        <source>Duración del vídeo:</source>
+        <translation>Duração do vídeo:</translation>
+    </message>
+    <message>
+        <source>Calidad:</source>
+        <translation>Qualidade:</translation>
+    </message>
+    <message>
+        <source>El MP4 no tiene transparencia: lo transparente va sobre este color (blanco o negro).</source>
+        <translation>O MP4 não tem transparência: o transparente vai sobre esta cor (branco ou preto).</translation>
+    </message>
+    <message>
+        <source>Fondo:</source>
+        <translation>Fundo:</translation>
+    </message>
+    <message>
+        <source>Tamaño:</source>
+        <translation>Tamanho:</translation>
+    </message>
+    <message>
+        <source>Sin pérdida y con transparencia de 8 bits; lo abren los navegadores y Discord.</source>
+        <translation>Sem perda e com transparência de 8 bits; os navegadores e o Discord o abrem.</translation>
+    </message>
+    <message>
+        <source>Con transparencia y mucho más ligero que el GIF.</source>
+        <translation>Com transparência e muito mais leve que o GIF.</translation>
+    </message>
+    <message>
+        <source>H.264: se ve en cualquier teléfono, navegador y red social.</source>
+        <translation>H.264: funciona em qualquer celular, navegador e rede social.</translation>
+    </message>
+    <message>
+        <source>VP9 con transparencia (para la web).</source>
+        <translation>VP9 com transparência (para a web).</translation>
     </message>
     <message>
         <source>Restablecer</source>
@@ -4416,6 +5033,10 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>Imagens para abrir.</translation>
     </message>
     <message>
+        <source>Tema: system, light, dark, blue, kde, custom, windows8, windows8dark, windows7, windows7dark, windows7basic, windows7basicdark, windowsxp, windows98, windows98alt, ubuntu, ubuntudark, gnome, gnomedark, mint, mintdark, elementary o elementarydark (se guarda).</source>
+        <translation>Tema: system, light, dark, blue, kde, custom, windows8, windows8dark, windows7, windows7dark, windows7basic, windows7basicdark, windowsxp, windows98, windows98alt, ubuntu, ubuntudark, gnome, gnomedark, mint, mintdark, elementary ou elementarydark (é salvo).</translation>
+    </message>
+    <message>
         <source>Guarda una captura de la ventana con la configuración de fábrica (la primera imagen es la actual) y sale.</source>
         <translation>Salva uma captura de tela da janela com as configurações de fábrica (a primeira imagem é a atual) e sai.</translation>
     </message>
@@ -4436,8 +5057,8 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>Estilo da interface na captura de tela (kaint ou paintnet).</translation>
     </message>
     <message>
-        <source>Idioma de la captura (en o es).</source>
-        <translation>Idioma da captura de tela (en ou es).</translation>
+        <source>Idioma de la captura (en, es o pt_BR).</source>
+        <translation>Idioma da captura (en, es ou pt_BR).</translation>
     </message>
     <message>
         <source>Reglas en la captura (yes o no).</source>
@@ -4462,6 +5083,10 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
     <message>
         <source>El color de las ventanas de los temas Windows 7 en la captura (#rrggbb).</source>
         <translation>Cor da janela dos temas do Windows 7 na captura de tela (#rrggbb).</translation>
+    </message>
+    <message>
+        <source>El color de las ventanas de los temas Windows 8 en la captura (#rrggbb).</source>
+        <translation>A cor das janelas dos temas Windows 8 na captura (#rrggbb).</translation>
     </message>
     <message>
         <source>La herramienta elegida en la captura (su número).</source>
@@ -4650,6 +5275,18 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
     <message>
         <source>la geometría está vacía</source>
         <translation>a geometria está vazia</translation>
+    </message>
+    <message>
+        <source>La forma está vacía.</source>
+        <translation>A forma está vazia.</translation>
+    </message>
+    <message>
+        <source>No se pudo crear la carpeta de las formas.</source>
+        <translation>Não foi possível criar a pasta das formas.</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir «%1».</source>
+        <translation>Não foi possível gravar «%1».</translation>
     </message>
     <message>
         <source>Nivel automático</source>
@@ -6939,10 +7576,6 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>encode() não retornou dados.</translation>
     </message>
     <message>
-        <source>Tema: system, light, dark, blue, kde, custom, windows7, windows7dark, windowsxp, windows98 o windows98alt (se guarda).</source>
-        <translation>Tema: system, light, dark, blue, kde, custom, windows7, windows7dark, windowsxp, windows98 ou windows98alt (salvo).</translation>
-    </message>
-    <message>
         <source>Leve</source>
         <translation>Claro</translation>
     </message>
@@ -7290,12 +7923,75 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <source>El parche arrastrado tiene que quedar dentro de la imagen.</source>
         <translation>O remendo arrastado precisa ficar dentro da imagem.</translation>
     </message>
+    <message>
+        <source>No es un WebP válido.</source>
+        <translation>Não é um WebP válido.</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el WebP.</source>
+        <translation>Não foi possível ler o WebP.</translation>
+    </message>
+    <message>
+        <source>No se pudo comprimir el WebP.</source>
+        <translation>Não foi possível comprimir o WebP.</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el AVIF: %1</source>
+        <translation>Não foi possível ler o AVIF: %1</translation>
+    </message>
+    <message>
+        <source>No se pudo comprimir el AVIF: %1</source>
+        <translation>Não foi possível comprimir o AVIF: %1</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el JPEG XL.</source>
+        <translation>Não foi possível ler o JPEG XL.</translation>
+    </message>
+    <message>
+        <source>No se pudo comprimir el JPEG XL.</source>
+        <translation>Não foi possível comprimir o JPEG XL.</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el HEIC: %1</source>
+        <translation>Não foi possível ler o HEIC: %1</translation>
+    </message>
+    <message>
+        <source>Kaint se compiló sin libwebpmux.</source>
+        <translation>O Kaint foi compilado sem a libwebpmux.</translation>
+    </message>
 </context>
 <context>
     <name>QPrintPreviewDialog</name>
     <message>
         <source>Page setup</source>
         <translation>Configuração da página</translation>
+    </message>
+</context>
+<context>
+    <name>QuickShape</name>
+    <message>
+        <source>Línea</source>
+        <translation>Linha</translation>
+    </message>
+    <message>
+        <source>Elipse</source>
+        <translation>Elipse</translation>
+    </message>
+    <message>
+        <source>Círculo</source>
+        <translation>Círculo</translation>
+    </message>
+    <message>
+        <source>Rectángulo</source>
+        <translation>Retângulo</translation>
+    </message>
+    <message>
+        <source>Triángulo</source>
+        <translation>Triângulo</translation>
+    </message>
+    <message>
+        <source>Polígono</source>
+        <translation>Polígono</translation>
     </message>
 </context>
 <context>
@@ -8776,16 +9472,8 @@ Deseja substituí-los?</translation>
         <translation>Sistema de complementos do Paint.NET:</translation>
     </message>
     <message>
-        <source>Usar Wine solo para lo que no funcione con OpenD2D</source>
-        <translation>Usar o Wine somente para o que não funcionar com o OpenD2D</translation>
-    </message>
-    <message>
         <source>Si un complemento no carga con OpenD2D, o uno de sus efectos falla al aplicarse, ese complemento o ese efecto se ejecuta con Wine (y se recuerda para la próxima vez); todo lo demás sigue con OpenD2D. Hace falta Wine instalado.</source>
         <translation>Se um complemento não carregar com o OpenD2D ou um de seus efeitos falhar ao ser aplicado, esse complemento ou efeito será executado com o Wine (e isso será lembrado para a próxima vez); todo o restante continuará usando o OpenD2D. É necessário ter o Wine instalado.</translation>
-    </message>
-    <message>
-        <source>Usar Wine solo para lo que no funcione con OpenD2D (Wine no está instalado)</source>
-        <translation>Usar o Wine somente para o que não funcionar com o OpenD2D (o Wine não está instalado)</translation>
     </message>
     <message>
         <source>Wine no está instalado (sudo pacman -S wine o sudo apt install wine).</source>
@@ -8810,6 +9498,166 @@ Deseja substituí-los?</translation>
     <message>
         <source>OpenD2D %1</source>
         <translation>OpenD2D %1</translation>
+    </message>
+    <message>
+        <source>Windows 8</source>
+        <translation>Windows 8</translation>
+    </message>
+    <message>
+        <source>Plano, con el marco ancho y la barra de título del color de las ventanas (se elige abajo) y el título centrado.</source>
+        <translation>Plano, com a moldura larga e a barra de título na cor das janelas (escolhida abaixo) e o título centralizado.</translation>
+    </message>
+    <message>
+        <source>Windows 8 oscuro</source>
+        <translation>Windows 8 escuro</translation>
+    </message>
+    <message>
+        <source>El de Windows 8 con el interior oscuro.</source>
+        <translation>O do Windows 8 com o interior escuro.</translation>
+    </message>
+    <message>
+        <source>Windows 7 Basic</source>
+        <translation>Windows 7 Basic</translation>
+    </message>
+    <message>
+        <source>El tema básico de Windows 7: los mismos controles con el marco opaco, sin cristal.</source>
+        <translation>O tema básico do Windows 7: os mesmos controles com a moldura opaca, sem vidro.</translation>
+    </message>
+    <message>
+        <source>Windows 7 Basic oscuro</source>
+        <translation>Windows 7 Basic escuro</translation>
+    </message>
+    <message>
+        <source>El Basic de Windows 7 en grises oscuros.</source>
+        <translation>O Basic do Windows 7 em cinzas escuros.</translation>
+    </message>
+    <message>
+        <source>Ubuntu</source>
+        <translation>Ubuntu</translation>
+    </message>
+    <message>
+        <source>Yaru: el naranja de Ubuntu, botones redondos y la fuente Ubuntu.</source>
+        <translation>Yaru: o laranja do Ubuntu, botões redondos e a fonte Ubuntu.</translation>
+    </message>
+    <message>
+        <source>Ubuntu oscuro</source>
+        <translation>Ubuntu escuro</translation>
+    </message>
+    <message>
+        <source>Yaru oscuro.</source>
+        <translation>Yaru escuro.</translation>
+    </message>
+    <message>
+        <source>GNOME</source>
+        <translation>GNOME</translation>
+    </message>
+    <message>
+        <source>Adwaita: el azul de GNOME y sus botones redondos grises.</source>
+        <translation>Adwaita: o azul do GNOME e seus botões redondos cinzas.</translation>
+    </message>
+    <message>
+        <source>GNOME oscuro</source>
+        <translation>GNOME escuro</translation>
+    </message>
+    <message>
+        <source>Adwaita oscuro.</source>
+        <translation>Adwaita escuro.</translation>
+    </message>
+    <message>
+        <source>Linux Mint</source>
+        <translation>Linux Mint</translation>
+    </message>
+    <message>
+        <source>Mint-Y: el verde de Linux Mint.</source>
+        <translation>Mint-Y: o verde do Linux Mint.</translation>
+    </message>
+    <message>
+        <source>Linux Mint oscuro</source>
+        <translation>Linux Mint escuro</translation>
+    </message>
+    <message>
+        <source>Mint-Y oscuro.</source>
+        <translation>Mint-Y escuro.</translation>
+    </message>
+    <message>
+        <source>elementary OS</source>
+        <translation>elementary OS</translation>
+    </message>
+    <message>
+        <source>El azul arándano de elementary y sus botones redondos.</source>
+        <translation>O azul-mirtilo do elementary e seus botões redondos.</translation>
+    </message>
+    <message>
+        <source>elementary OS oscuro</source>
+        <translation>elementary OS escuro</translation>
+    </message>
+    <message>
+        <source>elementary oscuro.</source>
+        <translation>elementary escuro.</translation>
+    </message>
+    <message>
+        <source>Como «Color y apariencia» de Windows 8: el marco y la barra de título de las ventanas. Solo con los temas Windows 8.</source>
+        <translation>Como «Cor e aparência» do Windows 8: a moldura e a barra de título das janelas. Só com os temas Windows 8.</translation>
+    </message>
+    <message>
+        <source>Los del tema: de cristal con Windows 7, planos con Windows 8, los azules de Luna con Windows XP, en relieve con Windows 98, redondos con los de Linux y, con los demás (Claro, Oscuro, Azul...), los de Windows 10.</source>
+        <translation>Os do tema: de vidro com o Windows 7, planos com o Windows 8, os azuis do Luna com o Windows XP, em relevo com o Windows 98, redondos com os do Linux e, com os demais (Claro, Escuro, Azul...), os do Windows 10.</translation>
+    </message>
+    <message>
+        <source>Planos, con cerrar rojo y ancho colgando del borde de arriba.</source>
+        <translation>Planos, com o fechar vermelho e largo pendurado na borda de cima.</translation>
+    </message>
+    <message>
+        <source>Círculos grises, como los de GNOME, Ubuntu, Mint y elementary.</source>
+        <translation>Círculos cinzas, como os do GNOME, Ubuntu, Mint e elementary.</translation>
+    </message>
+    <message>
+        <source>Pincel</source>
+        <translation>Pincel</translation>
+    </message>
+    <message>
+        <source>Opciones avanzadas del pincel (como Ibis Paint y FireAlpaca)</source>
+        <translation>Opções avançadas do pincel (como o Ibis Paint e o FireAlpaca)</translation>
+    </message>
+    <message>
+        <source>Añade «Avanzado…» a la barra del pincel, la goma y el tampón: forma y ángulo de la punta, flujo, curva de la presión, estabilizador, entrada y salida en punta (manga), presión por la velocidad para el dedo o el ratón, variación al azar y los deslizadores de tamaño y opacidad al lado del lienzo.</source>
+        <translation>Adiciona «Avançado…» à barra do pincel, da borracha e do carimbo: forma e ângulo da ponta, fluxo, curva da pressão, estabilizador, entrada e saída em ponta (mangá), pressão pela velocidade para o dedo ou o mouse, variação aleatória e os controles deslizantes de tamanho e opacidade ao lado da tela.</translation>
+    </message>
+    <message>
+        <source>.NET (recomendado)</source>
+        <translation>.NET (recomendado)</translation>
+    </message>
+    <message>
+        <source>El .NET moderno con la capa de Paint.NET 5: carga también los complementos de Paint.NET 5 (los de GPU, con OpenD2D) y muestra sus ventanas propias en el diálogo de Kaint. Lo que no funcione con él se ejecuta con mono y, si se pide, con Wine.</source>
+        <translation>O .NET moderno com a camada do Paint.NET 5: também carrega os complementos do Paint.NET 5 (os de GPU, com o OpenD2D) e mostra suas janelas próprias no diálogo do Kaint. O que não funcionar com ele é executado com o mono e, se for pedido, com o Wine.</translation>
+    </message>
+    <message>
+        <source>Usar Wine solo para lo que no funcione con los demás</source>
+        <translation>Usar o Wine só para o que não funcionar com os outros</translation>
+    </message>
+    <message>
+        <source>Usar Wine solo para lo que no funcione con los demás (Wine no está instalado)</source>
+        <translation>Usar o Wine só para o que não funcionar com os outros (o Wine não está instalado)</translation>
+    </message>
+    <message>
+        <source>Kaint se compiló sin el sistema .NET (hace falta el SDK de .NET al compilar).</source>
+        <translation>O Kaint foi compilado sem o sistema .NET (é preciso o SDK do .NET ao compilar).</translation>
+    </message>
+    <message>
+        <source>.NET no está instalado (sudo pacman -S dotnet-runtime o sudo apt install dotnet-runtime-10.0).</source>
+        <translation>O .NET não está instalado (sudo pacman -S dotnet-runtime ou sudo apt install dotnet-runtime-10.0).</translation>
+    </message>
+    <message>
+        <source>.NET: %1</source>
+        <translation>.NET: %1</translation>
+    </message>
+    <message>
+        <source>sin mono de respaldo</source>
+        <translation>sem mono de reserva</translation>
+    </message>
+    <message>
+        <source>respaldo: mono</source>
+        <translation>reserva: mono</translation>
     </message>
     <message>
         <source>Probando…</source>
@@ -9786,10 +10634,6 @@ Deseja substituí-los?</translation>
         <translation>Automáticos (os do tema)</translation>
     </message>
     <message>
-        <source>Los del tema: de cristal con Windows 7, los azules de Luna con Windows XP, en relieve con Windows 98 y, con los demás, los de Windows 10 (o los de Windows 11 con «Bordes: Redondeados»).</source>
-        <translation>Os do tema: de vidro com Windows 7, azuis do Luna com Windows XP, em relevo com Windows 98 e, nos demais, os do Windows 10 (ou os do Windows 11 com “Bordas: Arredondados”).</translation>
-    </message>
-    <message>
         <source>Los botones de cerrar, maximizar o restaurar y minimizar. «Automáticos» usa los del tema (Windows 7, XP o 98); los demás se ven igual con cualquier tema.</source>
         <translation>Os botões Fechar, Maximizar ou Restaurar e Minimizar. “Automáticos” usa os do tema (Windows 7, XP ou 98); os demais têm a mesma aparência em qualquer tema.</translation>
     </message>
@@ -10343,6 +11187,110 @@ Deseja substituí-los?</translation>
     <message>
         <source>Escarcha</source>
         <translation>Geada</translation>
+    </message>
+    <message>
+        <source>Gris</source>
+        <translation>Cinza</translation>
+    </message>
+    <message>
+        <source>Celeste</source>
+        <translation>Celeste</translation>
+    </message>
+    <message>
+        <source>Rosa</source>
+        <translation>Rosa</translation>
+    </message>
+    <message>
+        <source>Amarillo</source>
+        <translation>Amarelo</translation>
+    </message>
+    <message>
+        <source>Turquesa</source>
+        <translation>Turquesa</translation>
+    </message>
+    <message>
+        <source>Naranja</source>
+        <translation>Laranja</translation>
+    </message>
+    <message>
+        <source>Coral</source>
+        <translation>Coral</translation>
+    </message>
+    <message>
+        <source>Verde</source>
+        <translation>Verde</translation>
+    </message>
+    <message>
+        <source>Lila</source>
+        <translation>Lilás</translation>
+    </message>
+    <message>
+        <source>Azul</source>
+        <translation>Azul</translation>
+    </message>
+    <message>
+        <source>Blanco</source>
+        <translation>Branco</translation>
+    </message>
+    <message>
+        <source>Verde azulado</source>
+        <translation>Verde-azulado</translation>
+    </message>
+    <message>
+        <source>Turquesa intenso</source>
+        <translation>Turquesa intenso</translation>
+    </message>
+    <message>
+        <source>Azul cobalto</source>
+        <translation>Azul-cobalto</translation>
+    </message>
+    <message>
+        <source>Azul cielo</source>
+        <translation>Azul-celeste</translation>
+    </message>
+    <message>
+        <source>Morado</source>
+        <translation>Roxo</translation>
+    </message>
+    <message>
+        <source>Magenta</source>
+        <translation>Magenta</translation>
+    </message>
+    <message>
+        <source>Índigo</source>
+        <translation>Índigo</translation>
+    </message>
+    <message>
+        <source>Granate</source>
+        <translation>Grená</translation>
+    </message>
+    <message>
+        <source>Carmesí</source>
+        <translation>Carmesim</translation>
+    </message>
+    <message>
+        <source>Teja</source>
+        <translation>Telha</translation>
+    </message>
+    <message>
+        <source>Mandarina</source>
+        <translation>Tangerina</translation>
+    </message>
+    <message>
+        <source>Verde bosque</source>
+        <translation>Verde-floresta</translation>
+    </message>
+    <message>
+        <source>Verde hoja</source>
+        <translation>Verde-folha</translation>
+    </message>
+    <message>
+        <source>Azul marino</source>
+        <translation>Azul-marinho</translation>
+    </message>
+    <message>
+        <source>Azul real</source>
+        <translation>Azul-royal</translation>
     </message>
 </context>
 <context>
@@ -11398,6 +12346,46 @@ Deseja substituí-los?</translation>
         <translation>A pressão da caneta da mesa digitalizadora controla o tamanho do pincel</translation>
     </message>
     <message>
+        <source>Simetría</source>
+        <translation>Simetria</translation>
+    </message>
+    <message>
+        <source>Sin simetría</source>
+        <translation>Sem simetria</translation>
+    </message>
+    <message>
+        <source>Espejo a izquierda y derecha</source>
+        <translation>Espelho à esquerda e à direita</translation>
+    </message>
+    <message>
+        <source>Lo que se pinta a un lado del centro de la imagen sale reflejado al otro.</source>
+        <translation>O que se pinta de um lado do centro da imagem aparece refletido do outro.</translation>
+    </message>
+    <message>
+        <source>Espejo arriba y abajo</source>
+        <translation>Espelho em cima e embaixo</translation>
+    </message>
+    <message>
+        <source>Espejo en cuatro</source>
+        <translation>Espelho em quatro</translation>
+    </message>
+    <message>
+        <source>A izquierda y derecha y arriba y abajo a la vez.</source>
+        <translation>À esquerda e à direita e em cima e embaixo ao mesmo tempo.</translation>
+    </message>
+    <message>
+        <source>Radial de %1</source>
+        <translation>Radial de %1</translation>
+    </message>
+    <message>
+        <source>%1 copias girando alrededor del centro de la imagen (como un caleidoscopio o una mandala).</source>
+        <translation>%1 cópias girando ao redor do centro da imagem (como um caleidoscópio ou uma mandala).</translation>
+    </message>
+    <message>
+        <source>Formas rápidas: al acabar un trazo, deja el puntero quieto un momento y la línea, el círculo, la elipse, el rectángulo o el polígono que dibujaste se vuelve perfecto</source>
+        <translation>Formas rápidas: ao terminar um traço, deixe o ponteiro parado por um momento e a linha, o círculo, a elipse, o retângulo ou o polígono que você desenhou fica perfeito</translation>
+    </message>
+    <message>
         <source>Suavizado</source>
         <translation>Suavidade</translation>
     </message>
@@ -11546,8 +12534,24 @@ Deseja substituí-los?</translation>
         <translation>KDE</translation>
     </message>
     <message>
+        <source>Windows 8</source>
+        <translation>Windows 8</translation>
+    </message>
+    <message>
+        <source>Windows 8 oscuro</source>
+        <translation>Windows 8 escuro</translation>
+    </message>
+    <message>
         <source>Windows 7</source>
         <translation>Windows 7</translation>
+    </message>
+    <message>
+        <source>Windows 7 Basic</source>
+        <translation>Windows 7 Basic</translation>
+    </message>
+    <message>
+        <source>Windows 7 Basic oscuro</source>
+        <translation>Windows 7 Basic escuro</translation>
     </message>
     <message>
         <source>Windows XP</source>
@@ -11560,6 +12564,38 @@ Deseja substituí-los?</translation>
     <message>
         <source>Windows 98 ALT</source>
         <translation>Windows 98 ALT</translation>
+    </message>
+    <message>
+        <source>Ubuntu</source>
+        <translation>Ubuntu</translation>
+    </message>
+    <message>
+        <source>Ubuntu oscuro</source>
+        <translation>Ubuntu escuro</translation>
+    </message>
+    <message>
+        <source>GNOME</source>
+        <translation>GNOME</translation>
+    </message>
+    <message>
+        <source>GNOME oscuro</source>
+        <translation>GNOME escuro</translation>
+    </message>
+    <message>
+        <source>Linux Mint</source>
+        <translation>Linux Mint</translation>
+    </message>
+    <message>
+        <source>Linux Mint oscuro</source>
+        <translation>Linux Mint escuro</translation>
+    </message>
+    <message>
+        <source>elementary OS</source>
+        <translation>elementary OS</translation>
+    </message>
+    <message>
+        <source>elementary OS oscuro</source>
+        <translation>elementary OS escuro</translation>
     </message>
     <message>
         <source>Personalizado</source>
@@ -11588,6 +12624,14 @@ Deseja substituí-los?</translation>
     <message>
         <source>Idioma:</source>
         <translation>Idioma:</translation>
+    </message>
+    <message>
+        <source>.NET (recomendado)</source>
+        <translation>.NET (recomendado)</translation>
+    </message>
+    <message>
+        <source>El .NET moderno: también los complementos de Paint.NET 5 y sus ventanas en el diálogo de Kaint (hace falta el runtime de .NET).</source>
+        <translation>O .NET moderno: também os complementos do Paint.NET 5 e suas janelas no diálogo do Kaint (é preciso o runtime do .NET).</translation>
     </message>
     <message>
         <source>mono con OpenD2D, el Direct2D de código abierto: no necesita nada más que mono.</source>

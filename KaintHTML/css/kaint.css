@@ -5689,6 +5689,73 @@ html, body {
     display: none;
 }
 
+/* El peso aproximado del GIF y su duración: la barrita se llena hacia los 10 MB (GifEditor.estimateSize). */
+.gif-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-size: 0.92em;
+}
+
+.gif-size .bar {
+    width: 84px;
+    height: 8px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--text) 18%, transparent);
+    overflow: hidden;
+}
+
+.gif-size .fill {
+    height: 100%;
+    width: 0;
+    border-radius: 4px;
+    background: #3cb45a;
+    transition: width 200ms ease-out;
+}
+
+.gif-size.warn .fill {
+    background: #e6aa14;
+}
+
+.gif-size.over .fill {
+    background: #dc322f;
+}
+
+.gif-size.over span {
+    color: #dc322f;
+    font-weight: 600;
+}
+
+/* «Exportar GIF...» con su flecha de otros formatos, juntos. */
+.gif-split {
+    display: inline-flex;
+}
+
+.gif-split > .gif-button:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.gif-split > .gif-export-more {
+    min-width: 24px;
+    padding: 2px 6px;
+    margin-left: -1px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.gif-export-form {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 10px;
+    align-items: center;
+}
+
+:root.phone .gif-size .bar {
+    width: 40px;
+}
+
 /* En el teléfono: la biblioteca, una tira debajo de la vista previa; las barras, de una sola fila
    que se desliza (partidas en tres filas se comían la pantalla), y sin la barra de estado, que
    aquí no sirve. */

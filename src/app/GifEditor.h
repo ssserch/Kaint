@@ -54,6 +54,7 @@ int delayOf(const Layer* layer);
 class Preview;
 class Timeline;
 class Inspector;
+class SizeMeter;
 
 class MediaList : public QListWidget {
     Q_OBJECT
@@ -143,7 +144,8 @@ public:
     void seek(int ms);
 
 signals:
-    void exportRequested();
+    // 'format': "gif" (la configuración de siempre), "apng", "webp", "mp4" o "webm".
+    void exportRequested(const QString& format);
     void imageEditorRequested();
     void editFrameRequested(int layerIndex);
     // Deshacer y rehacer como los de la ventana (que avisan a la herramienta antes).
@@ -178,6 +180,8 @@ private:
     void invalidateStarts();
     QImage frameImage(int index) const;
     void showPlayingFrame(int index);
+    // El peso aproximado del GIF (unos fotogramas de muestra codificados) para la barrita.
+    void estimateSize();
 
     QPointer<Document> m_doc;
     QList<QPointer<Document>> m_openDocs;
@@ -188,6 +192,9 @@ private:
     GifEdit::MediaList* m_mediaList = nullptr;
     GifEdit::Preview* m_preview = nullptr;
     GifEdit::Inspector* m_inspector = nullptr;
+    GifEdit::SizeMeter* m_sizeMeter = nullptr;
+    QTimer m_sizeTimer;
+    QString m_sizeKey;
     GifEdit::Timeline* m_timeline = nullptr;
     QScrollArea* m_timelineScroll = nullptr;
     QToolButton* m_play = nullptr;

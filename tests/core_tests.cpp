@@ -42,6 +42,9 @@
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QPainter>
+#include "core/Apng.h"
+#include "core/ModernFormats.h"
+
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QXmlStreamReader>
@@ -3023,6 +3026,32 @@ paintDotJs.registerPlugin({
     pm->scan();
 }
 
+// Exportar desde el editor de GIF: el PNG animado (con su duración y transparencia) y el WebP animado.
+static void testAnimatedExport()
+{
+    QList<Gif::Frame> frames;
+    for (int i = 0; i < 3; ++i) {
+        Gif::Frame f;
+        f.image = QImage(20, 10, QImage::Format_ARGB32);
+        f.image.fill(QColor(i * 100, 50, 200 - i * 60, 128));
+        f.delayMs = 80 + i * 40;
+        frames << f;
+    }
+    QString error;
+    const QByteArray apng = Apng::encode(frames, 0, &error);
+    CHECK(!apng.isEmpty());
+    CHECK(Apng::frameCount(apng) == 3);
+    // El primer fotograma es un PNG normal (lo abre cualquiera), con su alfa.
+    const QImage first = QImage::fromData(apng, "PNG");
+    CHECK(first.size() == QSize(20, 10));
+    CHECK(std::abs(qAlpha(first.pixel(5, 5)) - 128) <= 1);
+    CHECK(apng.contains("acTL") && apng.contains("fdAT"));
+    if (ModernFormats::canWriteAnimatedWebP()) {
+        const QByteArray webp = ModernFormats::encodeAnimatedWebP(frames, 100, 0, &error);
+        CHECK(webp.startsWith("RIFF") && webp.contains("ANIM") && webp.count("ANMF") == 3);
+    }
+}
+
 int main(int argc, char** argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -3071,6 +3100,7 @@ int main(int argc, char** argv)
     testLocalHistogramSearch();
     testPluginDrop();
     testPackaging();
+    testAnimatedExport();
     if (g_failures == 0)
         std::printf("Todas las pruebas del núcleo pasaron.\n");
     return g_failures == 0 ? 0 : 1;

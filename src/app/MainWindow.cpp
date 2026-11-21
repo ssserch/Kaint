@@ -22,6 +22,7 @@
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/GifFramesDialog.h"
 #include "app/GifEditor.h"
+#include "app/GifExport.h"
 #include "app/widgets/BrushAdvanced.h"
 #include "app/dialogs/ImageDialogs.h"
 #include "app/dialogs/SaveAllDialog.h"
@@ -1164,7 +1165,21 @@ MainWindow::MainWindow()
     m_central->addWidget(m_workspace);
     m_gifEditor = new GifEditor(m_central);
     m_central->addWidget(m_gifEditor);
-    connect(m_gifEditor, &GifEditor::exportRequested, this, [this] { saveAs(m_doc, QStringLiteral("gif")); });
+    connect(m_gifEditor, &GifEditor::exportRequested, this, [this](const QString& format) {
+        if (format == QLatin1String("gif")) {
+            saveAs(m_doc, QStringLiteral("gif"));
+            return;
+        }
+        const GifExport::Format f = format == QLatin1String("apng")   ? GifExport::Format::Apng
+                                    : format == QLatin1String("webp") ? GifExport::Format::WebP
+                                    : format == QLatin1String("mp4")  ? GifExport::Format::Mp4
+                                                                      : GifExport::Format::WebM;
+        const QString path = GifExport::exportAnimation(this, m_doc, f, m_lastDir);
+        if (!path.isEmpty()) {
+            m_lastDir = QFileInfo(path).absolutePath();
+            statusBar()->showMessage(tr("Exportado: %1").arg(QDir::toNativeSeparators(path)), 5000);
+        }
+    });
     connect(m_gifEditor, &GifEditor::imageEditorRequested, this, [this] { toggleGifEditor(); });
     connect(m_gifEditor, &GifEditor::undoRequested, this, &MainWindow::undo);
     connect(m_gifEditor, &GifEditor::redoRequested, this, &MainWindow::redo);
@@ -4734,10 +4749,10 @@ void MainWindow::applySettings()
     FloatingPanel::setSnapping(m_settings.snapPanels);
     // Botones de la barra de título: el estilo y el lado cambian al momento.
     WindowFrame::setButtons(WindowFrame::Buttons(std::clamp(m_settings.titleButtons, 0, 8)));
-    // Los automáticos con los temas que no traen botones propios: los de Windows 11 con «Bordes:
-    // redondeados» (como antes, cuando la recreación de Windows 11 los elegía), si no los de 10.
-    WindowFrame::setAutoFallback(m_settings.windowsVersion == 11 ? WindowFrame::Buttons::Windows11
-                                                                 : WindowFrame::Buttons::Windows10);
+    // Los automáticos con los temas que no traen botones propios (Claro, Oscuro, Azul...): los de
+    // Windows 10, también con «Bordes: redondeados» (antes, tras pasar por un tema de Windows 7, que
+    // los redondea, quedaban los de Windows 11).
+    WindowFrame::setAutoFallback(WindowFrame::Buttons::Windows10);
 #ifdef Q_OS_WIN
     // Windows 11 redondea (o no) las esquinas de las ventanas con el marco de Kaint al momento.
     WindowFrame::setRoundedCorners(m_settings.roundedWindows());

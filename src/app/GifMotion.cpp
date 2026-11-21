@@ -10,6 +10,7 @@
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -546,6 +547,67 @@ void Inspector::jump(Motion::Prop prop, int direction)
             best = k.t;
     if (best >= 0)
         m_editor->selectKeyTime(best);
+}
+
+// ---------------------------------------------------------------------------
+// Peso y duración del GIF
+// ---------------------------------------------------------------------------
+
+SizeMeter::SizeMeter(QWidget* parent)
+    : QWidget(parent)
+{
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+}
+
+QSize SizeMeter::sizeHint() const
+{
+    return {fontMetrics().horizontalAdvance(QStringLiteral("≈ 00,0 MB · 00:00,0 s")) + 96, std::max(22, fontMetrics().height() + 6)};
+}
+
+void SizeMeter::setEstimate(qint64 bytes, int durationMs, int frames)
+{
+    m_bytes = bytes;
+    m_duration = durationMs;
+    m_frames = frames;
+    const QLocale locale;
+    const double mb = std::max<qint64>(0, bytes) / (1024.0 * 1024.0);
+    QString tip = GifEditor::tr("Peso aproximado del GIF exportado: %1 MB, %2 fotogramas, %3 s.")
+                      .arg(locale.toString(mb, 'f', 1))
+                      .arg(frames)
+                      .arg(locale.toString(durationMs / 1000.0, 'f', 1));
+    if (bytes >= kLimit)
+        tip += QLatin1Char('\n') + GifEditor::tr("Pesa mucho: Discord no deja enviar más de 10 MB sin Nitro y tarda en cargar. "
+                                                  "Acorta la animación, reduce el tamaño de la imagen, usa menos fotogramas por segundo "
+                                                  "o expórtala como vídeo MP4.");
+    else if (bytes >= kLimit * 6 / 10)
+        tip += QLatin1Char('\n') + GifEditor::tr("Se acerca a los 10 MB (el límite de Discord sin Nitro).");
+    setToolTip(tip);
+    update();
+}
+
+void SizeMeter::paintEvent(QPaintEvent*)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QPalette pal = palette();
+    const QRectF bar(1, height() / 2.0 - 4, 84, 8);
+    p.setPen(Qt::NoPen);
+    p.setBrush(pal.color(QPalette::Mid));
+    p.drawRoundedRect(bar, 4, 4);
+    const double f = m_bytes < 0 ? 0 : std::clamp(double(m_bytes) / kLimit, 0.0, 1.0);
+    const QColor color = m_bytes >= kLimit ? QColor(220, 50, 47) : m_bytes >= kLimit * 6 / 10 ? QColor(230, 170, 20) : QColor(60, 180, 90);
+    if (f > 0) {
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(bar.left(), bar.top(), std::max(8.0, bar.width() * f), bar.height()), 4, 4);
+    }
+    const QLocale locale;
+    const QString text = m_bytes < 0 ? QStringLiteral("…")
+                                     : QStringLiteral("%1%2 MB · %3 s")
+                                           .arg(m_bytes >= kLimit ? QStringLiteral("⚠ ") : QStringLiteral("≈ "))
+                                           .arg(locale.toString(m_bytes / (1024.0 * 1024.0), 'f', 1))
+                                           .arg(locale.toString(m_duration / 1000.0, 'f', 1));
+    p.setPen(m_bytes >= kLimit ? color : pal.color(QPalette::WindowText));
+    p.drawText(QRectF(bar.right() + 6, 0, width() - bar.right() - 6, height()), Qt::AlignVCenter | Qt::AlignLeft, text);
 }
 
 }  // namespace GifEdit

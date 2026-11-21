@@ -6,6 +6,7 @@
 #include "app/AppState.h"
 #include "app/Canvas.h"
 #include "app/DiscordPresence.h"
+#include "app/GifExport.h"
 #include "app/IconPacks.h"
 #include "app/Icons.h"
 #include "app/MainWindow.h"
@@ -3783,6 +3784,35 @@ int main(int argc, char** argv)
         CHECK(std::abs(canvas->viewRotation() - 75) < 1e-9);
         canvas->setViewRotation(0);
         CHECK(canvas->toLogical(QPointF(10, 20)) == QPointF(10, 20));
+    }
+
+    // Exportar la animación como vídeo (con FFmpeg, si está): MP4 y WebM con la duración de los
+    // fotogramas y las repeticiones.
+    if (!GifExport::ffmpegPath().isEmpty()) {
+        QTemporaryDir dir;
+        QList<Gif::Frame> frames;
+        for (int i = 0; i < 4; ++i) {
+            Gif::Frame f;
+            f.image = QImage(31, 17, QImage::Format_ARGB32);
+            f.image.fill(QColor::fromHsv(i * 80, 200, 220, i == 0 ? 0 : 255));
+            f.delayMs = 100;
+            frames << f;
+        }
+        GifExport::VideoOptions options;
+        options.repeat = 2;
+        options.scale = 2;
+        QString error;
+        for (GifExport::Format format : {GifExport::Format::Mp4, GifExport::Format::WebM}) {
+            const QString path = dir.filePath(QStringLiteral("salida.") + GifExport::extension(format));
+            const bool ok = GifExport::encode(frames, format, path, 0, 90, options, nullptr, &error);
+            if (!ok)
+                std::printf("Exportar %s: %s\n", qPrintable(GifExport::extension(format)), qPrintable(error));
+            CHECK(ok && QFileInfo(path).size() > 200);
+        }
+        const QString webp = dir.filePath(QStringLiteral("salida.webp"));
+        CHECK(GifExport::encode(frames, GifExport::Format::WebP, webp, 0, 90, options, nullptr, &error) && QFileInfo(webp).size() > 100);
+    } else {
+        std::printf("Se omite exportar vídeo: no está FFmpeg\n");
     }
 
     std::printf("Historial: %d pasos · capas: %d\n", int(doc->undoStack()->count()), doc->layerCount());

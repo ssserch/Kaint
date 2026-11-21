@@ -1,7 +1,10 @@
 #pragma once
 
+#include "core/Gif.h"
+
 #include <QByteArray>
 #include <QImage>
+#include <QList>
 #include <QString>
 
 // Formatos modernos con códecs propios (como paint.rs), si Kaint se compiló con sus bibliotecas:
@@ -16,6 +19,10 @@ bool canWrite(const QString& suffix);
 QImage decode(const QString& suffix, const QByteArray& data, QString* error);
 // 'quality' de 0 a 100; 100, sin pérdida (WebP y JPEG XL) o la máxima calidad (AVIF).
 QByteArray encode(const QString& suffix, const QImage& image, int quality, QString* error);
+// WebP animado (libwebpmux), para exportar desde el editor de GIF: 'quality' 100, sin pérdida;
+// 'loops' 0, se repite siempre.
+bool canWriteAnimatedWebP();
+QByteArray encodeAnimatedWebP(const QList<Gif::Frame>& frames, int quality, int loops, QString* error);
 // Para Ayuda > Acerca de y los diagnósticos: los que están ("WebP, AVIF, JPEG XL, HEIC").
 QString available();
 

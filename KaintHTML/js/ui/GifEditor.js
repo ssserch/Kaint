@@ -8,12 +8,14 @@
 // opacidad: el panel de la derecha, su gráfica y los rombos bajo la línea de tiempo.
 import { Layer } from "../core/Document.js";
 import { delayFromName, nameWithDelay } from "../core/Codecs.js";
-import { openFile, OpenAccept } from "../core/ImageIO.js";
+import { animationFrames, download, openFile, OpenAccept } from "../core/ImageIO.js";
+import { canEncodeMp4, canEncodeWebp, encodeAnimatedWebp, encodeApng, encodeMp4, recordVideo } from "../core/AnimExport.js";
+import { defaultSaveOptions, encodeAnimation } from "../core/Encode.js";
 import * as Motion from "../core/Motion.js";
 import { context, createCanvas, imageSignature, thumbnail } from "../core/Raster.js";
-import { tr, trn } from "../i18n.js";
+import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action } from "./Actions.js";
-import { el, message, promptNumber } from "./Dialogs.js";
+import { Dialog, el, message, promptNumber } from "./Dialogs.js";
 import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
 
@@ -140,7 +142,22 @@ export class GifEditor {
         const inspectorToggle = button(tr("Animación"), tr("Puntos clave del fotograma elegido"),
                                        () => { this.root.classList.toggle("inspector-open"); this.refreshInspector(); }, "gif-inspector-toggle");
         inspectorToggle.prepend(el("span", { className: "gif-diamond" }));
-        const head = el("div", { className: "gif-head" }, [this.title, inspectorToggle, back, exportButton]);
+        // Otros formatos: PNG animado, WebP animado y vídeo MP4.
+        const exportMore = button("▾", tr("Exportar en otro formato: PNG animado, WebP animado o vídeo MP4"), () => {
+            const r = exportMore.getBoundingClientRect();
+            popupMenu([
+                { text: tr("GIF..."), run: () => this.app.save(this.app.doc, true, "gif") },
+                { text: tr("PNG animado (APNG)..."), run: () => this.exportAs("apng") },
+                { text: tr("WebP animado..."), run: () => this.exportAs("webp") },
+                { text: tr("Vídeo MP4..."), run: () => this.exportAs("mp4") },
+            ], r.left, r.bottom);
+        }, "pushbutton gif-export-more");
+        // Cuánto pesará el GIF y cuánto dura, con una barrita que avisa si pesa demasiado.
+        this.sizeFill = el("div", { className: "fill" });
+        this.sizeText = el("span", { textContent: "…" });
+        this.sizeMeter = el("div", { className: "gif-size" }, [el("div", { className: "bar" }, [this.sizeFill]), this.sizeText]);
+        const head = el("div", { className: "gif-head" }, [this.title, this.sizeMeter, inspectorToggle, back,
+                                                            el("span", { className: "gif-split" }, [exportButton, exportMore])]);
 
         // Biblioteca
         this.mediaList = el("div", { className: "gif-media-list", title: tr("Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final).") });
@@ -1952,5 +1969,130 @@ export class GifEditor {
         this.drawPreview();
         this.renderTimeline();
         this.refreshInspector();
+        clearTimeout(this.sizeTimer);
+        this.sizeTimer = setTimeout(() => this.estimateSize(), 600);
+    }
+
+    // --- Peso del GIF y exportar en otros formatos -------------------------------------------
+
+    // El peso aproximado del GIF exportado (unos fotogramas de muestra codificados) y lo que dura,
+    // con la barrita que se llena hacia los 10 MB (el límite de Discord sin Nitro).
+    estimateSize() {
+        const doc = this.doc;
+        if (!doc || this.root.hidden)
+            return;
+        const key = `${doc.history.index}:${doc.width}x${doc.height}:${doc.layers.map((l) => `${l.name}${l.visible ? 1 : 0}`).join("|")}`;
+        if (key === this.sizeKey)
+            return;
+        this.sizeKey = key;
+        const shown = doc.layers.filter((l) => l.visible);
+        let frames = 0, duration = 0;
+        for (const l of shown) {
+            const d = delayOf(l), step = Math.max(10, l.motion?.step || 50);
+            duration += d;
+            frames += Motion.isAnimated(l.motion) ? Math.max(1, Math.ceil(d / step)) : 1;
+        }
+        let bytes = 0;
+        const samples = Math.min(4, shown.length);
+        if (samples) {
+            // Las grandes, reducidas (el peso crece con el área).
+            const factor = Math.max(1, (doc.width * doc.height) / 200000);
+            const w = Math.max(1, Math.round(doc.width / Math.sqrt(factor))), h = Math.max(1, Math.round(doc.height / Math.sqrt(factor)));
+            let sampled = 0;
+            for (let i = 0; i < samples; ++i) {
+                const layer = shown[Math.floor((i * shown.length) / samples)];
+                const c = createCanvas(w, h), g = context(c);
+                g.drawImage(layer.canvas, 0, 0, w, h);
+                const data = g.getImageData(0, 0, w, h).data;
+                sampled += encodeAnimation([{ width: w, height: h, data, delay: 100 }], defaultSaveOptions()).length * factor;
+            }
+            bytes = 800 + (sampled / samples) * frames;
+        }
+        const limit = 10 * 1024 * 1024, mb = bytes / (1024 * 1024);
+        const lang = currentLanguage() === "es" || currentLanguage() === "pt-BR" ? currentLanguage() : "en";
+        const fmt = (v) => v.toLocaleString(lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        this.sizeFill.style.width = `${Math.min(100, (bytes / limit) * 100)}%`;
+        this.sizeMeter.classList.toggle("warn", bytes >= limit * 0.6 && bytes < limit);
+        this.sizeMeter.classList.toggle("over", bytes >= limit);
+        this.sizeText.textContent = `${bytes >= limit ? "⚠" : "≈"} ${fmt(mb)} MB · ${fmt(duration / 1000)} s`;
+        let tip = tr("Peso aproximado del GIF exportado: %1 MB, %2 fotogramas, %3 s.", fmt(mb), frames, fmt(duration / 1000));
+        if (bytes >= limit)
+            tip += `\n${tr("Pesa mucho: Discord no deja enviar más de 10 MB sin Nitro y tarda en cargar. Acorta la animación, reduce el tamaño de la imagen, usa menos fotogramas por segundo o expórtala como vídeo MP4.")}`;
+        else if (bytes >= limit * 0.6)
+            tip += `\n${tr("Se acerca a los 10 MB (el límite de Discord sin Nitro).")}`;
+        this.sizeMeter.title = tip;
+        this.sizeBytes = bytes;
+    }
+
+    // Exportar como PNG animado, WebP animado o vídeo MP4 (GifExport de Kaint): las opciones y el archivo.
+    async exportAs(kind) {
+        const doc = this.doc;
+        if (!doc)
+            return;
+        this.stop();
+        const frames = animationFrames(doc, 100, false).filter((f) => !f.hidden);
+        if (!frames.length)
+            return;
+        if (kind === "webp" && !(await canEncodeWebp())) {
+            await message(tr("Exportar"), tr("Este navegador no sabe comprimir WebP."), "dialog-warning");
+            return;
+        }
+        const total = frames.reduce((a, f) => a + Math.max(1, f.delay || 100), 0);
+        const names = { apng: tr("PNG animado"), webp: tr("WebP animado"), mp4: "MP4" };
+        const dlg = new Dialog(tr("Exportar como %1", names[kind]), { iconName: "document-save-as" });
+        const form = el("div", { className: "form-grid gif-export-form" });
+        const row = (label, control) => form.append(el("label", { textContent: label }), control);
+        const repeat = el("input", { type: "number", min: 1, max: 100, value: Math.min(20, Math.max(1, Math.ceil(5000 / total))), style: { width: "70px" } });
+        const length = el("span");
+        const syncLength = () => (length.textContent = tr("%1 s", ((total * Math.max(1, +repeat.value || 1)) / 1000).toFixed(1)));
+        repeat.addEventListener("input", syncLength);
+        syncLength();
+        const scale = el("select", {}, [1, 2, 3, 4].map((f) => el("option", { value: f, textContent: `${f * 100} % (${doc.width * f} × ${doc.height * f})` })));
+        scale.title = tr("Más grande sin suavizar (para pixel art: los vídeos pequeños se ven borrosos).");
+        const quality = el("select", {}, [tr("Alta"), tr("Media"), tr("Baja (archivo más pequeño)")].map((t, i) => el("option", { value: i, textContent: t })));
+        const webpQuality = el("input", { type: "number", min: 1, max: 100, value: 90, style: { width: "70px" }, title: tr("100: sin pérdida.") });
+        const background = el("select", {}, [["#ffffff", tr("Blanco")], ["#000000", tr("Negro")]].map(([v, t]) => el("option", { value: v, textContent: t })));
+        background.title = tr("El MP4 no tiene transparencia: lo transparente va sobre este color (blanco o negro).");
+        if (kind === "mp4") {
+            row(tr("Repetir la animación:"), el("span", {}, [repeat, ` ${tr("veces")} · `, length]));
+            row(tr("Calidad:"), quality);
+            row(tr("Fondo:"), background);
+        }
+        if (kind === "webp")
+            row(tr("Calidad:"), webpQuality);
+        row(tr("Tamaño:"), scale);
+        dlg.body.append(form, el("p", { className: "note", textContent: kind === "apng" ? tr("Sin pérdida y con transparencia de 8 bits; lo abren los navegadores y Discord.")
+            : kind === "webp" ? tr("Con transparencia y mucho más ligero que el GIF.") : tr("H.264: se ve en cualquier teléfono, navegador y red social.") }));
+        dlg.addButton(tr("Exportar"), "ok", { isDefault: true });
+        dlg.addButton(tr("Cancelar"), null);
+        if ((await dlg.exec()) !== "ok")
+            return;
+        const base = doc.displayName().replace(/\.[^.]+$/, "");
+        const title = this.title.textContent;
+        const progress = (f) => (this.title.textContent = tr("Exportando… %1 %", Math.round(f * 100)));
+        document.body.classList.add("busy");
+        try {
+            let blob, ext = kind === "apng" ? "png" : kind;
+            const f = +scale.value;
+            if (kind === "apng")
+                blob = new Blob([await encodeApng(frames, { loops: doc.gifLoops ?? 0, scale: f })], { type: "image/apng" });
+            else if (kind === "webp")
+                blob = new Blob([await encodeAnimatedWebp(frames, { quality: +webpQuality.value, loops: doc.gifLoops ?? 0, scale: f })], { type: "image/webp" });
+            else if (canEncodeMp4())
+                blob = new Blob([await encodeMp4(frames, { repeat: +repeat.value || 1, scale: f, quality: +quality.value, background: background.value, onProgress: progress })],
+                                { type: "video/mp4" });
+            else {
+                const r = await recordVideo(frames, { repeat: +repeat.value || 1, scale: f, background: background.value, onProgress: progress });
+                blob = r.blob;
+                ext = r.ext;
+            }
+            this.lastExport = blob;
+            download(blob, `${base}.${ext}`);
+        } catch (e) {
+            await message(tr("Exportar"), tr("No se pudo exportar:\n%1", String(e?.message || e)), "dialog-warning");
+        } finally {
+            document.body.classList.remove("busy");
+            this.title.textContent = title;
+        }
     }
 }

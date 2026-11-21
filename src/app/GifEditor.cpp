@@ -809,14 +809,34 @@ void GifEditor::buildUi()
     auto* back = new QPushButton(Icons::theme({"draw-brush", "applications-graphics"}), tr("Editor de imágenes"), this);
     back->setToolTip(tr("Vuelve a editar esta imagen con las herramientas (cada fotograma es una capa)."));
     connect(back, &QPushButton::clicked, this, &GifEditor::imageEditorRequested);
-    auto* exportButton = new QPushButton(Icons::theme({"document-export", "document-save-as"}), tr("Exportar GIF..."), this);
+    // Exportar: el GIF (con la configuración de siempre) o, en el menú de la flecha, otros formatos.
+    auto* exportButton = new QToolButton(this);
+    exportButton->setIcon(Icons::theme({"document-export", "document-save-as"}));
+    exportButton->setText(tr("Exportar GIF..."));
+    exportButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    exportButton->setPopupMode(QToolButton::MenuButtonPopup);
     exportButton->setToolTip(tr("Guarda la animación como GIF, con la configuración de siempre (paleta, duración, "
-                                "repeticiones, efectos...)."));
-    connect(exportButton, &QPushButton::clicked, this, &GifEditor::exportRequested);
+                                "repeticiones, efectos...). En la flecha, otros formatos: PNG animado, WebP animado y vídeo "
+                                "MP4 o WebM."));
+    connect(exportButton, &QToolButton::clicked, this, [this] { emit exportRequested(QStringLiteral("gif")); });
+    auto* exportMenu = new QMenu(exportButton);
+    for (const auto& [format, text] : {std::pair{QStringLiteral("gif"), tr("GIF...")},
+                                       std::pair{QStringLiteral("apng"), tr("PNG animado (APNG)...")},
+                                       std::pair{QStringLiteral("webp"), tr("WebP animado...")},
+                                       std::pair{QStringLiteral("mp4"), tr("Vídeo MP4...")},
+                                       std::pair{QStringLiteral("webm"), tr("Vídeo WebM...")}})
+        exportMenu->addAction(text, this, [this, format] { emit exportRequested(format); });
+    exportButton->setMenu(exportMenu);
+    // Cuánto pesará el GIF y cuánto dura, con una barrita que avisa si pesa demasiado.
+    m_sizeMeter = new GifEdit::SizeMeter(this);
+    m_sizeTimer.setSingleShot(true);
+    m_sizeTimer.setInterval(600);
+    connect(&m_sizeTimer, &QTimer::timeout, this, &GifEditor::estimateSize);
     auto* icon = new QLabel(this);
     icon->setPixmap(Icons::theme({"video-x-generic", "image-gif", "media-playback-start"}).pixmap(20, 20));
     head->addWidget(icon);
     head->addWidget(m_title, 1);
+    head->addWidget(m_sizeMeter);
     head->addWidget(back);
     head->addWidget(exportButton);
     root->addLayout(head);
@@ -1398,9 +1418,57 @@ void GifEditor::updateState()
     if (m_inspector)
         m_inspector->refresh();
     updateMotionPath();
+    m_sizeTimer.start();
     // El cabezal siempre a la vista mientras se reproduce.
     if (m_playing)
         m_timelineScroll->ensureVisible(m_timeline->xForTime(m_time), kTrackTop, 60, 0);
+}
+
+void GifEditor::estimateSize()
+{
+    if (!m_doc || !isVisible() || !m_sizeMeter)
+        return;
+    // Solo si algo cambió (otro paso del historial, otro tamaño u otras duraciones).
+    QString key = QStringLiteral("%1:%2x%3:").arg(m_doc->undoStack()->index()).arg(m_doc->size().width()).arg(m_doc->size().height());
+    for (const LayerPtr& l : m_doc->layers())
+        key += l->props.name + QLatin1Char(l->props.visible ? '1' : '0');
+    if (key == m_sizeKey)
+        return;
+    m_sizeKey = key;
+    // Los fotogramas que tendrá (con los de los puntos clave, sin dibujarlos) y unos de muestra.
+    QList<const Layer*> shown;
+    int frames = 0, duration = 0;
+    for (const LayerPtr& l : m_doc->layers()) {
+        if (!l->props.visible)
+            continue;
+        const int delay = GifEdit::delayOf(l.get());
+        duration += delay;
+        const auto& m = l->props.motion;
+        frames += m && m->animated() ? std::max(1, (delay + std::max(10, m->stepMs) - 1) / std::max(10, m->stepMs)) : 1;
+        shown << l.get();
+    }
+    if (shown.isEmpty()) {
+        m_sizeMeter->setEstimate(0, 0, 0);
+        return;
+    }
+    const int samples = std::min<int>(4, shown.size());
+    qint64 sampled = 0;
+    for (int i = 0; i < samples; ++i) {
+        const Layer* layer = shown[int(qint64(i) * shown.size() / samples)];
+        QImage image = layer->image;
+        // Las grandes, reducidas (el peso crece con el área).
+        double factor = 1;
+        const qint64 area = qint64(image.width()) * image.height();
+        if (area > 300000) {
+            factor = double(area) / 300000;
+            image = image.scaled(image.size() / std::sqrt(factor), Qt::IgnoreAspectRatio, Qt::FastTransformation);
+        }
+        Gif::Frame f;
+        f.image = image;
+        QString error;
+        sampled += qint64(Gif::encode({f}, Gif::Options(), &error).size() * factor);
+    }
+    m_sizeMeter->setEstimate(800 + sampled / samples * frames, duration, frames);
 }
 
 void GifEditor::updateTimeLabel()

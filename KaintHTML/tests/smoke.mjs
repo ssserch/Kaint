@@ -1290,6 +1290,60 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           && r.active === 1, `iconos con sus versiones como capas (${JSON.stringify(r)})`);
 }
 
+// Exportar la animación en otros formatos (PNG animado, WebP animado y MP4) y el peso del GIF.
+{
+    const r = await page.evaluate(async () => {
+        const X = await import("./js/core/AnimExport.js");
+        const frames = [0, 1, 2].map((i) => {
+            const data = new Uint8ClampedArray(30 * 20 * 4);
+            for (let p = 0; p < data.length; p += 4) {
+                data[p] = i * 100; data[p + 1] = 80; data[p + 2] = 200 - i * 50; data[p + 3] = i ? 255 : 128;
+            }
+            return { width: 30, height: 20, data, delay: 100 + i * 20 };
+        });
+        const out = {};
+        const apng = await X.encodeApng(frames, { scale: 2 });
+        const text = String.fromCharCode(...apng.subarray(0, 200));
+        out.apng = text.includes("acTL") && text.includes("IHDR");
+        const bitmap = await createImageBitmap(new Blob([apng], { type: "image/png" }));
+        out.apngSize = `${bitmap.width}x${bitmap.height}`;
+        if (await X.canEncodeWebp()) {
+            const webp = await X.encodeAnimatedWebp(frames);
+            const s = String.fromCharCode(...webp);
+            out.webp = s.startsWith("RIFF") && s.split("ANMF").length - 1 === 3;
+        } else {
+            out.webp = true;
+        }
+        if (X.canEncodeMp4()) {
+            try {
+                const mp4 = await X.encodeMp4(frames, { repeat: 2, scale: 2 });
+                const s = String.fromCharCode(...mp4.subarray(0, 4000));
+                out.mp4 = s.includes("ftyp") && s.includes("moov") && s.includes("avcC");
+            } catch (e) {
+                // (Chromium sin el códec H.264, como el de Playwright: se comprueba en los navegadores.)
+                out.mp4 = /H\.264|codec|support/i.test(String(e?.message || e)) ? "sin H.264" : String(e?.message || e);
+            }
+        } else {
+            out.mp4 = "sin WebCodecs";
+        }
+        // El peso: un GIF abierto en el editor.
+        const { Document, Layer } = await import("./js/core/Document.js");
+        const k = window.kaint, doc = new Document(120, 90, { background: null });
+        doc.layers[0].name = "Fotograma 1 (100ms)";
+        for (let i = 2; i <= 3; i++)
+            doc.layers.push(new Layer(120, 90, `Fotograma ${i} (300ms)`));
+        k.addDocument(doc);
+        k.toggleGifEditor(true);
+        k.gifEditor.sizeKey = null;
+        k.gifEditor.estimateSize();
+        out.meter = k.gifEditor.sizeText.textContent;
+        k.toggleGifEditor(false);
+        return out;
+    });
+    check(r.apng && r.apngSize === "60x40" && r.webp && (r.mp4 === true || r.mp4 === "sin H.264" || r.mp4 === "sin WebCodecs") && /0[.,]7 s/.test(r.meter),
+          `exportar PNG animado, WebP animado y MP4 (${JSON.stringify(r)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

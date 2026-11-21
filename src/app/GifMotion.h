@@ -92,4 +92,25 @@ private:
     bool m_updating = false;
 };
 
+// El peso aproximado del GIF exportado y lo que dura, con una barrita que se llena hacia los 10 MB
+// (el límite de Discord sin Nitro): verde, amarilla y roja cuando ya pesa demasiado.
+class SizeMeter : public QWidget {
+    Q_OBJECT
+public:
+    explicit SizeMeter(QWidget* parent = nullptr);
+    // 'bytes' < 0: sin calcular todavía.
+    void setEstimate(qint64 bytes, int durationMs, int frames);
+    qint64 bytes() const { return m_bytes; }
+    QSize sizeHint() const override;
+    static constexpr qint64 kLimit = 10ll * 1024 * 1024;
+
+protected:
+    void paintEvent(QPaintEvent* e) override;
+
+private:
+    qint64 m_bytes = -1;
+    int m_duration = 0;
+    int m_frames = 0;
+};
+
 }  // namespace GifEdit

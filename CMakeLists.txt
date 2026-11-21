@@ -174,6 +174,7 @@ add_library(kaintcore STATIC
     src/core/FloodFill.cpp
     src/core/Gif.cpp
     src/core/Motion.cpp
+    src/core/Apng.cpp
     src/core/ModernFormats.cpp
     src/core/ImageIO.cpp
     src/core/LayerEdit.cpp
@@ -229,7 +230,7 @@ if(KAINT_MODERN_CODECS)
     find_package(PkgConfig QUIET)
     if(PKG_CONFIG_FOUND)
         set(_kaint_codecs "")
-        foreach(codec IN ITEMS "WEBP;libwebp" "AVIF;libavif" "JXL;libjxl" "HEIF;libheif")
+        foreach(codec IN ITEMS "WEBP;libwebp" "WEBPMUX;libwebpmux" "AVIF;libavif" "JXL;libjxl" "HEIF;libheif")
             list(GET codec 0 name)
             list(GET codec 1 module)
             pkg_check_modules(KAINT_${name} QUIET IMPORTED_TARGET ${module})
@@ -263,6 +264,7 @@ add_library(kaintui STATIC
     src/app/VideoFrames.cpp
     src/app/GifEditor.cpp
     src/app/GifMotion.cpp
+    src/app/GifExport.cpp
     src/app/widgets/BrushAdvanced.cpp
     src/app/Icons.cpp
     src/app/MainWindow.cpp

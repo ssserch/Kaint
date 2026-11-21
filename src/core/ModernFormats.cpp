@@ -11,6 +11,9 @@
 #include <webp/decode.h>
 #include <webp/encode.h>
 #endif
+#ifdef KAINT_HAVE_WEBPMUX
+#include <webp/mux.h>
+#endif
 #ifdef KAINT_HAVE_AVIF
 #include <avif/avif.h>
 #endif
@@ -372,6 +375,79 @@ QByteArray encode(const QString& suffix, const QImage& image, int quality, QStri
         return encodeJxl(image, quality, error);
 #endif
     return {};
+}
+
+bool canWriteAnimatedWebP()
+{
+#ifdef KAINT_HAVE_WEBPMUX
+    return true;
+#else
+    return false;
+#endif
+}
+
+QByteArray encodeAnimatedWebP(const QList<Gif::Frame>& frames, int quality, int loops, QString* error)
+{
+#ifdef KAINT_HAVE_WEBPMUX
+    QList<const Gif::Frame*> shown;
+    for (const Gif::Frame& f : frames)
+        if (!f.hidden && !f.image.isNull())
+            shown << &f;
+    if (shown.isEmpty()) {
+        setError(error, QObject::tr("No hay fotogramas que guardar."));
+        return {};
+    }
+    const QSize size = shown.first()->image.size();
+    WebPAnimEncoderOptions options;
+    if (!WebPAnimEncoderOptionsInit(&options))
+        return {};
+    options.anim_params.loop_count = std::max(0, loops);
+    // (Sin mezclar tipos: con calidad 100, todo sin pérdida.)
+    options.allow_mixed = 0;
+    WebPAnimEncoder* encoder = WebPAnimEncoderNew(size.width(), size.height(), &options);
+    if (!encoder) {
+        setError(error, QObject::tr("No se pudo comprimir el WebP."));
+        return {};
+    }
+    WebPConfig config;
+    WebPConfigInit(&config);
+    config.lossless = quality >= 100 ? 1 : 0;
+    config.quality = float(std::clamp(quality, 0, 100));
+    int timestamp = 0;
+    bool ok = true;
+    for (const Gif::Frame* f : std::as_const(shown)) {
+        QImage image = straight(f->image);
+        if (image.size() != size)
+            image = image.copy(QRect(QPoint(0, 0), size));
+        WebPPicture picture;
+        WebPPictureInit(&picture);
+        picture.use_argb = 1;
+        picture.width = size.width();
+        picture.height = size.height();
+        ok = WebPPictureImportBGRA(&picture, image.constBits(), image.bytesPerLine())
+             && WebPAnimEncoderAdd(encoder, &picture, timestamp, &config);
+        WebPPictureFree(&picture);
+        if (!ok)
+            break;
+        timestamp += std::max(1, f->delayMs);
+    }
+    WebPData data;
+    WebPDataInit(&data);
+    QByteArray out;
+    if (ok && WebPAnimEncoderAdd(encoder, nullptr, timestamp, nullptr) && WebPAnimEncoderAssemble(encoder, &data))
+        out = QByteArray(reinterpret_cast<const char*>(data.bytes), qsizetype(data.size));
+    WebPDataClear(&data);
+    WebPAnimEncoderDelete(encoder);
+    if (out.isEmpty())
+        setError(error, QObject::tr("No se pudo comprimir el WebP."));
+    return out;
+#else
+    Q_UNUSED(frames);
+    Q_UNUSED(quality);
+    Q_UNUSED(loops);
+    setError(error, QObject::tr("Kaint se compiló sin libwebpmux."));
+    return {};
+#endif
 }
 
 QString available()

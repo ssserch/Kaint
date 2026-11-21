@@ -17,6 +17,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
+import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -106,6 +107,14 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setTextZoom(100);
+
+        // Rendimiento: la WebView dibuja con la GPU, en su propia capa, y no baja su prioridad
+        // mientras Kaint se ve (el trazo y el zum no se quedan atrás).
+        web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        if (Build.VERSION.SDK_INT >= 26)
+            web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true);
+        if (Build.VERSION.SDK_INT >= 23)
+            s.setOffscreenPreRaster(true);
 
         web.addJavascriptInterface(new Bridge(), "KaintAndroid");
         web.setWebViewClient(new WebViewClient() {

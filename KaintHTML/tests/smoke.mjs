@@ -1400,6 +1400,51 @@ check(misc.light === 200 && misc.dark === 150 && misc.classic && misc.custom && 
           `simetría, formas rápidas y formas propias (${JSON.stringify(r)})`);
 }
 
+// La composición de la vista con las capas de debajo y de encima de la activa ya compuestas es igual
+// que la de siempre (también tras cambiar una capa de debajo y con un modo de fusión encima).
+{
+    const r = await page.evaluate(async () => {
+        const { Document, Layer } = await import("./js/core/Document.js");
+        const k = window.kaint, doc = new Document(64, 48, { background: null });
+        const colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff"];
+        doc.layers[0].ctx.fillStyle = "#808080";
+        doc.layers[0].ctx.fillRect(0, 0, 64, 48);
+        colors.forEach((c, i) => {
+            const l = new Layer(64, 48, `C${i}`);
+            l.ctx.fillStyle = c;
+            l.ctx.fillRect(i * 8, i * 6, 30, 20);
+            l.opacity = 160 + i * 20;
+            doc.layers.push(l);
+        });
+        k.addDocument(doc);
+        doc.setActiveIndex(2);
+        const same = () => {
+            const view = k.view;
+            view.updateComposite();
+            const a = doc.compositeCanvas.getContext("2d").getImageData(0, 0, 64, 48).data;
+            const b = doc.flattened().getContext("2d").getImageData(0, 0, 64, 48).data;
+            let worst = 0;
+            for (let i = 0; i < a.length; i++)
+                worst = Math.max(worst, Math.abs(a[i] - b[i]));
+            return worst;
+        };
+        const out = { first: same(), cached: !!k.view.layerCache };
+        doc.layers[1].ctx.fillStyle = "#00ffff";
+        doc.layers[1].ctx.fillRect(10, 10, 20, 20);
+        doc.pixelsChanged(doc.layers[1], { x: 10, y: 10, w: 20, h: 20 });
+        out.below = same();
+        doc.layers[4].blend = "multiply";
+        doc.layersChanged();
+        out.blend = same();
+        doc.activeLayer.ctx.fillStyle = "#000000";
+        doc.activeLayer.ctx.fillRect(0, 0, 5, 5);
+        doc.pixelsChanged(doc.activeLayer, { x: 0, y: 0, w: 5, h: 5 });
+        out.active = same();
+        return out;
+    });
+    check(r.cached && r.first <= 2 && r.below <= 2 && r.blend <= 2 && r.active <= 2, `composición con las capas ya compuestas (${JSON.stringify(r)})`);
+}
+
 // Todas las páginas de Configuración se abren sin errores.
 for (const id of ["interface", "canvas", "tools", "tablet", "performance", "plugins", "updates", "diagnostics", "iconpacks", "fonts", "shapes", "keyboard"]) {
     // Sin esperar al diálogo (se resuelve al cerrarlo).

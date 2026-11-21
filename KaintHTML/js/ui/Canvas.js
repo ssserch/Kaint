@@ -2,7 +2,7 @@
 // píxel de la imagen por píxel físico de la pantalla), el damero, la sombra, la cuadrícula de
 // píxeles, la selección con hormigas y lo que dibuje la herramienta; reparte el ratón a la
 // herramienta y se desplaza con la rueda, el botón central o la barra espaciadora.
-import { checkerPattern, clampRect, context, createCanvas, unionRect } from "../core/Raster.js";
+import { checkerPattern, clampRect, context, createCanvas, drawBlended, unionRect } from "../core/Raster.js";
 import { handCursor, icon, outlineCursor, paintMini, pdnCursors } from "./Icons.js";
 import { Settings } from "../Settings.js";
 import { pixelsPerUnit } from "./Units.js";
@@ -25,7 +25,10 @@ export class CanvasView extends EventTarget {
         super();
         this.canvas = canvas;
         this.workspace = workspace;
-        this.ctx = canvas.getContext("2d");
+        // En Android (Kaint.APK y el navegador), sin esperar al compositor: el trazo sigue al dedo con
+        // menos retraso.
+        const android = !!window.KaintAndroid || /Android/i.test(navigator.userAgent);
+        this.ctx = canvas.getContext("2d", android ? { desynchronized: true } : undefined);
         this.doc = null;
         this.tool = null;
         this.zoom = 1;
@@ -196,7 +199,10 @@ export class CanvasView extends EventTarget {
             doc.addEventListener(type, fn);
             this.listeners.push([type, fn]);
         };
-        on("pixels", (e) => this.invalidate(e.detail.rect));
+        on("pixels", (e) => {
+            this.noteLayerChange(e.detail.layer, e.detail.rect);
+            this.invalidate(e.detail.rect);
+        });
         on("layers", () => this.invalidate(null));
         on("selection", () => this.update());
         // Deshacer y rehacer cambian lo que hay bajo el puntero (el cuadro de la selección, la forma
@@ -240,7 +246,7 @@ export class CanvasView extends EventTarget {
         const dirty = doc.compositeDirty;
         if (dirty && dirty.w > 0 && dirty.h > 0) {
             const ctx = context(doc.compositeCanvas);
-            doc.composite(ctx, dirty);
+            this.compositeLayers(doc, ctx, dirty);
             // Con otro perfil de color, la imagen se ve convertida a sRGB (como Kaint).
             if (doc.colorProfile && !isSrgb(doc.colorProfile)) {
                 const part = ctx.getImageData(dirty.x, dirty.y, dirty.w, dirty.h);
@@ -250,6 +256,71 @@ export class CanvasView extends EventTarget {
             this.updateDisplay(doc, dirty);
         }
         doc.compositeDirty = null;
+    }
+
+    // La composición de las capas para la vista, como Document.composite, pero con las capas de
+    // debajo de la activa ya compuestas (y las de encima, si son todas normales: así se pueden
+    // juntar): al pintar en una imagen con muchas capas, cada fotograma compone tres lienzos en vez
+    // de todas las capas (lo que más tardaba en el teléfono).
+    compositeLayers(doc, ctx, rect) {
+        const layers = doc.layers, focus = doc.activeLayer, at = layers.indexOf(focus);
+        if (layers.length < 4 || at < 0 || (doc.preview && doc.preview.layer !== focus)) {
+            this.layerCache = null;
+            doc.composite(ctx, rect);
+            return;
+        }
+        const key = `${at}|${layers.map((l) => `${l.id}:${l.visible ? 1 : 0}:${l.opacity}:${l.blend}`).join(",")}`;
+        let c = this.layerCache;
+        if (!c || c.doc !== doc || c.key !== key || c.w !== doc.width || c.h !== doc.height || c.focus !== focus) {
+            const full = { x: 0, y: 0, w: doc.width, h: doc.height };
+            const aboveNormal = layers.slice(at + 1).every((l) => !l.visible || l.blend === "normal");
+            c = this.layerCache = { doc, key, focus, w: doc.width, h: doc.height, below: createCanvas(doc.width, doc.height),
+                                    above: aboveNormal ? createCanvas(doc.width, doc.height) : null, dirtyBelow: full, dirtyAbove: full };
+        }
+        const refresh = (canvas, from, to, r) => {
+            const g = context(canvas);
+            g.clearRect(r.x, r.y, r.w, r.h);
+            for (let i = from; i < to; i++)
+                if (layers[i].visible)
+                    drawBlended(g, layers[i].canvas, layers[i].blend, layers[i].opacity, r);
+        };
+        if (c.dirtyBelow) {
+            refresh(c.below, 0, at, clampRect(c.dirtyBelow, doc.width, doc.height));
+            c.dirtyBelow = null;
+        }
+        if (c.above && c.dirtyAbove) {
+            refresh(c.above, at + 1, layers.length, clampRect(c.dirtyAbove, doc.width, doc.height));
+            c.dirtyAbove = null;
+        }
+        ctx.clearRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.drawImage(c.below, rect.x, rect.y, rect.w, rect.h, rect.x, rect.y, rect.w, rect.h);
+        if (focus.visible)
+            drawBlended(ctx, doc.preview?.layer === focus ? doc.preview.canvas : focus.canvas, focus.blend, focus.opacity, rect);
+        if (c.above) {
+            ctx.drawImage(c.above, rect.x, rect.y, rect.w, rect.h, rect.x, rect.y, rect.w, rect.h);
+        } else {
+            for (let i = at + 1; i < layers.length; i++)
+                if (layers[i].visible)
+                    drawBlended(ctx, layers[i].canvas, layers[i].blend, layers[i].opacity, rect);
+        }
+    }
+
+    // Una capa cambió: la composición guardada de las de debajo o de encima de la activa se rehace en
+    // esa zona (los cambios de la activa no la tocan).
+    noteLayerChange(layer, rect) {
+        const c = this.layerCache;
+        if (!c || layer === c.focus)
+            return;
+        const r = rect || { x: 0, y: 0, w: c.w, h: c.h };
+        const i = layer ? c.doc.layers.indexOf(layer) : -1, at = c.doc.layers.indexOf(c.focus);
+        if (layer && i < 0) {
+            this.layerCache = null;
+            return;
+        }
+        if (!layer || i < at)
+            c.dirtyBelow = unionRect(c.dirtyBelow, r);
+        if (!layer || i > at)
+            c.dirtyAbove = unionRect(c.dirtyAbove, r);
     }
 
     // Lo que se dibuja en pantalla: una copia de la composición en un lienzo acelerado (la

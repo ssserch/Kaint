@@ -8,10 +8,14 @@
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QMutex>
 #include <QPainter>
+#include <QResizeEvent>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QThread>
 #include <QVariantAnimation>
+#include <QWaitCondition>
 
 #ifdef KAINT_HAVE_QTMULTIMEDIA
 #include <QAudioOutput>
@@ -44,6 +48,75 @@ QString introFile()
 }
 } // namespace
 
+// Cada fotograma del vídeo (1080p a 60 fps) se pasaba a QImage y se escalaba con suavizado en el
+// hilo de la interfaz: no daba tiempo y la intro iba a tirones (sobre todo en Windows, mientras
+// Kaint termina de abrirse). Ahora se convierte y se escala al tamaño de la ventana en un hilo
+// aparte; solo se queda el último que llega (si uno no se ha dibujado aún, se salta) y la interfaz
+// solo lo copia en la pantalla.
+struct IntroFrames {
+    QMutex mutex;
+    QWaitCondition wake;
+#ifdef KAINT_HAVE_QTMULTIMEDIA
+    QVideoFrame pending;
+#endif
+    bool hasPending = false;
+    bool closing = false;
+    QSize target;  // en píxeles de la pantalla
+    qreal dpr = 1;
+    QImage ready;
+    QWidget* owner = nullptr;
+    std::unique_ptr<QThread> thread;
+};
+
+namespace {
+#ifdef KAINT_HAVE_QTMULTIMEDIA
+// El fotograma escalado (sin deformar) para caber en 'target'.
+QImage fittedFrame(const QImage& image, QSize target, qreal dpr)
+{
+    const QSize size = image.size().scaled(target, Qt::KeepAspectRatio);
+    QImage out;
+    if (size == image.size() || size.isEmpty()) {
+        out = image.convertToFormat(QImage::Format_RGB32);
+    } else {
+        out = QImage(size, QImage::Format_RGB32);
+        QPainter p(&out);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.drawImage(QRect(QPoint(0, 0), size), image);
+    }
+    out.setDevicePixelRatio(dpr);
+    return out;
+}
+
+void convertFrames(IntroFrames* f)
+{
+    QMutexLocker lock(&f->mutex);
+    for (;;) {
+        while (!f->closing && !f->hasPending)
+            f->wake.wait(&f->mutex);
+        if (f->closing)
+            return;
+        QVideoFrame frame = f->pending;
+        f->pending = QVideoFrame();
+        f->hasPending = false;
+        const QSize target = f->target;
+        const qreal dpr = f->dpr;
+        lock.unlock();
+        QImage image = frame.toImage();
+        frame = QVideoFrame();
+        if (!image.isNull())
+            image = fittedFrame(image, target.isEmpty() ? image.size() : target, dpr);
+        lock.relock();
+        if (f->closing)
+            return;
+        if (image.isNull())
+            continue;
+        f->ready = image;
+        QMetaObject::invokeMethod(f->owner, [owner = f->owner] { owner->update(); }, Qt::QueuedConnection);
+    }
+}
+#endif
+} // namespace
+
 void Intro::start(QWidget* window, bool always, const QString& customVideo, std::function<void()> done)
 {
     QSettings settings;
@@ -70,6 +143,7 @@ void Intro::start(QWidget* window, bool always, const QString& customVideo, std:
 
 Intro::Intro(QWidget* window, bool skippable, const QString& video, std::function<void()> done)
     : QWidget(window)
+    , m_frames(std::make_shared<IntroFrames>())
     , m_skippable(skippable)
     , m_done(std::move(done))
 {
@@ -89,13 +163,22 @@ Intro::Intro(QWidget* window, bool skippable, const QString& video, std::functio
     player->setAudioOutput(audio);
     player->setVideoSink(sink);
     m_player = player;
-    connect(sink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame& frame) {
-        const QImage image = frame.toImage();
-        if (!image.isNull()) {
-            m_frame = image;
-            update();
+    m_frames->owner = this;
+    m_frames->dpr = devicePixelRatioF();
+    m_frames->target = (QSizeF(size()) * m_frames->dpr).toSize();
+    m_frames->thread.reset(QThread::create(convertFrames, m_frames.get()));
+    m_frames->thread->start();
+    // (Llega desde el hilo del reproductor: solo se guarda el fotograma y se avisa al de convertir.)
+    connect(sink, &QVideoSink::videoFrameChanged, sink, [frames = m_frames](const QVideoFrame& frame) {
+        {
+            QMutexLocker lock(&frames->mutex);
+            if (frames->closing)
+                return;
+            frames->pending = frame;
+            frames->hasPending = true;
         }
-    });
+        frames->wake.wakeOne();
+    }, Qt::DirectConnection);
     // Al terminar, desde su último fotograma; si no se puede reproducir, se va sin más.
     connect(player, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus status) {
         if (status == QMediaPlayer::EndOfMedia || status == QMediaPlayer::InvalidMedia)
@@ -112,6 +195,28 @@ Intro::Intro(QWidget* window, bool skippable, const QString& video, std::functio
     m_ticker.start();
 }
 
+Intro::~Intro()
+{
+    {
+        QMutexLocker lock(&m_frames->mutex);
+        m_frames->closing = true;
+#ifdef KAINT_HAVE_QTMULTIMEDIA
+        m_frames->pending = QVideoFrame();
+#endif
+    }
+    m_frames->wake.wakeAll();
+    if (m_frames->thread)
+        m_frames->thread->wait();
+}
+
+void Intro::resizeEvent(QResizeEvent* e)
+{
+    QWidget::resizeEvent(e);
+    QMutexLocker lock(&m_frames->mutex);
+    m_frames->dpr = devicePixelRatioF();
+    m_frames->target = (QSizeF(size()) * m_frames->dpr).toSize();
+}
+
 bool Intro::eventFilter(QObject* watched, QEvent* e)
 {
     if (watched == parentWidget() && e->type() == QEvent::Resize)
@@ -121,13 +226,29 @@ bool Intro::eventFilter(QObject* watched, QEvent* e)
 
 void Intro::paintEvent(QPaintEvent*)
 {
-    QPainter p(this);
-    p.fillRect(rect(), Qt::black);
-    if (!m_frame.isNull()) {
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        const QSize s = m_frame.size().scaled(size(), Qt::KeepAspectRatio);
-        p.drawImage(QRect(QPoint((width() - s.width()) / 2, (height() - s.height()) / 2), s), m_frame);
+    {
+        QMutexLocker lock(&m_frames->mutex);
+        if (!m_frames->ready.isNull())
+            m_frame = m_frames->ready;
     }
+    QPainter p(this);
+    QRegion bars(rect());
+    if (!m_frame.isNull()) {
+        // Ya viene a la medida: se copia tal cual (solo tras cambiar el tamaño de la ventana se
+        // escala aquí, hasta que llega el siguiente).
+        const QSizeF logical = QSizeF(m_frame.size()) / m_frame.devicePixelRatio();
+        const QSize s = logical.toSize().scaled(size(), Qt::KeepAspectRatio);
+        const QRect target(QPoint((width() - s.width()) / 2, (height() - s.height()) / 2), s);
+        if (target.size() == logical.toSize()) {
+            p.drawImage(target.topLeft(), m_frame);
+        } else {
+            p.setRenderHint(QPainter::SmoothPixmapTransform);
+            p.drawImage(target, m_frame);
+        }
+        bars -= target;
+    }
+    for (const QRect& r : bars)
+        p.fillRect(r, Qt::black);
     // La línea de saltar, de un extremo a otro.
     if (m_progress > 0) {
         p.fillRect(QRect(0, height() - 5, width(), 5), QColor(255, 255, 255, 40));

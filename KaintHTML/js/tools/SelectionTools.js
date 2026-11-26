@@ -298,6 +298,12 @@ export class MagicWandTool extends SelectTool {
         return !!this.draggingSeed;
     }
 
+    // La selección de la sesión aún no está en el historial: Deshacer la termina y la deshace (en
+    // una imagen recién abierta, sin pasos, Ctrl+Z estaba desactivado y no la quitaba).
+    hasPendingStep() {
+        return !!this.session;
+    }
+
     finish() {
         if (!this.session)
             return;

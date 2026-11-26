@@ -670,15 +670,23 @@ glibc_newer_than() {
     have=$(ldd --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+$' || true)
     [[ -n "$have" ]] && [[ "$(printf '%s\n%s\n' "$1" "$have" | sort -V | tail -n1)" == "$have" && "$have" != "$1" ]]
 }
-if (( DO_APPIMAGE && APPIMAGE_COMPAT && ! DO_MUSL && ! DO_ARM64 )) && [[ -z "${KAINT_IN_CONTAINER:-}" && "$OS_NAME" == linux ]] \
-    && [[ "$HOST_ARCH" == x86_64 ]] && glibc_newer_than 2.35; then
+# En un equipo aarch64 (o en GitHub, en ubuntu-24.04-arm), lo mismo con el Qt 6.8 oficial para arm64.
+if (( DO_APPIMAGE && APPIMAGE_COMPAT && ! DO_MUSL )) && [[ -z "${KAINT_IN_CONTAINER:-}" && "$OS_NAME" == linux ]] \
+    && { [[ "$HOST_ARCH" == x86_64 ]] && (( ! DO_ARM64 )) || [[ "$HOST_ARCH" == aarch64 ]]; } && glibc_newer_than 2.35; then
     tool=$(container_tool)
     if [[ -z "$tool" ]]; then
         echo "${c_yellow}Este sistema tiene una glibc más nueva que la 2.35: el AppImage solo funcionará en distribuciones igual de"
         echo "nuevas. Instala podman o docker para compilarlo en un contenedor de Ubuntu 22.04 (o usa --appimage-native).${c_reset}"
     else
         QT_COMPAT=6.8.3
+        if [[ "$HOST_ARCH" == aarch64 ]]; then
+            qt_host=linux_arm64 qt_arch=linux_gcc_arm64 qt_dir=gcc_arm64 platform=linux/arm64
+        else
+            qt_host=linux qt_arch=linux_gcc_64 qt_dir=gcc_64 platform=linux/amd64
+        fi
+        # (Lo descargado, aparte para cada arquitectura: Qt y Rust no sirven de una a otra.)
         cache="$PWD/build-appimage-cache"
+        [[ "$HOST_ARCH" == aarch64 ]] && cache="$PWD/build-appimage-cache-aarch64"
         mkdir -p "$cache"
         inner=(--appimage --appimage-native --opend2d "${OPEND2D:-latest}")
         (( DO_AVX2 )) && inner+=(--avx2)
@@ -702,20 +710,23 @@ update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 --slave /usr/
 ln -sf /usr/bin/gcc-12 /usr/bin/cc
 ln -sf /usr/bin/g++-12 /usr/bin/c++
 export HOME=/cache PATH=/cache/.cargo/bin:/cache/.local/bin:\$PATH
-if [ ! -x /cache/qt/$QT_COMPAT/gcc_64/bin/qmake ]; then
+if [ ! -x /cache/qt/$QT_COMPAT/$qt_dir/bin/qmake ]; then
     pip3 install -q --user aqtinstall
-    aqt install-qt -O /cache/qt linux desktop $QT_COMPAT linux_gcc_64 -m qtimageformats qtmultimedia
+    aqt install-qt -O /cache/qt $qt_host desktop $QT_COMPAT $qt_arch -m qtimageformats qtmultimedia
 fi
+qtdir=/cache/qt/$QT_COMPAT/$qt_dir
+# (Por si aqtinstall le da otro nombre a la carpeta.)
+[ -x \$qtdir/bin/qmake ] || qtdir=\$(dirname \$(dirname \$(ls /cache/qt/$QT_COMPAT/*/bin/qmake | head -n1)))
 if [ ! -x /cache/.cargo/bin/cargo ] && [ \"${OPEND2D:-latest}\" != off ]; then
     curl -sSf https://sh.rustup.rs | RUSTUP_INIT_SKIP_PATH_CHECK=yes sh -s -- -y -q --profile minimal >/dev/null 2>&1
 fi
 git config --global --add safe.directory '*'
-export CMAKE_PREFIX_PATH=/cache/qt/$QT_COMPAT/gcc_64
+export CMAKE_PREFIX_PATH=\$qtdir
 ./build.sh ${inner[*]}"
         echo "${c_bold}Compilando el AppImage en un contenedor de Ubuntu 22.04 (glibc 2.35, $tool)...${c_reset}"
-        echo "La primera vez descarga Qt $QT_COMPAT y Rust (en build-appimage-cache/): tarda un rato."
+        echo "La primera vez descarga Qt $QT_COMPAT y Rust (en $(basename "$cache")/): tarda un rato."
         STEP="compilar el AppImage en el contenedor"
-        "$tool" run --rm --platform linux/amd64 -v "$PWD:/src" -v "$cache:/cache" -w /src -e KAINT_IN_CONTAINER=1 \
+        "$tool" run --rm --platform "$platform" -v "$PWD:/src" -v "$cache:/cache" -w /src -e KAINT_IN_CONTAINER=1 \
             -e KAINT_BUILD_SUFFIX=-compat docker.io/library/ubuntu:22.04 bash -c "$setup"
         STEP=""
         built=$(ls -t build-appimage*-compat/Kaint-*.AppImage 2>/dev/null | head -n1 || true)

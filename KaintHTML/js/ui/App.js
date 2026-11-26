@@ -1311,7 +1311,8 @@ export class App extends EventTarget {
         A("collabSettings", tr("&Configuración de colaboración..."), "configure", null, () => settingsDialog(this, "collab"));
         A("closeAll", tr("Cerrar t&odas"), "document-close", "Ctrl+Shift+W", () => this.closeAll(), has);
         // Edición
-        A("undo", tr("&Deshacer"), "edit-undo", "Ctrl+Z", () => this.undo(), () => this.doc?.history.canUndo() || this.tools.current?.isBusy());
+        A("undo", tr("&Deshacer"), "edit-undo", "Ctrl+Z", () => this.undo(),
+          () => this.doc?.history.canUndo() || this.tools.current?.isBusy() || !!this.tools.current?.hasPendingStep?.());
         A("redo", tr("&Rehacer"), "edit-redo", "Ctrl+Y", () => this.redo(), () => this.doc?.history.canRedo());
         // En el editor de GIF, copiar, cortar y pegar son de fotogramas.
         A("cut", tr("Cor&tar"), "edit-cut", "Ctrl+X", c(() => (this.inGifEditor() ? this.gifEditor.cutFrames() : this.cut())),
@@ -2375,9 +2376,13 @@ export class App extends EventTarget {
         forgetCopiedFrames();
         // Como Kaint: se recuerda dónde estaba lo copiado (para pegarlo en el mismo sitio) y una
         // firma de la imagen (para saber si lo que se pega es esta copia).
-        const b = this.doc.selection.isEmpty() ? null : this.doc.selection.bounds();
+        const sel = this.doc.selection;
+        const b = sel.isEmpty() ? null : sel.bounds();
         this.copyOrigin = b ? { x: b.x, y: b.y } : { x: 0, y: 0 };
         this.copySignature = imageSignature(canvas);
+        // La forma de lo copiado (varita mágica, lazo...), como Kaint y Paint.NET: al pegar, la
+        // selección vuelve a tenerla y no es el rectángulo con lo transparente de alrededor.
+        this.copyShape = b && !sel.rect ? sel.remapped(canvas.width, canvas.height, -b.x, -b.y) : null;
         this.lastClipboardSize = { w: canvas.width, h: canvas.height };
         try {
             const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
@@ -2435,8 +2440,40 @@ export class App extends EventTarget {
         if (mode === "newLayer")
             this.addLayer();
         const { x, y } = this.pastePosition(image);
+        // La forma de lo copiado en Kaint; si viene de fuera con transparencia alrededor, la de lo
+        // que tiene píxeles, mezclado con lo de debajo (si no, lo transparente dejaba un hueco).
+        const ours = !!this.copySignature && imageSignature(image) === this.copySignature;
+        let shape = null, blend = false;
+        if (ours && this.copyShape?.width === image.width && this.copyShape?.height === image.height)
+            shape = this.copyShape.remapped(doc.width, doc.height, x, y);
+        else if (!ours) {
+            shape = this.shapeFromAlpha(image, x, y);
+            blend = !!shape;
+        }
         this.tools.select("moveselectedpixels");
-        this.tools.current.startFloating(image, x, y, tr("Pegar"));
+        this.tools.current.startFloating(image, x, y, tr("Pegar"), shape, blend);
+    }
+
+    // Lo que tiene píxeles de una imagen pegada en (x, y), si alrededor es transparente; null si es
+    // opaca entera.
+    shapeFromAlpha(image, x, y) {
+        const doc = this.doc, c = createCanvas(image.width, image.height), g = context(c);
+        g.drawImage(image, 0, 0);
+        const data = g.getImageData(0, 0, c.width, c.height).data;
+        const mask = new Uint8Array(doc.width * doc.height);
+        let clear = false, any = false;
+        for (let yy = 0; yy < c.height; ++yy) {
+            const ty = y + yy;
+            for (let xx = 0; xx < c.width; ++xx) {
+                const has = data[(yy * c.width + xx) * 4 + 3] !== 0;
+                any ||= has;
+                clear ||= !has;
+                const tx = x + xx;
+                if (has && tx >= 0 && ty >= 0 && tx < doc.width && ty < doc.height)
+                    mask[ty * doc.width + tx] = 255;
+            }
+        }
+        return clear && any ? Selection.fromMask(doc.width, doc.height, mask) : null;
     }
 
     // Como MainWindow::pastePosition de Kaint: donde se copió, si lo que se pega es esa copia y ese

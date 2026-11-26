@@ -477,6 +477,20 @@ Selection Selection::transformed(const QTransform& transform, bool smooth) const
     return fromMask(result);
 }
 
+Selection Selection::placed(QPoint offset, QSize canvas) const
+{
+    if (!d || canvas.isEmpty())
+        return {};
+    if (d->hasPath)
+        return fromPath(d->path.translated(offset), canvas);
+    QImage result = emptyMask(canvas);
+    const QRect target = QRect(offset, d->mask.size()).intersected(result.rect());
+    for (int y = target.top(); y <= target.bottom(); ++y)
+        std::memcpy(result.scanLine(y) + target.left(), d->mask.constScanLine(y - offset.y()) + (target.left() - offset.x()),
+                    size_t(target.width()));
+    return fromMask(result);
+}
+
 Selection Selection::inverted(QSize canvas) const
 {
     if (!d)

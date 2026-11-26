@@ -61,6 +61,7 @@
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDataStream>
 #include <QDateTime>
 #include <QDragEnterEvent>
 #include <QEventLoop>
@@ -183,6 +184,67 @@ quint64 imageSignature(const QImage& source)
             h = (h ^ image.pixel(x, y)) * 1099511628211ull;
         }
     return h;
+}
+
+// La forma de lo copiado (lo que no es un rectángulo: varita mágica, lazo, elipse...), junto a la
+// imagen en el portapapeles, como hace Paint.NET: al pegar en Kaint (en esta imagen, en otra o en
+// otra ventana de Kaint) la selección vuelve a tener esa forma y no el rectángulo con lo
+// transparente de alrededor.
+const QString kSelectionShapeMime = QStringLiteral("application/x-kaint-selection-shape");
+
+QByteArray encodeSelectionShape(const Selection& shape, QSize imageSize)
+{
+    QByteArray bytes;
+    QDataStream out(&bytes, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+    out << quint32(0x4b53454c) << quint32(1) << imageSize << shape.isPathBased();
+    if (shape.isPathBased())
+        out << shape.path();
+    else
+        out << shape.mask();
+    return bytes;
+}
+
+Selection decodeSelectionShape(const QByteArray& bytes, QSize imageSize)
+{
+    QDataStream in(bytes);
+    in.setVersion(QDataStream::Qt_6_0);
+    quint32 magic = 0, version = 0;
+    QSize size;
+    bool hasPath = false;
+    in >> magic >> version >> size >> hasPath;
+    if (in.status() != QDataStream::Ok || magic != 0x4b53454c || version != 1 || size != imageSize)
+        return {};
+    if (hasPath) {
+        QPainterPath path;
+        in >> path;
+        return in.status() == QDataStream::Ok ? Selection::fromPath(path, imageSize) : Selection();
+    }
+    QImage mask;
+    in >> mask;
+    if (in.status() != QDataStream::Ok || mask.size() != imageSize)
+        return {};
+    return Selection::fromMask(mask);
+}
+
+// Lo que tiene píxeles de una imagen que viene de fuera, si alrededor es transparente (un PNG
+// recortado, una pegatina...); vacía si es opaca entera.
+Selection shapeFromAlpha(const QImage& image)
+{
+    const QImage src = image.convertToFormat(QImage::Format_ARGB32);
+    QImage mask(src.size(), QImage::Format_Alpha8);
+    bool clear = false, any = false;
+    for (int y = 0; y < src.height(); ++y) {
+        const auto* row = reinterpret_cast<const QRgb*>(src.constScanLine(y));
+        uchar* m = mask.scanLine(y);
+        for (int x = 0; x < src.width(); ++x) {
+            const bool has = qAlpha(row[x]) != 0;
+            m[x] = has ? 255 : 0;
+            any = any || has;
+            clear = clear || !has;
+        }
+    }
+    return clear && any ? Selection::fromMask(mask) : Selection();
 }
 
 // Tira de imágenes: no pide más ancho que el de sus pestañas (QTabBar reserva sitio para las
@@ -3067,7 +3129,10 @@ void MainWindow::updateTab(Document* doc)
     int computer = 0;
     if (collab.guest)
         computer = collab.copy == Collab::Session::LocalCopy::Current ? 3 : collab.copy == Collab::Session::LocalCopy::Behind ? 2 : 1;
-    strip->setCollab(i, collab.collab, collab.collab ? (collab.hostSaved ? 2 : 1) : 0, computer);
+    if (const auto preview = m_previewCollab.constFind(doc); preview != m_previewCollab.cend())
+        strip->setCollab(i, true, preview->first, preview->second);
+    else
+        strip->setCollab(i, collab.collab, collab.collab ? (collab.hostSaved ? 2 : 1) : 0, computer);
     m_tabs->setTabToolTip(i, QStringLiteral("%1%2\n%3 × %4")
                                  .arg(doc->isModified() ? QStringLiteral("*") : QString(), doc->displayName())
                                  .arg(doc->size().width())
@@ -3177,7 +3242,11 @@ void MainWindow::updateActions()
     m_act["closeOthers"]->setEnabled(m_docs.size() > 1);
     m_act["nextImage"]->setEnabled(m_docs.size() > 1);
     m_act["prevImage"]->setEnabled(m_docs.size() > 1);
-    m_act["undo"]->setEnabled(m_undoGroup->canUndo());
+    // Con algo a medias en la herramienta (la selección de la varita mágica mientras se ajusta,
+    // una forma...), Deshacer lo termina y lo deshace: en una imagen recién abierta, sin pasos en
+    // el historial, Ctrl+Z no hacía nada y la selección se quedaba.
+    m_act["undo"]->setEnabled(m_undoGroup->canUndo()
+                              || (m_doc && m_tools && m_tools->current() && m_tools->current()->isBusy()));
     m_act["redo"]->setEnabled(m_undoGroup->canRedo());
     m_act["repeatEffect"]->setEnabled(has && m_lastEffect);
     m_act["repeatEffect"]->setVisible(m_lastEffect != nullptr);
@@ -3556,6 +3625,17 @@ QString MainWindow::screenPreview(const QStringList& files, const QString& outpu
         m_gifDocs.insert(m_doc);
         updateCentralView();
     }
+    // La tira de imágenes (para el README): la primera, sin guardar (la estrella naranja); la
+    // segunda, de una sesión colaborativa como anfitrión (la corona) y la última, como invitado (la
+    // corona y el equipo, con su copia al día).
+    const bool strip = popup == QLatin1String("strip");
+    if (strip && m_docs.size() >= 3) {
+        m_docs.first()->undoStack()->resetClean();
+        m_previewCollab.insert(m_docs[1], {2, 0});
+        m_previewCollab.insert(m_docs.last(), {2, 3});
+        for (Document* doc : std::as_const(m_docs))
+            updateTab(doc);
+    }
     // Tiempo para que se pinte todo (miniaturas, ventanas, barra de opciones).
     QElapsedTimer wait;
     wait.start();
@@ -3596,6 +3676,13 @@ QString MainWindow::screenPreview(const QStringList& files, const QString& outpu
         while (wait.elapsed() < 400)
             QApplication::processEvents(QEventLoop::AllEvents, 20);
         shot = dlg.grab().toImage();
+    } else if (strip) {
+        // De arriba abajo, toda la fila de arriba; a lo ancho, de la tira a la flecha de la lista.
+        QWidget* top = m_tabs->parentWidget();
+        QRect r = m_tabs->geometry().united(m_listButton->geometry()).adjusted(-6, 0, 6, 0);
+        r.setTop(0);
+        r.setBottom(top->height() - 1);
+        shot = grab(r.translated(top->mapTo(this, QPoint(0, 0))).intersected(rect())).toImage();
     } else {
         shot = grab().toImage();
     }
@@ -4335,12 +4422,16 @@ void MainWindow::copy(bool merged)
     }
     finishTool();
     const QImage source = merged ? m_doc->flattened() : m_doc->activeLayer()->image;
-    const QImage out = Raster::extractSelection(source, m_doc->selection()).convertToFormat(QImage::Format_ARGB32);
+    const Selection& selection = m_doc->selection();
+    const QImage out = Raster::extractSelection(source, selection).convertToFormat(QImage::Format_ARGB32);
     // Además de la imagen, un PNG: Discord, los navegadores y otros programas leen ese formato y
     // conservan la transparencia (con el mapa de bits de Windows, CF_DIB, sale en blanco o negro).
     // Paint.NET hace lo mismo.
     auto* data = new QMimeData;
     data->setImageData(out);
+    if (!selection.isEmpty() && !selection.isRectangular())
+        data->setData(kSelectionShapeMime,
+                      encodeSelectionShape(selection.placed(-selection.bounds().topLeft(), out.size()), out.size()));
     QByteArray png;
     QBuffer buffer(&png);
     if (buffer.open(QIODevice::WriteOnly) && out.save(&buffer, "PNG")) {
@@ -4487,8 +4578,24 @@ void MainWindow::paste()
     }
     if (!ensureCanvasFits(img, tr("Pegar")))
         return;
-    MoveSelectedTool::startPaste(m_doc, img, pastePosition(img), tr("Pegar"));
+    startPaste(img, tr("Pegar"));
     m_tools->select(ToolId::MoveSelected);
+}
+
+void MainWindow::startPaste(const QImage& img, const QString& text)
+{
+    // La forma de lo copiado en Kaint; si viene de fuera con transparencia alrededor, la de lo que
+    // tiene píxeles, mezclado con lo de debajo (si no, lo transparente dejaba un hueco).
+    const QMimeData* md = QApplication::clipboard()->mimeData();
+    Selection shape;
+    bool blend = false;
+    if (md && md->hasFormat(kSelectionShapeMime))
+        shape = decodeSelectionShape(md->data(kSelectionShapeMime), img.size());
+    if (shape.isEmpty() && imageSignature(img) != m_copySignature) {
+        shape = shapeFromAlpha(img);
+        blend = !shape.isEmpty();
+    }
+    MoveSelectedTool::startPaste(m_doc, img, pastePosition(img), text, shape, blend);
 }
 
 void MainWindow::pasteIntoNewLayer()
@@ -4508,7 +4615,7 @@ void MainWindow::pasteIntoNewLayer()
     m_doc->undoStack()->beginMacro(text);
     m_doc->undoStack()->push(new InsertLayerCommand(m_doc, m_doc->activeIndex() + 1,
                                                     std::make_shared<Layer>(m_doc->nextLayerName(), m_doc->size()), text));
-    MoveSelectedTool::startPaste(m_doc, img, pastePosition(img), text);
+    startPaste(img, text);
     m_doc->undoStack()->endMacro();
     m_tools->select(ToolId::MoveSelected);
 }

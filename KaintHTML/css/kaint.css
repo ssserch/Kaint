@@ -3054,6 +3054,15 @@ fieldset.group > legend {
     margin-bottom: 6px;
 }
 
+.task .question > div {
+    min-width: 0;
+}
+
+/* En el teléfono, del ancho de la pantalla (con su ancho mínimo, el texto se salía por la derecha). */
+:root.phone .task {
+    min-width: 0;
+}
+
 .task .choice-button {
     display: grid;
     grid-template-columns: 28px 1fr;
@@ -4144,6 +4153,22 @@ fieldset.group > legend {
 
 :root.phone #tool-options:not(.expanded) {
     display: none;
+}
+
+/* Desplegadas, encima de lo de arriba del área de trabajo, como un menú: en su propia fila bajaban
+   el área entera y, con ella, las ventanas de los lados (Herramientas, Colores...) y sus asas. */
+:root.phone #tool-options.expanded,
+:root.phone #workspace {
+    /* (Con la columna fija: si no, la cuadrícula pasaba el área a otra columna, sin ancho.) */
+    grid-column: 1;
+}
+
+:root.phone #tool-options.expanded {
+    grid-row: 3;
+    align-self: start;
+    position: relative;
+    z-index: 40;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 :root.phone #tool-options > * {
@@ -5935,6 +5960,14 @@ html, body {
     background: linear-gradient(to right, transparent 3px, var(--line) 3px, var(--line) 5px, transparent 5px) no-repeat center / 100% 16px;
 }
 
+/* La de la izquierda: también se estira por el principio. */
+.gif-clip-edge.left {
+    right: auto;
+    left: 0;
+    background-position: center;
+    background-image: linear-gradient(to right, transparent 2px, var(--line) 2px, var(--line) 4px, transparent 4px);
+}
+
 .gif-playhead {
     position: absolute;
     top: 0;
@@ -6198,7 +6231,14 @@ html, body {
 }
 
 :root.phone .gif-size .bar {
-    width: 40px;
+    display: none;
+}
+
+/* La flecha de volver al editor de imágenes: solo en el teléfono (ahí, en vez del texto). */
+.gif-back-arrow {
+    display: none;
+    font-size: 1.35em;
+    line-height: 1;
 }
 
 /* En el teléfono: la biblioteca, una tira debajo de la vista previa; las barras, de una sola fila
@@ -6214,11 +6254,66 @@ html, body {
 }
 
 :root.phone .gif-head .gif-title {
-    font-size: 0.95em;
+    font-size: 0.95em !important;
+}
+
+/* La cabecera, como en los editores de vídeo del móvil: volver a la izquierda, el nombre (y el
+   progreso al exportar), el peso, y la animación y exportar a la derecha, solo con su icono. Antes
+   no cabía y los botones quedaban unos encima de otros. */
+:root.phone .gif-head {
+    gap: 4px;
+    padding: 4px 6px;
+}
+
+:root.phone .gif-head > * {
+    flex: none;
+}
+
+:root.phone .gif-head > .gif-title {
+    flex: 1 1 0;
+    min-width: 0;
+    order: 1;
+}
+
+:root.phone .gif-head > .gif-back {
+    order: 0;
+    padding: 2px 9px;
+}
+
+:root.phone .gif-head > .gif-size {
+    order: 2;
+    font-size: 0.8em;
+}
+
+:root.phone .gif-head > .gif-inspector-toggle {
+    order: 3;
+}
+
+:root.phone .gif-head > .gif-split {
+    order: 4;
 }
 
 :root.phone .gif-head .gif-button {
-    padding: 2px 6px;
+    min-width: 0;
+    padding: 2px 8px;
+}
+
+:root.phone .gif-track-add::before {
+    content: "+";
+    font-weight: bold;
+    font-size: 1.25em;
+    line-height: 1;
+}
+
+:root.phone .gif-back-arrow {
+    display: inline;
+}
+
+:root.phone .gif-head .gif-back > .gif-label,
+:root.phone .gif-head .gif-button:has(> .kicon, > .gif-diamond) > .gif-label,
+:root.phone .gif-toolbar .gif-button:has(> .kicon, > .gif-diamond, > .gif-note) > .gif-label,
+:root.phone .gif-track-add > .gif-label {
+    display: none;
 }
 
 :root.phone .gif-top {
@@ -6229,12 +6324,31 @@ html, body {
 
 :root.phone .gif-top > .gif-bin {
     order: 2;
-    flex-direction: row;
-    align-items: stretch;
+    gap: 2px;
 }
 
-:root.phone .gif-bin > .gif-section-title {
-    display: none;
+/* La biblioteca: sus pestañas arriba, pequeñas, y debajo una tira que se desliza con Importar y
+   Añadir al lado (antes las pestañas, la tira y el historial quedaban uno al lado del otro). */
+:root.phone .gif-tab {
+    padding: 2px 10px;
+    font-size: 0.9em;
+}
+
+:root.phone .gif-bin-page {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 4px;
+    max-height: 84px;
+}
+
+:root.phone .gif-bin-page > .history-panel,
+:root.phone .gif-bin-page > * {
+    min-width: 0;
+}
+
+:root.phone .gif-bin-page > :only-child {
+    flex: 1;
+    overflow: auto;
 }
 
 :root.phone .gif-media-list {
@@ -6243,7 +6357,7 @@ html, body {
     overflow-x: auto;
     overflow-y: hidden;
     min-height: 0;
-    height: 92px;
+    height: 80px;
     padding: 3px;
 }
 
@@ -6258,9 +6372,55 @@ html, body {
     max-height: 52px;
 }
 
-:root.phone .gif-bin > .gif-row {
+:root.phone .gif-bin-page > .gif-row {
+    flex: none;
     flex-direction: column;
     justify-content: center;
+    align-items: stretch;
+    gap: 4px;
+}
+
+:root.phone .gif-bin-page > .gif-row > .gif-button {
+    justify-content: center;
+    min-height: 34px;
+}
+
+/* Las pistas: su cabecera, estrecha (el nombre y sus botones; sin el número de fotogramas), para
+   dejar sitio a los clips. */
+:root.phone .gif-timeline {
+    padding: 4px;
+}
+
+:root.phone .gif-track-headers {
+    flex-basis: 66px;
+    padding-right: 4px;
+}
+
+:root.phone .gif-track-head {
+    padding: 4px 5px;
+}
+
+:root.phone .gif-track-head small {
+    display: none;
+}
+
+:root.phone .gif-track-head .gif-row {
+    gap: 2px;
+}
+
+:root.phone .gif-track-button {
+    padding: 2px 3px !important;
+}
+
+/* Con el dedo, solo el clip elegido tiene asas (blancas, a los dos lados, como en los editores del
+   móvil); se arrastran para estirarlo o recortarlo. */
+:root.touch .gif-clip:not(.current) > .gif-clip-edge {
+    display: none;
+}
+
+:root.touch .gif-clip.current > .gif-clip-edge {
+    width: 14px;
+    background: linear-gradient(to right, transparent 5px, #ffffff 5px, #ffffff 9px, transparent 9px) no-repeat center / 100% 26px;
 }
 
 :root.phone .gif-toolbar,
@@ -6356,6 +6516,29 @@ html, body {
     border-top: 1px solid var(--line);
     border-radius: 12px 12px 0 0;
     box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.gif-sheet-close {
+    display: none;
+}
+
+:root.phone .gif-editor.inspector-open .gif-inspector > .gif-sheet-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1.5em;
+    line-height: 1;
+    z-index: 1;
+}
+
+:root.phone .gif-editor.inspector-open .gif-top > .gif-inspector > .gif-section-title {
+    padding-right: 44px;
 }
 
 :root.phone .gif-editor.inspector-open .gif-inspector-toggle {

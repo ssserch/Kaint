@@ -481,7 +481,8 @@ exit /b 0
 rem --- Windows arm64 ------------------------------------------------------------
 rem Qt no publica Qt para arm64 con MinGW: hace falta Visual Studio (o Build Tools) con las
 rem herramientas de ARM64 y Qt para arm64 (msvc2022_arm64) más un Qt de x64 para las
-rem herramientas (QT_HOST_PATH). Se indican con KAINT_QT_ARM64 y KAINT_QT_HOST.
+rem herramientas (QT_HOST_PATH). Se indican con KAINT_QT_ARM64 y KAINT_QT_HOST. En un equipo arm64
+rem (o en GitHub, windows-11-arm) basta el Qt para arm64: sus herramientas ya funcionan ahí.
 :arm64
 set "STEP=compilar para arm64"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -491,6 +492,7 @@ if not defined VCVARS goto arm64_missing
 if not exist "%VCVARS%" goto arm64_missing
 if not defined KAINT_QT_ARM64 goto arm64_missing
 if not exist "%KAINT_QT_ARM64%\lib\cmake\Qt6\Qt6Config.cmake" goto arm64_missing
+if not defined KAINT_QT_HOST if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "KAINT_QT_HOST=%KAINT_QT_ARM64%"
 if not defined KAINT_QT_HOST goto arm64_missing
 if not exist "%KAINT_QT_HOST%\lib\cmake\Qt6\Qt6Config.cmake" goto arm64_missing
 call :find_tools
@@ -519,11 +521,15 @@ exit /b 0
 echo.
 echo Para compilar para Windows arm64 hacen falta:
 echo   - Visual Studio 2022 ^(o Build Tools^) con "Herramientas de compilación de MSVC para ARM64".
-echo   - Qt para arm64 y Qt para x64 de MSVC, por ejemplo con aqtinstall:
+echo   - En un equipo arm64, Qt para arm64 de MSVC, por ejemplo con aqtinstall:
+echo       aqt install-qt windows_arm64 desktop %QT_VERSION% win64_msvc2022_arm64 -m qtimageformats
+echo     y set KAINT_QT_ARM64=...\%QT_VERSION%\msvc2022_arm64
+echo   - En uno x64, también Qt para x64 de MSVC ^(sus herramientas^):
 echo       aqt install-qt windows desktop %QT_VERSION% win64_msvc2022_64 -m qtimageformats
 echo       aqt install-qt windows desktop %QT_VERSION% win64_msvc2022_arm64_cross_compiled -m qtimageformats
-echo   - set KAINT_QT_ARM64=...\%QT_VERSION%\msvc2022_arm64
-echo     set KAINT_QT_HOST=...\%QT_VERSION%\msvc2022_64
+echo     y set KAINT_QT_ARM64=...\%QT_VERSION%\msvc2022_arm64
+echo         set KAINT_QT_HOST=...\%QT_VERSION%\msvc2022_64
+echo   - O, sin nada de esto: GitHub Actions lo compila ^(Actions ^> «Compilar Kaint»^).
 exit /b 1
 
 rem --- Copia de la instalación para empaquetar (%1: carpeta) --------------------

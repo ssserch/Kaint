@@ -8748,8 +8748,8 @@ With FFmpeg (https://ffmpeg.org) next to Kaint, more formats open.</translation>
         <translation>Nearest Neighbor (Antialiased)</translation>
     </message>
     <message>
-        <source>En la captura, en vez de la ventana: un menú abierto (menu:effects, menu:adjustments, menu:effects/Artístico...) o el diálogo de un efecto (effect:linocut...).</source>
-        <translation>In the screenshot, instead of the window: an open menu (menu:effects, menu:adjustments, menu:effects/Artístico...) or an effect&apos;s dialog (effect:linocut...).</translation>
+        <source>En la captura, en vez de la ventana: un menú abierto (menu:effects, menu:adjustments, menu:effects/Artístico...), el diálogo de un efecto (effect:linocut...) o la tira de imágenes (strip: la primera sin guardar, la segunda y la última de una sesión colaborativa).</source>
+        <translation>In the screenshot, instead of the window: an open menu (menu:effects, menu:adjustments, menu:effects/Artístico...), an effect&apos;s dialog (effect:linocut...) or the image strip (strip: the first image unsaved, the second and the last from a collaborative session).</translation>
     </message>
 </context>
 <context>

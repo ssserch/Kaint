@@ -171,6 +171,41 @@ QString timeText(int ms)
 
 } // namespace
 
+static Motion::Clip shiftedMotion(Motion::Clip clip, int shift)
+{
+    for (Motion::Track& track : clip.tracks) {
+        if (track.keys.isEmpty() || shift == 0)
+            continue;
+        if (shift > 0) {
+            for (Motion::Key& k : track.keys)
+                k.t += shift;
+            continue;
+        }
+        // Lo que queda antes del principio nuevo se quita; en el principio, un punto con el valor
+        // que tenía ahí (así la animación sigue igual).
+        const int cut = -shift;
+        QList<Motion::Key> keys;
+        const Motion::Key* last = nullptr;
+        for (const Motion::Key& k : std::as_const(track.keys)) {
+            if (k.t < cut) {
+                last = &k;
+                continue;
+            }
+            Motion::Key moved = k;
+            moved.t -= cut;
+            keys << moved;
+        }
+        if (last && (keys.isEmpty() || keys.first().t != 0)) {
+            Motion::Key first = *last;
+            first.t = 0;
+            first.value = track.value(cut);
+            keys.prepend(first);
+        }
+        track.keys = keys;
+    }
+    return clip;
+}
+
 int delayOf(const Layer* layer)
 {
     return layer ? std::max(Gif::kMinDelayMs, Gif::delayFromName(layer->props.name, kDefaultDelay)) : kDefaultDelay;
@@ -613,15 +648,25 @@ public:
     {
         int start = m_editor->frameStart(index), end = m_editor->frameEnd(index);
         if (m_resizing >= 0 && m_editor->trackOf(index) == m_editor->trackOf(m_resizing)) {
-            const int diff = m_resizeDelay - (m_editor->frameEnd(m_resizing) - m_editor->frameStart(m_resizing));
+            // (Por la izquierda cambia también el espacio de delante; por la derecha, no.)
+            const int oldEnd = m_editor->frameEnd(m_resizing);
+            const int newStart = m_editor->frameStart(m_resizing) - m_editor->frameGap(m_resizing) + m_resizeGap;
+            const int diff = newStart + m_resizeDelay - oldEnd;
             if (index == m_resizing)
-                end += diff;
-            else if (start >= m_editor->frameEnd(m_resizing)) {
+                return {newStart, newStart + m_resizeDelay};
+            if (start >= oldEnd) {
                 start += diff;
                 end += diff;
             }
         }
         return {start, end};
+    }
+
+    // Los bordes de un clip con los que se estira: el derecho y, si cabe, el izquierdo.
+    static bool onRightEdge(const QRect& r, QPoint pos) { return pos.x() >= r.right() - kEdgeGrab; }
+    static bool onLeftEdge(const QRect& r, QPoint pos)
+    {
+        return !onRightEdge(r, pos) && r.width() > 3 * kEdgeGrab && pos.x() <= r.left() + kEdgeGrab;
     }
 
     QRect clipRect(int index) const
@@ -816,11 +861,13 @@ protected:
                 }
                 p.restore();
             }
-            // El asa para estirar, a la derecha.
+            // Las asas para estirar, a los dos lados.
             if (r.width() > 16) {
                 p.setPen(Qt::NoPen);
                 p.setBrush(pal.color(QPalette::Mid));
                 p.drawRect(QRect(r.right() - 3, r.top() + r.height() / 2 - 10, 2, 20));
+                if (r.width() > 3 * kEdgeGrab)
+                    p.drawRect(QRect(r.left() + 2, r.top() + r.height() / 2 - 10, 2, 20));
                 p.setBrush(Qt::NoBrush);
             }
         }
@@ -1152,9 +1199,14 @@ protected:
         if (e->button() != Qt::LeftButton)
             return;
         const QRect r = clipRect(index);
-        if (pos.x() >= r.right() - kEdgeGrab) {
+        // Se estira por cualquiera de los dos bordes (por la izquierda, como en Filmora o CapCut:
+        // ocupa el espacio vacío de delante y, si no hay, empuja a los de detrás).
+        if (onRightEdge(r, pos) || onLeftEdge(r, pos)) {
             m_resizing = index;
+            m_resizeLeft = onLeftEdge(r, pos);
+            m_resizeGap = m_editor->frameGap(index);
             m_resizeDelay = m_editor->frameEnd(index) - m_editor->frameStart(index);
+            m_resizePressX = pos.x();
             return;
         }
         m_pressIndex = index;
@@ -1241,6 +1293,39 @@ protected:
             m_editor->seek(timeForX(pos.x()));
             return;
         }
+        if (m_resizing >= 0 && m_resizeLeft) {
+            // El principio sigue al puntero y el final se queda. Más allá del clip de delante (o
+            // del principio), el clip empieza donde acaba ese y dura más: se corren los de detrás.
+            const int start = m_editor->frameStart(m_resizing), end = m_editor->frameEnd(m_resizing);
+            const int prevEnd = start - m_editor->frameGap(m_resizing);
+            int t = start + int(std::lround((pos.x() - m_resizePressX) / pxPerMs()));
+            // Imán: a la unión de delante, al cabezal y a las uniones de las otras pistas.
+            if (t >= 0) {
+                const int edge = xForTime(t);
+                int best = kSnap / 2 + 1, snapped = t;
+                auto snap = [&](int c) {
+                    if (const int d = std::abs(xForTime(c) - edge); d < best) {
+                        best = d;
+                        snapped = c;
+                    }
+                };
+                snap(prevEnd);
+                snap(m_editor->playTime());
+                for (int i = 0; i < m_editor->frameCount(); ++i)
+                    if (m_editor->trackOf(i) != m_editor->trackOf(m_resizing)) {
+                        snap(m_editor->frameStart(i));
+                        snap(m_editor->frameEnd(i));
+                    }
+                t = snapped;
+            }
+            // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
+            t = std::min(int(std::round(t / 10.0)) * 10, end - Gif::kMinDelayMs);
+            m_resizeDelay = end - t;
+            m_resizeGap = std::max(0, t - prevEnd);
+            update();
+            setToolTip({});
+            return;
+        }
         if (m_resizing >= 0) {
             // Imán: el final se pega a las uniones de las otras pistas y al cabezal.
             int endTime = timeForX(pos.x());
@@ -1316,7 +1401,7 @@ protected:
         }
         setCursor(heightEdgeAt(pos) >= 0         ? Qt::SizeVerCursor
                   : keyAt(pos, &keyFrame) >= 0                                       ? Qt::PointingHandCursor
-                  : index >= 0 && pos.x() >= clipRect(index).right() - kEdgeGrab ? Qt::SizeHorCursor
+                  : index >= 0 && (onRightEdge(clipRect(index), pos) || onLeftEdge(clipRect(index), pos)) ? Qt::SizeHorCursor
                                                                                   : Qt::ArrowCursor);
     }
 
@@ -1377,9 +1462,14 @@ protected:
             return;
         }
         if (m_resizing >= 0) {
-            const int index = m_resizing, delay = m_resizeDelay;
+            const int index = m_resizing, delay = m_resizeDelay, gap = m_resizeGap;
+            const bool left = m_resizeLeft;
             m_resizing = -1;
-            m_editor->setFrameDelay(index, delay);
+            m_resizeLeft = false;
+            if (left)
+                m_editor->trimFrameStart(index, gap, delay);
+            else
+                m_editor->setFrameDelay(index, delay);
             update();
             return;
         }
@@ -1537,6 +1627,10 @@ private:
     int m_pps = 600;
     int m_resizing = -1;
     int m_resizeDelay = 0;
+    // Estirando por la izquierda: el espacio vacío que queda delante, y dónde se pulsó.
+    bool m_resizeLeft = false;
+    int m_resizeGap = 0;
+    int m_resizePressX = 0;
     int m_pressIndex = -1;
     QPoint m_pressPos;
     QPoint m_hover{-1, -1};
@@ -2968,6 +3062,31 @@ void GifEditor::setFrameDelay(int index, int delayMs)
     for (const LayerPtr& l : m_doc->layers())
         props << l->props;
     props[index].name = Gif::nameWithDelay(props[index].name, std::max(Gif::kMinDelayMs, delayMs));
+    applyFrames(m_doc->layers(), props, index, tr("Duración del fotograma"), QStringLiteral("chronometer"));
+}
+
+int GifEditor::frameGap(int index) const
+{
+    return m_doc && index >= 0 && index < m_doc->layerCount() ? std::max(0, m_doc->layer(index)->props.gap) : 0;
+}
+
+void GifEditor::trimFrameStart(int index, int gapMs, int delayMs)
+{
+    if (!m_doc || index < 0 || index >= m_doc->layerCount())
+        return;
+    gapMs = std::max(0, gapMs);
+    delayMs = std::max(Gif::kMinDelayMs, delayMs);
+    if (gapMs == frameGap(index) && delayMs == frameDelay(index))
+        return;
+    QList<LayerProps> props;
+    for (const LayerPtr& l : m_doc->layers())
+        props << l->props;
+    props[index].gap = gapMs;
+    props[index].name = Gif::nameWithDelay(props[index].name, delayMs);
+    // Los puntos clave siguen a la imagen: con el principio antes, corridos hacia delante; con él
+    // después, lo de antes se recorta.
+    if (const int shift = delayMs - frameDelay(index); props[index].motion && shift != 0)
+        props[index].motion = std::make_shared<const Motion::Clip>(shiftedMotion(*props[index].motion, shift));
     applyFrames(m_doc->layers(), props, index, tr("Duración del fotograma"), QStringLiteral("chronometer"));
 }
 

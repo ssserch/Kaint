@@ -147,6 +147,29 @@ export function moveKeys(clip, from, to) {
     }
 }
 
+// Los puntos clave de un fotograma cuyo principio se mueve 'shift' ms (positivo: empieza antes, al
+// estirarlo por la izquierda): siguen a la imagen. Lo que queda antes del principio nuevo se quita y
+// en el principio queda un punto con el valor que tenía ahí (como shiftedMotion de Kaint).
+export function shiftKeys(clip, shift) {
+    if (!clip || !shift)
+        return;
+    for (const p of Props) {
+        const t = clip.tracks?.[p];
+        if (!t?.keys?.length)
+            continue;
+        if (shift > 0) {
+            for (const k of t.keys)
+                k.t += shift;
+            continue;
+        }
+        const cut = -shift, before = t.keys.filter((k) => k.t < cut);
+        const keys = t.keys.filter((k) => k.t >= cut).map((k) => ({ ...k, t: k.t - cut }));
+        if (before.length && (!keys.length || keys[0].t !== 0))
+            keys.unshift({ ...before[before.length - 1], t: 0, v: trackValue(t, cut, p) });
+        t.keys = keys;
+    }
+}
+
 export function removeKeys(clip, time) {
     for (const p of Props) {
         const t = clip.tracks[p];

@@ -85,8 +85,11 @@ top right corner).
     </td>
     <td width="50%" valign="top">
       <h4>The image strip</h4>
+      <p align="center"><img src="img/windows/image-strip.png" alt="The image strip: an unsaved image, a collaborative session's image as host and as guest" width="414"></p>
       Every open image, as a thumbnail, along the top: the orange star marks the unsaved ones and the
-      arrow at the end lists them all. Drag a thumbnail to reorder it. <b>Ctrl+click</b> another image
+      arrow at the end lists them all. Images in a <a href="docs/collaboration.md">collaborative session</a>
+      turn yellow, with the crown (whether the host's image is saved) and, on a guest's, the computer
+      (whether its own copy is up to date). Drag a thumbnail to reorder it. <b>Ctrl+click</b> another image
       to select everything between them, and press the <b>+</b> that appears to make a <b>group</b>:
       give it a name and a border color, and click its name to collapse it to its first image and
       save space. The wheel scrolls the strip when there are many.
@@ -891,9 +894,15 @@ installing anything, and **macOS can be built from Windows or Linux**:
 | System | What it makes |
 | --- | --- |
 | Windows x64 | portable `.zip` and installer (`-setup.exe`) |
-| Linux x86_64 | AppImage (built on Ubuntu 22.04: runs on old distributions too) and `.deb` (Debian 13 / Ubuntu 25.04 or newer) |
-| macOS arm64 | `.tar.gz` with **Kaint.app**, Qt included (Apple Silicon, macOS 13 or newer) |
+| Windows arm64 | portable `.zip` (built natively on GitHub's Windows arm64 machines) |
+| Linux x86_64 and arm64 | AppImage (built on Ubuntu 22.04: runs on old distributions too) and `.deb` (Debian 13 / Ubuntu 25.04 or newer) |
+| Linux arm64 | `.tar.gz` (needs Qt 6.5 or newer installed, like the `.deb`) |
+| Linux musl (Alpine) | `.tar.gz` for x86_64 and arm64 |
+| FreeBSD x86_64 | `.tar.gz` |
+| macOS arm64 and Intel | `.tar.gz` with **Kaint.app**, Qt included (macOS 13 or newer) |
 | Web | `.zip` of Kaint.HTML (only when chosen) |
+
+The arm64 builds run on GitHub's arm64 machines, without emulation.
 
 - **By hand**: on GitHub, *Actions* > *Compilar Kaint* > *Run workflow*, tick the systems and press
   *Run workflow*. In a fork it works the same way (enable *Actions* in the fork first).

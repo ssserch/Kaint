@@ -145,6 +145,8 @@ private:
     void eraseSelection(const QString& text);
     void fillSelection();
     QImage clipboardImage() const;
+    // Pega 'img' (del portapapeles) flotando con Mover píxeles, con la forma de lo copiado.
+    void startPaste(const QImage& img, const QString& text);
     bool ensureCanvasFits(const QImage& image, const QString& title, bool importing = false);
 
     // Imagen 'dpi' > 0 cambia también la resolución del documento.
@@ -236,7 +238,7 @@ private:
     QSet<Document*> m_gifDocs;
     bool m_optionsHiddenForGif = false;
     CollabController* m_collab = nullptr;
-    ToolManager* m_tools;
+    ToolManager* m_tools = nullptr;
     ToolOptionsBar* m_options = nullptr;
     QTabBar* m_tabs = nullptr;
     QToolButton* m_listButton = nullptr;
@@ -314,6 +316,9 @@ private:
     bool m_restartRequested = false;
     QPoint m_copyOrigin;
     quint64 m_copySignature = 0;
+    // Solo en las capturas de la tira (--preview-popup strip): la corona y el equipo de las
+    // imágenes que se muestran como de una sesión colaborativa.
+    QHash<const Document*, QPair<int, int>> m_previewCollab;
     bool m_syncingHistory = false;
     QString m_toolHint;
     QTimer m_autosaveTimer;

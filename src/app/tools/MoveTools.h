@@ -30,7 +30,11 @@ public:
 
     // Píxeles flotantes de la última operación, si se puede continuar con ellos.
     static FloatingPtr currentFloating(Document* doc);
-    static void startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text);
+    // 'shape': la forma de lo pegado (en la imagen pegada, de su tamaño); vacía, el rectángulo.
+    // 'blend': lo pegado se mezcla con lo de debajo en vez de reemplazarlo (lo que viene de fuera
+    // con transparencia: sin esto, lo transparente dejaba un hueco en la capa).
+    static void startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text,
+                           const Selection& shape = {}, bool blend = false);
 
 private:
     FloatingPtr lift(bool keepCopy, LayerPtr layer = nullptr);

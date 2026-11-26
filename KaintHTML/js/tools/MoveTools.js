@@ -678,7 +678,7 @@ export class MoveSelectedTool extends MoveToolBase {
         p.drawImage(s.base, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
         const smooth = s.box.sx !== 1 || s.box.sy !== 1 || !!s.box.angle;
         const full = m.multiply(new DOMMatrix().translate(s.box.base.x, s.box.base.y));
-        if (Settings.get("replacePixels")) {
+        if (Settings.get("replacePixels") && !s.blend) {
             // La máscara de la selección colocada tal como quedará (pixelada o suavizada, según la
             // calidad de la selección): con la escalada suavizada se salía medio píxel.
             const maskSmooth = smooth && AppState.selectionAntialias();
@@ -839,7 +839,9 @@ export class MoveSelectedTool extends MoveToolBase {
 
     // Píxeles pegados: se colocan como un paso "Pegar" y quedan flotando (sin hueco debajo) para
     // moverlos después.
-    startFloating(image, x, y, name) {
+    // 'shape': la forma de lo pegado (ya colocada en la imagen); sin ella, el rectángulo. 'blend':
+    // se mezcla con lo de debajo en vez de reemplazarlo (lo que viene de fuera con transparencia).
+    startFloating(image, x, y, name, shape = null, blend = false) {
         const doc = this.doc;
         this.finish();
         const floating = createCanvas(image.width, image.height);
@@ -847,8 +849,8 @@ export class MoveSelectedTool extends MoveToolBase {
         const rect = { x, y, w: image.width, h: image.height };
         const s = {
             doc, layer: doc.activeLayer, base: cloneCanvas(doc.activeLayer.canvas), floating,
-            selBase: Selection.rect(doc.width, doc.height, x, y, image.width, image.height), box: new TransformBox(rect),
-            preview: createCanvas(doc.width, doc.height), step: null,
+            selBase: shape && !shape.isEmpty() ? shape : Selection.rect(doc.width, doc.height, x, y, image.width, image.height),
+            box: new TransformBox(rect), preview: createCanvas(doc.width, doc.height), step: null, blend,
         };
         this.render(s);
         this.commit(s, name, "edit-paste");

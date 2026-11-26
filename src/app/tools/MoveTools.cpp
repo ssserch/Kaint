@@ -171,7 +171,8 @@ FloatingPtr MoveSelectedTool::currentFloating(Document* doc)
     return cmd->floating();
 }
 
-void MoveSelectedTool::startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text)
+void MoveSelectedTool::startPaste(Document* doc, const QImage& image, QPoint pos, const QString& text,
+                                  const Selection& shape, bool blend)
 {
     auto f = std::make_shared<FloatingPixels>();
     f->layer = doc->activeLayerPtr();
@@ -179,10 +180,15 @@ void MoveSelectedTool::startPaste(Document* doc, const QImage& image, QPoint pos
     f->base = f->original;
     f->pixels = image.convertToFormat(kLayerFormat);
     f->origin = pos;
-    f->selectionBase = Selection::fromRect(QRect(pos, image.size()), doc->size());
+    // Con la forma de lo copiado (la varita, el lazo...), como Paint.NET: antes era siempre el
+    // rectángulo, y lo transparente de alrededor reemplazaba a lo de la capa.
+    if (!shape.isEmpty())
+        f->selectionBase = shape.placed(pos, doc->size());
+    if (f->selectionBase.isEmpty())
+        f->selectionBase = Selection::fromRect(QRect(pos, image.size()), doc->size());
     f->interpolation = AppState::instance()->tools().moveInterpolation;
     f->gammaCorrect = AppState::instance()->tools().moveGamma;
-    f->replace = AppState::instance()->preferences().replacePixels;
+    f->replace = !blend && AppState::instance()->preferences().replacePixels;
     HistoryIcons::registerIcon(text, QStringLiteral("edit-paste"));
     doc->undoStack()->push(new MovePixelsCommand(doc, f, QTransform(), QTransform(), true, true, doc->selection(), text));
 }

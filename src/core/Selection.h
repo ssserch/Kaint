@@ -49,6 +49,9 @@ public:
     Selection combined(const Selection& other, SelectionMode mode) const;
     // Con "smooth" en falso, girar o escalar una máscara no suaviza sus bordes.
     Selection transformed(const QTransform& transform, bool smooth = true) const;
+    // La misma forma desplazada 'offset' en un lienzo de otro tamaño (al copiar, recortada a lo
+    // copiado; al pegar, colocada en la imagen donde se pega).
+    Selection placed(QPoint offset, QSize canvas) const;
     Selection inverted(QSize canvas) const;
     // Amplía (radio positivo) o reduce (negativo) la selección tantos píxeles, con esquinas
     // redondeadas como en GIMP.

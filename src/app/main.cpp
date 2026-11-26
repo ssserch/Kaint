@@ -402,9 +402,10 @@ int main(int argc, char** argv)
                                         QObject::tr("Recreación de Windows en la captura (10 u 11)."), QStringLiteral("versión")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-popup"),
                                         QObject::tr("En la captura, en vez de la ventana: un menú abierto (menu:effects, "
-                                                    "menu:adjustments, menu:effects/Artístico...) o el diálogo de un efecto "
-                                                    "(effect:linocut...)."),
-                                        QStringLiteral("menu:...|effect:...")));
+                                                    "menu:adjustments, menu:effects/Artístico...), el diálogo de un efecto "
+                                                    "(effect:linocut...) o la tira de imágenes (strip: la primera sin guardar, "
+                                                    "la segunda y la última de una sesión colaborativa)."),
+                                        QStringLiteral("menu:...|effect:...|strip")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-frame"),
                                         QObject::tr("Barra de título de Windows 10 dibujada por Kaint en la captura (yes o no)."),
                                         QStringLiteral("yes|no")));

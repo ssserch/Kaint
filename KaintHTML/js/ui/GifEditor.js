@@ -106,10 +106,11 @@ function framesOf(doc) {
 
 function button(content, title, onclick, className = "") {
     const b = el("button", { className: `tbutton gif-button ${className}`.trim(), title, type: "button", onclick });
+    // (El texto, aparte: en el teléfono, los botones con icono se quedan solo con él.)
     if (content instanceof Node)
         b.append(content);
     else
-        b.textContent = content;
+        b.append(el("span", { className: "gif-label", textContent: content }));
     return b;
 }
 
@@ -143,7 +144,9 @@ export class GifEditor {
         // Cabecera
         this.title = el("span", { className: "gif-title" });
         const back = button(tr("Editor de imágenes"), tr("Vuelve a editar esta imagen con las herramientas (cada fotograma es una capa)."),
-                            () => this.app.toggleGifEditor(), "pushbutton");
+                            () => this.app.toggleGifEditor(), "pushbutton gif-back");
+        // En el teléfono, solo la flecha (a la izquierda, como volver en las apps del móvil).
+        back.prepend(el("span", { className: "gif-back-arrow", textContent: "←" }));
         const exportButton = button(tr("Exportar GIF..."), tr("Guarda la animación como GIF, con la configuración de siempre (paleta, duración, repeticiones, efectos...)."),
                                     () => this.app.save(this.app.doc, true, "gif"), "pushbutton");
         exportButton.prepend(icon("document-save-as", 16));
@@ -789,6 +792,30 @@ export class GifEditor {
         this.apply(layers, props, i, tr("Duración del fotograma"), "layer-properties");
     }
 
+    // El espacio vacío (ms) delante de un fotograma en su pista.
+    gapOf(i) {
+        return Math.max(0, this.doc?.layers[i]?.gap || 0);
+    }
+
+    // Estirado o recortado por la izquierda: el espacio de delante y la duración nuevos, en un paso
+    // (los puntos clave siguen a la imagen).
+    trimStart(i, gap, ms) {
+        if (i < 0 || i >= this.count())
+            return;
+        gap = Math.max(0, Math.round(gap));
+        ms = Math.max(MinDelay, Math.round(ms));
+        if (gap === this.gapOf(i) && ms === this.delay(i))
+            return;
+        const { layers, props } = this.current();
+        let motion = props[i].motion || null;
+        if (motion && ms !== this.delay(i)) {
+            motion = Motion.cloneClip(motion);
+            Motion.shiftKeys(motion, ms - this.delay(i));
+        }
+        props[i] = { ...props[i], gap, motion, name: nameWithDelay(props[i].name, ms) };
+        this.apply(layers, props, i, tr("Duración del fotograma"), "layer-properties");
+    }
+
     setAllDelays(ms) {
         if (!this.count() || !ms)
             return;
@@ -1239,8 +1266,12 @@ export class GifEditor {
                                       tr("Pone un punto clave con todos los valores (posición, escala, rotación y opacidad) en el cabezal, o lo quita si ya hay uno ahí (K)"),
                                       () => this.toggleGlobalKey(), "pushbutton gif-global-key");
         this.globalKeyButton.prepend(el("span", { className: "gif-diamond" }));
+        // En el teléfono el panel es una hoja que sube desde abajo: su × la cierra (si no, solo se
+        // cerraba con el rombo de la cabecera).
+        const sheetClose = el("button", { className: "tbutton gif-sheet-close", type: "button", title: tr("Cerrar"), textContent: "×",
+                                          onclick: () => this.root.classList.remove("inspector-open") });
         this.inspector = el("div", { className: "gif-inspector" }, [
-            this.inspectorTitle, this.globalKeyButton, grid,
+            sheetClose, this.inspectorTitle, this.globalKeyButton, grid,
             el("div", { className: "gif-row" }, [el("label", { textContent: tr("Gráfica:") }), this.graphProp]),
             el("div", { className: "gif-graph-box" }, [this.graph]),
             el("div", { className: "gif-row" }, [el("label", { textContent: tr("Al exportar:") }), this.fps]),
@@ -1895,10 +1926,21 @@ export class GifEditor {
             }
             const i = +clip.dataset.index;
             const r = clip.getBoundingClientRect();
-            const edge = e.target.classList.contains("gif-clip-edge") || (touch && e.clientX >= r.right - 18);
-            if (edge) {
+            // Se estira por cualquiera de los dos bordes (por la izquierda, como en Filmora o CapCut:
+            // ocupa el espacio vacío de delante y, si no hay, empuja a los de detrás).
+            // Con el dedo, como en los editores de vídeo del móvil, solo el clip elegido tiene asas (se
+            // toca para elegirlo y se arrastran sus bordes): en los demás, deslizar cerca del borde
+            // desplazaba la línea de tiempo o los estiraba sin querer.
+            const onEdge = e.target.classList.contains("gif-clip-edge");
+            const handles = !touch || i === this.selected();
+            const right = (onEdge && !e.target.classList.contains("left")) || (touch && handles && e.clientX >= r.right - 22);
+            const left = !right && ((onEdge && e.target.classList.contains("left"))
+                                    || (touch && handles && r.width > 60 && e.clientX <= r.left + 22));
+            if (right || left) {
                 this.select(i);
-                drag = { kind: "resize", id: e.pointerId, index: i, start: this.times().start[i], delay: this.delay(i) };
+                const t = this.times();
+                drag = { kind: "resize", id: e.pointerId, index: i, left, x, start: t.start[i], end: t.end[i], delay: this.delay(i),
+                         gap: this.gapOf(i) };
                 return;
             }
             if (!touch) {
@@ -1962,6 +2004,23 @@ export class GifEditor {
                 this.scroller.scrollLeft = drag.scroll - (e.clientX - drag.startX);
             } else if (drag.kind === "scrub") {
                 this.seek(this.msAt(x));
+            } else if (drag.kind === "resize" && drag.left) {
+                // El principio sigue al dedo o al puntero y el final se queda. Más allá del clip de
+                // delante (o del principio), el clip empieza donde acaba ese y dura más: se corren los
+                // de detrás.
+                const prevEnd = drag.start - this.gapOf(drag.index);
+                let t = drag.start + Math.round(((x - drag.x) * 1000) / this.pps);
+                // Imán: a la unión de delante y al cabezal.
+                if (t >= 0)
+                    for (const c of [prevEnd, this.time])
+                        if (Math.abs(this.x(c) - this.x(t)) <= Snap / 2)
+                            t = c;
+                // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
+                t = Math.min(Math.round(t / 10) * 10, drag.end - MinDelay);
+                drag.delay = drag.end - t;
+                drag.gap = Math.max(0, t - prevEnd);
+                this.renderTimeline(drag);
+                this.autoScroll(e.clientX);
             } else if (drag.kind === "resize") {
                 // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
                 drag.delay = Math.max(MinDelay, Math.round((this.msAt(x) - drag.start) / 10) * 10);
@@ -2046,6 +2105,8 @@ export class GifEditor {
                 setTimeout(() => document.removeEventListener("click", swallow, true), 450);
                 this.frameMenu(d.index, e.clientX, e.clientY);
             }
+            else if (d.kind === "resize" && d.left)
+                this.trimStart(d.index, d.gap, d.delay);
             else if (d.kind === "resize")
                 this.setDelay(d.index, d.delay);
             else if (d.kind === "reorder" && d.ghostX !== undefined)
@@ -2212,10 +2273,14 @@ export class GifEditor {
         if (this.root.hidden)
             return;
         const times = this.times(), start = [...times.start], end = [...times.end];
-        // Mientras se estira un clip: su duración nueva y los de detrás de su pista, corridos.
+        // Mientras se estira un clip: su duración nueva (por la izquierda, también el espacio de
+        // delante) y los de detrás de su pista, corridos.
         if (resize) {
-            const k = this.trackOf(resize.index), i0 = resize.index, diff = resize.delay - (end[i0] - start[i0]);
-            end[i0] += diff;
+            const k = this.trackOf(resize.index), i0 = resize.index;
+            if (resize.left)
+                start[i0] = times.start[i0] - this.gapOf(i0) + resize.gap;
+            end[i0] = start[i0] + resize.delay;
+            const diff = end[i0] - times.end[i0];
             for (let i = 0; i < start.length; i++)
                 if (i !== i0 && this.trackOf(i) === k && start[i] >= times.end[i0]) {
                     start[i] += diff;
@@ -2272,6 +2337,8 @@ export class GifEditor {
             const mark = Motion.isEmpty(layers[i].motion) ? "" : "◆ ";
             const text = w > 70 ? `${mark}${i + 1} · ${end[i] - start[i]} ms` : w > 26 ? String(i + 1) : "";
             clip.append(el("span", { className: "gif-clip-label", textContent: text }), el("div", { className: "gif-clip-edge" }));
+            if (w > 21)
+                clip.append(el("div", { className: "gif-clip-edge left" }));
             clips.push(clip);
         }
         this.track.replaceChildren(...clips);
@@ -2286,7 +2353,7 @@ export class GifEditor {
     renderTrackHeaders() {
         const n = this.trackCount(), active = this.curTrack(), rows = [];
         const add = el("button", { className: "gif-track-add", title: tr("Añade una pista encima de las demás (lo de las pistas de arriba se ve encima)") },
-                       [icon("list-add", 16), tr("Añadir pista")]);
+                       [icon("list-add", 16), el("span", { className: "gif-label", textContent: tr("Añadir pista") })]);
         add.addEventListener("click", () => this.addTrack());
         rows.push(add);
         for (let row = 0; row < n; row++) {

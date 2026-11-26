@@ -3008,9 +3008,9 @@ QImage blurredToSize(const QImage& source, QSize target, double sigma, bool wrap
     *margin = QSize(0, 0);
     const double shrink = std::max(animated ? 1.5 : 1.0, sigma / 2.0);
     const QSize smallSize(std::max(1, int(std::ceil(target.width() / shrink))), std::max(1, int(std::ceil(target.height() / shrink))));
-    QImage small = source.scaled(smallSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+    QImage reduced = source.scaled(smallSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
                        .convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    const double fx = double(target.width()) / small.width(), fy = double(target.height()) / small.height();
+    const double fx = double(target.width()) / reduced.width(), fy = double(target.height()) / reduced.height();
     // Reducir (media de cada bloque) y ampliar (interpolación lineal) ya desenfocan un poco: la
     // gaussiana pone el resto.
     const double f = std::sqrt(fx * fy);
@@ -3019,18 +3019,18 @@ QImage blurredToSize(const QImage& source, QSize target, double sigma, bool wrap
     if (soft) {
         const int px = int(std::ceil(3.0 * smallSigma)) + 1;
         pad = QSize(px, px);
-        QImage padded(small.size() + 2 * pad, QImage::Format_ARGB32_Premultiplied);
+        QImage padded(reduced.size() + 2 * pad, QImage::Format_ARGB32_Premultiplied);
         padded.fill(Qt::transparent);
         QPainter pp(&padded);
         pp.setCompositionMode(QPainter::CompositionMode_Source);
-        pp.drawImage(pad.width(), pad.height(), small);
+        pp.drawImage(pad.width(), pad.height(), reduced);
         pp.end();
-        small = padded;
+        reduced = padded;
     }
-    gaussianBlur(small, smallSigma, wrap);
+    gaussianBlur(reduced, smallSigma, wrap);
     *margin = QSize(int(std::round(pad.width() * fx)), int(std::round(pad.height() * fy)));
     const QSize full = target + 2 * *margin;
-    return small.size() == full ? small : small.scaled(full, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    return reduced.size() == full ? reduced : reduced.scaled(full, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
 // La imagen de fondo con sus retoques (escala de grises y tinte; el desenfoque se hace al tamaño

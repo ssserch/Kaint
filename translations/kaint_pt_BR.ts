@@ -8748,8 +8748,8 @@ Com o FFmpeg (https://ffmpeg.org) junto ao Kaint, abrem-se mais formatos.</trans
         <translation>Vizinho mais próximo (suavizado)</translation>
     </message>
     <message>
-        <source>En la captura, en vez de la ventana: un menú abierto (menu:effects, menu:adjustments, menu:effects/Artístico...) o el diálogo de un efecto (effect:linocut...).</source>
-        <translation>Na captura, em vez da janela: um menu aberto (menu:effects, menu:adjustments, menu:effects/Artístico...) ou a caixa de diálogo de um efeito (effect:linocut...).</translation>
+        <source>En la captura, en vez de la ventana: un menú abierto (menu:effects, menu:adjustments, menu:effects/Artístico...), el diálogo de un efecto (effect:linocut...) o la tira de imágenes (strip: la primera sin guardar, la segunda y la última de una sesión colaborativa).</source>
+        <translation>Na captura, em vez da janela: um menu aberto (menu:effects, menu:adjustments, menu:effects/Artístico...), a caixa de diálogo de um efeito (effect:linocut...) ou a faixa de imagens (strip: a primeira sem salvar, a segunda e a última de uma sessão colaborativa).</translation>
     </message>
 </context>
 <context>

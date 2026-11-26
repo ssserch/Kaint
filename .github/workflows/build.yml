@@ -2,6 +2,10 @@
 # build.sh de siempre. Solo deja los archivos como «artifacts» de la ejecución (se descargan desde la
 # pestaña Actions): no publica nada. Las versiones (Releases) se suben a mano.
 #
+# Lo que aquí se compila es, sobre todo, lo que no se puede compilar en un PC con Windows x64 o
+# Linux x86_64 (Arch, Debian...): Windows arm64, Linux arm64 (AppImage, .deb, tar.gz y musl),
+# Alpine, FreeBSD y macOS. Los de arm64 van en los equipos arm64 de GitHub (nativos, sin emular).
+#
 # - A mano: Actions > «Compilar Kaint» > Run workflow (eligiendo qué sistemas). También lo lanza
 #   build.bat (opción 19 del menú, macOS) con la herramienta gh.
 # - Solo: con cada push a main y cada pull request que cambie el código (no la documentación).
@@ -15,7 +19,7 @@ on:
         type: boolean
         default: true
       linux:
-        description: "Linux (AppImage x86_64, .deb x86_64 y arm64, Alpine musl)"
+        description: "Linux (AppImage x86_64 y arm64, .deb x86_64 y arm64, tar.gz arm64, musl x86_64 y arm64)"
         type: boolean
         default: true
       macos:
@@ -102,7 +106,7 @@ jobs:
         run: build.bat --zip --setup --yes
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Kaint-windows-x64
           path: |
@@ -111,38 +115,55 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # En un equipo Windows arm64 de GitHub (windows-11-arm), con el Qt oficial para arm64 y Visual
+  # Studio: sin compilación cruzada. (Desde un equipo x64, aqtinstall 3.3.0 no termina de instalar el
+  # Qt 6.10 para arm64 «cross_compiled»: falla al buscar bin\qmake.bat, que ese paquete ya no trae.)
   windows-arm64:
     name: Windows arm64
     if: github.event_name != 'workflow_dispatch' || inputs.windows
-    runs-on: windows-2022
+    runs-on: windows-11-arm
     timeout-minutes: 120
+    env:
+      QT_ARM64: C:\Qt\6.10.3\msvc2022_arm64
     steps:
       - uses: actions/checkout@v5
 
-      - name: Caché de Qt (MSVC x64 y arm64)
+      - name: Caché de Qt (arm64)
         uses: actions/cache@v5
         with:
           path: C:\Qt
-          key: windows-arm64-qt-6.10.3
+          key: windows-arm64-native-qt-6.10.3
 
-      - name: Qt para arm64 y para x64 (aqtinstall)
+      # aqtinstall (el mismo que usa build.bat, de x64: Windows on Arm lo ejecuta emulado).
+      - name: Qt para arm64 (aqtinstall)
         shell: pwsh
         run: |
-          if (-not (Test-Path C:\Qt\6.10.3\msvc2022_arm64)) {
-            pip install aqtinstall
-            aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -m qtimageformats --outputdir C:\Qt
-            aqt install-qt windows desktop 6.10.3 win64_msvc2022_arm64_cross_compiled -m qtimageformats --outputdir C:\Qt
+          if (-not (Test-Path "$env:QT_ARM64\lib\cmake\Qt6\Qt6Config.cmake")) {
+            curl.exe -L --fail -o aqt.exe https://github.com/miurahr/aqtinstall/releases/download/v3.3.0/aqt_x64.exe
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            # Con Qt Multimedia (la intro y el audio del editor de GIF); si no lo hubiera para arm64,
+            # sin él (Kaint compila igual).
+            .\aqt.exe install-qt windows_arm64 desktop 6.10.3 win64_msvc2022_arm64 -m qtimageformats qtmultimedia --outputdir C:\Qt
+            if (-not (Test-Path "$env:QT_ARM64\lib\cmake\Qt6\Qt6Config.cmake")) {
+              .\aqt.exe install-qt windows_arm64 desktop 6.10.3 win64_msvc2022_arm64 -m qtimageformats --outputdir C:\Qt
+            }
+            # Lo que importa para compilar con CMake es lib\cmake: si aqtinstall falla después, al
+            # retocar qmake (que no se usa), se sigue.
+            if (-not (Test-Path "$env:QT_ARM64\lib\cmake\Qt6\Qt6Config.cmake")) {
+              Write-Error "No se instaló Qt para arm64 en $env:QT_ARM64"
+              exit 1
+            }
           }
+          exit 0
 
       - name: Compilar (.zip portable)
         shell: cmd
         env:
-          KAINT_QT_ARM64: C:\Qt\6.10.3\msvc2022_arm64
-          KAINT_QT_HOST: C:\Qt\6.10.3\msvc2022_64
+          KAINT_QT_ARM64: ${{ env.QT_ARM64 }}
         run: build.bat --zip --arm64 --yes
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Kaint-windows-arm64
           path: build-windows*/Kaint-*arm64*.zip
@@ -150,29 +171,36 @@ jobs:
           retention-days: 30
 
   linux-appimage:
-    name: Linux AppImage
+    name: Linux AppImage ${{ matrix.arch }}
     if: github.event_name != 'workflow_dispatch' || inputs.linux
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04, cache: build-appimage-cache }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, cache: build-appimage-cache-aarch64 }
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
 
       # build.sh compila el AppImage en un contenedor de Ubuntu 22.04 (glibc 2.35: funciona también
-      # en distribuciones antiguas) con Qt de aqtinstall; lo descargado queda en build-appimage-cache/.
+      # en distribuciones antiguas) con Qt de aqtinstall (el de x86_64 o el de arm64); lo descargado
+      # queda en build-appimage-cache/ (o build-appimage-cache-aarch64/).
       - name: Caché de Qt y Rust del contenedor
         uses: actions/cache@v5
         with:
-          path: build-appimage-cache
-          key: appimage-cache-${{ hashFiles('build.sh') }}
-          restore-keys: appimage-cache-
+          path: ${{ matrix.cache }}
+          key: appimage-cache-${{ matrix.arch }}-${{ hashFiles('build.sh') }}
+          restore-keys: appimage-cache-${{ matrix.arch }}-
 
       - name: Compilar el AppImage
         run: ./build.sh --appimage --opend2d "$OPEND2D"
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
-          name: Kaint-linux-x86_64-AppImage
+          name: Kaint-linux-${{ matrix.arch }}-AppImage
           path: |
             build-appimage*/Kaint-*.AppImage
             build-appimage*/Kaint-*.AppImage.zsync
@@ -210,29 +238,69 @@ jobs:
           ./build.sh --deb --opend2d off
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Kaint-linux-deb-${{ matrix.arch }}
           path: build-deb/kaint_*.deb
           if-no-files-found: error
           retention-days: 30
 
-  linux-alpine:
-    name: Linux musl (Alpine)
+  # El .tar.gz de Linux arm64 (glibc): necesita Qt 6.5 o posterior en el sistema, como el .deb.
+  linux-tar-arm64:
+    name: Linux tar.gz arm64 (Debian 13 / Ubuntu 25.04 o más nuevo)
     if: github.event_name != 'workflow_dispatch' || inputs.linux
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie
+    timeout-minutes: 120
+    steps:
+      - name: Paquetes para compilar
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates curl file \
+            build-essential cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-tools-dev qt6-tools-dev-tools \
+            qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev libssl-dev breeze-icon-theme \
+            qt6-image-formats-plugins qt6-translations-l10n qt6-multimedia-dev
+
+      - uses: actions/checkout@v5
+
+      - name: Compilar el .tar.gz
+        env:
+          KAINT_IN_CONTAINER: "1"
+        run: |
+          git config --global --add safe.directory "$PWD"
+          ./build.sh --tar --opend2d off
+
+      - name: Subir
+        uses: actions/upload-artifact@v6
+        with:
+          name: Kaint-linux-aarch64-tar
+          path: build-tar*/Kaint-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-alpine:
+    name: Linux musl ${{ matrix.arch }} (Alpine)
+    if: github.event_name != 'workflow_dispatch' || inputs.linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04, flags: "" }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, flags: "--arm64" }
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
 
-      # build.sh --musl compila dentro de un contenedor de Alpine (podman o docker).
+      # build.sh --musl compila dentro de un contenedor de Alpine (podman o docker), de la
+      # arquitectura del equipo (--arm64: el de arm64).
       - name: Compilar el .tar.gz
-        run: ./build.sh --tar --musl
+        run: ./build.sh --tar --musl ${{ matrix.flags }}
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
-          name: Kaint-linux-musl
+          name: Kaint-linux-musl-${{ matrix.arch }}
           path: build-tar*/Kaint-*.tar.gz
           if-no-files-found: error
           retention-days: 30
@@ -254,7 +322,7 @@ jobs:
           run: bash ./build.sh --tar --opend2d off
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Kaint-freebsd-x86_64
           path: build-tar/Kaint-*.tar.gz
@@ -283,7 +351,7 @@ jobs:
         run: ./build.sh --tar --opend2d "$OPEND2D"
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Kaint-macos-${{ matrix.arch }}
           path: build-tar/Kaint-*.tar.gz
@@ -302,7 +370,7 @@ jobs:
         run: ./build.sh --web
 
       - name: Subir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Kaint-web
           path: build-web/*.zip
@@ -314,7 +382,7 @@ jobs:
   # revisa y se pulsa «Publish release» en GitHub. Si el borrador ya existe, se reemplazan los archivos.
   release:
     name: Borrador de release
-    needs: [windows, windows-arm64, linux-appimage, linux-deb, linux-alpine, freebsd, macos, web]
+    needs: [windows, windows-arm64, linux-appimage, linux-deb, linux-tar-arm64, linux-alpine, freebsd, macos, web]
     if: always() && github.event_name == 'workflow_dispatch' && inputs.draft_release
     runs-on: ubuntu-24.04
     permissions:
@@ -323,7 +391,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Descargar lo compilado
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           path: dist
           merge-multiple: true

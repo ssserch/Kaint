@@ -123,6 +123,11 @@ public:
     int frameEnd(int index) const;
     int totalTime() const;
     void setFrameDelay(int index, int delayMs);
+    // El espacio vacío (ms) delante de un fotograma en su pista.
+    int frameGap(int index) const;
+    // Estirado o recortado por la izquierda: el espacio de delante y la duración nuevos, en un paso
+    // (los puntos clave siguen a la imagen).
+    void trimFrameStart(int index, int gapMs, int delayMs);
     void removeFrame(int index);
     void duplicateFrame(int index);
     // Selección de varios fotogramas (Ctrl+clic, Mayús+clic): el elegido (la capa activa) y los demás.

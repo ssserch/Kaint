@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QPolygonF>
+#include <QProcessEnvironment>
 #include <QSaveFile>
 #include <QSettings>
 #include <QTemporaryFile>
@@ -937,8 +938,32 @@ bool PdnBridge::ensureStarted(QString* error)
                                ? L"\"" + QDir::toNativeSeparators(dotnetPath()).toStdWString() + L"\" \""
                                      + QDir::toNativeSeparators(dotnetHostPath()).toStdWString() + L"\""
                                : L"\"" + QDir::toNativeSeparators(hostPath()).toStdWString() + L"\"";
-    const BOOL started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
-                                        nullptr, &startup, &info);
+    // Como en los demás sistemas, los complementos activados para la carpeta Effects junto al
+    // proceso auxiliar (Random Effect elige allí): el entorno de Kaint con KAINT_PDN_EFFECTS.
+    std::wstring environment;
+    {
+        std::lock_guard lock(effectsFolderMutex());
+        QString list;
+        for (const QString& a : std::as_const(effectsFolderList())) {
+            const QString path = QDir::toNativeSeparators(a);
+            // Una variable de Windows admite hasta 32767 caracteres: los que no quepan, fuera.
+            if (list.size() + path.size() + 1 > 32000)
+                break;
+            if (!list.isEmpty())
+                list += QLatin1Char('\n');
+            list += path;
+        }
+        if (!list.isEmpty()) {
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            env.insert(QStringLiteral("KAINT_PDN_EFFECTS"), list);
+            for (const QString& entry : env.toStringList())
+                environment += entry.toStdWString() + L'\0';
+            environment += L'\0';
+        }
+    }
+    const BOOL started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE,
+                                        CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                                        environment.empty() ? nullptr : environment.data(), nullptr, &startup, &info);
     const DWORD code = GetLastError();
     CloseHandle(childIn);
     CloseHandle(childOut);

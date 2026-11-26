@@ -882,7 +882,7 @@ answers it beforehand; with CMake, `-DKAINT_OPEND2D_REF=...`, `-DKAINT_OPEND2D_S
 Packagers can build with `-DKAINT_UPDATE_CHECK=OFF` so that Kaint leaves updates to the package
 manager and never looks for new versions on GitHub (the Flatpak does this).
 
-### 🤖 Build on GitHub (GitHub Actions)
+### Build on GitHub (GitHub Actions)
 
 The **Compilar Kaint** (*build Kaint*) workflow, `.github/workflows/build.yml`, builds Kaint
 on GitHub's machines with the same `build.bat` and `build.sh`, so anyone can get the files without

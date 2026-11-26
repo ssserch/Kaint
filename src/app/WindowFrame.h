@@ -82,6 +82,10 @@ void paintClassicTitle(QPainter& p, const QRect& r, bool active);
 // Con el tema Windows 7 (claro u oscuro), la barra de título de Aero: en la ventana principal, el
 // cristal lo pinta el marco y su fila de arriba lo deja ver.
 bool aeroTitle();
+// El cristal del marco de la ventana principal con Windows 7 (el color, el reflejo de lado a lado y
+// el brillo de la barra de título, a la medida de la ventana) en 'r' de 'widget', una parte de su
+// fila de arriba: la barra de título y la franja de los menús siguen el cristal de los lados.
+void paintMainGlass(QPainter& p, const QRect& r, const QWidget* widget);
 // El título sobre el cristal de Aero, con su halo (claro detrás del texto oscuro y al revés), alineado
 // a la izquierda y centrado en 'r'.
 void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool active);
@@ -90,6 +94,10 @@ void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool a
 // de arriba (cuelga de él, como la de cerrar de los diálogos), un rectángulo suelto o un cuadrado
 // suelto (como las de Paint.NET en Windows 7).
 enum class PanelClose7 { Hanging = 0, Rectangle = 1, Square = 2 };
+// Windows 7: el cristal solo en el marco y la barra de título, como una ventana normal (lo de
+// fábrica), o extendido también por la franja de los menús.
+void setAeroExtended(bool on);
+bool aeroExtended();
 void setPanelClose7(PanelClose7 shape);
 PanelClose7 panelClose7();
 void paintPanelClose(QPainter& p, const QRect& box, Buttons style, bool hot, bool down);

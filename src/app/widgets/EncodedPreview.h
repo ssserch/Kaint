@@ -35,9 +35,13 @@ signals:
     // "Tamaño del archivo: …", "calculando…" o el error al codificar.
     void statusChanged(const QString& text);
 
+protected:
+    void showEvent(QShowEvent* e) override;
+
 private:
     void start();
-    void onEncoded(const QList<Gif::Frame>& frames, qint64 bytes, const QString& error, int generation);
+    void onEncoded(const QList<Gif::Frame>& frames, const QList<QImage>& fits, qint64 bytes, const QString& error,
+                   int generation);
     void showFrame(int index);
     void nextFrame();
 
@@ -55,6 +59,10 @@ private:
     bool m_running = false;
     bool m_pending = false;
     QList<Gif::Frame> m_frames;
+    // Cada fotograma ya reducido a la vista previa («Ajustar»), hecho en segundo plano: reducir una
+    // imagen grande en el hilo de la interfaz trababa la ventana al abrirse.
+    QList<QImage> m_fits;
+    bool m_shown = false;
     int m_index = 0;
     int m_playsLeft = 0;
 };

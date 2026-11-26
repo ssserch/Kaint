@@ -14,6 +14,7 @@
 #include "core/effects/Effect.h"
 #include "core/plugins/PaintJs.h"
 
+#include <algorithm>
 #include <QBuffer>
 #include <QFile>
 #include <QFileInfo>
@@ -769,8 +770,83 @@ bool saveAnimation(const QList<Gif::Frame>& frames, const QString& path, const S
     return !data.isEmpty() && writeFile(path, data, error);
 }
 
+namespace {
+
+// Con varias pistas (editor de GIF): en cada momento, el fotograma de cada pista que toca, uno
+// encima de otro (las de número más alto, arriba), con sus puntos clave. Un fotograma nuevo cada
+// vez que cambia alguno (o cada stepMs mientras alguno se mueve).
+QList<Gif::Frame> trackFrames(const Document* doc, int defaultDelay, bool withHidden)
+{
+    struct Span {
+        const Layer* layer;
+        int start, end;
+    };
+    int tracks = 0;
+    for (const LayerPtr& l : doc->layers())
+        tracks = std::max(tracks, l->props.track + 1);
+    QList<QList<Span>> byTrack(tracks);
+    QList<int> ends(tracks, 0);
+    QList<int> cuts{0};
+    for (const LayerPtr& l : doc->layers()) {
+        const int k = l->props.track;
+        const int delay = std::max(Gif::kMinDelayMs, Gif::delayFromName(l->props.name, defaultDelay));
+        const int start = ends[k] + std::max(0, l->props.gap);
+        const Span span{l.get(), start, start + delay};
+        ends[k] = span.end;
+        if (!l->props.visible && !withHidden)
+            continue;
+        byTrack[k] << span;
+        cuts << span.start << span.end;
+        if (l->props.motion && l->props.motion->animated()) {
+            const int step = std::max(10, l->props.motion->stepMs);
+            for (int t = span.start + step; t < span.end; t += step)
+                cuts << t;
+        }
+    }
+    std::sort(cuts.begin(), cuts.end());
+    cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
+    QList<Gif::Frame> frames;
+    for (int c = 0; c + 1 < cuts.size(); ++c) {
+        const int t = cuts[c];
+        QImage canvas(doc->size(), QImage::Format_ARGB32_Premultiplied);
+        canvas.fill(Qt::transparent);
+        QPainter p(&canvas);
+        for (const QList<Span>& track : std::as_const(byTrack))
+            for (const Span& s : track) {
+                if (t < s.start || t >= s.end)
+                    continue;
+                QImage image = s.layer->image;
+                if (s.layer->props.motion && !s.layer->props.motion->isEmpty())
+                    image = Motion::render(image, s.layer->props.motion->sample(t - s.start));
+                p.setOpacity(s.layer->props.opacity / 255.0);
+                p.drawImage(0, 0, image);
+                break;
+            }
+        p.end();
+        Gif::Frame f;
+        f.image = canvas.convertToFormat(kLayerFormat);
+        f.delayMs = cuts[c + 1] - t;
+        // Los que no cambian respecto al anterior se juntan (dura más).
+        if (!frames.isEmpty() && frames.last().image == f.image)
+            frames.last().delayMs += f.delayMs;
+        else
+            frames << f;
+    }
+    return frames;
+}
+
+} // namespace
+
 QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay, bool withHidden)
 {
+    // Varias pistas del editor de GIF (o fotogramas con espacio delante): se combinan.
+    for (const LayerPtr& l : doc->layers())
+        if (l->props.track > 0 || l->props.gap > 0) {
+            QList<Gif::Frame> frames = trackFrames(doc, defaultDelay, withHidden);
+            if (frames.isEmpty())
+                frames << Gif::Frame{doc->flattened(), defaultDelay};
+            return frames;
+        }
     // Las capas visibles (y las ocultas, si se piden) de abajo arriba, cada una con su opacidad.
     QList<Gif::Frame> frames;
     for (const LayerPtr& layer : doc->layers()) {

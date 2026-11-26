@@ -875,6 +875,173 @@ void drawSpotHealing(QPainter& p)
     puzzleBadge(p);
 }
 
+// Los botones de las ventanas de la esquina de arriba a la derecha con el aspecto de Paint.NET 5
+// (Herramientas, Historial, Capas, Colores, Configuración y Ayuda): como los suyos, con un contorno
+// blanco grueso alrededor de cada figura (se leen sobre la franja de cualquier color). Rejilla de
+// 20 px.
+void halo(QPainter& p, const QPainterPath& path, qreal width = 2.8)
+{
+    p.setPen(QPen(Qt::white, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(Qt::white);
+    p.drawPath(path);
+}
+
+void drawWinTools(QPainter& p)
+{
+    // Un martillo en diagonal: el mango de madera y la cabeza de acero.
+    aa(p);
+    p.translate(10, 10);
+    p.rotate(-45);
+    QPainterPath handle;
+    handle.addRoundedRect(QRectF(-8.6, -1.35, 12.2, 2.7), 1.2, 1.2);
+    QPainterPath head;
+    head.moveTo(1.6, -6.2);
+    head.lineTo(6.2, -6.2);
+    head.lineTo(6.2, 3.6);
+    head.lineTo(7.0, 3.6);
+    head.lineTo(7.0, 6.6);
+    head.lineTo(0.8, 6.6);
+    head.lineTo(0.8, 3.6);
+    head.lineTo(1.6, 3.6);
+    head.closeSubpath();
+    halo(p, handle.united(head));
+    QLinearGradient wood(0, -1.35, 0, 1.35);
+    wood.setColorAt(0, QColor(0xe8, 0xb8, 0x7c));
+    wood.setColorAt(1, QColor(0xb9, 0x7f, 0x45));
+    p.setPen(QPen(QColor(0x6e, 0x46, 0x22), 0.9));
+    p.setBrush(wood);
+    p.drawPath(handle);
+    QLinearGradient steel(1, 0, 7, 0);
+    steel.setColorAt(0, QColor(0xc9, 0xd0, 0xd8));
+    steel.setColorAt(1, QColor(0x74, 0x7e, 0x8a));
+    p.setPen(QPen(QColor(0x34, 0x3b, 0x44), 0.9, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+    p.setBrush(steel);
+    p.drawPath(head);
+}
+
+void drawWinHistory(QPainter& p)
+{
+    // Un reloj con la flecha de volver atrás rodeándolo.
+    aa(p);
+    const QPointF c(10.5, 10.5);
+    QPainterPath face;
+    face.addEllipse(c, 6.4, 6.4);
+    QPainterPath ring;
+    ring.arcMoveTo(QRectF(c.x() - 7.6, c.y() - 7.6, 15.2, 15.2), 205);
+    ring.arcTo(QRectF(c.x() - 7.6, c.y() - 7.6, 15.2, 15.2), 205, 290);
+    const QPointF end = ring.currentPosition();
+    QPainterPath head;
+    head.moveTo(end + QPointF(-3.6, 0.6));
+    head.lineTo(end + QPointF(1.4, -2.2));
+    head.lineTo(end + QPointF(1.0, 3.6));
+    head.closeSubpath();
+    QPainterPathStroker stroker;
+    stroker.setWidth(2.2);
+    stroker.setCapStyle(Qt::FlatCap);
+    const QPainterPath ringShape = stroker.createStroke(ring);
+    halo(p, face.united(ringShape).united(head), 3.0);
+    p.setPen(QPen(QColor(0x3a, 0x40, 0x48), 0.9));
+    p.setBrush(QColor(0xfb, 0xfb, 0xfb));
+    p.drawPath(face);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x1e, 0x78, 0xd2));
+    p.drawPath(ringShape);
+    p.drawPath(head);
+    p.setPen(QPen(QColor(0x2a, 0x2f, 0x36), 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(c, c + QPointF(0, -4.0));
+    p.drawLine(c, c + QPointF(3.0, 1.6));
+}
+
+void drawWinLayers(QPainter& p)
+{
+    // Tres hojas apiladas en perspectiva; la de arriba, más clara.
+    aa(p);
+    const QColor fills[] = {QColor(0x5e, 0x9b, 0xd8), QColor(0x8f, 0xbf, 0xec), QColor(0xd4, 0xe9, 0xfc)};
+    for (int i = 0; i < 3; ++i) {
+        const qreal y = 4.6 * (2 - i);
+        QPainterPath sheet;
+        sheet.moveTo(10, 1.8 + y);
+        sheet.lineTo(18.2, 5.6 + y);
+        sheet.lineTo(10, 9.4 + y);
+        sheet.lineTo(1.8, 5.6 + y);
+        sheet.closeSubpath();
+        halo(p, sheet, 2.6);
+        p.setPen(QPen(QColor(0x1f, 0x4f, 0x86), 0.9, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+        p.setBrush(fills[i]);
+        p.drawPath(sheet);
+    }
+}
+
+void drawWinColors(QPainter& p)
+{
+    // La rueda de colores en seis porciones.
+    aa(p);
+    const QRectF r(2.2, 2.2, 15.6, 15.6);
+    QPainterPath wheel;
+    wheel.addEllipse(r);
+    halo(p, wheel, 3.0);
+    const QColor slices[] = {QColor(0xf2, 0x4c, 0x3d), QColor(0xf7, 0x9a, 0x2a), QColor(0xf5, 0xd3, 0x2e),
+                             QColor(0x4c, 0xb8, 0x4f), QColor(0x2f, 0x8c, 0xe0), QColor(0x8e, 0x5b, 0xd4)};
+    p.setPen(QPen(Qt::white, 0.8));
+    for (int i = 0; i < 6; ++i) {
+        p.setBrush(slices[i]);
+        p.drawPie(r, (90 - 60 * i) * 16, -60 * 16);
+    }
+    p.setPen(QPen(QColor(0x3a, 0x40, 0x48), 0.9));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(r);
+    p.setPen(Qt::NoPen);
+    p.setBrush(Qt::white);
+    p.drawEllipse(QPointF(10, 10), 2.4, 2.4);
+}
+
+void drawWinSettings(QPainter& p)
+{
+    // El engranaje gris con el agujero en el centro.
+    aa(p);
+    QPolygonF gear;
+    for (int i = 0; i < 8; ++i) {
+        const qreal a = qDegreesToRadians(i * 45.0);
+        for (const auto& [r, da] : {std::pair{6.3, -15.0}, std::pair{8.6, -8.5}, std::pair{8.6, 8.5}, std::pair{6.3, 15.0}}) {
+            const qreal t = a + qDegreesToRadians(da);
+            gear << QPointF(10 + r * std::cos(t), 10 + r * std::sin(t));
+        }
+    }
+    QPainterPath body;
+    body.addPolygon(gear);
+    body.closeSubpath();
+    halo(p, body, 2.6);
+    QLinearGradient metal(0, 2, 0, 18);
+    metal.setColorAt(0, QColor(0xb4, 0xbb, 0xc3));
+    metal.setColorAt(1, QColor(0x6c, 0x74, 0x7e));
+    p.setPen(QPen(QColor(0x34, 0x3b, 0x44), 0.9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(metal);
+    p.drawPath(body);
+    p.setBrush(Qt::white);
+    p.drawEllipse(QPointF(10, 10), 2.9, 2.9);
+}
+
+void drawWinHelp(QPainter& p)
+{
+    // El círculo azul con la interrogación blanca.
+    aa(p);
+    QPainterPath circle;
+    circle.addEllipse(QPointF(10, 10), 7.8, 7.8);
+    halo(p, circle, 2.8);
+    QLinearGradient blue(0, 2, 0, 18);
+    blue.setColorAt(0, QColor(0x4a, 0x9c, 0xe8));
+    blue.setColorAt(1, QColor(0x1a, 0x5f, 0xb4));
+    p.setPen(QPen(QColor(0x14, 0x45, 0x80), 0.9));
+    p.setBrush(blue);
+    p.drawPath(circle);
+    QFont f(QStringLiteral("Segoe UI"));
+    f.setBold(true);
+    f.setPixelSize(13);
+    p.setFont(f);
+    p.setPen(Qt::white);
+    p.drawText(QRectF(2, 2.4, 16, 16), Qt::AlignCenter, QStringLiteral("?"));
+}
+
 // Nombre de Kaint → dibujo, rejilla en la que se dibuja y archivo de paint.js con el que lo puede
 // sustituir un paquete de iconos.
 struct Entry {
@@ -919,6 +1086,12 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("toolbar-deselect"), {BS, drawDeselect, "menu_edit_deselect_icon"}},
         {QStringLiteral("collab"), {BS, drawCollab, ""}},
         {QStringLiteral("settings-collab"), {BS, drawCollab, ""}},
+        {QStringLiteral("corner-tools"), {TS, drawWinTools, ""}},
+        {QStringLiteral("corner-history"), {TS, drawWinHistory, ""}},
+        {QStringLiteral("corner-layers"), {TS, drawWinLayers, ""}},
+        {QStringLiteral("corner-colors"), {TS, drawWinColors, ""}},
+        {QStringLiteral("corner-settings"), {TS, drawWinSettings, ""}},
+        {QStringLiteral("corner-help"), {TS, drawWinHelp, ""}},
     };
     return icons;
 }
@@ -1430,7 +1603,13 @@ QCursor rotateCursor(qreal angle, bool grabbing)
     if (const auto it = cache.constFind(key); it != cache.cend())
         return *it;
     const qreal a = index * 2 * M_PI / steps;
-    const qreal scale = drawnCursorSize() / 24.0;
+    // La flecha, a la medida de la mano que lleva encima (como en Kaint.HTML: la mano de 24 px en un
+    // cursor de 40). Antes iba con el tamaño de cursor del sistema y, con uno grande (o con la mano
+    // pixelada de Paint.NET, que no crece con él), la flecha quedaba mucho más grande que la mano.
+    const QCursor hand = handCursor(grabbing);
+    const QPixmap handPixmap = hand.pixmap();
+    const QSizeF handSize = handPixmap.deviceIndependentSize();
+    const qreal scale = std::clamp(std::max(handSize.width(), handSize.height()) / 24.0, 0.6, 3.0);
     const int side = int(std::ceil(40 * scale));
     QImage image(QSize(side, side) * dpr, QImage::Format_ARGB32_Premultiplied);
     image.setDevicePixelRatio(dpr);
@@ -1471,8 +1650,7 @@ QCursor rotateCursor(qreal angle, bool grabbing)
         p.drawPath(path);
         p.restore();
         // La mano encima, con su punto activo en el del cursor.
-        const QCursor hand = handCursor(grabbing);
-        const QPixmap pm = hand.pixmap();
+        const QPixmap& pm = handPixmap;
         p.setRenderHint(QPainter::SmoothPixmapTransform, g_cursorStyle != CursorStyle::PaintNet);
         p.drawPixmap(QRectF(QPointF(side / 2.0, side / 2.0) - QPointF(hand.hotSpot()), pm.deviceIndependentSize()), pm,
                      QRectF(pm.rect()));

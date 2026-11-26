@@ -56,6 +56,8 @@ constexpr int kAeroBorder = 6;
 // El de la ventana principal con Windows 7 (el cristal se ve entre sus dos contornos).
 constexpr int kMainAeroBorder = 8;
 constexpr int kTitleAero = 27;
+// Windows 8: el alto de la barra de los diálogos (desde el contorno de arriba).
+constexpr int kTitleMetro = 29;
 constexpr int kButton = 46;
 // Franja de los bordes (dentro de la ventana) desde la que se cambia el tamaño.
 constexpr int kGrab = 5;
@@ -278,6 +280,49 @@ void paintGlyph(QPainter& p, const QRect& box, int which, bool maximized, const 
         p.setPen(QPen(color, 1, Qt::SolidLine, Qt::FlatCap));
         p.drawLine(QPointF(x, y), QPointF(x + kSide, y + kSide));
         p.drawLine(QPointF(x + kSide, y), QPointF(x, y + kSide));
+        break;
+    }
+    p.restore();
+}
+
+// --- Windows 8 -------------------------------------------------------------------------------
+
+// Los de Windows 8: más gruesos que los de Windows 10. Minimizar, una raya de dos píxeles abajo;
+// maximizar, un recuadro con el borde de arriba de dos; cerrar, una X gruesa y pequeña.
+void paintGlyph8(QPainter& p, const QRect& box, int which, bool maximized, const QColor& color)
+{
+    p.save();
+    const int cx = box.left() + box.width() / 2, cy = box.top() + box.height() / 2;
+    auto window = [&p, &color](const QRect& r) {
+        p.fillRect(QRect(r.left(), r.top(), r.width(), 2), color);
+        p.fillRect(QRect(r.left(), r.bottom(), r.width(), 1), color);
+        p.fillRect(QRect(r.left(), r.top(), 1, r.height()), color);
+        p.fillRect(QRect(r.right(), r.top(), 1, r.height()), color);
+    };
+    // (Como los de Windows 8: gruesos y algo más grandes que los de Windows 10.)
+    switch (which) {
+    case 0:
+        p.fillRect(QRect(cx - 5, cy + 2, 10, 3), color);
+        break;
+    case 1:
+        if (maximized) {
+            // Restaurar: dos ventanas, la de detrás asomando arriba a la derecha.
+            p.fillRect(QRect(cx - 2, cy - 6, 9, 3), color);
+            p.fillRect(QRect(cx + 6, cy - 6, 1, 8), color);
+            p.fillRect(QRect(cx + 3, cy + 1, 4, 1), color);
+            p.fillRect(QRect(cx - 2, cy - 6, 1, 3), color);
+            window(QRect(cx - 6, cy - 2, 9, 8));
+            p.fillRect(QRect(cx - 6, cy - 2, 9, 3), color);
+        } else {
+            window(QRect(cx - 6, cy - 5, 12, 10));
+            p.fillRect(QRect(cx - 6, cy - 5, 12, 3), color);
+        }
+        break;
+    default:
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::FlatCap));
+        p.drawLine(QPointF(cx - 4, cy - 3.5), QPointF(cx + 4, cy + 3.5));
+        p.drawLine(QPointF(cx + 4, cy - 3.5), QPointF(cx - 4, cy + 3.5));
         break;
     }
     p.restore();
@@ -744,6 +789,9 @@ void enableBlurBehind(QWidget* window)
 // región de la ventana (Windows 11 las redondea él solo).
 bool ownCorners()
 {
+    // Windows 8 no tenía esquinas redondeadas (con ellas, su marco quedaba con bordes blancos).
+    if (Theme::active().metro && !Theme::active().classic)
+        return false;
 #ifdef Q_OS_WIN
     return g_winRound && !isWindows11();
 #else
@@ -960,6 +1008,10 @@ private:
         // Windows 7: la barra empieza en el borde de arriba (los botones cuelgan de él).
         if (aero())
             return QRect(b, 1, m_window->width() - 2 * b, kTitleAero);
+        // Windows 8: también desde el contorno de arriba (cerrar cuelga de él), hasta la línea del
+        // contenido.
+        if (metro())
+            return QRect(b, 1, m_window->width() - 2 * b, kTitleMetro);
         return QRect(b, b, m_window->width() - 2 * b, classic() ? kTitle98 : luna() ? kTitleXP : kTitle);
     }
 
@@ -1043,8 +1095,14 @@ private:
 #ifdef Q_OS_WIN
         extra = maximizedOverhang(m_window);
 #endif
-        if (aero()) {
+        if (aero() || (m_titleBar && metro())) {
             m_window->setContentsMargins(QMargins(b, titleRect().bottom() + 2, b, b) + extra);
+            return;
+        }
+        // Windows 8: la fila de la barra de título empieza bajo el contorno de arriba (cerrar cuelga
+        // de él) y es del color del marco; maximizada, sin marco.
+        if (!m_titleBar && metro()) {
+            m_window->setContentsMargins((isMaximized(m_window) ? QMargins() : QMargins(b, 1, b, b)) + extra);
             return;
         }
         // Windows 7: los botones cuelgan del borde de arriba y, maximizada, no hay marco.
@@ -1268,19 +1326,31 @@ private:
             } else if (metro()) {
                 // Windows 8: todo el marco del color de las ventanas (más apagado inactiva), con una
                 // línea más oscura por fuera.
+                // (La principal, siempre del color de su franja de arriba: al apagarse solo el marco,
+                // los lados no coincidían con la barra de título.)
                 QColor color = titleColor();
-                if (!active) {
+                if (!active && m_titleBar) {
                     const QColor w = m_window->palette().color(QPalette::Window);
                     color = QColor((color.red() * 55 + w.red() * 45) / 100, (color.green() * 55 + w.green() * 45) / 100,
                                    (color.blue() * 55 + w.blue() * 45) / 100);
                 }
-                const int b = border();
-                p.fillRect(QRect(f.left(), f.top(), f.width(), b), color);
-                p.fillRect(QRect(f.left(), f.bottom() - b + 1, f.width(), b), color);
-                p.fillRect(QRect(f.left(), f.top(), b, f.height()), color);
-                p.fillRect(QRect(f.right() - b + 1, f.top(), b, f.height()), color);
-                p.setPen(borderColor());
-                p.drawRect(f.adjusted(0, 0, -1, -1));
+                // (Maximizada no hay marco: pintarlo dejaba franjas del color de las ventanas bajo lo
+                // que no pinta su fondo, como la esquina «px» de las reglas.)
+                const int b = isMaximized(m_window) && !m_titleBar ? 0 : border();
+                if (b > 0) {
+                    p.fillRect(QRect(f.left(), f.top(), f.width(), b), color);
+                    p.fillRect(QRect(f.left(), f.bottom() - b + 1, f.width(), b), color);
+                    p.fillRect(QRect(f.left(), f.top(), b, f.height()), color);
+                    p.fillRect(QRect(f.right() - b + 1, f.top(), b, f.height()), color);
+                    p.setPen(borderColor());
+                    p.drawRect(f.adjusted(0, 0, -1, -1));
+                }
+                // Y otra línea, más suave, alrededor del contenido (bajo la barra de título).
+                if (!isMaximized(m_window)) {
+                    const QRect client = m_titleBar ? m_window->contentsRect() : clientRect();
+                    p.setPen(color.darker(118));
+                    p.drawRect(client.adjusted(-1, -1, 0, 0));
+                }
             } else {
                 p.setPen(borderColor());
                 p.drawRect(f.adjusted(0, 0, -1, -1));
@@ -1318,7 +1388,15 @@ private:
         }
         p.setPen(titleTextColor(active));
         // Windows 8 centra el título.
-        p.drawText(text, Qt::AlignVCenter | (metro() ? Qt::AlignHCenter : Qt::AlignLeft), title);
+        // Windows 8 centra el título en toda la barra (no en lo que queda tras el icono), sin pisar
+        // el icono ni el botón de cerrar.
+        if (metro()) {
+            const int w = p.fontMetrics().horizontalAdvance(title);
+            const int x = std::clamp(t.center().x() - w / 2, text.left(), std::max(text.left(), text.right() - w));
+            p.drawText(QRect(x, text.top(), w + 1, text.height()), Qt::AlignVCenter | Qt::AlignLeft, title);
+            return;
+        }
+        p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, title);
     }
 
     // La ventana principal con Windows 7: el cristal de 7.css en todo el marco (la fila de la barra de
@@ -1702,7 +1780,7 @@ Metrics metricsFor(Buttons style, int h)
     }
     case Buttons::Windows98: return {16, 16, 14, 0, 2, 2, false};
     // Windows 8: minimizar y maximizar estrechos y cerrar rojo y ancho, colgando del borde de arriba.
-    case Buttons::Windows8: return {26, 45, std::min(21, h), 0, 0, 0, true};
+    case Buttons::Windows8: return {26, 45, std::min(20, h), 0, 0, 0, true};
     // Los redondos de GNOME y compañía (24 px, con aire entre ellos).
     case Buttons::Gnome: {
         const int d = std::min(24, std::max(14, h - 6));
@@ -1813,17 +1891,16 @@ void paintButton(QPainter& p, const QRect& box, int which, bool maximized, bool 
     case Buttons::Windows8: {
         // Cerrar, siempre rojo (más claro bajo el puntero, más oscuro al pulsarlo; apagado en una
         // ventana inactiva) con la X blanca; los demás, planos sobre el color de las ventanas.
+        // (Cerrar, rojo también en las ventanas inactivas, como en Windows 8.)
         QColor glyph = titleTextColor(active);
         if (which == 2) {
-            QColor red = down ? QColor(0x99, 0x3d, 0x3d) : hot ? QColor(0xe0, 0x43, 0x43) : QColor(0xc7, 0x50, 0x50);
-            if (!active && !hot && !down)
-                red = QColor(0xc7, 0x50, 0x50, 150);
+            const QColor red = down ? QColor(0x99, 0x3d, 0x3d) : hot ? QColor(0xe0, 0x43, 0x43) : QColor(0xc7, 0x50, 0x50);
             p.fillRect(box, red);
             glyph = Qt::white;
         } else if (hot || down) {
             p.fillRect(box, overlay(down ? 60 : 32));
         }
-        paintGlyph(p, box, which, maximized, glyph);
+        paintGlyph8(p, box, which, maximized, glyph);
         return;
     }
     case Buttons::Gnome: {
@@ -1925,6 +2002,31 @@ bool aeroTitle()
     return s.win7 && !s.classic;
 }
 
+void paintMainGlass(QPainter& p, const QRect& r, const QWidget* widget)
+{
+    const QWidget* window = widget->window();
+    const QPoint offset = widget->mapTo(window, QPoint(0, 0));
+    const QRectF w = QRectF(window->rect()).translated(-offset);
+    const bool active = window->isActiveWindow();
+    const bool dark = Theme::active().dark;
+    p.save();
+    p.fillRect(r, Theme::glassColor(false, active));
+    // Los mismos degradados que paintMainAero, con las medidas de la ventana entera.
+    QLinearGradient across(w.topLeft(), w.topRight());
+    across.setColorAt(0, QColor(255, 255, 255, 102));
+    across.setColorAt(0.5, QColor(0, 0, 0, 26));
+    across.setColorAt(1, QColor(255, 255, 255, 51));
+    p.fillRect(r, across);
+    const qreal clientTop = window->contentsRect().top() + CaptionButtons::rowHeight(window) - offset.y();
+    QLinearGradient shine(QPointF(0, w.top()), QPointF(0, clientTop));
+    shine.setColorAt(0, QColor(255, 255, 255, dark ? 45 : 110));
+    shine.setColorAt(0.48, QColor(255, 255, 255, dark ? 20 : 50));
+    shine.setColorAt(0.5, QColor(255, 255, 255, 0));
+    shine.setColorAt(1, QColor(255, 255, 255, 0));
+    p.fillRect(r, shine);
+    p.restore();
+}
+
 void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool active)
 {
     const QColor color = titleTextColor(active);
@@ -1968,7 +2070,18 @@ void paintAeroTitleText(QPainter& p, const QRect& r, const QString& text, bool a
 
 namespace {
 PanelClose7 g_panelClose7 = PanelClose7::Rectangle;
+bool g_aeroExtended = false;
 } // namespace
+
+void setAeroExtended(bool on)
+{
+    g_aeroExtended = on;
+}
+
+bool aeroExtended()
+{
+    return g_aeroExtended;
+}
 
 void setPanelClose7(PanelClose7 shape)
 {
@@ -2055,8 +2168,8 @@ void CaptionTitle::paintEvent(QPaintEvent*)
         return;
     }
     p.setPen(WindowFrame::titleTextColor(active));
-    // Windows 8 centra el título.
-    p.drawText(text, Qt::AlignVCenter | (Theme::active().metro ? Qt::AlignHCenter : Qt::AlignLeft), title);
+    // (Con todos los temas, también Windows 8, a la izquierda, junto al icono.)
+    p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, title);
 }
 
 void CaptionTitle::mousePressEvent(QMouseEvent* e)

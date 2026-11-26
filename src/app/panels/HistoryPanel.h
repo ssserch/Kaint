@@ -18,6 +18,10 @@ public:
     void setJumpButtonsVisible(bool on);
     // El botón de la colaboración (a la derecha), visible mientras lo esté la acción.
     void setCollabAction(QAction* action);
+    // Qué pasos se ven: todos, los del editor de imágenes (sin los del editor de GIF) o solo los del
+    // editor de GIF (cada editor tiene su vista del historial; deshacer sigue siendo el de la imagen).
+    enum class Filter { All, Image, Gif };
+    void setFilter(Filter filter);
 
 signals:
     void aboutToJump();
@@ -26,6 +30,9 @@ protected:
     bool eventFilter(QObject* obj, QEvent* e) override;
 
 private:
+    void applyFilter();
+
+    Filter m_filter = Filter::All;
     QUndoGroup* m_group;
     QUndoView* m_view;
     // Ir al principio y al final.

@@ -24,4 +24,14 @@ if (!Settings.get("welcomed")) {
     welcomeDialog();
 } else {
     await window.kaint.offerRecovery();
+    // Kaint.APK: la pantalla de bienvenida (como la de ibis Paint), si no se quitó.
+    if (window.KaintAndroid && Settings.get("androidWelcome") !== false) {
+        const { showWelcome } = await import("./ui/Welcome.js");
+        await showWelcome(window.kaint);
+    }
+}
+// Kaint.APK: las imágenes recientes de la bienvenida se guardan al salir de la app.
+if (window.KaintAndroid) {
+    const { installRecents } = await import("./ui/Welcome.js");
+    installRecents(window.kaint);
 }

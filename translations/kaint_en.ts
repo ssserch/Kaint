@@ -1579,10 +1579,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Media</translation>
     </message>
     <message>
-        <source>Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final).</source>
-        <translation>The images open in Kaint and the ones you import. Drag them to the timeline (or double-click to add them at the end).</translation>
-    </message>
-    <message>
         <source>Importar...</source>
         <translation>Import...</translation>
     </message>
@@ -1593,10 +1589,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Añadir</source>
         <translation>Add</translation>
-    </message>
-    <message>
-        <source>Añade los medios elegidos detrás del fotograma elegido.</source>
-        <translation>Adds the chosen media after the chosen frame.</translation>
     </message>
     <message>
         <source>Primer fotograma (Inicio)</source>
@@ -1643,6 +1635,21 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Drag the image to move it (with position keyframes, one is set at the playhead)</translation>
     </message>
     <message>
+        <source>Añadir pista</source>
+        <translation>Add track</translation>
+    </message>
+    <message>
+        <source>Pista %1</source>
+        <translation>Track %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotograma(s)</source>
+        <translation>
+            <numerusform>%n frame</numerusform>
+            <numerusform>%n frames</numerusform>
+        </translation>
+    </message>
+    <message>
         <source>Guarda la animación como GIF, con la configuración de siempre (paleta, duración, repeticiones, efectos...). En la flecha, otros formatos: PNG animado, WebP animado y vídeo MP4 o WebM.</source>
         <translation>Saves the animation as a GIF, with the usual settings (palette, duration, loops, effects...). In the arrow, other formats: animated PNG, animated WebP and MP4 or WebM video.</translation>
     </message>
@@ -1665,6 +1672,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Vídeo WebM...</source>
         <translation>WebM video...</translation>
+    </message>
+    <message>
+        <source>Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final de la pista elegida).</source>
+        <translation>The images open in Kaint and the ones you import. Drag them to the timeline (or double-click to add them at the end of the selected track).</translation>
+    </message>
+    <message>
+        <source>Añade los medios elegidos a la pista elegida, detrás del fotograma elegido.</source>
+        <translation>Adds the selected media to the selected track, after the selected frame.</translation>
     </message>
     <message>
         <source>Deshacer (Ctrl+Z)</source>
@@ -1699,6 +1714,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Edit the frame with the tools</translation>
     </message>
     <message>
+        <source>Punto clave</source>
+        <translation>Keyframe</translation>
+    </message>
+    <message>
+        <source>Punto clave global: todos los valores (posición, escala, rotación y opacidad) en el cabezal; si ya hay uno ahí, lo quita (K)</source>
+        <translation>Global keyframe: every value (position, scale, rotation and opacity) at the playhead; if there is one there already, removes it (K)</translation>
+    </message>
+    <message>
         <source>Duración:</source>
         <translation>Duration:</translation>
     </message>
@@ -1723,16 +1746,132 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Reverse</translation>
     </message>
     <message>
-        <source>El último fotograma pasa a ser el primero</source>
-        <translation>The last frame becomes the first</translation>
-    </message>
-    <message>
         <source>Ida y vuelta</source>
         <translation>Back and forth</translation>
     </message>
     <message>
-        <source>Añade los fotogramas al revés al final: la animación va y vuelve</source>
-        <translation>Adds the frames in reverse at the end: the animation goes back and forth</translation>
+        <source>El último fotograma de la pista elegida pasa a ser el primero</source>
+        <translation>The last frame of the selected track becomes the first</translation>
+    </message>
+    <message>
+        <source>Arrastra aquí un audio (MP3, WAV, OGG...) para los vídeos exportados</source>
+        <translation>Drop audio here (MP3, WAV, OGG...) for exported videos</translation>
+    </message>
+    <message>
+        <source>Silenciado</source>
+        <translation>Muted</translation>
+    </message>
+    <message>
+        <source>AUDIO</source>
+        <translation>AUDIO</translation>
+    </message>
+    <message>
+        <source>Audio %1</source>
+        <translation>Audio %1</translation>
+    </message>
+    <message>
+        <source>Pistas pequeñas</source>
+        <translation>Small tracks</translation>
+    </message>
+    <message>
+        <source>Pistas medianas</source>
+        <translation>Medium tracks</translation>
+    </message>
+    <message>
+        <source>Pistas grandes</source>
+        <translation>Large tracks</translation>
+    </message>
+    <message>
+        <source>Silenciar el audio</source>
+        <translation>Mute audio</translation>
+    </message>
+    <message>
+        <source>Activar el sonido</source>
+        <translation>Unmute</translation>
+    </message>
+    <message>
+        <source>Quitar el audio</source>
+        <translation>Remove audio</translation>
+    </message>
+    <message>
+        <source>Quitar el punto de volumen</source>
+        <translation>Remove volume keyframe</translation>
+    </message>
+    <message>
+        <source>Cambiar el volumen</source>
+        <translation>Change volume</translation>
+    </message>
+    <message>
+        <source>Mover el audio</source>
+        <translation>Move audio</translation>
+    </message>
+    <message>
+        <source>Recortar el audio</source>
+        <translation>Trim audio</translation>
+    </message>
+    <message>
+        <source>Añadir un punto de volumen</source>
+        <translation>Add volume keyframe</translation>
+    </message>
+    <message>
+        <source>Volumen:</source>
+        <translation>Volume:</translation>
+    </message>
+    <message>
+        <source>Punto clave de volumen en el cabezal: con varios, el volumen cambia de uno a otro</source>
+        <translation>Volume keyframe at the playhead: with several, the volume goes from one to the next</translation>
+    </message>
+    <message>
+        <source>Fundido de entrada:</source>
+        <translation>Fade in:</translation>
+    </message>
+    <message>
+        <source>Fundido de salida:</source>
+        <translation>Fade out:</translation>
+    </message>
+    <message>
+        <source> s</source>
+        <translation> s</translation>
+    </message>
+    <message>
+        <source>Silenciar</source>
+        <translation>Mute</translation>
+    </message>
+    <message>
+        <source>El audio va en los vídeos exportados (MP4 y WebM): el GIF no tiene sonido. Doble clic en el clip añade un punto de volumen; arrastra los puntos para cambiarlo.</source>
+        <translation>Audio goes into exported videos (MP4 and WebM): GIFs have no sound. Double-click the clip to add a volume keyframe; drag the keyframes to change it.</translation>
+    </message>
+    <message>
+        <source>Empieza en %1 y suena %2 (de %3).</source>
+        <translation>Starts at %1 and plays for %2 (of %3).</translation>
+    </message>
+    <message>
+        <source>Cambiar el audio</source>
+        <translation>Change audio</translation>
+    </message>
+    <message>
+        <source>Vídeo (%1)</source>
+        <translation>Video (%1)</translation>
+    </message>
+    <message>
+        <source>Añade los fotogramas de la pista elegida al revés al final: la animación va y vuelve</source>
+        <translation>Adds the frames of the selected track in reverse at the end: the animation goes back and forth</translation>
+    </message>
+    <message>
+        <source>Pista</source>
+        <translation>Track</translation>
+    </message>
+    <message>
+        <source>Añade una pista encima de las demás (lo de las pistas de arriba se ve encima)</source>
+        <translation>Adds a track above the others (what is on the upper tracks is shown on top)</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation>Audio</translation>
+    </message>
+    <message>
+        <source>Añade un archivo de audio (MP3, WAV, OGG, FLAC...) para los vídeos exportados. También se puede arrastrar a la línea de tiempo.</source>
+        <translation>Adds an audio file (MP3, WAV, OGG, FLAC...) for exported videos. You can also drag it onto the timeline.</translation>
     </message>
     <message>
         <source>Zum:</source>
@@ -1741,6 +1880,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Zum de la línea de tiempo (también con Ctrl y la rueda)</source>
         <translation>Timeline zoom (also with Ctrl and the wheel)</translation>
+    </message>
+    <message>
+        <source>Historial</source>
+        <translation>History</translation>
     </message>
     <message>
         <source>%1 (abierta)</source>
@@ -1766,6 +1909,29 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
 %1</source>
         <translation>Could not import:
 %1</translation>
+    </message>
+    <message>
+        <source>Eliminar la pista</source>
+        <translation>Delete track</translation>
+    </message>
+    <message numerus="yes">
+        <source>¿Eliminar la pista %1 y sus %n fotograma(s)?</source>
+        <translation>
+            <numerusform>Delete track %1 and its %n frame?</numerusform>
+            <numerusform>Delete track %1 and its %n frames?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Eliminar la pista %1</source>
+        <translation>Delete track %1</translation>
+    </message>
+    <message>
+        <source>Mostrar la pista %1</source>
+        <translation>Show track %1</translation>
+    </message>
+    <message>
+        <source>Ocultar la pista %1</source>
+        <translation>Hide track %1</translation>
     </message>
     <message>
         <source>Editor de GIF: %1</source>
@@ -1796,6 +1962,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Move frame</translation>
     </message>
     <message>
+        <source>Mover a la pista %1</source>
+        <translation>Move to track %1</translation>
+    </message>
+    <message>
         <source>Duración del fotograma</source>
         <translation>Frame duration</translation>
     </message>
@@ -1810,6 +1980,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Duplicar fotograma</source>
         <translation>Duplicate frame</translation>
+    </message>
+    <message>
+        <source>Quitar el punto clave global</source>
+        <translation>Remove global keyframe</translation>
+    </message>
+    <message>
+        <source>Punto clave global</source>
+        <translation>Global keyframe</translation>
     </message>
     <message>
         <source>Mover punto clave</source>
@@ -1896,6 +2074,34 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Edit with the tools</translation>
     </message>
     <message>
+        <source>El editor de GIF está pensado para hacer GIF animados.</source>
+        <translation>The GIF editor is made for creating animated GIFs.</translation>
+    </message>
+    <message>
+        <source>También exporta vídeo (MP4 o WebM) y admite pistas de audio para esos vídeos, pero no es un editor de vídeo completo: para vídeos largos o con mucha edición, usa un programa de edición de vídeo.</source>
+        <translation>It can also export video (MP4 or WebM) and supports audio tracks for those videos, but it isn&apos;t a full video editor: for long videos or heavy editing, use a video editing program.</translation>
+    </message>
+    <message>
+        <source>Añadir audio</source>
+        <translation>Add audio</translation>
+    </message>
+    <message>
+        <source>Audio (%1)</source>
+        <translation>Audio (%1)</translation>
+    </message>
+    <message>
+        <source>Añadir audios</source>
+        <translation>Add audio files</translation>
+    </message>
+    <message>
+        <source>Punto de volumen en el cabezal</source>
+        <translation>Volume keyframe at the playhead</translation>
+    </message>
+    <message>
+        <source>Quitar los puntos de volumen</source>
+        <translation>Remove volume keyframes</translation>
+    </message>
+    <message>
         <source>Lineal</source>
         <translation>Linear</translation>
     </message>
@@ -1942,6 +2148,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Quitar el punto</source>
         <translation>Remove the point</translation>
+    </message>
+    <message>
+        <source>Pone un punto clave con todos los valores (posición, escala, rotación y opacidad) en el cabezal, o lo quita si ya hay uno ahí (K)</source>
+        <translation>Adds a keyframe with every value (position, scale, rotation and opacity) at the playhead, or removes it if there is one there already (K)</translation>
     </message>
     <message>
         <source>Escala</source>
@@ -3048,8 +3258,60 @@ Opacity: %2 · Blend: %3</translation>
         <translation>%1 (from %2)</translation>
     </message>
     <message>
+        <source>Grupo %1</source>
+        <translation>Group %1</translation>
+    </message>
+    <message>
+        <source>Editor de GIF</source>
+        <translation>GIF Editor</translation>
+    </message>
+    <message>
+        <source>Vídeo (%1)</source>
+        <translation>Video (%1)</translation>
+    </message>
+    <message>
+        <source>Fotograma %1</source>
+        <translation>Frame %1</translation>
+    </message>
+    <message>
+        <source>Abrir un vídeo</source>
+        <translation>Open a Video</translation>
+    </message>
+    <message>
         <source>Exportar GIF</source>
         <translation>Export GIF</translation>
+    </message>
+    <message>
+        <source>Expandir el grupo</source>
+        <translation>Expand group</translation>
+    </message>
+    <message>
+        <source>Contraer el grupo</source>
+        <translation>Collapse group</translation>
+    </message>
+    <message>
+        <source>Cambiar el nombre del grupo…</source>
+        <translation>Rename group…</translation>
+    </message>
+    <message>
+        <source>Grupo de imágenes</source>
+        <translation>Image group</translation>
+    </message>
+    <message>
+        <source>Nombre del grupo:</source>
+        <translation>Group name:</translation>
+    </message>
+    <message>
+        <source>Color del borde del grupo…</source>
+        <translation>Group border color…</translation>
+    </message>
+    <message>
+        <source>Quitar del grupo</source>
+        <translation>Remove from group</translation>
+    </message>
+    <message>
+        <source>Desagrupar</source>
+        <translation>Ungroup</translation>
     </message>
     <message>
         <source>Efectos añadidos (en Ajustes o Efectos): %1</source>
@@ -3116,6 +3378,10 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Intercambiar colores</source>
         <translation>Swap colors</translation>
+    </message>
+    <message>
+        <source>Agrupar las imágenes elegidas</source>
+        <translation>Group selected images</translation>
     </message>
     <message>
         <source>Exportado: %1</source>
@@ -4804,12 +5070,20 @@ Left click: active slot · right click: inactive slot</translation>
         <translation>Exporting in this format needs FFmpeg (https://ffmpeg.org). Install it (on Linux, the “ffmpeg” package) or put ffmpeg next to Kaint and try again.</translation>
     </message>
     <message>
+        <source>Para leer este audio hace falta FFmpeg (https://ffmpeg.org). Los WAV se leen sin él.</source>
+        <translation>Reading this audio needs FFmpeg (https://ffmpeg.org). WAV files are read without it.</translation>
+    </message>
+    <message>
         <source>No se pudo crear una carpeta temporal.</source>
         <translation>Couldn&apos;t create a temporary folder.</translation>
     </message>
     <message>
         <source>No se pudo ejecutar FFmpeg (%1).</source>
         <translation>Couldn&apos;t run FFmpeg (%1).</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el audio: %1</source>
+        <translation>Could not read the audio: %1</translation>
     </message>
     <message>
         <source>Cancelar</source>
@@ -4822,6 +5096,18 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>FFmpeg no pudo exportar: %1</source>
         <translation>FFmpeg couldn&apos;t export: %1</translation>
+    </message>
+    <message>
+        <source>Para abrir vídeo hace falta FFmpeg (https://ffmpeg.org). Instálalo (en Linux, el paquete «ffmpeg») o pon ffmpeg junto a Kaint y vuelve a intentarlo.</source>
+        <translation>Opening video needs FFmpeg (https://ffmpeg.org). Install it (on Linux, the “ffmpeg” package) or put ffmpeg next to Kaint and try again.</translation>
+    </message>
+    <message>
+        <source>Leyendo el vídeo…</source>
+        <translation>Reading the video…</translation>
+    </message>
+    <message>
+        <source>FFmpeg no pudo leer el vídeo: %1</source>
+        <translation>FFmpeg could not read the video: %1</translation>
     </message>
     <message>
         <source>PNG animado (*.png *.apng)</source>
@@ -4922,6 +5208,10 @@ Left click: active slot · right click: inactive slot</translation>
     <message>
         <source>VP9 con transparencia (para la web).</source>
         <translation>VP9 with transparency (for the web).</translation>
+    </message>
+    <message>
+        <source>Lleva las pistas de audio del editor de GIF.</source>
+        <translation>It includes the GIF editor audio tracks.</translation>
     </message>
     <message>
         <source>Restablecer</source>
@@ -8878,6 +9168,38 @@ Do you want to replace them?</translation>
         <translation>When off, the layer moves along the list with the mouse while you drag it.</translation>
     </message>
     <message>
+        <source>Si no, solo la primera vez. Se salta manteniendo pulsada Intro o Espacio.</source>
+        <translation>Otherwise, only the first time. Hold Enter or Space to skip it.</translation>
+    </message>
+    <message>
+        <source>La de Kaint</source>
+        <translation>Kaint&apos;s</translation>
+    </message>
+    <message>
+        <source>Un vídeo propio para la intro (MP4, WebM, MKV...). Vacío, la de Kaint.</source>
+        <translation>Your own video for the intro (MP4, WebM, MKV...). Empty, Kaint&apos;s.</translation>
+    </message>
+    <message>
+        <source>Examinar…</source>
+        <translation>Browse…</translation>
+    </message>
+    <message>
+        <source>Mantén pulsada Intro o Espacio durante la intro para saltarla.</source>
+        <translation>Hold Enter or Space during the intro to skip it.</translation>
+    </message>
+    <message>
+        <source>Vídeo de la intro:</source>
+        <translation>Intro video:</translation>
+    </message>
+    <message>
+        <source>Vídeo de la intro</source>
+        <translation>Intro video</translation>
+    </message>
+    <message>
+        <source>Vídeos (*.mp4 *.webm *.mkv *.mov *.avi *.m4v *.ogv)</source>
+        <translation>Videos (*.mp4 *.webm *.mkv *.mov *.avi *.m4v *.ogv)</translation>
+    </message>
+    <message>
         <source>Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba</source>
         <translation>Image thumbnails take the full height of the top area</translation>
     </message>
@@ -9516,24 +9838,44 @@ Do you want to replace them?</translation>
         <translation>Windows 8 with a dark inside.</translation>
     </message>
     <message>
-        <source>Windows 7 Basic</source>
-        <translation>Windows 7 Basic</translation>
-    </message>
-    <message>
         <source>El tema básico de Windows 7: los mismos controles con el marco opaco, sin cristal.</source>
         <translation>The Windows 7 Basic theme: the same controls with an opaque frame, without glass.</translation>
     </message>
     <message>
-        <source>Windows 7 Basic oscuro</source>
-        <translation>Windows 7 Basic Dark</translation>
-    </message>
-    <message>
-        <source>El Basic de Windows 7 en grises oscuros.</source>
-        <translation>Windows 7 Basic in dark grays.</translation>
-    </message>
-    <message>
         <source>Ubuntu</source>
         <translation>Ubuntu</translation>
+    </message>
+    <message>
+        <source>Simple</source>
+        <translation>Simple</translation>
+    </message>
+    <message>
+        <source>Cada sección en su pestaña</source>
+        <translation>Each section in its own tab</translation>
+    </message>
+    <message>
+        <source>Todo en una sola página</source>
+        <translation>Everything on a single page</translation>
+    </message>
+    <message>
+        <source>Comportamiento</source>
+        <translation>Behavior</translation>
+    </message>
+    <message>
+        <source>Mostrar la intro siempre al abrir Kaint</source>
+        <translation>Always show the intro when Kaint opens</translation>
+    </message>
+    <message>
+        <source>Mostrar el candado (bloquear la transparencia) en los botones de Capas</source>
+        <translation>Show the lock (lock transparency) among the Layers buttons</translation>
+    </message>
+    <message>
+        <source>Desactivado, la opción está en el menú del clic derecho de cada capa y en el menú Capas.</source>
+        <translation>When off, the option is in each layer&apos;s right-click menu and in the Layers menu.</translation>
+    </message>
+    <message>
+        <source>Tema y aspecto</source>
+        <translation>Theme and look</translation>
     </message>
     <message>
         <source>Yaru: el naranja de Ubuntu, botones redondos y la fuente Ubuntu.</source>
@@ -9596,8 +9938,44 @@ Do you want to replace them?</translation>
         <translation>elementary dark.</translation>
     </message>
     <message>
+        <source>Windows 7 Basic (sin cristal)</source>
+        <translation>Windows 7 Basic (no glass)</translation>
+    </message>
+    <message>
+        <source>Extender el cristal por la franja de los menús</source>
+        <translation>Extend the glass into the menu strip</translation>
+    </message>
+    <message>
+        <source>Desactivado (lo de fábrica), el cristal solo está en el borde y la barra de título, como una ventana de Windows 7. Activado, sigue por la franja de los menús y de las imágenes.</source>
+        <translation>Off (the default), the glass is only on the border and the title bar, like a Windows 7 window. On, it continues through the menu and image strip.</translation>
+    </message>
+    <message>
         <source>Como «Color y apariencia» de Windows 8: el marco y la barra de título de las ventanas. Solo con los temas Windows 8.</source>
         <translation>Like Windows 8&apos;s “Color and Appearance”: the window frame and title bar. Only with the Windows 8 themes.</translation>
+    </message>
+    <message>
+        <source>Idioma y letra</source>
+        <translation>Language and font</translation>
+    </message>
+    <message>
+        <source>Agranda o achica toda la interfaz (ventanas, menús, iconos y letra), como el zum del navegador en Kaint.HTML. Se aplica al abrir Kaint.</source>
+        <translation>Makes the whole interface (windows, menus, icons and text) bigger or smaller, like browser zoom in Kaint.HTML. Applied when Kaint opens.</translation>
+    </message>
+    <message>
+        <source>Tamaño de la interfaz:</source>
+        <translation>Interface size:</translation>
+    </message>
+    <message>
+        <source>El tamaño de la interfaz cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?</source>
+        <translation>The interface size changes when Kaint opens. Do you want to restart it now?</translation>
+    </message>
+    <message>
+        <source>Kaint se cerrará y se abrirá de nuevo con el tamaño elegido. Si hay cambios sin guardar, te lo preguntará antes.</source>
+        <translation>Kaint will close and open again with the chosen size. If there are unsaved changes, it will ask you first.</translation>
+    </message>
+    <message>
+        <source>Usar el tamaño nuevo la próxima vez que se abra Kaint.</source>
+        <translation>Use the new size the next time Kaint opens.</translation>
     </message>
     <message>
         <source>El nombre que sale en la barra de título y en la barra de tareas («imagen.png - Kaint»).</source>
@@ -9632,6 +10010,10 @@ Do you want to replace them?</translation>
         <translation>Program:</translation>
     </message>
     <message>
+        <source>Programa y colores</source>
+        <translation>Program and colors</translation>
+    </message>
+    <message>
         <source>Los del tema: de cristal con Windows 7, planos con Windows 8, los azules de Luna con Windows XP, en relieve con Windows 98, redondos con los de Linux y, con los demás (Claro, Oscuro, Azul...), los de Windows 10.</source>
         <translation>The theme&apos;s: glass with Windows 7, flat with Windows 8, Luna blue with Windows XP, raised with Windows 98, round with the Linux ones and, with the rest (Light, Dark, Blue...), Windows 10&apos;s.</translation>
     </message>
@@ -9642,6 +10024,10 @@ Do you want to replace them?</translation>
     <message>
         <source>Círculos grises, como los de GNOME, Ubuntu, Mint y elementary.</source>
         <translation>Gray circles, like those of GNOME, Ubuntu, Mint and elementary.</translation>
+    </message>
+    <message>
+        <source>Inicio y cierre</source>
+        <translation>Startup and closing</translation>
     </message>
     <message>
         <source>Pincel</source>
@@ -10448,10 +10834,6 @@ Do you want to replace them?</translation>
     <message>
         <source>ms</source>
         <translation>ms</translation>
-    </message>
-    <message>
-        <source>En Wayland las ventanas las anima el escritorio.</source>
-        <translation>On Wayland, the desktop animates the windows.</translation>
     </message>
     <message>
         <source>Windows 7 oscuro</source>
@@ -11380,6 +11762,14 @@ Do you want to replace them?</translation>
         <translation>Dark</translation>
     </message>
     <message>
+        <source>Windows 8</source>
+        <translation>Windows 8</translation>
+    </message>
+    <message>
+        <source>Windows 8 oscuro</source>
+        <translation>Windows 8 Dark</translation>
+    </message>
+    <message>
         <source>Modo:</source>
         <translation>Mode:</translation>
     </message>
@@ -11582,6 +11972,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Bordes clásicos en relieve (como Windows 98)</source>
         <translation>Classic 3D borders (like Windows 98)</translation>
+    </message>
+    <message>
+        <source>Windows 8 (Metro)</source>
+        <translation>Windows 8 (Metro)</translation>
+    </message>
+    <message>
+        <source>El marco ancho y plano del color de las ventanas (el de Configuración), el título centrado y los botones de Windows 8.</source>
+        <translation>The wide, flat frame in the window color (the one in Settings), the centered title and the Windows 8 buttons.</translation>
     </message>
     <message>
         <source>Estilo:</source>
@@ -11942,6 +12340,34 @@ Do you want to replace them?</translation>
         <translation>Sampling:</translation>
     </message>
     <message>
+        <source>Esquinas</source>
+        <translation>Corners</translation>
+    </message>
+    <message>
+        <source>Redimensionar</source>
+        <translation>Resize</translation>
+    </message>
+    <message>
+        <source>Una esquina cambia el tamaño de lo seleccionado, como en Paint.NET.</source>
+        <translation>A corner resizes the selection, as in Paint.NET.</translation>
+    </message>
+    <message>
+        <source>Deformar</source>
+        <translation>Warp</translation>
+    </message>
+    <message>
+        <source>Cada esquina se mueve sola y pone lo seleccionado en perspectiva.</source>
+        <translation>Each corner moves on its own and puts the selection in perspective.</translation>
+    </message>
+    <message>
+        <source>Ajustar</source>
+        <translation>Snap</translation>
+    </message>
+    <message>
+        <source>Ajustar: al mover, los bordes y el centro se pegan a los del lienzo y de las demás capas (con Ctrl, se mueve libre)</source>
+        <translation>Snap: when moving, the edges and the middle stick to those of the canvas and the other layers (hold Ctrl to move freely)</translation>
+    </message>
+    <message>
         <source>Gamma</source>
         <translation>Gamma</translation>
     </message>
@@ -12188,10 +12614,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Toma de muestras:</source>
         <translation>Sampling:</translation>
-    </message>
-    <message>
-        <source> px</source>
-        <translation> px</translation>
     </message>
     <message>
         <source>Anchura de detección: el borde solo sigue los bordes que estén así de cerca del puntero ([ y ] para cambiarla)</source>
@@ -12576,14 +12998,6 @@ Do you want to replace them?</translation>
     <message>
         <source>Windows 7</source>
         <translation>Windows 7</translation>
-    </message>
-    <message>
-        <source>Windows 7 Basic</source>
-        <translation>Windows 7 Basic</translation>
-    </message>
-    <message>
-        <source>Windows 7 Basic oscuro</source>
-        <translation>Windows 7 Basic Dark</translation>
     </message>
     <message>
         <source>Windows XP</source>

@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QWidget>
 
+#include "core/Audio.h"
 #include "core/Motion.h"
 
 #include <memory>
@@ -20,6 +21,7 @@ class QLabel;
 class QScrollArea;
 class QSlider;
 class QSpinBox;
+class QTabWidget;
 class QToolButton;
 struct Layer;
 struct LayerProps;
@@ -54,6 +56,7 @@ int delayOf(const Layer* layer);
 class Preview;
 class Timeline;
 class Inspector;
+class AudioInspector;
 class SizeMeter;
 
 class MediaList : public QListWidget {
@@ -93,10 +96,32 @@ public:
     void selectFrame(int index);
     int frameDelay(int index) const;
     bool frameHidden(int index) const;
-    // Inserta en 'at' (-1: al final) los fotogramas de un medio o de unos archivos.
-    void insertMedia(int mediaIndex, int at);
-    void insertFiles(const QStringList& paths, int at);
-    void moveFrame(int from, int to);
+    // Inserta en 'at' (índice de capa; -1: al final) los fotogramas de un medio o de unos archivos,
+    // en la pista 'track' (-1: la elegida).
+    void insertMedia(int mediaIndex, int at, int track = -1);
+    void insertFiles(const QStringList& paths, int at, int track = -1);
+    // Mueve el fotograma 'from' a 'to' (índices de capa) y, si se da, a otra pista.
+    void moveFrame(int from, int to, int track = -1);
+    // Lleva el fotograma a la pista 'track' empezando en 'startMs' (con espacio vacío delante si
+    // hace falta, como en Filmora). Los demás no se mueven salvo si se solaparían: entonces se corren.
+    void placeFrame(int from, int track, int startMs);
+
+    // Pistas (las capas de la línea de tiempo, como en Filmora): cada fotograma va en una
+    // (LayerProps::track) y cada pista es una sucesión de fotogramas; las de número más alto se ven
+    // encima. La elegida recibe lo que se añade.
+    int trackCount() const;
+    int trackOf(int index) const;
+    QList<int> framesOfTrack(int track) const;
+    int activeTrack() const;
+    void setActiveTrack(int track);
+    void addTrack();
+    void removeTrack(int track);
+    bool trackHidden(int track) const;
+    void toggleTrackHidden(int track);
+    // Inicio y final (ms) de un fotograma dentro de su pista; la duración total (la pista más larga).
+    int frameStart(int index) const;
+    int frameEnd(int index) const;
+    int totalTime() const;
     void setFrameDelay(int index, int delayMs);
     void removeFrame(int index);
     void duplicateFrame(int index);
@@ -121,12 +146,26 @@ public:
     // cada cambio es un paso del historial.
     Motion::Clip motion(int index) const;
     void setMotion(int index, const Motion::Clip& clip, const QString& text);
+    // Mientras se arrastra un punto en la gráfica: la animación como quedaría (motion() la devuelve y
+    // todo se dibuja con ella), sin pasar todavía al historial.
+    void setMotionPreview(int index, const Motion::Clip& clip);
+    void clearMotionPreview();
     // Tiempo (ms) del cabezal dentro del fotograma elegido.
     int localTime() const;
     void seekLocal(int ms);
     // El punto clave elegido (su tiempo dentro del fotograma; -1 ninguno): lleva el cabezal allí.
     int selectedKeyTime() const { return m_selectedKey; }
     void selectKeyTime(int ms);
+    // Elige el fotograma (si es otro) y su punto clave en 'ms'.
+    void selectKey(int index, int ms);
+    // Punto clave global (como el de Filmora): todos los valores (posición, escala, rotación y
+    // opacidad) en el cabezal; si ya hay uno ahí, lo quita.
+    void toggleGlobalKey();
+    bool hasKeyAtPlayhead() const;
+    // La vista del historial del editor de GIF (solo sus pasos), en una pestaña junto a los medios.
+    void setHistoryPanel(QWidget* panel);
+    // El brillo del damero de lo transparente (el de Configuración, como el del lienzo).
+    void setCheckerBrightness(int brightness);
     // Mueve los puntos de un tiempo a otro (si pasa del final, el fotograma dura más).
     void moveKeyTime(int from, int to);
     void removeKeyTime(int ms);
@@ -138,10 +177,26 @@ public:
     void toggleHidden(int index);
     void showFrameMenu(int index, const QPoint& globalPos);
     void editDelay(int index);
-    // Tiempo (ms) donde empieza cada fotograma; el último valor es la duración total.
-    QList<int> frameStarts() const;
     int playTime() const { return m_time; }
     void seek(int ms);
+
+    // Pistas de audio (para los vídeos exportados; el GIF no tiene sonido): debajo de las de los
+    // fotogramas. Se ven las usadas y una vacía debajo, donde soltar más.
+    QList<Audio::Clip> audioClips() const;
+    int audioRows() const;
+    // El final de lo que hay en la línea de tiempo (fotogramas o audio).
+    int timelineEnd() const;
+    // Cambia los clips de audio en un paso del historial del editor de GIF.
+    void setAudioClips(const QList<Audio::Clip>& clips, const QString& text);
+    // Añade archivos de audio en 'startMs' (-1: el cabezal) y en la pista 'row' (-1: la primera libre).
+    void addAudioFiles(const QStringList& paths, int startMs = -1, int row = -1);
+    void chooseAudioFiles();
+    void removeAudio(int index);
+    int selectedAudio() const { return m_selectedAudio; }
+    void selectAudio(int index);
+    // Pone o quita el punto de volumen del clip en el cabezal.
+    void toggleAudioKey(int index);
+    void showAudioMenu(int index, const QPoint& globalPos);
 
 signals:
     // 'format': "gif" (la configuración de siempre), "apng", "webp", "mp4" o "webm".
@@ -167,7 +222,7 @@ private:
     // Cambia la lista de capas (fotogramas) en un paso del historial.
     void applyFrames(const QList<LayerPtr>& layers, const QList<LayerProps>& props, int active, const QString& text,
                      const QString& icon);
-    void insertFrames(int at, const QList<QImage>& images, const QList<int>& delays, const QString& text);
+    void insertFrames(int at, const QList<QImage>& images, const QList<int>& delays, const QString& text, int track = -1);
     void importFiles(const QStringList& paths);
     bool loadFile(const QString& path, GifEdit::Media* media, QString* error) const;
     void reverseFrames();
@@ -176,12 +231,24 @@ private:
     void togglePlay();
     void step(int delta);
     void tick();
+    // El fotograma de la pista elegida en 'ms' (pasado su final, el último; -1 si está vacía) y el de
+    // la pista 'track' (-1 fuera de sus fotogramas).
     int frameAt(int ms) const;
+    int frameAtTrack(int track, int ms) const;
+    void computeTimes() const;
     void invalidateStarts();
     QImage frameImage(int index) const;
+    QImage frameImageAt(int index, int time) const;
+    // Lo que se ve en el cabezal: el fotograma o, con varias pistas, todas una encima de otra.
+    QImage shownImage() const;
     void showPlayingFrame(int index);
     // El peso aproximado del GIF (unos fotogramas de muestra codificados) para la barrita.
     void estimateSize();
+    // Lo que suena mientras se reproduce: cada clip de audio en su sitio, con su volumen.
+    void syncAudio();
+    // Negro AMOLED con el acento verde azulado, como los editores de vídeo.
+    void applyLook();
+    void applyPalettes();
 
     QPointer<Document> m_doc;
     QList<QPointer<Document>> m_openDocs;
@@ -189,9 +256,16 @@ private:
     QList<GifEdit::Media> m_media;
 
     QLabel* m_title = nullptr;
+    QTabWidget* m_leftTabs = nullptr;
     GifEdit::MediaList* m_mediaList = nullptr;
     GifEdit::Preview* m_preview = nullptr;
     GifEdit::Inspector* m_inspector = nullptr;
+    GifEdit::AudioInspector* m_audioInspector = nullptr;
+    class QStackedWidget* m_rightStack = nullptr;
+    int m_selectedAudio = -1;
+    struct AudioVoices;
+    std::unique_ptr<AudioVoices> m_voices;
+    bool m_introShown = false;
     GifEdit::SizeMeter* m_sizeMeter = nullptr;
     QTimer m_sizeTimer;
     QString m_sizeKey;
@@ -215,7 +289,12 @@ private:
     // Los otros fotogramas elegidos (además de la capa activa).
     QList<int> m_extraSelection;
     mutable QList<int> m_starts;
+    mutable QList<int> m_ends;
+    mutable int m_total = 0;
     mutable bool m_startsValid = false;
+    int m_activeTrack = 0;
+    int m_previewIndex = -1;
+    Motion::Clip m_previewClip;
     mutable QHash<qint64, QImage> m_opacityCache;
     int m_selectedKey = -1;
     QPointF m_dragOffset;

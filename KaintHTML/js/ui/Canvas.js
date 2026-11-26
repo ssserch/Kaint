@@ -28,7 +28,27 @@ export class CanvasView extends EventTarget {
         // En Android (Kaint.APK y el navegador), sin esperar al compositor: el trazo sigue al dedo con
         // menos retraso.
         const android = !!window.KaintAndroid || /Android/i.test(navigator.userAgent);
-        this.ctx = canvas.getContext("2d", android ? { desynchronized: true } : undefined);
+        this.android = android;
+        // Antes, en Android, sin esperar al compositor (desynchronized): con algunas GPU el lienzo se
+        // quedaba congelado mientras se dibujaba (la vista seguía moviéndose por dentro: el zum y la
+        // posición de abajo cambiaban, pero no se veía). Ahora, el modo normal. Al volver a la app o
+        // al recuperar el contexto, se hace un búfer nuevo y se vuelve a dibujar todo.
+        this.ctx = canvas.getContext("2d");
+        if (android) {
+            const recover = () => {
+                if (this.ctx.isContextLost?.())
+                    return;
+                const w = this.canvas.width;
+                this.canvas.width = w;
+                this.render();
+            };
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible")
+                    setTimeout(recover, 60);
+            });
+            window.addEventListener("pageshow", () => setTimeout(recover, 60));
+            canvas.addEventListener("contextrestored", recover);
+        }
         this.doc = null;
         this.tool = null;
         this.zoom = 1;
@@ -68,7 +88,7 @@ export class CanvasView extends EventTarget {
         // aplicaciones de dibujo del móvil: la imagen se mueve con dos dedos).
         this.applyScrollbarSetting();
         window.addEventListener("kaint-settings", (e) => {
-            if (e.detail?.key === "scrollbars")
+            if (e.detail?.key === "scrollbars" || e.detail?.key === "scrollbarH" || e.detail?.key === "scrollbarV")
                 this.applyScrollbarSetting();
         });
         // Las hormigas avanzan 25 píxeles por segundo (una vuelta del patrón en 0,32 s), casi como
@@ -80,8 +100,11 @@ export class CanvasView extends EventTarget {
         });
     }
 
+    // En los teléfonos, el búfer del lienzo como mucho al doble de los píxeles CSS: con 2,75 o 3, como
+    // en muchos Android, cada fotograma movía casi el doble de píxeles sin que se note la diferencia.
     get dpr() {
-        return window.devicePixelRatio || 1;
+        const d = window.devicePixelRatio || 1;
+        return this.android ? Math.min(d, 2) : d;
     }
 
     // Píxeles CSS por píxel de la imagen.
@@ -171,6 +194,9 @@ export class CanvasView extends EventTarget {
         const value = Settings.get("scrollbars");
         const phone = matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) <= 600;
         this.workspace.classList.toggle("no-scrollbars", value === undefined || value === null ? phone : !value);
+        // Y cada una por separado (Configuración > Lienzo).
+        this.workspace.classList.toggle("no-hscroll", Settings.get("scrollbarH") === false);
+        this.workspace.classList.toggle("no-vscroll", Settings.get("scrollbarV") === false);
     }
 
     imageToView(x, y) {
@@ -650,14 +676,29 @@ export class CanvasView extends EventTarget {
 
     // --- Dibujo ----------------------------------------------------------------------------
 
+    // Un dibujo en el próximo fotograma. Si el navegador deja de dar fotogramas (requestAnimationFrame
+    // se para en algunas WebView de Android con poca memoria o al volver de otra app), el lienzo no
+    // se queda congelado: pasado un momento se dibuja igual.
     update() {
-        if (this.pending)
+        if (this.pending && performance.now() - this.pendingAt < 250)
             return;
         this.pending = true;
-        requestAnimationFrame(() => {
+        this.pendingAt = performance.now();
+        const token = (this.frameToken = (this.frameToken || 0) + 1);
+        const run = () => {
+            if (token !== this.frameToken || !this.pending)
+                return;
             this.pending = false;
-            this.render();
-        });
+            clearTimeout(this.frameFallback);
+            try {
+                this.render();
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        requestAnimationFrame(run);
+        clearTimeout(this.frameFallback);
+        this.frameFallback = setTimeout(run, 300);
     }
 
     // La imagen tal como se ve, recortada a la vista y en coordenadas del área de trabajo: las

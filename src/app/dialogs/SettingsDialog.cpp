@@ -82,6 +82,7 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QStackedWidget>
+#include <QTabWidget>
 #include <QStandardPaths>
 #include <QStyle>
 #include <QSysInfo>
@@ -152,6 +153,9 @@ AppSettings AppSettings::load()
     a.systemFileDialogs = get("systemFileDialogs", a.systemFileDialogs);
     a.systemPointer = get("systemPointer", a.systemPointer);
     a.layerDropLine = get("layerDropLine", a.layerDropLine);
+    a.layerLockButton = get("layerLockButton", a.layerLockButton);
+    a.introAlways = get("introAlways", a.introAlways);
+    a.introPath = s.value(QStringLiteral("introPath")).toString();
     a.historyJumpButtons = get("historyJumpButtons", a.historyJumpButtons);
     a.pluginMenuIcons = get("pluginMenuIcons", a.pluginMenuIcons);
     a.browsePlugins = get("browsePlugins", a.browsePlugins);
@@ -164,6 +168,13 @@ AppSettings AppSettings::load()
                                                                                     : int(PdnBridge::Runtime::Wine);
     a.pluginRuntime = std::clamp(get("pluginSystem", factoryRuntime), 0, 2);
     a.pluginWineFallback = get("pluginWineFallback", a.pluginWineFallback);
+    // 1.2.1: lo de fábrica que antes era otra cosa y quedaba guardado sin haberlo elegido (usar Wine
+    // con lo que no funciona con los otros, mover las capas en la lista al arrastrarlas y las reglas
+    // de Paint.NET) pasa a lo de ahora una sola vez.
+    if (!s.contains(QStringLiteral("defaults121"))) {
+        a.pluginWineFallback = AppSettings().pluginWineFallback;
+        a.layerDropLine = AppSettings().layerDropLine;
+    }
     a.wheelChangesValues = get("wheelChangesValues", a.wheelChangesValues);
     a.wheelStep = std::clamp(get("wheelStep", a.wheelStep), 0, 3);
     a.stripFullHeight = get("stripFullHeight", a.stripFullHeight);
@@ -201,6 +212,8 @@ AppSettings AppSettings::load()
     a.titleButtons = buttons < 0 ? defaultButtons : buttons;
     a.titleButtonsLeft = get("titleButtonsLeft", a.titleButtonsLeft);
     a.win7PanelClose = std::clamp(get("win7PanelClose", a.win7PanelClose), 0, 2);
+    a.win7ExtendedGlass = get("win7ExtendedGlass", a.win7ExtendedGlass);
+    a.uiScale = std::clamp(get("uiScale", a.uiScale), 50, 300);
     a.uiStyle = std::clamp(get("uiStyle", a.uiStyle), 0, 1);
     a.cursorStyle = std::clamp(get("cursorStyle", a.cursorStyle), 0, 1);
     a.welcomed = get("welcomed", a.welcomed);
@@ -225,6 +238,8 @@ AppSettings AppSettings::load()
     a.unit = get("unit", a.unit);
     a.rulers = get("rulers", a.rulers);
     a.rulerStyle = std::clamp(get("rulerStyle", a.rulerStyle), 0, 3);
+    if (!s.contains(QStringLiteral("defaults121")))
+        a.rulerStyle = AppSettings().rulerStyle;
     a.dropShadow = get("dropShadow", a.dropShadow);
     a.canvasBorderLight = s.value(QStringLiteral("canvasBorderLight"), QColor()).value<QColor>();
     a.canvasBorderDark = s.value(QStringLiteral("canvasBorderDark"), QColor()).value<QColor>();
@@ -284,12 +299,16 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("systemFileDialogs"), systemFileDialogs);
     s.setValue(QStringLiteral("systemPointer"), systemPointer);
     s.setValue(QStringLiteral("layerDropLine"), layerDropLine);
+    s.setValue(QStringLiteral("layerLockButton"), layerLockButton);
+    s.setValue(QStringLiteral("introAlways"), introAlways);
+    s.setValue(QStringLiteral("introPath"), introPath);
     s.setValue(QStringLiteral("historyJumpButtons"), historyJumpButtons);
     s.setValue(QStringLiteral("pluginMenuIcons"), pluginMenuIcons);
     s.setValue(QStringLiteral("browsePlugins"), browsePlugins);
     s.setValue(QStringLiteral("photocraftExtras"), photocraftExtras);
     s.setValue(QStringLiteral("pluginSystem"), pluginRuntime);
     s.setValue(QStringLiteral("pluginWineFallback"), pluginWineFallback);
+    s.setValue(QStringLiteral("defaults121"), true);
     s.setValue(QStringLiteral("wheelChangesValues"), wheelChangesValues);
     s.setValue(QStringLiteral("wheelStep"), wheelStep);
     s.setValue(QStringLiteral("stripFullHeight"), stripFullHeight);
@@ -312,6 +331,8 @@ void AppSettings::save() const
     s.setValue(QStringLiteral("titleButtonsAuto"), true);
     s.setValue(QStringLiteral("titleButtonsLeft"), titleButtonsLeft);
     s.setValue(QStringLiteral("win7PanelClose"), win7PanelClose);
+    s.setValue(QStringLiteral("win7ExtendedGlass"), win7ExtendedGlass);
+    s.setValue(QStringLiteral("uiScale"), uiScale);
     s.setValue(QStringLiteral("windowsVersion"), windowsVersion);
     s.setValue(QStringLiteral("uiStyle"), uiStyle);
     s.setValue(QStringLiteral("cursorStyle"), cursorStyle);
@@ -378,6 +399,148 @@ PageBox makePage(QWidget* parent)
     scroll->setWidget(content);
     return {scroll, layout};
 }
+
+// Interfaz de usuario: la vista simple (cada sección en su pestaña, con aire) o la compacta (todo
+// seguido en una sola página, como antes). Se cambia arriba y se recuerda.
+class SectionedPage : public QWidget {
+public:
+    SectionedPage(const PageBox& page, const QList<std::pair<QString, int>>& marks, QWidget* parent)
+        : QWidget(parent)
+    {
+        // Las entradas de la página (controles y filas), cada una en su sección.
+        for (int index = 0; page.layout->count() > 0; ++index) {
+            for (const auto& [title, start] : marks)
+                if (start == index)
+                    m_sections.append({title, {}});
+            if (m_sections.isEmpty())
+                m_sections.append({QString(), {}});
+            QLayoutItem* item = page.layout->takeAt(0);
+            Entry e;
+            if (item->widget()) {
+                e.widget = item->widget();
+                delete item;
+            } else if (item->layout()) {
+                e.layout = item->layout();
+            } else {
+                e.spacing = item->sizeHint().height();
+                delete item;
+            }
+            m_sections.last().entries << e;
+        }
+        m_old = page.widget;
+        auto* root = new QVBoxLayout(this);
+        root->setContentsMargins(0, 0, 0, 0);
+        root->setSpacing(4);
+        auto* bar = new QHBoxLayout;
+        bar->setContentsMargins(12, 6, 12, 0);
+        bar->addWidget(new QLabel(SettingsDialog::tr("Vista:"), this));
+        auto* group = new QButtonGroup(this);
+        const bool simple = QSettings().value(QStringLiteral("settings/interfaceSimpleView"), true).toBool();
+        for (const auto& [text, tip, isSimple] :
+             {std::tuple{SettingsDialog::tr("Simple"), SettingsDialog::tr("Cada sección en su pestaña"), true},
+              std::tuple{SettingsDialog::tr("Compacta"), SettingsDialog::tr("Todo en una sola página"), false}}) {
+            auto* b = new QToolButton(this);
+            b->setText(text);
+            b->setToolTip(tip);
+            b->setCheckable(true);
+            b->setChecked(isSimple == simple);
+            b->setMinimumWidth(80);
+            group->addButton(b);
+            bar->addWidget(b);
+            connect(b, &QToolButton::toggled, this, [this, value = isSimple](bool on) {
+                if (!on)
+                    return;
+                QSettings().setValue(QStringLiteral("settings/interfaceSimpleView"), value);
+                arrange(value);
+            });
+        }
+        bar->addStretch();
+        root->addLayout(bar);
+        arrange(simple);
+        // La página de antes se queda escondida (sin borrarla): algunos objetos de la página (menús,
+        // grupos de botones...) la tienen de padre sin estar en ninguna fila.
+        m_old->setParent(this);
+        m_old->hide();
+    }
+
+private:
+    struct Entry {
+        QPointer<QWidget> widget;
+        QPointer<QLayout> layout;
+        int spacing = 0;
+    };
+    struct Section {
+        QString title;
+        QList<Entry> entries;
+    };
+
+    void arrange(bool simple)
+    {
+        // Cada entrada sale de donde estaba (la vista anterior) y va a la nueva.
+        for (Section& section : m_sections)
+            for (Entry& e : section.entries) {
+                if (e.widget && e.widget->parentWidget() && e.widget->parentWidget()->layout())
+                    e.widget->parentWidget()->layout()->removeWidget(e.widget);
+                if (e.layout) {
+                    if (auto* owner = qobject_cast<QLayout*>(e.layout->parent()))
+                        owner->removeItem(e.layout);
+                    e.layout->setParent(nullptr);
+                }
+            }
+        auto fill = [](QVBoxLayout* layout, const Section& section) {
+            for (const Entry& e : section.entries) {
+                if (e.widget)
+                    layout->addWidget(e.widget);
+                else if (e.layout)
+                    layout->addLayout(e.layout);
+                else if (e.spacing > 0)
+                    layout->addSpacing(e.spacing);
+            }
+            layout->addStretch();
+        };
+        QWidget* body = nullptr;
+        if (simple) {
+            auto* tabs = new QTabWidget(this);
+            tabs->setDocumentMode(true);
+            for (const Section& section : std::as_const(m_sections)) {
+                PageBox box = makePage(tabs);
+                box.layout->setContentsMargins(16, 12, 16, 12);
+                box.layout->setSpacing(8);
+                fill(box.layout, section);
+                tabs->addTab(box.widget, section.title);
+            }
+            if (m_tab >= 0 && m_tab < tabs->count())
+                tabs->setCurrentIndex(m_tab);
+            connect(tabs, &QTabWidget::currentChanged, this, [this](int i) { m_tab = i; });
+            body = tabs;
+        } else {
+            PageBox box = makePage(this);
+            for (const Section& section : std::as_const(m_sections))
+                for (const Entry& e : section.entries) {
+                    if (e.widget)
+                        box.layout->addWidget(e.widget);
+                    else if (e.layout)
+                        box.layout->addLayout(e.layout);
+                    else if (e.spacing > 0)
+                        box.layout->addSpacing(e.spacing);
+                }
+            box.layout->addStretch();
+            body = box.widget;
+        }
+        if (m_body) {
+            layout()->replaceWidget(m_body, body);
+            m_body->deleteLater();
+        } else {
+            static_cast<QVBoxLayout*>(layout())->addWidget(body, 1);
+        }
+        m_body = body;
+    }
+
+    QList<Section> m_sections;
+    QWidget* m_old = nullptr;
+    QWidget* m_body = nullptr;
+    int m_tab = 0;
+};
 
 // Llama a 'done' cuando el campo pierde el foco (QPlainTextEdit no tiene editingFinished).
 class FocusOutFilter : public QObject {
@@ -583,6 +746,10 @@ bool SettingsDialog::askRestart(const QString& question, const QString& restartT
 QWidget* SettingsDialog::createInterfacePage()
 {
     PageBox page = makePage(this);
+    // Dónde empieza cada sección (para la vista simple, en pestañas).
+    QList<std::pair<QString, int>> sections;
+    auto mark = [&](const QString& title) { sections.append({title, int(page.layout->count())}); };
+    mark(tr("Comportamiento"));
     auto check = [&](const QString& text, bool AppSettings::*field, const QString& tip = {}) {
         auto* c = new QCheckBox(text, page.widget);
         c->setChecked(m_settings.*field);
@@ -613,13 +780,11 @@ QWidget* SettingsDialog::createInterfacePage()
         indent->addWidget(withUnit(duration, tr("ms"), {}, page.widget));
         indent->addStretch();
         page.layout->addLayout(indent);
-        const bool wayland = QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
-        auto sync = [animations, windowAnimation, duration, wayland] {
-            windowAnimation->setEnabled(animations->isChecked() && !wayland);
+        // (En Wayland también: la animación va dentro de la propia ventana.)
+        auto sync = [animations, windowAnimation, duration] {
+            windowAnimation->setEnabled(animations->isChecked());
             duration->setEnabled(windowAnimation->isEnabled() && windowAnimation->isChecked());
         };
-        if (wayland)
-            windowAnimation->setToolTip(tr("En Wayland las ventanas las anima el escritorio."));
         sync();
         connect(animations, &QCheckBox::toggled, this, sync);
         connect(windowAnimation, &QCheckBox::toggled, this, sync);
@@ -659,6 +824,47 @@ QWidget* SettingsDialog::createInterfacePage()
           tr("El mismo que usan Firefox y los demás programas del escritorio. Desactivado, se usa el de Qt que trae Kaint."));
     check(tr("Al arrastrar una capa, marcar con una línea dónde quedará"), &AppSettings::layerDropLine,
           tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra."));
+    {
+        QCheckBox* intro = check(tr("Mostrar la intro siempre al abrir Kaint"), &AppSettings::introAlways,
+                                 tr("Si no, solo la primera vez. Se salta manteniendo pulsada Intro o Espacio."));
+        // Debajo, con sangría: el vídeo (el de Kaint o uno propio) y cómo saltarla.
+        auto* path = new QLineEdit(m_settings.introPath, page.widget);
+        path->setPlaceholderText(tr("La de Kaint"));
+        path->setClearButtonEnabled(true);
+        path->setToolTip(tr("Un vídeo propio para la intro (MP4, WebM, MKV...). Vacío, la de Kaint."));
+        auto* browse = new QPushButton(tr("Examinar…"), page.widget);
+        auto* skip = new QLabel(tr("Mantén pulsada Intro o Espacio durante la intro para saltarla."), page.widget);
+        skip->setWordWrap(true);
+        skip->setForegroundRole(QPalette::PlaceholderText);
+        auto* row = new QHBoxLayout;
+        row->setContentsMargins(20, 0, 0, 0);
+        row->addWidget(new QLabel(tr("Vídeo de la intro:"), page.widget));
+        row->addWidget(path, 1);
+        row->addWidget(browse);
+        page.layout->addLayout(row);
+        auto* note = new QHBoxLayout;
+        note->setContentsMargins(20, 0, 0, 0);
+        note->addWidget(skip, 1);
+        page.layout->addLayout(note);
+        auto sync = [intro, path, browse, skip] {
+            for (QWidget* w : std::initializer_list<QWidget*>{path, browse, skip})
+                w->setEnabled(intro->isChecked());
+        };
+        sync();
+        connect(intro, &QCheckBox::toggled, this, sync);
+        connect(path, &QLineEdit::textChanged, this, [this](const QString& text) {
+            m_settings.introPath = text.trimmed();
+            changed();
+        });
+        connect(browse, &QPushButton::clicked, this, [this, path] {
+            const QString file = QFileDialog::getOpenFileName(this, tr("Vídeo de la intro"), path->text(),
+                                                              tr("Vídeos (*.mp4 *.webm *.mkv *.mov *.avi *.m4v *.ogv)"));
+            if (!file.isEmpty())
+                path->setText(file);
+        });
+    }
+    check(tr("Mostrar el candado (bloquear la transparencia) en los botones de Capas"), &AppSettings::layerLockButton,
+          tr("Desactivado, la opción está en el menú del clic derecho de cada capa y en el menú Capas."));
     check(tr("Mostrar los botones de ir al principio y al final del historial"), &AppSettings::historyJumpButtons,
           tr("En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio."));
     check(tr("Las miniaturas de las imágenes ocupan toda la altura de la parte de arriba"), &AppSettings::stripFullHeight,
@@ -676,6 +882,7 @@ QWidget* SettingsDialog::createInterfacePage()
             m_browsePluginsButton->setVisible(on);
     });
 
+    mark(tr("Tema y aspecto"));
     // Temas: los cuatro primeros imitan Paint.NET; KDE usa el del escritorio. En Windows no hay
     // tema nativo aparte: claro y oscuro ya son los de Windows, como en Paint.NET.
     auto* schemeRow = new QHBoxLayout;
@@ -697,9 +904,6 @@ QWidget* SettingsDialog::createInterfacePage()
     addScheme(tr("Windows 7"), Theme::Scheme::Windows7, tr("Gris claro con los botones de cristal y el azul de Aero, con los colores de 7.css."));
     addScheme(tr("Windows 7 oscuro"), Theme::Scheme::Windows7Dark,
               tr("El de Windows 7 en grises oscuros, con el cristal ahumado."));
-    addScheme(tr("Windows 7 Basic"), Theme::Scheme::Windows7Basic,
-              tr("El tema básico de Windows 7: los mismos controles con el marco opaco, sin cristal."));
-    addScheme(tr("Windows 7 Basic oscuro"), Theme::Scheme::Windows7BasicDark, tr("El Basic de Windows 7 en grises oscuros."));
     addScheme(tr("Windows XP"), Theme::Scheme::WindowsXP, tr("El beige de Luna con las ventanas azules y los botones de XP, con los colores de XP.css."));
     addScheme(tr("Windows 98"), Theme::Scheme::Windows98, tr("El clásico gris con relieve. También es una plantilla del personalizado."));
     addScheme(tr("Windows 98 ALT"), Theme::Scheme::Windows98Alt,
@@ -715,7 +919,13 @@ QWidget* SettingsDialog::createInterfacePage()
     addScheme(tr("elementary OS oscuro"), Theme::Scheme::ElementaryDark, tr("elementary oscuro."));
     scheme->insertSeparator(scheme->count());
     addScheme(tr("Personalizado"), Theme::Scheme::Custom, tr("Colores, fondo del lienzo y diseño a tu gusto."));
-    scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
+    // Windows 7 Basic no es un tema aparte en la lista: es una opción de Windows 7 (y de su oscuro).
+    const auto listedScheme = [](int id) {
+        return id == int(Theme::Scheme::Windows7Basic)       ? int(Theme::Scheme::Windows7)
+               : id == int(Theme::Scheme::Windows7BasicDark) ? int(Theme::Scheme::Windows7Dark)
+                                                             : id;
+    };
+    scheme->setCurrentIndex(std::max(0, scheme->findData(listedScheme(m_settings.colorScheme))));
     auto* customize = new QPushButton(tr("Personalizar…"), page.widget);
     customize->setToolTip(tr("Editar el tema personalizado."));
     schemeRow->addWidget(new QLabel(tr("Tema:"), page.widget));
@@ -723,6 +933,27 @@ QWidget* SettingsDialog::createInterfacePage()
     schemeRow->addWidget(customize);
     schemeRow->addStretch();
     page.layout->addLayout(schemeRow);
+    // Windows 7 Basic: el de Windows 7 (claro u oscuro) con el marco opaco, sin cristal.
+    auto* win7Basic = new QCheckBox(tr("Windows 7 Basic (sin cristal)"), page.widget);
+    win7Basic->setToolTip(tr("El tema básico de Windows 7: los mismos controles con el marco opaco, sin cristal."));
+    win7Basic->setChecked(m_settings.colorScheme == int(Theme::Scheme::Windows7Basic)
+                          || m_settings.colorScheme == int(Theme::Scheme::Windows7BasicDark));
+    {
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(win7Basic);
+        page.layout->addLayout(indent);
+    }
+    connect(win7Basic, &QCheckBox::toggled, this, [this](bool on) {
+        const int s = m_settings.colorScheme;
+        const bool dark = s == int(Theme::Scheme::Windows7Dark) || s == int(Theme::Scheme::Windows7BasicDark);
+        const int want = on ? int(dark ? Theme::Scheme::Windows7BasicDark : Theme::Scheme::Windows7Basic)
+                            : int(dark ? Theme::Scheme::Windows7Dark : Theme::Scheme::Windows7);
+        if (want == s)
+            return;
+        m_settings.colorScheme = want;
+        changed();
+    });
     // Windows 7: «Habilitar transparencia», como en Windows 7 (solo con sus temas).
     auto* aeroGlass = new QCheckBox(tr("Habilitar transparencia"), page.widget);
     aeroGlass->setChecked(m_settings.aeroTransparency);
@@ -736,6 +967,21 @@ QWidget* SettingsDialog::createInterfacePage()
     }
     connect(aeroGlass, &QCheckBox::toggled, this, [this](bool on) {
         m_settings.aeroTransparency = on;
+        changed();
+    });
+    // Windows 7: el cristal solo en el marco (como una ventana normal) o extendido por los menús.
+    auto* extendedGlass = new QCheckBox(tr("Extender el cristal por la franja de los menús"), page.widget);
+    extendedGlass->setChecked(m_settings.win7ExtendedGlass);
+    extendedGlass->setToolTip(tr("Desactivado (lo de fábrica), el cristal solo está en el borde y la barra de título, como "
+                                 "una ventana de Windows 7. Activado, sigue por la franja de los menús y de las imágenes."));
+    {
+        auto* indent = new QHBoxLayout;
+        indent->setContentsMargins(20, 0, 0, 0);
+        indent->addWidget(extendedGlass);
+        page.layout->addLayout(indent);
+    }
+    connect(extendedGlass, &QCheckBox::toggled, this, [this](bool on) {
+        m_settings.win7ExtendedGlass = on;
         changed();
     });
     // Windows 7: la forma de la X de las ventanas flotantes (Herramientas, Colores...).
@@ -866,7 +1112,7 @@ QWidget* SettingsDialog::createInterfacePage()
     };
     syncWin8();
     connect(this, &SettingsDialog::settingsChanged, this, syncWin8);
-    auto syncAeroGlass = [this, aeroGlass, panelCloseRow, glassRow] {
+    auto syncAeroGlass = [this, aeroGlass, panelCloseRow, glassRow, win7Basic, extendedGlass] {
         // (También el personalizado con el estilo de Windows 7.)
         const bool basic = m_settings.colorScheme == int(Theme::Scheme::Windows7Basic)
                            || m_settings.colorScheme == int(Theme::Scheme::Windows7BasicDark);
@@ -876,7 +1122,12 @@ QWidget* SettingsDialog::createInterfacePage()
         // El Basic no tiene cristal: sin «Habilitar transparencia».
         aeroGlass->setEnabled(win7 && !basic);
         aeroGlass->setVisible(win7 && !basic);
+        // (El personalizado con el estilo de Windows 7 no tiene versión Basic.)
+        win7Basic->setVisible(win7 && m_settings.colorScheme != int(Theme::Scheme::Custom));
+        const QSignalBlocker block(win7Basic);
+        win7Basic->setChecked(basic);
         panelCloseRow->setVisible(win7);
+        extendedGlass->setVisible(win7 && !basic);
         glassRow->setVisible(win7);
     };
     syncAeroGlass();
@@ -965,6 +1216,7 @@ QWidget* SettingsDialog::createInterfacePage()
     for (QPushButton* b : {importLanguage, newLanguage, editLanguage, exportLanguage, removeLanguage})
         languageRow->addWidget(b);
     languageRow->addStretch();
+    mark(tr("Idioma y letra"));
     page.layout->addLayout(languageRow);
     page.layout->addWidget(wrapped(tr("En un idioma personalizado, lo que no esté traducido sale en inglés."), page.widget));
     auto chosenCustom = [language]() -> std::optional<CustomLanguages::Language> {
@@ -1076,6 +1328,40 @@ QWidget* SettingsDialog::createInterfacePage()
     fontRow->addWidget(withUnit(uiFontSize, tr("pt"), {}, page.widget));
     fontRow->addStretch();
     page.layout->addLayout(fontRow);
+    // Tamaño de la interfaz: todo Kaint (ventanas, menús, iconos, letra) más grande o más pequeño, como
+    // el zum del navegador con Kaint.HTML. Qt lo toma al abrir el programa: se ofrece reiniciar.
+    {
+        auto* scaleRow = new QHBoxLayout;
+        auto* scale = new QComboBox(page.widget);
+        for (int percent : {67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300})
+            scale->addItem(QStringLiteral("%1 %").arg(percent), percent);
+        int index = scale->findData(m_settings.uiScale);
+        if (index < 0) {
+            scale->addItem(QStringLiteral("%1 %").arg(m_settings.uiScale), m_settings.uiScale);
+            index = scale->count() - 1;
+        }
+        scale->setCurrentIndex(index);
+        scale->setToolTip(tr("Agranda o achica toda la interfaz (ventanas, menús, iconos y letra), como el zum del navegador "
+                             "en Kaint.HTML. Se aplica al abrir Kaint."));
+        scaleRow->addWidget(new QLabel(tr("Tamaño de la interfaz:"), page.widget));
+        scaleRow->addWidget(scale);
+        scaleRow->addStretch();
+        page.layout->addLayout(scaleRow);
+        connect(scale, &QComboBox::activated, this, [this, scale](int i) {
+            const int chosen = scale->itemData(i).toInt();
+            if (chosen == m_settings.uiScale)
+                return;
+            m_settings.uiScale = chosen;
+            changed();
+            if (askRestart(tr("El tamaño de la interfaz cambia al abrir Kaint. ¿Quieres reiniciarlo ahora?"),
+                           tr("Kaint se cerrará y se abrirá de nuevo con el tamaño elegido. Si hay cambios sin guardar, te lo "
+                              "preguntará antes."),
+                           tr("Usar el tamaño nuevo la próxima vez que se abra Kaint."))) {
+                m_restartRequested = true;
+                accept();
+            }
+        });
+    }
     connect(uiFont, &QComboBox::activated, this, [this, uiFont](int i) {
         m_settings.uiFontFamily = uiFont->itemData(i).toString();
         changed();
@@ -1146,6 +1432,7 @@ QWidget* SettingsDialog::createInterfacePage()
     programRow->addWidget(programIcon);
     programRow->addWidget(programName, 1);
     programRow->addWidget(programReset);
+    mark(tr("Programa y colores"));
     page.layout->addWidget(programRowWidget);
 
     // El color de la barra superior (y de las cabeceras de las ventanas), como el color de énfasis
@@ -1253,6 +1540,7 @@ QWidget* SettingsDialog::createInterfacePage()
     // escritorio: en KDE, la de Plasma). Con el estilo Paint.NET, además, la recreación de Windows 10
     // u 11 (esquinas redondeadas en modo ventana). Por defecto, la de Kaint en Linux y la del
     // sistema en Windows.
+    mark(tr("Barra de título y ventanas"));
     page.layout->addWidget(sectionHeader(tr("Barra de título y ventanas"), page.widget));
     auto* customFrame = new QCheckBox(tr("Usar la barra de título y el marco de ventana de Kaint"), page.widget);
     customFrame->setChecked(m_settings.customFrame);
@@ -1418,7 +1706,14 @@ QWidget* SettingsDialog::createInterfacePage()
 
     // Entrar en el tema KDE o salir de él, y cambiar el idioma, reinicia Kaint: se pregunta antes
     // y, si no se acepta, se queda como estaba.
-    auto chooseScheme = [this, scheme](int i) {
+    auto chooseScheme = [this, scheme, listedScheme](int i) {
+        // Con Windows 7 Basic marcado, pasar entre Windows 7 y su oscuro sigue siendo Basic.
+        const bool basicNow = m_settings.colorScheme == int(Theme::Scheme::Windows7Basic)
+                              || m_settings.colorScheme == int(Theme::Scheme::Windows7BasicDark);
+        if (basicNow && i == int(Theme::Scheme::Windows7))
+            i = int(Theme::Scheme::Windows7Basic);
+        else if (basicNow && i == int(Theme::Scheme::Windows7Dark))
+            i = int(Theme::Scheme::Windows7BasicDark);
         if (i == m_settings.colorScheme)
             return true;
         if (Theme::needsRestart(Theme::Scheme(i))) {
@@ -1434,7 +1729,7 @@ QWidget* SettingsDialog::createInterfacePage()
                 m_restartRequested = true;
                 accept();
             } else {
-                scheme->setCurrentIndex(scheme->findData(m_settings.colorScheme));
+                scheme->setCurrentIndex(scheme->findData(listedScheme(m_settings.colorScheme)));
             }
             return false;
         }
@@ -1443,7 +1738,7 @@ QWidget* SettingsDialog::createInterfacePage()
         if (isWin7(i) && !isWin7(m_settings.colorScheme))
             m_settings.windowsVersion = 11;
         m_settings.colorScheme = i;
-        scheme->setCurrentIndex(scheme->findData(i));
+        scheme->setCurrentIndex(scheme->findData(listedScheme(i)));
         changed();
         return true;
     };
@@ -1470,6 +1765,7 @@ QWidget* SettingsDialog::createInterfacePage()
         }
     });
 
+    mark(tr("Inicio y cierre"));
     page.layout->addWidget(sectionHeader(tr("Al iniciar"), page.widget));
     check(tr("Volver a abrir las imágenes de la última sesión"), &AppSettings::reopenLast);
 
@@ -1514,8 +1810,7 @@ QWidget* SettingsDialog::createInterfacePage()
         m_settings.autosaveMinutes = v;
         changed();
     });
-    page.layout->addStretch();
-    return page.widget;
+    return new SectionedPage(page, sections, this);
 }
 
 QWidget* SettingsDialog::createCanvasPage()
@@ -1878,7 +2173,6 @@ QWidget* SettingsDialog::createPluginsPage()
     PageBox page = makePage(this);
     // Cada formato resaltado y, al dejar el puntero encima, de dónde viene (en vez de decirlo en el
     // texto, que ocupaba mucho).
-    const QColor strong = palette().color(QPalette::Window).lightness() < 128 ? QColor(Qt::white) : QColor(Qt::black);
     const struct { const char* ext; QString tip; } formats[] = {
         {".so", tr("De Kaint")},
         {".dll", tr("De Paint.NET")},
@@ -1888,17 +2182,24 @@ QWidget* SettingsDialog::createPluginsPage()
         {".xmp", tr("Ajustes de LightCraft")},
         {".paintjs", tr("De paint.js (sin acceso a tus archivos ni a internet)")},
     };
-    QStringList names;
-    for (const auto& f : formats)
-        names << QStringLiteral("<a href=\"%1\" style=\"color:%2; font-weight:600; text-decoration:none\">%1</a>")
-                     .arg(QString::fromLatin1(f.ext), strong.name());
-    auto* intro = new QLabel(tr("Complementos de efectos y formatos de archivo instalados (%1). Se guardan en %2; si un "
-                                "complemento trae varios archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos > "
-                                "Complementos.")
-                                 .arg(tr("%1, %2, %3, %4, %5, %6 y %7")
-                                          .arg(names[0], names[1], names[2], names[3], names[4], names[5], names[6]),
-                                      QDir::toNativeSeparators(PluginManager::instance()->userPath()).toHtmlEscaped()),
-                             page.widget);
+    auto* intro = new QLabel(page.widget);
+    // El color de los formatos, el del texto del tema activo: se vuelve a poner al cambiar de tema
+    // con Configuración abierta (antes se quedaba el de cuando se abrió: negro sobre el fondo oscuro).
+    auto fillIntro = [intro, formats] {
+        const QColor strong = QApplication::palette().color(QPalette::WindowText);
+        QStringList names;
+        for (const auto& f : formats)
+            names << QStringLiteral("<a href=\"%1\" style=\"color:%2; font-weight:600; text-decoration:none\">%1</a>")
+                         .arg(QString::fromLatin1(f.ext), strong.name());
+        intro->setText(tr("Complementos de efectos y formatos de archivo instalados (%1). Se guardan en %2; si un "
+                          "complemento trae varios archivos, añádelos todos o copia su carpeta ahí. Aparecen en Efectos > "
+                          "Complementos.")
+                           .arg(tr("%1, %2, %3, %4, %5, %6 y %7")
+                                    .arg(names[0], names[1], names[2], names[3], names[4], names[5], names[6]),
+                                QDir::toNativeSeparators(PluginManager::instance()->userPath()).toHtmlEscaped()));
+    };
+    fillIntro();
+    connect(Theme::notifier(), &Theme::Notifier::changed, intro, [fillIntro] { QTimer::singleShot(0, fillIntro); });
     intro->setWordWrap(true);
     intro->setTextFormat(Qt::RichText);
     intro->setTextInteractionFlags(Qt::LinksAccessibleByMouse);

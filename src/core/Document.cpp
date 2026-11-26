@@ -198,6 +198,12 @@ void Document::renderComposite(QImage& target, const QRect& area) const
     }
 }
 
+void Document::setAudioClips(const QList<Audio::Clip>& clips)
+{
+    m_audio = clips;
+    emit audioChanged();
+}
+
 QImage Document::flattened() const
 {
     // Una sola capa visible, opaca y Normal: sus píxeles tal cual (así abrir y guardar un PNG

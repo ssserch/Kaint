@@ -32,6 +32,8 @@ public:
     void setValue(QSize size);
     double dpi() const;
     void setKeepAspect(bool on);
+    // El ancho con el foco y su número elegido, para escribir directamente.
+    void focusWidth();
 
 signals:
     void changed();

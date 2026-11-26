@@ -175,6 +175,7 @@ add_library(kaintcore STATIC
     src/core/Gif.cpp
     src/core/Motion.cpp
     src/core/Apng.cpp
+    src/core/Audio.cpp
     src/core/QuickShape.cpp
     src/core/ModernFormats.cpp
     src/core/ImageIO.cpp
@@ -268,6 +269,7 @@ add_library(kaintui STATIC
     src/app/GifExport.cpp
     src/app/widgets/BrushAdvanced.cpp
     src/app/Icons.cpp
+    src/app/Intro.cpp
     src/app/MainWindow.cpp
     src/app/PdnIcons.cpp
     src/app/PngIcons.cpp
@@ -424,6 +426,8 @@ file(GLOB KAINT_CURSORS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/curs
 qt_add_resources(kaintui kaint_cursors PREFIX "/kaint/cursors" BASE data/cursors FILES ${KAINT_CURSORS})
 # La copia del catálogo de Explorar complementos (por si no se puede descargar el del repositorio).
 qt_add_resources(kaintui kaint_plugin_catalog PREFIX "/kaint" FILES plugins/catalog.json)
+# La intro (la primera vez que se abre Kaint, o siempre si se pide).
+qt_add_resources(kaintui kaint_intro PREFIX "/kaint" FILES video/intro.webm)
 # Los textos que se pueden traducir con un idioma personalizado (su original y el inglés).
 qt_add_resources(kaintui kaint_translation_sources PREFIX "/i18n" BASE translations FILES translations/kaint_en.ts)
 

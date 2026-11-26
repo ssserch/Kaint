@@ -161,7 +161,9 @@ private:
     ChoiceButton* m_blend;
     ChoiceButton* m_fill;
     // Las herramientas de PhotoCraft.
-    BarSlider* m_magneticWidth;
+    QComboBox* m_magneticWidth;
+    class ChoiceButton* m_moveWarp = nullptr;
+    QToolButton* m_moveSnap = nullptr;
     BarSlider* m_magneticContrast;
     BarSlider* m_magneticFrequency;
     ChoiceButton* m_objectFinder;

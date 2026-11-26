@@ -1,6 +1,38 @@
 // Os textos próprios da web (os de «extra» em js/i18n.js) em português do Brasil, com os termos da
 // tradução de Mildanner. O que não estiver aqui sai em inglês.
 export default {
+    "Arrastra para cambiar la altura de las pistas": "Arraste para mudar a altura das faixas",
+    "Mostrar la barra de desplazamiento horizontal": "Mostrar a barra de rolagem horizontal",
+    "Mostrar la barra de desplazamiento vertical": "Mostrar a barra de rolagem vertical",
+    "Ocultar o mostrar la pista": "Ocultar ou mostrar a faixa",
+    "Añade los fotogramas al revés al final: la animación va y vuelve":
+        "Adiciona os quadros ao contrário no final: a animação vai e volta",
+    "Añade los medios elegidos detrás del fotograma elegido.":
+        "Adiciona as mídias escolhidas depois do quadro escolhido.",
+    "El último fotograma pasa a ser el primero":
+        "O último quadro passa a ser o primeiro",
+    "Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final).":
+        "As imagens abertas no Kaint e as que você importar. Arraste-as para a linha do tempo (ou dê um clique duplo para adicioná-las ao final).",
+    "Puntos clave del fotograma elegido (sobre su imagen): arrástralos para cambiar cuándo llegan; clic derecho para la forma del movimiento":
+        "Quadros-chave do quadro selecionado (sobre a sua imagem): arraste-os para mudar quando chegam; clique com o botão direito para a forma do movimento",
+    "Configurar esta pantalla":
+        "Configurar esta tela",
+    "Fondo con la última imagen editada":
+        "Fundo com a última imagem editada",
+    "Importar del dispositivo…":
+        "Importar do dispositivo…",
+    "Mostrar esta pantalla al abrir Kaint":
+        "Mostrar esta tela ao abrir o Kaint",
+    "Mostrar las imágenes recientes":
+        "Mostrar as imagens recentes",
+    "Nueva":
+        "Nova",
+    "Recientes":
+        "Recentes",
+    "Todavía no hay imágenes recientes.":
+        "Ainda não há imagens recentes.",
+    "Volver":
+        "Voltar",
     "Aberración cromática": "Aberração cromática",
     "Blanco a partir de": "Branco a partir de",
     "Color de las líneas": "Cor das linhas",

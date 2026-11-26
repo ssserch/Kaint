@@ -2,6 +2,7 @@
 // ("Línea/Curva"), uno por cada cambio terminado ("Editar…") y "Finalizar…" al acabar. Mientras uno
 // de esos pasos sea el último del historial, su herramienta lo puede retomar (al deshacer o al
 // pulsar en él en el Historial) para seguir editándolo.
+import { preserveAlpha } from "../core/Document.js";
 import { clampRect, cloneCanvas, context, unionRect } from "../core/Raster.js";
 
 export class StepRecorder {
@@ -44,6 +45,12 @@ export class StepRecorder {
         layer.ctx.clearRect(r.x, r.y, r.w, r.h);
         layer.ctx.drawImage(preview, r.x, r.y, r.w, r.h, r.x, r.y, r.w, r.h);
         const after = layer.ctx.getImageData(r.x, r.y, r.w, r.h);
+        // Alpha-Lock (relleno, degradado, formas, texto): solo cambia el color, como en Kaint; antes
+        // estos pasos no lo respetaban y pintaban también lo transparente.
+        if (layer.alphaLock) {
+            preserveAlpha(after.data, before.data);
+            layer.ctx.putImageData(after, r.x, r.y);
+        }
         const apply = (data) => {
             layer.ctx.putImageData(data, r.x, r.y);
             doc.pixelsChanged(layer, r);

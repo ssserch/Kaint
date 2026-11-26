@@ -1,4 +1,5 @@
 #include "app/Icons.h"
+#include "app/Theme.h"
 
 #include "core/CustomShapes.h"
 #include "core/FillPattern.h"
@@ -341,9 +342,88 @@ QIcon sampleSize(int pixels)
     });
 }
 
+namespace {
+
+// − y + de la barra de opciones. Con el estilo de Paint.NET y un tema oscuro, como los suyos: un
+// cuadrado blanco con el signo oscuro; si no, los PNG de siempre. Se decide al dibujar (el tema
+// puede cambiar después de crear el botón).
+class StepperIconEngine : public QIconEngine {
+public:
+    StepperIconEngine(bool plus, QIcon fallback)
+        : m_plus(plus)
+        , m_fallback(std::move(fallback))
+    {
+    }
+    void paint(QPainter* p, const QRect& rect, QIcon::Mode mode, QIcon::State state) override
+    {
+        if (!Theme::paintNetLook() || !Theme::isDark()) {
+            m_fallback.paint(p, rect, Qt::AlignCenter, mode, state);
+            return;
+        }
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing);
+        const qreal side = std::min(rect.width(), rect.height()) - 1;
+        const QRectF box(rect.x() + (rect.width() - side) / 2.0, rect.y() + (rect.height() - side) / 2.0, side, side);
+        const bool off = mode == QIcon::Disabled;
+        p->setPen(Qt::NoPen);
+        // Con el puntero encima, el cuadrado se vuelve azul (sin recuadro alrededor del botón).
+        const bool hot = mode == QIcon::Active || mode == QIcon::Selected;
+        p->setBrush(off ? QColor(150, 150, 150) : hot ? QColor(0x00, 0x78, 0xd7) : QColor(Qt::white));
+        p->drawRoundedRect(box, 1.5, 1.5);
+        p->setPen(QPen(hot ? QColor(Qt::white) : QColor(0x1e, 0x1e, 0x1e), std::max<qreal>(1.4, side / 8.0), Qt::SolidLine,
+                       Qt::FlatCap));
+        const QPointF c = box.center();
+        const qreal arm = side * 0.28;
+        p->drawLine(c - QPointF(arm, 0), c + QPointF(arm, 0));
+        if (m_plus)
+            p->drawLine(c - QPointF(0, arm), c + QPointF(0, arm));
+        p->restore();
+    }
+    QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override
+    {
+        QPixmap pm(size);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        paint(&p, QRect(QPoint(), size), mode, state);
+        return pm;
+    }
+    QIconEngine* clone() const override { return new StepperIconEngine(m_plus, m_fallback); }
+
+private:
+    bool m_plus;
+    QIcon m_fallback;
+};
+
+} // namespace
+
+QIcon magnet()
+{
+    // Una herradura roja con las puntas grises, dibujada a cualquier tamaño.
+    QPixmap pm(QSize(32, 32));
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.translate(16, 16);
+    p.rotate(-45);
+    QPainterPath u;
+    u.moveTo(-9, -12);
+    u.lineTo(-9, 2);
+    u.arcTo(QRectF(-9, -7, 18, 18), 180, 180);
+    u.lineTo(9, -12);
+    p.setPen(QPen(QColor(40, 40, 40), 9.5, Qt::SolidLine, Qt::FlatCap));
+    p.drawPath(u);
+    p.setPen(QPen(QColor(220, 50, 50), 7, Qt::SolidLine, Qt::FlatCap));
+    p.drawPath(u);
+    p.setPen(QPen(QColor(200, 205, 210), 7, Qt::SolidLine, Qt::FlatCap));
+    p.drawLine(QPointF(-9, -12), QPointF(-9, -6));
+    p.drawLine(QPointF(9, -12), QPointF(9, -6));
+    p.end();
+    return QIcon(pm);
+}
+
 QIcon stepper(bool plus)
 {
-    return png(plus ? QStringLiteral("plus_button_icon") : QStringLiteral("minus_button_icon"));
+    return QIcon(new StepperIconEngine(plus, png(plus ? QStringLiteral("plus_button_icon") : QStringLiteral("minus_button_icon"))));
 }
 
 QIcon blendMode()

@@ -27,7 +27,9 @@
 #include <QTemporaryDir>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace GifExport {
 
@@ -117,8 +119,54 @@ bool encodeWithFfmpeg(const QList<Gif::Frame>& frames, Format format, const QStr
     const int q = std::clamp(o.quality, 0, 2);
     QStringList args{QStringLiteral("-y"), QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("error"),
                      QStringLiteral("-progress"), QStringLiteral("pipe:1"), QStringLiteral("-f"), QStringLiteral("concat"),
-                     QStringLiteral("-safe"), QStringLiteral("0"), QStringLiteral("-i"), listFile.fileName(),
-                     QStringLiteral("-fps_mode"), QStringLiteral("vfr")};
+                     QStringLiteral("-safe"), QStringLiteral("0"), QStringLiteral("-i"), listFile.fileName()};
+    // El audio (solo en los vídeos): cada clip recortado, con su volumen y sus fundidos, colocado en
+    // su momento y todos mezclados; lo que pasa del final del vídeo se corta.
+    const bool withAudio = (format == Format::Mp4 || format == Format::WebM)
+                           && std::any_of(o.audio.cbegin(), o.audio.cend(), [](const Audio::Clip& c) { return !c.muted && c.duration > 0; });
+    if (withAudio) {
+        qint64 videoMs = 0;
+        for (const Gif::Frame& f : frames)
+            videoMs += std::max(1, f.delayMs);
+        videoMs *= repeat;
+        QStringList chains, labels;
+        int input = 1;
+        for (const Audio::Clip& c : o.audio) {
+            if (c.muted || c.duration <= 0 || c.start >= videoMs)
+                continue;
+            const QString file = dir.filePath(QStringLiteral("a%1.%2").arg(input).arg(c.suffix.isEmpty() ? QStringLiteral("bin") : c.suffix));
+            if (!writeFile(file, c.data, error))
+                return false;
+            args << QStringLiteral("-i") << file;
+            QString chain = QStringLiteral("[%1:a]atrim=start=%2:duration=%3,asetpts=PTS-STARTPTS,volume='%4':eval=frame")
+                                .arg(input)
+                                .arg(c.offset / 1000.0, 0, 'f', 3)
+                                .arg(c.duration / 1000.0, 0, 'f', 3)
+                                .arg(Audio::ffmpegVolumeExpression(c));
+            if (c.fadeIn > 0)
+                chain += QStringLiteral(",afade=t=in:st=0:d=%1").arg(c.fadeIn / 1000.0, 0, 'f', 3);
+            if (c.fadeOut > 0)
+                chain += QStringLiteral(",afade=t=out:st=%1:d=%2")
+                             .arg(std::max(0, c.duration - c.fadeOut) / 1000.0, 0, 'f', 3)
+                             .arg(c.fadeOut / 1000.0, 0, 'f', 3);
+            if (c.start > 0)
+                chain += QStringLiteral(",adelay=delays=%1:all=1").arg(c.start);
+            const QString label = QStringLiteral("[a%1]").arg(input);
+            chains << chain + label;
+            labels << label;
+            ++input;
+        }
+        const QString mix = labels.size() == 1 ? labels.first() + QStringLiteral("anull")
+                                               : labels.join(QString()) + QStringLiteral("amix=inputs=%1:duration=longest:normalize=0").arg(labels.size());
+        chains << mix + QStringLiteral(",atrim=0:%1[aout]").arg(videoMs / 1000.0, 0, 'f', 3);
+        args << QStringLiteral("-filter_complex") << chains.join(QLatin1Char(';')) << QStringLiteral("-map") << QStringLiteral("0:v")
+             << QStringLiteral("-map") << QStringLiteral("[aout]");
+        if (format == Format::Mp4)
+            args << QStringLiteral("-c:a") << QStringLiteral("aac") << QStringLiteral("-b:a") << QStringLiteral("192k");
+        else
+            args << QStringLiteral("-c:a") << QStringLiteral("libopus") << QStringLiteral("-b:a") << QStringLiteral("160k");
+    }
+    args << QStringLiteral("-fps_mode") << QStringLiteral("vfr");
     switch (format) {
     case Format::Mp4:
         // H.264 en 4:2:0 necesita medidas pares.
@@ -195,6 +243,112 @@ bool encodeWithFfmpeg(const QList<Gif::Frame>& frames, Format format, const QStr
 }
 
 } // namespace
+
+bool isVideoFile(const QString& path)
+{
+    static const QStringList kinds{QStringLiteral("mp4"), QStringLiteral("webm"), QStringLiteral("mov"), QStringLiteral("mkv"),
+                                   QStringLiteral("avi"), QStringLiteral("m4v"), QStringLiteral("ogv"), QStringLiteral("wmv"),
+                                   QStringLiteral("mpg"), QStringLiteral("mpeg"), QStringLiteral("flv"), QStringLiteral("3gp")};
+    return kinds.contains(QFileInfo(path).suffix().toLower());
+}
+
+QString videoPatterns()
+{
+    return QStringLiteral("*.mp4 *.webm *.mov *.mkv *.avi *.m4v *.ogv *.wmv *.mpg *.mpeg *.flv *.3gp");
+}
+
+bool decodeVideo(const QString& path, QList<QImage>* frames, int* delayMs, QWidget* progressParent, QString* error)
+{
+    const QString ffmpeg = ffmpegPath();
+    if (ffmpeg.isEmpty()) {
+        if (error)
+            *error = QObject::tr("Para abrir vídeo hace falta FFmpeg (https://ffmpeg.org). Instálalo (en Linux, el paquete «ffmpeg») "
+                                 "o pon ffmpeg junto a Kaint y vuelve a intentarlo.");
+        return false;
+    }
+    // Fotogramas por segundo y duración (ffprobe va con FFmpeg; sin él, 25 por segundo).
+    double fps = 25, duration = 0;
+    const QString probe = QFileInfo(ffmpeg).absolutePath() + QStringLiteral("/ffprobe") + QFileInfo(ffmpeg).suffix().prepend(
+                              QFileInfo(ffmpeg).suffix().isEmpty() ? QString() : QStringLiteral("."));
+    QProcess info;
+    info.start(QFileInfo::exists(probe) ? probe : QStringLiteral("ffprobe"),
+               {QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-select_streams"), QStringLiteral("v:0"),
+                QStringLiteral("-show_entries"), QStringLiteral("stream=avg_frame_rate:format=duration"), QStringLiteral("-of"),
+                QStringLiteral("default=nw=1"), path});
+    if (info.waitForFinished(15000)) {
+        for (const QByteArray& line : info.readAllStandardOutput().split('\n')) {
+            if (line.startsWith("avg_frame_rate=")) {
+                const QList<QByteArray> parts = line.mid(15).trimmed().split('/');
+                const double num = parts.value(0).toDouble(), den = parts.size() > 1 ? parts[1].toDouble() : 1;
+                if (num > 0 && den > 0)
+                    fps = std::min(25.0, num / den);
+            } else if (line.startsWith("duration=")) {
+                duration = line.mid(9).trimmed().toDouble();
+            }
+        }
+    }
+    if (duration > 0 && fps * duration > 1500)
+        fps = 1500 / duration;
+    fps = std::max(0.5, fps);
+    QTemporaryDir dir;
+    if (!dir.isValid()) {
+        if (error)
+            *error = QObject::tr("No se pudo crear una carpeta temporal.");
+        return false;
+    }
+    QProcess process;
+    process.setProgram(ffmpeg);
+    process.setArguments({QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-progress"), QStringLiteral("pipe:1"),
+                          QStringLiteral("-i"), path, QStringLiteral("-vf"), QStringLiteral("fps=%1").arg(fps, 0, 'f', 4),
+                          QStringLiteral("-frames:v"), QStringLiteral("1500"), dir.filePath(QStringLiteral("f%05d.png"))});
+    process.start();
+    if (!process.waitForStarted(10000)) {
+        if (error)
+            *error = QObject::tr("No se pudo ejecutar FFmpeg (%1).").arg(ffmpeg);
+        return false;
+    }
+    const int expected = duration > 0 ? int(std::ceil(duration * fps)) : 0;
+    std::unique_ptr<QProgressDialog> progress;
+    if (progressParent) {
+        progress = std::make_unique<QProgressDialog>(QObject::tr("Leyendo el vídeo…"), QObject::tr("Cancelar"), 0,
+                                                     std::max(1, expected), progressParent);
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setMinimumDuration(400);
+    }
+    QByteArray out;
+    while (!process.waitForFinished(50)) {
+        out += process.readAllStandardOutput();
+        const qsizetype at = out.lastIndexOf("frame=");
+        if (progress && at >= 0) {
+            const qsizetype end = out.indexOf('\n', at);
+            if (end > at)
+                progress->setValue(std::min(std::max(1, expected), out.mid(at + 6, end - at - 6).trimmed().toInt()));
+        }
+        QCoreApplication::processEvents();
+        if (progress && progress->wasCanceled()) {
+            process.kill();
+            process.waitForFinished(3000);
+            if (error)
+                error->clear();
+            return false;
+        }
+        if (process.state() == QProcess::NotRunning)
+            break;
+    }
+    QStringList files = QDir(dir.path()).entryList({QStringLiteral("f*.png")}, QDir::Files, QDir::Name);
+    for (const QString& f : std::as_const(files)) {
+        QImage image(dir.filePath(f));
+        if (!image.isNull())
+            frames->append(image.convertToFormat(QImage::Format_ARGB32_Premultiplied));
+    }
+    if (frames->isEmpty()) {
+        if (error)
+            *error = QObject::tr("FFmpeg no pudo leer el vídeo: %1").arg(QString::fromUtf8(process.readAllStandardError()).trimmed().left(600));
+        return false;
+    }
+    *delayMs = std::max(Gif::kMinDelayMs, int(std::lround(1000.0 / fps / 10.0)) * 10);
+    return true;
+}
 
 QString ffmpegPath()
 {
@@ -331,6 +485,8 @@ QString exportAnimation(QWidget* parent, Document* doc, Format format, const QSt
                   : format == Format::WebP ? QObject::tr("Con transparencia y mucho más ligero que el GIF.")
                   : format == Format::Mp4  ? QObject::tr("H.264: se ve en cualquier teléfono, navegador y red social.")
                                            : QObject::tr("VP9 con transparencia (para la web)."));
+    if (video && !doc->audioClips().isEmpty())
+        note->setText(note->text() + QLatin1Char(' ') + QObject::tr("Lleva las pistas de audio del editor de GIF."));
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -353,6 +509,8 @@ QString exportAnimation(QWidget* parent, Document* doc, Format format, const QSt
     options.scale = scale->currentData().toInt();
     options.quality = quality->currentIndex();
     options.background = background;
+    if (video)
+        options.audio = doc->audioClips();
     QString error;
     QApplication::setOverrideCursor(Qt::WaitCursor);
     const bool ok = encode(frames, format, path, doc->gifLoops(), webpQuality->value(), options, parent, &error);

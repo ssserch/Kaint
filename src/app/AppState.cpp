@@ -167,6 +167,8 @@ ToolSettings AppState::toolDefaults() const
     // fábrica).
     t.moveInterpolation = Resample::Interpolation(std::clamp(num("moveResampling", int(t.moveInterpolation)), 0, 4));
     t.moveGamma = num("moveGamma", t.moveGamma);
+    t.moveWarp = num("moveWarp", t.moveWarp);
+    t.moveSnap = num("moveSnap", t.moveSnap);
     t.afterSelect = AfterSelect(std::clamp(num("afterSelect", int(t.afterSelect)), 0, 2));
     t.magneticWidth = std::clamp(num("magneticWidth", t.magneticWidth), 1, 256);
     t.magneticContrast = std::clamp(num("magneticContrast", t.magneticContrast), 1, 100);
@@ -259,6 +261,8 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.remove(QStringLiteral("moveSampling"));
     s.remove(QStringLiteral("moveInterpolation"));
     s.setValue(QStringLiteral("moveGamma"), t.moveGamma);
+    s.setValue(QStringLiteral("moveWarp"), t.moveWarp);
+    s.setValue(QStringLiteral("moveSnap"), t.moveSnap);
     s.setValue(QStringLiteral("afterSelect"), int(t.afterSelect));
     s.setValue(QStringLiteral("magneticWidth"), t.magneticWidth);
     s.setValue(QStringLiteral("magneticContrast"), t.magneticContrast);

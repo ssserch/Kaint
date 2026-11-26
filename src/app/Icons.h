@@ -151,6 +151,8 @@ QIcon afterSelect(AfterSelect after);
 QIcon sampleSize(int pixels);
 // Botones − y + junto a los deslizadores y tamaños de la barra.
 QIcon stepper(bool plus);
+// El imán del Snap (Mover, funciones de PhotoCraft).
+QIcon magnet();
 QIcon blendMode();
 QIcon swatch(const QColor& color);
 // El icono del programa: el de Kaint o el propio elegido en Configuración (setProgram).

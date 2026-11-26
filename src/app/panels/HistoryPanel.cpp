@@ -100,6 +100,36 @@ HistoryPanel::HistoryPanel(QUndoGroup* group, QAction* undo, QAction* redo, QWid
     layout->addWidget(m_view, 1);
     layout->addWidget(strip);
 
+    // Con un filtro, los pasos que no son de este editor se esconden (también los que llegan).
+    auto refilter = [this] {
+        if (m_filter != Filter::All)
+            applyFilter();
+    };
+    connect(m_view->model(), &QAbstractItemModel::rowsInserted, this, refilter);
+    connect(m_view->model(), &QAbstractItemModel::modelReset, this, refilter);
+    connect(m_view->model(), &QAbstractItemModel::layoutChanged, this, refilter);
+    connect(group, &QUndoGroup::activeStackChanged, this, refilter);
+    connect(group, &QUndoGroup::indexChanged, this, refilter);
+}
+
+void HistoryPanel::setFilter(Filter filter)
+{
+    m_filter = filter;
+    applyFilter();
+}
+
+void HistoryPanel::applyFilter()
+{
+    QUndoStack* stack = m_group->activeStack();
+    const int rows = m_view->model() ? m_view->model()->rowCount() : 0;
+    for (int row = 1; row < rows; ++row) {
+        bool hide = false;
+        if (stack && m_filter != Filter::All && row - 1 < stack->count()) {
+            const bool gif = History::isGifStep(stack->command(row - 1));
+            hide = m_filter == Filter::Gif ? !gif : gif;
+        }
+        m_view->setRowHidden(row, hide);
+    }
 }
 
 void HistoryPanel::setJumpButtonsVisible(bool on)

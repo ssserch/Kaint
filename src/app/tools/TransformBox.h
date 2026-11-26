@@ -35,6 +35,41 @@ public:
     // Partes que se dibujan (al arrastrar, las herramientas Mover ocultan algunas).
     enum Part { Outline = 1, BoxHandles = 2, PivotPoint = 4, MoveIcon = 8, AllParts = 15 };
     void draw(QPainter& p, const QTransform& imageToView, int parts = AllParts) const;
+    // El botón de volver a centrar el punto de giro con el puntero encima. Devuelve si cambió.
+    // Snap (funciones de PhotoCraft): al mover, los bordes y el centro de lo que se mueve se pegan a
+    // estas líneas (en píxeles del lienzo) si quedan a 'tolerance' o menos; Ctrl mueve libre.
+    struct SnapTarget {
+        double pos, from, to;  // la línea y lo que ocupa en el otro eje
+    };
+    struct SnapLine {
+        bool vertical;
+        double pos, from, to;
+    };
+    void setSnapTargets(const QList<SnapTarget>& xs, const QList<SnapTarget>& ys, double tolerance)
+    {
+        m_snapX = xs;
+        m_snapY = ys;
+        m_snapTol = tolerance;
+        m_snapLines.clear();
+    }
+    void clearSnap()
+    {
+        m_snapX.clear();
+        m_snapY.clear();
+        m_snapTol = 0;
+        m_snapLines.clear();
+    }
+    // Las alineaciones del arrastre en curso (para dibujarlas en magenta).
+    const QList<SnapLine>& snapLines() const { return m_snapLines; }
+    // Deformar (funciones de PhotoCraft): cada esquina se mueve sola y pone la imagen en perspectiva.
+    void setWarp(bool on) { m_warp = on; }
+    bool setResetHot(bool hot)
+    {
+        if (m_resetHot == hot)
+            return false;
+        m_resetHot = hot;
+        return true;
+    }
 
     // Píxel a píxel: sin giro (o girado 90° o 270°), las esquinas del rectángulo transformado
     // quedan en píxeles enteros; con otros giros no se toca (girar alrededor del punto central no
@@ -50,5 +85,10 @@ private:
     QPointF m_startPos;
     QPointF m_pivot;
     QPointF m_localPivot;
+    bool m_resetHot = false;
+    QList<SnapTarget> m_snapX, m_snapY;
+    double m_snapTol = 0;
+    QList<SnapLine> m_snapLines;
+    bool m_warp = false;
     QPointF resetButtonView(const QTransform& imageToView) const;
 };

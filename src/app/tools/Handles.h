@@ -14,7 +14,13 @@ enum class Shape { Square, Circle, Move, Rotate, ResetPivot };
 
 constexpr qreal kHitRadius = 8;
 
-void draw(QPainter& p, const QPointF& viewPos, Shape shape);
+// 'hot': con el puntero encima (el botón de volver a centrar el punto de giro cambia de colores).
+// 'angle' (grados): el botón de volver a centrar el punto de giro gira según dónde está el punto.
+void draw(QPainter& p, const QPointF& viewPos, Shape shape, bool hot = false, double angle = 0);
+// Como en Paint.NET, los tiradores laten: su opacidad sigue un seno de 2 s entre 0,25 y 1,5 (cortado
+// en 1), cada uno desfasado una décima de periodo ('index': 0 el punto de giro, 1 a 8 los de la caja,
+// 9 el icono de mover). Sin animaciones, 1.
+qreal pulse(int index);
 // Punto de giro (círculo con una cruz girada 'degrees').
 void drawPivot(QPainter& p, const QPointF& viewPos, double degrees);
 inline bool hit(const QPointF& viewPos, const QPointF& handleView, qreal radius = kHitRadius)

@@ -63,8 +63,6 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     scheme->addItem(tr("Windows 8 oscuro"), int(Theme::Scheme::Windows8Dark));
     scheme->addItem(tr("Windows 7"), int(Theme::Scheme::Windows7));
     scheme->addItem(tr("Windows 7 oscuro"), int(Theme::Scheme::Windows7Dark));
-    scheme->addItem(tr("Windows 7 Basic"), int(Theme::Scheme::Windows7Basic));
-    scheme->addItem(tr("Windows 7 Basic oscuro"), int(Theme::Scheme::Windows7BasicDark));
     scheme->addItem(tr("Windows XP"), int(Theme::Scheme::WindowsXP));
     scheme->addItem(tr("Windows 98"), int(Theme::Scheme::Windows98));
     scheme->addItem(tr("Windows 98 ALT"), int(Theme::Scheme::Windows98Alt));
@@ -77,7 +75,11 @@ WelcomeDialog::WelcomeDialog(const AppSettings& current, QWidget* parent)
     scheme->addItem(tr("elementary OS"), int(Theme::Scheme::Elementary));
     scheme->addItem(tr("elementary OS oscuro"), int(Theme::Scheme::ElementaryDark));
     scheme->addItem(tr("Personalizado"), int(Theme::Scheme::Custom));
-    scheme->setCurrentIndex(std::max(0, scheme->findData(m_settings.colorScheme)));
+    // (Windows 7 Basic es una opción de Windows 7 en Configuración, no un tema de la lista.)
+    const int listed = m_settings.colorScheme == int(Theme::Scheme::Windows7Basic)       ? int(Theme::Scheme::Windows7)
+                       : m_settings.colorScheme == int(Theme::Scheme::Windows7BasicDark) ? int(Theme::Scheme::Windows7Dark)
+                                                                                          : m_settings.colorScheme;
+    scheme->setCurrentIndex(std::max(0, scheme->findData(listed)));
     auto* look = new QComboBox(this);
     look->addItem(QStringLiteral("Kaint"), 0);
     look->addItem(QStringLiteral("Paint.NET"), 1);

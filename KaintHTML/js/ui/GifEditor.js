@@ -9,18 +9,27 @@
 import { Layer } from "../core/Document.js";
 import { delayFromName, nameWithDelay } from "../core/Codecs.js";
 import { animationFrames, download, openFile, OpenAccept } from "../core/ImageIO.js";
-import { canEncodeMp4, canEncodeWebp, encodeAnimatedWebp, encodeApng, encodeMp4, recordVideo } from "../core/AnimExport.js";
+import { canEncodeAac, canEncodeMp4, canEncodeWebp, encodeAnimatedWebp, encodeApng, encodeMp4, recordVideo } from "../core/AnimExport.js";
+import { AudioExtensions, PeakMs, analyzeAudio, automate, copyClip, decodeClip, isAudioFile, keyedVolume, renderMix, setKey, volumeAt } from "../core/Audio.js";
+import { Settings } from "../Settings.js";
 import { defaultSaveOptions, encodeAnimation } from "../core/Encode.js";
 import * as Motion from "../core/Motion.js";
-import { context, createCanvas, imageSignature, thumbnail } from "../core/Raster.js";
+import { checkerPattern, context, createCanvas, imageSignature, thumbnail } from "../core/Raster.js";
 import { currentLanguage, tr, trn } from "../i18n.js";
 import { Action } from "./Actions.js";
 import { Dialog, el, message, promptNumber } from "./Dialogs.js";
 import { icon } from "./Icons.js";
 import { popupMenu } from "./Menu.js";
+import { historyPanel } from "./Panels.js";
 
 const DefaultDelay = 100, MinDelay = 20, MediaMime = "application/x-kaint-gif-media";
 const RulerHeight = 22, LeftMargin = 12;
+// Las pistas: desde arriba de la primera (bajo la regla), cada una con sus clips y aire entre ellas.
+const TrackTop = 28, TrackGap = 8, Snap = 14;
+// La altura de las pistas (se cambia arrastrando el borde de abajo de su cabecera o con su menú).
+const TrackHeights = { small: 48, medium: 74, large: 118 };
+// Las pistas de audio, debajo de las de los fotogramas (con la franja «AUDIO» entre unas y otras).
+const AudioHeight = 54, AudioGap = 24;
 
 const delayOf = (layer) => Math.max(MinDelay, delayFromName(layer?.name, DefaultDelay));
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -166,16 +175,31 @@ export class GifEditor {
         const importButton = button(tr("Importar..."), tr("Importar imágenes o GIF"), () => this.fileInput.click());
         importButton.prepend(icon("layer-import", 16));
         const addButton = button(tr("Añadir"), tr("Añade los medios elegidos detrás del fotograma elegido."), () => {
-            let at = this.selected() >= 0 ? this.selected() + 1 : -1;
+            const track = this.curTrack();
+            let at = this.selected() >= 0 && this.trackOf(this.selected()) === track ? this.selected() + 1 : -1;
             for (const item of this.mediaList.querySelectorAll(".gif-media.selected")) {
                 const before = this.count();
-                this.insertMedia(+item.dataset.index, at);
+                this.insertMedia(+item.dataset.index, at, track);
                 if (at >= 0)
                     at += this.count() - before;
             }
         });
-        const bin = el("div", { className: "gif-bin" }, [el("div", { className: "gif-section-title", textContent: tr("Medios") }), this.mediaList,
-                                                        el("div", { className: "gif-row" }, [importButton, addButton, this.fileInput])]);
+        // Medios e historial (solo los pasos del editor de GIF), en pestañas.
+        const mediaPage = el("div", { className: "gif-bin-page" }, [this.mediaList, el("div", { className: "gif-row" }, [importButton, addButton, this.fileInput])]);
+        const historyPage = el("div", { className: "gif-bin-page", hidden: true }, [historyPanel(this.app, "gif")]);
+        const tab = (text, page) => {
+            const b = el("button", { className: "gif-tab", textContent: text });
+            b.addEventListener("click", () => {
+                for (const t of tabs.children)
+                    t.classList.toggle("selected", t === b);
+                mediaPage.hidden = page !== mediaPage;
+                historyPage.hidden = page !== historyPage;
+            });
+            return b;
+        };
+        const tabs = el("div", { className: "gif-tabs" }, [tab(tr("Medios"), mediaPage), tab(tr("Historial"), historyPage)]);
+        tabs.firstChild.classList.add("selected");
+        const bin = el("div", { className: "gif-bin" }, [tabs, mediaPage, historyPage]);
         this.mediaList.addEventListener("dragover", (e) => {
             if (e.dataTransfer.types.includes("Files")) {
                 e.preventDefault();
@@ -202,7 +226,7 @@ export class GifEditor {
             this.playButton,
             button("⏹", tr("Detener"), () => { this.stop(); this.seek(0); }),
             button("⏩", tr("Fotograma siguiente (→)"), () => this.step(1)),
-            button("⏭", tr("Último fotograma (Fin)"), () => { const s = this.starts(); if (s.length > 1) this.seek(s[s.length - 2]); }),
+            button("⏭", tr("Último fotograma (Fin)"), () => { const f = this.trackFrames(this.curTrack()); if (f.length) this.seek(this.times().start[f[f.length - 1]]); }),
             this.timeLabel, el("span", { className: "gif-stretch" }),
             el("label", { className: "gif-check" }, [this.loop, tr("Repetir")]), this.speed,
         ]);
@@ -229,17 +253,23 @@ export class GifEditor {
         del.prepend(icon("edit-delete", 16));
         const hide = frameButton(icon("eye-open", 16), tr("Ocultar o mostrar el fotograma (los ocultos no van en el GIF)"), () => this.toggleHidden(this.selected()));
         const edit = frameButton("✎", tr("Editar el fotograma con las herramientas"), () => this.editFrame(this.selected()));
+        const globalKey = frameButton(tr("Punto clave"), tr("Punto clave global: todos los valores (posición, escala, rotación y opacidad) en el cabezal; si ya hay uno ahí, lo quita (K)"),
+                                      () => this.toggleGlobalKey());
+        globalKey.prepend(el("span", { className: "gif-diamond filled" }));
         const all = frameButton(tr("A todos"), tr("La misma duración para todos los fotogramas"), () => this.setAllDelays(+this.delayInput.value));
         this.frameControls.push(this.delayInput);
         this.zoom = el("input", { type: "range", min: 40, max: 3000, value: this.pps, className: "gif-zoom",
                                   title: tr("Zum de la línea de tiempo (también con Ctrl y la rueda)"),
                                   oninput: () => { this.pps = +this.zoom.value; this.renderTimeline(); } });
         const bar = el("div", { className: "gif-row gif-toolbar" }, [
-            undo, redo, el("span", { className: "gif-gap" }), dup, del, hide, edit, el("span", { className: "gif-gap" }),
+            undo, redo, el("span", { className: "gif-gap" }), dup, del, hide, edit, el("span", { className: "gif-gap" }), globalKey,
+            el("span", { className: "gif-gap" }),
             el("label", { textContent: tr("Duración:") }), this.delayInput, el("span", { textContent: tr(" ms") }), all,
             el("span", { className: "gif-gap" }),
-            button(tr("Invertir"), tr("El último fotograma pasa a ser el primero"), () => this.reverse()),
-            button(tr("Ida y vuelta"), tr("Añade los fotogramas al revés al final: la animación va y vuelve"), () => this.boomerang()),
+            button(tr("Invertir"), tr("El último fotograma de la pista elegida pasa a ser el primero"), () => this.reverse()),
+            button(tr("Ida y vuelta"), tr("Añade los fotogramas de la pista elegida al revés al final: la animación va y vuelve"), () => this.boomerang()),
+            button(tr("Pista"), tr("Añade una pista encima de las demás (lo de las pistas de arriba se ve encima)"), () => this.addTrack()),
+            this.audioButton(),
             el("span", { className: "gif-stretch" }), el("label", { textContent: tr("Zum:") }), this.zoom,
         ]);
         this.ruler = el("canvas", { className: "gif-ruler" });
@@ -249,12 +279,20 @@ export class GifEditor {
         this.empty = el("div", { className: "gif-empty", textContent: tr("Arrastra aquí imágenes o GIF (de la biblioteca o de tus carpetas)") });
         // Los puntos clave del fotograma elegido: se arrastran (más separados, más dura el movimiento
         // entre ellos) y el clic derecho elige la forma del movimiento.
-        this.keyLane = el("div", { className: "gif-keylane", title: tr("Puntos clave del fotograma elegido: arrástralos para cambiar cuándo llegan; clic derecho para la forma del movimiento") });
-        this.lane = el("div", { className: "gif-lane" }, [this.ruler, this.track, this.keyLane, this.dropMark, this.playhead, this.empty]);
+        this.keyLane = el("div", { className: "gif-keylane", title: tr("Puntos clave del fotograma elegido (sobre su imagen): arrástralos para cambiar cuándo llegan; clic derecho para la forma del movimiento") });
+        this.audioArea = el("div", { className: "gif-audio-area" });
+        this.lane = el("div", { className: "gif-lane" }, [this.ruler, this.track, this.audioArea, this.keyLane, this.dropMark, this.playhead, this.empty]);
         this.scroller = el("div", { className: "gif-scroller" }, [this.lane]);
-        const timeline = el("div", { className: "gif-timeline" }, [bar, this.scroller]);
+        // A la izquierda, fija al desplazarse a lo largo: la cabecera de las pistas.
+        this.trackHeaders = el("div", { className: "gif-track-headers" });
+        this.timelineBody = el("div", { className: "gif-timeline-body" }, [this.trackHeaders, this.scroller]);
+        // La regla se queda arriba a la vista al bajar entre muchas pistas.
+        this.timelineBody.addEventListener("scroll", () => { this.ruler.style.top = `${this.timelineBody.scrollTop}px`; });
+        const timeline = el("div", { className: "gif-timeline" }, [bar, this.timelineBody]);
 
-        root.append(head, el("div", { className: "gif-top" }, [bin, player, this.buildInspector()]), timeline);
+        const inspector = this.buildInspector();
+        inspector.append(this.buildAudioPanel());
+        root.append(head, el("div", { className: "gif-top" }, [bin, player, inspector]), timeline);
         this.installTimeline();
         this.installPreview();
         new ResizeObserver(() => { this.drawPreview(); this.renderTimeline(); this.drawGraph(); }).observe(root);
@@ -273,6 +311,7 @@ export class GifEditor {
         this.time = 0;
         this.extra = [];
         this.selectedKey = -1;
+        this.selectedAudio = -1;
         this.lastActive = doc ? doc.active : -1;
         if (doc) {
             const refresh = () => this.update();
@@ -296,19 +335,21 @@ export class GifEditor {
                     this.lastActive = doc.active;
                     this.selectedKey = -1;
                 }
-                if (!this.playing) {
-                    const s = this.starts(), i = this.selected();
-                    if (i >= 0 && this.frameAt(this.time) !== i)
-                        this.time = s[i];
-                }
+                const i = this.selected();
+                if (i >= 0)
+                    this.activeTrack = this.trackOf(i);
+                if (!this.playing && i >= 0 && this.frameAt(this.time) !== i)
+                    this.time = this.times().start[i];
                 this.update(!this.playing);
             };
             doc.addEventListener("active", active);
             this.listeners.push(["active", active]);
         }
         // El cabezal, al principio del fotograma elegido (la capa activa).
-        if (doc && this.selected() >= 0)
-            this.time = this.starts()[this.selected()];
+        if (doc && this.selected() >= 0) {
+            this.activeTrack = this.trackOf(this.selected());
+            this.time = this.times().start[this.selected()];
+        }
         this.rebuildMedia();
         this.update();
     }
@@ -324,6 +365,11 @@ export class GifEditor {
         if (on) {
             this.rebuildMedia();
             this.update();
+            // La primera vez: para qué está pensado.
+            if (!Settings.get("gifIntroShown")) {
+                Settings.set("gifIntroShown", true);
+                setTimeout(() => message(tr("Editor de GIF"), `${tr("El editor de GIF está pensado para hacer GIF animados.")}\n\n${tr("También exporta vídeo (MP4 o WebM) y admite pistas de audio para esos vídeos, pero no es un editor de vídeo completo: para vídeos largos o con mucha edición, usa un programa de edición de vídeo.")}`, "dialog-information"), 0);
+            }
         } else {
             this.stop();
         }
@@ -345,35 +391,145 @@ export class GifEditor {
         return !!this.doc && !this.doc.layers[i]?.visible;
     }
 
-    // Tiempo (ms) donde empieza cada fotograma; el último valor es la duración total.
-    starts() {
-        const s = [0];
-        for (const layer of this.doc?.layers || [])
-            s.push(s[s.length - 1] + delayOf(layer));
-        return s;
+    // --- Pistas (como en Kaint y en Filmora) ---------------------------------------------------
+    // Cada fotograma va en una pista (layer.track); cada pista empieza en 0 y sus fotogramas van uno
+    // detrás de otro. Las de número más alto se ven encima. La elegida recibe lo que se añade.
+    trackOf(i) {
+        return this.doc?.layers[i]?.track || 0;
     }
 
+    trackCount() {
+        let n = Math.max(1, this.doc?.gifTracks || 1);
+        for (const l of this.doc?.layers || [])
+            n = Math.max(n, (l.track || 0) + 1);
+        return n;
+    }
+
+    trackFrames(k) {
+        const out = [];
+        (this.doc?.layers || []).forEach((l, i) => {
+            if ((l.track || 0) === k)
+                out.push(i);
+        });
+        return out;
+    }
+
+    curTrack() {
+        return Math.max(0, Math.min(this.activeTrack || 0, this.trackCount() - 1));
+    }
+
+    // Inicio y final (ms) de cada fotograma en su pista y la duración total (la pista más larga).
+    times() {
+        const start = [], end = [], ends = [];
+        for (const layer of this.doc?.layers || []) {
+            // (Con el espacio vacío que tenga delante.)
+            const k = layer.track || 0, s = (ends[k] || 0) + Math.max(0, layer.gap || 0);
+            start.push(s);
+            ends[k] = s + delayOf(layer);
+            end.push(ends[k]);
+        }
+        return { start, end, total: ends.reduce((m, v) => Math.max(m, v || 0), 0) };
+    }
+
+    // El fotograma de la pista elegida en 'ms' (pasado su final, el último; -1 si está vacía).
     frameAt(ms) {
-        const s = this.starts();
-        for (let i = 0; i + 1 < s.length; i++)
-            if (ms < s[i + 1])
+        const t = this.times(), frames = this.trackFrames(this.curTrack());
+        for (const i of frames)
+            if (ms < t.end[i])
                 return i;
-        return s.length - 2;
+        return frames.length ? frames[frames.length - 1] : -1;
+    }
+
+    // El de la pista 'k' en 'ms' (-1 fuera de sus fotogramas).
+    frameAtTrack(k, ms) {
+        const t = this.times();
+        return this.trackFrames(k).find((i) => ms >= t.start[i] && ms < t.end[i]) ?? -1;
+    }
+
+    setActiveTrack(k) {
+        this.activeTrack = Math.max(0, Math.min(k, this.trackCount() - 1));
+        // El fotograma elegido pasa a ser el de esta pista en el cabezal.
+        if (this.doc && !this.playing && this.trackOf(this.selected()) !== this.activeTrack) {
+            const f = this.frameAt(this.time);
+            if (f >= 0) {
+                this.extra = [];
+                this.selectedKey = -1;
+                this.doc.setActiveIndex(f);
+                return;
+            }
+        }
+        this.update();
+    }
+
+    addTrack() {
+        const n = this.trackCount();
+        if (!this.doc || n >= 16)
+            return;
+        // Las vacías se recuerdan en la imagen mientras está abierta.
+        this.doc.gifTracks = n + 1;
+        this.activeTrack = n;
+        this.update();
+    }
+
+    removeTrack(k) {
+        if (!this.doc || this.trackCount() <= 1)
+            return;
+        const { layers, props } = this.current(), keepLayers = [], keepProps = [];
+        let removed = 0;
+        layers.forEach((l, i) => {
+            const p = props[i], track = p.track || 0;
+            if (track === k) {
+                removed++;
+                return;
+            }
+            keepLayers.push(l);
+            keepProps.push(track > k ? { ...p, track: track - 1 } : p);
+        });
+        // Una imagen necesita al menos una capa: la única pista con fotogramas no se quita.
+        if (!keepLayers.length)
+            return;
+        if (removed && !window.confirm(trn("¿Eliminar la pista %1 y sus %n fotograma(s)?", removed, k + 1)))
+            return;
+        this.doc.gifTracks = Math.max(1, (this.doc.gifTracks || 1) - 1);
+        this.activeTrack = Math.max(0, k - 1);
+        if (!removed) {
+            this.update();
+            return;
+        }
+        this.apply(keepLayers, keepProps, 0, tr("Eliminar la pista %1", k + 1), "edit-delete");
+    }
+
+    trackHidden(k) {
+        const f = this.trackFrames(k);
+        return f.length > 0 && f.every((i) => this.hidden(i));
+    }
+
+    toggleTrackHidden(k) {
+        const f = this.trackFrames(k);
+        if (!f.length)
+            return;
+        const show = this.trackHidden(k);
+        const { layers, props } = this.current();
+        for (const i of f)
+            props[i] = { ...props[i], visible: show };
+        this.apply(layers, props, this.selected(), show ? tr("Mostrar la pista %1", k + 1) : tr("Ocultar la pista %1", k + 1), "layer-visible-on");
     }
 
     select(i) {
         if (!this.doc || i < 0 || i >= this.doc.layers.length)
             return;
         this.extra = [];
+        // Un fotograma elegido: el panel de la derecha vuelve a su animación.
+        this.selectedAudio = -1;
+        this.activeTrack = this.trackOf(i);
         this.doc.setActiveIndex(i);
         if (!this.playing)
-            this.time = this.starts()[i];
+            this.time = this.times().start[i];
         this.update();
     }
 
     seek(ms) {
-        const s = this.starts();
-        this.time = s.length > 1 ? Math.max(0, Math.min(ms, s[s.length - 1] - 1)) : 0;
+        this.time = this.count() ? Math.max(0, Math.min(ms, this.times().total - 1)) : 0;
         const i = this.frameAt(this.time);
         if (this.playing) {
             this.playFrame = i;
@@ -393,32 +549,33 @@ export class GifEditor {
 
     // El cabezal dentro del fotograma elegido (ms desde su comienzo).
     localTime() {
-        const i = this.selected(), s = this.starts();
-        if (i < 0 || i + 1 >= s.length)
+        const i = this.selected(), t = this.times();
+        if (i < 0)
             return 0;
-        return clamp(this.time - s[i], 0, Math.max(0, s[i + 1] - s[i] - 1));
+        return clamp(this.time - t.start[i], 0, Math.max(0, t.end[i] - t.start[i] - 1));
     }
 
     seekLocal(ms) {
-        const i = this.selected(), s = this.starts();
-        if (i < 0 || i + 1 >= s.length)
+        const i = this.selected(), t = this.times();
+        if (i < 0)
             return;
         this.stop();
-        this.time = s[i] + clamp(Math.round(ms), 0, Math.max(0, s[i + 1] - s[i] - 1));
+        this.time = t.start[i] + clamp(Math.round(ms), 0, Math.max(0, t.end[i] - t.start[i] - 1));
         this.update(false);
     }
 
     step(delta) {
         this.stop();
-        const s = this.starts(), n = s.length - 1;
+        // Por los fotogramas de la pista elegida.
+        const frames = this.trackFrames(this.curTrack()), n = frames.length;
         if (n <= 0)
             return;
-        let i = this.frameAt(this.time) + delta;
+        let i = frames.indexOf(this.frameAt(this.time)) + delta;
         if (i < 0)
             i = this.loop.checked ? n - 1 : 0;
         if (i >= n)
             i = this.loop.checked ? 0 : n - 1;
-        this.seek(s[i]);
+        this.seek(this.times().start[frames[i]]);
     }
 
     togglePlay() {
@@ -428,36 +585,43 @@ export class GifEditor {
         }
         if (!this.count())
             return;
-        const s = this.starts();
-        if (this.time >= s[s.length - 1] - 1)
+        if (this.time >= this.times().total - 1)
             this.time = 0;
         this.playing = true;
         this.playFrame = this.frameAt(this.time);
         this.playButton.replaceChildren(icon("media-playback-pause", 16));
+        this.startAudio();
         let last = performance.now();
         const frame = (now) => {
             if (!this.playing)
                 return;
-            const s = this.starts(), n = s.length - 1;
-            if (!this.doc || n <= 0) {
+            const total = this.times().total;
+            if (!this.doc || !this.count() || total <= 0) {
                 this.stop();
                 return;
             }
             this.time += (now - last) * +this.speed.value;
             last = now;
-            if (this.time >= s[n]) {
+            if (this.time >= total) {
                 if (!this.loop.checked) {
-                    this.time = s[n - 1];
+                    this.time = total - 1;
                     this.stop();
                 } else {
-                    this.time %= Math.max(1, s[n]);
+                    this.time %= Math.max(1, total);
+                    // Vuelve a empezar: el audio también.
+                    this.startAudio();
                 }
             }
-            // Los ocultos no se ven (tampoco van en el GIF): se saltan.
+            // Con una sola pista, los ocultos no se ven (tampoco van en el GIF): se saltan.
             let i = this.frameAt(this.time);
-            for (let tries = 0; tries < n && this.hidden(i); tries++) {
-                i = (i + 1) % n;
-                this.time = s[i];
+            if (this.trackCount() === 1) {
+                const frames = this.trackFrames(0), t = this.times();
+                let at = frames.indexOf(i);
+                for (let tries = 0; at >= 0 && tries < frames.length && this.hidden(frames[at]); tries++) {
+                    at = (at + 1) % frames.length;
+                    i = frames[at];
+                    this.time = t.start[i];
+                }
             }
             this.playFrame = i;
             this.update(false);
@@ -471,6 +635,7 @@ export class GifEditor {
         const wasPlaying = this.playing, frame = this.playFrame;
         this.playing = false;
         this.playFrame = -1;
+        this.stopAudio();
         cancelAnimationFrame(this.raf);
         this.playButton?.replaceChildren(icon("media-playback-start", 16));
         // Al parar, el fotograma del cabezal pasa a ser el elegido (la capa activa).
@@ -496,6 +661,9 @@ export class GifEditor {
         layers.forEach((l, i) => l.setProps(props[i]));
         doc.active = Math.max(0, Math.min(active, layers.length - 1));
         doc.pushLayers(before, name, iconName);
+        // Paso del editor de GIF: su historial lo muestra y el del editor de imágenes, no.
+        doc.history.steps[doc.history.index].gif = true;
+        doc.emit("history");
         doc.layersChanged();
         doc.emit("active");
         this.update();
@@ -506,46 +674,111 @@ export class GifEditor {
         return { layers, props: layers.map((l) => l.props()) };
     }
 
-    insertFrames(at, frames, name) {
+    insertFrames(at, frames, name, track = -1) {
         const doc = this.doc;
         if (!doc || !frames.length)
             return;
+        if (track < 0)
+            track = this.curTrack();
         const { layers, props } = this.current();
         if (at < 0 || at > layers.length)
             at = layers.length;
         frames.forEach((f, i) => {
             const layer = new Layer(doc.width, doc.height, nameWithDelay(tr("Fotograma %1", at + i + 1), f.delay || DefaultDelay));
             layer.ctx.drawImage(fitted(f.image, doc.width, doc.height), 0, 0);
+            layer.track = track;
             layers.splice(at + i, 0, layer);
             props.splice(at + i, 0, layer.props());
         });
         this.apply(layers, props, at, name, "layer-import");
     }
 
-    insertMedia(index, at) {
+    insertMedia(index, at, track = -1) {
         const m = this.media[index];
         if (!m)
             return;
-        this.insertFrames(at, m.doc ? framesOf(m.doc) : m.frames, tr("Añadir «%1»", m.name));
+        this.insertFrames(at, m.doc ? framesOf(m.doc) : m.frames, tr("Añadir «%1»", m.name), track);
     }
 
-    async insertFiles(files, at) {
+    async insertFiles(files, at, track = -1) {
         const loaded = await this.load(files);
         const frames = loaded.flatMap((m) => m.frames);
         this.imported.push(...loaded);
         this.rebuildMedia();
         if (frames.length)
-            this.insertFrames(at, frames, loaded.length === 1 ? tr("Añadir «%1»", loaded[0].name) : tr("Añadir imágenes"));
+            this.insertFrames(at, frames, loaded.length === 1 ? tr("Añadir «%1»", loaded[0].name) : tr("Añadir imágenes"), track);
     }
 
-    move(from, to) {
+    // A 'to' (índice de capa) y, si se da, a otra pista.
+    move(from, to, track = -1) {
         const n = this.count();
-        if (from < 0 || from >= n || to < 0 || to >= n || from === to)
+        if (from < 0 || from >= n || to < 0 || to >= n)
+            return;
+        const target = track < 0 ? this.trackOf(from) : Math.min(track, this.trackCount() - 1);
+        const other = target !== this.trackOf(from);
+        if (from === to && !other)
             return;
         const { layers, props } = this.current();
+        props[from] = { ...props[from], track: target };
         layers.splice(to, 0, ...layers.splice(from, 1));
         props.splice(to, 0, ...props.splice(from, 1));
-        this.apply(layers, props, to, tr("Mover fotograma"), "layer-raise");
+        this.activeTrack = target;
+        this.apply(layers, props, to, other ? tr("Mover a la pista %1", target + 1) : tr("Mover fotograma"), "layer-raise");
+    }
+
+    // Lleva el fotograma a la pista 'track' empezando en 'startMs' (con espacio vacío delante si hace
+    // falta, como en Filmora). Los demás no se mueven salvo si se solaparían: entonces se corren.
+    place(from, track, startMs) {
+        const n = this.count();
+        if (!this.doc || from < 0 || from >= n)
+            return;
+        track = Math.max(0, Math.min(track, this.trackCount() - 1));
+        startMs = Math.max(0, Math.round(startMs / 10) * 10);
+        const t = this.times();
+        if (track === this.trackOf(from) && startMs === t.start[from])
+            return;
+        const start = [...t.start], dur = t.end.map((e, i) => e - t.start[i]), trackOf = this.doc.layers.map((l) => l.track || 0);
+        trackOf[from] = track;
+        // En la pista de destino, por orden de tiempo. Si cae dentro de otro clip, va delante o detrás
+        // según en qué mitad; lo que se solaparía se corre hacia la derecha.
+        const order = [];
+        for (let i = 0; i < n; i++)
+            if (i !== from && trackOf[i] === track)
+                order.push(i);
+        let key = startMs;
+        for (const i of order)
+            if (startMs >= start[i] && startMs < start[i] + dur[i])
+                key = startMs < start[i] + dur[i] / 2 ? start[i] - 0.5 : start[i] + dur[i] - 0.5;
+        let at = 0;
+        while (at < order.length && start[order[at]] <= key)
+            at++;
+        order.splice(at, 0, from);
+        start[from] = startMs;
+        let cursor = 0;
+        for (const i of order) {
+            start[i] = Math.max(start[i], cursor);
+            cursor = start[i] + dur[i];
+        }
+        // La lista de capas: el fotograma, detrás del que le precede en la pista (o delante del
+        // siguiente); los demás, en su sitio. Los espacios vacíos salen de las posiciones nuevas.
+        const original = [...this.doc.layers], layers = [...original];
+        const moved = layers.splice(from, 1)[0];
+        let index = layers.length;
+        if (at > 0)
+            index = layers.indexOf(original[order[at - 1]]) + 1;
+        else if (at + 1 < order.length)
+            index = layers.indexOf(original[order[at + 1]]);
+        layers.splice(index, 0, moved);
+        const ends = {};
+        const props = layers.map((l) => {
+            const i = original.indexOf(l), k = trackOf[i];
+            const p = { ...l.props(), track: k, gap: Math.max(0, start[i] - (ends[k] || 0)) };
+            ends[k] = start[i] + dur[i];
+            return p;
+        });
+        const other = track !== this.trackOf(from);
+        this.activeTrack = track;
+        this.apply(layers, props, index, other ? tr("Mover a la pista %1", track + 1) : tr("Mover fotograma"), "layer-raise");
     }
 
     setDelay(i, ms) {
@@ -594,23 +827,33 @@ export class GifEditor {
         this.apply(layers, props, i, props[i].visible ? tr("Mostrar fotograma") : tr("Ocultar fotograma"), "layer-visible-on");
     }
 
+    // Los de la pista elegida (las demás se quedan como están).
     reverse() {
-        if (this.count() < 2)
+        const frames = this.trackFrames(this.curTrack());
+        if (frames.length < 2)
             return;
-        const { layers, props } = this.current();
-        layers.reverse();
-        props.reverse();
-        this.apply(layers, props, this.count() - 1 - this.selected(), tr("Invertir el orden"), "layer-flip-vertical");
+        const { layers, props } = this.current(), oldLayers = [...layers], oldProps = [...props];
+        frames.forEach((at, j) => {
+            layers[at] = oldLayers[frames[frames.length - 1 - j]];
+            props[at] = oldProps[frames[frames.length - 1 - j]];
+        });
+        const pos = frames.indexOf(this.selected());
+        this.apply(layers, props, pos >= 0 ? frames[frames.length - 1 - pos] : this.selected(), tr("Invertir el orden"), "layer-flip-vertical");
     }
 
-    // Como en la configuración avanzada del GIF: al revés al final, sin repetir el último ni el primero.
+    // Como en la configuración avanzada del GIF: los de la pista elegida al revés al final de ella,
+    // sin repetir el último ni el primero.
     boomerang() {
-        if (this.count() < 3)
+        const frames = this.trackFrames(this.curTrack());
+        if (frames.length < 3)
             return;
         const { layers, props } = this.current();
-        for (let i = this.count() - 2; i >= 1; i--) {
-            layers.push(this.doc.layers[i].duplicate(this.doc.layers[i].name));
-            props.push({ ...props[i] });
+        let at = frames[frames.length - 1] + 1;
+        for (let j = frames.length - 2; j >= 1; j--) {
+            const i = frames[j];
+            layers.splice(at, 0, this.doc.layers[i].duplicate(this.doc.layers[i].name));
+            props.splice(at, 0, { ...props[i] });
+            at++;
         }
         this.apply(layers, props, this.selected(), tr("Ida y vuelta"), "layer-duplicate");
     }
@@ -781,7 +1024,7 @@ export class GifEditor {
         frames.forEach((f, k) => {
             const layer = new Layer(this.doc.width, this.doc.height, f.props.name);
             layer.ctx.drawImage(fitted(f.canvas, this.doc.width, this.doc.height), 0, 0);
-            layer.setProps({ ...f.props, motion: f.props.motion || null });
+            layer.setProps({ ...f.props, motion: f.props.motion || null, track: this.curTrack() });
             layers.splice(at + k, 0, layer);
             props.splice(at + k, 0, layer.props());
         });
@@ -793,6 +1036,10 @@ export class GifEditor {
     // --- Puntos clave (Motion.js) -----------------------------------------------------------
 
     motion(i) {
+        // Mientras se arrastra un punto en la gráfica, la animación como quedaría (así la línea de
+        // tiempo y la vista previa lo siguen).
+        if (this.graphDrag?.preview && i === this.selected())
+            return this.graphDrag.preview;
         return this.doc?.layers[i]?.motion || null;
     }
 
@@ -824,7 +1071,7 @@ export class GifEditor {
         props[i] = { ...props[i], motion: Motion.isEmpty(clip) ? null : clip };
         if (to >= this.delay(i))
             props[i].name = nameWithDelay(props[i].name, to + 10);
-        const start = this.starts()[i];
+        const start = this.times().start[i];
         this.apply(layers, props, i, tr("Mover punto clave"), "transform-move");
         this.selectedKey = to;
         this.time = start + to;
@@ -874,8 +1121,8 @@ export class GifEditor {
 
     // La transformación del fotograma 'i' en el cabezal, como en el GIF exportado (de 'step' en 'step' ms).
     frameTransform(i) {
-        const clip = this.motion(i), s = this.starts();
-        let t = clamp(this.time - s[i], 0, Math.max(0, s[i + 1] - s[i] - 1));
+        const clip = this.motion(i), times = this.times();
+        let t = clamp(this.time - times.start[i], 0, Math.max(0, times.end[i] - times.start[i] - 1));
         if (Motion.isAnimated(clip)) {
             const step = Math.max(10, clip.step || 50);
             t = Math.floor(t / step) * step;
@@ -987,8 +1234,12 @@ export class GifEditor {
         this.bakeButton = button(tr("Convertir en fotogramas"), tr("Sustituye este fotograma por los que salen de su animación (como al exportar), para editarlos uno a uno"),
                                  () => this.bakeMotion(this.selected()));
         this.bakeButton.prepend(icon("layer-duplicate", 16));
+        this.globalKeyButton = button(tr("Punto clave global"),
+                                      tr("Pone un punto clave con todos los valores (posición, escala, rotación y opacidad) en el cabezal, o lo quita si ya hay uno ahí (K)"),
+                                      () => this.toggleGlobalKey(), "pushbutton gif-global-key");
+        this.globalKeyButton.prepend(el("span", { className: "gif-diamond" }));
         this.inspector = el("div", { className: "gif-inspector" }, [
-            this.inspectorTitle, grid,
+            this.inspectorTitle, this.globalKeyButton, grid,
             el("div", { className: "gif-row" }, [el("label", { textContent: tr("Gráfica:") }), this.graphProp]),
             el("div", { className: "gif-graph-box" }, [this.graph]),
             el("div", { className: "gif-row" }, [el("label", { textContent: tr("Al exportar:") }), this.fps]),
@@ -1025,6 +1276,9 @@ export class GifEditor {
             r.prev.disabled = i < 0 || !keys.some((k) => k.t < t);
             r.next.disabled = i < 0 || !keys.some((k) => k.t > t);
         }
+        const atKey = this.hasKeyAtPlayhead();
+        this.globalKeyButton.lastChild.textContent = atKey ? tr("Quitar el punto clave global") : tr("Punto clave global");
+        this.globalKeyButton.firstChild.classList.toggle("filled", atKey);
         this.drawGraph();
     }
 
@@ -1073,6 +1327,33 @@ export class GifEditor {
         this.setMotion(i, clip, adding ? tr("Añadir punto clave") : tr("Quitar punto clave"));
     }
 
+    // Punto clave global (como el de Filmora): todos los valores (posición, escala, rotación y
+    // opacidad) en el cabezal; si ya hay uno ahí, lo quita.
+    hasKeyAtPlayhead() {
+        const i = this.selected();
+        return i >= 0 && Motion.keyTimes(this.motion(i)).includes(this.localTime());
+    }
+
+    toggleGlobalKey() {
+        const i = this.selected();
+        if (!this.doc || i < 0)
+            return;
+        this.stop();
+        const clip = Motion.cloneClip(this.motion(i)), t = this.localTime();
+        if (Motion.keyTimes(clip).includes(t)) {
+            Motion.removeKeys(clip, t);
+            this.selectedKey = -1;
+            this.setMotion(i, clip, tr("Quitar el punto clave global"));
+            return;
+        }
+        for (const p of Motion.Props) {
+            const track = Motion.editTrack(clip, p);
+            Motion.setKey(track, t, Motion.trackValue(track, t, p));
+        }
+        this.selectedKey = t;
+        this.setMotion(i, clip, tr("Punto clave global"));
+    }
+
     jumpKey(prop, direction) {
         const t = this.localTime();
         let best = -1;
@@ -1112,7 +1393,7 @@ export class GifEditor {
 
     // La animación con el punto que se arrastra en la gráfica donde va.
     graphClip() {
-        const clip = this.motion(this.selected()), d = this.graphDrag;
+        const clip = this.doc?.layers[this.selected()]?.motion || null, d = this.graphDrag;
         if (!d)
             return clip;
         const c = Motion.cloneClip(clip), track = Motion.editTrack(c, d.prop);
@@ -1132,7 +1413,7 @@ export class GifEditor {
 
     graphKeyAt(x, y) {
         const prop = this.graphProp.value, track = Motion.track(this.motion(this.selected()), prop);
-        const [lo, hi] = this.graphRange(this.motion(this.selected()), prop);
+        const [lo, hi] = this.graphRange(this.doc?.layers[this.selected()]?.motion || null, prop);
         return (track.keys || []).findIndex((k) => {
             const [px, py] = this.graphPoint(k.t, k.v, lo, hi);
             return Math.hypot(px - x, py - y) <= 8;
@@ -1266,6 +1547,10 @@ export class GifEditor {
             if (d.prop === "opacity")
                 d.v = clamp(d.v, 0, 100);
             d.v = Math.round(d.v * 10) / 10;
+            d.preview = null;
+            d.preview = this.graphClip();
+            this.renderKeyLane();
+            this.drawPreview();
             this.drawGraph();
         });
         const end = (e) => {
@@ -1330,7 +1615,7 @@ export class GifEditor {
                         other.classList.remove("selected");
                 item.classList.toggle("selected");
             });
-            item.addEventListener("dblclick", () => this.insertMedia(i, -1));
+            item.addEventListener("dblclick", () => this.insertMedia(i, -1, this.curTrack()));
             item.addEventListener("pointerdown", (e) => this.mediaPointerDown(e, item, i));
             item.addEventListener("dragstart", (e) => {
                 if (!item.classList.contains("selected")) {
@@ -1383,7 +1668,8 @@ export class GifEditor {
                 d.ghost.style.left = `${ev.clientX}px`;
                 d.ghost.style.top = `${ev.clientY}px`;
                 if (overLane(ev)) {
-                    this.showDropMark(this.insertionAt(this.laneX(ev)));
+                    const k = this.trackAtEvent(ev);
+                    this.showDropMark(this.insertionAt(this.laneX(ev), k), k);
                     this.autoScroll(ev.clientX);
                 } else {
                     this.dropMark.hidden = true;
@@ -1405,7 +1691,8 @@ export class GifEditor {
                     other.classList.remove("selected");
                 item.classList.add("selected");
             } else if (d.kind === "drag" && ev.type === "pointerup" && overLane(ev)) {
-                this.insertMedia(index, this.insertionAt(this.laneX(ev)));
+                const k = this.trackAtEvent(ev);
+                this.insertMedia(index, this.insertionAt(this.laneX(ev), k), k);
             }
         };
         item.addEventListener("pointermove", move);
@@ -1423,16 +1710,57 @@ export class GifEditor {
         return Math.max(0, Math.round(((x - LeftMargin) * 1000) / this.pps));
     }
 
-    insertionAt(x) {
-        const s = this.starts(), n = s.length - 1;
-        for (let i = 0; i < n; i++)
-            if (x < (this.x(s[i]) + this.x(s[i + 1])) / 2)
+    // Dónde quedaría (índice de capa) lo que se suelta en x en la pista: delante del clip cuya mitad
+    // está más allá; si no, detrás del último de la pista.
+    insertionAt(x, track = this.curTrack()) {
+        const t = this.times(), frames = this.trackFrames(track);
+        for (const i of frames)
+            if (x < (this.x(t.start[i]) + this.x(t.end[i])) / 2)
                 return i;
-        return Math.max(0, n);
+        return frames.length ? frames[frames.length - 1] + 1 : this.count();
     }
 
     laneX(e) {
         return e.clientX - this.lane.getBoundingClientRect().left;
+    }
+
+    laneY(e) {
+        return e.clientY - this.lane.getBoundingClientRect().top;
+    }
+
+    get trackHeight() {
+        const h = +localStorage.getItem("kaint.gif.trackHeight");
+        return h >= 40 && h <= 160 ? h : TrackHeights.medium;
+    }
+
+    set trackHeight(h) {
+        try {
+            localStorage.setItem("kaint.gif.trackHeight", String(Math.max(40, Math.min(160, Math.round(h)))));
+        } catch {}
+        this.thumbs = new WeakMap();
+        this.renderTimeline();
+    }
+
+    rowStep() {
+        return this.trackHeight + TrackGap;
+    }
+
+    // Las pistas de número más alto, arriba.
+    rowOffset(k) {
+        return (this.trackCount() - 1 - k) * this.rowStep();
+    }
+
+    trackAtY(y) {
+        if (y < TrackTop)
+            return -1;
+        const row = Math.floor((y - TrackTop) / this.rowStep()), n = this.trackCount();
+        return row >= n ? -1 : n - 1 - row;
+    }
+
+    // La pista bajo el puntero (fuera de ellas, la elegida).
+    trackAtEvent(e) {
+        const k = this.trackAtY(this.laneY(e));
+        return k >= 0 ? k : this.curTrack();
     }
 
     frameMenu(i, clientX, clientY) {
@@ -1503,6 +1831,9 @@ export class GifEditor {
                 return;
             }
             if (!clip || e.target === this.ruler) {
+                const k = this.trackAtY(this.laneY(e));
+                if (k >= 0 && k !== this.curTrack())
+                    this.setActiveTrack(k);
                 if (touch && e.target !== this.ruler) {
                     drag = { kind: "pan", id: e.pointerId, startX: e.clientX, scroll: this.scroller.scrollLeft };
                 } else if (e.button === 0) {
@@ -1516,7 +1847,7 @@ export class GifEditor {
             const edge = e.target.classList.contains("gif-clip-edge") || (touch && e.clientX >= r.right - 18);
             if (edge) {
                 this.select(i);
-                drag = { kind: "resize", id: e.pointerId, index: i, start: this.starts()[i], delay: this.delay(i) };
+                drag = { kind: "resize", id: e.pointerId, index: i, start: this.times().start[i], delay: this.delay(i) };
                 return;
             }
             if (!touch) {
@@ -1532,8 +1863,12 @@ export class GifEditor {
                 // El clic derecho sobre uno de los elegidos conserva la selección (el menú es para todos).
                 if (!(e.button === 2 && this.isFrameSelected(i)))
                     this.select(i);
-                if (e.button === 0)
-                    drag = { kind: "press", id: e.pointerId, index: i, x };
+                if (e.button === 0) {
+                    // El cabezal va donde se hizo clic (no al principio del clip).
+                    const t = this.times();
+                    this.seek(clamp(this.msAt(x), t.start[i], Math.max(t.start[i], t.end[i] - 1)));
+                    drag = { kind: "press", id: e.pointerId, index: i, x, grabDx: x - this.x(t.start[i]) };
+                }
                 return;
             }
             drag = { kind: "touch", id: e.pointerId, index: i, x, startX: e.clientX, scroll: this.scroller.scrollLeft, clientY: e.clientY };
@@ -1558,9 +1893,9 @@ export class GifEditor {
                     drag.kind = "key";
                     clearTimeout(drag.timer);
                 }
-                const sel = this.selected(), s = this.starts();
+                const sel = this.selected();
                 if (drag.moved && sel >= 0) {
-                    drag.to = Math.max(0, Math.round((this.msAt(x) - s[sel]) / 10) * 10);
+                    drag.to = Math.max(0, Math.round((this.msAt(x) - this.times().start[sel]) / 10) * 10);
                     this.keyDrag = { from: drag.from, to: drag.to };
                     this.keyLane.title = `${drag.to} ms`;
                     this.renderKeyLane();
@@ -1584,8 +1919,37 @@ export class GifEditor {
                 drag.kind = "reorder";
             }
             if (drag.kind === "reorder") {
-                drag.to = this.insertionAt(x);
-                this.showDropMark(drag.to);
+                // El clip va donde se suelte, en el tiempo (con espacio delante si se deja, como en
+                // Filmora) y en la pista de esa fila. Como con un imán, se pega al cabezal y a los bordes
+                // de los demás clips al acercarse.
+                const k = this.trackAtY(this.laneY(e));
+                drag.toTrack = k >= 0 ? k : this.trackOf(drag.index);
+                const t = this.times(), width = this.x(t.end[drag.index]) - this.x(t.start[drag.index]);
+                const left = x - (drag.grabDx ?? 0);
+                let best = Snap + 1;
+                drag.ghostX = Math.max(LeftMargin, left);
+                const snap = (ms) => {
+                    for (const candidate of [this.x(ms), this.x(ms) - width])
+                        if (candidate >= LeftMargin && Math.abs(candidate - left) < best) {
+                            best = Math.abs(candidate - left);
+                            drag.ghostX = candidate;
+                        }
+                };
+                snap(0);
+                snap(this.time);
+                for (let i = 0; i < this.count(); i++)
+                    if (i !== drag.index) {
+                        snap(t.start[i]);
+                        snap(t.end[i]);
+                    }
+                const clipEl = this.lane.querySelector(`.gif-clip[data-index="${drag.index}"]`);
+                if (clipEl) {
+                    clipEl.classList.add("lifted");
+                    clipEl.style.left = `${drag.ghostX}px`;
+                    clipEl.style.top = `${this.rowOffset(drag.toTrack)}px`;
+                    clipEl.title = timeText(this.msAt(drag.ghostX));
+                }
+                this.dropMark.hidden = true;
                 this.autoScroll(e.clientX);
             }
         });
@@ -1633,17 +1997,16 @@ export class GifEditor {
             }
             else if (d.kind === "resize")
                 this.setDelay(d.index, d.delay);
-            else if (d.kind === "reorder") {
-                let to = d.to;
-                if (to > d.index)
-                    to--;
-                this.move(d.index, to);
-            }
+            else if (d.kind === "reorder" && d.ghostX !== undefined)
+                this.place(d.index, d.toTrack ?? this.trackOf(d.index), this.msAt(d.ghostX));
             this.renderTimeline();
         };
         lane.addEventListener("pointerup", end);
         lane.addEventListener("pointercancel", end);
         lane.addEventListener("dblclick", (e) => {
+            // Sobre un rombo, el doble clic no abre la duración del fotograma.
+            if (e.target.closest(".gif-key"))
+                return;
             const clip = e.target.closest(".gif-clip");
             if (clip)
                 this.editDelay(+clip.dataset.index);
@@ -1666,8 +2029,26 @@ export class GifEditor {
             this.frameMenu(+clip.dataset.index, e.clientX, e.clientY);
         });
         lane.addEventListener("wheel", (e) => {
-            if (!e.ctrlKey)
+            if (!e.ctrlKey) {
+                // La rueda desplaza a lo largo de la línea de tiempo (con Mayús, o si cabe entera, entre
+                // las pistas; sin nada que desplazar, acerca o aleja).
+                const across = this.scroller, down = this.timelineBody;
+                const delta = e.deltaY || e.deltaX;
+                const canAcross = across.scrollWidth > across.clientWidth, canDown = down.scrollHeight > down.clientHeight;
+                if ((e.shiftKey || !canAcross) && canDown && !e.deltaX) {
+                    e.preventDefault();
+                    down.scrollTop += delta;
+                } else if (canAcross) {
+                    e.preventDefault();
+                    across.scrollLeft += delta;
+                } else if (delta) {
+                    e.preventDefault();
+                    this.pps = Math.max(40, Math.min(3000, Math.round(this.pps * (delta < 0 ? 1.25 : 0.8))));
+                    this.zoom.value = this.pps;
+                    this.renderTimeline();
+                }
                 return;
+            }
             e.preventDefault();
             this.pps = Math.max(40, Math.min(3000, Math.round(this.pps * (e.deltaY < 0 ? 1.25 : 0.8))));
             this.zoom.value = this.pps;
@@ -1680,11 +2061,12 @@ export class GifEditor {
                 return;
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
-            this.showDropMark(this.insertionAt(this.laneX(e)));
+            const k = this.trackAtEvent(e);
+            this.showDropMark(this.insertionAt(this.laneX(e), k), k);
         });
         lane.addEventListener("dragleave", () => { this.dropMark.hidden = true; });
         lane.addEventListener("drop", (e) => {
-            const at = this.insertionAt(this.laneX(e));
+            const track = this.trackAtEvent(e), at = this.insertionAt(this.laneX(e), track);
             this.dropMark.hidden = true;
             const media = e.dataTransfer.getData(MediaMime);
             if (media) {
@@ -1692,7 +2074,7 @@ export class GifEditor {
                 let offset = 0;
                 for (const n of media.split(" ")) {
                     const before = this.count();
-                    this.insertMedia(+n, at + offset);
+                    this.insertMedia(+n, at + offset, track);
                     offset += this.count() - before;
                 }
                 return;
@@ -1700,7 +2082,12 @@ export class GifEditor {
             if (e.dataTransfer.files.length) {
                 e.preventDefault();
                 e.stopPropagation();
-                this.insertFiles([...e.dataTransfer.files], at);
+                const files = [...e.dataTransfer.files], audio = files.filter(isAudioFile), images = files.filter((f) => !isAudioFile(f));
+                // Los audios, donde se sueltan (en su pista de audio o en la primera libre).
+                if (audio.length)
+                    this.addAudioFiles(audio, this.msAt(this.laneX(e)), this.audioRowAt(this.laneY(e)));
+                if (images.length)
+                    this.insertFiles(images, at, track);
             }
         });
         // Teclado: espacio reproduce, las flechas pasan de fotograma, Supr quita el punto clave elegido
@@ -1726,8 +2113,9 @@ export class GifEditor {
                 }
                 return;
             }
-            const keys = { " ": () => this.togglePlay(), ArrowLeft: () => this.step(-1), ArrowRight: () => this.step(1), Home: () => this.seek(0),
-                           Delete: () => (this.selectedKey >= 0 ? this.removeKeyTime(this.selectedKey) : this.removeFrames(this.selectedFrames())),
+            const keys = { " ": () => this.togglePlay(), ArrowLeft: () => this.step(-1), ArrowRight: () => this.step(1), Home: () => this.seek(0), k: () => this.toggleGlobalKey(), K: () => this.toggleGlobalKey(),
+                           Delete: () => (this.selectedAudio >= 0 ? this.removeAudio(this.selectedAudio)
+                                          : this.selectedKey >= 0 ? this.removeKeyTime(this.selectedKey) : this.removeFrames(this.selectedFrames())),
                            Escape: () => {
                                this.extra = [];
                                this.selectedKey = -1;
@@ -1742,10 +2130,11 @@ export class GifEditor {
         }, true);
     }
 
-    showDropMark(at) {
-        const s = this.starts();
-        const x = at < s.length - 1 ? this.x(s[at]) - 1 : this.x(s[s.length - 1]);
+    showDropMark(at, track = this.curTrack()) {
+        const t = this.times(), frames = this.trackFrames(track);
+        const x = frames.includes(at) ? this.x(t.start[at]) - 1 : frames.length ? this.x(t.end[frames[frames.length - 1]]) : this.x(0);
         this.dropMark.style.left = `${x - 1}px`;
+        this.dropMark.style.top = `${TrackTop - 4 + this.rowOffset(track)}px`;
         this.dropMark.hidden = false;
     }
 
@@ -1767,13 +2156,23 @@ export class GifEditor {
     renderTimeline(resize = null) {
         if (this.root.hidden)
             return;
-        const s = this.starts();
+        const times = this.times(), start = [...times.start], end = [...times.end];
+        // Mientras se estira un clip: su duración nueva y los de detrás de su pista, corridos.
         if (resize) {
-            const diff = resize.delay - (s[resize.index + 1] - s[resize.index]);
-            for (let i = resize.index + 1; i < s.length; i++)
-                s[i] += diff;
+            const k = this.trackOf(resize.index), i0 = resize.index, diff = resize.delay - (end[i0] - start[i0]);
+            end[i0] += diff;
+            for (let i = 0; i < start.length; i++)
+                if (i !== i0 && this.trackOf(i) === k && start[i] >= times.end[i0]) {
+                    start[i] += diff;
+                    end[i] += diff;
+                }
         }
-        const total = s[s.length - 1];
+        const total = Math.max(times.total, ...end, ...(this.doc?.audioClips || []).map((c) => c.start + c.duration));
+        const tracks = this.trackCount();
+        this.root.style.setProperty("--gif-track-h", `${this.trackHeight}px`);
+        this.lane.style.height = `${this.audioTop(this.audioRows()) + 4}px`;
+        this.track.style.height = `${tracks * this.rowStep()}px`;
+        this.renderTrackHeaders();
         const width = Math.max(this.scroller.clientWidth, LeftMargin * 2 + Math.ceil((total * this.pps) / 1000) + 160);
         this.lane.style.width = `${width}px`;
         // Regla
@@ -1803,45 +2202,126 @@ export class GifEditor {
         const selected = this.selected(), layers = this.doc?.layers || [];
         const clips = [];
         for (let i = 0; i < layers.length; i++) {
-            const x0 = this.x(s[i]), w = Math.max(6, this.x(s[i + 1]) - x0) - 2;
+            const x0 = this.x(start[i]), w = Math.max(6, this.x(end[i]) - x0) - 2;
             const chosen = this.playing ? i === this.playFrame : this.isFrameSelected(i);
             const clip = el("div", { className: `gif-clip${chosen ? " selected" : ""}${i === selected ? " current" : ""}${layers[i].visible ? "" : " hidden-frame"}`,
                                      dataset: { index: i } });
             clip.style.left = `${x0}px`;
+            clip.style.top = `${this.rowOffset(this.trackOf(i))}px`;
             clip.style.width = `${w}px`;
             if (w > 14) {
-                const img = this.thumbFor(layers[i], Math.max(8, w - 6), 50);
+                const img = this.thumbFor(layers[i], Math.max(8, w - 6), Math.max(16, this.trackHeight - 24));
                 img.classList.add("gif-clip-thumb");
                 clip.append(img);
             }
             const mark = Motion.isEmpty(layers[i].motion) ? "" : "◆ ";
-            const text = w > 70 ? `${mark}${i + 1} · ${s[i + 1] - s[i]} ms` : w > 26 ? String(i + 1) : "";
+            const text = w > 70 ? `${mark}${i + 1} · ${end[i] - start[i]} ms` : w > 26 ? String(i + 1) : "";
             clip.append(el("span", { className: "gif-clip-label", textContent: text }), el("div", { className: "gif-clip-edge" }));
             clips.push(clip);
         }
         this.track.replaceChildren(...clips);
-        this.renderKeyLane(s);
+        this.renderAudio(width);
+        this.renderKeyLane();
         this.empty.hidden = layers.length > 0;
         this.playhead.style.left = `${this.x(this.time) - 1}px`;
-        if (this.playing) {
-            const px = this.x(this.time), view = this.scroller;
-            if (px < view.scrollLeft + 40 || px > view.scrollLeft + view.clientWidth - 60)
-                view.scrollLeft = Math.max(0, px - 60);
-        }
     }
 
-    // Los rombos del fotograma elegido ('s': los comienzos, si ya se calcularon).
-    renderKeyLane(s = this.starts()) {
-        const i = this.selected(), children = [];
-        if (this.doc && i >= 0 && i + 1 < s.length) {
+    // La cabecera de las pistas (a la izquierda, como en Filmora): añadir pista y, en cada una, su
+    // nombre, ocultarla y eliminarla. Las de número más alto, arriba.
+    renderTrackHeaders() {
+        const n = this.trackCount(), active = this.curTrack(), rows = [];
+        const add = el("button", { className: "gif-track-add", title: tr("Añade una pista encima de las demás (lo de las pistas de arriba se ve encima)") },
+                       [icon("list-add", 16), tr("Añadir pista")]);
+        add.addEventListener("click", () => this.addTrack());
+        rows.push(add);
+        for (let row = 0; row < n; row++) {
+            const k = n - 1 - row, frames = this.trackFrames(k).length;
+            const eye = button(icon(this.trackHidden(k) ? "eye-closed" : "eye-open", 16), tr("Ocultar o mostrar la pista"), () => this.toggleTrackHidden(k), "gif-track-button");
+            const trash = button(icon("edit-delete", 16), tr("Eliminar la pista %1", k + 1), () => this.removeTrack(k), "gif-track-button");
+            trash.disabled = n <= 1;
+            const head = el("div", { className: `gif-track-head${k === active ? " active" : ""}` }, [
+                el("b", { textContent: tr("Pista %1", k + 1) }),
+                el("small", { textContent: trn("%n fotograma(s)", frames) }),
+                el("div", { className: "gif-row" }, [eye, trash]),
+            ]);
+            head.addEventListener("click", (e) => {
+                if (!e.target.closest("button, .gif-track-resize"))
+                    this.setActiveTrack(k);
+            });
+            // El borde de abajo: arrastrándolo cambia la altura de todas las pistas (las de arriba
+            // crecen igual, así el borde sigue al puntero).
+            const grip = el("div", { className: "gif-track-resize", title: tr("Arrastra para cambiar la altura de las pistas") });
+            grip.addEventListener("pointerdown", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                grip.setPointerCapture(e.pointerId);
+                const y0 = e.clientY, h0 = this.trackHeight;
+                const move = (ev) => (this.trackHeight = h0 + (ev.clientY - y0) / (row + 1));
+                const up = () => {
+                    grip.removeEventListener("pointermove", move);
+                    grip.removeEventListener("pointerup", up);
+                    grip.removeEventListener("pointercancel", up);
+                };
+                grip.addEventListener("pointermove", move);
+                grip.addEventListener("pointerup", up);
+                grip.addEventListener("pointercancel", up);
+            });
+            head.append(grip);
+            rows.push(head);
+        }
+        rows.push(el("div", { className: "gif-audio-label", textContent: tr("AUDIO") }));
+        const clips = this.doc?.audioClips || [];
+        for (let r = 0; r < this.audioRows(); r++) {
+            const mine = clips.map((c, i) => (c.row === r ? i : -1)).filter((i) => i >= 0);
+            const parts = [el("b", { textContent: tr("Audio %1", r + 1) })];
+            if (mine.length) {
+                const muted = mine.every((i) => clips[i].muted);
+                parts.push(el("div", { className: "gif-row" }, [
+                    button(muted ? "🔇" : "🔊", muted ? tr("Activar el sonido") : tr("Silenciar"), () => {
+                        const next = clips.map(copyClip);
+                        for (const i of mine)
+                            next[i].muted = !muted;
+                        this.setAudioClips(next, muted ? tr("Activar el sonido") : tr("Silenciar el audio"));
+                    }, "gif-track-button"),
+                    button(icon("edit-delete", 16), tr("Quitar el audio"), () => {
+                        const next = clips.filter((c) => c.row !== r).map(copyClip);
+                        for (const c of next)
+                            if (c.row > r)
+                                c.row--;
+                        this.selectedAudio = -1;
+                        this.setAudioClips(next, tr("Quitar el audio"));
+                    }, "gif-track-button"),
+                ]));
+            }
+            rows.push(el("div", { className: "gif-audio-head" }, parts));
+        }
+        this.trackHeaders.replaceChildren(...rows);
+        this.trackHeaders.oncontextmenu = (e) => {
+            // La altura de las pistas, como en Filmora.
+            e.preventDefault();
+            const h = this.trackHeight;
+            popupMenu([
+                { text: tr("Pistas pequeñas"), checked: h === TrackHeights.small, run: () => (this.trackHeight = TrackHeights.small) },
+                { text: tr("Pistas medianas"), checked: h === TrackHeights.medium, run: () => (this.trackHeight = TrackHeights.medium) },
+                { text: tr("Pistas grandes"), checked: h === TrackHeights.large, run: () => (this.trackHeight = TrackHeights.large) },
+            ], e.clientX, e.clientY);
+        };
+    }
+
+    // Los rombos del fotograma elegido, sobre su clip.
+    renderKeyLane() {
+        const i = this.selected(), children = [], times = this.times();
+        // (La franja, solo si el fotograma tiene puntos: si no, tapaba su imagen sin motivo.)
+        if (this.doc && i >= 0 && i < this.count() && Motion.keyTimes(this.motion(i)).length) {
+            this.keyLane.style.top = `${TrackTop + this.rowOffset(this.trackOf(i)) + Math.max(2, this.trackHeight - 40)}px`;
             const band = el("div", { className: "gif-keylane-band" });
-            band.style.left = `${this.x(s[i])}px`;
-            band.style.width = `${Math.max(4, this.x(s[i + 1]) - this.x(s[i]) - 2)}px`;
+            band.style.left = `${this.x(times.start[i])}px`;
+            band.style.width = `${Math.max(4, this.x(times.end[i]) - this.x(times.start[i]) - 2)}px`;
             children.push(band);
             for (const t of Motion.keyTimes(this.motion(i))) {
                 const dragging = this.keyDrag?.from === t;
                 const key = el("div", { className: `gif-key${t === this.selectedKey || dragging ? " selected" : ""}`, dataset: { t } });
-                key.style.left = `${this.x(s[i] + (dragging ? this.keyDrag.to : t))}px`;
+                key.style.left = `${this.x(times.start[i] + (dragging ? this.keyDrag.to : t))}px`;
                 children.push(key);
             }
         }
@@ -1859,9 +2339,13 @@ export class GifEditor {
         canvas.style.height = `${h}px`;
         const ctx = context(canvas);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.fillStyle = "#18181a";
+        ctx.fillStyle = "#000000";
         ctx.fillRect(0, 0, w, h);
         const index = this.shownFrame(), layer = this.doc?.layers[index];
+        // Con varias pistas, todas una encima de otra (las de número más alto, arriba).
+        const shown = this.trackCount() > 1
+            ? [...Array(this.trackCount()).keys()].map((k) => this.frameAtTrack(k, this.time)).filter((i) => i >= 0 && !this.hidden(i))
+            : index >= 0 ? [index] : [];
         if (!layer) {
             ctx.fillStyle = "#c8c8c8";
             ctx.font = "13px sans-serif";
@@ -1877,31 +2361,32 @@ export class GifEditor {
         ctx.beginPath();
         ctx.rect(x, y, dw, dh);
         ctx.clip();
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x, y, dw, dh);
-        ctx.fillStyle = "#cccccc";
-        for (let yy = y; yy < y + dh; yy += 8)
-            for (let xx = x + (((yy - y) / 8) % 2) * 8; xx < x + dw; xx += 16)
-                ctx.fillRect(xx, yy, 8, 8);
+        // Con el brillo de Configuración, como el damero del lienzo.
+        ctx.translate(x, y);
+        ctx.fillStyle = checkerPattern(ctx, Settings.get("checkerBrightness") ?? 191);
+        ctx.fillRect(0, 0, dw, dh);
         ctx.restore();
         this.previewGeom = { x, y, scale };
         // Con su opacidad y su animación en el cabezal, como en el GIF exportado.
-        const t = this.frameTransform(index), cw = layer.canvas.width, ch = layer.canvas.height;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, y, dw, dh);
-        ctx.clip();
-        ctx.imageSmoothingEnabled = scale < 1 || !Motion.isIdentity(t);
-        ctx.imageSmoothingQuality = "high";
-        ctx.globalAlpha = (layer.opacity / 255) * (t.opacity / 100);
-        ctx.translate(x, y);
-        ctx.scale(dw / cw, dh / ch);
-        ctx.translate(cw / 2 + t.x, ch / 2 + t.y);
-        ctx.rotate((t.rotation * Math.PI) / 180);
-        ctx.scale(t.scaleX / 100, t.scaleY / 100);
-        ctx.drawImage(layer.canvas, -cw / 2, -ch / 2);
-        ctx.restore();
-        if (index === this.selected())
+        const cw = layer.canvas.width, ch = layer.canvas.height;
+        for (const i of shown) {
+            const lay = this.doc.layers[i], t = this.frameTransform(i);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, dw, dh);
+            ctx.clip();
+            ctx.imageSmoothingEnabled = scale < 1 || !Motion.isIdentity(t);
+            ctx.imageSmoothingQuality = "high";
+            ctx.globalAlpha = (lay.opacity / 255) * (t.opacity / 100);
+            ctx.translate(x, y);
+            ctx.scale(dw / cw, dh / ch);
+            ctx.translate(cw / 2 + t.x, ch / 2 + t.y);
+            ctx.rotate((t.rotation * Math.PI) / 180);
+            ctx.scale(t.scaleX / 100, t.scaleY / 100);
+            ctx.drawImage(lay.canvas, -cw / 2, -ch / 2);
+            ctx.restore();
+        }
+        if (index === this.selected() && shown.includes(index))
             this.drawMotionPath(ctx, index, x, y, dw / cw);
     }
 
@@ -1946,19 +2431,20 @@ export class GifEditor {
             return;
         const has = this.count() > 0, i = this.selected();
         if (!full) {
-            const s = this.starts(), shown = this.shownFrame();
-            this.timeLabel.textContent = `${timeText(this.time)} / ${timeText(s[s.length - 1])}` + (shown >= 0 ? `   ${tr("Fotograma %1 de %2", shown + 1, this.count())}` : "");
+            const total = this.times().total, shown = this.shownFrame();
+            this.timeLabel.textContent = `${timeText(this.time)} / ${timeText(total)}` + (shown >= 0 ? `   ${tr("Fotograma %1 de %2", shown + 1, this.count())}` : "");
             this.drawPreview();
             const chosen = this.shownFrame();
             for (const clip of this.track.children)
                 clip.classList.toggle("selected", this.playing ? +clip.dataset.index === chosen : this.isFrameSelected(+clip.dataset.index));
             if (!this.playing)
-                this.renderKeyLane(s);
+                this.renderKeyLane();
             if (chosen === i)
                 this.refreshInspectorValues();
             const px = this.x(this.time), view = this.scroller;
             this.playhead.style.left = `${px - 1}px`;
-            if (px < view.scrollLeft + 40 || px > view.scrollLeft + view.clientWidth - 60)
+            // (Reproducir no desplaza la línea de tiempo: solo al moverse el cabezal a mano.)
+            if (!this.playing && (px < view.scrollLeft + 40 || px > view.scrollLeft + view.clientWidth - 60))
                 view.scrollLeft = Math.max(0, px - 60);
             return;
         }
@@ -1967,11 +2453,11 @@ export class GifEditor {
             c.disabled = !has || i < 0;
         if (has && i >= 0 && document.activeElement !== this.delayInput)
             this.delayInput.value = this.delay(i);
-        const s = this.starts();
-        this.timeLabel.textContent = `${timeText(this.time)} / ${timeText(s[s.length - 1])}` + (i >= 0 ? `   ${tr("Fotograma %1 de %2", i + 1, this.count())}` : "");
+        this.timeLabel.textContent = `${timeText(this.time)} / ${timeText(this.times().total)}` + (i >= 0 ? `   ${tr("Fotograma %1 de %2", i + 1, this.count())}` : "");
         this.drawPreview();
         this.renderTimeline();
         this.refreshInspector();
+        this.refreshAudioPanel();
         clearTimeout(this.sizeTimer);
         this.sizeTimer = setTimeout(() => this.estimateSize(), 600);
     }
@@ -2074,6 +2560,9 @@ export class GifEditor {
         const title = this.title.textContent;
         const progress = (f) => (this.title.textContent = tr("Exportando… %1 %", Math.round(f * 100)));
         document.body.classList.add("busy");
+        // Las pistas de audio, mezcladas (solo en el vídeo).
+        let audio = null, mixed = null;
+        const mix = async () => (mixed ??= await renderMix(doc.audioClips || [], total * Math.max(1, +repeat.value || 1)).catch(() => null));
         try {
             let blob, ext = kind === "apng" ? "png" : kind;
             const f = +scale.value;
@@ -2081,11 +2570,13 @@ export class GifEditor {
                 blob = new Blob([await encodeApng(frames, { loops: doc.gifLoops ?? 0, scale: f })], { type: "image/apng" });
             else if (kind === "webp")
                 blob = new Blob([await encodeAnimatedWebp(frames, { quality: +webpQuality.value, loops: doc.gifLoops ?? 0, scale: f })], { type: "image/webp" });
-            else if (canEncodeMp4())
-                blob = new Blob([await encodeMp4(frames, { repeat: +repeat.value || 1, scale: f, quality: +quality.value, background: background.value, onProgress: progress })],
+            else if (canEncodeMp4() && (!(audio = await mix()) || await canEncodeAac(audio.sampleRate)))
+                blob = new Blob([await encodeMp4(frames, { repeat: +repeat.value || 1, scale: f, quality: +quality.value, background: background.value, onProgress: progress,
+                                                           audio })],
                                 { type: "video/mp4" });
             else {
-                const r = await recordVideo(frames, { repeat: +repeat.value || 1, scale: f, background: background.value, onProgress: progress });
+                const r = await recordVideo(frames, { repeat: +repeat.value || 1, scale: f, background: background.value, onProgress: progress,
+                                                      audio: await mix() });
                 blob = r.blob;
                 ext = r.ext;
             }
@@ -2097,5 +2588,385 @@ export class GifEditor {
             document.body.classList.remove("busy");
             this.title.textContent = title;
         }
+    }
+
+    // --- Audio (para los vídeos exportados; el GIF no tiene sonido) -------------------------------
+
+    audioButton() {
+        this.audioInput = el("input", { type: "file", multiple: true, hidden: true, accept: `audio/*,${AudioExtensions.map((e) => `.${e}`).join(",")}`,
+                                        onchange: () => { this.addAudioFiles([...this.audioInput.files], this.time, -1); this.audioInput.value = ""; } });
+        const b = button(tr("Audio"), tr("Añade un archivo de audio (MP3, WAV, OGG, FLAC...) para los vídeos exportados. También se puede arrastrar a la línea de tiempo."),
+                         () => this.audioInput.click());
+        b.prepend(el("span", { className: "gif-note", textContent: "♪" }));
+        b.append(this.audioInput);
+        return b;
+    }
+
+    audioRows() {
+        let used = 0;
+        for (const c of this.doc?.audioClips || [])
+            used = Math.max(used, c.row + 1);
+        return used + 1;
+    }
+
+    audioTop(row) {
+        return TrackTop + this.trackCount() * this.rowStep() + AudioGap + row * (AudioHeight + TrackGap);
+    }
+
+    audioRowAt(y) {
+        const top = this.audioTop(0) - TrackGap / 2;
+        if (y < top)
+            return -1;
+        const row = Math.floor((y - top) / (AudioHeight + TrackGap));
+        return row < this.audioRows() ? row : -1;
+    }
+
+    setAudioClips(clips, text) {
+        const doc = this.doc;
+        if (!doc)
+            return;
+        const before = doc.audioClips || [];
+        const apply = (list) => {
+            doc.audioClips = list;
+            if (this.selectedAudio >= list.length)
+                this.selectedAudio = -1;
+            this.update();
+        };
+        doc.audioClips = clips;
+        doc.push({ name: text, icon: "audio-x-generic", gif: true, undo: () => apply(before), redo: () => apply(clips) });
+        this.update();
+    }
+
+    async addAudioFiles(files, startMs = -1, row = -1) {
+        if (!this.doc || !files.length)
+            return;
+        const clips = (this.doc.audioClips || []).map(copyClip), before = clips.length, failed = [];
+        let at = Math.max(0, startMs >= 0 ? startMs : this.time);
+        document.body.classList.add("busy");
+        for (const file of files) {
+            try {
+                const c = await analyzeAudio(file);
+                c.start = at;
+                c.row = row;
+                if (c.row < 0)
+                    for (c.row = 0; clips.some((o) => o.row === c.row && o.start < c.start + c.duration && c.start < o.start + o.duration); c.row++);
+                clips.push(c);
+                at += c.length;
+            } catch (e) {
+                failed.push(`${file.name}: ${e?.message || e}`);
+            }
+        }
+        document.body.classList.remove("busy");
+        if (failed.length)
+            await message(tr("Añadir audio"), failed.join("\n"), "dialog-warning");
+        if (clips.length > before) {
+            this.selectedAudio = clips.length - 1;
+            this.setAudioClips(clips, clips.length - before > 1 ? tr("Añadir audios") : tr("Añadir audio"));
+        }
+    }
+
+    removeAudio(i) {
+        const clips = (this.doc?.audioClips || []).map(copyClip);
+        if (i < 0 || i >= clips.length)
+            return;
+        clips.splice(i, 1);
+        this.selectedAudio = -1;
+        this.setAudioClips(clips, tr("Quitar el audio"));
+    }
+
+    selectAudio(i) {
+        this.selectedAudio = i;
+        this.inspector?.classList.toggle("audio-mode", i >= 0);
+        this.renderTimeline();
+        this.refreshAudioPanel();
+    }
+
+    toggleAudioKey(i) {
+        const clips = (this.doc?.audioClips || []).map(copyClip), c = clips[i];
+        if (!c)
+            return;
+        const t = clamp(Math.round(this.time - c.start), 0, c.duration);
+        if (c.volume.keys.some((k) => k.t === t)) {
+            c.volume = { ...c.volume, keys: c.volume.keys.filter((k) => k.t !== t) };
+            this.setAudioClips(clips, tr("Quitar el punto de volumen"));
+        } else {
+            setKey(c, t, Math.round(keyedVolume(c, t)));
+            this.setAudioClips(clips, tr("Añadir un punto de volumen"));
+        }
+    }
+
+    audioMenu(i, x, y) {
+        const clips = this.doc?.audioClips || [], c = clips[i];
+        if (!c)
+            return;
+        const edit = (fn, text) => {
+            const next = clips.map(copyClip);
+            fn(next[i]);
+            this.setAudioClips(next, text);
+        };
+        popupMenu([
+            { text: c.muted ? tr("Activar el sonido") : tr("Silenciar"), run: () => edit((n) => (n.muted = !n.muted), c.muted ? tr("Activar el sonido") : tr("Silenciar el audio")) },
+            { text: tr("Punto de volumen en el cabezal"), enabled: this.time >= c.start && this.time <= c.start + c.duration, run: () => this.toggleAudioKey(i) },
+            { text: tr("Quitar los puntos de volumen"), enabled: c.volume.keys.length > 0, run: () => edit((n) => (n.volume = { ...n.volume, keys: [] }), tr("Quitar los puntos de volumen")) },
+            "-",
+            { text: tr("Quitar el audio"), icon: "edit-delete", run: () => this.removeAudio(i) },
+        ], x, y);
+    }
+
+    // El volumen (0 a 200 %) a lo alto del clip, debajo de su nombre.
+    static volumeY(v) {
+        return AudioHeight - 4 - (v * (AudioHeight - 22)) / 200;
+    }
+
+    renderAudio(width) {
+        const clips = this.doc?.audioClips || [], rows = this.audioRows();
+        const bands = [el("div", { className: "gif-audio-band", style: { top: `${this.audioTop(0) - AudioGap}px`, width: `${width}px` } })];
+        for (let r = 0; r < rows; r++) {
+            const row = el("div", { className: "gif-audio-row", style: { top: `${this.audioTop(r)}px`, width: `${width}px` } });
+            if (!clips.some((c) => c.row === r))
+                row.append(el("span", { className: "gif-audio-empty", textContent: tr("Arrastra aquí un audio (MP3, WAV, OGG...) para los vídeos exportados") }));
+            bands.push(row);
+        }
+        clips.forEach((c, i) => bands.push(this.audioClipElement(c, i)));
+        this.audioArea.replaceChildren(...bands);
+    }
+
+    audioClipElement(c, i) {
+        const x0 = this.x(c.start), w = Math.max(6, this.x(c.start + c.duration) - x0) - 2;
+        const node = el("div", { className: `gif-audio-clip${i === this.selectedAudio ? " selected" : ""}${c.muted ? " muted" : ""}`,
+                                 title: `${c.name} · ${timeText(c.duration)}` });
+        Object.assign(node.style, { left: `${x0}px`, top: `${this.audioTop(c.row)}px`, width: `${w}px`, height: `${AudioHeight}px` });
+        const canvas = el("canvas");
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(w * dpr));
+        canvas.height = Math.round(AudioHeight * dpr);
+        canvas.style.width = `${w}px`;
+        canvas.style.height = `${AudioHeight}px`;
+        const g = canvas.getContext("2d");
+        g.scale(dpr, dpr);
+        // La onda, a la altura de su volumen.
+        const mid = (18 + AudioHeight - 3) / 2, half = (AudioHeight - 21) / 2;
+        g.fillStyle = c.muted ? "rgba(139,143,151,0.6)" : "rgba(31,209,185,0.62)";
+        for (let px = 0; px < w; px++) {
+            const local = this.msAt(x0 + px) - c.start, idx = Math.floor((c.offset + local) / PeakMs);
+            if (idx < 0 || idx >= c.peaks.length)
+                continue;
+            const h = Math.max(1, (c.peaks[idx] / 255) * half * Math.min(1.6, volumeAt(c, local) / 100));
+            g.fillRect(px, mid - Math.min(half, h), 1, 2 * Math.min(half, h));
+        }
+        // La línea del volumen (con los fundidos) y sus puntos.
+        g.strokeStyle = "rgba(255,255,255,0.85)";
+        g.lineWidth = 1.4;
+        g.beginPath();
+        for (let px = 0; px <= w; px += 3) {
+            const y = GifEditor.volumeY(volumeAt(c, clamp(this.msAt(x0 + px) - c.start, 0, c.duration)));
+            px ? g.lineTo(px, y) : g.moveTo(px, y);
+        }
+        g.stroke();
+        for (const k of c.volume.keys)
+            drawDiamond(g, this.x(c.start + k.t) - x0, GifEditor.volumeY(k.value), 5, i === this.selectedAudio, "#1fd1b9");
+        node.append(canvas, el("span", { className: "gif-audio-name", textContent: `♪ ${c.name}${c.muted ? ` · ${tr("Silenciado")}` : ""}` }),
+                    el("div", { className: "gif-audio-edge left" }), el("div", { className: "gif-audio-edge right" }));
+        node.addEventListener("pointerdown", (e) => this.audioPointerDown(e, node, i));
+        node.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            const clips = this.doc.audioClips.map(copyClip), cc = clips[i];
+            const r = node.getBoundingClientRect();
+            const t = clamp(Math.round((this.msAt(x0 + e.clientX - r.left) - cc.start) / 10) * 10, 0, cc.duration);
+            const v = clamp(Math.round(((AudioHeight - 4 - (e.clientY - r.top)) * 200) / (AudioHeight - 22)), 0, 200);
+            setKey(cc, t, v);
+            this.setAudioClips(clips, tr("Añadir un punto de volumen"));
+        });
+        node.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.selectAudio(i);
+            this.audioMenu(i, e.clientX, e.clientY);
+        });
+        return node;
+    }
+
+    // Mover el clip (y a otra pista de audio), recortarlo por sus bordes o arrastrar un punto de volumen.
+    audioPointerDown(e, node, i) {
+        if (e.button !== 0)
+            return;
+        e.stopPropagation();
+        e.preventDefault();
+        const orig = this.doc.audioClips[i];
+        // Al elegirlo se rehace la línea de tiempo: su elemento nuevo.
+        if (i !== this.selectedAudio) {
+            this.selectAudio(i);
+            node = this.audioArea.querySelectorAll(".gif-audio-clip")[i] || node;
+        }
+        const capture = (target, id) => {
+            try {
+                target.setPointerCapture(id);
+            } catch {}
+        };
+        const r = node.getBoundingClientRect(), lx = e.clientX - r.left, ly = e.clientY - r.top;
+        const key = orig.volume.keys.find((k) => Math.abs(this.x(orig.start + k.t) - this.x(orig.start) - lx) <= 6 && Math.abs(GifEditor.volumeY(k.value) - ly) <= 7);
+        const mode = key ? "key" : lx >= r.width - 8 ? "end" : lx <= 8 ? "start" : "move";
+        const startX = e.clientX;
+        let moved = false, next = copyClip(orig);
+        capture(node, e.pointerId);
+        const move = (ev) => {
+            const dt = Math.round(((ev.clientX - startX) * 1000) / this.pps);
+            if (!moved && Math.abs(ev.clientX - startX) < 4 && mode !== "key")
+                return;
+            moved = true;
+            next = copyClip(orig);
+            if (mode === "move") {
+                next.start = Math.max(0, orig.start + dt);
+                const row = this.audioRowAt(this.laneY(ev));
+                if (row >= 0)
+                    next.row = row;
+            } else if (mode === "end") {
+                next.duration = clamp(orig.duration + dt, 100, Math.max(100, orig.length - orig.offset));
+            } else if (mode === "start") {
+                const d = clamp(dt, Math.max(-orig.offset, -orig.start), orig.duration - 100);
+                next.start = orig.start + d;
+                next.offset = orig.offset + d;
+                next.duration = orig.duration - d;
+                next.volume = { ...next.volume, keys: next.volume.keys.map((k) => ({ ...k, t: Math.max(0, k.t - d) })) };
+            } else {
+                const t = clamp(Math.round((key.t + dt) / 10) * 10, 0, orig.duration);
+                const v = clamp(Math.round(((AudioHeight - 4 - (ev.clientY - r.top)) * 200) / (AudioHeight - 22)), 0, 200);
+                next.volume = { ...next.volume, keys: next.volume.keys.filter((k) => k !== key && k.t !== t) };
+                setKey(next, t, v);
+                node.title = `${v} % · ${timeText(next.start + t)}`;
+            }
+            // Se ve mientras se arrastra (sin pasar al historial hasta soltar).
+            const clips = [...this.doc.audioClips];
+            clips[i] = next;
+            const shown = this.audioClipElement(next, i);
+            shown.classList.add("lifted");
+            node.replaceWith(shown);
+            node = shown;
+            capture(node, ev.pointerId);
+        };
+        const up = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", up);
+            if (!moved) {
+                this.seek(this.msAt(this.laneX(e)));
+                return;
+            }
+            const clips = this.doc.audioClips.map(copyClip);
+            clips[i] = next;
+            this.setAudioClips(clips, mode === "move" ? tr("Mover el audio") : mode === "key" ? tr("Cambiar el volumen") : tr("Recortar el audio"));
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+    }
+
+    buildAudioPanel() {
+        const panel = this.audioPanel = el("div", { className: "gif-audio-panel" });
+        this.audioTitle = el("div", { className: "gif-section-title" });
+        this.audioInfo = el("p", { className: "note" });
+        this.audioVolume = el("input", { type: "number", min: 0, max: 200, step: 5, className: "gif-prop-value" });
+        this.audioSlider = el("input", { type: "range", min: 0, max: 200, step: 1 });
+        this.audioKey = button(el("span", { className: "gif-diamond" }), tr("Punto clave de volumen en el cabezal: con varios, el volumen cambia de uno a otro"),
+                               () => this.toggleAudioKey(this.selectedAudio), "gif-key-toggle");
+        this.audioFadeIn = el("input", { type: "number", min: 0, max: 30, step: 0.1, className: "gif-prop-value" });
+        this.audioFadeOut = el("input", { type: "number", min: 0, max: 30, step: 0.1, className: "gif-prop-value" });
+        this.audioMute = el("input", { type: "checkbox" });
+        const edit = (fn, text) => {
+            const i = this.selectedAudio, clips = (this.doc?.audioClips || []).map(copyClip);
+            if (!clips[i])
+                return;
+            fn(clips[i]);
+            this.setAudioClips(clips, text || tr("Cambiar el audio"));
+        };
+        const setVolume = (v) => edit((c) => {
+            v = clamp(v, 0, 200);
+            if (c.volume.keys.length)
+                setKey(c, clamp(Math.round(this.time - c.start), 0, c.duration), v);
+            else
+                c.volume = { ...c.volume, base: v };
+        }, tr("Cambiar el volumen"));
+        this.audioVolume.addEventListener("change", () => setVolume(+this.audioVolume.value));
+        this.audioSlider.addEventListener("input", () => (this.audioVolume.value = this.audioSlider.value));
+        this.audioSlider.addEventListener("change", () => setVolume(+this.audioSlider.value));
+        this.audioFadeIn.addEventListener("change", () => edit((c) => (c.fadeIn = Math.round(clamp(+this.audioFadeIn.value, 0, 30) * 1000))));
+        this.audioFadeOut.addEventListener("change", () => edit((c) => (c.fadeOut = Math.round(clamp(+this.audioFadeOut.value, 0, 30) * 1000))));
+        this.audioMute.addEventListener("change", () => edit((c) => (c.muted = this.audioMute.checked),
+                                                             this.audioMute.checked ? tr("Silenciar el audio") : tr("Activar el sonido")));
+        const remove = button(tr("Quitar el audio"), "", () => this.removeAudio(this.selectedAudio), "pushbutton");
+        const back = button("‹", tr("Animación"), () => this.selectAudio(-1), "gif-key-nav");
+        panel.append(
+            el("div", { className: "gif-row" }, [back, this.audioTitle]), this.audioInfo,
+            el("div", { className: "gif-props" }, [
+                el("label", { textContent: tr("Volumen:") }), el("span", { className: "gif-prop-input" }, [this.audioVolume, el("span", { textContent: "%" })]),
+                el("span"), this.audioKey, el("span"),
+            ]),
+            this.audioSlider,
+            el("div", { className: "gif-props" }, [
+                el("label", { textContent: tr("Fundido de entrada:") }), el("span", { className: "gif-prop-input" }, [this.audioFadeIn, el("span", { textContent: tr(" s") })]),
+                el("span"), el("span"), el("span"),
+                el("label", { textContent: tr("Fundido de salida:") }), el("span", { className: "gif-prop-input" }, [this.audioFadeOut, el("span", { textContent: tr(" s") })]),
+                el("span"), el("span"), el("span"),
+            ]),
+            el("label", { className: "gif-check" }, [this.audioMute, tr("Silenciar")]),
+            remove,
+            el("p", { className: "note", textContent: tr("El audio va en los vídeos exportados (MP4 y WebM): el GIF no tiene sonido. Doble clic en el clip añade un punto de volumen; arrastra los puntos para cambiarlo.") }),
+        );
+        return panel;
+    }
+
+    refreshAudioPanel() {
+        const c = this.doc?.audioClips?.[this.selectedAudio];
+        this.inspector?.classList.toggle("audio-mode", !!c);
+        if (!c)
+            return;
+        this.audioTitle.textContent = `♪ ${c.name}`;
+        this.audioInfo.textContent = tr("Empieza en %1 y suena %2 (de %3).", timeText(c.start), timeText(c.duration), timeText(c.length));
+        const local = clamp(Math.round(this.time - c.start), 0, c.duration), v = Math.round(keyedVolume(c, local));
+        if (document.activeElement !== this.audioVolume)
+            this.audioVolume.value = v;
+        this.audioSlider.value = v;
+        this.audioFadeIn.value = (c.fadeIn / 1000).toFixed(1);
+        this.audioFadeOut.value = (c.fadeOut / 1000).toFixed(1);
+        this.audioMute.checked = c.muted;
+        this.audioKey.firstChild?.classList.toggle("filled", c.volume.keys.some((k) => k.t === local));
+    }
+
+    // Lo que suena mientras se reproduce (Web Audio): cada clip desde el cabezal, con su volumen.
+    async startAudio() {
+        this.stopAudio();
+        const token = this.audioToken;
+        const clips = (this.doc?.audioClips || []).filter((c) => !c.muted && c.start + c.duration > this.time);
+        if (!clips.length || typeof AudioContext === "undefined")
+            return;
+        const ctx = (this.audioCtx ??= new AudioContext());
+        if (ctx.state === "suspended")
+            await ctx.resume().catch(() => {});
+        const buffers = await Promise.all(clips.map((c) => decodeClip(c).catch(() => null)));
+        if (token !== this.audioToken || !this.playing)
+            return;
+        const speed = +this.speed.value || 1, t0 = this.time, now = ctx.currentTime + 0.02;
+        clips.forEach((c, k) => {
+            if (!buffers[k])
+                return;
+            const from = Math.max(0, t0 - c.start), when = now + Math.max(0, c.start - t0) / 1000 / speed;
+            const source = ctx.createBufferSource();
+            source.buffer = buffers[k];
+            source.playbackRate.value = speed;
+            const gain = ctx.createGain();
+            automate(gain.gain, c, when, from, speed);
+            source.connect(gain).connect(ctx.destination);
+            source.start(when, (c.offset + from) / 1000, (c.duration - from) / 1000);
+            this.audioNodes.push(source);
+        });
+    }
+
+    stopAudio() {
+        this.audioToken = (this.audioToken || 0) + 1;
+        for (const n of this.audioNodes || [])
+            try {
+                n.stop();
+            } catch {}
+        this.audioNodes = [];
     }
 }

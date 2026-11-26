@@ -72,6 +72,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QImageReader>
+#include <QColorDialog>
 #include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -208,8 +209,104 @@ public:
             b->installEventFilter(this);
         }
         connect(this, &QTabBar::currentChanged, this, &ImageStrip::fadeCloseButtons);
-        connect(this, &QTabBar::tabMoved, this, [this] { resetCloseButtons(); });
+        connect(this, &QTabBar::tabMoved, this, [this](int, int to) {
+            clearRange();
+            fixGroupAfterMove(to);
+            resetCloseButtons();
+        });
     }
+
+    // --- Grupos de imágenes ---------------------------------------------------------------------
+    // Ctrl+clic (o Mayús+clic) en otra imagen elige desde la actual hasta ella; el «+» que aparece
+    // encima las agrupa. Un grupo lleva un nombre y el color de su borde, y se contrae a su primera
+    // imagen (ahorra sitio en la tira) o se expande con un clic en su nombre.
+    struct Group {
+        QString name;
+        QColor color;
+        bool collapsed = false;
+    };
+    int groupOf(int index) const { return index >= 0 && index < count() ? marks(index) >> kGroupShift : 0; }
+    bool hasGroup(int id) const { return m_groups.contains(id); }
+    Group group(int id) const { return m_groups.value(id); }
+    QList<int> membersOf(int id) const
+    {
+        QList<int> out;
+        for (int i = 0; id > 0 && i < count(); ++i)
+            if (groupOf(i) == id)
+                out << i;
+        return out;
+    }
+    bool hasRange() const { return m_rangeA >= 0 && m_rangeB >= 0 && m_rangeA != m_rangeB && m_rangeA < count() && m_rangeB < count(); }
+    bool inRange(int index) const
+    {
+        return hasRange() && index >= std::min(m_rangeA, m_rangeB) && index <= std::max(m_rangeA, m_rangeB);
+    }
+    void clearRange()
+    {
+        if (m_rangeA < 0 && m_rangeB < 0)
+            return;
+        m_rangeA = m_rangeB = -1;
+        m_hoverPlus = false;
+        update();
+    }
+    // Agrupa las imágenes elegidas (las de otro grupo pasan a este). Devuelve el grupo nuevo.
+    int groupRange(const QString& name)
+    {
+        if (!hasRange())
+            return 0;
+        static const QColor palette[] = {QColor(0xe7, 0x4c, 0x3c), QColor(0xf3, 0x9c, 0x12), QColor(0x27, 0xae, 0x60),
+                                         QColor(0x29, 0x80, 0xb9), QColor(0x8e, 0x44, 0xad), QColor(0xe9, 0x1e, 0x63),
+                                         QColor(0x16, 0xa0, 0x85), QColor(0x7f, 0x8c, 0x8d)};
+        const int id = m_nextGroup++;
+        m_groups.insert(id, Group{name, palette[(id - 1) % std::size(palette)], false});
+        for (int i = std::min(m_rangeA, m_rangeB); i <= std::max(m_rangeA, m_rangeB); ++i)
+            setGroupOf(i, id);
+        clearRange();
+        cleanupGroups();
+        return id;
+    }
+    void setGroupName(int id, const QString& name)
+    {
+        if (m_groups.contains(id)) {
+            m_groups[id].name = name;
+            update();
+        }
+    }
+    void setGroupColor(int id, const QColor& color)
+    {
+        if (m_groups.contains(id) && color.isValid()) {
+            m_groups[id].color = color;
+            update();
+        }
+    }
+    void setCollapsed(int id, bool collapsed)
+    {
+        if (!m_groups.contains(id) || m_groups[id].collapsed == collapsed)
+            return;
+        m_groups[id].collapsed = collapsed;
+        applyGroupVisibility();
+    }
+    void ungroup(int id)
+    {
+        for (int i : membersOf(id))
+            setGroupOf(i, 0);
+        m_groups.remove(id);
+        applyGroupVisibility();
+    }
+    void removeFromGroup(int index)
+    {
+        setGroupOf(index, 0);
+        cleanupGroups();
+    }
+    // Si la imagen está dentro de un grupo contraído, el grupo se expande (para verla).
+    void revealTab(int index)
+    {
+        const int id = groupOf(index);
+        if (id > 0 && m_groups.value(id).collapsed && !isTabVisible(index))
+            setCollapsed(id, false);
+    }
+    // Al elegir otra imagen con un clic normal, se olvida la selección de varias.
+    std::function<void()> onGroupRequested;
 
     bool eventFilter(QObject* watched, QEvent* e) override
     {
@@ -288,7 +385,7 @@ public:
     // 2 copia atrasada, 3 copia al día).
     void setCollab(int index, bool collab, int crown, int computer)
     {
-        int m = marks(index) & kUnsaved;
+        int m = marks(index) & (kUnsaved | kGroupMask);
         if (collab)
             m |= kCollab | (crown << 2) | (computer << 4);
         setMarks(index, m);
@@ -298,15 +395,46 @@ public:
     QRect markRect(int index, int row) const { return unsavedRect(index).translated(0, row * (kDot + 3)); }
 
 protected:
+    // Al abrir o cerrar una imagen, un arrastre a medias se olvida y los desplazamientos de las
+    // pestañas también (eran de otros índices: una pestaña se quedaba encima de otra, corrida, hasta
+    // volver a arrastrar alguna).
     void tabInserted(int index) override
     {
         QTabBar::tabInserted(index);
+        resetDrag();
+        clearRange();
         resetCloseButtons();
     }
     void tabRemoved(int index) override
     {
         QTabBar::tabRemoved(index);
+        resetDrag();
+        clearRange();
+        cleanupGroups();
         resetCloseButtons();
+    }
+    void resetDrag()
+    {
+        m_dragging = false;
+        m_dragTab = -1;
+        m_pressedTab = -1;
+        m_shift.clear();
+        m_shiftTimer.stop();
+        update();
+    }
+    int firstVisible() const
+    {
+        for (int i = 0; i < count(); ++i)
+            if (isTabVisible(i))
+                return i;
+        return -1;
+    }
+    int lastVisible() const
+    {
+        for (int i = count() - 1; i >= 0; --i)
+            if (isTabVisible(i))
+                return i;
+        return -1;
     }
 
     QSize tabSizeHint(int index) const override
@@ -327,9 +455,10 @@ protected:
     }
     bool arrowShown(bool right) const
     {
-        if (count() == 0)
+        const int first = firstVisible(), last = lastVisible();
+        if (first < 0)
             return false;
-        return right ? tabRect(count() - 1).right() > width() - 1 : tabRect(0).left() < 0;
+        return right ? tabRect(last).right() > width() - 1 : tabRect(first).left() < 0;
     }
     // Un clic en una flecha: la imagen siguiente hacia ese lado queda entera a la vista (junto a la
     // flecha o, si es la última, en el borde), con una animación corta.
@@ -340,16 +469,16 @@ protected:
         if (!right) {
             for (int i = n - 1; i >= 0; --i) {
                 const QRect r = tabRect(i);
-                if (r.left() < kArrow) {
-                    delta = i == 0 ? -r.left() : kArrow - r.left();
+                if (isTabVisible(i) && r.left() < kArrow) {
+                    delta = i == firstVisible() ? -r.left() : kArrow - r.left();
                     break;
                 }
             }
         } else {
             for (int i = 0; i < n; ++i) {
                 const QRect r = tabRect(i);
-                if (r.right() > width() - 1 - kArrow) {
-                    delta = i == n - 1 ? width() - 1 - r.right() : width() - 1 - kArrow - r.right();
+                if (isTabVisible(i) && r.right() > width() - 1 - kArrow) {
+                    delta = i == lastVisible() ? width() - 1 - r.right() : width() - 1 - kArrow - r.right();
                     break;
                 }
             }
@@ -413,17 +542,35 @@ protected:
     int shiftOf(int index) const { return index >= 0 && index < m_shift.size() ? int(std::lround(m_shift[index])) : 0; }
     int slotWidth() const
     {
-        if (count() >= 2)
-            return tabRect(1).left() - tabRect(0).left();
-        return count() == 1 ? tabRect(0).width() : 0;
+        const int first = firstVisible();
+        if (first < 0)
+            return 0;
+        for (int i = first + 1; i < count(); ++i)
+            if (isTabVisible(i))
+                return tabRect(i).left() - tabRect(first).left();
+        return tabRect(first).width();
+    }
+    // Dónde se dibuja la miniatura arrastrada: sigue al puntero, pero como en Paint.NET no pasa de
+    // la primera ni de la última imagen (antes seguía de largo y el borde de la tira la cortaba).
+    int dragLeft() const
+    {
+        const int first = firstVisible(), last = lastVisible();
+        if (first < 0 || m_dragTab < 0)
+            return m_dragX - m_grab;
+        const int w = tabRect(m_dragTab).width();
+        const int lo = std::max(0, tabRect(first).left());
+        const int hi = std::max(lo, std::min(width() - w, tabRect(last).left()));
+        return std::clamp(m_dragX - m_grab, lo, hi);
     }
     // Dónde quedaría la miniatura arrastrada: el sitio cuyo centro está más cerca del suyo.
     int dropIndex() const
     {
         const int w = tabRect(m_dragTab).width();
-        const int center = m_dragX - m_grab + w / 2;
+        const int center = dragLeft() + w / 2;
         int best = m_dragTab, bestDistance = INT_MAX;
         for (int i = 0; i < count(); ++i) {
+            if (!isTabVisible(i))
+                continue;
             const int d = std::abs(tabRect(i).center().x() - center);
             if (d < bestDistance) {
                 bestDistance = d;
@@ -437,7 +584,7 @@ protected:
         if (!m_dragging)
             return 0;
         if (index == m_dragTab)
-            return m_dragX - m_grab - tabRect(index).left();
+            return dragLeft() - tabRect(index).left();
         const int to = dropIndex();
         const int w = slotWidth();
         if (m_dragTab < to && index > m_dragTab && index <= to)
@@ -490,10 +637,20 @@ protected:
     void finishDrag()
     {
         const int from = m_dragTab;
-        const int to = dropIndex();
+        int to = dropIndex();
+        // Detrás de un grupo contraído: después de todas sus imágenes (no entre la que se ve y las
+        // ocultas).
+        if (to > from) {
+            const int g = groupOf(to);
+            if (g > 0 && m_groups.value(g).collapsed) {
+                const QList<int> members = membersOf(g);
+                if (!members.isEmpty())
+                    to = members.last();
+            }
+        }
         QList<int> visual;
         for (int i = 0; i < count(); ++i)
-            visual << tabRect(i).left() + (i == from ? m_dragX - m_grab - tabRect(i).left() : shiftOf(i));
+            visual << tabRect(i).left() + (i == from ? dragLeft() - tabRect(i).left() : shiftOf(i));
         m_dragging = false;
         m_dragTab = -1;
         if (from != to)
@@ -615,13 +772,18 @@ protected:
                 order << currentIndex();
             if (m_dragTab >= 0 && m_dragTab < count())
                 order << m_dragTab;
+            // Los marcos de los grupos, debajo de la que se arrastra.
+            paintGroups(lp);
             for (int i : std::as_const(order)) {
+                if (!isTabVisible(i))
+                    continue;
                 const int dx = shiftOf(i);
                 const QRect tab = tabRect(i).translated(dx, 0);
                 if (tab.right() < 0 || tab.left() > width())
                     continue;
                 paintTab(lp, i, dx);
             }
+            paintGroupLabels(lp);
         }
         for (bool right : {false, true}) {
             if (!arrowShown(right))
@@ -640,6 +802,178 @@ protected:
         p.drawImage(QPoint(0, 0), layer);
         p.setRenderHint(QPainter::Antialiasing);
         paintScrollArrows(p);
+        paintPlus(p);
+    }
+
+    // El marco de cada grupo alrededor de sus imágenes (las que se ven), de su color.
+    QRect groupFrame(int id) const
+    {
+        QRect frame;
+        for (int i : membersOf(id))
+            if (isTabVisible(i) && i != m_dragTab)
+                frame = frame.united(tabRect(i).translated(shiftOf(i), 0));
+        return frame;
+    }
+    void paintGroups(QPainter& p)
+    {
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        for (auto it = m_groups.cbegin(); it != m_groups.cend(); ++it) {
+            const QRect frame = groupFrame(it.key());
+            if (frame.isEmpty())
+                continue;
+            QColor fill = it->color;
+            fill.setAlpha(38);
+            p.setPen(Qt::NoPen);
+            p.setBrush(fill);
+            p.drawRoundedRect(QRectF(frame).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
+            // Contraído: otra hoja asomando detrás (hay más imágenes dentro).
+            if (it->collapsed) {
+                p.setPen(QPen(it->color, 1.5));
+                p.setBrush(Qt::NoBrush);
+                p.drawRoundedRect(QRectF(frame).adjusted(3.5, 1.5, -0.5, -3.5), 4, 4);
+            }
+        }
+        p.restore();
+    }
+    // Encima de las miniaturas: el borde y el nombre del grupo (un clic contrae o expande).
+    void paintGroupLabels(QPainter& p)
+    {
+        m_groupChips.clear();
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        QFont f = font();
+        f.setBold(true);
+        f.setPointSizeF(std::max(6.5, f.pointSizeF() * 0.85));
+        p.setFont(f);
+        const QFontMetrics fm(f);
+        for (auto it = m_groups.cbegin(); it != m_groups.cend(); ++it) {
+            const QRect frame = groupFrame(it.key());
+            if (frame.isEmpty())
+                continue;
+            p.setPen(QPen(it->color, 2));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(QRectF(frame).adjusted(1, 1, -1, -1), 4, 4);
+            QString text = it->name;
+            if (it->collapsed)
+                text += QStringLiteral(" (%1)").arg(membersOf(it.key()).size());
+            const int h = fm.height() + 2;
+            const int left = frame.left() + 3 + kDot + 3;
+            // A lo ancho del grupo (sin tapar la X de la última), como mucho 150 px.
+            const int maxW = std::max(24, std::min(150, frame.right() - left - kClose - 6));
+            const int w = std::min(maxW, fm.horizontalAdvance(text) + 18);
+            const QRect chip(left, frame.top() + 3, w, h);
+            p.setPen(Qt::NoPen);
+            p.setBrush(it->color);
+            p.drawRoundedRect(QRectF(chip), h / 2.0, h / 2.0);
+            const QColor ink = qGray(it->color.rgb()) > 160 ? Qt::black : Qt::white;
+            p.setPen(ink);
+            p.drawText(chip.adjusted(6, 0, -12, 0), Qt::AlignVCenter | Qt::AlignLeft, fm.elidedText(text, Qt::ElideRight, chip.width() - 18));
+            // La flecha: hacia la derecha contraído, hacia abajo expandido.
+            const QPointF c(chip.right() - 7, chip.center().y() + 0.5);
+            QPolygonF arrow = it->collapsed ? QPolygonF({c + QPointF(-2, -3.5), c + QPointF(2, 0), c + QPointF(-2, 3.5)})
+                                            : QPolygonF({c + QPointF(-3.5, -2), c + QPointF(3.5, -2), c + QPointF(0, 2.5)});
+            p.setBrush(ink);
+            p.setPen(Qt::NoPen);
+            p.drawPolygon(arrow);
+            m_groupChips.append({chip, it.key()});
+        }
+        // Las elegidas con Ctrl+clic, con el azul de la selección.
+        if (hasRange()) {
+            QRect frame;
+            for (int i = std::min(m_rangeA, m_rangeB); i <= std::max(m_rangeA, m_rangeB); ++i)
+                if (isTabVisible(i))
+                    frame = frame.united(tabRect(i).translated(shiftOf(i), 0));
+            QColor fill = palette().color(QPalette::Highlight);
+            fill.setAlpha(45);
+            p.setBrush(fill);
+            p.setPen(QPen(palette().color(QPalette::Highlight), 2, Qt::DashLine));
+            p.drawRoundedRect(QRectF(frame).adjusted(1, 1, -1, -1), 4, 4);
+        }
+        p.restore();
+    }
+    // El «+» que agrupa las elegidas: arriba, en el centro de la del medio.
+    QRect plusRect() const
+    {
+        if (!hasRange() || m_dragging)
+            return {};
+        QList<int> shown;
+        for (int i = std::min(m_rangeA, m_rangeB); i <= std::max(m_rangeA, m_rangeB); ++i)
+            if (isTabVisible(i))
+                shown << i;
+        if (shown.isEmpty())
+            return {};
+        const QRect mid = tabRect(shown[shown.size() / 2]);
+        return QRect(mid.center().x() - 11, mid.top() + 3, 22, 22);
+    }
+    void paintPlus(QPainter& p)
+    {
+        const QRect r = plusRect();
+        if (r.isEmpty())
+            return;
+        p.save();
+        QColor fill = palette().color(QPalette::Highlight);
+        if (m_hoverPlus)
+            fill = fill.lighter(125);
+        p.setPen(QPen(QColor(255, 255, 255, 230), 1.5));
+        p.setBrush(fill);
+        p.drawEllipse(QRectF(r).adjusted(0.75, 0.75, -0.75, -0.75));
+        p.setPen(QPen(Qt::white, 2, Qt::SolidLine, Qt::RoundCap));
+        const QPointF c = QRectF(r).center();
+        p.drawLine(c + QPointF(-5, 0), c + QPointF(5, 0));
+        p.drawLine(c + QPointF(0, -5), c + QPointF(0, 5));
+        p.restore();
+    }
+    void setGroupOf(int index, int id)
+    {
+        setMarks(index, (marks(index) & ~kGroupMask) | (id << kGroupShift));
+    }
+    // Sin grupos de una sola imagen; las ocultas, solo las que no son la primera de uno contraído.
+    void cleanupGroups()
+    {
+        for (auto it = m_groups.begin(); it != m_groups.end();) {
+            const QList<int> members = membersOf(it.key());
+            if (members.size() < 2) {
+                for (int i : members)
+                    setGroupOf(i, 0);
+                it = m_groups.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        applyGroupVisibility();
+    }
+    void applyGroupVisibility()
+    {
+        QHash<int, bool> seen;
+        for (int i = 0; i < count(); ++i) {
+            const int id = groupOf(i);
+            bool visible = true;
+            if (id > 0 && m_groups.contains(id)) {
+                visible = !m_groups[id].collapsed || !seen.value(id);
+                seen.insert(id, true);
+            } else if (id > 0) {
+                setGroupOf(i, 0);
+            }
+            if (isTabVisible(i) != visible)
+                setTabVisible(i, visible);
+        }
+        update();
+    }
+    // Una imagen que se lleva entre dos del mismo grupo entra en él; una que sale de su grupo
+    // (sin ninguna de él al lado) lo deja.
+    void fixGroupAfterMove(int to)
+    {
+        if (to < 0 || to >= count())
+            return;
+        const int own = groupOf(to);
+        const int left = to > 0 ? groupOf(to - 1) : 0;
+        const int right = to + 1 < count() ? groupOf(to + 1) : 0;
+        if (left > 0 && left == right)
+            setGroupOf(to, left);
+        else if (own > 0 && own != left && own != right)
+            setGroupOf(to, 0);
+        cleanupGroups();
     }
 
     // Una pestaña con su recuadro (el del estilo), la miniatura, las marcas y la X, 'dx' píxeles a
@@ -704,6 +1038,36 @@ protected:
     void mousePressEvent(QMouseEvent* e) override
     {
         const QPoint pos = e->position().toPoint();
+        // Un arrastre que no terminó (se perdió la suelta del botón, p. ej. al cambiar de ventana):
+        // la miniatura se quedaba corrida encima de otra.
+        if (m_dragging)
+            finishDrag();
+        if (e->button() == Qt::LeftButton && plusRect().contains(pos)) {
+            if (onGroupRequested)
+                onGroupRequested();
+            e->accept();
+            return;
+        }
+        if (e->button() == Qt::LeftButton)
+            for (const auto& [chip, id] : std::as_const(m_groupChips))
+                if (chip.contains(pos)) {
+                    setCollapsed(id, !m_groups.value(id).collapsed);
+                    e->accept();
+                    return;
+                }
+        // Ctrl+clic (o Mayús+clic): desde la imagen actual hasta esta, para agruparlas.
+        if (e->button() == Qt::LeftButton && (e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier))) {
+            const int i = tabAt(pos);
+            if (i >= 0 && currentIndex() >= 0 && i != currentIndex()) {
+                m_rangeA = currentIndex();
+                m_rangeB = i;
+                update();
+                e->accept();
+                return;
+            }
+        }
+        if (e->button() == Qt::LeftButton)
+            clearRange();
         // Las flechas de los bordes: una imagen hacia ese lado.
         for (bool right : {false, true})
             if (e->button() == Qt::LeftButton && arrowShown(right) && arrowRect(right).contains(pos)) {
@@ -727,6 +1091,20 @@ protected:
     void mouseMoveEvent(QMouseEvent* e) override
     {
         const QPoint pos = e->position().toPoint();
+        if (m_dragging && !(e->buttons() & Qt::LeftButton)) {
+            m_pressedTab = -1;
+            finishDrag();
+        }
+        const bool overPlus = plusRect().contains(pos);
+        if (overPlus != m_hoverPlus) {
+            m_hoverPlus = overPlus;
+            setToolTip(overPlus ? QCoreApplication::translate("MainWindow", "Agrupar las imágenes elegidas") : QString());
+            update();
+        }
+        // Las de un grupo contraído no se arrastran (se separarían de las suyas, que están ocultas).
+        const int pressedGroup = groupOf(m_pressedTab);
+        if (pressedGroup > 0 && m_groups.value(pressedGroup).collapsed)
+            m_pressedTab = -1;
         // Arrastrar una miniatura: va con el puntero y las demás se apartan para dejarle sitio.
         if (m_pressedTab >= 0 && m_pressedTab < count() && (e->buttons() & Qt::LeftButton)) {
             if (!m_dragging && (pos - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
@@ -792,8 +1170,27 @@ protected:
         m_hoverTab = -1;
         m_hoverClose = false;
         m_hoverArrow = -1;
+        m_hoverPlus = false;
         fadeCloseButtons();
         QTabBar::leaveEvent(e);
+    }
+    // Si la ventana deja de estar activa a mitad de un arrastre (Alt+Tab, otra ventana encima), la
+    // suelta no llega: la miniatura se deja en su sitio nuevo.
+    void changeEvent(QEvent* e) override
+    {
+        if (e->type() == QEvent::ActivationChange && m_dragging && !(QGuiApplication::mouseButtons() & Qt::LeftButton)) {
+            m_pressedTab = -1;
+            finishDrag();
+        }
+        QTabBar::changeEvent(e);
+    }
+    void hideEvent(QHideEvent* e) override
+    {
+        if (m_dragging) {
+            m_pressedTab = -1;
+            finishDrag();
+        }
+        QTabBar::hideEvent(e);
     }
 
 private:
@@ -857,6 +1254,15 @@ private:
 
     static constexpr int kUnsaved = 1;
     static constexpr int kCollab = 2;
+    // El grupo de la imagen va en las marcas, de este bit en adelante (0: ninguno).
+    static constexpr int kGroupShift = 8;
+    static constexpr int kGroupMask = ~0xff;
+    QHash<int, Group> m_groups;
+    int m_nextGroup = 1;
+    int m_rangeA = -1;
+    int m_rangeB = -1;
+    bool m_hoverPlus = false;
+    QList<std::pair<QRect, int>> m_groupChips;
     static constexpr int kClose = 14;
     static constexpr int kDot = 12;
     // Ancho de las flechas de los bordes (el mismo hueco que reserva el estilo).
@@ -893,6 +1299,30 @@ private:
     QElapsedTimer m_closeClock;
 };
 
+// Entre los botones de las ventanas y Configuración: un hueco y, con el aspecto de Paint.NET, la
+// línea vertical que los separa en el suyo.
+class CornerSeparator : public QWidget {
+public:
+    explicit CornerSeparator(QWidget* parent)
+        : QWidget(parent)
+    {
+        setFixedWidth(9);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        if (!Theme::paintNetLook())
+            return;
+        QPainter p(this);
+        QColor c = palette().color(QPalette::WindowText);
+        c.setAlpha(90);
+        p.setPen(c);
+        p.drawLine(width() / 2, 4, width() / 2, height() - 5);
+    }
+};
+
 // Fila superior al estilo de Paint.NET 5: menús con la barra principal debajo, la tira de
 // imágenes a lo alto de las dos filas y los botones de las ventanas a la derecha. La franja de
 // los menús lleva el color de la barra de título y la de abajo el de las barras.
@@ -920,7 +1350,14 @@ protected:
         // Windows 7 con la barra de título simulada: su fila se deja sin pintar y se ve el cristal de
         // Aero del marco de la ventana, seguido como en Windows 7.
         const int top = m_caption && WindowFrame::aeroTitle() ? m_caption->geometry().bottom() + 1 : 0;
-        const QRect below = rect().adjusted(0, top, 0, 0);
+        // Con el cristal (sin color propio de la barra), la fila del título y la franja de los menús
+        // son del cristal del marco, con sus mismos reflejos: antes la franja era de un color liso y,
+        // con un color de ventana oscuro, se veía un bloque plano entre los lados claros del marco.
+        const bool glass = top > 0 && !Theme::titleBarColor().isValid();
+        // Extendido (Configuración): el cristal sigue por la franja de los menús; si no, como el borde
+        // de una ventana de Windows 7, solo en la barra de título.
+        const bool extended = glass && WindowFrame::aeroExtended();
+        const QRect below = rect().adjusted(0, extended ? split : top, 0, 0);
         // Azul: bajo los menús empieza el degradado de casi blanco a azul claro que sigue en la
         // barra de opciones (la barra principal es transparente encima de él).
         if (Theme::active().blue) {
@@ -931,7 +1368,27 @@ protected:
         } else {
             p.fillRect(below, Theme::active().toolBar);
         }
-        p.fillRect(QRect(0, top, width(), split - top), bandColor());
+        if (glass)
+            WindowFrame::paintMainGlass(p, QRect(0, 0, width(), extended ? split : top), this);
+        if (!extended)
+            p.fillRect(QRect(0, top, width(), split - top), bandColor());
+        // Las líneas del marco de Windows 7 que este cristal tapaba (como en Kaint 1.1.8): la blanca
+        // de dentro del contorno, arriba, y bajo la barra de título el borde del contenido, blanco y
+        // por dentro oscuro.
+        if (glass) {
+            p.save();
+            if (!WindowFrame::isMaximized(window())) {
+                p.setPen(QColor(255, 255, 255, 170));
+                p.drawLine(0, 0, width(), 0);
+            }
+            if (!extended) {
+                p.setPen(QColor(255, 255, 255, 153));
+                p.drawLine(0, top - 2, width(), top - 2);
+                p.setPen(QColor(0, 0, 0, window()->isActiveWindow() ? 179 : 110));
+                p.drawLine(0, top - 1, width(), top - 1);
+            }
+            p.restore();
+        }
         // Con el tema Windows 98 y la barra de título simulada, su fila es la de Windows 98
         // (degradado azul) y debajo sigue la franja gris de los menús.
         if (m_caption && WindowFrame::classicTitle())
@@ -1939,6 +2396,10 @@ void MainWindow::createTopRow()
         for (Document* doc : std::as_const(m_docs))
             updateTab(doc);
     };
+    static_cast<ImageStrip*>(m_tabs)->onGroupRequested = [this] {
+        static int groups = 0;
+        static_cast<ImageStrip*>(m_tabs)->groupRange(tr("Grupo %1").arg(++groups));
+    };
     m_tabs->setUsesScrollButtons(true);
     m_tabs->setElideMode(Qt::ElideRight);
     // Solo lo que ocupan las miniaturas: la flecha de la lista va justo después de la última y
@@ -2092,11 +2553,20 @@ void MainWindow::createPanels()
 
     m_history = new HistoryPanel(m_undoGroup, m_act["undo"], m_act["redo"]);
     connect(m_history, &HistoryPanel::aboutToJump, this, &MainWindow::prepareHistoryJump);
+    // Cada editor con su historial: el de las imágenes sin los pasos del editor de GIF, y el del
+    // editor de GIF (una pestaña junto a sus medios) solo con ellos.
+    m_history->setFilter(HistoryPanel::Filter::Image);
+    m_gifHistory = new HistoryPanel(m_undoGroup, m_act["undo"], m_act["redo"]);
+    m_gifHistory->setFilter(HistoryPanel::Filter::Gif);
+    connect(m_gifHistory, &HistoryPanel::aboutToJump, this, &MainWindow::prepareHistoryJump);
+    m_gifEditor->setHistoryPanel(m_gifHistory);
     // Solo en el modo colaborativo: el historial del anfitrión.
     m_history->setCollabAction(m_act["collabHistory"]);
     m_historyPanel = m_workspace->addPanel(QStringLiteral("history"), tr("Historial"), m_history, Corner::TopRight,
                                            QPoint(8, 8), QSize(210, 240));
 
+    m_act["alphaLock"]->setObjectName(QStringLiteral("alphaLock"));
+    m_act["layerProps"]->setObjectName(QStringLiteral("layerProps"));
     m_layers = new LayersPanel({m_act["addLayer"], m_act["deleteLayer"], m_act["duplicateLayer"], m_act["mergeDown"],
                                 m_act["layerUp"], m_act["layerDown"], m_act["alphaLock"], m_act["layerProps"]});
     connect(m_layers, &LayersPanel::visibilityToggled, this, &MainWindow::toggleLayerVisibility);
@@ -2115,15 +2585,20 @@ void MainWindow::createPanels()
     });
 
     // Botones de las ventanas en la esquina superior derecha, como Paint.NET.
-    const QList<std::tuple<FloatingPanel*, QString, QIcon, Qt::Key>> panels{
-        {m_toolsPanel, tr("Herramientas"), Icons::theme({"window-tools", "tools", "draw-brush"}), Qt::Key_F5},
-        {m_historyPanel, tr("Historial"), Icons::theme({"window-history", "view-history"}), Qt::Key_F6},
-        {m_layersPanel, tr("Capas"), Icons::theme({"window-layers", "layer-visible-on", "layer-new"}), Qt::Key_F7},
-        {m_colorsPanel, tr("Colores"), Icons::theme({"window-colors", "color-management", "color-picker"}), Qt::Key_F8},
+    // Con el aspecto de Paint.NET, sus iconos (applyThemeLayout): el martillo, el reloj, las hojas y la
+    // rueda, con el contorno blanco grueso.
+    const QList<std::tuple<FloatingPanel*, QString, QIcon, Qt::Key, const char*>> panels{
+        {m_toolsPanel, tr("Herramientas"), Icons::theme({"window-tools", "tools", "draw-brush"}), Qt::Key_F5, "corner-tools"},
+        {m_historyPanel, tr("Historial"), Icons::theme({"window-history", "view-history"}), Qt::Key_F6, "corner-history"},
+        {m_layersPanel, tr("Capas"), Icons::theme({"window-layers", "layer-visible-on", "layer-new"}), Qt::Key_F7, "corner-layers"},
+        {m_colorsPanel, tr("Colores"), Icons::theme({"window-colors", "color-management", "color-picker"}), Qt::Key_F8,
+         "corner-colors"},
     };
-    for (const auto& [panel, name, icon, key] : panels) {
+    for (const auto& [panel, name, icon, key, pdnIcon] : panels) {
         QAction* a = makeAction(name, {}, QKeySequence(key), [] {});
         a->setIcon(icon);
+        a->setProperty("kaintIcon", QVariant::fromValue(icon));
+        a->setProperty("pdnIcon", QString::fromLatin1(pdnIcon));
         a->setCheckable(true);
         a->setChecked(!panel->isHidden());
         a->setToolTip(QStringLiteral("%1 (%2)").arg(name, QKeySequence(key).toString(QKeySequence::NativeText)));
@@ -2141,14 +2616,22 @@ void MainWindow::createPanels()
         b->setIconSize(QSize(16, 16));
         m_cornerLayout->addWidget(b);
     }
+    // El engranaje con su propio icono (no el de la acción, que también va en el menú Utilidades).
     auto* gear = new QToolButton(m_cornerButtons);
-    gear->setDefaultAction(m_act["settings"]);
+    gear->setIcon(m_act["settings"]->icon());
+    gear->setToolTip(m_act["settings"]->toolTip());
+    gear->setProperty("kaintIcon", QVariant::fromValue(m_act["settings"]->icon()));
+    gear->setProperty("pdnIcon", QStringLiteral("corner-settings"));
+    connect(gear, &QToolButton::clicked, m_act["settings"], &QAction::trigger);
     gear->setAutoRaise(true);
     gear->setIconSize(QSize(16, 16));
-    m_cornerLayout->addSpacing(8);
+    // Entre las ventanas y Configuración: un hueco o, con el aspecto de Paint.NET, su línea.
+    m_cornerLayout->addWidget(new CornerSeparator(m_cornerButtons));
     m_cornerLayout->addWidget(gear);
     auto* help = new QToolButton(m_cornerButtons);
     help->setIcon(Icons::theme({"help-contents", "help-about"}));
+    help->setProperty("kaintIcon", QVariant::fromValue(help->icon()));
+    help->setProperty("pdnIcon", QStringLiteral("corner-help"));
     help->setToolTip(tr("Ayuda"));
     help->setAutoRaise(true);
     help->setIconSize(QSize(16, 16));
@@ -2373,6 +2856,7 @@ void MainWindow::addDocument(Document* doc)
         if (doc == m_doc) {
             updateTitle();
             m_history->setDocument(doc);
+            m_gifHistory->setDocument(doc);
         }
     });
     connect(doc, &Document::pixelsChanged, this, [this, doc] {
@@ -2401,8 +2885,11 @@ void MainWindow::setCurrentDocument(Document* doc, bool force)
     m_undoGroup->setActiveStack(doc ? doc->undoStack() : nullptr);
     m_layers->setDocument(doc);
     m_history->setDocument(doc);
+    m_gifHistory->setDocument(doc);
     {
         const QSignalBlocker block(m_tabs);
+        // Dentro de un grupo contraído, el grupo se expande para verla.
+        static_cast<ImageStrip*>(m_tabs)->revealTab(int(m_docs.indexOf(doc)));
         m_tabs->setCurrentIndex(int(m_docs.indexOf(doc)));
     }
     updateTitle();
@@ -2695,6 +3182,12 @@ void MainWindow::showToolHint(const QString& hint)
 
 void MainWindow::refreshHint()
 {
+    // En el editor de GIF, solo su icono y su nombre (lo demás de la barra es del lienzo).
+    if (inGifEditor()) {
+        m_hintIcon->setPixmap(Icons::theme({"video-x-generic", "image-gif", "media-playback-start"}).pixmap(QSize(16, 16), devicePixelRatioF()));
+        m_hint->setText(tr("Editor de GIF"));
+        return;
+    }
     // Con una herramienta de selección en reposo y algo seleccionado, como Paint.NET: posición,
     // rectángulo delimitador y área de la selección.
     // Delante, como en paint.js, el icono de la herramienta o el de la selección.
@@ -2776,7 +3269,12 @@ void MainWindow::newImage()
 
 void MainWindow::open()
 {
-    const QStringList paths = QFileDialog::getOpenFileNames(this, tr("Abrir"), m_lastDir, ImageIO::openFilter());
+    // Con los vídeos (se abren con FFmpeg, un fotograma por capa).
+    QString filter = ImageIO::openFilter();
+    const QString videos = GifExport::videoPatterns();
+    filter.replace(QRegularExpression(QStringLiteral("^([^;]*\\()([^)]*)\\)")), QStringLiteral("\\1\\2 %1)").arg(videos));
+    filter.insert(filter.indexOf(QStringLiteral(";;")), QStringLiteral(";;") + tr("Vídeo (%1)").arg(videos));
+    const QStringList paths = QFileDialog::getOpenFileNames(this, tr("Abrir"), m_lastDir, filter);
     openFiles(paths);
 }
 
@@ -2864,9 +3362,34 @@ void MainWindow::openFiles(const QStringList& paths)
         if (alreadyOpen)
             continue;
         QString error;
-        QApplication::setOverrideCursor(Qt::WaitCursor);
-        Document* doc = ImageIO::load(abs, &error);
-        QApplication::restoreOverrideCursor();
+        Document* doc = nullptr;
+        // Vídeo (con FFmpeg): un fotograma por capa, como un GIF animado, y sin archivo (guardar no
+        // lo pisa).
+        const bool video = GifExport::isVideoFile(abs);
+        if (video) {
+            QList<QImage> images;
+            int delay = 100;
+            if (!GifExport::decodeVideo(abs, &images, &delay, this, &error)) {
+                if (!error.isEmpty())
+                    QMessageBox::critical(this, tr("No se pudo abrir"), tr("No se pudo abrir «%1»:\n%2").arg(abs, error));
+                continue;
+            }
+            doc = new Document(images.first().size());
+            QList<LayerPtr> layers;
+            for (int i = 0; i < images.size(); ++i) {
+                auto layer = std::make_shared<Layer>(Gif::nameWithDelay(tr("Fotograma %1").arg(i + 1), delay), images.first().size());
+                Raster::blit(layer->image, images[i].convertToFormat(kLayerFormat), QPoint());
+                layers << layer;
+            }
+            doc->replaceState(images.first().size(), layers, int(layers.size()) - 1);
+            doc->setUntitledName(QFileInfo(abs).completeBaseName());
+            doc->setHistoryRootLabel(tr("Abrir imagen"));
+            doc->undoStack()->clear();
+        } else {
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            doc = ImageIO::load(abs, &error);
+            QApplication::restoreOverrideCursor();
+        }
         if (!doc) {
             QMessageBox::critical(this, tr("No se pudo abrir"), tr("No se pudo abrir «%1»:\n%2").arg(abs, error));
             continue;
@@ -2876,10 +3399,10 @@ void MainWindow::openFiles(const QStringList& paths)
         bool asImages = false;
         // Fotogramas elegidos (vacío: todos).
         QList<int> frames;
-        if (ImageIO::isAnimation(abs) && doc->layerCount() > 1) {
+        if ((ImageIO::isAnimation(abs) || video) && doc->layerCount() > 1) {
             int mode = m_settings.gifOpenMode;
             if (mode == 0) {
-                TaskDialog ask(tr("Abrir un GIF animado"), Icons::theme({"document-open"}), doc->layer(0)->image,
+                TaskDialog ask(video ? tr("Abrir un vídeo") : tr("Abrir un GIF animado"), Icons::theme({"document-open"}), doc->layer(0)->image,
                                tr("«%1» tiene %n fotograma(s). ¿Cómo quieres abrirlo?", nullptr, doc->layerCount())
                                    .arg(QFileInfo(abs).fileName()),
                                this);
@@ -3119,6 +3642,21 @@ void MainWindow::updateCentralView()
         m_gifEditor->setFocus();
     else
         m_canvas->setFocus();
+    // La barra de estado: en el editor de GIF, solo su icono y su nombre (el tamaño, la posición, las
+    // unidades y el zum son del lienzo); al volver, lo que se vio antes.
+    if (gif) {
+        for (QWidget* w : statusBar()->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))
+            if (w != m_hintIcon && w != m_hint && !w->inherits("QSizeGrip") && w->isVisible()) {
+                w->hide();
+                m_statusHiddenForGif << w;
+            }
+    } else {
+        for (const QPointer<QWidget>& w : std::as_const(m_statusHiddenForGif))
+            if (w)
+                w->show();
+        m_statusHiddenForGif.clear();
+    }
+    refreshHint();
     updateActions();
     updatePresence();
 }
@@ -3245,11 +3783,45 @@ void MainWindow::moveImageTab(int delta)
 
 void MainWindow::showTabMenu(const QPoint& pos)
 {
-    Document* doc = m_docs.value(m_tabs->tabAt(pos));
+    const int index = m_tabs->tabAt(pos);
+    Document* doc = m_docs.value(index);
     if (!doc)
         return;
-    setCurrentDocument(doc);
+    auto* strip = static_cast<ImageStrip*>(m_tabs);
+    const bool range = strip->hasRange() && strip->inRange(index);
+    if (!range)
+        setCurrentDocument(doc);
     QMenu menu(this);
+    // Los grupos de imágenes: agrupar las elegidas (Ctrl+clic) y, en una de un grupo, contraerlo o
+    // expandirlo, su nombre, el color de su borde, sacarla o deshacerlo.
+    if (range) {
+        menu.addAction(Icons::theme({"list-add"}), tr("Agrupar las imágenes elegidas"), this, [strip] {
+            if (strip->onGroupRequested)
+                strip->onGroupRequested();
+        });
+        menu.exec(m_tabs->mapToGlobal(pos));
+        return;
+    }
+    if (const int id = strip->groupOf(index); id > 0 && strip->hasGroup(id)) {
+        const ImageStrip::Group g = strip->group(id);
+        menu.addAction(g.collapsed ? tr("Expandir el grupo") : tr("Contraer el grupo"), this,
+                       [strip, id, collapsed = g.collapsed] { strip->setCollapsed(id, !collapsed); });
+        menu.addAction(Icons::theme({"edit-rename"}), tr("Cambiar el nombre del grupo…"), this, [this, strip, id] {
+            bool ok = false;
+            const QString name = QInputDialog::getText(this, tr("Grupo de imágenes"), tr("Nombre del grupo:"), QLineEdit::Normal,
+                                                       strip->group(id).name, &ok);
+            if (ok && !name.trimmed().isEmpty())
+                strip->setGroupName(id, name.trimmed());
+        });
+        menu.addAction(Icons::theme({"color-management", "color-picker"}), tr("Color del borde del grupo…"), this, [this, strip, id] {
+            const QColor c = QColorDialog::getColor(strip->group(id).color, this, tr("Color del borde del grupo…"));
+            if (c.isValid())
+                strip->setGroupColor(id, c);
+        });
+        menu.addAction(tr("Quitar del grupo"), this, [strip, index] { strip->removeFromGroup(index); });
+        menu.addAction(tr("Desagrupar"), this, [strip, id] { strip->ungroup(id); });
+        menu.addSeparator();
+    }
     menu.addAction(m_act["save"]);
     menu.addAction(m_act["saveAs"]);
     menu.addSeparator();
@@ -4649,6 +5221,8 @@ void MainWindow::applyCanvasAppearance()
     // El color propio del fondo es el del brillo del tema (también al cambiar el del sistema).
     m_canvas->setAppearance(m_settings.dropShadow, Theme::isDark() ? m_settings.canvasBorderDark : m_settings.canvasBorderLight,
                             m_settings.checkerBrightness);
+    if (m_gifEditor)
+        m_gifEditor->setCheckerBrightness(m_settings.checkerBrightness);
 }
 
 void MainWindow::applyThemeLayout()
@@ -4670,8 +5244,25 @@ void MainWindow::applyThemeLayout()
     // Paint.NET: la regla girada, como una «Γ» (como la suya); con el de Kaint, la de siempre.
     const QIcon ruler = Icons::theme({"measure", "kruler"});
     m_act["rulers"]->setIcon(paintNet ? Icons::rotated(ruler) : ruler);
-    for (QToolButton* b : m_cornerButtons->findChildren<QToolButton*>())
-        b->setIconSize(icon);
+    // Los botones de las ventanas: con el aspecto de Paint.NET, sus iconos y algo más grandes, como
+    // los suyos; con el de Kaint, los de siempre.
+    const QSize cornerIcon = paintNet ? QSize(spec.iconSize + 4, spec.iconSize + 4) : icon;
+    for (QToolButton* b : m_cornerButtons->findChildren<QToolButton*>()) {
+        b->setIconSize(cornerIcon);
+        QObject* holder = b->defaultAction() ? static_cast<QObject*>(b->defaultAction()) : static_cast<QObject*>(b);
+        const QString pdnIcon = holder->property("pdnIcon").toString();
+        if (pdnIcon.isEmpty())
+            continue;
+        const QIcon chosen = paintNet ? Icons::pdn(pdnIcon) : holder->property("kaintIcon").value<QIcon>();
+        if (QAction* a = b->defaultAction())
+            a->setIcon(chosen);
+        else
+            b->setIcon(chosen);
+    }
+    // Pegados debajo de los botones de la barra de título, como en Paint.NET (centrados en la fila de
+    // los menús quedaban más abajo, con un hueco); con el aspecto de Kaint, centrados.
+    m_topLayout->setAlignment(m_cornerButtons, Qt::AlignRight | (paintNet ? Qt::AlignTop : Qt::AlignVCenter));
+    m_cornerButtons->update();
     if (auto* tools = findChild<ToolsPanel*>())
         tools->setIconSize(spec.toolIconSize);
     if (m_tabs)
@@ -4721,6 +5312,11 @@ void MainWindow::applySettings()
     m_workspace->setTranslucentOverImageOnly(m_settings.translucentOverImage);
     m_workspace->setTranslucentPanels(m_settings.translucentPanels);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(m_settings.win7PanelClose, 0, 2)));
+    if (WindowFrame::aeroExtended() != m_settings.win7ExtendedGlass) {
+        WindowFrame::setAeroExtended(m_settings.win7ExtendedGlass);
+        if (QWidget* top = menuWidget())
+            top->update();
+    }
     m_workspace->setPanelChrome(FloatingPanel::Style(m_settings.panelStyle), m_settings.panelBorder, m_settings.roundedWindows());
     m_canvas->setRulerStyle(Ruler::Style(m_settings.rulerStyle));
     m_canvas->setRulersVisible(m_settings.rulers);
@@ -4731,7 +5327,9 @@ void MainWindow::applySettings()
     Icons::setCursorStyle(Icons::CursorStyle(m_settings.cursorStyle));
     Theme::setUnderlineShortcuts(m_settings.menuMnemonics);
     m_layers->setDropLineMode(m_settings.layerDropLine);
+    m_layers->setLockButtonVisible(m_settings.layerLockButton);
     m_history->setJumpButtonsVisible(m_settings.historyJumpButtons);
+    m_gifHistory->setJumpButtonsVisible(m_settings.historyJumpButtons);
     EffectMenu::showPluginIcons() = m_settings.pluginMenuIcons;
     // La tira de imágenes a lo alto de toda la fila de arriba (o solo lo que ocupan las miniaturas).
     if (auto* strip = static_cast<ImageStrip*>(m_tabs)) {
@@ -4767,6 +5365,12 @@ void MainWindow::applySettings()
     if (Effects::extrasEnabled() != m_settings.photocraftExtras || m_appliedBoltBait != m_settings.boltBaitEffects) {
         Effects::setExtrasEnabled(m_settings.photocraftExtras);
         Effects::setBoltBaitEnabled(m_settings.boltBaitEffects);
+        // Sin las funciones de PhotoCraft, el imán (Snap) se apaga y su botón desaparece.
+        // (Siempre avisa: la barra de opciones muestra u oculta sus botones de PhotoCraft.)
+        AppState::instance()->updateTools([extras = m_settings.photocraftExtras](ToolSettings& s) {
+            if (!extras)
+                s.moveSnap = false;
+        });
         m_tools->setExtrasEnabled(m_settings.photocraftExtras);
         m_appliedBoltBait = m_settings.boltBaitEffects;
         rebuildEffectMenus();

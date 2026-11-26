@@ -1009,6 +1009,10 @@ namespace Kaint.PdnHost
             }
 
             PrepareEffectsFolder();
+            // Si de un diálogo anterior quedó alguna ventana, fuera antes de abrir otro.
+            CloseStrayForms(null);
+            Application.DoEvents();
+            Dictionary<string, object> reply;
             using (SharedPixels pixels = new SharedPixels(Json.Str(request, "shm"), width, height))
             {
                 Services.Instance.SetCurrentPalette(PaletteFrom(request));
@@ -1050,12 +1054,75 @@ namespace Kaint.PdnHost
                     // que tarda en cancelarse, una imagen grande...), la ventana seguía en pantalla,
                     // congelada, como si no se cerrara. Se oculta ya.
                     dialog.Hide();
+                    // Las ventanas que abrió el complemento desde la suya (selectores de color, ayudas,
+                    // vistas aparte...) sin dueño se quedaban en pantalla después de cerrarla, sobre
+                    // todo con .NET, que deja este proceso abierto solo para las ventanas: se cierran
+                    // con ella.
+                    CloseStrayForms(dialog);
                     Application.DoEvents();
                     Dictionary<string, object> r = Ok();
                     r["accepted"] = result == DialogResult.OK;
                     if (result == DialogResult.OK && dialog.EffectToken != null)
                         le.DialogToken = (EffectConfigToken)dialog.EffectToken.Clone();
-                    return r;
+                    reply = r;
+                }
+            }
+            // Ya liberada la ventana del complemento: lo que haya quedado, también fuera, y que X se
+            // entere ya (este proceso se queda esperando la siguiente orden sin atender a X).
+            CloseStrayForms(null);
+            Application.DoEvents();
+            return reply;
+        }
+
+        // Cierra todas las ventanas abiertas menos 'keep' (la del complemento, que se libera aparte).
+        // Además de Application.OpenForms, con mono se miran todas las ventanas que tiene su
+        // controlador de X11 (Hwnd.windows): algunos complementos (Random Effect) abren ventanas que
+        // no salen en OpenForms y se quedaban en pantalla al cerrar la suya.
+        private static void CloseStrayForms(Form keep)
+        {
+            // Solo las que se ven y no son de WinForms: cerrar sus ventanas ocultas internas (la de
+            // aparcar controles y otras) dejaba el siguiente diálogo sin responder a los clics
+            // (Random Effect no dejaba pulsar Aceptar ni ningún otro botón).
+            Func<Form, bool> stray = f => f != null && f != keep && f.Visible
+                && !(f.GetType().Namespace ?? "").StartsWith("System.Windows.Forms", StringComparison.Ordinal);
+            List<Form> open = new List<Form>();
+            foreach (Form f in Application.OpenForms)
+                if (stray(f) && !open.Contains(f))
+                    open.Add(f);
+            try
+            {
+                Type hwnd = typeof(Form).Assembly.GetType("System.Windows.Forms.Hwnd");
+                FieldInfo field = hwnd == null ? null : hwnd.GetField("windows", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                System.Collections.IDictionary windows = field == null ? null : field.GetValue(null) as System.Collections.IDictionary;
+                PropertyInfo handleProp = hwnd == null ? null : hwnd.GetProperty("Handle", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (windows != null && handleProp != null)
+                {
+                    List<object> all = new List<object>();
+                    lock (windows.SyncRoot)
+                        foreach (object w in windows.Values)
+                            all.Add(w);
+                    foreach (object w in all)
+                    {
+                        Control c = Control.FromHandle((IntPtr)handleProp.GetValue(w, null));
+                        Form f = c == null ? null : c.FindForm() ?? c as Form;
+                        if (stray(f) && f.TopLevel && !open.Contains(f))
+                            open.Add(f);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+            foreach (Form f in open)
+            {
+                try
+                {
+                    f.Hide();
+                    f.Close();
+                    f.Dispose();
+                }
+                catch (Exception)
+                {
                 }
             }
         }

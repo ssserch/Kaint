@@ -29,6 +29,7 @@
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -184,6 +185,12 @@ QSize SizeEditor::value() const
     return QSize(m_width->value(), m_height->value());
 }
 
+void SizeEditor::focusWidth()
+{
+    m_width->setFocus(Qt::TabFocusReason);
+    m_width->selectAll();
+}
+
 void SizeEditor::setKeepAspect(bool on)
 {
     m_keepAspect->setChecked(on);
@@ -300,6 +307,8 @@ NewImageDialog::NewImageDialog(QSize initial, double dpi, QWidget* parent)
     layout->addWidget(okCancel(this));
     connect(m_size, &SizeEditor::changed, this, &NewImageDialog::updateMemory);
     updateMemory();
+    // Como en Paint.NET: el ancho, elegido, listo para escribir el tamaño.
+    QTimer::singleShot(0, this, [this] { m_size->focusWidth(); });
 }
 
 void NewImageDialog::updateMemory() { m_memory->setText(tr("Nuevo tamaño: %1").arg(memoryText(m_size->value()))); }

@@ -32,12 +32,16 @@ export class Layer {
         this.alphaLock = false;
         // Editor de GIF: la animación por puntos clave de este fotograma (Motion.js; null: ninguna).
         this.motion = null;
+        // Editor de GIF: la pista de este fotograma (como en Filmora; las de número más alto, encima).
+        this.track = 0;
+        // Y el espacio vacío (ms) antes de él en su pista.
+        this.gap = 0;
         this.id = nextLayerId++;
     }
 
     props() {
         return { name: this.name, visible: this.visible, opacity: this.opacity, blend: this.blend, alphaLock: this.alphaLock,
-                 motion: this.motion };
+                 motion: this.motion, track: this.track || 0, gap: this.gap || 0 };
     }
 
     setProps(p) {
@@ -47,7 +51,8 @@ export class Layer {
     duplicate(name) {
         const copy = new Layer(this.canvas.width, this.canvas.height, name);
         copy.ctx.drawImage(this.canvas, 0, 0);
-        copy.setProps({ visible: this.visible, opacity: this.opacity, blend: this.blend, alphaLock: this.alphaLock, motion: this.motion });
+        copy.setProps({ visible: this.visible, opacity: this.opacity, blend: this.blend, alphaLock: this.alphaLock, motion: this.motion,
+                        track: this.track || 0, gap: this.gap || 0 });
         return copy;
     }
 

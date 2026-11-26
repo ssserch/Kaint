@@ -497,6 +497,129 @@ u {
     width: 8px;
 }
 
+/* Los iconos de Paint.NET en la esquina (App.pdnCornerIcon), algo más grandes, solo con su aspecto; y
+   la línea entre las ventanas y Configuración. */
+.corner-buttons .pdn-corner {
+    display: none;
+    width: 20px;
+    height: 20px;
+}
+
+:root.pdn:not(.classic) .corner-buttons .pdn-icon-button > .pdn-corner {
+    display: block;
+}
+
+:root.pdn:not(.classic) .corner-buttons .pdn-icon-button > .kicon {
+    display: none;
+}
+
+:root.pdn:not(.classic) .corner-buttons .gap {
+    width: 9px;
+    align-self: stretch;
+    background: linear-gradient(currentColor, currentColor) center / 1px 60% no-repeat;
+    opacity: 0.4;
+}
+
+/* Paint.NET 5: los campos de la barra de opciones (tamaños, tipo de letra...) con su borde recto, casi
+   blanco en el tema oscuro y gris oscuro en el claro; más claro bajo el puntero y azul al escribir. */
+:root.pdn:not(.classic) .tool-options input[type="number"],
+:root.pdn:not(.classic) .tool-options input[type="text"],
+:root.pdn:not(.classic) .tool-options select {
+    border: 1px solid #7a7a7a;
+    border-radius: 0;
+    /* Más altos y con aire por dentro, como los de Paint.NET. */
+    box-sizing: border-box;
+    height: 28px;
+    padding: 1px 3px;
+}
+
+:root.pdn:not(.classic) .tool-options {
+    height: 36px;
+}
+
+/* Tema oscuro, como Paint.NET 5 (medido en una captura suya): el texto en un recuadro oscuro con 2 px
+   de blanco alrededor y, en los desplegables, la flecha gris oscuro sobre una franja blanca. */
+:root.pdn.dark:not(.classic) .tool-options input[type="number"],
+:root.pdn.dark:not(.classic) .tool-options input[type="text"],
+:root.pdn.dark:not(.classic) .tool-options select {
+    border: 2px solid #ffffff;
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
+:root.pdn.dark:not(.classic) .tool-options select {
+    appearance: none;
+    padding-right: 24px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 5.5l4.5 4.5 4.5-4.5' fill='none' stroke='%235c5c5c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 4px center / 10px no-repeat,
+                linear-gradient(to left, #ffffff 18px, #1e1e1e 18px);
+}
+
+:root.pdn.dark:not(.classic) .tool-options input[type="number"]:hover,
+:root.pdn.dark:not(.classic) .tool-options input[type="text"]:hover,
+:root.pdn.dark:not(.classic) .tool-options select:hover,
+:root.pdn.dark:not(.classic) .tool-options input[type="number"]:focus,
+:root.pdn.dark:not(.classic) .tool-options input[type="text"]:focus,
+:root.pdn.dark:not(.classic) .tool-options select:focus {
+    border-color: #ffffff;
+}
+
+/* Los − y + de Paint.NET en el tema oscuro: un cuadrado blanco con el signo oscuro. */
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper {
+    position: relative;
+}
+
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper > .kicon {
+    visibility: hidden;
+}
+
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper::after {
+    content: attr(data-sign);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border-radius: 2px;
+    background: #ffffff;
+    color: #1e1e1e;
+    font: bold 12px/12px sans-serif;
+    text-align: center;
+}
+
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper,
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper:hover,
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper:active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+/* Con el puntero encima, el cuadrado se vuelve azul (sin recuadro alrededor del botón). */
+:root.pdn.dark:not(.classic) .tool-options .tbutton.stepper:hover::after {
+    background: #0078d7;
+    color: #ffffff;
+}
+
+:root.pdn:not(.classic) .tool-options input[type="number"]:hover,
+:root.pdn:not(.classic) .tool-options input[type="text"]:hover,
+:root.pdn:not(.classic) .tool-options select:hover {
+    border-color: #333333;
+}
+
+:root.pdn.dark:not(.classic) .tool-options input[type="number"]:hover,
+:root.pdn.dark:not(.classic) .tool-options input[type="text"]:hover,
+:root.pdn.dark:not(.classic) .tool-options select:hover {
+    border-color: #ffffff;
+}
+
+:root.pdn:not(.classic) .tool-options input[type="number"]:focus,
+:root.pdn:not(.classic) .tool-options input[type="text"]:focus,
+:root.pdn:not(.classic) .tool-options select:focus {
+    border-color: #0078d7;
+    outline: none;
+}
+
 /* Como en Paint.NET, las ventanas visibles con el acento translúcido y su borde (no el celeste de
    la selección). */
 :root:not(.classic) .corner-buttons .tbutton.checked {
@@ -985,9 +1108,9 @@ input[type="checkbox"] {
 
 #view {
     position: absolute;
-    inset: 0 var(--scrollbar) var(--scrollbar) 0;
-    width: calc(100% - var(--scrollbar));
-    height: calc(100% - var(--scrollbar));
+    inset: 0 var(--scrollbar-v, var(--scrollbar)) var(--scrollbar-h, var(--scrollbar)) 0;
+    width: calc(100% - var(--scrollbar-v, var(--scrollbar)));
+    height: calc(100% - var(--scrollbar-h, var(--scrollbar)));
     outline: none;
     touch-action: none;
 }
@@ -1006,17 +1129,17 @@ input[type="checkbox"] {
 .ruler.h {
     top: 0;
     left: 20px;
-    right: var(--scrollbar);
+    right: var(--scrollbar-v, var(--scrollbar));
     height: 20px;
-    width: calc(100% - 20px - var(--scrollbar));
+    width: calc(100% - 20px - var(--scrollbar-v, var(--scrollbar)));
 }
 
 .ruler.v {
     top: 20px;
     left: 0;
-    bottom: var(--scrollbar);
+    bottom: var(--scrollbar-h, var(--scrollbar));
     width: 20px;
-    height: calc(100% - 20px - var(--scrollbar));
+    height: calc(100% - 20px - var(--scrollbar-h, var(--scrollbar)));
 }
 
 .ruler-corner {
@@ -1091,9 +1214,9 @@ input[type="checkbox"] {
 }
 
 .workspace.rulers #view {
-    inset: 20px var(--scrollbar) var(--scrollbar) 20px;
-    width: calc(100% - 20px - var(--scrollbar));
-    height: calc(100% - 20px - var(--scrollbar));
+    inset: 20px var(--scrollbar-v, var(--scrollbar)) var(--scrollbar-h, var(--scrollbar)) 20px;
+    width: calc(100% - 20px - var(--scrollbar-v, var(--scrollbar)));
+    height: calc(100% - 20px - var(--scrollbar-h, var(--scrollbar)));
 }
 
 .scrollbar {
@@ -1103,14 +1226,14 @@ input[type="checkbox"] {
 
 .scrollbar.h {
     left: 0;
-    right: var(--scrollbar);
+    right: var(--scrollbar-v, var(--scrollbar));
     bottom: 0;
     height: var(--scrollbar);
 }
 
 .scrollbar.v {
     top: 0;
-    bottom: var(--scrollbar);
+    bottom: var(--scrollbar-h, var(--scrollbar));
     right: 0;
     width: var(--scrollbar);
 }
@@ -5005,10 +5128,121 @@ fieldset.group > legend {
 
 .image-strip.dragging .image-tab.dragged {
     transition: none;
-    z-index: 2;
+    z-index: 5;
     position: relative;
     cursor: grabbing;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Grupos de imágenes (App.decorateGroups): un marco de su color alrededor de sus imágenes, con su
+   nombre en la primera (un clic lo contrae a ella o lo expande). Las elegidas con Ctrl+clic, con un
+   marco a trazos y el «+» que las agrupa. */
+.image-strip .image-tab.grouped::before {
+    content: "";
+    position: absolute;
+    inset: 0 -2px 0 -1px;
+    border-top: 2px solid var(--group-color);
+    border-bottom: 2px solid var(--group-color);
+    background: color-mix(in srgb, var(--group-color) 14%, transparent);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.image-strip .image-tab.group-first::before {
+    left: 0;
+    border-left: 2px solid var(--group-color);
+    border-radius: 5px 0 0 5px;
+}
+
+.image-strip .image-tab.group-last::before {
+    right: 0;
+    border-right: 2px solid var(--group-color);
+    border-radius: 0 5px 5px 0;
+}
+
+.image-strip .image-tab.group-first.group-last::before {
+    border-radius: 5px;
+}
+
+/* Contraído: otra hoja asomando detrás (hay más imágenes dentro). */
+.image-strip .image-tab.group-collapsed.group-first {
+    box-shadow: 3px -3px 0 -1px var(--group-color);
+}
+
+.image-strip .image-tab.group-hidden {
+    display: none;
+}
+
+.image-strip .group-chip {
+    position: absolute;
+    top: 3px;
+    left: 16px;
+    /* Expandido, el nombre puede pasar por encima de las demás del grupo; contraído, solo la suya. */
+    max-width: 150px;
+    height: 16px;
+    box-sizing: border-box;
+    padding: 0 15px 0 7px;
+    border-radius: 8px;
+    background: var(--group-color);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 3;
+    cursor: pointer;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.image-strip .group-chip::after {
+    content: "▾";
+    position: absolute;
+    right: 5px;
+}
+
+.image-strip .group-collapsed .group-chip::after {
+    content: "▸";
+}
+
+.image-strip .group-collapsed .group-chip {
+    max-width: calc(100% - 36px);
+}
+
+.image-strip .image-tab.in-range::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border: 2px dashed var(--selection-border, #0078d7);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--selection-border, #0078d7) 16%, transparent);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.image-strip .group-plus {
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    margin-left: -11px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    background: var(--selection-border, #0078d7);
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    z-index: 4;
+    cursor: pointer;
+}
+
+.image-strip .group-plus:hover {
+    filter: brightness(1.2);
 }
 
 :root.no-animations .image-strip .image-tab {
@@ -5215,8 +5449,8 @@ html, body {
     grid-template-rows: auto minmax(0, 1fr) auto;
     /* La línea de tiempo se desplaza dentro: no ensancha el editor. */
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-    padding: 6px;
+    gap: 10px;
+    padding: 10px;
     min-height: 0;
     background: var(--window);
     color: var(--text);
@@ -5230,8 +5464,60 @@ html, body {
 .gif-head, .gif-row {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     min-width: 0;
+}
+
+/* Cabecera y línea de tiempo en recuadros, con más aire (como un editor de vídeo). */
+.gif-head, .gif-timeline {
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--base);
+}
+
+.gif-title {
+    font-size: 1.2em !important;
+}
+
+/* Medios e historial, en pestañas. */
+.gif-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
+}
+
+.gif-tab {
+    padding: 5px 12px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
+    background: transparent;
+    color: var(--text);
+    font-weight: bold;
+}
+
+.gif-tab.selected {
+    border-color: var(--line);
+    background: var(--base);
+}
+
+.gif-bin-page {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-height: 0;
+}
+
+.gif-bin-page[hidden] {
+    display: none;
+}
+
+.gif-global-key {
+    justify-content: center;
+    min-height: 30px;
+    margin: 4px 0;
 }
 
 .gif-title {
@@ -5252,8 +5538,8 @@ html, body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    min-height: 26px;
-    padding: 2px 8px;
+    min-height: 30px;
+    padding: 3px 10px;
     white-space: nowrap;
 }
 
@@ -5416,7 +5702,7 @@ html, body {
 
 .gif-lane {
     position: relative;
-    height: 134px;
+    height: 110px;
     /* Los gestos los lleva GifEditor.js (deslizar desplaza, mantener pulsado levanta un clip). */
     touch-action: none;
 }
@@ -5501,6 +5787,7 @@ html, body {
     position: absolute;
     top: 0;
     bottom: 0;
+    z-index: 4;
     width: 2px;
     background: #e63c3c;
     pointer-events: none;
@@ -5544,23 +5831,28 @@ html, body {
 }
 
 /* Los puntos clave del fotograma elegido (bajo los clips): blancos y, el elegido, del color de acento. */
+/* Sobre la imagen del propio clip (como en Filmora), en una franja oscura que se ve sobre cualquier
+   imagen; solo los rombos reciben el puntero. */
 .gif-keylane {
     position: absolute;
     left: 0;
     right: 0;
-    top: 106px;
-    height: 22px;
-    background: var(--window);
-    border-top: 1px solid var(--line);
+    top: 62px;
+    height: 20px;
+    pointer-events: none;
 }
 
 .gif-keylane-band {
     position: absolute;
     top: 0;
     bottom: 0;
-    background: var(--selection);
-    opacity: 0.6;
+    background: rgba(0, 0, 0, 0.38);
+    border-radius: 3px;
     pointer-events: none;
+}
+
+.gif-keylane .gif-key {
+    pointer-events: auto;
 }
 
 .gif-key {
@@ -5654,6 +5946,7 @@ html, body {
     border: 1.5px solid currentColor;
 }
 
+.gif-diamond.filled,
 .gif-key-toggle.filled .gif-diamond {
     background: var(--accent);
     border-color: var(--accent);
@@ -5916,4 +6209,734 @@ html, body {
 :root.phone .gif-editor.inspector-open .gif-inspector-toggle {
     background: var(--selection);
     border-color: var(--selection-border);
+}
+
+/* --- Kaint.APK: la pantalla de bienvenida (Welcome.js) ------------------------------------------
+   Todo lo que se anima es la opacidad y el desplazamiento (lo barato para la GPU del teléfono): antes
+   se animaba un desenfoque del tamaño de la pantalla, que trababa la entrada. El fondo con la última
+   imagen ya llega difuminado (una miniatura diminuta ampliada). */
+.kaint-welcome {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: flex;
+    flex-direction: column;
+    color: #ffffff;
+    background: #0b0d12;
+    overflow: hidden;
+    font-family: var(--ui-font, "Segoe UI", "Noto Sans", sans-serif);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.kaint-welcome.shown {
+    opacity: 1;
+}
+
+.welcome-backdrop {
+    position: absolute;
+    inset: -8%;
+    background: #0b0d12 center / cover no-repeat;
+    transform: scale(1.12);
+    opacity: 0;
+    transition: transform 1.6s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.6s ease;
+    will-change: transform, opacity;
+}
+
+.kaint-welcome.shown .welcome-backdrop {
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* Sin imagen: dos luces suaves del acento sobre casi negro. */
+.kaint-welcome.plain .welcome-backdrop {
+    background: radial-gradient(60% 45% at 20% 15%, rgba(0, 120, 215, 0.35), transparent 70%),
+                radial-gradient(55% 40% at 85% 85%, rgba(31, 209, 185, 0.22), transparent 70%), #0b0d12;
+}
+
+/* Un velo oscuro encima de la imagen: el texto se lee sobre cualquiera. */
+.welcome-shade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(5, 7, 12, 0.55), rgba(5, 7, 12, 0.35) 40%, rgba(5, 7, 12, 0.8));
+    pointer-events: none;
+}
+
+.kaint-welcome > :not(.welcome-backdrop):not(.welcome-shade) {
+    position: relative;
+}
+
+/* Cada parte entra subiendo un poco y apareciendo, una tras otra (--d). */
+.wl-in {
+    opacity: 0;
+    transform: translateY(16px);
+}
+
+.kaint-welcome.shown .wl-in {
+    animation: welcome-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--d, 0) * 70ms + 80ms) forwards;
+}
+
+@keyframes welcome-in {
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Al entrar en el editor: lo de encima se va hacia arriba y la pantalla se desvanece. */
+.kaint-welcome.leaving {
+    opacity: 0;
+    transition: opacity 0.28s ease 0.12s;
+}
+
+.kaint-welcome.leaving .welcome-page {
+    opacity: 0;
+    transform: scale(1.04);
+    transition: opacity 0.2s ease, transform 0.3s ease;
+}
+
+:root.no-animations .kaint-welcome, :root.no-animations .kaint-welcome *, :root.no-animations .kaint-welcome *::before {
+    transition: none !important;
+    animation: none !important;
+}
+
+:root.no-animations .kaint-welcome .wl-in {
+    opacity: 1;
+    transform: none;
+}
+
+.welcome-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.welcome-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: max(14px, env(safe-area-inset-top)) 16px 0;
+}
+
+.welcome-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    opacity: 0.9;
+}
+
+.welcome-brand img {
+    width: 24px;
+    height: 24px;
+}
+
+.welcome-gear, .welcome-back {
+    margin-left: auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.welcome-gear:active, .welcome-back:active {
+    transform: scale(0.94);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.welcome-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 0;
+    padding: 0 18px;
+}
+
+.welcome-logo {
+    width: 92px;
+    height: 92px;
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+}
+
+.welcome-title {
+    font-size: 2.6em;
+    font-weight: 300;
+    letter-spacing: 0.03em;
+    margin-top: 6px;
+}
+
+.welcome-version {
+    padding: 2px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    font-size: 0.85em;
+    margin-bottom: 30px;
+}
+
+.welcome-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    width: min(520px, 100%);
+}
+
+.welcome-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 8px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 1em;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.welcome-action:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.welcome-action.primary {
+    background: linear-gradient(160deg, rgba(0, 120, 215, 0.55), rgba(0, 90, 170, 0.35));
+    border-color: rgba(120, 190, 255, 0.45);
+}
+
+.welcome-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.welcome-bottom {
+    padding: 10px 0 max(16px, env(safe-area-inset-bottom));
+}
+
+.welcome-bottom > b {
+    display: block;
+    padding: 0 18px;
+    font-size: 0.95em;
+    opacity: 0.85;
+}
+
+.welcome-strip {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 10px 18px 4px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+}
+
+.welcome-recent {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100px;
+    border: none;
+    background: none;
+    color: #ffffff;
+    scroll-snap-align: start;
+    transition: transform 0.15s ease;
+}
+
+.welcome-recent:active {
+    transform: scale(0.95);
+}
+
+.welcome-recent img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: #ffffff;
+}
+
+.welcome-recent span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+.welcome-open {
+    width: min(720px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    padding-top: 8px;
+}
+
+.welcome-open-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 1.3em;
+}
+
+.welcome-back {
+    margin-left: 0;
+    border-radius: 21px;
+    width: auto;
+    padding: 0 14px;
+}
+
+.welcome-open-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 14px;
+    overflow-y: auto;
+    min-height: 0;
+    justify-items: center;
+}
+
+.welcome-import {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 24px;
+    border: 1px solid rgba(120, 190, 255, 0.45);
+    background: rgba(0, 120, 215, 0.45);
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.welcome-empty {
+    text-align: center;
+    opacity: 0.8;
+}
+
+/* Los menús (el del engranaje) por encima de la bienvenida: con el z-index de siempre quedaban
+   detrás y el botón parecía no hacer nada. */
+body:has(.kaint-welcome) .popup-menu {
+    z-index: 6000;
+}
+
+/* Editor de GIF: las pistas (como en Filmora). A la izquierda su cabecera, fija al desplazarse a lo
+   largo; todo junto se desplaza hacia abajo si hay muchas. */
+.gif-timeline-body {
+    display: flex;
+    align-items: flex-start;
+    max-height: 300px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.gif-timeline-body > .gif-scroller {
+    flex: 1;
+    min-width: 0;
+}
+
+.gif-track-headers {
+    flex: 0 0 132px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 6px;
+    border-right: 1px solid var(--line);
+}
+
+.gif-track-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 22px;
+    margin-bottom: -2px;
+    padding: 0 6px;
+    font-size: 0.9em;
+}
+
+.gif-track-head {
+    box-sizing: border-box;
+    height: 74px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 5px 8px;
+    border-radius: 5px;
+    background: var(--window);
+    cursor: pointer;
+}
+
+.gif-track-head.active {
+    background: color-mix(in srgb, var(--selection) 70%, var(--window));
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.gif-track-head small {
+    opacity: 0.7;
+}
+
+.gif-track-button {
+    min-height: 24px !important;
+    padding: 2px 5px !important;
+}
+
+/* La regla del tiempo y «Añadir pista», arriba a la vista al bajar entre las pistas. */
+.gif-ruler {
+    z-index: 3;
+}
+
+.gif-track-add {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--button);
+}
+
+/* La altura de las pistas (GifEditor.js pone --gif-track-h): sus clips, su cabecera y la marca de
+   dónde cae lo que se suelta. El borde de abajo de la cabecera la cambia al arrastrarlo. */
+.gif-clip, .gif-empty {
+    height: var(--gif-track-h, 74px);
+}
+
+.gif-drop-mark {
+    height: calc(var(--gif-track-h, 74px) + 8px);
+}
+
+.gif-track-head {
+    position: relative;
+    height: var(--gif-track-h, 74px);
+    overflow: hidden;
+}
+
+.gif-track-resize {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.gif-track-resize:hover {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Pistas bajas: el nombre y los botones en una fila. */
+.gif-editor[style*="--gif-track-h: 4"] .gif-track-head,
+.gif-editor[style*="--gif-track-h: 5"] .gif-track-head {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.gif-editor[style*="--gif-track-h: 4"] .gif-track-head small,
+.gif-editor[style*="--gif-track-h: 5"] .gif-track-head small {
+    display: none;
+}
+
+/* Un clip que se arrastra, encima de los demás. */
+.gif-clip.lifted {
+    z-index: 2;
+    opacity: 0.85;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* En el editor de GIF, la barra de estado solo dice que se está en él (la posición, el zum y lo
+   demás son del lienzo). */
+.status-bar .gif-status {
+    display: none;
+    align-items: center;
+    gap: 6px;
+}
+
+:root.gif-editing .status-bar > .gif-status {
+    display: inline-flex;
+}
+
+:root.gif-editing .status-bar > :not(.gif-status) {
+    display: none !important;
+}
+
+/* Cada barra de desplazamiento se puede quitar por separado (Configuración > Lienzo). */
+.workspace.no-hscroll {
+    --scrollbar-h: 0px;
+}
+
+.workspace.no-vscroll {
+    --scrollbar-v: 0px;
+}
+
+.workspace.no-hscroll .scrollbar.h,
+.workspace.no-vscroll .scrollbar.v,
+.workspace.no-hscroll .scroll-corner,
+.workspace.no-vscroll .scroll-corner {
+    display: none;
+}
+
+/* --- Editor de GIF: negro AMOLED con el acento verde azulado, como los editores de vídeo (los
+   colores del tema se sustituyen dentro del editor) ---------------------------------------------- */
+#gif-editor.gif-editor {
+    --accent: #1fd1b9;
+    --window: #000000;
+    --text: #ecedef;
+    --base: #000000;
+    --button: #17181c;
+    --border: #2a2c32;
+    --panel: #0c0d0f;
+    --selection: #0d4a43;
+    --selection-border: #1fd1b9;
+    --hover: #222429;
+    --hover-border: #3a3d44;
+    --line: #26282d;
+    --field: #2a2c32;
+    --disabled: #5b5e65;
+    --menu: #0c0d0f;
+    --toolbar: #000000;
+    --button-hover: #222429;
+    --button-pressed: #0d4a43;
+    --thumb: #2a2c32;
+    color-scheme: dark;
+    background: #000000;
+    color: var(--text);
+}
+
+#gif-editor .gif-head, #gif-editor .gif-timeline {
+    background: #0c0d0f;
+    border: 1px solid #1b1c20;
+    border-radius: 12px;
+}
+
+/* (En el teléfono, el panel de la animación es una hoja que sube desde abajo: con su propio marco.) */
+:root:not(.phone) #gif-editor .gif-bin, :root:not(.phone) #gif-editor .gif-player, :root:not(.phone) #gif-editor .gif-inspector {
+    background: #0c0d0f;
+    border: 1px solid #1b1c20;
+    border-radius: 12px;
+    padding: 8px;
+}
+
+#gif-editor .gif-scroller, #gif-editor .gif-media-list {
+    background: #000000;
+    border-color: #1b1c20;
+    border-radius: 10px;
+}
+
+#gif-editor button, #gif-editor .pushbutton, #gif-editor .gif-button {
+    border-radius: 8px;
+}
+
+#gif-editor input[type="number"], #gif-editor select {
+    background: #08090a;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+}
+
+#gif-editor input[type="number"]:focus, #gif-editor select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+#gif-editor input[type="range"] {
+    accent-color: var(--accent);
+}
+
+#gif-editor .gif-tab {
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #8b8f97;
+}
+
+#gif-editor .gif-tab.selected {
+    background: transparent;
+    color: #ffffff;
+    border-bottom-color: var(--accent);
+}
+
+#gif-editor .gif-clip {
+    border-radius: 7px;
+    background: #17181c;
+    border-color: #2a2c32;
+}
+
+#gif-editor .gif-clip.selected {
+    background: #0d4a43;
+    border-color: var(--accent);
+}
+
+#gif-editor .gif-preview-box {
+    background: #000000;
+}
+
+/* Las pistas de audio, debajo de las de los fotogramas. */
+.gif-audio-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+}
+
+.gif-audio-band {
+    position: absolute;
+    left: 0;
+    height: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.gif-audio-row {
+    position: absolute;
+    left: 0;
+    height: 54px;
+    background: color-mix(in srgb, var(--text) 3%, transparent);
+    border-radius: 6px;
+}
+
+.gif-audio-empty {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--disabled);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.gif-audio-clip {
+    position: absolute;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background: #0d4a43;
+    border: 1px solid #1a7f73;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+}
+
+.gif-audio-clip.selected {
+    border: 2px solid var(--accent, #1fd1b9);
+}
+
+.gif-audio-clip.muted {
+    background: #17181c;
+    border-color: #2a2c32;
+}
+
+.gif-audio-clip.lifted {
+    z-index: 3;
+    opacity: 0.9;
+    cursor: grabbing;
+}
+
+.gif-audio-clip canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+}
+
+.gif-audio-name {
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    right: 6px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #ecedef;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.gif-audio-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+}
+
+.gif-audio-edge.left {
+    left: 0;
+}
+
+.gif-audio-edge.right {
+    right: 0;
+}
+
+.gif-audio-edge::after {
+    content: "";
+    position: absolute;
+    top: calc(50% - 9px);
+    width: 2px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.gif-audio-edge.left::after {
+    left: 2px;
+}
+
+.gif-audio-edge.right::after {
+    right: 2px;
+}
+
+.gif-audio-label {
+    height: 16px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    color: var(--disabled);
+    padding-left: 8px;
+    line-height: 16px;
+}
+
+.gif-audio-head {
+    box-sizing: border-box;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: var(--window);
+}
+
+.gif-note {
+    color: var(--accent);
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+/* El panel de la derecha con un audio elegido: en lugar de la animación del fotograma. */
+.gif-inspector.audio-mode > :not(.gif-audio-panel),
+.gif-inspector:not(.audio-mode) > .gif-audio-panel {
+    display: none !important;
+}
+
+.gif-audio-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }

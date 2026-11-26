@@ -1,6 +1,7 @@
 #include "app/Animations.h"
 #include "app/AppState.h"
 #include "app/Icons.h"
+#include "app/Intro.h"
 #include "app/MainWindow.h"
 #include "app/Theme.h"
 #include "app/WindowFrame.h"
@@ -278,8 +279,22 @@ int main(int argc, char** argv)
     if (portalTheme)
         qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
 #endif
+    // Tamaño de la interfaz (Configuración, como el zum del navegador con Kaint.HTML): Qt lo toma al
+    // crear la aplicación. Si ya viene de fuera (QT_SCALE_FACTOR, o las capturas), manda ese.
+    bool ownScale = false;
+    if (!preview && qEnvironmentVariableIsEmpty("QT_SCALE_FACTOR")) {
+        const QSettings saved(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("Kaint"), QStringLiteral("Kaint"));
+        const int scale = std::clamp(saved.value(QStringLiteral("settings/uiScale"), 100).toInt(), 50, 300);
+        if (scale != 100) {
+            qputenv("QT_SCALE_FACTOR", QByteArray::number(scale / 100.0));
+            ownScale = true;
+        }
+    }
     QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
     QApplication app(argc, argv);
+    // (Los programas que abra Kaint no lo heredan.)
+    if (ownScale)
+        qunsetenv("QT_SCALE_FACTOR");
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     if (portalTheme)
         qunsetenv("QT_QPA_PLATFORMTHEME");
@@ -417,6 +432,7 @@ int main(int argc, char** argv)
     WindowFrame::setAutoFallback(WindowFrame::Buttons::Windows10);
     WindowFrame::setButtonsOnLeft(startup.titleButtonsLeft);
     WindowFrame::setPanelClose7(WindowFrame::PanelClose7(std::clamp(startup.win7PanelClose, 0, 2)));
+    WindowFrame::setAeroExtended(startup.win7ExtendedGlass);
     // Recreación de Windows 11 (estilo Paint.NET) y temas de Windows 7: esquinas redondeadas en
     // modo ventana.
     WindowFrame::setRoundedCorners(frame && startup.roundedWindows());
@@ -443,6 +459,14 @@ int main(int argc, char** argv)
 
     MainWindow window;
     window.show();
+    // La intro (la primera vez o, si se pide, siempre); la bienvenida de la primera vez, después.
+    auto introDone = std::make_shared<bool>(false);
+    auto welcomePending = std::make_shared<bool>(false);
+    Intro::start(&window, startup.introAlways, startup.introPath, [&window, introDone, welcomePending] {
+        *introDone = true;
+        if (*welcomePending)
+            QTimer::singleShot(0, &window, &MainWindow::showWelcome);
+    });
     // Como Paint.NET: primero se ve lo fundamental (la ventana con sus barras y las ventanas de
     // herramientas) y, ya pintada, se carga lo demás: los complementos (sus efectos y formatos
     // aparecen en los menús al terminar), las imágenes que abrir y los avisos.
@@ -450,15 +474,19 @@ int main(int argc, char** argv)
     // Discord abre Kaint con "discord-<ID>://…" al aceptar una invitación: no es un archivo (la
     // invitación llega después por el IPC de Discord).
     files.removeIf([](const QString& f) { return f.startsWith(QLatin1String("discord-"), Qt::CaseInsensitive) && f.contains(QLatin1String("://")); });
-    afterFirstPaint(&window, [&window, files] {
+    afterFirstPaint(&window, [&window, files, introDone, welcomePending] {
         PluginManager::instance()->scan();
         if (files.isEmpty())
             window.restoreSessionOrNew();
         else
             window.openFiles(files);
         window.startupChecks();
-        if (!AppSettings::load().welcomed)
-            QTimer::singleShot(0, &window, &MainWindow::showWelcome);
+        if (!AppSettings::load().welcomed) {
+            if (*introDone)
+                QTimer::singleShot(0, &window, &MainWindow::showWelcome);
+            else
+                *welcomePending = true;
+        }
     });
     const int code = app.exec();
     if (window.restartRequested())

@@ -178,7 +178,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     auto* templateRow = new QHBoxLayout;
     m_template = new QComboBox(content);
     m_template->addItems({tr("Claro"), tr("Oscuro"), tr("Windows 7"), tr("Windows 7 oscuro"), tr("Windows XP"), tr("Windows 98"),
-                          tr("Windows 98 ALT")});
+                          tr("Windows 98 ALT"), tr("Windows 8"), tr("Windows 8 oscuro")});
     m_template->setToolTip(tr("Los temas de Windows 7 y XP traen su estilo de botones, menús y ventanas: así puedes, por "
                               "ejemplo, poner una imagen o un vídeo de fondo con el tema de Windows 7."));
     auto* applyTemplate = new QPushButton(tr("Aplicar"), content);
@@ -198,6 +198,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
             spec.dark = t.dark;
             spec.win7 = t.win7;
             spec.xp = t.xp;
+            spec.metro = t.metro;
             spec.radius = t.radius;
             spec.buttonStyle = t.buttonStyle;
             spec.density = t.density;
@@ -211,6 +212,8 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         case 4: styleOf(Theme::windowsXP()); break;
         case 5: spec = Theme::windows98(); break;
         case 6: spec = Theme::windows98Alt(); break;
+        case 7: styleOf(Theme::windows8(false)); break;
+        case 8: styleOf(Theme::windows8(true)); break;
         default:
             spec.dark = m_template->currentIndex() == 1;
             spec.radius = Theme::preset(spec.dark).radius;
@@ -410,6 +413,10 @@ ThemeDialog::ThemeDialog(QWidget* parent)
     m_style->addItem(tr("Windows XP (Luna)"));
     m_style->setItemData(2, tr("Botones, campos, menús y ventanas de Windows XP."), Qt::ToolTipRole);
     m_style->addItem(tr("Bordes clásicos en relieve (como Windows 98)"));
+    m_style->addItem(tr("Windows 8 (Metro)"));
+    m_style->setItemData(4, tr("El marco ancho y plano del color de las ventanas (el de Configuración), el título centrado y "
+                               "los botones de Windows 8."),
+                         Qt::ToolTipRole);
     designForm->addRow(tr("Estilo:"), m_style);
     connect(m_style, &QComboBox::activated, this, [this](int i) {
         if (m_refreshing)
@@ -422,6 +429,7 @@ ThemeDialog::ThemeDialog(QWidget* parent)
         m_spec.win7 = i == 1;
         m_spec.xp = i == 2;
         m_spec.classic = i == 3;
+        m_spec.metro = i == 4;
         if (m_spec.xp && !m_spec.classic)
             m_spec.dark = false;
         else if (wasXp)
@@ -605,7 +613,7 @@ void ThemeDialog::refresh()
     for (QWidget* w : std::initializer_list<QWidget*>{m_imageMode, m_imageOpacity, m_imageBlur, m_imageGrayscale, m_imageTint,
                                                       m_imageTintStrength})
         w->setEnabled(hasImage);
-    m_style->setCurrentIndex(m_spec.classic ? 3 : m_spec.xp ? 2 : m_spec.win7 ? 1 : 0);
+    m_style->setCurrentIndex(m_spec.classic ? 3 : m_spec.xp ? 2 : m_spec.win7 ? 1 : m_spec.metro ? 4 : 0);
     m_pixelFont->setChecked(m_spec.pixelFont);
     static_cast<BackgroundPreview*>(m_preview)->setSpec(m_spec);
     selectData(m_iconSize, m_spec.iconSize);

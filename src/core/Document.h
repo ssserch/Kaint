@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Audio.h"
 #include "core/Layer.h"
 #include "core/Selection.h"
 
@@ -72,6 +73,9 @@ public:
     QString filePath() const { return m_filePath; }
     int gifLoops() const { return m_gifLoops; }
     void setGifLoops(int loops) { m_gifLoops = loops; }
+    // Las pistas de audio del editor de GIF (para los vídeos exportados).
+    const QList<Audio::Clip>& audioClips() const { return m_audio; }
+    void setAudioClips(const QList<Audio::Clip>& clips);
     void setFilePath(const QString& path);
     QString displayName() const;
     // Nombre que se muestra mientras no tiene archivo (los fotogramas de un GIF abiertos como
@@ -98,6 +102,7 @@ signals:
     void colorSpaceChanged();
     void filePathChanged();
     void modifiedChanged(bool modified);
+    void audioChanged();
 
 private:
     QSize m_size;
@@ -110,6 +115,7 @@ private:
     QUndoStack* m_undo;
     QString m_filePath;
     int m_gifLoops = 0;
+    QList<Audio::Clip> m_audio;
     QString m_untitledName;
     QString m_historyRoot;
     const Layer* m_previewLayer = nullptr;

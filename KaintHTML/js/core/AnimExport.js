@@ -220,10 +220,70 @@ function fields(fn) {
 const fullBox = (type, version, flags, ...parts) => box(type, fields((b) => { b.u8(version); b.push(Uint8Array.of((flags >> 16) & 255, (flags >> 8) & 255, flags & 255)); }), ...parts);
 const matrix = () => fields((b) => [0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000].forEach((v) => b.u32(v)));
 
-// Un MP4 con una pista de vídeo H.264 ('samples': { data, duration (ms), key }) y el índice delante
-// (se puede ver mientras se descarga).
-function muxMp4(samples, width, height, avcc) {
+// Un descriptor de MPEG-4 (esds): etiqueta, tamaño (en 4 bytes) y contenido.
+function descriptor(tag, ...parts) {
+    const body = new Bytes();
+    for (const p of parts)
+        body.push(p);
+    const n = body.length;
+    return Uint8Array.of(tag, 0x80 | ((n >> 21) & 127), 0x80 | ((n >> 14) & 127), 0x80 | ((n >> 7) & 127), n & 127, ...body.result());
+}
+
+// Las pistas de audio del editor de GIF, comprimidas en AAC (WebCodecs) para el MP4: { frames, asc, rate }.
+export async function canEncodeAac(rate = 48000) {
+    if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined")
+        return false;
+    try {
+        return (await AudioEncoder.isConfigSupported({ codec: "mp4a.40.2", sampleRate: rate, numberOfChannels: 2, bitrate: 192000 })).supported;
+    } catch {
+        return false;
+    }
+}
+
+async function encodeAac(buffer) {
+    const rate = buffer.sampleRate, frames = [];
+    let asc = null, failure = null;
+    const encoder = new AudioEncoder({
+        output: (chunk, meta) => {
+            const d = meta?.decoderConfig?.description;
+            if (d && !asc)
+                asc = new Uint8Array(d instanceof ArrayBuffer ? d : d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength));
+            const data = new Uint8Array(chunk.byteLength);
+            chunk.copyTo(data);
+            frames.push(data);
+        },
+        error: (e) => { failure = e; },
+    });
+    encoder.configure({ codec: "mp4a.40.2", sampleRate: rate, numberOfChannels: 2, bitrate: 192000 });
+    const left = buffer.getChannelData(0), right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+    const block = 4096;
+    for (let i = 0; i < buffer.length; i += block) {
+        const n = Math.min(block, buffer.length - i);
+        const planar = new Float32Array(n * 2);
+        planar.set(left.subarray(i, i + n), 0);
+        planar.set(right.subarray(i, i + n), n);
+        const data = new AudioData({ format: "f32-planar", sampleRate: rate, numberOfFrames: n, numberOfChannels: 2,
+                                     timestamp: Math.round((i / rate) * 1e6), data: planar });
+        encoder.encode(data);
+        data.close();
+        while (encoder.encodeQueueSize > 8)
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        if (failure)
+            throw failure;
+    }
+    await encoder.flush();
+    encoder.close();
+    if (failure)
+        throw failure;
+    // AAC-LC, 48 kHz, estéreo, si el navegador no dio su configuración.
+    return { frames, asc: asc || Uint8Array.of(0x11, 0x90), rate };
+}
+
+// Un MP4 con una pista de vídeo H.264 ('samples': { data, duration (ms), key }), si se da, una de
+// audio AAC ('audio': { frames, asc, rate }) y el índice delante (se puede ver mientras se descarga).
+function muxMp4(samples, width, height, avcc, audio = null) {
     const total = samples.reduce((a, s) => a + s.duration, 0);
+    const videoBytes = samples.reduce((a, s) => a + s.data.length, 0);
     const ftyp = box("ftyp", fields((b) => { b.ascii("isom"); b.u32(0x200); b.ascii("isomiso2avc1mp41"); }));
     const stts = [];
     for (const s of samples) {
@@ -257,25 +317,54 @@ function muxMp4(samples, width, height, avcc) {
         }));
         const mvhd = fullBox("mvhd", 0, 0, fields((b) => {
             b.u32(0); b.u32(0); b.u32(1000); b.u32(total); b.u32(0x10000); b.u16(0x100); b.push(new Uint8Array(10));
-            b.push(matrix()); b.push(new Uint8Array(24)); b.u32(2);
+            b.push(matrix()); b.push(new Uint8Array(24)); b.u32(audio ? 3 : 2);
         }));
-        return box("moov", mvhd, box("trak", tkhd, mdia));
+        if (!audio)
+            return box("moov", mvhd, box("trak", tkhd, mdia));
+        // El audio, detrás de los fotogramas en el mismo bloque de datos.
+        const n = audio.frames.length, samplesTotal = n * 1024, ms = Math.round((samplesTotal / audio.rate) * 1000);
+        const esds = fullBox("esds", 0, 0, descriptor(3, Uint8Array.of(0, 2, 0),
+            descriptor(4, Uint8Array.of(0x40, 0x15, 0, 0, 0), fields((b) => { b.u32(192000); b.u32(192000); }), descriptor(5, audio.asc)),
+            descriptor(6, Uint8Array.of(2))));
+        const mp4a = box("mp4a", fields((b) => {
+            b.push(new Uint8Array(6)); b.u16(1); b.u32(0); b.u32(0); b.u16(2); b.u16(16); b.u16(0); b.u16(0); b.u32(audio.rate * 65536);
+        }), esds);
+        const astbl = box("stbl",
+            fullBox("stsd", 0, 0, fields((b) => b.u32(1)), mp4a),
+            fullBox("stts", 0, 0, fields((b) => { b.u32(1); b.u32(n); b.u32(1024); })),
+            fullBox("stsz", 0, 0, fields((b) => { b.u32(0); b.u32(n); audio.frames.forEach((f) => b.u32(f.length)); })),
+            fullBox("stsc", 0, 0, fields((b) => { b.u32(1); b.u32(1); b.u32(n); b.u32(1); })),
+            fullBox("stco", 0, 0, fields((b) => { b.u32(1); b.u32(offset + videoBytes); })));
+        const aminf = box("minf", fullBox("smhd", 0, 0, new Uint8Array(4)),
+                          box("dinf", fullBox("dref", 0, 0, fields((b) => b.u32(1)), fullBox("url ", 0, 1))), astbl);
+        const amdia = box("mdia",
+            fullBox("mdhd", 0, 0, fields((b) => { b.u32(0); b.u32(0); b.u32(audio.rate); b.u32(samplesTotal); b.u16(0x55c4); b.u16(0); })),
+            fullBox("hdlr", 0, 0, fields((b) => { b.u32(0); b.ascii("soun"); b.push(new Uint8Array(12)); b.ascii("Kaint\0"); })), aminf);
+        const atkhd = fullBox("tkhd", 0, 3, fields((b) => {
+            b.u32(0); b.u32(0); b.u32(2); b.u32(0); b.u32(Math.min(ms, total)); b.push(new Uint8Array(8)); b.u16(0); b.u16(1); b.u16(0x100); b.u16(0);
+            b.push(matrix()); b.u32(0); b.u32(0);
+        }));
+        return box("moov", mvhd, box("trak", tkhd, mdia), box("trak", atkhd, amdia));
     };
     const moovSize = moovFor(0).length;
     const moov = moovFor(ftyp.length + moovSize + 8);
+    const audioBytes = audio ? audio.frames.reduce((a, f) => a + f.length, 0) : 0;
     const out = new Bytes();
     out.push(ftyp);
     out.push(moov);
-    out.u32(8 + samples.reduce((a, s) => a + s.data.length, 0));
+    out.u32(8 + videoBytes + audioBytes);
     out.ascii("mdat");
     for (const s of samples)
         out.push(s.data);
+    for (const f of audio?.frames || [])
+        out.push(f);
     return out.result();
 }
 
 // 'repeat': cuántas veces seguidas va la animación (un vídeo no se repite solo); 'scale': aumento
 // sin suavizar; 'quality': 0 alta, 1 media, 2 baja; 'background': el color de lo transparente.
-export async function encodeMp4(all, { repeat = 1, scale = 1, quality = 0, background = "#ffffff", onProgress = null } = {}) {
+// 'audio': la mezcla de las pistas de audio (AudioBuffer), comprimida en AAC si el navegador puede.
+export async function encodeMp4(all, { repeat = 1, scale = 1, quality = 0, background = "#ffffff", onProgress = null, audio = null } = {}) {
     const frames = visible(all);
     if (!frames.length)
         throw new Error("No hay fotogramas que guardar.");
@@ -344,12 +433,13 @@ export async function encodeMp4(all, { repeat = 1, scale = 1, quality = 0, backg
         throw new Error("El navegador no devolvió el vídeo completo.");
     // (Sin fotogramas B: salen en el mismo orden en que entran.)
     samples.forEach((s, i) => (s.duration = durations[i]));
-    return muxMp4(samples, w, h, avcc);
+    return muxMp4(samples, w, h, avcc, audio ? await encodeAac(audio) : null);
 }
 
 // Sin WebCodecs: el vídeo se graba mientras se reproduce la animación (tarda lo que dura), en el
 // formato que el navegador sepa grabar (MP4 o WebM). { blob, ext }.
-export async function recordVideo(all, { repeat = 1, scale = 1, background = "#ffffff", onProgress = null } = {}) {
+// 'audio': la mezcla de las pistas de audio (AudioBuffer), que suena mientras se graba.
+export async function recordVideo(all, { repeat = 1, scale = 1, background = "#ffffff", onProgress = null, audio = null } = {}) {
     const frames = visible(all);
     if (!frames.length || typeof MediaRecorder === "undefined")
         throw new Error("El navegador no puede grabar vídeo.");
@@ -358,7 +448,19 @@ export async function recordVideo(all, { repeat = 1, scale = 1, background = "#f
     const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
     if (!type)
         throw new Error("El navegador no puede grabar vídeo.");
-    const stream = canvas.captureStream(60), recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: w * h * 8 });
+    const stream = canvas.captureStream(60);
+    // El audio, a la grabación (sin oírse).
+    let audioCtx = null, source = null;
+    if (audio && typeof AudioContext !== "undefined") {
+        audioCtx = new AudioContext({ sampleRate: audio.sampleRate });
+        const dest = audioCtx.createMediaStreamDestination();
+        source = audioCtx.createBufferSource();
+        source.buffer = audio;
+        source.connect(dest);
+        for (const t of dest.stream.getAudioTracks())
+            stream.addTrack(t);
+    }
+    const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: w * h * 8 });
     const parts = [];
     recorder.ondataavailable = (e) => e.data.size && parts.push(e.data);
     const done = new Promise((resolve) => (recorder.onstop = resolve));
@@ -369,6 +471,7 @@ export async function recordVideo(all, { repeat = 1, scale = 1, background = "#f
     };
     draw(frames[0]);
     recorder.start();
+    source?.start();
     const total = frames.length * Math.max(1, repeat);
     let n = 0;
     for (let r = 0; r < Math.max(1, repeat); ++r)
@@ -380,5 +483,7 @@ export async function recordVideo(all, { repeat = 1, scale = 1, background = "#f
     recorder.stop();
     await done;
     stream.getTracks().forEach((t) => t.stop());
+    source?.stop();
+    audioCtx?.close();
     return { blob: new Blob(parts, { type: type.split(";")[0] }), ext: type.includes("mp4") ? "mp4" : "webm" };
 }

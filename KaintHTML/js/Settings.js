@@ -43,6 +43,8 @@ const defaults = {
     // Capas: al arrastrar una, se mueve en la lista con el ratón; con esto, se queda en su sitio
     // y una línea marca dónde quedará.
     layerDropLine: false,
+    // El candado (bloquear la transparencia) entre los botones de Capas; si no, en su clic derecho.
+    layerLockButton: false,
     // Cursores con la herramienta en miniatura al lado: el puntero del sistema o el de Kaint.
     systemPointer: true,
     // Aspecto de la interfaz: 0, el de Kaint; 1, la recreación de Paint.NET (solo lo visual).
@@ -78,6 +80,9 @@ const defaults = {
     // equipo, ocultas en el teléfono).
     touchRotate: true,
     scrollbars: null,
+    // Y cada una por separado (Configuración > Lienzo).
+    scrollbarH: true,
+    scrollbarV: true,
     // Ventanas flotantes y diálogos: 0, como los de paint.js (Windows 10); 1, compactos. Grosor
     // del borde en píxeles.
     panelStyle: 0,
@@ -151,7 +156,15 @@ const defaults = {
 
 function load() {
     try {
-        return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+        const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+        // 1.2.1: lo de fábrica que antes era otra cosa y quedaba guardado sin haberlo elegido (mover
+        // las capas en la lista al arrastrarlas y las reglas de Paint.NET) pasa a lo de ahora una vez.
+        if (!saved.defaults121) {
+            delete saved.layerDropLine;
+            delete saved.rulerStyle;
+            saved.defaults121 = true;
+        }
+        return { ...defaults, ...saved };
     } catch {
         return { ...defaults };
     }

@@ -26,7 +26,22 @@ protected:
     bool m_released = false;
 };
 
+// Un paso del editor de GIF (el cambio de verdad va de hijo): el historial del editor de GIF solo
+// muestra estos y el de las imágenes, los demás.
+class GifEditCommand : public QUndoCommand {
+public:
+    explicit GifEditCommand(const QString& text)
+        : QUndoCommand(text)
+    {
+    }
+};
+
 namespace History {
+// Si el paso es del editor de GIF.
+inline bool isGifStep(const QUndoCommand* cmd)
+{
+    return dynamic_cast<const GifEditCommand*>(cmd) != nullptr;
+}
 // Memoria de un paso (con sus hijos, p. ej. los de una macro).
 qint64 memory(const QUndoCommand* cmd);
 // Memoria de todos los pasos de la pila.

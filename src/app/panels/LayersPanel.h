@@ -22,6 +22,9 @@ public:
     // Al arrastrar una capa: con la línea, la fila se queda en su sitio y una línea marca dónde
     // quedará; si no, la fila sigue al ratón y las demás le van dejando sitio.
     void setDropLineMode(bool on) { m_dropLineMode = on; }
+    // El botón del candado (bloquear la transparencia) en la fila de botones. Oculto, la opción sigue
+    // en el menú del clic derecho de cada capa (y en el menú Capas).
+    void setLockButtonVisible(bool on);
 
 signals:
     void visibilityToggled(int layerIndex);
@@ -48,7 +51,11 @@ private:
     // Desliza la fila de 'layer' desde 'offset' píxeles hasta su sitio (al soltarla).
     void glideRow(const Layer* layer, qreal offset);
 
+    void showLayerMenu(const QPoint& globalPos);
+
     QPointer<Document> m_doc;
+    QList<QAction*> m_actions;
+    class QToolButton* m_lockButton = nullptr;
     QListWidget* m_list;
     QTimer m_thumbTimer;
     QSet<int> m_dirty;

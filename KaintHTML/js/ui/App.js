@@ -93,6 +93,61 @@ function extraVisible(e) {
     return Settings.get("photocraftExtras") === true;
 }
 
+// Los iconos de la esquina de arriba a la derecha de Paint.NET 5 (como los de Kaint de escritorio):
+// cada figura con un contorno blanco grueso alrededor. SVG de 20 × 20.
+function pdnCornerIcon(name) {
+    const halo = (shape, w = 2.8) => shape.replace(/^<(\w+)/, `<$1 fill="#fff" stroke="#fff" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`);
+    let body = "";
+    if (name === "tools") {
+        const handle = '<rect x="1.4" y="8.65" width="12.2" height="2.7" rx="1.2"/>';
+        const head = '<path d="M11.6 3.8H16.2V13.6H17V16.6H10.8V13.6H11.6Z"/>';
+        body = `<defs><linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8b87c"/><stop offset="1" stop-color="#b97f45"/></linearGradient>
+            <linearGradient id="s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9d0d8"/><stop offset="1" stop-color="#747e8a"/></linearGradient></defs>
+            <g transform="rotate(-45 10 10)">${halo(handle)}${halo(head)}
+            <rect x="1.4" y="8.65" width="12.2" height="2.7" rx="1.2" fill="url(#w)" stroke="#6e4622" stroke-width=".9"/>
+            <path d="M11.6 3.8H16.2V13.6H17V16.6H10.8V13.6H11.6Z" fill="url(#s)" stroke="#343b44" stroke-width=".9" stroke-linejoin="miter"/></g>`;
+    } else if (name === "history") {
+        const ring = "M3.61 13.71A7.6 7.6 0 1 0 5.13 5.13";
+        const head = '<path d="M1.53 5.73L6.53 2.93L6.13 8.73Z"/>';
+        body = `<path d="${ring}" fill="none" stroke="#fff" stroke-width="5.2"/>${halo('<circle cx="10.5" cy="10.5" r="6.4"/>', 3)}${halo(head, 3)}
+            <circle cx="10.5" cy="10.5" r="6.4" fill="#fbfbfb" stroke="#3a4048" stroke-width=".9"/>
+            <path d="${ring}" fill="none" stroke="#1e78d2" stroke-width="2.2"/><path d="M1.53 5.73L6.53 2.93L6.13 8.73Z" fill="#1e78d2"/>
+            <path d="M10.5 10.5V6.5M10.5 10.5L13.5 12.1" stroke="#2a2f36" stroke-width="1.5" stroke-linecap="round"/>`;
+    } else if (name === "layers") {
+        const fills = ["#5e9bd8", "#8fbfec", "#d4e9fc"];
+        for (let i = 0; i < 3; i++) {
+            const y = 4.6 * (2 - i);
+            const sheet = `<path d="M10 ${1.8 + y}L18.2 ${5.6 + y}L10 ${9.4 + y}L1.8 ${5.6 + y}Z"/>`;
+            body += halo(sheet, 2.6) + sheet.replace("<path", `<path fill="${fills[i]}" stroke="#1f4f86" stroke-width=".9"`);
+        }
+    } else if (name === "colors") {
+        const colors = ["#f24c3d", "#f79a2a", "#f5d32e", "#4cb84f", "#2f8ce0", "#8e5bd4"];
+        const at = (deg) => `${(10 + 7.8 * Math.cos((deg * Math.PI) / 180)).toFixed(2)} ${(10 - 7.8 * Math.sin((deg * Math.PI) / 180)).toFixed(2)}`;
+        body = halo('<circle cx="10" cy="10" r="7.8"/>', 3);
+        colors.forEach((c, i) => {
+            const a0 = 90 - 60 * i, a1 = a0 - 60;
+            body += `<path d="M10 10L${at(a0)}A7.8 7.8 0 0 1 ${at(a1)}Z" fill="${c}" stroke="#fff" stroke-width=".8"/>`;
+        });
+        body += '<circle cx="10" cy="10" r="7.8" fill="none" stroke="#3a4048" stroke-width=".9"/><circle cx="10" cy="10" r="2.4" fill="#fff"/>';
+    } else if (name === "settings") {
+        const pts = [];
+        for (let i = 0; i < 8; i++)
+            for (const [r, da] of [[6.3, -15], [8.6, -8.5], [8.6, 8.5], [6.3, 15]]) {
+                const t = ((i * 45 + da) * Math.PI) / 180;
+                pts.push(`${(10 + r * Math.cos(t)).toFixed(2)},${(10 + r * Math.sin(t)).toFixed(2)}`);
+            }
+        const gear = `<polygon points="${pts.join(" ")}"/>`;
+        body = `<defs><linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b4bbc3"/><stop offset="1" stop-color="#6c747e"/></linearGradient></defs>
+            ${halo(gear, 2.6)}${gear.replace("<polygon", '<polygon fill="url(#m)" stroke="#343b44" stroke-width=".9" stroke-linejoin="round"')}
+            <circle cx="10" cy="10" r="2.9" fill="#fff" stroke="#343b44" stroke-width=".9"/>`;
+    } else {
+        body = `<defs><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a9ce8"/><stop offset="1" stop-color="#1a5fb4"/></linearGradient></defs>
+            ${halo('<circle cx="10" cy="10" r="7.8"/>')}<circle cx="10" cy="10" r="7.8" fill="url(#b)" stroke="#144580" stroke-width=".9"/>
+            <text x="10" y="14.6" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="13" fill="#fff">?</text>`;
+    }
+    return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">${body}</svg>`)}`;
+}
+
 export class App extends EventTarget {
     constructor() {
         super();
@@ -699,6 +754,7 @@ export class App extends EventTarget {
             strip.replaceChildren(...tabs);
         for (const doc of fresh)
             this.updateTab(doc, true);
+        this.decorateGroups();
         strip.updateArrows();
         // La imagen actual, a la vista.
         this.doc?.tab?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -715,17 +771,149 @@ export class App extends EventTarget {
                 e.preventDefault();
                 this.closeDocument(doc);
             } else if (e.button === 0) {
+                // Ctrl+clic (o Mayús+clic): desde la imagen actual hasta esta, para agruparlas con el «+».
+                if ((e.ctrlKey || e.metaKey || e.shiftKey) && this.doc && doc !== this.doc) {
+                    e.preventDefault();
+                    this.stripRange = [this.doc, doc];
+                    this.decorateGroups();
+                    return;
+                }
+                this.stripRange = null;
                 this.setCurrent(doc);
-                this.startTabDrag(strip, tab, doc, e);
+                this.decorateGroups();
+                // Las de un grupo contraído no se arrastran (se separarían de las suyas, ocultas).
+                if (!doc.group?.collapsed)
+                    this.startTabDrag(strip, tab, doc, e);
             }
         });
         tab.addEventListener("contextmenu", (e) => {
             e.preventDefault();
-            popupMenu([this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("close"),
+            popupMenu([...this.groupMenu(doc), this.actions.get("save"), this.actions.get("saveAs"), "-", this.actions.get("close"),
                        this.actions.get("closeAll")], e.clientX, e.clientY);
         });
         tab.append(close);
         return tab;
+    }
+
+    // --- Grupos de imágenes: Ctrl+clic elige desde la imagen actual hasta otra; el «+» las agrupa. Un
+    // grupo lleva un nombre y el color de su borde, y se contrae a su primera imagen (un clic en su
+    // nombre) para ahorrar sitio en la tira.
+    groupRange() {
+        const [a, b] = this.stripRange || [];
+        const i = this.docs.indexOf(a), j = this.docs.indexOf(b);
+        if (i < 0 || j < 0 || i === j)
+            return;
+        const colors = ["#e74c3c", "#f39c12", "#27ae60", "#2980b9", "#8e44ad", "#e91e63", "#16a085", "#7f8c8d"];
+        this.groupCount = (this.groupCount || 0) + 1;
+        const group = { name: tr("Grupo %1", this.groupCount), color: colors[(this.groupCount - 1) % colors.length], collapsed: false };
+        for (let k = Math.min(i, j); k <= Math.max(i, j); k++)
+            this.docs[k].group = group;
+        this.stripRange = null;
+        this.decorateGroups();
+    }
+
+    groupMenu(doc) {
+        const range = this.stripRange && this.stripRange.includes(doc) ? [{ text: tr("Agrupar las imágenes elegidas"), icon: "list-add",
+                                                                             run: () => this.groupRange() }, "-"] : [];
+        const g = doc.group;
+        if (!g)
+            return range;
+        const refresh = () => this.decorateGroups();
+        return [...range,
+            { text: g.collapsed ? tr("Expandir el grupo") : tr("Contraer el grupo"), run: () => { g.collapsed = !g.collapsed; refresh(); } },
+            { text: tr("Cambiar el nombre del grupo…"), run: async () => {
+                const name = await promptText(tr("Grupo de imágenes"), tr("Nombre del grupo:"), g.name);
+                if (name?.trim()) {
+                    g.name = name.trim();
+                    refresh();
+                }
+            } },
+            { text: tr("Color del borde del grupo…"), run: () => {
+                const input = el("input", { type: "color", value: g.color, style: { position: "fixed", left: "-100px", top: "0" } });
+                document.body.append(input);
+                input.addEventListener("input", () => { g.color = input.value; refresh(); });
+                input.addEventListener("change", () => input.remove());
+                input.click();
+            } },
+            { text: tr("Quitar del grupo"), run: () => { doc.group = null; refresh(); } },
+            { text: tr("Desagrupar"), run: () => { for (const d of this.docs) if (d.group === g) d.group = null; refresh(); } },
+            "-"];
+    }
+
+    // Las clases y marcas de los grupos y de la selección de varias en las pestañas.
+    decorateGroups() {
+        const docs = this.docs;
+        const count = new Map();
+        for (const d of docs)
+            if (d.group)
+                count.set(d.group, (count.get(d.group) || 0) + 1);
+        for (const d of docs)
+            if (d.group && count.get(d.group) < 2)
+                d.group = null;
+        // La imagen actual dentro de un grupo contraído: se expande para verla.
+        const g0 = this.doc?.group;
+        if (g0?.collapsed && docs[docs.indexOf(this.doc) - 1]?.group === g0)
+            g0.collapsed = false;
+        let range = null;
+        if (this.stripRange) {
+            const i = docs.indexOf(this.stripRange[0]), j = docs.indexOf(this.stripRange[1]);
+            if (i >= 0 && j >= 0 && i !== j)
+                range = [Math.min(i, j), Math.max(i, j)];
+            else
+                this.stripRange = null;
+        }
+        const hidden = (i) => !!docs[i].group?.collapsed && docs[i - 1]?.group === docs[i].group;
+        let plusAt = -1;
+        if (range) {
+            const shown = [];
+            for (let i = range[0]; i <= range[1]; i++)
+                if (!hidden(i))
+                    shown.push(i);
+            plusAt = shown[Math.floor(shown.length / 2)] ?? -1;
+        }
+        docs.forEach((d, i) => {
+            const t = d.tab;
+            if (!t)
+                return;
+            const g = d.group;
+            const prev = !!g && docs[i - 1]?.group === g, next = !!g && docs[i + 1]?.group === g;
+            t.classList.toggle("grouped", !!g);
+            t.classList.toggle("group-first", !!g && !prev);
+            t.classList.toggle("group-last", !!g && (!next || g.collapsed));
+            t.classList.toggle("group-hidden", hidden(i));
+            t.classList.toggle("group-collapsed", !!g?.collapsed);
+            t.classList.toggle("in-range", !!range && i >= range[0] && i <= range[1]);
+            if (g)
+                t.style.setProperty("--group-color", g.color);
+            else
+                t.style.removeProperty("--group-color");
+            t.querySelector(":scope > .group-chip")?.remove();
+            t.querySelector(":scope > .group-plus")?.remove();
+            if (g && !prev) {
+                const members = count.get(g) || 0;
+                const chip = el("div", { className: "group-chip", textContent: g.collapsed ? `${g.name} (${members})` : g.name,
+                                         title: g.collapsed ? tr("Expandir el grupo") : tr("Contraer el grupo") });
+                chip.addEventListener("pointerdown", (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    g.collapsed = !g.collapsed;
+                    if (g.collapsed && this.doc?.group === g && docs.find((x) => x.group === g) !== this.doc)
+                        this.setCurrent(docs.find((x) => x.group === g));
+                    this.decorateGroups();
+                });
+                t.append(chip);
+            }
+            if (i === plusAt) {
+                const plus = el("div", { className: "group-plus", textContent: "+", title: tr("Agrupar las imágenes elegidas") });
+                plus.addEventListener("pointerdown", (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this.groupRange();
+                });
+                t.append(plus);
+            }
+        });
+        document.getElementById("image-strip")?.updateArrows?.();
     }
 
     // Tamaño máximo de las miniaturas. A lo alto de toda la fila, como en Kaint de escritorio y
@@ -846,14 +1034,20 @@ export class App extends EventTarget {
     // animación para dejarle sitio; al soltarla, la imagen pasa a ese lugar.
     startTabDrag(strip, tab, doc, down) {
         const startX = down.clientX;
-        const tabs = () => [...strip.querySelectorAll(".image-tab")];
+        // Solo las que se ven (las de un grupo contraído, salvo la primera, están ocultas).
+        const tabs = () => [...strip.querySelectorAll(".image-tab:not(.group-hidden)")];
         let dragging = false, from = -1, to = -1, slot = 0, grabOffset = 0, autoScroll = 0, lastX = startX;
         const place = () => {
             const list = tabs();
             const box = strip.getBoundingClientRect();
             const scrolled = strip.scrollLeft;
+            // Sigue al puntero, pero como en Paint.NET no pasa de la primera ni de la última imagen ni se
+            // sale de la tira (antes seguía de largo, cortada por el borde o encima de lo de al lado).
+            const lo = Math.max(list[0].slotLeft, scrolled);
+            const hi = Math.max(lo, Math.min(list[list.length - 1].slotLeft, scrolled + strip.clientWidth - tab.offsetWidth));
+            const left = Math.min(hi, Math.max(lo, lastX - box.left + scrolled - grabOffset));
             // Dónde estaría la miniatura: el sitio cuyo centro queda más cerca del suyo.
-            const center = lastX - box.left + scrolled - grabOffset + tab.offsetWidth / 2;
+            const center = left + tab.offsetWidth / 2;
             let best = from, bestD = Infinity;
             list.forEach((t, i) => {
                 const c = t.slotLeft + t.offsetWidth / 2;
@@ -874,7 +1068,7 @@ export class App extends EventTarget {
                     dx = slot;
                 t.style.transform = dx ? `translateX(${dx}px)` : "";
             });
-            tab.style.transform = `translateX(${lastX - box.left + scrolled - grabOffset - tab.slotLeft}px)`;
+            tab.style.transform = `translateX(${left - tab.slotLeft}px)`;
         };
         const move = (e) => {
             lastX = e.clientX;
@@ -925,10 +1119,25 @@ export class App extends EventTarget {
                 t.style.transform = "";
             });
             if (to >= 0 && to !== from) {
-                const [moved] = this.docs.splice(from, 1);
-                this.docs.splice(to, 0, moved);
-                const ref = list.filter((t) => t !== tab)[to] ?? null;
-                strip.insertBefore(tab, ref);
+                // De la lista de las que se ven a la de imágenes: delante de la del sitio o, hacia la
+                // derecha, detrás (y detrás de todo su grupo si está contraído).
+                const target = this.docs.find((d) => d.tab === list[to]);
+                this.docs.splice(this.docs.indexOf(doc), 1);
+                let at = this.docs.indexOf(target);
+                if (to > from) {
+                    while (target.group?.collapsed && this.docs[at + 1]?.group === target.group)
+                        at++;
+                    at++;
+                }
+                this.docs.splice(at, 0, doc);
+                // Entre dos del mismo grupo, entra en él; lejos del suyo, lo deja.
+                const left = this.docs[at - 1]?.group, right = this.docs[at + 1]?.group;
+                if (left && left === right)
+                    doc.group = left;
+                else if (doc.group && doc.group !== left && doc.group !== right)
+                    doc.group = null;
+                strip.replaceChildren(...this.docs.map((d) => d.tab).filter(Boolean));
+                this.decorateGroups();
                 this.rememberSession();
             }
             for (const t of list) {
@@ -1383,16 +1592,23 @@ export class App extends EventTarget {
 
     createCornerButtons() {
         const box = document.getElementById("corner-buttons");
+        // Con el aspecto de Paint.NET, sus iconos (el martillo, el reloj, las hojas, la rueda, el
+        // engranaje y la ayuda, con el contorno blanco grueso); con el de Kaint, los de siempre (CSS).
+        const pdn = (b, name) => {
+            b.classList.add("pdn-icon-button");
+            b.append(el("img", { className: "pdn-corner", src: pdnCornerIcon(name), alt: "", draggable: false }));
+            return b;
+        };
         for (const id of ["tools", "history", "layers", "colors"]) {
             const b = this.actionButton(id);
             b.dataset.action = id;
-            box.appendChild(b);
+            box.appendChild(pdn(b, id));
         }
         box.appendChild(el("span", { className: "gap" }));
-        box.appendChild(this.actionButton("settings"));
+        box.appendChild(pdn(this.actionButton("settings"), "settings"));
         // Ayuda, como la de paint.js: documentación y web; donar, foro, tutoriales, complementos y
         // comentarios; acerca de.
-        const help = el("button", { className: "tbutton", title: tr("Ayuda") }, [icon("help-contents", 16)]);
+        const help = pdn(el("button", { className: "tbutton", title: tr("Ayuda") }, [icon("help-contents", 16)]), "help");
         help.addEventListener("click", () => {
             const r = help.getBoundingClientRect();
             const a = (id) => this.actions.get(id);
@@ -1438,7 +1654,9 @@ export class App extends EventTarget {
         // Avance de la vista previa de un efecto (como la barra de Kaint): solo mientras calcula.
         this.effectProgress = el("progress", { className: "effect-progress", max: 1, value: 0 });
         this.effectProgress.hidden = true;
-        bar.append(this.hintIcon, this.hintLabel, this.effectProgress, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
+        // En el editor de GIF solo su icono y su nombre (lo demás es del lienzo; ver la hoja de estilo).
+        const gifStatus = el("span", { className: "gif-status" }, [icon("media-playback-start", 16), tr("Editor de GIF")]);
+        bar.append(gifStatus, this.hintIcon, this.hintLabel, this.effectProgress, item("status-selection", this.selLabel, tr("Tamaño de la selección")),
                    item("status-cursor", this.posLabel, tr("Posición del cursor"), "cursor-position"), this.createUnitButton(),
                    this.zoomBox, presets, this.zoomFitButton = this.actionButton("zoomFit"), this.actionButton("zoomOut"), this.zoomSlider,
                    this.actionButton("zoomIn"));
@@ -2087,6 +2305,9 @@ export class App extends EventTarget {
         doc.fileHandle = handle;
         doc.fileName = name;
         doc.markSaved();
+        // Kaint.APK: también en las imágenes recientes de la bienvenida.
+        if (window.KaintAndroid)
+            import("./Welcome.js").then(({ Recents }) => Recents.remember(doc));
         // (La pestaña, sin la estrella de los cambios y con el nombre nuevo, al momento.)
         this.updateTab(doc, true);
         this.rebuildTabs();
@@ -2258,6 +2479,10 @@ export class App extends EventTarget {
         layer.ctx.drawImage(sel.clipCanvas(AppState.selectionAntialias()), 0, 0);
         layer.ctx.restore();
         const after = layer.ctx.getImageData(r.x, r.y, r.w, r.h);
+        // Alpha-Lock: borrar no cambia el alfa, así que con la transparencia bloqueada no borra nada
+        // (antes borraba igual).
+        if (layer.alphaLock)
+            after.data.set(before.data);
         const none = Selection.none(doc.width, doc.height);
         const apply = (data, s) => {
             layer.ctx.putImageData(data, r.x, r.y);

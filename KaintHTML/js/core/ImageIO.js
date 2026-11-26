@@ -5,6 +5,7 @@ import { decodeJxr, decodeWithMagick } from "./ExternalCodecs.js";
 import { Document, Layer } from "./Document.js";
 import { context, createCanvas, OraNames } from "./Raster.js";
 import { unzip, zip } from "./Zip.js";
+import { clipFromJson, clipToJson } from "./Audio.js";
 import * as Codecs from "./Codecs.js";
 import * as Motion from "./Motion.js";
 import { iccFromImage, isSrgb, readIcc } from "./ColorProfiles.js";
@@ -289,6 +290,8 @@ async function openOra(file) {
         layer.opacity = Math.round(parseFloat(node.getAttribute("opacity") ?? "1") * 255);
         layer.blend = blendFromOra[node.getAttribute("composite-op")] || "normal";
         layer.alphaLock = node.getAttribute("kaint-alpha-lock") === "true";
+        layer.track = Math.max(0, Math.min(63, parseInt(node.getAttribute("kaint-gif-track") || "0", 10) || 0));
+        layer.gap = Math.max(0, parseInt(node.getAttribute("kaint-gif-gap") || "0", 10) || 0);
         try {
             const motion = node.getAttribute("kaint-motion");
             if (motion)
@@ -300,6 +303,12 @@ async function openOra(file) {
         doc.layers.push(new Layer(width, height, tr("Fondo")));
     doc.active = doc.layers.length - 1;
     doc.fileName = file.name;
+    // Las pistas de audio del editor de GIF.
+    try {
+        const audio = files.get("kaint-audio.json");
+        if (audio)
+            doc.audioClips = JSON.parse(new TextDecoder().decode(audio)).map((o) => files.get(o.src) && clipFromJson(o, new Uint8Array(files.get(o.src)))).filter(Boolean);
+    } catch {}
     return doc;
 }
 
@@ -315,7 +324,52 @@ export function flattenedImage(doc) {
 
 // Fotogramas de un GIF animado: las capas visibles (y las ocultas, marcadas, si se piden), la de
 // abajo primero, cada una con su opacidad (ImageIO::animationFrames de Kaint).
+// Con varias pistas (editor de GIF), como trackFrames de Kaint: en cada momento, lo de cada pista
+// uno encima de otro (las de número más alto, arriba); un fotograma cada vez que cambia algo.
+function trackFrames(doc, defaultDelay, withHidden) {
+    const spans = [], ends = [], cuts = new Set([0]);
+    for (const layer of doc.layers) {
+        const k = layer.track || 0, delay = Math.max(20, Codecs.delayFromName(layer.name, defaultDelay));
+        const start = (ends[k] || 0) + Math.max(0, layer.gap || 0);
+        ends[k] = start + delay;
+        if (!layer.visible && !withHidden)
+            continue;
+        spans.push({ layer, k, start, end: start + delay });
+        cuts.add(start).add(start + delay);
+        if (layer.motion && Motion.isAnimated(layer.motion)) {
+            const step = Math.max(10, layer.motion.step || 50);
+            for (let t = start + step; t < start + delay; t += step)
+                cuts.add(t);
+        }
+    }
+    spans.sort((a, b) => a.k - b.k);
+    const times = [...cuts].sort((a, b) => a - b), frames = [];
+    let lastKey = "";
+    for (let c = 0; c + 1 < times.length; c++) {
+        const t = times[c], canvas = createCanvas(doc.width, doc.height), ctx = context(canvas);
+        const shown = spans.filter((s) => t >= s.start && t < s.end);
+        for (const s of shown) {
+            ctx.globalAlpha = s.layer.opacity / 255;
+            ctx.drawImage(s.layer.motion && !Motion.isEmpty(s.layer.motion) ? Motion.render(s.layer.canvas, Motion.sample(s.layer.motion, t - s.start)) : s.layer.canvas, 0, 0);
+        }
+        // Los que no cambian respecto al anterior se juntan (dura más).
+        const key = shown.map((s) => `${s.layer.id}:${s.layer.motion && Motion.isAnimated(s.layer.motion) ? t - s.start : ""}`).join("|");
+        if (frames.length && key === lastKey) {
+            frames[frames.length - 1].delay += times[c + 1] - t;
+            continue;
+        }
+        lastKey = key;
+        frames.push({ width: doc.width, height: doc.height, data: ctx.getImageData(0, 0, doc.width, doc.height).data, delay: times[c + 1] - t, hidden: false });
+    }
+    return frames;
+}
+
 export function animationFrames(doc, defaultDelay, withHidden = false) {
+    // Varias pistas del editor de GIF: se combinan.
+    if (doc.layers.some((l) => l.track > 0 || l.gap > 0)) {
+        const combined = trackFrames(doc, defaultDelay, withHidden);
+        return combined.length ? combined : [{ ...flattenedImage(doc), delay: defaultDelay }];
+    }
     const frames = [];
     for (const layer of doc.layers) {
         if (!layer.visible && !withHidden)
@@ -427,10 +481,21 @@ async function encodeOra(doc) {
         xml += `  <layer name="${escape(layer.name)}" src="${src}" x="0" y="0" opacity="${(layer.opacity / 255).toFixed(3)}"` +
                ` visibility="${layer.visible ? "visible" : "hidden"}" composite-op="${OraNames[layer.blend]}"` +
                (layer.alphaLock ? ` kaint-alpha-lock="true"` : "") +
+               (layer.track > 0 ? ` kaint-gif-track="${layer.track}"` : "") +
+               (layer.gap > 0 ? ` kaint-gif-gap="${layer.gap}"` : "") +
                (layer.motion ? ` kaint-motion="${escape(JSON.stringify(layer.motion))}"` : "") + `/>\n`;
     }
     xml += " </stack>\n</image>\n";
     entries.push({ name: "stack.xml", data: enc.encode(xml) });
+    // Las pistas de audio del editor de GIF: cada archivo tal cual y, aparte, dónde va cada uno.
+    if (doc.audioClips?.length) {
+        const json = doc.audioClips.map((c, k) => {
+            const src = `data/audio${k}.${c.suffix || "bin"}`;
+            entries.push({ name: src, data: c.data });
+            return clipToJson(c, src);
+        });
+        entries.push({ name: "kaint-audio.json", data: enc.encode(JSON.stringify(json)) });
+    }
     const flat = doc.flattened();
     entries.push({ name: "mergedimage.png", data: await bytes(await canvasBlob(flat)) });
     const thumb = document.createElement("canvas");

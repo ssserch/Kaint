@@ -3681,10 +3681,29 @@ int main(int argc, char** argv)
             CHECK(gif->frameCount() == layersBefore + 1 && gif->frameDelay(1) == 250);
             gif->moveFrame(0, gif->frameCount() - 1);
             CHECK(gif->frameDelay(gif->frameCount() - 1) == 250);
-            const QList<int> starts = gif->frameStarts();
-            CHECK(starts.size() == gif->frameCount() + 1 && starts.last() >= 500);
-            gif->seek(starts[1]);
+            CHECK(gif->totalTime() >= 500 && gif->frameStart(1) == gif->frameEnd(0));
+            gif->seek(gif->frameStart(1));
             CHECK(gif->selectedFrame() == 1);
+            // Pistas: una nueva, vacía, y un fotograma movido a ella empieza en 0 y se ve encima.
+            {
+                const int before = gif->trackCount();
+                gif->addTrack();
+                CHECK(gif->trackCount() == before + 1 && gif->activeTrack() == before);
+                CHECK(gif->framesOfTrack(before).isEmpty());
+                // Un fotograma llevado a la pista nueva más adelante: empieza ahí (con espacio delante).
+                gif->placeFrame(gif->frameCount() - 1, before, 300);
+                const QList<int> moved = gif->framesOfTrack(before);
+                CHECK(moved.size() == 1 && gif->frameStart(moved.first()) == 300);
+                current->undoStack()->undo();
+            }
+            // El punto clave global pone todos los valores en el cabezal (y quitarlo, los quita).
+            gif->selectFrame(0);
+            gif->toggleGlobalKey();
+            CHECK(gif->hasKeyAtPlayhead() && gif->motion(0).tracks[Motion::Opacity].animated());
+            gif->toggleGlobalKey();
+            CHECK(!gif->hasKeyAtPlayhead() && gif->motion(0).isEmpty());
+            current->undoStack()->undo();
+            current->undoStack()->undo();
             CHECK(current->undoStack()->index() == stepsBefore + 3);
             if (current->undoStack()->index() != stepsBefore + 3)
                 std::printf("pasos: %d -> %d (índice %d)\n", stepsBefore, int(current->undoStack()->count()), int(current->undoStack()->index()));

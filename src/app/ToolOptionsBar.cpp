@@ -1,4 +1,5 @@
 #include "app/ToolOptionsBar.h"
+#include "core/effects/Effect.h"
 
 #include "app/widgets/BrushAdvanced.h"
 
@@ -163,6 +164,8 @@ bool ToolOptionsEditor::groupApplies(const QString& key, const ToolSettings& s)
     // «Avanzado…», solo con las opciones avanzadas del pincel activadas (Configuración).
     if (key == QLatin1String("advanced"))
         return s.advancedBrush;
+    if (key == QLatin1String("movewarp") || key == QLatin1String("movesnap"))
+        return Effects::extrasEnabled();
     return true;
 }
 
@@ -195,6 +198,7 @@ QWidget* ToolOptionsEditor::steppers(QWidget* inner, const std::function<void(in
     l->setSpacing(1);
     auto button = [&](int dir, const QString& tip) {
         auto* b = new QToolButton(w);
+        b->setObjectName(QStringLiteral("OptionsStepper"));
         b->setIcon(Icons::stepper(dir > 0));
         b->setAutoRaise(true);
         b->setAutoRepeat(true);
@@ -470,6 +474,27 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
         update([v](ToolSettings& s) { s.moveInterpolation = Resample::Interpolation(v); });
     };
     add(QStringLiteral("interp"), Tool::OptInterpolation, Move, {label(tr("Muestreo:")), m_interpolation});
+    // Redimensionar o Deformar (funciones de PhotoCraft): con Deformar, cada esquina se mueve sola y
+    // pone lo seleccionado en perspectiva.
+    m_moveWarp = new ChoiceButton(tr("Esquinas"), parent);
+    m_moveWarp->addChoice(Icons::theme({"transform-scale"}), tr("Redimensionar"), 0,
+                          tr("Una esquina cambia el tamaño de lo seleccionado, como en Paint.NET."));
+    m_moveWarp->addChoice(Icons::theme({"transform-shear-left", "transform-scale"}), tr("Deformar"), 1,
+                          tr("Cada esquina se mueve sola y pone lo seleccionado en perspectiva."));
+    m_moveWarp->setShowText(true);
+    m_moveWarp->onChosen = [update](int v) { update([v](ToolSettings& s) { s.moveWarp = v == 1; }); };
+    add(QStringLiteral("movewarp"), Tool::OptInterpolation, Move, {m_moveWarp});
+    // Snap (funciones de PhotoCraft): el imán, en las dos herramientas Mover; apagado de fábrica.
+    m_moveSnap = new QToolButton(parent);
+    m_moveSnap->setIcon(Icons::magnet());
+    m_moveSnap->setText(tr("Ajustar"));
+    m_moveSnap->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_moveSnap->setToolTip(tr("Ajustar: al mover, los bordes y el centro se pegan a los del lienzo y de las demás capas "
+                              "(con Ctrl, se mueve libre)"));
+    m_moveSnap->setCheckable(true);
+    m_moveSnap->setAutoRaise(true);
+    connect(m_moveSnap, &QToolButton::toggled, this, [update](bool on) { update([on](ToolSettings& s) { s.moveSnap = on; }); });
+    add(QStringLiteral("movesnap"), Tool::OptInterpolation | Tool::OptMoveSelectionQuality, Move, {m_moveSnap});
 
     m_gamma = new ChoiceButton(tr("Gamma"), parent);
     m_gamma->addChoice(Icons::gamma(true), tr("Gamma corregido"), 1,
@@ -677,11 +702,11 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
 
     // --- Las herramientas de PhotoCraft -----------------------------------------
     // Lazo magnético: anchura de detección, contraste y frecuencia (como en Photoshop).
-    m_magneticWidth = new BarSlider(1, 256, tr(" px"), parent);
+    // La anchura, un número que se escribe o se elige de la lista, con − y + (como el tamaño del pincel).
+    static const QList<double> widthPresets{1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 64, 80, 100, 128, 160, 200, 256};
+    m_magneticWidth = numberCombo(widthPresets, 1, 256, 0, [update](double v) { update([v](ToolSettings& s) { s.magneticWidth = int(v); }); });
     m_magneticWidth->setToolTip(tr("Anchura de detección: el borde solo sigue los bordes que estén así de cerca del puntero "
                                    "([ y ] para cambiarla)"));
-    connect(m_magneticWidth, &BarSlider::valueChanged, this,
-            [update](int v) { update([v](ToolSettings& s) { s.magneticWidth = v; }); });
     m_magneticContrast = new BarSlider(1, 100, QStringLiteral("%"), parent);
     m_magneticContrast->setToolTip(tr("Contraste: los saltos más débiles no cuentan como bordes"));
     connect(m_magneticContrast, &BarSlider::valueChanged, this,
@@ -691,7 +716,11 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     connect(m_magneticFrequency, &BarSlider::valueChanged, this,
             [update](int v) { update([v](ToolSettings& s) { s.magneticFrequency = v; }); });
     add(QStringLiteral("magnetic"), Tool::OptMagnetic, Select,
-        {label(tr("Anchura:")), m_magneticWidth, label(tr("Contraste:")), m_magneticContrast, label(tr("Frecuencia:")),
+        {label(tr("Anchura:")), steppers(m_magneticWidth, [this, update](int dir) {
+             const double v = stepPreset(m_model->tools().magneticWidth, dir, widthPresets);
+             update([v](ToolSettings& s) { s.magneticWidth = int(v); });
+         }),
+         label(tr("Contraste:")), m_magneticContrast, label(tr("Frecuencia:")),
          m_magneticFrequency});
 
     // Selección de objetos: el Buscador de objetos y Seleccionar sujeto.
@@ -929,13 +958,17 @@ void ToolOptionsEditor::sync()
     m_pickerSize->setCurrent(s.pickerSize);
     m_pickerAfter->setCurrent(int(s.pickerAfter));
     m_interpolation->setCurrent(int(s.moveInterpolation));
+    m_moveWarp->setCurrent(s.moveWarp ? 1 : 0);
+    {
+        const QSignalBlocker block(m_moveSnap);
+        m_moveSnap->setChecked(s.moveSnap);
+    }
     m_textRendering->setCurrent(int(s.textRendering));
     m_sampling->setCurrent(s.sampleImage ? 1 : 0);
     m_pickerSampling->setCurrent(s.pickerSampleImage ? 1 : 0);
     {
-        const QSignalBlocker b1(m_magneticWidth), b2(m_magneticContrast), b3(m_magneticFrequency), b4(m_patchStructure),
-            b5(m_patchColor);
-        m_magneticWidth->setValue(s.magneticWidth);
+        const QSignalBlocker b2(m_magneticContrast), b3(m_magneticFrequency), b4(m_patchStructure), b5(m_patchColor);
+        setNumber(m_magneticWidth, s.magneticWidth, 0);
         m_magneticContrast->setValue(s.magneticContrast);
         m_magneticFrequency->setValue(s.magneticFrequency);
         m_patchStructure->setValue(s.patchStructure);

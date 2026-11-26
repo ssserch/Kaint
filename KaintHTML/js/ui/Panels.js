@@ -463,7 +463,9 @@ export function toolsPanel(app) {
 
 // --- Historial ----------------------------------------------------------------------------
 
-export function historyPanel(app) {
+// 'filter': "image" (el de la ventana Historial: sin los pasos del editor de GIF) o "gif" (el del
+// editor de GIF: solo los suyos). El primero (la imagen nueva o abierta) sale en los dos.
+export function historyPanel(app, filter = "image") {
     const list = el("div", { className: "list history-list" });
     // Una fila por paso, que se reutiliza: antes la lista se rehacía entera (con todos sus iconos) en
     // cada paso, y con un historial largo cada trazo iba más lento.
@@ -487,6 +489,7 @@ export function historyPanel(app) {
                 row.lastChild.textContent = step.name;
             row.classList.toggle("selected", i === doc.history.index);
             row.classList.toggle("undone", i > doc.history.index);
+            row.hidden = i > 0 && !!step.gif !== (filter === "gif");
             return row;
         });
         if (wanted.length !== list.children.length || wanted.some((r, i) => list.children[i] !== r))
@@ -675,10 +678,24 @@ export function layersPanel(app, actionIds) {
         if (drag?.touch && drag.ready)
             e.preventDefault();
     }, { passive: false });
-    // Mantener pulsado no abre el menú del navegador.
+    // Mantener pulsado no abre el menú del navegador. El clic derecho en una capa la elige y abre lo de
+    // los botones (también el candado, que de fábrica no está entre ellos).
     list.addEventListener("contextmenu", (e) => {
-        if (drag?.touch)
-            e.preventDefault();
+        e.preventDefault();
+        if (drag?.touch || !app.doc)
+            return;
+        const row = e.target.closest?.(".row");
+        if (row && row.index !== undefined)
+            app.doc.setActiveIndex(row.index);
+        const entries = [];
+        for (const id of actionIds) {
+            if (id === "alphaLock" || id === "layerProps")
+                entries.push("-");
+            const a = app.actions.get(id);
+            if (a)
+                entries.push(a);
+        }
+        popupMenu(entries, e.clientX, e.clientY);
     });
     list.addEventListener("pointercancel", () => endDrag());
     const dragTo = (y) => {
@@ -754,8 +771,16 @@ export function layersPanel(app, actionIds) {
         app.moveLayerTo(row.index, layers - 1 - slot);
     });
     const buttons = el("div", { className: "panel-buttons" });
-    for (const id of actionIds)
-        buttons.appendChild(app.actionButton(id));
+    for (const id of actionIds) {
+        const b = app.actionButton(id);
+        // El candado, solo si se pide (Configuración); si no, en el clic derecho de cada capa.
+        if (id === "alphaLock") {
+            const sync = () => (b.style.display = Settings.get("layerLockButton") ? "" : "none");
+            sync();
+            window.addEventListener("kaint-settings", sync);
+        }
+        buttons.appendChild(b);
+    }
     return el("div", { style: { display: "flex", flexDirection: "column", flex: "1", minHeight: "0" } }, [list, buttons]);
 }
 

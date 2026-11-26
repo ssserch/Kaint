@@ -107,7 +107,7 @@ struct Spec {
     // la imagen y los botones de las ventanas también lo llevan.
     bool ownSelection = false;
     // Windows 8 (Metro): el marco ancho y la barra de título planos, del color de las ventanas, y sus
-    // botones (no se guarda).
+    // botones. Lo llevan sus temas y, si se elige, el personalizado (que lo guarda).
     bool metro = false;
     // Windows 7 Basic: el estilo de Windows 7 con el marco opaco, sin cristal (no se guarda).
     bool basic = false;

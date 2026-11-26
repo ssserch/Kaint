@@ -32,6 +32,11 @@ struct LayerProps {
     std::shared_ptr<const Motion::Clip> motion;
     // Bloquear la transparencia (Alpha-Lock): lo que se pinta solo cambia el color, no el alfa.
     bool alphaLock = false;
+    // Editor de GIF: la pista (capa de la línea de tiempo, como en Filmora) de este fotograma. Cada
+    // pista es una sucesión de fotogramas; las de número más alto se ven encima de las otras.
+    int track = 0;
+    // Editor de GIF: el espacio vacío (ms) en su pista antes de este fotograma (0: pegado al anterior).
+    int gap = 0;
 
     bool operator==(const LayerProps&) const = default;
 };

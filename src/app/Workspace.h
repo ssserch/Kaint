@@ -97,6 +97,7 @@ private:
     int titleInset() const;
     // Los marcos de Windows XP (Luna) y Windows 7 (cristal de Aero).
     void paintFrame(QPainter& p, bool luna);
+    void paintMetroFrame(QPainter& p);
     // Zona del área de trabajo donde puede estar la ventana (sin tapar las reglas).
     QRect area() const;
     // Con los temas de Paint.NET y el personalizado (no con el de KDE ni el clásico).

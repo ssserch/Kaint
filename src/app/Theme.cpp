@@ -1220,6 +1220,9 @@ Spec customBase(const Spec& custom)
     }
     if (custom.win7 && !custom.classic)
         return custom.dark ? windows7Dark() : windows7();
+    // Windows 8: con el color de las ventanas de Configuración, como sus temas.
+    if (custom.metro && !custom.classic)
+        return windows8(custom.dark, g_win8Color);
     return preset(custom.dark);
 }
 
@@ -1344,6 +1347,8 @@ QString webBaseName(const Spec& s)
         return QStringLiteral("xp");
     if (s.win7)
         return s.dark ? QStringLiteral("win7dark") : QStringLiteral("win7");
+    if (s.metro)
+        return s.dark ? QStringLiteral("win8dark") : QStringLiteral("win8");
     return s.dark ? QStringLiteral("dark") : QStringLiteral("light");
 }
 
@@ -1486,6 +1491,7 @@ QJsonObject toJson(const Spec& spec, bool embedImage)
         {QStringLiteral("classic"), spec.classic},
         {QStringLiteral("win7"), spec.win7},
         {QStringLiteral("xp"), spec.xp},
+        {QStringLiteral("metro"), spec.metro},
         {QStringLiteral("pixelFont"), spec.pixelFont},
         {QStringLiteral("iconSize"), spec.iconSize},
         {QStringLiteral("toolIconSize"), spec.toolIconSize},
@@ -1548,6 +1554,11 @@ Spec fromJson(const QJsonObject& json)
     s.classic = json.value(QStringLiteral("classic")).toBool(false);
     s.win7 = !s.classic && json.value(QStringLiteral("win7")).toBool(false);
     s.xp = !s.classic && !s.win7 && json.value(QStringLiteral("xp")).toBool(false);
+    // Windows 8 (también los temas de Kaint.HTML con la base «win8» o «win8dark»).
+    const QString webBase = json.value(QStringLiteral("base")).toString();
+    s.metro = !s.classic && !s.win7 && !s.xp
+              && (json.value(QStringLiteral("metro")).toBool(false) || webBase == QLatin1String("win8")
+                  || webBase == QLatin1String("win8dark"));
     s.pixelFont = json.value(QStringLiteral("pixelFont")).toBool(false);
     s.iconSize = number("iconSize", base.iconSize, 12, 48);
     s.toolIconSize = number("toolIconSize", base.toolIconSize, 12, 48);
@@ -1662,6 +1673,37 @@ FloatingPanel QAbstractItemView { background: %6; }
 )")
                .arg(css(tab), css(edge), css(line), css(s.toolBar), css(line), css(s.panel))
                .arg(css(hoverTab), css(hoverEdge));
+    // Los campos de la barra de opciones (tipo y tamaño de letra, tamaño del pincel, radio...) con el
+    // borde de Paint.NET 5: casi blanco en el tema oscuro y gris oscuro en el claro, recto, más claro
+    // bajo el puntero y azul mientras se escribe. Los menús desplegables sin campo, sin borde.
+    const QColor field = s.dark ? QColor(0xf0, 0xf0, 0xf0) : QColor(0x7a, 0x7a, 0x7a);
+    const QColor fieldHot = s.dark ? QColor(0xff, 0xff, 0xff) : QColor(0x33, 0x33, 0x33);
+    qss += QStringLiteral(R"(
+QToolBar#ToolOptionsBar QComboBox:editable, QToolBar#ToolOptionsBar QAbstractSpinBox, QToolBar#ToolOptionsBar QLineEdit {
+    border: 1px solid %1; border-radius: 0px; min-height: 24px; padding: 1px 6px; }
+QToolBar#ToolOptionsBar QComboBox:editable:hover, QToolBar#ToolOptionsBar QAbstractSpinBox:hover,
+QToolBar#ToolOptionsBar QLineEdit:hover { border-color: %2; }
+QToolBar#ToolOptionsBar QComboBox:editable:focus, QToolBar#ToolOptionsBar QAbstractSpinBox:focus,
+QToolBar#ToolOptionsBar QLineEdit:focus { border-color: %3; }
+)")
+               .arg(css(field), css(fieldHot), css(edge));
+    // Tema oscuro: los desplegables con campo (tipo y tamaño de letra, tamaño del pincel...) como los
+    // de Paint.NET 5 (medidos en una captura suya): el texto en un recuadro oscuro con 2 px de blanco
+    // alrededor y la flecha gris oscuro sobre una franja blanca. (El campo de texto de dentro no se
+    // puede pintar aparte: lo dibuja el desplegable.)
+    if (s.dark)
+        qss += QStringLiteral(R"(
+QToolBar#ToolOptionsBar QComboBox:editable { background: #1e1e1e; color: #ffffff; border: 2px solid #ffffff; border-radius: 0px;
+    padding: 0px 2px; min-height: 20px; selection-background-color: %1; selection-color: #ffffff; }
+QToolBar#ToolOptionsBar QComboBox:editable:hover { border-color: #ffffff; }
+QToolBar#ToolOptionsBar QComboBox:editable:focus { border-color: #ffffff; }
+QToolBar#ToolOptionsBar QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 18px;
+    border: none; background: #ffffff; }
+QToolBar#ToolOptionsBar QComboBox::down-arrow { image: url("%2"); width: 10px; height: 10px; }
+QToolBar#ToolOptionsBar QToolButton#OptionsStepper, QToolBar#ToolOptionsBar QToolButton#OptionsStepper:hover,
+QToolBar#ToolOptionsBar QToolButton#OptionsStepper:pressed { background: transparent; border: 1px solid transparent; }
+)")
+                   .arg(css(edge), indicatorImage("down", QColor(0x5c, 0x5c, 0x5c)));
     if (s.dark)
         qss += QStringLiteral(R"(
 FloatingPanel QAbstractItemView::indicator { background: #ffffff; border: 1px solid #333333; border-radius: 0px; }

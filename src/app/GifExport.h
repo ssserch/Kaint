@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Audio.h"
 #include "core/Gif.h"
 
 #include <QColor>
@@ -26,6 +27,8 @@ struct VideoOptions {
     int quality = 0;
     // Lo transparente, sobre este color (el MP4 no tiene transparencia; el WebM sí la conserva).
     QColor background = Qt::white;
+    // Las pistas de audio del editor de GIF, mezcladas en el vídeo (los silenciados no suenan).
+    QList<Audio::Clip> audio;
 };
 
 // El ejecutable de FFmpeg (junto a Kaint o en el PATH), o vacío.
@@ -36,6 +39,13 @@ QString filter(Format format);
 // Codifica a 'path' (sin preguntar nada): para las pruebas y para exportAnimation.
 bool encode(const QList<Gif::Frame>& frames, Format format, const QString& path, int loops, int webpQuality,
             const VideoOptions& video, QWidget* progressParent, QString* error);
+
+// Abrir vídeo (MP4, WebM, MOV, MKV...) con FFmpeg: sus fotogramas, como mucho 25 por segundo y 1500
+// en total (más largo, menos por segundo), todos con la misma duración ('delayMs'). Con
+// 'progressParent', una barra de progreso que se puede cancelar (entonces 'error' queda vacío).
+bool isVideoFile(const QString& path);
+QString videoPatterns();
+bool decodeVideo(const QString& path, QList<QImage>* frames, int* delayMs, QWidget* progressParent, QString* error);
 
 // Pregunta las opciones y dónde guardar, y exporta. Devuelve la ruta guardada (vacía si se canceló o falló).
 QString exportAnimation(QWidget* parent, Document* doc, Format format, const QString& directory);

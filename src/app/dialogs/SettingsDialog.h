@@ -68,6 +68,12 @@ struct AppSettings {
     // Capas: al arrastrar una, se mueve en la lista con el ratón; con esto, se queda en su sitio
     // y una línea marca dónde quedará.
     bool layerDropLine = false;
+    // El candado (bloquear la transparencia) entre los botones de Capas; si no, en su clic derecho.
+    bool layerLockButton = false;
+    // La intro al abrir Kaint siempre (si no, solo la primera vez); se salta manteniendo Intro.
+    bool introAlways = false;
+    // Un vídeo propio para la intro (con introAlways); vacío, el de Kaint.
+    QString introPath;
     // Botones de ir al principio y al final del historial, junto a deshacer y rehacer.
     bool historyJumpButtons = false;
     // En los menús Ajustes y Efectos, los efectos de los complementos con el icono de los
@@ -137,6 +143,10 @@ struct AppSettings {
     // La X de las ventanas flotantes con los temas Windows 7 (WindowFrame::PanelClose7): unida al
     // borde de arriba, rectángulo o cuadrado.
     int win7PanelClose = 1;
+    // Windows 7: el cristal extendido por la franja de los menús (si no, solo en el marco).
+    bool win7ExtendedGlass = false;
+    // Tamaño de toda la interfaz en % (como el zum del navegador en Kaint.HTML); se aplica al abrir Kaint.
+    int uiScale = 100;
     // Los botones a la izquierda de la barra de título.
     bool titleButtonsLeft = false;
     // Recreación de Windows (solo con el estilo Paint.NET): 10 u 11 (esquinas redondeadas en modo

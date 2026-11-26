@@ -77,6 +77,52 @@ private:
     qreal m_t = 0;
 };
 
+// En Wayland (donde no se puede poner una ventana encima de otra en su sitio), la animación va dentro
+// de la propia ventana: encima de todo, el fondo de la ventana y su imagen, de un poco más pequeña y
+// transparente a su tamaño.
+class InWindowOverlay : public QWidget {
+public:
+    explicit InWindowOverlay(QWidget* window)
+        : QWidget(window)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setGeometry(window->rect());
+        raise();
+        show();
+    }
+    void setShot(const QPixmap& shot)
+    {
+        m_shot = shot;
+        update();
+    }
+    void setProgress(qreal t)
+    {
+        m_t = t;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.fillRect(rect(), palette().color(QPalette::Window));
+        if (m_shot.isNull())
+            return;
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        const qreal scale = 0.92 + 0.08 * m_t;
+        const QPointF c = QRectF(rect()).center();
+        p.translate(c);
+        p.scale(scale, scale);
+        p.translate(-c);
+        p.setOpacity(std::clamp(m_t, 0.0, 1.0));
+        p.drawPixmap(QRectF(rect()), m_shot, QRectF(m_shot.rect()));
+    }
+
+private:
+    QPixmap m_shot;
+    qreal m_t = 0;
+};
+
 // Anima la apertura de las ventanas con el marco de Kaint (ver setWindowAnimation).
 class WindowOpener : public QObject {
 public:
@@ -90,6 +136,10 @@ public:
         if (!w->isWindow() || w->windowType() != Qt::Dialog || !w->property("kaintWindowFrame").toBool()
             || w->property("kaintOpenOverlay").toBool() || w->testAttribute(Qt::WA_DontShowOnScreen))
             return false;
+        if (QGuiApplication::platformName().startsWith(QLatin1String("wayland"))) {
+            startInside(w);
+            return false;
+        }
         // Este filtro recibe el Show antes que la ventana, y QDialog se centra en su propio showEvent:
         // tomada aquí, la animación salía un momento donde estaba la ventana antes de centrarse y
         // luego la ventana aparecía en el centro. Se muestra invisible y la animación empieza cuando
@@ -108,6 +158,39 @@ public:
     }
 
 private:
+    // Wayland: dentro de la ventana. Primero solo su fondo (no se ve a medio pintar) y, ya colocada y
+    // pintada, su imagen creciendo.
+    static void startInside(QWidget* w)
+    {
+        QPointer<InWindowOverlay> overlay = new InWindowOverlay(w);
+        QPointer<QWidget> window(w);
+        QTimer::singleShot(0, w, [window, overlay] {
+            if (!window || !overlay)
+                return;
+            overlay->setGeometry(window->rect());
+            overlay->hide();
+            const QPixmap shot = window->grab();
+            overlay->show();
+            overlay->raise();
+            if (shot.isNull()) {
+                overlay->deleteLater();
+                return;
+            }
+            overlay->setShot(shot);
+            auto finish = [overlay] {
+                if (overlay)
+                    overlay->deleteLater();
+            };
+            if (!run(overlay, 0, 1, g_windowMs, QEasingCurve::OutCubic,
+                     [overlay](qreal v) {
+                         if (overlay)
+                             overlay->setProgress(v);
+                     },
+                     finish))
+                finish();
+        });
+    }
+
     static void start(QWidget* w)
     {
         // La imagen de la ventana ya colocada y pintada.
@@ -338,8 +421,8 @@ bool enabled()
 
 void setWindowAnimation(bool on, int ms)
 {
-    // En Wayland no se puede poner una ventana encima de otra en su sitio: la anima el escritorio.
-    g_windowAnimation = on && !QGuiApplication::platformName().startsWith(QLatin1String("wayland"));
+    // (En Wayland, dentro de la propia ventana: ver WindowOpener::startInside.)
+    g_windowAnimation = on;
     g_windowMs = std::clamp(ms, 50, 2000);
 }
 

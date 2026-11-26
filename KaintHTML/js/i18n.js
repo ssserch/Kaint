@@ -9,6 +9,39 @@ import extraPt from "./i18n/pt-BR-web.js";
 let pt = null;
 
 const extra = {
+    // 1.2.1: la bienvenida de Kaint.APK y el editor de GIF de la web.
+    "Arrastra para cambiar la altura de las pistas": "Drag to change the height of the tracks",
+    "Mostrar la barra de desplazamiento horizontal": "Show the horizontal scroll bar",
+    "Mostrar la barra de desplazamiento vertical": "Show the vertical scroll bar",
+    "Ocultar o mostrar la pista": "Hide or show the track",
+    "Añade los fotogramas al revés al final: la animación va y vuelve":
+        "Adds the frames in reverse at the end: the animation goes back and forth",
+    "Añade los medios elegidos detrás del fotograma elegido.":
+        "Adds the selected media after the selected frame.",
+    "El último fotograma pasa a ser el primero":
+        "The last frame becomes the first",
+    "Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final).":
+        "The images open in Kaint and the ones you import. Drag them to the timeline (or double-click to add them at the end).",
+    "Puntos clave del fotograma elegido (sobre su imagen): arrástralos para cambiar cuándo llegan; clic derecho para la forma del movimiento":
+        "Keyframes of the selected frame (on its image): drag them to change when they arrive; right-click for the motion shape",
+    "Configurar esta pantalla":
+        "Set up this screen",
+    "Fondo con la última imagen editada":
+        "Last edited image as background",
+    "Importar del dispositivo…":
+        "Import from device…",
+    "Mostrar esta pantalla al abrir Kaint":
+        "Show this screen when Kaint opens",
+    "Mostrar las imágenes recientes":
+        "Show recent images",
+    "Nueva":
+        "New",
+    "Recientes":
+        "Recent",
+    "Todavía no hay imágenes recientes.":
+        "There are no recent images yet.",
+    "Volver":
+        "Back",
     // 1.1.9: lo propio de la web y del móvil (Kaint.APK), y textos que Kaint para el escritorio ya no usa.
     "Aberración cromática": "Chromatic Aberration",
     "Blanco a partir de": "White from",

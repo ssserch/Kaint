@@ -466,7 +466,8 @@ void FloatingPixels::render(const QTransform& t, const QRect& region, bool draft
     }
     QImage tmp(r.size(), kPremulFormat);
     QTransform toTmp = m * QTransform::fromTranslate(-r.left(), -r.top());
-    if (draft && !exact) {
+    // (En perspectiva, Deformar, siempre con QPainter: el remuestreo de Kaint es para transformaciones afines.)
+    if ((draft || m.type() == QTransform::TxProject) && !exact) {
         // Con QPainter, por franjas en paralelo (cada una, su propio QPainter sobre su trozo de
         // 'tmp', que también se vacía allí): con imágenes grandes, el bicúbico con gamma tardaba de
         // 90 a 150 ms en cada movimiento del ratón al estirar, y se notaba el retraso.

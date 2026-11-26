@@ -2,6 +2,7 @@
 
 #include "core/Motion.h"
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -61,6 +62,10 @@ bool save(const Document* doc, const QString& path, QString* error)
         // Kaint: la animación por puntos clave del editor de GIF (los demás programas la ignoran).
         if (l->props.alphaLock)
             xml.writeAttribute(QStringLiteral("kaint-alpha-lock"), QStringLiteral("true"));
+        if (l->props.track > 0)
+            xml.writeAttribute(QStringLiteral("kaint-gif-track"), QString::number(l->props.track));
+        if (l->props.gap > 0)
+            xml.writeAttribute(QStringLiteral("kaint-gif-gap"), QString::number(l->props.gap));
         if (l->props.motion && !l->props.motion->isEmpty())
             xml.writeAttribute(QStringLiteral("kaint-motion"),
                                QString::fromUtf8(QJsonDocument(l->props.motion->toJson()).toJson(QJsonDocument::Compact)));
@@ -71,6 +76,19 @@ bool save(const Document* doc, const QString& path, QString* error)
     xml.writeEndElement();
     xml.writeEndDocument();
     zip.add(QStringLiteral("stack.xml"), stackXml);
+    // Las pistas de audio del editor de GIF: cada archivo tal cual y, aparte, dónde va cada uno.
+    if (!doc->audioClips().isEmpty()) {
+        QJsonArray clips;
+        for (int k = 0; k < doc->audioClips().size(); ++k) {
+            const Audio::Clip& c = doc->audioClips()[k];
+            const QString src = QStringLiteral("data/audio%1.%2").arg(k).arg(c.suffix.isEmpty() ? QStringLiteral("bin") : c.suffix);
+            QJsonObject o = c.toJson();
+            o.insert(QStringLiteral("src"), src);
+            clips.append(o);
+            zip.add(src, c.data);
+        }
+        zip.add(QStringLiteral("kaint-audio.json"), QJsonDocument(clips).toJson(QJsonDocument::Compact));
+    }
 
     const QImage merged = doc->flattened();
     zip.add(QStringLiteral("mergedimage.png"), encodePng(merged));
@@ -135,6 +153,8 @@ Document* load(const QString& path, QString* error)
             info.props.visible = attrs.value(QLatin1String("visibility")) != QLatin1String("hidden");
             info.props.blend = blendModeFromOra(attrs.value(QLatin1String("composite-op")).toString());
             info.props.alphaLock = attrs.value(QLatin1String("kaint-alpha-lock")) == QLatin1String("true");
+            info.props.track = std::clamp(attrs.value(QLatin1String("kaint-gif-track")).toInt(), 0, 63);
+            info.props.gap = std::clamp(attrs.value(QLatin1String("kaint-gif-gap")).toInt(), 0, 3600000);
             const auto motion = attrs.value(QLatin1String("kaint-motion"));
             if (!motion.isEmpty()) {
                 const QJsonObject o = QJsonDocument::fromJson(motion.toUtf8()).object();
@@ -167,6 +187,17 @@ Document* load(const QString& path, QString* error)
         layers.append(std::make_shared<Layer>(QObject::tr("Fondo"), size, Qt::white));
     doc->replaceState(size, layers, int(layers.size()) - 1);
     doc->setDpi(dpi);
+    if (zip.contains(QStringLiteral("kaint-audio.json"))) {
+        QList<Audio::Clip> clips;
+        for (const QJsonValue& v : QJsonDocument::fromJson(zip.read(QStringLiteral("kaint-audio.json"))).array()) {
+            const QJsonObject o = v.toObject();
+            Audio::Clip c = Audio::Clip::fromJson(o);
+            c.data = zip.read(o.value(QStringLiteral("src")).toString());
+            if (!c.data.isEmpty())
+                clips << c;
+        }
+        doc->setAudioClips(clips);
+    }
     doc->setHistoryRootLabel(QObject::tr("Abrir imagen"));
     return doc;
 }

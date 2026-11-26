@@ -4,6 +4,7 @@
 #include "app/Canvas.h"
 #include "app/Icons.h"
 #include "core/Raster.h"
+#include "core/effects/Effect.h"
 
 #include <QKeyEvent>
 #include <QPainter>
@@ -24,6 +25,76 @@ QPoint arrowDelta(QKeyEvent* e)
     default: return {};
     }
     return (e->modifiers() & Qt::ControlModifier) ? d * 10 : d;
+}
+} // namespace
+
+
+namespace {
+// Lo que tiene píxeles de una imagen (premultiplicada), o vacío.
+QRect contentBounds(const QImage& img)
+{
+    int top = -1, bottom = -1, left = img.width(), right = -1;
+    for (int y = 0; y < img.height(); ++y) {
+        const auto* row = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+        int first = -1, last = -1;
+        for (int x = 0; x < img.width(); ++x)
+            if (qAlpha(row[x])) {
+                if (first < 0)
+                    first = x;
+                last = x;
+            }
+        if (first < 0)
+            continue;
+        if (top < 0)
+            top = y;
+        bottom = y;
+        left = std::min(left, first);
+        right = std::max(right, last);
+    }
+    return top < 0 ? QRect() : QRect(QPoint(left, top), QPoint(right, bottom));
+}
+
+// Snap (funciones de PhotoCraft, como paint.rs): los bordes y el centro del lienzo y de lo que tiene
+// píxeles en cada capa visible (salvo 'skip', la que se mueve), a 8 px de la pantalla.
+void prepareSnap(TransformBox& box, const Document* doc, const Canvas* canvas, const Layer* skip)
+{
+    if (!Effects::extrasEnabled() || !AppState::instance()->tools().moveSnap || !doc) {
+        box.clearSnap();
+        return;
+    }
+    QList<TransformBox::SnapTarget> xs, ys;
+    auto add = [&](const QRectF& r) {
+        for (double x : {r.left(), r.right(), r.center().x()})
+            xs.append({x, r.top(), r.bottom()});
+        for (double y : {r.top(), r.bottom(), r.center().y()})
+            ys.append({y, r.left(), r.right()});
+    };
+    add(QRectF(doc->rect()));
+    for (int i = 0; i < doc->layerCount(); ++i) {
+        const Layer* l = doc->layer(i);
+        if (l == skip || !l->props.visible)
+            continue;
+        const QRect b = contentBounds(l->image);
+        if (!b.isEmpty() && b != doc->rect())
+            add(QRectF(b.left(), b.top(), b.width(), b.height()));
+    }
+    const QTransform t = canvas->imageToViewTransform();
+    const double zoom = std::max(1e-6, std::hypot(t.m11(), t.m12()));
+    box.setSnapTargets(xs, ys, 8.0 / zoom);
+}
+
+// Las alineaciones del Snap, en magenta, de un píxel.
+void paintSnapLines(QPainter& p, const TransformBox& box, const QTransform& toView)
+{
+    if (box.snapLines().isEmpty() || box.mode() != TransformBox::Mode::Translate)
+        return;
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.setPen(QPen(QColor(255, 0, 255), 0));
+    for (const TransformBox::SnapLine& l : box.snapLines())
+        p.drawLine(l.vertical ? QLineF(toView.map(QPointF(l.pos, l.from)), toView.map(QPointF(l.pos, l.to)))
+                              : QLineF(toView.map(QPointF(l.from, l.pos)), toView.map(QPointF(l.to, l.pos))));
+    p.restore();
 }
 } // namespace
 
@@ -214,6 +285,12 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
     m_startTransform = m_float->transform;
     m_current = m_startTransform;
     m_box.set(QRectF(m_float->pixels.rect()), m_float->pixelsToCanvas(m_startTransform));
+    // Deformar (solo Mover píxeles, con las funciones de PhotoCraft) y Snap al mover.
+    m_box.setWarp(Effects::extrasEnabled() && AppState::instance()->tools().moveWarp);
+    if (mode == TransformBox::Mode::Translate)
+        prepareSnap(m_box, doc, canvas(), m_float ? m_float->layer.get() : doc->activeLayer());
+    else
+        m_box.clearSnap();
     m_box.begin(mode, handle, e.pos);
     m_active = true;
     if (mode == TransformBox::Mode::Scale)
@@ -252,6 +329,8 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
         int handle = -1;
         const auto mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle);
         canvas()->setToolCursor(transformCursor(mode, cursor(), rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+        if (m_box.setResetHot(mode == TransformBox::Mode::ResetPivot))
+            repaint();
         return;
     }
     if (m_pivotDrag) {
@@ -262,7 +341,8 @@ void MoveSelectedTool::mouseMove(const ToolEvent& e)
     QTransform canvasMap = m_box.update(e.pos, e.modifiers);
     // Píxel a píxel (por defecto): nada queda a medio píxel, como la selección.
     if (!AppState::instance()->tools().selectionAntialias) {
-        canvasMap = TransformBox::snappedToPixels(canvasMap, m_box.localRect());
+        if (canvasMap.type() != QTransform::TxProject)
+            canvasMap = TransformBox::snappedToPixels(canvasMap, m_box.localRect());
         m_box.set(m_box.localRect(), canvasMap);
     }
     const QTransform t = QTransform::fromTranslate(-m_float->origin.x(), -m_float->origin.y()) * canvasMap;
@@ -412,7 +492,12 @@ void MoveSelectedTool::paintOverlay(QPainter& p)
     int parts = TransformBox::AllParts & ~TransformBox::Outline;
     if (hidesSelectionOutline())
         parts = TransformBox::MoveIcon | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
+    // Arrastrando el punto de giro, también él y el botón de volver al centro.
+    if (m_pivotDrag)
+        parts |= TransformBox::PivotPoint;
     m_box.draw(p, canvas()->imageToViewTransform(), parts);
+    if (m_active)
+        paintSnapLines(p, m_box, canvas()->imageToViewTransform());
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +563,11 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
     if (mode == TransformBox::Mode::None)
         mode = TransformBox::Mode::Translate;
     m_pivotDrag = mode == TransformBox::Mode::Pivot;
+    m_box.setWarp(false);
+    if (mode == TransformBox::Mode::Translate)
+        prepareSnap(m_box, doc, canvas(), nullptr);
+    else
+        m_box.clearSnap();
     m_box.begin(mode, handle, e.pos);
     m_active = true;
     if (mode == TransformBox::Mode::Scale)
@@ -497,6 +587,8 @@ void MoveSelectionTool::mouseMove(const ToolEvent& e)
         int handle = -1;
         const TransformBox::Mode mode = m_box.hit(e.viewPos, canvas()->imageToViewTransform(), false, &handle);
         canvas()->setToolCursor(transformCursor(mode, cursor(), rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos)));
+        if (m_box.setResetHot(mode == TransformBox::Mode::ResetPivot))
+            repaint();
         return;
     }
     if (m_pivotDrag) {
@@ -599,5 +691,10 @@ void MoveSelectionTool::paintOverlay(QPainter& p)
     int parts = TransformBox::AllParts & ~TransformBox::Outline;
     if (m_active && !m_pivotDrag && AppState::instance()->preferences().hideBoxWhileDragging)
         parts = TransformBox::MoveIcon | (m_box.mode() == TransformBox::Mode::Rotate ? TransformBox::PivotPoint : 0);
+    // Arrastrando el punto de giro, también él y el botón de volver al centro.
+    if (m_pivotDrag)
+        parts |= TransformBox::PivotPoint;
     m_box.draw(p, canvas()->imageToViewTransform(), parts);
+    if (m_active)
+        paintSnapLines(p, m_box, canvas()->imageToViewTransform());
 }

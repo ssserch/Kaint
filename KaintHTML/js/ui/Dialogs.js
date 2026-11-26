@@ -14,7 +14,7 @@ import { download } from "../core/ImageIO.js";
 import { Plugins } from "../plugins/Plugins.js";
 import { UserFonts } from "../UserFonts.js";
 import { REPOSITORY, VERSION } from "../version.js";
-import { baseColors, ColorRoles, customColors, readDesign, resolveScheme, themeChoices, themeFromJson, themeToJson, Win7WindowColors, Win8DefaultColor,
+import { baseColors, ColorRoles, customColors, listedScheme, readDesign, resolveScheme, themeChoices, themeFromJson, themeToJson, Win7WindowColors, Win8DefaultColor,
          Win8StartColors, Win8WindowColors } from "./Themes.js";
 import { BackgroundAccept, BackgroundDefaults, backgroundAlignment, backgroundType, clearBackground, isVideoFile, loadBackgroundFile, storeBackground } from "./Background.js";
 import { unzip, zip } from "../core/Zip.js";
@@ -512,6 +512,11 @@ function sizeEditor(original, dpi, allowPercent, onChange) {
         value: () => ({ w: width.read(), h: height.read() }),
         dpi: () => currentDpi,
         setKeepAspect(on) { keep.input.checked = on; },
+        // El ancho con el foco y su número elegido, para escribir directamente.
+        focusWidth() {
+            width.focus();
+            width.select();
+        },
     };
 }
 
@@ -528,6 +533,8 @@ export async function newImageDialog(width, height, dpi = 96) {
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
+    // Como en Paint.NET: el ancho, elegido, listo para escribir el tamaño.
+    setTimeout(() => size.focusWidth(), 0);
     const r = await dlg.exec();
     return r ? { width: size.value().w, height: size.value().h, background: bg.value, dpi: size.dpi() } : null;
 }
@@ -841,13 +848,27 @@ export async function settingsDialog(app = null, startPage = "interface") {
     const pages = [
         ["interface", "settings-interface", tr("Interfaz de usuario"), async () => {
             const scheme = select(themeChoices(tr),
-                                  Settings.get("colorScheme"));
+                                  listedScheme(Number(Settings.get("colorScheme")) || 0));
             scheme.addEventListener("change", () => {
                 // Los temas de Windows 7 traen los bordes redondeados (se pueden volver a poner rectos).
                 const win7 = (s) => s === 7 || s === 10 || s === 13 || s === 14;
-                if (win7(Number(scheme.value)) && !win7(Number(Settings.get("colorScheme")) || 0))
+                const before = Number(Settings.get("colorScheme")) || 0;
+                let chosen = Number(scheme.value);
+                // Con Windows 7 Basic marcado, pasar entre Windows 7 y su oscuro sigue siendo Basic.
+                if (before === 13 || before === 14)
+                    chosen = chosen === 7 ? 13 : chosen === 10 ? 14 : chosen;
+                if (win7(chosen) && !win7(before))
                     Settings.set("windowCorners", 1);
-                Settings.set("colorScheme", Number(scheme.value));
+                Settings.set("colorScheme", chosen);
+            });
+            // Windows 7 Basic: el de Windows 7 (claro u oscuro) con el marco opaco, sin cristal.
+            const win7Basic = checkbox(tr("Windows 7 Basic (sin cristal)"), [13, 14].includes(Number(Settings.get("colorScheme"))));
+            win7Basic.title = tr("El tema básico de Windows 7: los mismos controles con el marco opaco, sin cristal.");
+            win7Basic.style.marginLeft = "20px";
+            win7Basic.input.addEventListener("change", () => {
+                const now = Number(Settings.get("colorScheme")) || 0;
+                const dark = now === 10 || now === 14;
+                Settings.set("colorScheme", win7Basic.input.checked ? (dark ? 14 : 13) : (dark ? 10 : 7));
             });
             const cursors = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("cursorStyle"));
             cursors.title = tr("Los de Paint.NET, en pixel art: la cruz con el dibujo de la herramienta.");
@@ -1041,6 +1062,9 @@ export async function settingsDialog(app = null, startPage = "interface") {
             const themeWin8Row = el("label", { style: { marginLeft: "20px" } }, [tr("Color de las ventanas:"), win8Choice, win8Input]);
             themeWin8Row.title = tr("El marco y la barra de título de las ventanas, como en Windows 8. Solo con los temas Windows 8.");
             const syncThemeWin7 = () => {
+                const id = Number(Settings.get("colorScheme")) || 0;
+                win7Basic.style.display = [7, 10, 13, 14].includes(id) ? "" : "none";
+                win7Basic.input.checked = id === 13 || id === 14;
                 themeWin8Row.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win8 ? "" : "none";
                 themeWin7Row.style.display = resolveScheme(Number(Settings.get("colorScheme")) || 0).win7 ? "" : "none";
                 // (También el personalizado con base Windows 7 u oscuro; si en Personalizar… tiene un
@@ -1231,12 +1255,14 @@ export async function settingsDialog(app = null, startPage = "interface") {
                       tr("La selección, el degradado, la línea, el texto y las formas muestran la flecha (o la I) del tema de cursores del escritorio con su icono al lado. Desactivado, la flecha de Kaint.")),
                 check(tr("Al arrastrar una capa, marcar con una línea dónde quedará"), "layerDropLine",
                       tr("Desactivado, la capa se mueve en la lista con el ratón mientras se arrastra.")),
+                check(tr("Mostrar el candado (bloquear la transparencia) en los botones de Capas"), "layerLockButton",
+                      tr("Desactivado, la opción está en el menú del clic derecho de cada capa y en el menú Capas.")),
                 check(tr("Mostrar los botones de ir al principio y al final del historial"), "historyJumpButtons",
                       tr("En la ventana Historial, junto a deshacer y rehacer: vuelven a la imagen original o al último cambio.")),
                 check(tr("Mostrar los colores semitransparentes de la paleta en la vista ampliada de Colores"), "paletteTranslucent",
                       tr("Las filas de abajo de la paleta de fábrica, como en Paint.NET. El blanco con que se rellenan las paletas de menos colores no se muestra nunca.")),
                 el("label", {}, [tr("Tema:"), scheme, customize]),
-                themeWin7Row, themeGlassRow, themeWin8Row,
+                win7Basic, themeWin7Row, themeGlassRow, themeWin8Row,
                 el("label", {}, [tr("Estilo de la interfaz:"), look]),
                 el("label", {}, [tr("Cursores:"), cursors]),
                 el("label", {}, [tr("Idioma:"), language, reload]),
@@ -1295,6 +1321,8 @@ export async function settingsDialog(app = null, startPage = "interface") {
                                  Settings.get("rulerStyle"));
             ruler.addEventListener("change", () => Settings.set("rulerStyle", Number(ruler.value)));
             return [check(tr("Proyectar una sombra bajo el lienzo"), "dropShadow"),
+                    check(tr("Mostrar la barra de desplazamiento horizontal"), "scrollbarH"),
+                    check(tr("Mostrar la barra de desplazamiento vertical"), "scrollbarV"),
                     borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas claros"), "canvasBorderLight", "#cfcfcf"),
                     borderRow(tr("Usar un color personalizado para el fondo del lienzo con los temas oscuros"), "canvasBorderDark", "#303030"),
                     el("label", {}, [tr("Brillo de tablero de ajedrez de transparencia")]),
@@ -1616,7 +1644,7 @@ async function customThemeDialog() {
     const save = () => Settings.set("customTheme", { base: theme.base, colors: { ...theme.colors }, image: theme.image ? { ...theme.image } : null,
                                                      design: { ...theme.design } });
     const base = select([["light", tr("Claro")], ["dark", tr("Oscuro")], ["win7", tr("Windows 7")], ["win7dark", tr("Windows 7 oscuro")],
-                         ["xp", tr("Windows XP")], ["win98", tr("Windows 98")], ["win98alt", tr("Windows 98 ALT")]], theme.base);
+                         ["win8", tr("Windows 8")], ["win8dark", tr("Windows 8 oscuro")], ["xp", tr("Windows XP")], ["win98", tr("Windows 98")], ["win98alt", tr("Windows 98 ALT")]], theme.base);
     base.title = tr("Los temas de Windows 7 y XP traen su estilo de botones, menús y ventanas: así puedes, por ejemplo, poner una imagen o un vídeo de fondo con el tema de Windows 7.");
     const grid = el("div", { className: "theme-colors" });
     const fill = () => {
@@ -2978,7 +3006,7 @@ export async function welcomeDialog() {
     const dlg = new Dialog(tr("Te damos la bienvenida a Kaint"));
     const startLanguage = Settings.get("language");
     const scheme = select(themeChoices(tr),
-                          Settings.get("colorScheme"));
+                          listedScheme(Number(Settings.get("colorScheme")) || 0));
     scheme.addEventListener("change", () => Settings.set("colorScheme", Number(scheme.value)));
     const look = select([[0, "Kaint"], [1, "Paint.NET"]], Settings.get("uiStyle"));
     look.title = tr("Como Paint.NET 5: más compacto, con las ventanas sin borde y los botones y menús más juntos.");

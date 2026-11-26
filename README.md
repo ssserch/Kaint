@@ -1,14 +1,21 @@
 <div align="center">
   <img src="img/other/kaintqt6logo.png" alt="kaint.qt6 logo" width="460">
 
-  <h3>The Paint.NET experience, native on Linux (and Windows!)</h3>
-  <p>A free raster image editor built with C++20 and Qt 6.</p>
+  <h3>The Paint.NET experience on Linux, Windows, macOS, FreeBSD, Android and the web</h3>
+  <p>A free raster image editor built with C++20 and Qt 6, with a web version in plain JavaScript.</p>
 
   [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg?logo=cplusplus)](CMakeLists.txt)
   [![Qt 6](https://img.shields.io/badge/Qt-6-41CD52.svg?logo=qt&logoColor=white)](https://www.qt.io/)
-  [![Platforms: Linux | Windows](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-informational.svg)](#-install)
-  [![Paint.NET plugins](https://img.shields.io/badge/Paint.NET-plugins-8a2be2.svg)](#features)
   [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+  [![Paint.NET plugins](https://img.shields.io/badge/Paint.NET-plugins-8a2be2.svg)](#features)
+
+  [![Linux](https://img.shields.io/badge/Linux-Flatpak%20%7C%20AppImage%20%7C%20deb%20%7C%20Arch-FCC624.svg?logo=linux&logoColor=black)](#-install)
+  [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6.svg?logo=windows&logoColor=white)](#-install)
+  [![macOS](https://img.shields.io/badge/macOS-build.sh-999999.svg?logo=apple&logoColor=white)](#-install)
+  [![FreeBSD](https://img.shields.io/badge/FreeBSD-build.sh-AB2B28.svg?logo=freebsd&logoColor=white)](#-install)
+  [![Android](https://img.shields.io/badge/Android-Kaint.APK-3DDC84.svg?logo=android&logoColor=white)](#-install)
+  [![Web](https://img.shields.io/badge/Web-Kaint.HTML-E34F26.svg?logo=html5&logoColor=white)](https://ssserch.github.io/kainthtml/)
+  [![x86-64 | ARM64](https://img.shields.io/badge/CPU-x86--64%20%7C%20ARM64-555555.svg)](#-install)
 
   [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/E1E5ZOEH6)
 
@@ -24,11 +31,13 @@
 # Kaint
 
 **Kaint** recreates the look, the tools and the workflow of [Paint.NET](https://www.getpaint.net/)
-as a native application. It is made for KDE Plasma on Wayland, it also
-runs on Windows 10 and 11, in any browser and on Android.
+as a native application. It is made for KDE Plasma on Wayland, and the same code builds for other
+Linux desktops, Windows 10 and 11, macOS and FreeBSD, on x86-64 and ARM64. Its web version runs in any
+browser and, as Kaint.APK, on Android phones and tablets.
 
 <table align="center">
   <tr>
+    <td align="center" width="110"><a href="#the-windows"><img src="data/ui-icons/menu_window_colors_icon.png" alt="" width="32"><br><sub><b>The windows</b></sub></a></td>
     <td align="center" width="110"><a href="#make-it-yours"><img src="data/ui-icons/menu_utilities_settings_icon.png" alt="" width="32"><br><sub><b>Make it yours</b></sub></a></td>
     <td align="center" width="110"><a href="#features"><img src="img/kaint-32.png" alt="" width="32"><br><sub><b>Features</b></sub></a></td>
     <td align="center" width="110"><a href="#gif-editor"><img src="data/ui-icons/menu_window_layers_icon.png" alt="" width="32"><br><sub><b>GIF Editor</b></sub></a></td>
@@ -36,6 +45,60 @@ runs on Windows 10 and 11, in any browser and on Android.
     <td align="center" width="110"><a href="#opening-and-saving"><img src="data/ui-icons/menu_file_open_icon.png" alt="" width="32"><br><sub><b>Opening and saving</b></sub></a></td>
     <td align="center" width="110"><a href="#-install"><img src="data/ui-icons/menu_file_save_icon.png" alt="" width="32"><br><sub><b>Install</b></sub></a></td>
     <td align="center" width="110"><a href="#license"><img src="data/ui-icons/menu_help_about_icon.png" alt="" width="32"><br><sub><b>License</b></sub></a></td>
+  </tr>
+</table>
+
+## The windows
+
+Like Paint.NET, the image takes the whole window and everything else floats over it in small
+windows you can move, snap to the edges, make translucent or hide (F5 to F8, or the buttons in the
+top right corner).
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="25%"><img src="img/windows/tools.png" alt="Tools window" height="300"></td>
+    <td align="center" valign="top" width="25%"><img src="img/windows/history.png" alt="History window" width="200"></td>
+    <td align="center" valign="top" width="25%"><img src="img/windows/layers.png" alt="Layers window" width="210"></td>
+    <td align="center" valign="top" width="25%"><img src="img/windows/colors.png" alt="Colors window" width="210"></td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Tools</b><br><sub>Every tool, in the order you choose (Settings → Customization). Each one has its letter on
+      the keyboard.</sub></td>
+    <td valign="top"><b>History</b><br><sub>Every step, to click back and forth. Gradients, lines, shapes and text stay editable
+      when you go back to them.</sub></td>
+    <td valign="top"><b>Layers</b><br><sub>Thumbnails, visibility and drag and drop. Right-click a layer for everything,
+      Alpha Lock included.</sub></td>
+    <td valign="top"><b>Colors</b><br><sub>Primary and secondary colors, the wheel and the palette. <b>More »</b> opens
+      the full editor.</sub></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>The top right corner</h4>
+      <p align="center"><img src="img/windows/corner-paintnet.png" alt="The window buttons with the Paint.NET style" width="204"></p>
+      One button for each window (Tools, History, Layers and Colors: lit while it's open), then
+      <b>Settings</b> and <b>Help</b>, with its documentation, the website, the forum and more. With the
+      Paint.NET style they look like Paint.NET's; right-click them to put the windows back in their
+      corners or make them translucent.
+    </td>
+    <td width="50%" valign="top">
+      <h4>The image strip</h4>
+      Every open image, as a thumbnail, along the top: the orange star marks the unsaved ones and the
+      arrow at the end lists them all. Drag a thumbnail to reorder it. <b>Ctrl+click</b> another image
+      to select everything between them, and press the <b>+</b> that appears to make a <b>group</b>:
+      give it a name and a border color, and click its name to collapse it to its first image and
+      save space. The wheel scrolls the strip when there are many.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <h4>The GIF editor</h4>
+      <b>File → GIF Editor</b> turns the image into an animation on a timeline, on a black screen like a
+      video editor: frames, tracks, keyframes and, for exported videos, audio tracks with volume
+      keyframes. <a href="#gif-editor">More below</a>.
+    </td>
   </tr>
 </table>
 
@@ -93,7 +156,8 @@ Kaint looks the way you want. Almost everything about its appearance can be chan
   style rulers** (the divisions of a real ruler, with a unit button in the corner: pixels, inches or
   centimeters).
 - **Image strip**: like Paint.NET, the box of the current image and of the one under the pointer can
-  reach the top of the window, title bar included (or only the height of the thumbnail).
+  reach the top of the window, title bar included (or only the height of the thumbnail). Images can
+  be grouped, with a name and a border color, and a group collapses to its first image.
 - **Little touches**: tool icons in the active colors, Paint.NET's orange star on unsaved images
   (on their thumbnail in the strip and in the open images list),
   animations everywhere (fades, sliding layers, the active color slot) that you can turn off, and a
@@ -315,7 +379,8 @@ color you choose for the glass of the windows (**Settings → User interface**).
     <td valign="top">
       <h4>Layers</h4>
       Blend modes, opacity, visibility and properties, with live thumbnails, <b>Alpha Lock</b> (paint
-      only where there already is something) and layers that glide into place when you drag them.
+      only where there already is something; in the right-click menu of each layer, or as a button if you
+      turn it on in Settings) and layers that glide into place when you drag them.
     </td>
     <td valign="top">
       <h4>Adjustments and effects</h4>
@@ -327,7 +392,7 @@ color you choose for the glass of the windows (**Settings → User interface**).
       <h4>Plugins</h4>
       Paint.NET effect plugins (.dll), through the .NET Framework built into Windows and, on Linux,
       macOS and FreeBSD, with the plugin system you choose (in <b>Settings → Plugins</b> or the welcome
-      window): <b>.NET</b> (the default: modern .NET with paint.rs's Paint.NET 5 libraries, for GPU,
+      window): <b>.NET</b> (the default: modern .NET, for GPU,
       <code>BitmapEffect</code> and Paint.NET 5 plugins, their own windows shown inside Kaint's effect
       dialog, and FileType plugins that add formats to Open and Save As), <b>Wine</b> 🍷 (the plugins
       run inside Wine like a Windows program) or <b>OpenD2D</b>
@@ -365,7 +430,7 @@ color you choose for the glass of the windows (**Settings → User interface**).
       Windows codecs on Windows (JPEG XR is built in; HEIC, AVIF and JPEG XL need their Microsoft Store
       extensions). Animated GIFs open as layers, as separate images, as a single image or with just the frames you pick, and
       can be saved from the layers or from the open images you pick, with a playable preview and
-      ezgif-style advanced settings: per-frame duration, show/hide and copy, hidden layers as
+      advanced settings: per-frame duration, show/hide and copy, hidden layers as
       frames, global palette, crossfades and a background frame. <b>File → GIF Editor</b> turns
       any image into a simple video-editor-style timeline: a media library with the open images
       and the ones you import or drag in, a player, and one clip per frame to reorder, stretch,
@@ -449,13 +514,12 @@ color you choose for the glass of the windows (**Settings → User interface**).
   <tr>
     <td colspan="2" valign="top">
       <h4>Painting like on a tablet app</h4>
-      <img src="img/other/brush-symmetry.png" alt="Radial symmetry drawing" width="420" align="right">
       Turn on <b>Settings → Tools → Advanced brush options</b> for an <b>Advanced…</b> button on the
       paintbrush, eraser and clone stamp: round or square tip with angle and roundness, flow, pressure
       curve and minimum size, pressure that changes the opacity, <b>pressure from speed</b> for a mouse or
-      a finger, a <b>stabilizer</b> like FireAlpaca's, <b>tapered starts and ends</b> for manga lines,
-      random jitter, and Ibis Paint style vertical size and opacity sliders beside the canvas.
-      <br><br>
+      a finger, a <b>stabilizer</b>, <b>tapered starts and ends</b> for manga lines,
+      random jitter, and vertical size and opacity sliders beside the canvas.
+      <br><br><div align="center"><img src="img/other/brush-symmetry.png" alt="Radial symmetry drawing" width="420"></div><br><br>
       <b>Symmetry</b> mirrors what you paint with the brush, the eraser and the pencil (left and right, top
       and bottom, both, or radial with 4, 6, 8 or 12 copies), with guides over the image.
       <b>Quick shapes</b>: finish a stroke and hold still for a moment, and the line, circle, ellipse,
@@ -486,8 +550,8 @@ color you choose for the glass of the windows (**Settings → User interface**).
   <img src="img/other/gifeditor-sample.gif" alt="A small animation made in the GIF editor" width="240">
 </div>
 
-**File → GIF Editor** turns the current image into an animation on a timeline, with a screen like
-a simple video editor; choosing it again goes back to the image editor (each image remembers which
+**File → GIF Editor** turns the current image into an animation on a timeline, with a black screen
+like a simple video editor (the first time, a note explains it is made for GIFs); choosing it again goes back to the image editor (each image remembers which
 one it is in). Every frame is one of the image's layers, so the History, the tools and **Export
 GIF...** (with the usual palette, loops and effects) all work as always. The arrow next to it exports
 an **animated PNG**, an **animated WebP** or an **MP4 or WebM video** (with FFmpeg; repeat the
@@ -502,7 +566,13 @@ heavy the GIF will be and how long it lasts, turning yellow and red as it gets c
   change its duration, duplicate, hide, delete, reverse, back and forth, the same duration for all,
   and edit any frame with the tools. Ctrl+click and Shift+click pick several frames; Ctrl+C, Ctrl+X,
   Ctrl+V and Ctrl+D copy, cut, paste and duplicate them.
-- **Keyframes**, like Filmora: the panel on the right sets the **scale** (proportional or not),
+- **Tracks**: each track is its own row of frames, and the upper tracks show on top of the lower
+  ones.
+- **Audio tracks** (for MP4 and WebM videos; a GIF has no sound): add MP3, WAV, OGG, FLAC... files
+  with the **Audio** button or by dropping them on the timeline. Move and trim them, mute them, set
+  their **volume** and **fade in and out**, and double-click a clip to add **volume keyframes** that you
+  drag up, down and sideways. They play with the preview and are saved inside the `.ora`.
+- **Keyframes**: the panel on the right sets the **scale** (proportional or not),
   **position**, **rotation** and **opacity** of the selected frame. The diamond next to each value
   adds a keyframe at the playhead, and the diamonds appear under the clip on the timeline (white, or
   in your accent color when selected): drag them apart and the motion lasts longer, right-click for
@@ -510,16 +580,9 @@ heavy the GIF will be and how long it lasts, turning yellow and red as it gets c
   changes and its points can be dragged too; drag the image in the preview to move it, along its
   dotted motion path. **Convert to frames** turns the motion into ordinary frames.
 
-<table>
-  <tr>
-    <td width="50%"><img src="img/other/gifeditor-keyframes.png" alt="GIF editor with keyframes, dark theme"></td>
-    <td width="50%"><img src="img/other/gifeditor-keyframes-light.png" alt="GIF editor with keyframes, light theme"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Dark</sub></td>
-    <td align="center"><sub>Light</sub></td>
-  </tr>
-</table>
+<div align="center">
+  <img src="img/other/gifeditor-audio.png" alt="GIF editor with two audio tracks, one of them muted, and volume keyframes" width="900">
+</div>
 
 ## Web version
 
@@ -532,8 +595,32 @@ windows, adjustments and effects in plain JavaScript, running entirely in the br
 `KaintHTML` folder with any static web server (`python3 -m http.server`) and open it. Browsers on
 the network can also join a collaborative session hosted by Kaint by opening the address its
 session window shows, and any browser can host or join a P2P session with just its code. It has the
-same GIF editor (keyframes and MP4 export included), brush options, themes and languages, and on
-phones a single Save button with every option.
+same GIF editor (keyframes, audio tracks and MP4 export included), brush options, themes and
+languages, and on phones a single Save button with every option.
+
+<table>
+  <tr>
+    <td width="280" align="center" valign="top"><img src="img/other/apk-welcome.png" alt="Kaint.APK welcome screen" width="280"></td>
+    <td valign="top">
+      <h4>Kaint.APK, on Android</h4>
+      The web version as an Android app (<code>./build.sh --apk</code>), with everything Kaint.HTML has and a
+      few things of its own:
+      <ul>
+        <li><b>A welcome screen</b>: <b>New</b>, <b>Open</b> (your recent images and the files on the
+          device) and <b>Collaboration</b>, with your last image blurred behind and the recent ones at the
+          bottom. The gear hides any of it, or the whole screen.</li>
+        <li><b>Recent images kept on the phone</b>, with their layers, so they open again even though
+          Android can't reopen a file by its path.</li>
+        <li><b>Touch first</b>: two fingers zoom, move and rotate the image (tap the angle to straighten
+          it), a long press lifts a layer or a GIF clip, and the windows tuck into the corners.</li>
+        <li><b>One Save button</b> with every option, saving where Android asks.</li>
+        <li><b>Smooth on phones</b>: the canvas draws at up to twice the screen's resolution and never
+          stays frozen, and the welcome screen only animates what the phone draws cheaply.</li>
+        <li><b>Collaborative sessions</b> with other phones, browsers and copies of Kaint.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
 ## Opening and saving
 
@@ -556,7 +643,7 @@ Linux) or, on Windows, from the system's codecs: without them they don't appear 
 | GIF, animated (frames as layers or images) | `.gif` | ✔ | ✔ | ✔ / ✔ |
 | Animated PNG (exported from the GIF editor) | `.png` `.apng` | ✔ | ✔ | ✔ / ✔ |
 | Animated WebP (exported from the GIF editor) | `.webp` | ✔ | ✔ | ✔ / ✔ |
-| MP4 and WebM video (exported from the GIF editor, with FFmpeg; MP4 in the browser) | `.mp4` `.webm` | ❌ | ✔ | ✔ / ✔ |
+| Video: MP4, WebM, MOV, MKV, AVI... (opened as frames, like an animated GIF, and exported from the GIF editor with its audio tracks, with FFmpeg; MP4 in the browser) | `.mp4` `.webm` `.mov` `.mkv` ... | ✔ | ✔ | ✔ / ✔ |
 | BMP | `.bmp` `.dib` `.rle` | ✔ | ✔ | ✔ / ✔ |
 | TIFF | `.tif` `.tiff` | ✔ | ✔ | ✔ / ✔ |
 | TGA (8, 24 or 32 bits, RLE) | `.tga` | ✔ | ✔ | ✔ / ✔ |
@@ -740,7 +827,7 @@ downloaded the first time if missing (checked against their checksums), and you 
 SDK licenses yourself. APKs are signed with a key kept on this computer, so newer versions install
 over older ones. On phones and tablets two fingers zoom, move and **rotate** the image (tap the angle
 in the corner to straighten it), the scroll bars can be hidden (they are, by default, on phones) and
-**Effects → ibis Paint style** has Extract Line Art, Chromatic Aberration and Glitch.
+the **Effects** menu has a section with Extract Line Art, Chromatic Aberration and Glitch.
 
 ```bash
 ./build.sh --apk            # or build.bat --apk on Windows; --aab for Google Play
@@ -812,10 +899,9 @@ jxrlib (BSD), and HEIC, JPEG XL, AVIF, OpenEXR, JPEG 2000 and other formats (whe
 [magick-wasm](https://github.com/dlemstra/magick-wasm) by Dirk Lemstra (Apache-2.0). Plugins from
 **Browse Plugins** are the work of their authors, credited next to each one. Some features were
 inspired by [paint.rs](https://github.com/daijro/paint.rs) by daijro, such as having PhotoCraft's
-tools in Kaint; the .NET plugin system uses paint.rs's Paint.NET 5 replacement libraries and plugin
-bridge (`third_party/pdn5/`, GPL-3.0). WebP, AVIF, JPEG XL and HEIC use libwebp (BSD), libavif
+tools in Kaint. (`third_party/pdn5/`, GPL-3.0). WebP, AVIF, JPEG XL and HEIC use libwebp (BSD), libavif
 (BSD), libjxl (BSD) and libheif (LGPL-3.0), and video export runs [FFmpeg](https://ffmpeg.org) when it
-is installed. The Brazilian Portuguese translation is by Mildanner.
+is installed.
 
 ## Disclaimer
 

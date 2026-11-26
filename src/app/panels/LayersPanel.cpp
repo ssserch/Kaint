@@ -15,6 +15,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
+#include <QMenu>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QVariantAnimation>
@@ -143,14 +144,28 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
     auto* buttons = new QHBoxLayout(strip);
     buttons->setContentsMargins(2, 2, 2, 2);
     buttons->setSpacing(0);
+    m_actions = actions;
     for (QAction* a : actions) {
         auto* b = new QToolButton(strip);
         b->setDefaultAction(a);
         b->setAutoRaise(true);
         b->setIconSize(QSize(16, 16));
         buttons->addWidget(b);
+        // El candado: el que se puede marcar y no está en el menú de la ventana con otro nombre.
+        if (a->isCheckable() && a->objectName() == QLatin1String("alphaLock"))
+            m_lockButton = b;
     }
     buttons->addStretch();
+    if (m_lockButton)
+        m_lockButton->hide();
+    // Clic derecho en una capa: la elige y muestra lo de los botones (también el candado).
+    m_list->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_list, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const int row = m_list->indexAt(pos).row();
+        if (row >= 0 && m_doc)
+            m_doc->setActiveIndex(layerForRow(row));
+        showLayerMenu(m_list->viewport()->mapToGlobal(pos));
+    });
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -191,6 +206,26 @@ LayersPanel::LayersPanel(const QList<QAction*>& actions, QWidget* parent)
         else
             showDropLine(targetRowAt(m_lastDragY));
     });
+}
+
+void LayersPanel::setLockButtonVisible(bool on)
+{
+    if (m_lockButton)
+        m_lockButton->setVisible(on);
+}
+
+void LayersPanel::showLayerMenu(const QPoint& globalPos)
+{
+    if (!m_doc)
+        return;
+    QMenu menu(this);
+    for (QAction* a : std::as_const(m_actions)) {
+        // El candado y las propiedades, en su propio apartado.
+        if (a->isCheckable() || a->objectName() == QLatin1String("layerProps"))
+            menu.addSeparator();
+        menu.addAction(a);
+    }
+    menu.exec(globalPos);
 }
 
 bool LayersPanel::eventFilter(QObject* obj, QEvent* e)

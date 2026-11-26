@@ -6,6 +6,7 @@
 #include "core/Selection.h"
 #include "core/effects/Effect.h"
 
+#include <QPointer>
 #include <QHash>
 #include <QMainWindow>
 #include <QSet>
@@ -246,6 +247,9 @@ private:
     FloatingPanel* m_layersPanel = nullptr;
     FloatingPanel* m_colorsPanel = nullptr;
     HistoryPanel* m_history = nullptr;
+    HistoryPanel* m_gifHistory = nullptr;
+    // Lo de la barra de estado escondido mientras se está en el editor de GIF.
+    QList<QPointer<QWidget>> m_statusHiddenForGif;
     LayersPanel* m_layers = nullptr;
     ColorsPanel* m_colors = nullptr;
 

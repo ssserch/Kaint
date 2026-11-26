@@ -14,6 +14,7 @@ import { wheelEnabled, wheelStep, wheelSteps } from "./Wheel.js";
 
 const brushPresets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85,
                       90, 95, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500];
+const magneticWidths = [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 64, 80, 100, 128, 160, 200, 256];
 const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72, 96, 144, 192, 288];
 const fonts = ["Noto Sans, Segoe UI, sans-serif", "Arial", "Times New Roman", "Courier New", "Georgia", "Verdana", "Trebuchet MS",
                "Comic Sans MS", "Impact", "serif", "sans-serif", "monospace", "cursive"];
@@ -94,6 +95,9 @@ function button(content, tip, onClick) {
 
 function stepper(plus, onStep, tip) {
     const b = button([icon(`opt-stepper:${plus ? "plus" : "minus"}`, 12)], tip, () => onStep(plus ? 1 : -1));
+    // Con el estilo de Paint.NET y un tema oscuro, el cuadrado blanco con el signo oscuro (CSS).
+    b.classList.add("stepper");
+    b.dataset.sign = plus ? "+" : "−";
     b.style.minWidth = b.style.minHeight = "18px";
     b.style.padding = "1px";
     return b;
@@ -512,7 +516,9 @@ export class ToolOptions {
             break;
         // Las herramientas de PhotoCraft.
         case "magnetic":
-            this.group(label(tr("Anchura:")), barSlider("magneticWidth", 1, 256, (v) => `${v} px`),
+            // La anchura, un número que se escribe o se elige, con − y + (como el tamaño del pincel).
+            this.group(label(tr("Anchura:")), stepper(false, (d) => stepPreset("magneticWidth", magneticWidths, d), tr("Reducir")),
+                       editableCombo("magneticWidth", magneticWidths), stepper(true, (d) => stepPreset("magneticWidth", magneticWidths, d), tr("Aumentar")),
                        label(tr("Contraste:")), barSlider("magneticContrast", 1, 100, (v) => `${v}%`),
                        label(tr("Frecuencia:")), barSlider("magneticFrequency", 0, 100, (v) => `${v}`));
             break;

@@ -91,9 +91,27 @@ QRectF KeyGraph::plotRect() const
     return QRectF(rect()).adjusted(34, 8, -10, -16);
 }
 
+Motion::Clip KeyGraph::dragged() const
+{
+    Motion::Clip clip = m_dragBase;
+    Motion::Track& track = clip.tracks[m_prop];
+    if (m_drag >= 0 && m_drag < track.keys.size()) {
+        Motion::Key k = track.keys.takeAt(m_drag);
+        k.t = m_dragT;
+        k.value = m_dragV;
+        if (const int existing = track.keyAt(k.t); existing >= 0)
+            track.keys.removeAt(existing);
+        auto it = std::lower_bound(track.keys.begin(), track.keys.end(), k.t,
+                                   [](const Motion::Key& a, int time) { return a.t < time; });
+        track.keys.insert(it, k);
+    }
+    return clip;
+}
+
 void KeyGraph::range(double* lo, double* hi) const
 {
-    const Motion::Clip clip = m_editor->motion(m_editor->selectedFrame());
+    // (Mientras se arrastra, la de antes: la escala no se mueve sola.)
+    const Motion::Clip clip = m_drag >= 0 ? m_dragBase : m_editor->motion(m_editor->selectedFrame());
     const Motion::Track& track = clip.tracks[m_prop];
     double a = track.base, b = track.base;
     for (const Motion::Key& k : track.keys) {
@@ -136,18 +154,7 @@ void KeyGraph::paintEvent(QPaintEvent*)
     const int frame = m_editor->selectedFrame();
     if (frame < 0)
         return;
-    Motion::Clip clip = m_editor->motion(frame);
-    if (m_drag >= 0 && m_drag < clip.tracks[m_prop].keys.size()) {
-        Motion::Track& track = clip.tracks[m_prop];
-        Motion::Key k = track.keys.takeAt(m_drag);
-        k.t = m_dragT;
-        k.value = m_dragV;
-        if (track.keyAt(k.t) < 0) {
-            auto it = std::lower_bound(track.keys.begin(), track.keys.end(), k.t,
-                                       [](const Motion::Key& a, int time) { return a.t < time; });
-            track.keys.insert(it, k);
-        }
-    }
+    const Motion::Clip clip = m_drag >= 0 ? dragged() : m_editor->motion(frame);
     const Motion::Track& track = clip.tracks[m_prop];
     double lo, hi;
     range(&lo, &hi);
@@ -244,10 +251,11 @@ void KeyGraph::mousePressEvent(QMouseEvent* e)
     }
     if (e->button() != Qt::LeftButton)
         return;
+    m_dragBase = clip;
+    range(&m_dragLo, &m_dragHi);
     m_drag = i;
     m_dragT = k.t;
     m_dragV = k.value;
-    range(&m_dragLo, &m_dragHi);
 }
 
 void KeyGraph::mouseMoveEvent(QMouseEvent* e)
@@ -264,6 +272,8 @@ void KeyGraph::mouseMoveEvent(QMouseEvent* e)
     if (m_prop == Motion::Opacity)
         m_dragV = std::clamp(m_dragV, 0.0, 100.0);
     m_dragV = std::round(m_dragV * 10) / 10;
+    // La línea de tiempo, la vista previa y los valores siguen al punto mientras se arrastra.
+    m_editor->setMotionPreview(m_editor->selectedFrame(), dragged());
     update();
 }
 
@@ -272,22 +282,13 @@ void KeyGraph::mouseReleaseEvent(QMouseEvent*)
     if (m_drag < 0)
         return;
     const int frame = m_editor->selectedFrame();
-    Motion::Clip c = m_editor->motion(frame);
-    Motion::Track& track = c.tracks[m_prop];
-    if (m_drag < track.keys.size()) {
-        Motion::Key k = track.keys.takeAt(m_drag);
-        k.t = m_dragT;
-        k.value = m_dragV;
-        const int existing = track.keyAt(k.t);
-        if (existing >= 0)
-            track.keys.removeAt(existing);
-        auto it = std::lower_bound(track.keys.begin(), track.keys.end(), k.t,
-                                   [](const Motion::Key& a, int time) { return a.t < time; });
-        track.keys.insert(it, k);
-        m_editor->selectKeyTime(k.t);
-    }
+    const Motion::Clip c = dragged();
+    const int t = m_dragT;
     m_drag = -1;
+    m_editor->clearMotionPreview();
     m_editor->setMotion(frame, c, GifEditor::tr("Mover punto clave"));
+    // El punto (y el cabezal) donde quedó.
+    m_editor->selectKeyTime(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +306,17 @@ Inspector::Inspector(GifEditor* editor, QWidget* parent)
     bold.setBold(true);
     m_title->setFont(bold);
     root->addWidget(m_title);
+    // Como en Filmora: un punto clave con todos los valores (posición, escala, rotación y opacidad)
+    // en el cabezal; si ya hay uno ahí, lo quita.
+    m_globalKey = new QToolButton(this);
+    m_globalKey->setText(GifEditor::tr("Punto clave global"));
+    m_globalKey->setToolTip(GifEditor::tr("Pone un punto clave con todos los valores (posición, escala, rotación y opacidad) en "
+                                          "el cabezal, o lo quita si ya hay uno ahí (K)"));
+    m_globalKey->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_globalKey->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_globalKey->setMinimumHeight(30);
+    connect(m_globalKey, &QToolButton::clicked, this, [this] { m_editor->toggleGlobalKey(); });
+    root->addWidget(m_globalKey);
 
     auto* grid = new QGridLayout;
     grid->setHorizontalSpacing(4);
@@ -483,6 +495,9 @@ void Inspector::refreshValues()
         r.prev->setEnabled(before);
         r.next->setEnabled(after);
     }
+    m_globalKey->setIcon(diamondIcon(m_editor->hasKeyAtPlayhead()));
+    m_globalKey->setText(m_editor->hasKeyAtPlayhead() ? GifEditor::tr("Quitar el punto clave global")
+                                                      : GifEditor::tr("Punto clave global"));
     m_updating = false;
     m_graph->update();
 }

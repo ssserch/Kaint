@@ -183,7 +183,8 @@ function edgeHandle(corners, p) {
 
 // Tiradores de Kaint (Handles::draw): redondos, el botón azul de restablecer el punto de giro y el
 // icono de mover (cuadro con cuatro flechas).
-function drawHandle(ctx, c, shape) {
+// 'hot': con el puntero encima (el botón de volver a centrar el punto de giro cambia de colores).
+function drawHandle(ctx, c, shape, hot = false, angle = 0) {
     const dark = "rgba(30,30,30,0.9)", light = "rgba(255,255,255,0.94)";
     ctx.save();
     ctx.lineWidth = 1;
@@ -198,15 +199,19 @@ function drawHandle(ctx, c, shape) {
         ctx.stroke();
     } else if (shape === "resetPivot") {
         ctx.translate(c.x, c.y);
+        // Gira según hacia dónde quedó el punto de giro respecto al centro (al que vuelve).
+        ctx.rotate(angle);
         ctx.rotate(Math.PI / 4);
-        ctx.fillStyle = "#0078d7";
+        // En reposo, el cuadrado blanco con la flecha azul; con el puntero encima, al revés.
+        const blue = "#0078d7", ink = hot ? light : blue;
+        ctx.fillStyle = hot ? blue : light;
         ctx.strokeStyle = dark;
         ctx.fillRect(-6.5, -6.5, 13, 13);
         ctx.strokeRect(-6.5, -6.5, 13, 13);
         ctx.rotate(-Math.PI / 4);
         ctx.beginPath();
         ctx.arc(0, 0, 3.5, (-30 * Math.PI) / 180, (-300 * Math.PI) / 180, true);
-        ctx.strokeStyle = light;
+        ctx.strokeStyle = ink;
         ctx.lineWidth = 1.4;
         ctx.stroke();
         ctx.beginPath();
@@ -214,7 +219,7 @@ function drawHandle(ctx, c, shape) {
         ctx.lineTo(4.5, -3.5);
         ctx.lineTo(1.5, -1.5);
         ctx.closePath();
-        ctx.fillStyle = light;
+        ctx.fillStyle = ink;
         ctx.fill();
     } else if (shape === "move") {
         ctx.beginPath();
@@ -245,18 +250,29 @@ function drawHandle(ctx, c, shape) {
 }
 
 // Punto de giro (Handles::drawPivot): círculo con una cruz girada como la caja.
+// Como en Paint.NET, los tiradores laten: su opacidad sigue un seno de 2 s entre 0,25 y 1,5 (cortado en
+// 1), cada uno desfasado una décima de periodo (Handles::pulse de Kaint). Sin animaciones, 1.
+function handlePulse(index) {
+    if (document.documentElement.classList.contains("no-animations"))
+        return 1;
+    return Math.min(1, 0.875 + 0.625 * Math.sin(2 * Math.PI * (performance.now() / 2000 + index / 10)));
+}
+
 function drawPivot(ctx, c, angle) {
     ctx.save();
     ctx.translate(c.x, c.y);
     ctx.rotate(angle);
+    // Hueco: un círculo con una cruz dentro, con un halo blanco (como los tiradores de Paint.NET).
     ctx.beginPath();
     ctx.arc(0, 0, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.94)";
-    ctx.fill();
     ctx.moveTo(-4, 0);
     ctx.lineTo(4, 0);
     ctx.moveTo(0, -4);
     ctx.lineTo(0, 4);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.94)";
+    ctx.lineWidth = 2.8;
+    ctx.stroke();
     ctx.strokeStyle = "rgba(30,30,30,0.9)";
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -312,7 +328,12 @@ class MoveToolBase extends Tool {
         const xs = corners.map((c) => c.x), ys = corners.map((c) => c.y);
         const bounds = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
         const pivot = toView(box.pivotPoint());
-        return { handles: box.handles().map(toView), corners, bounds, pivot, reset: { x: pivot.x + 18, y: pivot.y - 18 },
+        // El botón de volver al centro, junto al punto de giro del lado del centro (movido a la
+        // izquierda, a su derecha); gira hacia él y según lo lejos que quedó.
+        const center = { x: (corners[0].x + corners[2].x) / 2, y: (corners[0].y + corners[2].y) / 2 };
+        const dx = center.x - pivot.x, dy = center.y - pivot.y, dist = Math.hypot(dx, dy);
+        const reset = dist < 1 ? { x: pivot.x + 18, y: pivot.y - 18 } : { x: pivot.x + (dx / dist) * 26, y: pivot.y + (dy / dist) * 26 };
+        return { handles: box.handles().map(toView), corners, bounds, pivot, reset, resetAngle: Math.atan2(dy, dx) + (dist * 1.5 * Math.PI) / 180,
                  moveIcon: { x: bounds.x1 + 16, y: bounds.y1 + 16 } };
     }
 
@@ -465,6 +486,10 @@ class MoveToolBase extends Tool {
             return;
         }
         const hit = this.hit(e, box);
+        if ((hit.kind === "resetPivot") !== !!this.resetHot) {
+            this.resetHot = hit.kind === "resetPivot";
+            this.view.update();
+        }
         this.view.setCursor(hit.kind === "resize" ? handCursor(false)
                             : hit.kind === "rotate" ? rotateCursor(this.angleTo(box, e))
                             : hit.kind === "pivot" || hit.kind === "resetPivot" ? "default" : this.cursor());
@@ -539,14 +564,20 @@ class MoveToolBase extends Tool {
             view.strokeSelection(ctx, s.selBase, box.matrix());
         const g = this.viewGeometry(box);
         ctx.save();
+        // Los tiradores laten como en Paint.NET (handlePulse), cada uno con su desfase.
         if (!hide)
-            for (const v of g.handles)
+            g.handles.forEach((v, i) => {
+                ctx.globalAlpha = handlePulse(i + 1);
                 drawHandle(ctx, v, "circle");
+            });
         if (!hide || this.drag.kind === "rotate") {
+            ctx.globalAlpha = handlePulse(0);
             drawPivot(ctx, g.pivot, box.angle);
+            ctx.globalAlpha = 1;
             if (box.pivotMoved() && !hide)
-                drawHandle(ctx, g.reset, "resetPivot");
+                drawHandle(ctx, g.reset, "resetPivot", !!this.resetHot, g.resetAngle);
         }
+        ctx.globalAlpha = handlePulse(9);
         drawHandle(ctx, g.moveIcon, "move");
         ctx.restore();
     }

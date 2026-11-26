@@ -72,11 +72,12 @@ export function reasonText(reason) {
 }
 
 // (Con el Alpha-Lock y la animación del editor de GIF, como en Kaint.)
-const props = (l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend, alphaLock: !!l.alphaLock, motion: l.motion ?? null });
+const props = (l) => ({ name: l.name, visible: l.visible, opacity: l.opacity, blend: l.blend, alphaLock: !!l.alphaLock, motion: l.motion ?? null,
+                        track: l.track || 0, gap: l.gap || 0 });
 const sameProps = (a, b) => a.name === b.name && a.visible === b.visible && a.opacity === b.opacity && a.blend === b.blend
-    && !!a.alphaLock === !!b.alphaLock && JSON.stringify(a.motion ?? null) === JSON.stringify(b.motion ?? null);
+    && !!a.alphaLock === !!b.alphaLock && JSON.stringify(a.motion ?? null) === JSON.stringify(b.motion ?? null) && (a.track || 0) === (b.track || 0) && (a.gap || 0) === (b.gap || 0);
 const propsJson = (id, p) => ({ id, name: p.name, visible: p.visible, opacity: p.opacity, blend: p.blend, alphaLock: !!p.alphaLock,
-                                motion: p.motion ?? null });
+                                motion: p.motion ?? null, track: p.track || 0, gap: p.gap || 0 });
 
 function propsFrom(o, p = { name: "", visible: true, opacity: 255, blend: "normal", alphaLock: false, motion: null }) {
     const out = { ...p };
@@ -85,6 +86,8 @@ function propsFrom(o, p = { name: "", visible: true, opacity: 255, blend: "norma
     if (o.opacity !== undefined) out.opacity = Math.max(0, Math.min(255, Math.round(+o.opacity || 0)));
     if (o.blend !== undefined) out.blend = String(o.blend);
     if (o.alphaLock !== undefined) out.alphaLock = !!o.alphaLock;
+    if (o.track !== undefined) out.track = Math.max(0, Math.min(63, Math.round(+o.track || 0)));
+    if (o.gap !== undefined) out.gap = Math.max(0, Math.round(+o.gap || 0));
     if (o.motion !== undefined) out.motion = o.motion && typeof o.motion === "object" ? o.motion : null;
     return out;
 }

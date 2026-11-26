@@ -55,6 +55,9 @@ private:
     int m_dragT = 0;
     double m_dragV = 0;
     double m_dragLo = 0, m_dragHi = 1;
+    // La animación de antes de arrastrar y cómo queda con el punto donde está el puntero.
+    Motion::Clip m_dragBase;
+    Motion::Clip dragged() const;
 };
 
 class Inspector : public QWidget {
@@ -89,6 +92,8 @@ private:
     KeyGraph* m_graph = nullptr;
     QToolButton* m_reset = nullptr;
     QToolButton* m_bake = nullptr;
+    // El punto clave global (todos los valores a la vez, como el de Filmora).
+    QToolButton* m_globalKey = nullptr;
     bool m_updating = false;
 };
 

@@ -1,13 +1,28 @@
 #include "app/tools/Handles.h"
 
+#include "app/Animations.h"
 #include "app/Theme.h"
+
+#include <QElapsedTimer>
+#include <QtMath>
 
 #include <QPainter>
 #include <QPainterPath>
 
 namespace Handles {
 
-void draw(QPainter& p, const QPointF& c, Shape shape)
+qreal pulse(int index)
+{
+    if (!Animations::enabled())
+        return 1.0;
+    static QElapsedTimer clock;
+    if (!clock.isValid())
+        clock.start();
+    const double phase = clock.elapsed() / 2000.0 + index / 10.0;
+    return std::min(1.0, 0.875 + 0.625 * std::sin(2 * M_PI * phase));
+}
+
+void draw(QPainter& p, const QPointF& c, Shape shape, bool hot, double angle)
 {
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
@@ -46,16 +61,21 @@ void draw(QPainter& p, const QPointF& c, Shape shape)
         p.drawLine(c - QPointF(0, 4), c + QPointF(0, 4));
         break;
     case Shape::ResetPivot: {
+        // En reposo, el cuadrado blanco con la flecha azul; con el puntero encima, al revés (azul
+        // con la flecha blanca).
+        const QColor blue(0, 120, 215);
+        const QColor fill = hot ? blue : light, ink = hot ? light : blue;
         p.translate(c);
+        p.rotate(angle);
         p.rotate(45);
         p.setPen(QPen(dark, 1));
-        p.setBrush(QColor(0, 120, 215));
+        p.setBrush(fill);
         p.drawRect(QRectF(-6.5, -6.5, 13, 13));
         p.rotate(-45);
-        p.setPen(QPen(light, 1.4));
+        p.setPen(QPen(ink, 1.4));
         p.setBrush(Qt::NoBrush);
         p.drawArc(QRectF(-3.5, -3.5, 7, 7), 30 * 16, 270 * 16);
-        p.setBrush(light);
+        p.setBrush(ink);
         p.setPen(Qt::NoPen);
         p.drawPolygon(QPolygonF{QPointF(1.5, -5.5), QPointF(4.5, -3.5), QPointF(1.5, -1.5)});
         break;
@@ -89,11 +109,15 @@ void drawPivot(QPainter& p, const QPointF& c, double degrees)
     const QColor light(255, 255, 255, 240);
     p.translate(c);
     p.rotate(degrees);
-    p.setPen(QPen(dark, 1));
-    p.setBrush(light);
-    p.drawEllipse(QPointF(), 6, 6);
-    p.drawLine(QPointF(-4, 0), QPointF(4, 0));
-    p.drawLine(QPointF(0, -4), QPointF(0, 4));
+    // Hueco: un círculo con una cruz dentro (se ve la imagen), con un halo blanco para que se vea
+    // sobre cualquier fondo, como los tiradores de Paint.NET.
+    p.setBrush(Qt::NoBrush);
+    for (const auto& [color, width] : {std::pair{light, 2.8}, std::pair{dark, 1.0}}) {
+        p.setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap));
+        p.drawEllipse(QPointF(), 6, 6);
+        p.drawLine(QPointF(-4, 0), QPointF(4, 0));
+        p.drawLine(QPointF(0, -4), QPointF(0, 4));
+    }
     p.restore();
 }
 

@@ -137,10 +137,16 @@ function linuxColors(desktop, dark) {
 // Los temas 11 a 22 (los mismos números que en Kaint): Windows 8, Windows 7 Basic y los de Linux.
 const LinuxSchemes = { 15: "yaru", 16: "yaru", 17: "adwaita", 18: "adwaita", 19: "mint", 20: "mint", 21: "elementary", 22: "elementary" };
 
+// Windows 7 Basic (13 y 14) no sale en la lista: es una opción de Windows 7 y de su oscuro. En la
+// lista se ve el tema del que es la variante.
+export function listedScheme(id) {
+    return id === 13 ? 7 : id === 14 ? 10 : id;
+}
+
 // La lista de temas de Configuración y de la bienvenida (como la de Kaint), agrupados.
 export function themeChoices(tr) {
     return [[0, tr("Seguir al sistema")], [1, tr("Claro")], [2, tr("Oscuro")], [6, tr("Azul")],
-            [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")], [13, tr("Windows 7 Basic")], [14, tr("Windows 7 Basic oscuro")],
+            [7, tr("Windows 7")], [10, tr("Windows 7 oscuro")],
             [11, tr("Windows 8")], [12, tr("Windows 8 oscuro")], [8, tr("Windows XP")], [4, tr("Windows 98")], [9, tr("Windows 98 ALT")],
             [15, "Ubuntu"], [16, tr("Ubuntu oscuro")], [17, "GNOME"], [18, tr("GNOME oscuro")], [19, "Linux Mint"], [20, tr("Linux Mint oscuro")],
             [21, "elementary OS"], [22, tr("elementary OS oscuro")], [5, tr("Personalizado")]];
@@ -156,11 +162,16 @@ export const CustomBases = {
     xp: { base: "light", colors: XpColors, xp: true },
     win98: { base: "win98", colors: {} },
     win98alt: { base: "win98", colors: Win98AltColors, alt: true },
+    // Windows 8: el marco plano del color de las ventanas (el de Configuración) y sus botones.
+    win8: { base: "light", colors: {}, win8: true },
+    win8dark: { base: "dark", colors: {}, win8: true },
 };
 
 // Los colores de una base del personalizado (los que tiene cada color sin cambiar).
 export function baseColors(name) {
     const b = CustomBases[name] || CustomBases.dark;
+    if (b.win8)
+        return { ...Presets[b.base], ...win8Colors(b.base === "dark", Settings.get("win8Color")) };
     return { ...Presets[b.base], ...b.colors };
 }
 
@@ -261,8 +272,11 @@ export function resolveScheme(scheme, systemDark) {
         if (b.win7 && !own.glass && /^#[0-9a-f]{6}$/i.test(glass || ""))
             own = { ...own, glass: b.base === "dark" ? followGlass(Win7DarkColors.glass, Win7Colors.glass, glass) : glass };
         const colors = b.win7 ? customColors(CustomBases[custom.base] ? custom.base : "dark", own)
+                     : b.win8 ? { ...win8Colors(b.base === "dark", Settings.get("win8Color")), ...own }
                               : { ...b.colors, ...own };
-        return { base: b.base, colors, win7: !!b.win7, xp: !!b.xp, alt: !!b.alt, custom: true };
+        if (b.win8 && own.menuBar)
+            colors.win8 = own.menuBar;
+        return { base: b.base, colors, win7: !!b.win7, xp: !!b.xp, alt: !!b.alt, win8: !!b.win8, custom: true };
     }
     return { base: scheme === 2 || (scheme === 0 && systemDark) ? "dark" : "light" };
 }

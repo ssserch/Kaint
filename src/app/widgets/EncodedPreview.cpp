@@ -17,6 +17,16 @@
 
 #include <algorithm>
 
+#ifdef Q_OS_LINUX
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
+namespace {
+constexpr QSize kFitBox(340, 260);
+}
+
 EncodedPreview::EncodedPreview(const QString& path, QWidget* parent)
     : QWidget(parent)
     , m_path(path)
@@ -80,7 +90,19 @@ void EncodedPreview::request(Encoder encoder, int loops)
     m_loops = loops;
     emit statusChanged(tr("Tamaño del archivo: calculando…"));
     m_pending = true;
-    m_debounce.start();
+    // Hasta que la ventana se ve, no se codifica (antes empezaba mientras se abría y la trababa).
+    if (m_shown)
+        m_debounce.start(120);
+}
+
+void EncodedPreview::showEvent(QShowEvent* e)
+{
+    QWidget::showEvent(e);
+    if (m_shown)
+        return;
+    m_shown = true;
+    if (m_pending)
+        m_debounce.start(160);
 }
 
 void EncodedPreview::start()
@@ -93,6 +115,10 @@ void EncodedPreview::start()
     m_running = true;
     const int generation = ++m_generation;
     m_thread = std::thread([this, generation, encoder = m_encoder, path = m_path] {
+#ifdef Q_OS_LINUX
+        // Con menos prioridad que la interfaz: la ventana sigue fluida mientras se codifica.
+        setpriority(PRIO_PROCESS, id_t(syscall(SYS_gettid)), 10);
+#endif
         QString error;
         QByteArray data = encoder(&error);
         // Se vuelve a leer lo codificado: así la vista previa es exactamente el archivo.
@@ -119,13 +145,19 @@ void EncodedPreview::start()
                 frames << Gif::Frame{decoded, 100};
         }
         const qint64 bytes = data.size();
+        QList<QImage> fits;
+        for (const Gif::Frame& f : std::as_const(frames)) {
+            const QSize box = f.image.size().scaled(kFitBox, Qt::KeepAspectRatio).boundedTo(f.image.size()).expandedTo(QSize(1, 1));
+            fits << (box == f.image.size() ? f.image : f.image.scaled(box, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+        }
         QMetaObject::invokeMethod(
-            this, [this, frames, bytes, error, generation] { onEncoded(frames, bytes, error, generation); },
+            this, [this, frames, fits, bytes, error, generation] { onEncoded(frames, fits, bytes, error, generation); },
             Qt::QueuedConnection);
     });
 }
 
-void EncodedPreview::onEncoded(const QList<Gif::Frame>& frames, qint64 bytes, const QString& error, int generation)
+void EncodedPreview::onEncoded(const QList<Gif::Frame>& frames, const QList<QImage>& fits, qint64 bytes, const QString& error,
+                               int generation)
 {
     if (generation != m_generation)
         return;
@@ -133,6 +165,7 @@ void EncodedPreview::onEncoded(const QList<Gif::Frame>& frames, qint64 bytes, co
     if (m_thread.joinable())
         m_thread.join();
     m_frames = frames;
+    m_fits = fits;
     emit statusChanged(error.isEmpty() ? tr("Tamaño del archivo: %1").arg(QLocale().formattedDataSize(bytes))
                                        : tr("No se pudo codificar: %1").arg(error));
     m_index = std::clamp(m_index, 0, std::max(0, int(m_frames.size()) - 1));
@@ -150,11 +183,12 @@ void EncodedPreview::showFrame(int index)
     if (index < 0 || index >= m_frames.size())
         return;
     m_index = index;
-    const QImage& image = m_frames[index].image;
     const int zoom = m_zoom->currentData().toInt();
+    // «Ajustar»: la ya reducida en segundo plano.
+    const QImage& image = zoom == 0 && index < m_fits.size() ? m_fits[index] : m_frames[index].image;
     QSize s = image.size();
     if (zoom == 0)
-        s = s.scaled(QSize(340, 260), Qt::KeepAspectRatio).boundedTo(image.size()).expandedTo(QSize(1, 1));
+        s = s.scaled(kFitBox, Qt::KeepAspectRatio).boundedTo(image.size()).expandedTo(QSize(1, 1));
     else
         s = s * zoom / 100;
     QPixmap pm(s);

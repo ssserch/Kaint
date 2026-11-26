@@ -34,7 +34,9 @@ bool g_overImageOnly = true;
 // Marcos propios de las ventanas flotantes con los temas Windows XP (el de Luna: la cabecera azul
 // en degradado con las esquinas de arriba redondeadas y el borde azul) y Windows 7 (el de cristal
 // de Aero: el borde translúcido y el contenido en un recuadro), con los dos aspectos.
-enum class PanelFrame { Plain, Luna, Aero };
+// Con Windows 8 (Metro), el marco plano y ancho del color de las ventanas, con la línea oscura por
+// fuera y otra alrededor del contenido, y la X roja colgando del borde de arriba.
+enum class PanelFrame { Plain, Luna, Aero, Metro };
 
 PanelFrame panelFrame()
 {
@@ -43,7 +45,14 @@ PanelFrame panelFrame()
     const Theme::Spec s = Theme::active();
     if (s.classic)
         return PanelFrame::Plain;
-    return s.xp ? PanelFrame::Luna : s.win7 ? PanelFrame::Aero : PanelFrame::Plain;
+    return s.xp ? PanelFrame::Luna : s.win7 ? PanelFrame::Aero : s.metro ? PanelFrame::Metro : PanelFrame::Plain;
+}
+
+// La X cuelga del borde de arriba: Windows 7 con esa forma elegida y Windows 8.
+bool hangingPanelClose()
+{
+    return panelFrame() == PanelFrame::Metro
+        || (panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging);
 }
 
 bool windows10Chrome()
@@ -77,6 +86,7 @@ public:
         // Windows 7, el rojo de cristal, más ancho.
         switch (panelFrame()) {
         case PanelFrame::Luna: return {19, 19};
+        case PanelFrame::Metro: return {34, 18};
         case PanelFrame::Aero:
             switch (WindowFrame::panelClose7()) {
             case WindowFrame::PanelClose7::Hanging: return {30, 18};
@@ -106,7 +116,10 @@ protected:
             return;
         }
         if (const PanelFrame frame = panelFrame(); frame != PanelFrame::Plain) {
-            WindowFrame::paintPanelClose(p, rect(), frame == PanelFrame::Luna ? WindowFrame::Buttons::WindowsXP : WindowFrame::Buttons::Windows7,
+            WindowFrame::paintPanelClose(p, rect(),
+                                         frame == PanelFrame::Luna    ? WindowFrame::Buttons::WindowsXP
+                                         : frame == PanelFrame::Metro ? WindowFrame::Buttons::Windows8
+                                                                      : WindowFrame::Buttons::Windows7,
                                          underMouse(), isDown());
             return;
         }
@@ -291,6 +304,7 @@ int FloatingPanel::borderWidth() const
     switch (panelFrame()) {
     case PanelFrame::Luna: return 3;
     case PanelFrame::Aero: return 6;
+    case PanelFrame::Metro: return 6;
     case PanelFrame::Plain: break;
     }
     // Como Paint.NET: sin borde (salvo con los bordes redondeados, que llevan el elegido).
@@ -316,6 +330,9 @@ void FloatingPanel::applyChrome()
     auto* titleLayout = static_cast<QBoxLayout*>(m_titleBar->layout());
     if (panelFrame() == PanelFrame::Luna)
         titleLayout->setContentsMargins(6, 3, 4, 3);
+    else if (panelFrame() == PanelFrame::Metro)
+        // Windows 8: la X cuelga del contorno, a ras del marco de la derecha.
+        titleLayout->setContentsMargins(8, 1, 6, 4);
     else if (panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging)
         // La X unida al borde de arriba: cuelga del contorno (el título, igual de centrado).
         titleLayout->setContentsMargins(8, 1, 6, 3);
@@ -327,7 +344,7 @@ void FloatingPanel::applyChrome()
         titleLayout->setContentsMargins(6, 5, 2, 5);
     else
         titleLayout->setContentsMargins(7, 1, 1, 1);
-    const bool hangingClose = panelFrame() == PanelFrame::Aero && WindowFrame::panelClose7() == WindowFrame::PanelClose7::Hanging;
+    const bool hangingClose = hangingPanelClose();
     titleLayout->setAlignment(m_close, hangingClose ? Qt::AlignTop : Qt::Alignment());
     m_title->setContentsMargins(0, hangingClose ? 3 : 0, 0, 0);
     m_close->updateGeometry();
@@ -382,7 +399,10 @@ void FloatingPanel::paintEvent(QPaintEvent* e)
     }
     const Theme::Spec s = Theme::active();
     QPainter p(this);
-    if (const PanelFrame frame = panelFrame(); frame != PanelFrame::Plain) {
+    if (const PanelFrame frame = panelFrame(); frame == PanelFrame::Metro) {
+        paintMetroFrame(p);
+        return;
+    } else if (frame != PanelFrame::Plain) {
         paintFrame(p, frame == PanelFrame::Luna);
         return;
     }
@@ -521,6 +541,25 @@ void FloatingPanel::paintFrame(QPainter& p, bool luna)
     p.drawRect(body.adjusted(-1, -1, 0, 0));
     p.setPen(QColor(0, 0, 0, 179));
     p.drawRect(body.adjusted(0, 0, -1, -1));
+}
+
+// Windows 8, como sus ventanas: todo del color de las ventanas (la cabecera y el marco), la línea
+// oscura por fuera y otra más suave alrededor del contenido.
+void FloatingPanel::paintMetroFrame(QPainter& p)
+{
+    const Theme::Spec s = Theme::active();
+    const QColor color = s.panelTitle;
+    const int b = borderWidth();
+    const int titleBottom = m_titleBar->geometry().bottom() + 1;
+    p.setRenderHint(QPainter::Antialiasing, false);
+    p.fillRect(rect(), color);
+    const QRect body(b, titleBottom, width() - 2 * b, height() - titleBottom - b);
+    p.fillRect(body, s.panel);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(color.darker(118));
+    p.drawRect(body.adjusted(-1, -1, 0, 0));
+    p.setPen(color.darker(130));
+    p.drawRect(rect().adjusted(0, 0, -1, -1));
 }
 
 int FloatingPanel::titleInset() const

@@ -102,8 +102,14 @@ bool TransformBox::pivotMoved() const
 
 QPointF TransformBox::resetButtonView(const QTransform& imageToView) const
 {
-    // Junto al punto central, hacia arriba a la derecha (lo sigue al moverlo).
-    return (m_transform * imageToView).map(m_localPivot) + QPointF(18, -18);
+    // Junto al punto de giro, del lado del centro al que vuelve: movido a la izquierda, a su derecha
+    // (y al revés), siguiéndolo al moverlo.
+    const QTransform toView = m_transform * imageToView;
+    const QPointF pivot = toView.map(m_localPivot), center = toView.map(m_rect.center());
+    const QLineF toCenter(pivot, center);
+    if (toCenter.length() < 1)
+        return pivot + QPointF(18, -18);
+    return pivot + (center - pivot) * (26.0 / toCenter.length());
 }
 
 QPolygonF TransformBox::canvasCorners() const
@@ -181,6 +187,39 @@ QTransform TransformBox::update(const QPointF& pos, Qt::KeyboardModifiers mods)
     case Mode::Translate: {
         QPointF d = pos - m_startPos;
         d = QPointF(std::round(d.x()), std::round(d.y()));
+        m_snapLines.clear();
+        if (m_snapTol > 0 && !(mods & Qt::ControlModifier)) {
+            // En cada eje, el borde o el centro más cerca de una línea (a la tolerancia o menos) se pega a ella.
+            const QRectF r = m_start.mapRect(m_rect);
+            auto snapAxis = [this](const QList<SnapTarget>& targets, double a0, double a1, double delta) {
+                const double edges[3] = {a0, a1, (a0 + a1) / 2};
+                double best = 0;
+                bool found = false;
+                for (double e : edges)
+                    for (const SnapTarget& t : targets) {
+                        const double diff = t.pos - (e + delta);
+                        if (std::abs(diff) <= m_snapTol && (!found || std::abs(diff) < std::abs(best))) {
+                            best = diff;
+                            found = true;
+                        }
+                    }
+                return found ? std::round(delta + best) : delta;
+            };
+            d.setX(snapAxis(m_snapX, r.left(), r.right(), d.x()));
+            d.setY(snapAxis(m_snapY, r.top(), r.bottom(), d.y()));
+            // Las alineaciones que quedan: cada borde o centro sobre una línea.
+            const QRectF moved = r.translated(d);
+            auto lines = [this, &moved](const QList<SnapTarget>& targets, bool vertical) {
+                const double a0 = vertical ? moved.left() : moved.top(), a1 = vertical ? moved.right() : moved.bottom();
+                const double o0 = vertical ? moved.top() : moved.left(), o1 = vertical ? moved.bottom() : moved.right();
+                for (double e : {a0, a1, (a0 + a1) / 2})
+                    for (const SnapTarget& t : targets)
+                        if (std::abs(t.pos - e) < 0.5)
+                            m_snapLines.append({vertical, t.pos, std::min(t.from, o0), std::max(t.to, o1)});
+            };
+            lines(m_snapX, true);
+            lines(m_snapY, false);
+        }
         m_transform = m_start * QTransform::fromTranslate(d.x(), d.y());
         break;
     }
@@ -199,6 +238,18 @@ QTransform TransformBox::update(const QPointF& pos, Qt::KeyboardModifiers mods)
         break;
     }
     case Mode::Scale: {
+        // Deformar: la esquina va sola donde esté el puntero y la imagen queda en perspectiva.
+        if (m_warp && Handles::isCorner(m_handle)) {
+            QPolygonF quad = m_start.map(QPolygonF(m_rect));
+            quad.resize(4);
+            quad[m_handle / 2] = pos;
+            QPolygonF from(m_rect);
+            from.resize(4);
+            QTransform warped;
+            if (QTransform::quadToQuad(from, quad, warped))
+                m_transform = warped;
+            break;
+        }
         bool ok = false;
         const QTransform inv = m_start.inverted(&ok);
         if (!ok)
@@ -237,14 +288,28 @@ void TransformBox::draw(QPainter& p, const QTransform& imageToView, int parts) c
     const QPolygonF poly = toView.map(QPolygonF(m_rect));
     if (parts & Outline)
         Handles::drawBox(p, poly);
+    // Los tiradores laten como en Paint.NET (Handles::pulse), cada uno con su desfase.
+    p.save();
     if (parts & BoxHandles)
-        for (int i = 0; i < 8; ++i)
+        for (int i = 0; i < 8; ++i) {
+            p.setOpacity(Handles::pulse(i + 1));
             Handles::draw(p, toView.map(Handles::boxHandle(m_rect, i)), Handles::Shape::Circle);
+        }
     if (parts & PivotPoint) {
+        p.setOpacity(Handles::pulse(0));
         Handles::drawPivot(p, toView.map(m_localPivot), rotationDegrees());
-        if (pivotMoved())
-            Handles::draw(p, resetButtonView(imageToView), Handles::Shape::ResetPivot);
+        p.setOpacity(1.0);
+        if (pivotMoved()) {
+            // Gira hacia el centro al que vuelve y, además, según lo lejos que quedó (se nota al
+            // arrastrar el punto).
+            const QLineF toCenter(toView.map(m_localPivot), toView.map(m_rect.center()));
+            Handles::draw(p, resetButtonView(imageToView), Handles::Shape::ResetPivot, m_resetHot,
+                          -toCenter.angle() + toCenter.length() * 1.5);
+        }
     }
-    if (parts & MoveIcon)
+    if (parts & MoveIcon) {
+        p.setOpacity(Handles::pulse(9));
         Handles::draw(p, Handles::moveIconPos(poly.boundingRect()), Handles::Shape::Move);
+    }
+    p.restore();
 }

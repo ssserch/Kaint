@@ -108,13 +108,14 @@ public class MainActivity extends Activity {
         s.setUseWideViewPort(true);
         s.setTextZoom(100);
 
-        // Rendimiento: la WebView dibuja con la GPU, en su propia capa, y no baja su prioridad
-        // mientras Kaint se ve (el trazo y el zum no se quedan atrás).
-        web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        // Rendimiento: la WebView ya dibuja con la GPU. Antes iba además en una capa propia
+        // (LAYER_TYPE_HARDWARE) y prerrasterizaba lo que no se ve (setOffscreenPreRaster): cada
+        // fotograma se copiaba entero otra vez a esa capa, con mucho más trabajo y memoria de la GPU,
+        // y con poca memoria la capa dejaba de actualizarse (el lienzo se quedaba congelado aunque el
+        // zum y la posición seguían cambiando). Solo se mantiene la prioridad alta mientras se ve.
+        web.setLayerType(View.LAYER_TYPE_NONE, null);
         if (Build.VERSION.SDK_INT >= 26)
             web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true);
-        if (Build.VERSION.SDK_INT >= 23)
-            s.setOffscreenPreRaster(true);
 
         web.addJavascriptInterface(new Bridge(), "KaintAndroid");
         web.setWebViewClient(new WebViewClient() {

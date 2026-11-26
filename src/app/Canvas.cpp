@@ -120,7 +120,8 @@ Canvas::Canvas(QWidget* parent)
         QRectF area(sel.bounds());
         if (!sel.path().isEmpty())
             area = area.united(sel.path().boundingRect());
-        const QRect r = imageToView(area).toAlignedRect().adjusted(-2, -2, 2, 2);
+        // (Con margen: los tiradores de las herramientas Mover, que laten, y su icono de mover.)
+        const QRect r = imageToView(area).toAlignedRect().adjusted(-34, -34, 34, 34);
         updateView(r.intersected(viewport()->rect()));
     });
 }
@@ -782,7 +783,9 @@ const QImage& Canvas::selectionTint() const
 void Canvas::paintEvent(QPaintEvent* e)
 {
     QPainter p(viewport());
-    Theme::paintWorkspace(p, viewport()->rect(), e->rect(), m_border);
+    // La imagen de fondo se coloca respecto a todo el lienzo (con el sitio de las barras de
+    // desplazamiento): si no, al aparecer o desaparecer las barras (ajustar a la ventana) se movía.
+    Theme::paintWorkspace(p, QRect(viewport()->mapFrom(this, QPoint(0, 0)), size()), e->rect(), m_border);
     const bool dark = (m_border.isValid() ? m_border : Theme::workspaceColor()).lightness() < 128;
     if (!m_doc)
         return;

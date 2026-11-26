@@ -1,5 +1,7 @@
 #include "app/widgets/FontChooser.h"
 
+#include "app/Theme.h"
+
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QComboBox>
@@ -115,8 +117,14 @@ bool ComboClickToOpen::eventFilter(QObject* watched, QEvent* event)
     if (!m_editing) {
         switch (event->type()) {
         case QEvent::MouseButtonPress:
-            if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton)
-                m_clickTimer.start(QApplication::doubleClickInterval());
+            // Con el estilo de Paint.NET, como en él: un clic en el texto ya escribe (la flecha sigue
+            // abriendo la lista). Con el de Kaint, un clic abre la lista y el doble clic escribe.
+            if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+                if (Theme::paintNetLook())
+                    startEditing();
+                else
+                    m_clickTimer.start(QApplication::doubleClickInterval());
+            }
             return true;
         case QEvent::MouseButtonDblClick:
             m_clickTimer.stop();
@@ -256,8 +264,14 @@ bool FontChooser::eventFilter(QObject* watched, QEvent* event)
     if (!m_editing) {
         switch (event->type()) {
         case QEvent::MouseButtonPress:
-            if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton)
-                m_clickTimer.start(QApplication::doubleClickInterval());
+            // Con el estilo de Paint.NET, como en él: un clic en el texto ya escribe (la flecha sigue
+            // abriendo la lista). Con el de Kaint, un clic abre la lista y el doble clic escribe.
+            if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+                if (Theme::paintNetLook())
+                    startEditing();
+                else
+                    m_clickTimer.start(QApplication::doubleClickInterval());
+            }
             return true;
         case QEvent::MouseButtonDblClick:
             m_clickTimer.stop();

@@ -804,7 +804,7 @@ license, components, folder, finish), whether it runs Kaint at the end, the Star
 shortcuts (`optional`, `checked`, `always` or `never`), what *delete my settings* removes, and the
 languages (NSIS names: `English`, `Spanish`, `French`...) with their texts. In texts, `{name}`,
 `{version}` and `{arch}` are replaced. Anything left out keeps its usual value. Use another file
-with `build.bat --setup --winsetup path	oile.json`.
+with `build.bat --setup --winsetup path\to\file.json`.
 
 `build.bat --zip` makes a portable `Kaint-<version>-windows-x64.zip`: unzip it anywhere and run
 `Kaint\bin\kaint.exe`.
@@ -845,6 +845,10 @@ Run `build.sh` or `build.bat` without options for an **interactive menu**: *Comp
 lead to the list of formats (the ones that don't suit this system are marked *not recommended*),
 and *Exit* leaves.
 
+<p align="center">
+  <img src="img/other/build-menu.png" alt="The build.bat menu: Compile, Debug or Exit, and then the list of formats" width="700">
+</p>
+
 | Option | `build.sh` (Linux, FreeBSD, macOS) | `build.bat` (Windows) |
 | --- | :---: | :---: |
 | Just build the executable | `--build` (in `build/`) | `--build` (in `build-windows\`) |
@@ -856,6 +860,7 @@ and *Exit* leaves.
 | Variants | `--avx2` (x86-64-v3) · `--musl` (Alpine container) · `--arm64` (aarch64) | `--avx2` · `--arm64` |
 | FreeBSD / macOS | `--tar` on FreeBSD · `--tar` on macOS (with Kaint.app) | |
 | Linux builds from Windows | | `--wsl build`, `deb`, `pkg`, `appimage`, `appimage-avx2`, `tar`, `tar-musl` or `tar-arm64` |
+| macOS build from Windows | | option 19 of the menu ([GitHub Actions](#-build-on-github-github-actions), with `gh`) |
 | Web version (.zip) | `--web` | `--web` |
 | Mobile version (Android) | `--apk` · `--aab` | `--apk` · `--aab` (with WSL) |
 | OpenD2D for Paint.NET plugins | `--opend2d latest`, `main`, a release (`v0.1.0-beta.1`), `local` (`2dlocal/`), a folder or `off` | |
@@ -876,6 +881,32 @@ answers it beforehand; with CMake, `-DKAINT_OPEND2D_REF=...`, `-DKAINT_OPEND2D_S
 
 Packagers can build with `-DKAINT_UPDATE_CHECK=OFF` so that Kaint leaves updates to the package
 manager and never looks for new versions on GitHub (the Flatpak does this).
+
+### 🤖 Build on GitHub (GitHub Actions)
+
+The **Compilar Kaint** (*build Kaint*) workflow, `.github/workflows/build.yml`, builds Kaint
+on GitHub's machines with the same `build.bat` and `build.sh`, so anyone can get the files without
+installing anything, and **macOS can be built from Windows or Linux**:
+
+| System | What it makes |
+| --- | --- |
+| Windows x64 | portable `.zip` and installer (`-setup.exe`) |
+| Linux x86_64 | AppImage (built on Ubuntu 22.04: runs on old distributions too) and `.deb` (Debian 13 / Ubuntu 25.04 or newer) |
+| macOS arm64 | `.tar.gz` with **Kaint.app**, Qt included (Apple Silicon, macOS 13 or newer) |
+| Web | `.zip` of Kaint.HTML (only when chosen) |
+
+- **By hand**: on GitHub, *Actions* > *Compilar Kaint* > *Run workflow*, tick the systems and press
+  *Run workflow*. In a fork it works the same way (enable *Actions* in the fork first).
+- **From `build.bat`**: option 19 of the menu (*tar.gz macOS arm64*) starts the macOS build with the
+  [GitHub CLI](https://cli.github.com) (`gh auth login` once). It builds what is pushed to GitHub on
+  the current branch, not local changes.
+- **On its own**: on every push to `main` and every pull request that changes the code (not the
+  documentation), to check that it still builds everywhere.
+
+When it finishes, the files are in the run's page under **Artifacts** (kept for 30 days). The
+workflow never publishes anything: releases are uploaded by hand. The macOS app is not signed by
+Apple: the first time, right-click *Kaint.app* > *Open* (or run `xattr -dr com.apple.quarantine
+Kaint.app`).
 
 ## License
 

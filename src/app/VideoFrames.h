@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QImage>
+#include <QList>
 #include <QObject>
 #include <QString>
 
+#include <functional>
 #include <memory>
 
 // Los fotogramas de un vídeo para el fondo del lienzo, en bucle y sin sonido: con Media Foundation
@@ -22,6 +24,15 @@ public:
     static bool isVideo(const QString& path);
     // Extensiones de vídeo para el diálogo de abrir ("*.mp4 *.webm...").
     static QString filePatterns();
+
+    // Leer un vídeo entero de una vez (para abrirlo como animación) sin FFmpeg: solo en Windows,
+    // con Media Foundation. Como mucho 'maxFps' fotogramas por segundo y 'maxFrames' en total (más
+    // largo, menos por segundo), todos con la misma duración (1 / '*fps' segundos), opacos y
+    // derechos (los de móvil en vertical se giran). Mientras lee, llama a 'progress' (hechos y
+    // total, 0 si no se sabe) en este hilo; si devuelve false, se cancela y 'error' queda vacío.
+    static bool canDecode();
+    static bool decode(const QString& path, double maxFps, int maxFrames, QList<QImage>* frames, double* fps,
+                       const std::function<bool(int, int)>& progress, QString* error);
 
     void setPaused(bool paused);
     QString error() const;

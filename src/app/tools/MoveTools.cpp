@@ -117,7 +117,7 @@ qreal rotateAngle(const TransformBox& box, const QTransform& imageToView, const 
 }
 
 // ---------------------------------------------------------------------------
-// Mover píxeles seleccionados
+// Mover píxeles
 // ---------------------------------------------------------------------------
 
 MoveSelectedTool::MoveSelectedTool(QObject* parent)
@@ -537,7 +537,7 @@ void MoveSelectionTool::mousePress(const ToolEvent& e)
     Document* doc = document();
     if (!doc || (e.button != Qt::LeftButton && e.button != Qt::RightButton))
         return;
-    // Sin selección, como Mover píxeles seleccionados: el clic selecciona todo el lienzo.
+    // Sin selección, como Mover píxeles: el clic selecciona todo el lienzo.
     if (doc->selection().isEmpty()) {
         if (e.button != Qt::LeftButton)
             return;

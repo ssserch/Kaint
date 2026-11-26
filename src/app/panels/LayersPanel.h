@@ -17,7 +17,7 @@ class LayersPanel : public QWidget {
 public:
     LayersPanel(const QList<QAction*>& actions, QWidget* parent = nullptr);
     void setDocument(Document* doc);
-    // Con Mover píxeles seleccionados: Ctrl+clic añade capas que se mueven junto con la activa.
+    // Con Mover píxeles: Ctrl+clic añade capas que se mueven junto con la activa.
     void setLinkingEnabled(bool on);
     // Al arrastrar una capa: con la línea, la fila se queda en su sitio y una línea marca dónde
     // quedará; si no, la fila sigue al ratón y las demás le van dejando sitio.

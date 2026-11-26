@@ -400,6 +400,11 @@ int main(int argc, char** argv)
                                         QStringLiteral("sí/no")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-windows"),
                                         QObject::tr("Recreación de Windows en la captura (10 u 11)."), QStringLiteral("versión")));
+    parser.addOption(QCommandLineOption(QStringLiteral("preview-popup"),
+                                        QObject::tr("En la captura, en vez de la ventana: un menú abierto (menu:effects, "
+                                                    "menu:adjustments, menu:effects/Artístico...) o el diálogo de un efecto "
+                                                    "(effect:linocut...)."),
+                                        QStringLiteral("menu:...|effect:...")));
     parser.addOption(QCommandLineOption(QStringLiteral("preview-frame"),
                                         QObject::tr("Barra de título de Windows 10 dibujada por Kaint en la captura (yes o no)."),
                                         QStringLiteral("yes|no")));
@@ -449,7 +454,8 @@ int main(int argc, char** argv)
         window.show();
         const QString gif = parser.value(QStringLiteral("preview-gif-editor")).toLower();
         const QString error = window.screenPreview(parser.positionalArguments(), parser.value(QStringLiteral("screenpreview")),
-                                                   gif == QLatin1String("yes") || gif == QLatin1String("sí") || gif == QLatin1String("si"));
+                                                   gif == QLatin1String("yes") || gif == QLatin1String("sí") || gif == QLatin1String("si"),
+                                                   parser.value(QStringLiteral("preview-popup")));
         if (!error.isEmpty()) {
             std::fprintf(stderr, "%s\n", qPrintable(error));
             return 1;

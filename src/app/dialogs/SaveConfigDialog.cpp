@@ -51,7 +51,7 @@ SaveConfigDialog::SaveConfigDialog(const QImage& flattened, const QString& path,
         m_sourceOrder << i;
         m_sourceOn << true;
     }
-    setWindowTitle(tr("Configuración de guardado: %1").arg(QFileInfo(path).suffix().toUpper()));
+    setWindowTitle(tr("Opciones de guardado: %1").arg(QFileInfo(path).suffix().toUpper()));
     setWindowIcon(Icons::theme({"document-save"}));
 
     auto* form = new QFormLayout;

@@ -1139,7 +1139,8 @@ export class GifEditor {
     installPreview() {
         let drag = null;
         this.preview.addEventListener("pointerdown", (e) => {
-            if (!this.doc || e.button !== 0 || this.selected() < 0)
+            // (En un hueco no se ve: no se mueve a ciegas.)
+            if (!this.doc || e.button !== 0 || this.selected() < 0 || this.inGap(this.selected()))
                 return;
             this.stop();
             if (!this.previewGeom)
@@ -1219,7 +1220,7 @@ export class GifEditor {
 
         const names = { x: tr("Posición X"), y: tr("Posición Y"), scaleX: tr("Escala X"), scaleY: tr("Escala Y"), rotation: tr("Rotación"), opacity: tr("Opacidad") };
         this.graphProp = el("select", { onchange: () => this.drawGraph() }, Motion.Props.map((p) => el("option", { value: p, textContent: names[p] })));
-        this.graph = el("canvas", { className: "gif-graph", title: tr("Cómo cambia el valor a lo largo del fotograma. Arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.") });
+        this.graph = el("canvas", { className: "gif-graph", title: tr("Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.") });
         this.installGraph();
 
         this.fps = el("select", { title: tr("Cuántas imágenes por segundo tiene el GIF mientras este fotograma se mueve") },
@@ -1354,6 +1355,33 @@ export class GifEditor {
         this.setMotion(i, clip, tr("Punto clave global"));
     }
 
+    // Un punto clave global en 'ms' (dentro del fotograma 'index'), con los valores que hay ahí, si
+    // no lo había; lo elige (doble clic en el fotograma de la línea de tiempo).
+    addGlobalKey(index, ms) {
+        if (!this.doc || index < 0 || index >= this.doc.layers.length)
+            return;
+        this.stop();
+        if (index !== this.selected())
+            this.select(index);
+        ms = clamp(ms, 0, this.delay(index));
+        const clip = Motion.cloneClip(this.motion(index));
+        if (!Motion.keyTimes(clip).includes(ms)) {
+            // Todos los valores tal como están en ese momento.
+            for (const p of Motion.Props) {
+                const track = Motion.editTrack(clip, p);
+                Motion.setKey(track, ms, Motion.trackValue(track, ms, p));
+            }
+            this.selectedKey = ms;
+            this.setMotion(index, clip, tr("Punto clave global"));
+        }
+        this.selectKeyTime(ms);
+    }
+
+    // Si el cabezal está en un hueco de la pista del fotograma (sin nada: no se ve).
+    inGap(i) {
+        return !!this.doc && i >= 0 && i < this.doc.layers.length && this.frameAtTrack(this.trackOf(i), this.time) < 0;
+    }
+
     jumpKey(prop, direction) {
         const t = this.localTime();
         let best = -1;
@@ -1486,7 +1514,7 @@ export class GifEditor {
             ctx.globalAlpha = 0.65;
             ctx.fillStyle = text;
             ctx.textAlign = "center";
-            ctx.fillText(tr("Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal."), (r.left + r.right) / 2, (r.top + r.bottom) / 2, r.right - r.left - 8);
+            ctx.fillText(tr("Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal o haz doble clic aquí."), (r.left + r.right) / 2, (r.top + r.bottom) / 2, r.right - r.left - 8);
             ctx.globalAlpha = 1;
         }
     }
@@ -1569,6 +1597,29 @@ export class GifEditor {
         };
         g.addEventListener("pointerup", end);
         g.addEventListener("pointercancel", end);
+        g.addEventListener("dblclick", (e) => {
+            const i = this.selected(), r = this.graphPlot();
+            if (!this.doc || i < 0 || e.button !== 0 || r.right <= r.left || r.bottom <= r.top)
+                return;
+            const [x, y] = pos(e);
+            if (this.graphKeyAt(x, y) >= 0 || x < r.left - 6 || x > r.right + 6 || y < r.top - 6 || y > r.bottom + 6)
+                return;
+            // Como al arrastrar un rombo: de 10 en 10 ms, con la escala que se ve.
+            const prop = this.graphProp.value, duration = Math.max(1, this.delay(i));
+            const t = clamp(Math.round((duration * (x - r.left)) / (r.right - r.left) / 10) * 10, 0, duration);
+            const [lo, hi] = this.graphRange(this.motion(i), prop);
+            let v = lo + ((hi - lo) * (r.bottom - y)) / (r.bottom - r.top);
+            if (prop === "opacity")
+                v = clamp(v, 0, 100);
+            v = Math.round(v * 10) / 10;
+            const clip = Motion.cloneClip(this.motion(i));
+            Motion.setKey(Motion.editTrack(clip, prop), t, v);
+            if (clip.lockScale !== false && (prop === "scaleX" || prop === "scaleY"))
+                Motion.setKey(Motion.editTrack(clip, prop === "scaleX" ? "scaleY" : "scaleX"), t, v);
+            this.selectedKey = t;
+            this.setMotion(i, clip, tr("Añadir punto clave"));
+            this.selectKeyTime(t);
+        });
     }
 
     // Con el diálogo de Kaint (en Kaint.APK, el prompt() del navegador no sale).
@@ -2004,12 +2055,16 @@ export class GifEditor {
         lane.addEventListener("pointerup", end);
         lane.addEventListener("pointercancel", end);
         lane.addEventListener("dblclick", (e) => {
-            // Sobre un rombo, el doble clic no abre la duración del fotograma.
+            // Sobre un rombo, el doble clic solo lo elige.
             if (e.target.closest(".gif-key"))
                 return;
+            // En un fotograma: un punto clave donde se hizo doble clic (como en los de audio). La
+            // duración se cambia con su clic derecho o en la barra de arriba.
             const clip = e.target.closest(".gif-clip");
-            if (clip)
-                this.editDelay(+clip.dataset.index);
+            if (clip) {
+                const index = +clip.dataset.index;
+                this.addGlobalKey(index, Math.round((this.msAt(this.laneX(e)) - this.times().start[index]) / 10) * 10);
+            }
         });
         lane.addEventListener("contextmenu", (e) => {
             const key = e.target.closest(".gif-key");
@@ -2345,7 +2400,7 @@ export class GifEditor {
         // Con varias pistas, todas una encima de otra (las de número más alto, arriba).
         const shown = this.trackCount() > 1
             ? [...Array(this.trackCount()).keys()].map((k) => this.frameAtTrack(k, this.time)).filter((i) => i >= 0 && !this.hidden(i))
-            : index >= 0 ? [index] : [];
+            : index >= 0 && !this.inGap(index) ? [index] : [];
         if (!layer) {
             ctx.fillStyle = "#c8c8c8";
             ctx.font = "13px sans-serif";

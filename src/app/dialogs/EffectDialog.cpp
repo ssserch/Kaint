@@ -462,6 +462,26 @@ EffectDialog::EffectDialog(const Effect& effect, const ParamValues& initial, con
         case EffectParam::Type::Color: {
             title(true);
             describe();
+            if (p.colorInline) {
+                // Como en Paint.NET 5.2: el editor entero en el diálogo. Restablecer vuelve al color de
+                // fábrica del efecto (o al que tenía al abrirlo, si depende de los colores activos).
+                auto* editor = new InlineColorEditor(p.colorAlpha, this);
+                editor->setColor(m_values.value(key).value<QColor>());
+                const QColor initial = m_values.value(key).value<QColor>();
+                QColor def = p.defaultValue.isValid() ? p.defaultValue.value<QColor>() : initial;
+                if (!p.defaultValue.isValid() && p.colorDefault == EffectParam::ColorDefault::Black)
+                    def = Qt::black;
+                else if (!p.defaultValue.isValid() && p.colorDefault == EffectParam::ColorDefault::White)
+                    def = Qt::white;
+                connect(editor, &InlineColorEditor::colorChanged, this, [this, key](const QColor& c) { set(key, c); });
+                connect(editor, &InlineColorEditor::resetRequested, this, [this, key, editor, def] {
+                    editor->setColor(def);
+                    set(key, editor->color());
+                });
+                m_setters.insert(key, [editor](const QVariant& v) { editor->setColor(v.value<QColor>()); });
+                layout->addWidget(editor);
+                break;
+            }
             auto* button = new ColorButton(this);
             button->setColor(m_values.value(key).value<QColor>());
             connect(button, &ColorButton::colorChanged, this, [this, key](const QColor& c) { set(key, c); });

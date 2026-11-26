@@ -21,7 +21,7 @@ bool isWritable(const QString& path);
 bool supportsQuality(const QString& path);
 bool supportsAlpha(const QString& path);
 
-// Opciones del diálogo "Configuración de guardado" de Paint.NET.
+// Opciones del diálogo "Opciones de guardado" de Paint.NET.
 struct SaveOptions {
     int quality = 95;
     int bitDepth = 0;
@@ -65,11 +65,15 @@ int automaticBitDepth(const QImage& flattened);
 // de 16 bits o con grupos...): el aviso para el usuario. Ese documento se abre sin archivo, como una
 // imagen nueva, para que guardar no pise el original.
 inline constexpr char kImportWarningProperty[] = "kaintImportWarning";
+// Propiedad (QVariantMap: clave → texto) del documento abierto de un PNG con textos (tEXt, zTXt o
+// iTXt, como los «prompts» de Stable Diffusion): se vuelven a escribir al guardarlo como PNG (como
+// en Paint.NET 5.2).
+inline constexpr char kPngTextProperty[] = "kaintPngText";
 
 Document* load(const QString& path, QString* error);
 // Una imagen sola (acoplada) del archivo: con los lectores de Kaint (TGA, DDS, QOI) o los de Qt.
 QImage readImage(const QString& path, QString* error = nullptr);
-// Lo codificado con encode(), vuelto a leer (la vista previa de "Configuración de guardado").
+// Lo codificado con encode(), vuelto a leer (la vista previa de "Opciones de guardado").
 QImage decode(const QByteArray& data, const QString& path);
 // Imagen tal como se escribirá (acoplada, sin alfa si el formato no lo admite y con la
 // profundidad elegida).

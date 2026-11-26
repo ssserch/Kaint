@@ -204,6 +204,7 @@ StrokeParams EraserTool::params(const ToolEvent& e) const
     StrokeParams p = baseParams();
     p.kind = StrokeKind::Erase;
     const AppState* app = AppState::instance();
+    p.fill = app->tools().fill;
     p.color = e.button == Qt::RightButton ? app->secondary() : app->primary();
     return p;
 }

@@ -6,6 +6,7 @@
 #include "core/Gif.h"
 #include "core/Raster.h"
 
+#include <QAbstractButton>
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
@@ -17,6 +18,8 @@
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QPainter>
+#include <QPixmap>
+#include <QPolygonF>
 #include <QTreeWidget>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -33,6 +36,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -50,6 +54,64 @@ QString memoryText(QSize s, int layers = 1)
     const QLocale locale;
     return mb >= 1024 ? QObject::tr("%1 GB").arg(locale.toString(mb / 1024.0, 'f', 2))
                       : QObject::tr("%1 MB").arg(locale.toString(mb, 'f', 1));
+}
+
+// Una flecha negra hacia (dx, dy), como las del anclaje de Paint.NET (sobre sus casillas gris
+// claro): asta fina y punta triangular, en 15 px (y a 2x y 3x para pantallas con escala).
+QIcon anchorArrow(int dx, int dy)
+{
+    constexpr int kSide = 15;
+    QIcon icon;
+    for (const qreal dpr : {1.0, 2.0, 3.0}) {
+        QPixmap pm(QSize(kSide, kSide) * dpr);
+        pm.setDevicePixelRatio(dpr);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        QPointF dir(dx, dy);
+        dir /= std::hypot(dir.x(), dir.y());
+        const QPointF perp(-dir.y(), dir.x());
+        const QPointF center(kSide / 2.0, kSide / 2.0);
+        const QPointF tip = center + dir * 6.0, tail = center - dir * 6.0;
+        const QPointF base = tip - dir * 5.0;
+        p.setPen(QPen(Qt::black, 1.4, Qt::SolidLine, Qt::FlatCap));
+        p.drawLine(tail, base + dir * 0.5);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::black);
+        p.drawPolygon(QPolygonF{tip, base + perp * 3.5, base - perp * 3.5});
+        p.end();
+        icon.addPixmap(pm);
+    }
+    return icon;
+}
+
+// La casilla del ancla, como en Paint.NET: una imagen (marco gris, fondo blanco, una nube gris y
+// montañas azules) en 16 px.
+QIcon anchorPicture()
+{
+    constexpr int kSide = 16;
+    QIcon icon;
+    for (const qreal dpr : {1.0, 2.0, 3.0}) {
+        QPixmap pm(QSize(kSide, kSide) * dpr);
+        pm.setDevicePixelRatio(dpr);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(QColor(0x6d, 0x6e, 0x71), 1));
+        p.setBrush(Qt::white);
+        p.drawRect(QRectF(0.5, 0.5, kSide - 1, kSide - 1));
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0xc4, 0xc6, 0xc8));
+        p.drawEllipse(QPointF(4.6, 5.0), 1.7, 1.5);
+        p.drawEllipse(QPointF(6.6, 4.2), 2.1, 2.0);
+        p.drawRoundedRect(QRectF(3.0, 4.6, 5.8, 2.2), 1.0, 1.0);
+        p.setBrush(QColor(0x3e, 0x79, 0xb4));
+        p.drawPolygon(QPolygonF{QPointF(1.5, 14.5), QPointF(4.0, 11.0), QPointF(6.6, 7.4), QPointF(8.4, 9.6),
+                                QPointF(10.6, 6.4), QPointF(14.5, 14.5)});
+        p.end();
+        icon.addPixmap(pm);
+    }
+    return icon;
 }
 
 } // namespace
@@ -376,32 +438,62 @@ CanvasSizeDialog::CanvasSizeDialog(QSize current, double dpi, QWidget* parent)
     m_size = new SizeEditor(current, dpi, true, this);
     m_size->setKeepAspect(false);
 
-    auto* anchorBox = new QGroupBox(tr("Anclaje"), this);
-    auto* grid = new QGridLayout(anchorBox);
+    // Opciones, como en Paint.NET 5: el ancla en un desplegable y, debajo, la rejilla de casillas
+    // (botones de Windows: gris claro, la del ancla en azul) con flechas hacia donde crece el
+    // lienzo; y con qué se rellena lo nuevo.
+    auto* options = new QGroupBox(tr("Opciones"), this);
+    auto* optionsGrid = new QGridLayout(options);
+    m_anchorList = new QComboBox(options);
+    m_anchorList->addItems({tr("Arriba a la izquierda"), tr("Arriba"), tr("Arriba a la derecha"), tr("Izquierda"), tr("Centro"),
+                            tr("Derecha"), tr("Abajo a la izquierda"), tr("Abajo"), tr("Abajo a la derecha")});
+    auto* cells = new QWidget(options);
+    cells->setStyleSheet(QStringLiteral(
+        "QToolButton { background: #e1e1e1; border: 1px solid #adadad; border-radius: 0px; padding: 0px; }"
+        "QToolButton:hover { background: #e5f1fb; border-color: #0078d7; }"
+        "QToolButton:pressed, QToolButton:checked { background: #cce4f7; border-color: #005499; }"));
+    auto* grid = new QGridLayout(cells);
+    grid->setContentsMargins(0, 0, 0, 0);
     grid->setSpacing(2);
     const Qt::Alignment rows[] = {Qt::AlignTop, Qt::AlignVCenter, Qt::AlignBottom};
     const Qt::Alignment cols[] = {Qt::AlignLeft, Qt::AlignHCenter, Qt::AlignRight};
     for (int r = 0; r < 3; ++r) {
         for (int c = 0; c < 3; ++c) {
-            auto* b = new QToolButton(anchorBox);
+            auto* b = new QToolButton(cells);
             b->setCheckable(true);
-            b->setFixedSize(44, 44);
-            QFont arrows = b->font();
-            arrows.setPointSizeF(arrows.pointSizeF() * 1.5);
-            b->setFont(arrows);
+            b->setFixedSize(25, 25);
+            b->setIconSize(QSize(16, 16));
+            b->setToolTip(m_anchorList->itemText(r * 3 + c));
             m_anchor->addButton(b, int(rows[r] | cols[c]));
-            grid->addWidget(b, r, c + 1);
-            if (r == 1 && c == 1)
-                b->setChecked(true);
+            grid->addWidget(b, r, c);
         }
     }
-    // La rejilla, centrada en su recuadro.
-    grid->setColumnStretch(0, 1);
-    grid->setColumnStretch(4, 1);
-    connect(m_anchor, &QButtonGroup::idToggled, this, [this](int, bool on) {
-        if (on)
-            updateArrows();
+    m_anchor->buttons().at(4)->setChecked(true);
+    m_anchorList->setCurrentIndex(4);
+    m_fill = new QComboBox(options);
+    m_fill->addItems({tr("Transparente"), tr("Color principal"), tr("Color secundario")});
+    // Se recuerda el último; la primera vez, el de siempre (el color secundario).
+    m_fill->setCurrentIndex(std::clamp(QSettings().value(QStringLiteral("dialogs/canvasFill"), int(Fill::Secondary)).toInt(), 0, 2));
+    m_fill->setToolTip(tr("Con qué se rellena lo que se añade al lienzo: con un color, solo en la capa de abajo (las demás "
+                          "quedan transparentes)"));
+    optionsGrid->addWidget(new QLabel(tr("Ancla:"), options), 0, 0);
+    optionsGrid->addWidget(m_anchorList, 0, 1);
+    optionsGrid->addWidget(cells, 1, 1, Qt::AlignHCenter);
+    optionsGrid->addWidget(new QLabel(tr("Relleno:"), options), 2, 0);
+    optionsGrid->addWidget(m_fill, 2, 1);
+    optionsGrid->setColumnStretch(1, 1);
+    // La lista y la rejilla, a la par.
+    connect(m_anchorList, &QComboBox::currentIndexChanged, this, [this](int i) {
+        if (QAbstractButton* b = m_anchor->buttons().value(i))
+            b->setChecked(true);
     });
+    connect(m_anchor, &QButtonGroup::idToggled, this, [this](int, bool on) {
+        if (!on)
+            return;
+        m_anchorList->setCurrentIndex(int(m_anchor->buttons().indexOf(m_anchor->checkedButton())));
+        updateArrows();
+    });
+    connect(m_fill, &QComboBox::currentIndexChanged, this,
+            [](int i) { QSettings().setValue(QStringLiteral("dialogs/canvasFill"), i); });
     m_memory = new QLabel(this);
     connect(m_size, &SizeEditor::changed, this, [this] { m_memory->setText(memoryText(m_size->value())); });
     m_memory->setText(memoryText(current));
@@ -409,7 +501,7 @@ CanvasSizeDialog::CanvasSizeDialog(QSize current, double dpi, QWidget* parent)
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(new QLabel(tr("Tamaño actual: %1 × %2 píxeles").arg(current.width()).arg(current.height()), this));
     layout->addWidget(m_size);
-    layout->addWidget(anchorBox);
+    layout->addWidget(options);
     auto* info = new QFormLayout;
     info->addRow(tr("Memoria por capa:"), m_memory);
     layout->addLayout(info);
@@ -419,30 +511,27 @@ CanvasSizeDialog::CanvasSizeDialog(QSize current, double dpi, QWidget* parent)
 
 void CanvasSizeDialog::updateArrows()
 {
-    // Flechas que apuntan desde el anclaje hacia donde crece el lienzo.
+    // Como en Paint.NET: el ancla (la imagen) en su casilla y, en las de alrededor, flechas negras
+    // que apuntan desde ella hacia donde crece el lienzo; las demás, vacías.
     const QList<QAbstractButton*> buttons = m_anchor->buttons();
     const int checked = int(buttons.indexOf(m_anchor->checkedButton()));
     const int cr = checked / 3, cc = checked % 3;
-    static const QString arrows[3][3] = {{QStringLiteral("↖"), QStringLiteral("↑"), QStringLiteral("↗")},
-                                         {QStringLiteral("←"), QStringLiteral("●"), QStringLiteral("→")},
-                                         {QStringLiteral("↙"), QStringLiteral("↓"), QStringLiteral("↘")}};
-    // En el anclaje, el icono del ancla de Paint.NET.
-    const QIcon anchor = Icons::named(QStringLiteral("anchor"));
+    const QIcon anchor = anchorPicture();
     for (int i = 0; i < buttons.size(); ++i) {
         const int dr = i / 3 - cr, dc = i % 3 - cc;
-        QString text;
+        QIcon icon;
         if (dr == 0 && dc == 0)
-            text = anchor.isNull() ? arrows[1][1] : QString();
+            icon = anchor;
         else if (std::abs(dr) <= 1 && std::abs(dc) <= 1)
-            text = arrows[dr + 1][dc + 1];
-        buttons[i]->setText(text);
-        buttons[i]->setIcon(dr == 0 && dc == 0 ? anchor : QIcon());
+            icon = anchorArrow(dc, dr);
+        buttons[i]->setIcon(icon);
     }
 }
 
 QSize CanvasSizeDialog::canvasSize() const { return m_size->value(); }
 double CanvasSizeDialog::dpi() const { return m_size->dpi(); }
 Qt::Alignment CanvasSizeDialog::anchor() const { return Qt::Alignment(m_anchor->checkedId()); }
+CanvasSizeDialog::Fill CanvasSizeDialog::fill() const { return Fill(m_fill->currentIndex()); }
 
 // ---------------------------------------------------------------------------
 

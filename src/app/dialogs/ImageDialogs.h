@@ -100,15 +100,22 @@ private:
 class CanvasSizeDialog : public QDialog {
     Q_OBJECT
 public:
+    // Con qué se rellena lo que se añade al lienzo: nada (transparente) o, en la capa de abajo, el
+    // color principal o el secundario (lo de siempre; las demás capas quedan transparentes).
+    enum class Fill { Transparent = 0, Primary = 1, Secondary = 2 };
+
     CanvasSizeDialog(QSize current, double dpi, QWidget* parent = nullptr);
     QSize canvasSize() const;
     double dpi() const;
     Qt::Alignment anchor() const;
+    Fill fill() const;
 
 private:
     void updateArrows();
     SizeEditor* m_size;
     QButtonGroup* m_anchor;
+    QComboBox* m_anchorList = nullptr;
+    QComboBox* m_fill = nullptr;
     QLabel* m_memory;
 };
 

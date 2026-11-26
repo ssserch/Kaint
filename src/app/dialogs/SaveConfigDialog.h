@@ -13,7 +13,7 @@ class QLabel;
 class QPushButton;
 class QSpinBox;
 
-// "Configuración de guardado" de Paint.NET: opciones del formato (calidad, profundidad de
+// "Opciones de guardado" de Paint.NET: opciones del formato (calidad, profundidad de
 // bits, tramado, umbral de transparencia) con una vista previa del resultado y el tamaño que
 // ocupará el archivo.
 class SaveConfigDialog : public QDialog {

@@ -479,6 +479,41 @@ export class LineTool extends EditableTool {
     }
 }
 
+// Elipse píxel a píxel en el cuadro (redondeado a píxeles enteros): dentro, los píxeles cuyo
+// centro cae en la elipse; el contorno, los de dentro con algún vecino (arriba, abajo, a los lados)
+// fuera. Simétrica por construcción en los dos ejes. Devuelve tramos [x, y, ancho] de cada fila.
+function pixelEllipse(box) {
+    const x0 = Math.round(box.x), y0 = Math.round(box.y);
+    const w = Math.max(1, Math.round(box.x + box.w) - x0), h = Math.max(1, Math.round(box.y + box.h) - y0);
+    const isIn = (i, j) => {
+        if (i < 0 || j < 0 || i >= w || j >= h)
+            return false;
+        const u = (i + 0.5 - w / 2) / (w / 2), v = (j + 0.5 - h / 2) / (h / 2);
+        return u * u + v * v <= 1 + 1e-9;
+    };
+    const inside = [], ring = [];
+    for (let j = 0; j < h; ++j) {
+        let runStart = -1, lineStart = -1;
+        for (let i = 0; i <= w; ++i) {
+            const here = isIn(i, j);
+            const edge = here && (!isIn(i - 1, j) || !isIn(i + 1, j) || !isIn(i, j - 1) || !isIn(i, j + 1));
+            if (here && runStart < 0)
+                runStart = i;
+            if (!here && runStart >= 0) {
+                inside.push([x0 + runStart, y0 + j, i - runStart]);
+                runStart = -1;
+            }
+            if (edge && lineStart < 0)
+                lineStart = i;
+            if (!edge && lineStart >= 0) {
+                ring.push([x0 + lineStart, y0 + j, i - lineStart]);
+                lineStart = -1;
+            }
+        }
+    }
+    return { inside, ring };
+}
+
 export class ShapesTool extends EditableTool {
     get id() { return "shapes"; }
     get name() { return tr("Formas"); }
@@ -627,6 +662,22 @@ export class ShapesTool extends EditableTool {
         // redondos: el trazo del navegador da la vuelta al borde de dentro cuando el pincel es más
         // grueso que una curva cerrada (las burbujas de la nube) y deja agujeros: «círculos negativos».
         const solid = !(dashPatterns[s.dash] || []).length;
+        // Elipse de 1 px sin suavizado: píxel a píxel y simétrica, como en Paint.NET 5.2 (con el
+        // trazo del navegador, alguna salía un píxel torcida).
+        if (s.shape === "ellipse" && !s.antialias && solid && lw > 0 && lw <= 1) {
+            const { inside, ring } = pixelEllipse(n);
+            this.renderWith((ctx, paint) => {
+                if (s.shapeStyle !== "outline") {
+                    ctx.fillStyle = paint(fill);
+                    for (const [x, y, w] of inside)
+                        ctx.fillRect(x, y, w, 1);
+                }
+                ctx.fillStyle = paint(line);
+                for (const [x, y, w] of ring)
+                    ctx.fillRect(x, y, w, 1);
+            });
+            return;
+        }
         this.renderWith((ctx, paint) => {
             ctx.beginPath();
             ctx.save();

@@ -1,4 +1,4 @@
-// "Configuración de guardado" de Kaint (SaveConfigDialog y EncodedPreview): las opciones del
+// "Opciones de guardado" de Kaint (SaveConfigDialog y EncodedPreview): las opciones del
 // formato con una vista previa del archivo tal como se guardará (codificado en segundo plano y
 // vuelto a leer) y lo que ocupará; en el GIF animado, también la configuración avanzada, con los
 // fotogramas uno por uno, como ezgif.
@@ -245,7 +245,7 @@ export class EncodedPreview {
     }
 }
 
-// --- Configuración de guardado ------------------------------------------------------------
+// --- Opciones de guardado ------------------------------------------------------------
 
 // image: la imagen acoplada ({ width, height, data }); frames: los fotogramas del GIF (las capas,
 // también las ocultas, marcadas con 'hidden') si hay más de uno. Devuelve null o { options,
@@ -259,7 +259,7 @@ export async function saveConfigDialog(format, image, initial, frames = [], { dp
         sources = [];
     let fromImages = false, sourceOrder = sources.map((_, i) => i), sourceOn = sources.map(() => true);
     const ext = format.ext, t = traits(ext);
-    const dlg = new Dialog(tr("Configuración de guardado: %1", ext.toUpperCase()), { iconName: "document-save" });
+    const dlg = new Dialog(tr("Opciones de guardado: %1", ext.toUpperCase()), { iconName: "document-save" });
     dlg.element.classList.add("save-config");
     const form = el("div", { className: "save-form" });
     const row = (label, control) => {

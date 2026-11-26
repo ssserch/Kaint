@@ -1117,18 +1117,76 @@ if (( DO_TAR )); then
     cp -R "$PWD/$BUILD_DIR/tar/root/usr/." "$stage/"
     rm -rf "$stage/include"
     if [[ "$OS_NAME" == macos ]]; then
-        app=$(find "$BUILD_DIR" -maxdepth 2 -name 'kaint.app' -o -maxdepth 2 -name 'Kaint.app' | head -n 1)
-        if [[ -n "$app" ]] && command -v macdeployqt >/dev/null 2>&1; then
-            cp -R "$app" "$stage/Kaint.app"
-            macdeployqt "$stage/Kaint.app" >/dev/null
+        # Kaint.app con lo instalado dentro (el ejecutable en Contents/MacOS y share/ y lib/ junto a
+        # él, donde Kaint los busca: ../share/kaint desde el ejecutable) y Qt dentro (macdeployqt):
+        # se abre sin instalar nada.
+        bundle="$stage/Kaint.app"
+        mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
+        mv "$stage/bin/kaint" "$bundle/Contents/MacOS/kaint"
+        for dir in share lib; do
+            [[ -d "$stage/$dir" ]] && mv "$stage/$dir" "$bundle/Contents/$dir"
+        done
+        rm -rf "$stage/bin"
+        # El icono (.icns) con los PNG de img/.
+        iconset="$PWD/$BUILD_DIR/tar/Kaint.iconset"
+        mkdir -p "$iconset"
+        for size in 16 32 128 256 512; do
+            [[ -f "img/kaint-$size.png" ]] && cp "img/kaint-$size.png" "$iconset/icon_${size}x${size}.png"
+            [[ -f "img/kaint-$((size * 2)).png" ]] && cp "img/kaint-$((size * 2)).png" "$iconset/icon_${size}x${size}@2x.png"
+        done
+        iconutil -c icns "$iconset" -o "$bundle/Contents/Resources/Kaint.icns" 2>/dev/null || true
+        cat > "$bundle/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Kaint</string>
+    <key>CFBundleDisplayName</key><string>Kaint</string>
+    <key>CFBundleIdentifier</key><string>io.github.ssserch.Kaint</string>
+    <key>CFBundleExecutable</key><string>kaint</string>
+    <key>CFBundleIconFile</key><string>Kaint</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>$VERSION</string>
+    <key>CFBundleVersion</key><string>$VERSION</string>
+    <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+</dict>
+</plist>
+EOF
+        deployqt=$(command -v macdeployqt 2>/dev/null || true)
+        if [[ -z "$deployqt" ]] && command -v brew >/dev/null 2>&1 && [[ -x "$(brew --prefix qt)/bin/macdeployqt" ]]; then
+            deployqt="$(brew --prefix qt)/bin/macdeployqt"
         fi
-    fi
-    cat > "$stage/README.txt" <<EOF
+        if [[ -n "$deployqt" ]]; then
+            "$deployqt" "$bundle" -always-overwrite >/dev/null
+        else
+            echo "${c_yellow}Sin macdeployqt: Kaint.app usará el Qt del sistema (Homebrew).${c_reset}"
+        fi
+        # Firma «ad hoc» (sin cuenta de Apple): en los Mac con Apple Silicon, sin firma no se abre.
+        # Primero cada binario de dentro (los de lib/ no están donde codesign --deep los busca) y
+        # después el .app entero.
+        while IFS= read -r -d '' file; do
+            if file -b "$file" | grep -q 'Mach-O'; then
+                codesign --force --sign - "$file" >/dev/null 2>&1 || true
+            fi
+        done < <(find "$bundle/Contents" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) -print0)
+        codesign --force --deep --sign - "$bundle" >/dev/null 2>&1 \
+            || echo "${c_yellow}No se pudo firmar Kaint.app (codesign).${c_reset}"
+        cat > "$stage/README.txt" <<EOF
 Kaint $VERSION ($OS_LABEL, $arch$suffix)
 
-Ejecuta bin/kaint (en macOS, Kaint.app). Necesita Qt 6.5 o posterior instalado en el sistema
-(en Linux y FreeBSD); el AppImage y el Flatpak lo llevan dentro.
+Abre Kaint.app (lleva Qt dentro). No está firmada por Apple: la primera vez, clic derecho en
+Kaint.app > Abrir (o, en la Terminal, xattr -dr com.apple.quarantine Kaint.app).
 EOF
+    else
+        cat > "$stage/README.txt" <<EOF
+Kaint $VERSION ($OS_LABEL, $arch$suffix)
+
+Ejecuta bin/kaint. Necesita Qt 6.5 o posterior instalado en el sistema; el AppImage y el Flatpak
+lo llevan dentro.
+EOF
+    fi
     (cd "$PWD/$BUILD_DIR/tar" && tar -czf "../$name.tar.gz" "$name")
     report "Paquete" "$BUILD_DIR/$name.tar.gz"
 fi

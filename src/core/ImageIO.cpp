@@ -533,6 +533,12 @@ Document* load(const QString& path, QString* error)
             doc->setDpi(image.dotsPerMeterX() * 0.0254);
         if (image.colorSpace().isValid())
             doc->setColorSpace(image.colorSpace());
+        if (suffixOf(path) == QLatin1String("png") && !image.textKeys().isEmpty()) {
+            QVariantMap text;
+            for (const QString& key : image.textKeys())
+                text.insert(key, image.text(key));
+            doc->setProperty(kPngTextProperty, text);
+        }
     }
     if (doc) {
         doc->setFilePath(path);
@@ -743,6 +749,11 @@ bool save(const Document* doc, const QString& path, const SaveOptions& options, 
     image.setDotsPerMeterY(dpm);
     if (doc->colorSpace().isValid() && doc->colorSpace() != QColorSpace(QColorSpace::SRgb))
         image.setColorSpace(doc->colorSpace());
+    if (suffixOf(path) == QLatin1String("png")) {
+        const QVariantMap text = doc->property(kPngTextProperty).toMap();
+        for (auto it = text.constBegin(); it != text.constEnd(); ++it)
+            image.setText(it.key(), it.value().toString());
+    }
     data = encode(image, path, options, error);
     if (data.isEmpty())
         return false;

@@ -498,7 +498,7 @@ void FloatingPixels::render(const QTransform& t, const QRect& region, bool draft
     // Al reducir con bilineal o bicúbica, antes se promedia por áreas (si no, sale pixelado). El
     // vecino más próximo no: como en Paint.NET, cada píxel es uno de la imagen, sin mezclar (con el
     // promedio se veía suavizado, casi como el bicúbico).
-    const bool nearest = interpolation == Resample::Interpolation::NearestNeighbor;
+    const bool nearest = Resample::isNearest(interpolation);
     const QImage source = nearest ? pixels : Resample::prefiltered(pixels, &toTmp, gammaCorrect);
     // Bilineal sin gamma, con QPainter (más rápido); lo demás, con lo de Kaint (el vecino más
     // próximo toma el píxel bajo el centro de cada uno, también al girar).

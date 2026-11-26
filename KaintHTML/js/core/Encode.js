@@ -1,7 +1,7 @@
 // Lo que se escribe al guardar, como ImageIO::prepare, encode y encodeAnimation de Kaint: la
 // imagen acoplada se prepara (sin alfa si el formato no lo admite, con la profundidad de bits
 // elegida) y se codifica. Sin el DOM, así también funciona en el Web Worker de la vista previa de
-// "Configuración de guardado".
+// "Opciones de guardado".
 import * as Codecs from "./Codecs.js";
 import { crc32 } from "./Zip.js";
 
@@ -33,7 +33,7 @@ export const hasOptions = (ext) => {
     return !!(t.quality || t.depth || t.animation || t.icon);
 };
 
-// Opciones de "Configuración de guardado" (ImageIO::SaveOptions de Kaint).
+// Opciones de "Opciones de guardado" (ImageIO::SaveOptions de Kaint).
 export function defaultSaveOptions() {
     return {
         quality: 95, bitDepth: 0, dither: 7, alphaThreshold: 128, quantization: 1, interlaced: false,
@@ -94,8 +94,9 @@ async function canvasEncode(image, mime, quality) {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
-// Resolución (y perfil de color) en los PNG y JPEG del navegador.
-function withMetadata(bytes, ext, { dpi = 0, icc = null } = {}) {
+// Resolución (y perfil de color) en los PNG y JPEG del navegador; en los PNG, también los textos
+// ({ clave: texto }): en tEXt si caben en Latin-1 y si no, en iTXt (UTF-8).
+function withMetadata(bytes, ext, { dpi = 0, icc = null, text = null } = {}) {
     if (ext === "png" && bytes[12] === 0x49 && bytes[13] === 0x48) {
         const chunks = [];
         const chunk = (type, data) => {
@@ -115,6 +116,24 @@ function withMetadata(bytes, ext, { dpi = 0, icc = null } = {}) {
         }
         if (icc)
             chunk("iCCP", icc);
+        for (const [key, value] of Object.entries(text || {})) {
+            const k = String(key).slice(0, 79), v = String(value ?? "");
+            if (!k || /[^\x20-\x7e\xa0-\xff]/.test(k))
+                continue;
+            const keyBytes = Uint8Array.from(k, (c) => c.charCodeAt(0));
+            if (!/[^\x00-\xff]/.test(v)) {
+                const data = new Uint8Array(keyBytes.length + 1 + v.length);
+                data.set(keyBytes);
+                for (let i = 0; i < v.length; ++i)
+                    data[keyBytes.length + 1 + i] = v.charCodeAt(i);
+                chunk("tEXt", data);
+            } else {
+                const body = new TextEncoder().encode(v), data = new Uint8Array(keyBytes.length + 5 + body.length);
+                data.set(keyBytes);
+                data.set(body, keyBytes.length + 5);
+                chunk("iTXt", data);
+            }
+        }
         if (!chunks.length)
             return bytes;
         const at = 8 + 25, total = chunks.reduce((n, c) => n + c.length, 0), out = new Uint8Array(bytes.length + total);
@@ -248,7 +267,7 @@ async function iccChunk(icc) {
 
 // Los bytes del archivo a partir de la imagen preparada. extra: { dpi, icc }.
 export async function encodeImage(prepared, ext, o, extra = {}) {
-    const { dpi = 0, icc = null } = extra;
+    const { dpi = 0, icc = null, text = null } = extra;
     switch (ext) {
     case "gif":
         return encodeAnimation([{ ...prepared, delay: o.frameDelay }], o);
@@ -279,9 +298,9 @@ export async function encodeImage(prepared, ext, o, extra = {}) {
     case "png":
         if (prepared.indices || prepared.depth === 24 || o.interlaced) {
             const bytes = await Codecs.encodePng(prepared, { depth: prepared.depth || 32, interlaced: o.interlaced, dpi });
-            return icc ? withMetadata(bytes, "png", { icc: await iccChunk(icc) }) : bytes;
+            return icc || text ? withMetadata(bytes, "png", { icc: await iccChunk(icc), text }) : bytes;
         }
-        return withMetadata(await canvasEncode(prepared, MIMES.png), "png", { dpi, icc: await iccChunk(icc) });
+        return withMetadata(await canvasEncode(prepared, MIMES.png), "png", { dpi, icc: await iccChunk(icc), text });
     case "webp":
         return webpWithIcc(await canvasEncode(prepared, MIMES.webp, o.quality / 100), prepared, icc);
     default:

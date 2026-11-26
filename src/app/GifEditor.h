@@ -161,6 +161,9 @@ public:
     // Punto clave global (como el de Filmora): todos los valores (posición, escala, rotación y
     // opacidad) en el cabezal; si ya hay uno ahí, lo quita.
     void toggleGlobalKey();
+    // Un punto clave global en 'ms' (dentro del fotograma 'index'), con los valores que hay ahí, si
+    // no lo había; lo elige (doble clic en el fotograma de la línea de tiempo).
+    void addGlobalKey(int index, int ms);
     bool hasKeyAtPlayhead() const;
     // La vista del historial del editor de GIF (solo sus pasos), en una pestaña junto a los medios.
     void setHistoryPanel(QWidget* panel);
@@ -241,6 +244,8 @@ private:
     QImage frameImageAt(int index, int time) const;
     // Lo que se ve en el cabezal: el fotograma o, con varias pistas, todas una encima de otra.
     QImage shownImage() const;
+    // Si el cabezal está en un hueco de la pista del fotograma (sin nada: no se ve).
+    bool inGap(int index) const;
     void showPlayingFrame(int index);
     // El peso aproximado del GIF (unos fotogramas de muestra codificados) para la barrita.
     void estimateSize();
@@ -286,6 +291,7 @@ private:
     qint64 m_lastTick = 0;
     // Mientras se reproduce, el fotograma del cabezal (la capa activa no cambia en cada uno).
     int m_playFrame = -1;
+    bool m_playGap = false;
     // Los otros fotogramas elegidos (además de la capa activa).
     QList<int> m_extraSelection;
     mutable QList<int> m_starts;

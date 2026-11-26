@@ -220,11 +220,12 @@ export class EraserTool extends StrokeTool {
     get name() { return tr("Goma de borrar"); }
     get icon() { return "eraser"; }
     get letter() { return "E"; }
-    get options() { return ["brushSize", "hardness", "spacing", "smoothing", "pressure", "antialias", "advanced", "symmetry", "selectionQuality"]; }
+    get options() { return ["brushSize", "hardness", "spacing", "fill", "smoothing", "pressure", "antialias", "advanced", "symmetry", "selectionQuality"]; }
     hint() { return tr("Arrastra para borrar. La opacidad del color principal (clic derecho: secundario) regula la fuerza."); }
 
+    // Con un patrón de relleno (como en Paint.NET 5.2), solo borra donde lo marca el patrón.
     strokeOptions(e) {
-        return { ...super.strokeOptions(e), mode: "erase" };
+        return { ...super.strokeOptions(e), mode: "erase", fill: this.settings.fill || 0 };
     }
 }
 

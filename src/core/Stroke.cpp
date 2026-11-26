@@ -583,11 +583,20 @@ void StrokeEngine::composite(const QRect& area)
         return;
     case StrokeKind::Erase: {
         const int strength = m_params.color.alpha();
+        // Con un patrón de relleno (como en Paint.NET 5.2), solo borra donde lo marca el patrón.
+        QImage pattern;
+        if (m_params.fill != 0) {
+            pattern = QImage(r.size(), kLayerFormat);
+            Raster::renderFill(pattern, r.topLeft(), m_params.fill, Qt::white, Qt::transparent);
+        }
         for (int y = r.top(); y <= r.bottom(); ++y) {
             const QRgb* src = reinterpret_cast<const QRgb*>(m_before.constScanLine(y));
             QRgb* dst = reinterpret_cast<QRgb*>(img.scanLine(y));
-            for (int x = r.left(); x <= r.right(); ++x)
-                dst[x] = scaleAlpha(src[x], 255 - coverage(x, y) * strength / 255);
+            const QRgb* pat = pattern.isNull() ? nullptr : reinterpret_cast<const QRgb*>(pattern.constScanLine(y - r.top()));
+            for (int x = r.left(); x <= r.right(); ++x) {
+                const int m = pat ? coverage(x, y) * qAlpha(pat[x - r.left()]) / 255 : coverage(x, y);
+                dst[x] = scaleAlpha(src[x], 255 - m * strength / 255);
+            }
         }
         break;
     }

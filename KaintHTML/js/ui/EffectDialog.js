@@ -6,11 +6,12 @@
 import { AppState } from "../AppState.js";
 import { automaticLevels, curveSpline, defaultCurves, defaultLevels, defaultValues, histogram, isReadOnly, levelsLut } from "../core/Effects.js";
 import { startEffect } from "../core/EffectRunner.js";
-import { checkerPattern, clampRect, cloneCanvas, context, createCanvas, thumbnail } from "../core/Raster.js";
+import { checkerPattern, clampRect, cloneCanvas, context, createCanvas, hsvToRgb, rgbToHsv, thumbnail } from "../core/Raster.js";
 import { colorDialog } from "./ColorDialog.js";
+import { ChannelSlider, ColorWheel } from "./Panels.js";
 import { Dialog, el } from "./Dialogs.js";
 import { icon } from "./Icons.js";
-import { tr } from "../i18n.js";
+import { tr, trc } from "../i18n.js";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -403,6 +404,85 @@ function colorButton(value, onChange) {
     });
     paint();
     return { element: button, set(v) { current = { ...v }; paint(); } };
+}
+
+// Editor de color dentro del diálogo, como los de los efectos de Paint.NET 5.2 (Linograbado,
+// Mosaico...): la muestra, la rueda de tono y saturación, las barras de saturación y brillo (y de
+// transparencia si la admite), los valores R, V, A (y la transparencia) y el botón de restablecer.
+function inlineColorEditor(value, alpha, onChange, onReset) {
+    let color = { r: 0, g: 0, b: 0, a: 255 }, hsv = { h: 0, s: 0, v: 0 };
+    const swatch = el("div", { className: "fx-inline-swatch" }, [el("span")]);
+    const wheel = new ColorWheel((h) => apply({ h: h.h, s: h.s, v: hsv.v < 0.02 ? 1 : hsv.v }, color.a, true));
+    // Siempre en el sentido de las agujas del reloj, como la de Paint.NET.
+    Object.defineProperty(wheel, "clockwise", { get: () => true });
+    wheel.box.classList.add("fx-inline-wheel");
+    const sat = new ChannelSlider("s", true, (v) => apply({ ...hsv, s: v / 100 }, color.a, true));
+    const val = new ChannelSlider("v", true, (v) => apply({ ...hsv, v: v / 100 }, color.a, true));
+    sat.canvas.title = tr("Saturación");
+    val.canvas.title = tr("Brillo");
+    const alphaSlider = alpha ? new ChannelSlider("a", true, (v) => apply(hsv, v, true)) : null;
+    if (alphaSlider)
+        alphaSlider.canvas.title = tr("Transparencia");
+    const grid = el("div", { className: "fx-inline-values" });
+    const labels = [tr("R:"), tr("V:"), tr("A:"), trc("alfa", "A:")], tips = [tr("Rojo"), tr("Verde"), tr("Azul"), tr("Transparencia (alfa)")];
+    const channels = ["r", "g", "b", "a"], spins = [];
+    for (let i = 0; i < (alpha ? 4 : 3); ++i) {
+        const spin = el("input", { type: "number", min: 0, max: 255, step: 1, title: tips[i] });
+        spin.addEventListener("input", () => {
+            const v = Number(spin.value);
+            if (spin.value === "" || !Number.isFinite(v))
+                return;
+            // Exactamente esos valores; un gris conserva el tono que tenía.
+            color = { ...color, [channels[i]]: Math.min(255, Math.max(0, Math.round(v))) };
+            const n = rgbToHsv(color);
+            hsv = { h: n.s > 0 && n.v > 0 ? n.h : hsv.h, s: n.s, v: n.v };
+            sync();
+            onChange({ ...color });
+        });
+        spin.addEventListener("change", () => sync());
+        spins.push(spin);
+        grid.append(el("span", { textContent: labels[i], title: tips[i] }), spin);
+    }
+    // Un botón con recuadro bajo los valores, como el de Paint.NET.
+    const reset = el("button", { className: "fx-inline-reset", type: "button", title: tr("Restablecer") }, [icon("edit-reset", 16)]);
+    reset.addEventListener("click", onReset);
+    grid.appendChild(reset);
+    const sliders = el("div", { className: "fx-inline-sliders" }, [sat.canvas, val.canvas, ...(alphaSlider ? [alphaSlider.canvas] : [])]);
+    const element = el("div", { className: "fx-inline-color" }, [swatch, wheel.box, sliders, el("div", { className: "fx-inline-spacer" }), grid]);
+
+    function apply(h, a, notify) {
+        hsv = { h: Math.min(Math.max(h.h, 0), 359.99), s: Math.min(Math.max(h.s, 0), 1), v: Math.min(Math.max(h.v, 0), 1) };
+        color = { ...hsvToRgb(hsv.h, hsv.s, hsv.v), a: alpha ? Math.min(255, Math.max(0, Math.round(a))) : 255 };
+        sync();
+        if (notify)
+            onChange({ ...color });
+    }
+    function sync() {
+        swatch.firstChild.style.setProperty("--c", cssColor(color));
+        // La rueda y las barras con el tono que se recuerda (aunque el color sea gris o negro).
+        wheel.set({ ...hsv });
+        sat.set(color, hsv);
+        val.set(color, hsv);
+        alphaSlider?.set(color, hsv);
+        spins.forEach((spin, i) => {
+            if (document.activeElement !== spin)
+                spin.value = color[channels[i]];
+        });
+    }
+    // Sin avisar (para fijar el valor desde fuera); lo exacto, no lo que sale de ida y vuelta por HSV.
+    const set = (c) => {
+        const n = rgbToHsv(c);
+        hsv = { h: n.s > 0 && n.v > 0 ? n.h : hsv.h, s: n.s, v: n.v };
+        color = { r: c.r, g: c.g, b: c.b, a: alpha ? c.a ?? 255 : 255 };
+        sync();
+    };
+    set(value);
+    // La rueda se pinta cuando ya tiene tamaño.
+    requestAnimationFrame(() => {
+        wheel.resized();
+        sync();
+    });
+    return { element, set, color: () => ({ ...color }) };
 }
 
 // Pestañas (QTabWidget) para los parámetros con 'tab'.
@@ -1125,6 +1205,17 @@ export async function effectDialog(app, effect, initial) {
         case "color": {
             title(true);
             describe();
+            if (p.inline) {
+                // Como en Paint.NET 5.2: el editor entero en el diálogo. Restablecer vuelve al color de
+                // fábrica del efecto (o al activo, si depende de los colores activos).
+                const editor = inlineColorEditor(values[p.key], p.alpha !== false, (c) => set(p.key, c), () => {
+                    editor.set(resolveColor(p.def));
+                    set(p.key, editor.color());
+                });
+                setters.set(p.key, editor.set);
+                target.appendChild(editor.element);
+                break;
+            }
             const button = colorButton(values[p.key], (c) => set(p.key, c));
             setters.set(p.key, button.set);
             target.appendChild(el("div", { className: "fx-row" }, [button.element]));

@@ -14,7 +14,7 @@ class QToolButton;
 
 // Vista previa de lo que se va a guardar: se codifica en segundo plano y se muestra lo que sale
 // al volver a leerlo (en el GIF, todos sus fotogramas, con un botón para reproducirlo). La usan
-// "Configuración de guardado" y la configuración avanzada del GIF.
+// "Opciones de guardado" y la configuración avanzada del GIF.
 class EncodedPreview : public QWidget {
     Q_OBJECT
 public:

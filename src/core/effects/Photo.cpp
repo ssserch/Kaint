@@ -220,7 +220,7 @@ void registerPhoto(QList<const Effect*>& list)
                                   "seleccionar cada ojo.");
         add(redeye);
     }
-    add({"sharpen", QObject::tr("Nítido"), catPhoto(), {}, {},
+    add({"sharpen", QObject::tr("Enfocar"), catPhoto(), {}, {},
          {P::real("amount", QObject::tr("Cantidad"), 1, 20, 2, 2), P::real("threshold", QObject::tr("Umbral"), 0, 100, 0, 2)},
          renderSharpen});
     add({"softenportrait", QObject::tr("Suavizado de retrato"), catPhoto(), {}, {},

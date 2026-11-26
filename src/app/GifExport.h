@@ -40,7 +40,8 @@ QString filter(Format format);
 bool encode(const QList<Gif::Frame>& frames, Format format, const QString& path, int loops, int webpQuality,
             const VideoOptions& video, QWidget* progressParent, QString* error);
 
-// Abrir vídeo (MP4, WebM, MOV, MKV...) con FFmpeg: sus fotogramas, como mucho 25 por segundo y 1500
+// Abrir vídeo (MP4, WebM, MOV, MKV...) con FFmpeg (en Windows, sin él, con Media Foundation): sus
+// fotogramas, como mucho 25 por segundo y 1500
 // en total (más largo, menos por segundo), todos con la misma duración ('delayMs'). Con
 // 'progressParent', una barra de progreso que se puede cancelar (entonces 'error' queda vacío).
 bool isVideoFile(const QString& path);

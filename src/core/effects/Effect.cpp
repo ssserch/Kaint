@@ -775,6 +775,7 @@ QList<const Effect*>& registry()
         fx::registerPhoto(l);
         fx::registerRender(l);
         fx::registerStylize(l);
+        fx::registerPdn52(l);
         fx::registerLayerEffects(l);
         fx::registerPhotoCraft(l);
         fx::registerBoltBait(l);

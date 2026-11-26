@@ -113,6 +113,43 @@ QPainterPath solidOutline(const QPainterPath& path, qreal width)
     return out;
 }
 
+// Elipse píxel a píxel en el cuadro (redondeado a píxeles enteros): dentro, los píxeles cuyo
+// centro cae en la elipse; el contorno, los de dentro con algún vecino (arriba, abajo, a los lados)
+// fuera. Simétrica por construcción en los dos ejes. 'inside' y 'ring', como rectángulos enteros.
+void pixelEllipse(const QRectF& box, QPainterPath* inside, QPainterPath* ring)
+{
+    const int x0 = int(std::lround(box.left())), y0 = int(std::lround(box.top()));
+    const int w = std::max(1, int(std::lround(box.right())) - x0), h = std::max(1, int(std::lround(box.bottom())) - y0);
+    auto in = [&](int i, int j) {
+        if (i < 0 || j < 0 || i >= w || j >= h)
+            return false;
+        const double u = (i + 0.5 - w / 2.0) / (w / 2.0), v = (j + 0.5 - h / 2.0) / (h / 2.0);
+        return u * u + v * v <= 1.0 + 1e-9;
+    };
+    QPainterPath fill, line;
+    for (int j = 0; j < h; ++j) {
+        int runStart = -1, lineStart = -1;
+        for (int i = 0; i <= w; ++i) {
+            const bool inside = in(i, j);
+            const bool edge = inside && (!in(i - 1, j) || !in(i + 1, j) || !in(i, j - 1) || !in(i, j + 1));
+            if (inside && runStart < 0)
+                runStart = i;
+            if (!inside && runStart >= 0) {
+                fill.addRect(QRectF(x0 + runStart, y0 + j, i - runStart, 1));
+                runStart = -1;
+            }
+            if (edge && lineStart < 0)
+                lineStart = i;
+            if (!edge && lineStart >= 0) {
+                line.addRect(QRectF(x0 + lineStart, y0 + j, i - lineStart, 1));
+                lineStart = -1;
+            }
+        }
+    }
+    *inside = fill;
+    *ring = line;
+}
+
 // La forma dentro de su cuadro: el contorno (medio pincel hacia fuera) y lo que sobresale de la
 // figura (los bultos de la nube) quedan dentro, como en Paint.NET, así que el cuadro de la forma
 // la abarca entera. 'width' es el grosor del contorno (0: solo relleno) y se reduce si el cuadro
@@ -593,11 +630,15 @@ void ShapesTool::render()
     const QColor main = m_secondary ? app->secondary() : app->primary();
     const QColor other = m_secondary ? app->primary() : app->secondary();
     qreal w = s.shapeStyle == ShapeStyle::Fill ? 0 : s.brushSize;
-    const QPainterPath path = shapeInBox(s, m_box.localRect(), m_box.transform(), &w);
+    QPainterPath path = shapeInBox(s, m_box.localRect(), m_box.transform(), &w);
     // Con línea continua, el contorno se rellena (sin los agujeros del trazo de Qt en las curvas
     // más pequeñas que el pincel); con guiones, el trazo de siempre.
     const bool solid = s.dash == Qt::SolidLine;
-    const QPainterPath outline = solid && w > 0 ? solidOutline(path, w) : QPainterPath();
+    QPainterPath outline = solid && w > 0 ? solidOutline(path, w) : QPainterPath();
+    // Elipse de 1 px sin suavizado (sin girar): píxel a píxel y simétrica, como en Paint.NET 5.2
+    // (con el contorno de Qt, alguna salía un píxel torcida).
+    if (s.shape == ShapeType::Ellipse && !s.antialias && solid && w > 0 && w <= 1.0 && m_box.transform().type() <= QTransform::TxScale)
+        pixelEllipse(m_box.transform().mapRect(m_box.localRect().normalized()), &path, &outline);
     const QRect region = path.boundingRect().adjusted(-w - 3, -w - 3, w + 3, w + 3).toAlignedRect();
     renderVector(m_edit, region, [&](QPainter& p, bool coverage) {
         const QBrush fillBrush = coverage ? QBrush(Qt::black)

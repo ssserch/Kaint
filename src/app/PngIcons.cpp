@@ -322,7 +322,8 @@ QStringList missingNamedIcons()
 QString effectIcon(const QString& id, const QString& fallback)
 {
     const QString name = QStringLiteral("effect-") + id;
-    return files().contains(name) ? name : fallback;
+    // El PNG o, si no lo hay, el dibujado (los efectos de Paint.NET 5.2).
+    return files().contains(name) || !pdn(name).isNull() ? name : fallback;
 }
 
 } // namespace Icons

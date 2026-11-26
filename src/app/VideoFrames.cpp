@@ -3,9 +3,12 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QStringList>
+#include <QTransform>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <condition_variable>
@@ -113,6 +116,91 @@ QString hresultText(HRESULT hr)
     return message;
 }
 
+// Tamaño, paso entre filas y zona visible del formato de salida (cambian si cambia el vídeo).
+struct FrameFormat {
+    UINT32 width = 0;
+    UINT32 height = 0;
+    LONG stride = 0;
+    QRect visible;
+};
+
+bool readFrameFormat(IMFSourceReader* reader, const MediaFoundation& api, FrameFormat* f)
+{
+    IMFMediaType* current = nullptr;
+    if (FAILED(reader->GetCurrentMediaType(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &current)))
+        return false;
+    MFGetAttributeSize(current, MF_MT_FRAME_SIZE, &f->width, &f->height);
+    UINT32 s = 0;
+    if (SUCCEEDED(current->GetUINT32(MF_MT_DEFAULT_STRIDE, &s)))
+        f->stride = LONG(INT32(s));
+    else
+        api.stride(MFVideoFormat_RGB32.Data1, f->width, &f->stride);
+    f->visible = QRect(0, 0, int(f->width), int(f->height));
+    MFVideoArea area{};
+    if (SUCCEEDED(current->GetBlob(MF_MT_MINIMUM_DISPLAY_APERTURE, reinterpret_cast<UINT8*>(&area), sizeof(area), nullptr)))
+        f->visible = QRect(area.OffsetX.value, area.OffsetY.value, int(area.Area.cx), int(area.Area.cy))
+                         .intersected(QRect(0, 0, int(f->width), int(f->height)));
+    current->Release();
+    return f->width > 0 && f->height > 0 && f->stride != 0;
+}
+
+// Un lector del primer vídeo del archivo que da los fotogramas en RGB32 (MF ya iniciado).
+HRESULT openReader(const QString& path, const MediaFoundation& api, IMFAttributes** attributes, IMFSourceReader** reader,
+                   FrameFormat* format)
+{
+    HRESULT hr = api.createAttributes(attributes, 1);
+    if (SUCCEEDED(hr))
+        hr = (*attributes)->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE);
+    if (SUCCEEDED(hr))
+        hr = api.createReader(reinterpret_cast<LPCWSTR>(path.utf16()), *attributes, reader);
+    if (SUCCEEDED(hr)) {
+        (*reader)->SetStreamSelection(DWORD(MF_SOURCE_READER_ALL_STREAMS), FALSE);
+        hr = (*reader)->SetStreamSelection(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE);
+    }
+    IMFMediaType* type = nullptr;
+    if (SUCCEEDED(hr))
+        hr = api.createMediaType(&type);
+    if (SUCCEEDED(hr))
+        hr = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+    if (SUCCEEDED(hr))
+        hr = type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+    if (SUCCEEDED(hr))
+        hr = (*reader)->SetCurrentMediaType(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, type);
+    release(type);
+    if (SUCCEEDED(hr) && !readFrameFormat(*reader, api, format))
+        hr = MF_E_INVALIDMEDIATYPE;
+    return hr;
+}
+
+// El fotograma de una muestra, opaco (Media Foundation no siempre deja el alfa a 255) o nulo.
+QImage frameImage(IMFSample* sample, const FrameFormat& f)
+{
+    QImage image;
+    IMFMediaBuffer* buffer = nullptr;
+    if (FAILED(sample->ConvertToContiguousBuffer(&buffer)))
+        return image;
+    BYTE* data = nullptr;
+    DWORD length = 0;
+    if (SUCCEEDED(buffer->Lock(&data, nullptr, &length))) {
+        const qsizetype rowBytes = qsizetype(std::abs(f.stride));
+        if (qsizetype(length) >= rowBytes * qsizetype(f.height) && rowBytes >= qsizetype(f.width) * 4 && !f.visible.isEmpty()) {
+            image = QImage(f.visible.size(), QImage::Format_RGB32);
+            for (int y = 0; y < f.visible.height(); ++y) {
+                const int row = f.visible.top() + y;
+                // Paso negativo: las filas van de abajo arriba.
+                const BYTE* line = f.stride > 0 ? data + qsizetype(row) * rowBytes : data + qsizetype(int(f.height) - 1 - row) * rowBytes;
+                auto* out = reinterpret_cast<quint32*>(image.scanLine(y));
+                std::memcpy(out, line + qsizetype(f.visible.left()) * 4, size_t(f.visible.width()) * 4);
+                for (int x = 0; x < f.visible.width(); ++x)
+                    out[x] |= 0xff000000u;
+            }
+        }
+        buffer->Unlock();
+    }
+    buffer->Release();
+    return image;
+}
+
 } // namespace
 
 struct VideoFrames::Private {
@@ -141,7 +229,6 @@ VideoFrames::VideoFrames(const QString& path, int maxSide, QObject* parent)
         const bool mf = api.ok && SUCCEEDED(api.startup(MF_VERSION, MFSTARTUP_LITE));
         IMFAttributes* attributes = nullptr;
         IMFSourceReader* reader = nullptr;
-        IMFMediaType* type = nullptr;
         auto fail = [&](const QString& why) {
             {
                 std::lock_guard lock(p->mutex);
@@ -149,49 +236,8 @@ VideoFrames::VideoFrames(const QString& path, int maxSide, QObject* parent)
             }
             QMetaObject::invokeMethod(this, [this, why] { emit failed(why); }, Qt::QueuedConnection);
         };
-        HRESULT hr = mf ? api.createAttributes(&attributes, 1) : E_FAIL;
-        if (SUCCEEDED(hr))
-            hr = attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE);
-        if (SUCCEEDED(hr))
-            hr = api.createReader(reinterpret_cast<LPCWSTR>(p->path.utf16()), attributes, &reader);
-        if (SUCCEEDED(hr)) {
-            reader->SetStreamSelection(DWORD(MF_SOURCE_READER_ALL_STREAMS), FALSE);
-            hr = reader->SetStreamSelection(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE);
-        }
-        if (SUCCEEDED(hr))
-            hr = api.createMediaType(&type);
-        if (SUCCEEDED(hr))
-            hr = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-        if (SUCCEEDED(hr))
-            hr = type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
-        if (SUCCEEDED(hr))
-            hr = reader->SetCurrentMediaType(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, type);
-        release(type);
-
-        // Tamaño, paso entre filas y zona visible del formato de salida (cambian si cambia el vídeo).
-        UINT32 width = 0, height = 0;
-        LONG stride = 0;
-        QRect visible;
-        auto readFormat = [&] {
-            IMFMediaType* current = nullptr;
-            if (FAILED(reader->GetCurrentMediaType(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &current)))
-                return false;
-            MFGetAttributeSize(current, MF_MT_FRAME_SIZE, &width, &height);
-            UINT32 s = 0;
-            if (SUCCEEDED(current->GetUINT32(MF_MT_DEFAULT_STRIDE, &s)))
-                stride = LONG(INT32(s));
-            else
-                api.stride(MFVideoFormat_RGB32.Data1, width, &stride);
-            visible = QRect(0, 0, int(width), int(height));
-            MFVideoArea area{};
-            if (SUCCEEDED(current->GetBlob(MF_MT_MINIMUM_DISPLAY_APERTURE, reinterpret_cast<UINT8*>(&area), sizeof(area), nullptr)))
-                visible = QRect(area.OffsetX.value, area.OffsetY.value, int(area.Area.cx), int(area.Area.cy))
-                              .intersected(QRect(0, 0, int(width), int(height)));
-            current->Release();
-            return width > 0 && height > 0 && stride != 0;
-        };
-        if (SUCCEEDED(hr) && !readFormat())
-            hr = MF_E_INVALIDMEDIATYPE;
+        FrameFormat format;
+        HRESULT hr = mf ? openReader(p->path, api, &attributes, &reader, &format) : E_FAIL;
         if (!api.ok) {
             fail(tr("Windows no tiene Media Foundation (en las ediciones N se instala con el «Media Feature Pack»)."));
         } else if (FAILED(hr)) {
@@ -221,7 +267,7 @@ VideoFrames::VideoFrames(const QString& path, int maxSide, QObject* parent)
                     break;
                 }
                 if (flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED)
-                    readFormat();
+                    readFrameFormat(reader, api, &format);
                 if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
                     release(sample);
                     // Otra vez desde el principio (si el vídeo no tenía fotogramas, se deja).
@@ -261,32 +307,13 @@ VideoFrames::VideoFrames(const QString& path, int maxSide, QObject* parent)
                     release(sample);
                     continue;
                 }
-                IMFMediaBuffer* buffer = nullptr;
-                if (SUCCEEDED(sample->ConvertToContiguousBuffer(&buffer))) {
-                    BYTE* data = nullptr;
-                    DWORD length = 0;
-                    if (SUCCEEDED(buffer->Lock(&data, nullptr, &length))) {
-                        const qsizetype rowBytes = qsizetype(std::abs(stride));
-                        if (qsizetype(length) >= rowBytes * qsizetype(height) && rowBytes >= qsizetype(width) * 4) {
-                            QImage image(visible.size(), QImage::Format_RGB32);
-                            for (int y = 0; y < visible.height(); ++y) {
-                                const int row = visible.top() + y;
-                                // Paso negativo: las filas van de abajo arriba.
-                                const BYTE* line = stride > 0 ? data + qsizetype(row) * rowBytes
-                                                              : data + qsizetype(int(height) - 1 - row) * rowBytes;
-                                std::memcpy(image.scanLine(y), line + qsizetype(visible.left()) * 4, size_t(visible.width()) * 4);
-                            }
-                            buffer->Unlock();
-                            image = fitted(std::move(image), p->maxSide);
-                            lastFrame = Clock::now();
-                            QMetaObject::invokeMethod(this, [this, image] { emit frame(image); }, Qt::QueuedConnection);
-                        } else {
-                            buffer->Unlock();
-                        }
-                    }
-                    buffer->Release();
-                }
+                QImage image = frameImage(sample, format);
                 release(sample);
+                if (!image.isNull()) {
+                    image = fitted(std::move(image), p->maxSide);
+                    lastFrame = Clock::now();
+                    QMetaObject::invokeMethod(this, [this, image] { emit frame(image); }, Qt::QueuedConnection);
+                }
             }
         }
         release(reader);
@@ -328,6 +355,170 @@ QString VideoFrames::error() const
 {
     std::lock_guard lock(d->mutex);
     return d->error;
+}
+
+bool VideoFrames::canDecode()
+{
+    return mediaFoundation().ok;
+}
+
+bool VideoFrames::decode(const QString& path, double maxFps, int maxFrames, QList<QImage>* frames, double* fps,
+                         const std::function<bool(int, int)>& progress, QString* error)
+{
+    if (error)
+        error->clear();
+    if (!mediaFoundation().ok) {
+        if (error)
+            *error = tr("Windows no tiene Media Foundation (en las ediciones N se instala con el «Media Feature Pack»).");
+        return false;
+    }
+    // Se lee en otro hilo: este sigue atendiendo la interfaz (y la barra de progreso).
+    struct Shared {
+        std::mutex mutex;
+        QList<QImage> frames;
+        int expected = 0;
+        double fps = 0;
+        QString error;
+        std::atomic_bool cancel{false};
+        std::atomic_bool done{false};
+    };
+    auto s = std::make_shared<Shared>();
+    const QString file = QDir::toNativeSeparators(QFileInfo(path).absoluteFilePath());
+    maxFrames = std::max(1, maxFrames);
+    std::thread worker([s, file, maxFps, maxFrames] {
+        const HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const MediaFoundation& api = mediaFoundation();
+        const bool mf = SUCCEEDED(api.startup(MF_VERSION, MFSTARTUP_LITE));
+        IMFAttributes* attributes = nullptr;
+        IMFSourceReader* reader = nullptr;
+        FrameFormat format;
+        HRESULT hr = mf ? openReader(file, api, &attributes, &reader, &format) : E_FAIL;
+        if (FAILED(hr)) {
+            std::lock_guard lock(s->mutex);
+            s->error = hresultText(hr);
+        } else {
+            // Los fotogramas por segundo del vídeo, su giro (los de móvil en vertical) y su duración.
+            double nativeFps = 0;
+            UINT32 rotation = 0;
+            IMFMediaType* native = nullptr;
+            if (SUCCEEDED(reader->GetNativeMediaType(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0, &native))) {
+                UINT32 num = 0, den = 0;
+                if (SUCCEEDED(MFGetAttributeRatio(native, MF_MT_FRAME_RATE, &num, &den)) && num > 0 && den > 0)
+                    nativeFps = double(num) / den;
+                UINT32 degrees = 0;
+                if (SUCCEEDED(native->GetUINT32(MF_MT_VIDEO_ROTATION, &degrees)))
+                    rotation = degrees % 360;
+                native->Release();
+            }
+            double duration = 0;
+            PROPVARIANT value;
+            PropVariantInit(&value);
+            if (SUCCEEDED(reader->GetPresentationAttribute(DWORD(MF_SOURCE_READER_MEDIASOURCE), MF_PD_DURATION, &value))
+                && value.vt == VT_UI8)
+                duration = double(value.uhVal.QuadPart) / 1e7;
+            PropVariantClear(&value);
+            double rate = nativeFps > 0 ? std::min(maxFps, nativeFps) : maxFps;
+            if (duration > 0 && rate * duration > maxFrames)
+                rate = maxFrames / duration;
+            rate = std::max(0.5, rate);
+            {
+                std::lock_guard lock(s->mutex);
+                s->fps = rate;
+                s->expected = duration > 0 ? std::min(maxFrames, int(std::ceil(duration * rate - 1e-6))) : 0;
+            }
+            // Como el filtro fps de FFmpeg: el fotograma n de la salida (a n / rate segundos) es el
+            // que se ve en ese momento (uno se repite si el vídeo va a menos, o se salta si va a más).
+            QImage held;
+            double heldAt = 0;
+            LONGLONG first = -1;
+            int next = 0;
+            auto emitUntil = [&](double until) {
+                // (Medio milisegundo antes: uno que cae justo en su momento, con redondeos, es el suyo.)
+                while (!held.isNull() && next < maxFrames && next / rate < until - 0.0005) {
+                    std::lock_guard lock(s->mutex);
+                    s->frames.append(held);
+                    ++next;
+                }
+            };
+            while (!s->cancel && next < maxFrames) {
+                DWORD flags = 0;
+                LONGLONG stamp = 0;
+                IMFSample* sample = nullptr;
+                hr = reader->ReadSample(DWORD(MF_SOURCE_READER_FIRST_VIDEO_STREAM), 0, nullptr, &flags, &stamp, &sample);
+                if (FAILED(hr) || (flags & MF_SOURCE_READERF_ERROR)) {
+                    release(sample);
+                    std::lock_guard lock(s->mutex);
+                    s->error = hresultText(FAILED(hr) ? hr : E_FAIL);
+                    break;
+                }
+                if (flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED)
+                    readFrameFormat(reader, api, &format);
+                if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
+                    release(sample);
+                    break;
+                }
+                if (!sample)
+                    continue;
+                if (first < 0)
+                    first = stamp;
+                const double at = double(stamp - first) / 1e7;
+                emitUntil(at);
+                QImage image = frameImage(sample, format);
+                release(sample);
+                if (image.isNull())
+                    continue;
+                if (rotation != 0)
+                    image = image.transformed(QTransform().rotate(rotation));
+                // (Ya es opaco: RGB32 y ARGB32 premultiplicado son entonces los mismos bytes.)
+                if (!image.reinterpretAsFormat(QImage::Format_ARGB32_Premultiplied))
+                    image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+                held = image;
+                heldAt = at;
+            }
+            // El último, hasta el final del vídeo.
+            if (!s->cancel && !held.isNull()) {
+                emitUntil(duration > 0 ? duration - double(std::max<LONGLONG>(0, first)) / 1e7 : heldAt + 1.0 / rate);
+                std::lock_guard lock(s->mutex);
+                if (s->frames.isEmpty())
+                    s->frames.append(held);
+            }
+        }
+        release(reader);
+        release(attributes);
+        if (mf)
+            api.shutdown();
+        if (SUCCEEDED(co))
+            CoUninitialize();
+        s->done = true;
+    });
+    bool canceled = false;
+    while (!s->done) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        int count = 0, expected = 0;
+        {
+            std::lock_guard lock(s->mutex);
+            count = int(s->frames.size());
+            expected = s->expected;
+        }
+        if (progress && !canceled && !progress(count, expected)) {
+            canceled = true;
+            s->cancel = true;
+        }
+    }
+    worker.join();
+    if (canceled) {
+        if (error)
+            error->clear();
+        return false;
+    }
+    if (s->frames.isEmpty()) {
+        if (error)
+            *error = s->error.isEmpty() ? tr("El vídeo no tiene fotogramas.") : s->error;
+        return false;
+    }
+    *frames = std::move(s->frames);
+    *fps = s->fps;
+    return true;
 }
 
 #elif defined(KAINT_HAVE_QTMULTIMEDIA)
@@ -427,6 +618,20 @@ QString VideoFrames::error() const
     return d->error;
 }
 
+#endif
+
+#ifndef Q_OS_WIN
+bool VideoFrames::canDecode()
+{
+    return false;
+}
+
+bool VideoFrames::decode(const QString&, double, int, QList<QImage>*, double*, const std::function<bool(int, int)>&, QString* error)
+{
+    if (error)
+        *error = tr("Para abrir vídeo hace falta FFmpeg.");
+    return false;
+}
 #endif
 
 bool VideoFrames::isVideo(const QString& path)

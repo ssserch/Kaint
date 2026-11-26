@@ -140,7 +140,7 @@ export class PaintBucketTool extends EditableFill {
     hint() {
         return this.editing
             ? tr("Cambia la tolerancia o los colores, o arrastra el punto de origen. Intro: terminar.")
-            : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.");
+            : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global. Ctrl: muestrear la imagen en vez de la capa (o al revés).");
     }
 
 
@@ -164,7 +164,9 @@ export class PaintBucketTool extends EditableFill {
         if (x < 0 || y < 0 || x >= doc.width || y >= doc.height || (clip && !clip[y * doc.width + x]))
             return;
         const s = this.settings;
-        this.sample = context(s.sampleImage ? doc.flattened() : doc.activeLayer.canvas).getImageData(0, 0, doc.width, doc.height);
+        // Con Ctrl, lo contrario de «Muestreo» (imagen o capa), como en Paint.NET 5.2.
+        this.ctrlSample = !!e.ctrl;
+        this.sample = context(!!s.sampleImage !== this.ctrlSample ? doc.flattened() : doc.activeLayer.canvas).getImageData(0, 0, doc.width, doc.height);
         this.seed = { x, y };
         this.useSecondary = e.button === "right";
         this.shiftGlobal = !!e.shift;
@@ -204,7 +206,7 @@ export class PaintBucketTool extends EditableFill {
 
     saveState() {
         const s = this.settings;
-        return { seed: { ...this.seed }, useSecondary: this.useSecondary, shiftGlobal: this.shiftGlobal, sample: this.sample,
+        return { seed: { ...this.seed }, useSecondary: this.useSecondary, shiftGlobal: this.shiftGlobal, ctrlSample: this.ctrlSample, sample: this.sample,
                  primary: { ...AppState.primary }, secondary: { ...AppState.secondary },
                  settings: { tolerance: s.tolerance, floodGlobal: s.floodGlobal, sampleImage: s.sampleImage, antialias: s.antialias, blend: s.blend,
                              toleranceStraight: !!s.toleranceStraight, fillAccumulate: s.fillAccumulate !== false, fill: s.fill || 0 } };
@@ -214,6 +216,7 @@ export class PaintBucketTool extends EditableFill {
         this.seed = { ...st.seed };
         this.useSecondary = st.useSecondary;
         this.shiftGlobal = st.shiftGlobal;
+        this.ctrlSample = !!st.ctrlSample;
         this.sample = st.sample;
         AppState.updateTools(st.settings);
         AppState.setPrimary(st.primary);
@@ -239,7 +242,7 @@ export class PaintBucketTool extends EditableFill {
             tolerance: s.tolerance, global: s.floodGlobal !== this.shiftGlobal, straight: !!s.toleranceStraight, antialias: s.antialias,
             accumulate: s.fillAccumulate !== false, blend: s.blend, color: this.useSecondary ? AppState.secondary : AppState.primary,
             background: this.useSecondary ? AppState.primary : AppState.secondary, pattern: s.fill || 0,
-            sampleIsLayer: !s.sampleImage,
+            sampleIsLayer: !!s.sampleImage === !!this.ctrlSample,
         }, clip);
         if (!r) {
             if (old)

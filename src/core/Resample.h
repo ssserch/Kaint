@@ -30,7 +30,11 @@ QImage scale(const QImage& src, QSize size, Method method, bool gammaCorrect = f
 // Muestreo de Paint.NET: vecino más próximo, bilineal, bicúbica, multimuestra bilineal (cuatro
 // muestras bilineales por píxel, bordes más suaves) y anisotrópica (más muestras en el eje en que
 // la imagen se encoge más). Los valores se guardan en la configuración.
-enum class Interpolation { NearestNeighbor, Bilinear, Bicubic, BilinearMultisample, Anisotropic };
+// NearestNeighborAntialiased (Paint.NET 5.2): cada muestra, el píxel más cercano, pero con varias
+// por píxel: el interior sigue nítido y los bordes salen suavizados. (Al final: los valores
+// guardados de las demás no cambian.)
+enum class Interpolation { NearestNeighbor, Bilinear, Bicubic, BilinearMultisample, Anisotropic, NearestNeighborAntialiased };
+inline bool isNearest(Interpolation i) { return i == Interpolation::NearestNeighbor || i == Interpolation::NearestNeighborAntialiased; }
 QString name(Interpolation interpolation);
 // En el orden del menú de Paint.NET.
 const QList<Interpolation>& interpolations();

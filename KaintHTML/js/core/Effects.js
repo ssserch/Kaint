@@ -2033,7 +2033,7 @@ function octreePalette(colors, count) {
 
 const color = [
     {
-        id: "quantize", name: "Cuantizar", category: "color",
+        id: "quantize", name: "Cuantización / Dithering", category: "color",
         params: [P.choice("algorithm", "Algoritmo", ["Corte a la mediana", "Octree"], 1), P.int("colors", "Colores", 2, 256, 256),
                  P.int("dither", "Nivel de tramado", 0, 8, 7), P.int("threshold", "Umbral de transparencia", 0, 255, 128)],
         note: "Los píxeles que tengan un valor del canal alfa menor que el umbral serán totalmente transparentes.",
@@ -2262,7 +2262,7 @@ const distort = [
         },
     },
     {
-        id: "frostedglass", name: "Cristal congelado", category: "distort",
+        id: "frostedglass", name: "Cristal esmerilado", category: "distort",
         params: [P.real("max", "Radio de dispersión máximo", 0, 200, 3, 2), P.real("min", "Radio de dispersión mínimo", 0, 200, 0, 2),
                  P.real("diffusion", "Difusión", 0, 3, 1, 2), P.int("smoothness", "Suavizado", 1, 8, 2), P.seed()],
         run(a) {
@@ -2544,7 +2544,7 @@ const photo = [
         },
     },
     {
-        id: "sharpen", name: "Nítido", category: "photo",
+        id: "sharpen", name: "Enfocar", category: "photo",
         params: [P.real("amount", "Cantidad", 1, 20, 2, 2), P.real("threshold", "Umbral", 0, 100, 0, 2)],
         run(a) {
             // SharpenEffect de Paint.NET: se aleja de la mediana local. Con Umbral solo se
@@ -2947,6 +2947,1333 @@ const layer = [
     },
 ];
 
+// --- Los efectos nuevos de Paint.NET 5.2 (Pdn52Effects.cpp de Kaint) ---------------------------
+// Linograbado, Mosaico, Puntillismo y Vidriera (Artístico), Tramado ordenado (Color), Esferizar y
+// Ondas (Distorsionar) y Semitono (Estilizado): los mismos algoritmos que Kaint para el escritorio.
+
+const p52Clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const p52Straight = (src, x, y) => qUnpremultiply(sampleBilinear(src, x + 0.5, y + 0.5));
+
+// Media de cinco muestras alrededor de un punto (el centro de una celda de lado 'cell').
+function p52CellColor(src, x, y, cell) {
+    const d = cell * 0.25, s = new Uint32Array(5);
+    s[0] = sampleBilinear(src, x + 0.5, y + 0.5);
+    s[1] = sampleBilinear(src, x - d + 0.5, y - d + 0.5);
+    s[2] = sampleBilinear(src, x + d + 0.5, y - d + 0.5);
+    s[3] = sampleBilinear(src, x - d + 0.5, y + d + 0.5);
+    s[4] = sampleBilinear(src, x + d + 0.5, y + d + 0.5);
+    return qUnpremultiply(average(s, 5));
+}
+
+// Ruido de valor suave en [-1, 1].
+function p52ValueNoise(x, y, seed) {
+    const fx = Math.floor(x), fy = Math.floor(y);
+    let tx = x - fx, ty = y - fy;
+    tx = tx * tx * (3 - 2 * tx);
+    ty = ty * ty * (3 - 2 * ty);
+    const h = (i, j) => hashUnit(i >>> 0, j >>> 0, seed) * 2 - 1;
+    const a = h(fx, fy) + (h(fx + 1, fy) - h(fx, fy)) * tx;
+    const b = h(fx, fy + 1) + (h(fx + 1, fy + 1) - h(fx, fy + 1)) * tx;
+    return a + (b - a) * ty;
+}
+
+// Un color directo hacia el blanco (shade > 0) o el negro (shade < 0).
+function p52Shaded(c, shade) {
+    const ch = (v) => clamp255(lround(shade >= 0 ? v + (255 - v) * shade : v * (1 + shade)));
+    return qRgba(ch(qRed(c)), ch(qGreen(c)), ch(qBlue(c)), qAlpha(c));
+}
+
+function p52Mix(a, b, t) {
+    const l = (x, y) => clamp255(lround(x + (y - x) * t));
+    return qRgba(l(qRed(a), qRed(b)), l(qGreen(a), qGreen(b)), l(qBlue(a), qBlue(b)), l(qAlpha(a), qAlpha(b)));
+}
+
+// "Source over" con alfa directo (overStraight de Kaint).
+function p52OverStraight(dst, src) {
+    const sa = qAlpha(src);
+    if (sa === 255)
+        return src;
+    if (sa === 0)
+        return dst;
+    const da = qAlpha(dst);
+    if (da === 0)
+        return src;
+    const y = idiv(da * (255 - sa) + 127, 255), total = y + sa;
+    const ch = (d, s) => idiv(d * y + s * sa + (total >> 1), total);
+    return qRgba(ch(qRed(dst), qRed(src)), ch(qGreen(dst), qGreen(src)), ch(qBlue(dst), qBlue(src)), total);
+}
+
+const p52Packed = (c) => qRgba(c.r, c.g, c.b, c.a ?? 255);
+
+// Transformada de distancia euclídea exacta (Felzenszwalb y Huttenlocher): de cada píxel al más
+// cercano de los marcados.
+function p52DistanceTransform(seeds, w, h) {
+    const INF = 1e20, f = new Float32Array(w * h);
+    for (let i = 0; i < f.length; ++i)
+        f[i] = seeds[i] ? 0 : INF;
+    const n = Math.max(w, h), v = new Int32Array(n), z = new Float32Array(n + 1), col = new Float32Array(n), res = new Float32Array(n);
+    const pass = (input, out, count) => {
+        let k = 0;
+        v[0] = 0;
+        z[0] = -INF;
+        z[1] = INF;
+        for (let q = 1; q < count; ++q) {
+            let s;
+            for (;;) {
+                const p = v[k];
+                s = (input[q] + q * q - (input[p] + p * p)) / (2 * (q - p));
+                if (s <= z[k] && k > 0)
+                    --k;
+                else
+                    break;
+            }
+            if (s <= z[k]) {
+                v[0] = q;
+                z[0] = -INF;
+                z[1] = INF;
+                k = 0;
+                continue;
+            }
+            ++k;
+            v[k] = q;
+            z[k] = s;
+            z[k + 1] = INF;
+        }
+        k = 0;
+        for (let q = 0; q < count; ++q) {
+            while (z[k + 1] < q)
+                ++k;
+            const p = v[k];
+            out[q] = (q - p) * (q - p) + input[p];
+        }
+    };
+    for (let x = 0; x < w; ++x) {
+        for (let y = 0; y < h; ++y)
+            col[y] = f[y * w + x];
+        pass(col, res, h);
+        for (let y = 0; y < h; ++y)
+            f[y * w + x] = res[y];
+    }
+    for (let y = 0; y < h; ++y) {
+        for (let x = 0; x < w; ++x)
+            col[x] = f[y * w + x];
+        pass(col, res, w);
+        for (let x = 0; x < w; ++x)
+            f[y * w + x] = Math.sqrt(res[x]);
+    }
+    return f;
+}
+
+// --- Ondas -----------------------------------------------------------------------------------
+
+function p52Wave(form, t) {
+    const f = t - Math.floor(t);
+    switch (form) {
+    case 1: return 1 - 4 * Math.abs(((f + 0.25) % 1) - 0.5);
+    case 2: return 2 * ((f + 0.5) % 1) - 1;
+    case 3: return f < 0.5 ? 1 : -1;
+    case 4: {
+        const s = (f < 0.5 ? f : f - 0.5) * 4 - 1;
+        const arch = Math.sqrt(Math.max(0, 1 - s * s));
+        return f < 0.5 ? arch : -arch;
+    }
+    case 5: {
+        const x = 2 * Math.PI * f;
+        return 0.6 * Math.sin(x) + 0.3 * Math.sin(2 * x) + 0.1 * Math.sin(3 * x);
+    }
+    case 6: return Math.round(Math.sin(2 * Math.PI * f) * 3) / 3;
+    default: return Math.sin(2 * Math.PI * f);
+    }
+}
+const P52_WAVES_CENTERED = [1, 3, 4, 5, 7, 8];
+const P52_WAVES_DAMPED = [1, 3, 4, 5, 7, 8, 9];
+const P52_WAVES_LOBED = [7, 8];
+
+// --- Tramado ordenado ------------------------------------------------------------------------
+
+const p52Thresholds = (rank) => Float32Array.from(rank, (r) => (r + 0.5) / rank.length);
+
+function p52Bayer(n) {
+    let m = [0], s = 1;
+    const quad = [[0, 2], [3, 1]];
+    while (s < n) {
+        const next = new Array(4 * s * s);
+        for (let y = 0; y < 2 * s; ++y)
+            for (let x = 0; x < 2 * s; ++x)
+                next[y * 2 * s + x] = m[(y % s) * s + (x % s)] * 4 + quad[(y / s) | 0][(x / s) | 0];
+        m = next;
+        s *= 2;
+    }
+    return m;
+}
+
+function p52Spiral(n, centers) {
+    const half = n / 2;
+    const c1 = centers === 1 ? [(n - 1) / 2, (n - 1) / 2] : [n / 4 - 0.5, n / 4 - 0.5];
+    const c2 = [c1[0] + half, c1[1] + half];
+    const torus = (d) => Math.min(Math.abs(d), n - Math.abs(d));
+    const lists = [[], []];
+    for (let y = 0; y < n; ++y)
+        for (let x = 0; x < n; ++x) {
+            const d1 = Math.hypot(torus(x - c1[0]), torus(y - c1[1]));
+            const d2 = centers === 1 ? 1e9 : Math.hypot(torus(x - c2[0]), torus(y - c2[1]));
+            const c = d1 <= d2 ? c1 : c2;
+            lists[d1 <= d2 ? 0 : 1].push({ index: y * n + x, dist: Math.min(d1, d2), angle: Math.atan2(y - c[1], x - c[0]) });
+        }
+    const less = (a, b) => (Math.abs(a.dist - b.dist) > 1e-9 ? a.dist - b.dist : a.angle - b.angle);
+    lists[0].sort(less);
+    lists[1].sort(less);
+    const rank = new Array(n * n);
+    let i0 = 0, i1 = 0;
+    for (let r = 0; r < n * n; ++r) {
+        const first = i1 >= lists[1].length || (i0 < lists[0].length && r % 2 === 0);
+        rank[(first ? lists[0][i0++] : lists[1][i1++]).index] = r;
+    }
+    return rank;
+}
+
+// std::mt19937 (el de Kaint para el escritorio: así el ruido azul sale igual).
+function p52Mt19937(seed) {
+    const mt = new Uint32Array(624);
+    let index = 624;
+    mt[0] = seed >>> 0;
+    for (let i = 1; i < 624; ++i) {
+        const prev = mt[i - 1] ^ (mt[i - 1] >>> 30);
+        mt[i] = (Math.imul(1812433253, prev) + i) >>> 0;
+    }
+    return () => {
+        if (index >= 624) {
+            for (let i = 0; i < 624; ++i) {
+                const y = (mt[i] & 0x80000000) | (mt[(i + 1) % 624] & 0x7fffffff);
+                mt[i] = mt[(i + 397) % 624] ^ (y >>> 1) ^ (y & 1 ? 0x9908b0df : 0);
+            }
+            index = 0;
+        }
+        let y = mt[index++];
+        y ^= y >>> 11;
+        y ^= (y << 7) & 0x9d2c5680;
+        y ^= (y << 15) & 0xefc60000;
+        y ^= y >>> 18;
+        return y >>> 0;
+    };
+}
+
+// Ruido azul («void and cluster» de Ulichney).
+function p52BlueNoise(n) {
+    const count = n * n, sigma = 1.5;
+    const kernel = new Float64Array(count);
+    for (let y = 0; y < n; ++y)
+        for (let x = 0; x < n; ++x) {
+            const dx = Math.min(x, n - x), dy = Math.min(y, n - y);
+            kernel[y * n + x] = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+        }
+    let bits = new Uint8Array(count), energy = new Float64Array(count);
+    const change = (index, sgn) => {
+        const ix = index % n, iy = (index / n) | 0;
+        bits[index] = sgn > 0 ? 1 : 0;
+        for (let y = 0; y < n; ++y) {
+            const ky = (((y - iy) % n) + n) % n;
+            for (let x = 0; x < n; ++x)
+                energy[y * n + x] += sgn * kernel[ky * n + ((((x - ix) % n) + n) % n)];
+        }
+    };
+    const tightest = () => {
+        let best = -1;
+        for (let i = 0; i < count; ++i)
+            if (bits[i] && (best < 0 || energy[i] > energy[best]))
+                best = i;
+        return best;
+    };
+    const largestVoid = () => {
+        let best = -1;
+        for (let i = 0; i < count; ++i)
+            if (!bits[i] && (best < 0 || energy[i] < energy[best]))
+                best = i;
+        return best;
+    };
+    const random = p52Mt19937(1234 + n);
+    const ones = Math.max(1, (count / 10) | 0);
+    for (let placed = 0; placed < ones;) {
+        const i = random() % count;
+        if (!bits[i]) {
+            change(i, 1);
+            ++placed;
+        }
+    }
+    for (let iter = 0; iter < count; ++iter) {
+        const t = tightest();
+        change(t, -1);
+        const v = largestVoid();
+        change(v, 1);
+        if (v === t)
+            break;
+    }
+    const startBits = bits.slice(), startEnergy = energy.slice();
+    const rank = new Array(count);
+    for (let r = ones - 1; r >= 0; --r) {
+        const t = tightest();
+        change(t, -1);
+        rank[t] = r;
+    }
+    bits = startBits;
+    energy = startEnergy;
+    for (let r = ones; r < count; ++r) {
+        const v = largestVoid();
+        change(v, 1);
+        rank[v] = r;
+    }
+    return rank;
+}
+
+const P52_DITHER_NAMES = ["Bayer 2x2", "Bayer 4x4", "Bayer 8x8", "Bayer 16x16", "Espiral 4x4", "Espiral 8x8", "Espiral doble 4x4",
+                          "Espiral doble 8x8", "Ruido azul 16x16", "Ruido azul 32x32", "Ruido azul 64x64", "Ruido blanco 8x8",
+                          "Ruido blanco 16x16", "Ruido blanco 32x32", "Ruido blanco 64x64"];
+const p52BlueCache = [];
+
+function p52DitherMatrix(which, seed) {
+    if (which <= 3) {
+        const n = 2 << which;
+        return { n, t: p52Thresholds(p52Bayer(n)) };
+    }
+    if (which <= 7) {
+        const n = which % 2 === 0 ? 4 : 8;
+        return { n, t: p52Thresholds(p52Spiral(n, which <= 5 ? 1 : 2)) };
+    }
+    if (which <= 10) {
+        // Una vez por tamaño; la semilla lo desplaza y lo voltea.
+        const n = 16 << (which - 8);
+        const base = p52BlueCache[which - 8] || (p52BlueCache[which - 8] = p52Thresholds(p52BlueNoise(n)));
+        const sx = Math.imul(seed, 7) % n, sy = Math.imul(seed, 13) % n, transpose = (seed & 1) === 1;
+        const t = new Float32Array(n * n);
+        for (let y = 0; y < n; ++y)
+            for (let x = 0; x < n; ++x) {
+                const bx = (x + sx) % n, by = (y + sy) % n;
+                t[y * n + x] = transpose ? base[bx * n + by] : base[by * n + bx];
+            }
+        return { n, t };
+    }
+    const n = 8 << (which - 11), count = n * n;
+    const order = [];
+    for (let i = 0; i < count; ++i)
+        order.push([hash3(i, 0x51, seed), i]);
+    order.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const rank = new Array(count);
+    order.forEach(([, i], r) => (rank[i] = r));
+    return { n, t: p52Thresholds(rank) };
+}
+
+// --- Semitono --------------------------------------------------------------------------------
+
+function p52SpotMetric(pattern, u, v) {
+    switch (pattern) {
+    case 1: return Math.abs(u) + Math.abs(v);
+    case 2: return Math.hypot(u, v / 0.65) / Math.hypot(0.5, 0.5 / 0.65);
+    case 3: return Math.max(Math.abs(u), Math.abs(v)) * 2;
+    case 4: return Math.min(Math.abs(u), Math.abs(v)) * 2;
+    case 5: return Math.abs(v) * 2;
+    default: return Math.hypot(u, v) * Math.SQRT2;
+    }
+}
+
+function p52SpotLimit(pattern, ink) {
+    ink = p52Clamp01(ink);
+    switch (pattern) {
+    case 4: return 1 - Math.sqrt(1 - ink);
+    case 5: return ink;
+    default: return Math.sqrt(ink) * 0.88;
+    }
+}
+
+// --- Teselas (Mosaico y Vidriera) ------------------------------------------------------------
+// hit(x, y, h) rellena h = { key, cx, cy, dist, nx, ny, shade } y devuelve si hay tesela.
+
+class P52PolygonTiling {
+    constructor(area, bucket) {
+        this.area = area;
+        this.bucket = Math.max(2, bucket);
+        this.nx = Math.max(1, Math.ceil(area.width / this.bucket) + 1);
+        this.ny = Math.max(1, Math.ceil(area.height / this.bucket) + 1);
+        this.cells = Array.from({ length: this.nx * this.ny }, () => []);
+        this.items = [];
+    }
+
+    add(pts, shade = 0) {
+        if (pts.length < 3)
+            return;
+        let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+        for (const [x, y] of pts) {
+            minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y);
+        }
+        const A = this.area;
+        if (maxx < A.left || minx > A.left + A.width || maxy < A.top || miny > A.top + A.height)
+            return;
+        let area2 = 0;
+        for (let i = 0; i < pts.length; ++i) {
+            const p = pts[i], q = pts[(i + 1) % pts.length];
+            area2 += p[0] * q[1] - q[0] * p[1];
+        }
+        const ordered = area2 < 0 ? [...pts].reverse() : pts;
+        let cx = 0, cy = 0;
+        const edges = new Float64Array(ordered.length * 3);
+        for (let i = 0; i < ordered.length; ++i) {
+            const p = ordered[i], q = ordered[(i + 1) % ordered.length];
+            cx += p[0];
+            cy += p[1];
+            const ex = q[0] - p[0], ey = q[1] - p[1], len = Math.max(1e-12, Math.hypot(ex, ey));
+            const nx = ey / len, ny = -ex / len;
+            edges[i * 3] = nx;
+            edges[i * 3 + 1] = ny;
+            edges[i * 3 + 2] = -(nx * p[0] + ny * p[1]);
+        }
+        const index = this.items.length;
+        this.items.push({ edges, count: ordered.length, cx: cx / ordered.length, cy: cy / ordered.length, shade });
+        const b = this.bucket;
+        const bx0 = clamp(Math.floor((minx - A.left) / b), 0, this.nx - 1), bx1 = clamp(Math.floor((maxx - A.left) / b), 0, this.nx - 1);
+        const by0 = clamp(Math.floor((miny - A.top) / b), 0, this.ny - 1), by1 = clamp(Math.floor((maxy - A.top) / b), 0, this.ny - 1);
+        for (let by = by0; by <= by1; ++by)
+            for (let bx = bx0; bx <= bx1; ++bx)
+                this.cells[by * this.nx + bx].push(index);
+    }
+
+    hit(x, y, h) {
+        const A = this.area;
+        const bx = clamp(Math.floor((x - A.left) / this.bucket), 0, this.nx - 1), by = clamp(Math.floor((y - A.top) / this.bucket), 0, this.ny - 1);
+        let bestDist = -1e18, best = -1, bnx = 0, bny = -1;
+        for (const index of this.cells[by * this.nx + bx]) {
+            const it = this.items[index], e = it.edges;
+            let inside = 1e18, nx = 0, ny = -1;
+            for (let k = 0; k < it.count; ++k) {
+                const dd = -(e[k * 3] * x + e[k * 3 + 1] * y + e[k * 3 + 2]);
+                if (dd < inside) {
+                    inside = dd;
+                    nx = e[k * 3];
+                    ny = e[k * 3 + 1];
+                }
+            }
+            if (inside > bestDist) {
+                bestDist = inside;
+                best = index;
+                bnx = nx;
+                bny = ny;
+            }
+            if (inside >= 0)
+                break;
+        }
+        if (best < 0)
+            return false;
+        const it = this.items[best];
+        h.key = best;
+        h.cx = it.cx;
+        h.cy = it.cy;
+        h.dist = Math.max(0, bestDist);
+        h.nx = bnx;
+        h.ny = bny;
+        h.shade = it.shade;
+        return true;
+    }
+}
+
+const p52Key = (i, j) => (j + 1048576) * 2097152 + (i + 1048576);
+
+class P52VoronoiTiling {
+    constructor(cell, jitter, seed, round, ox, oy) {
+        Object.assign(this, { cell: Math.max(2, cell), jitter, seed, round, ox, oy });
+        this.sx = new Float64Array(25);
+        this.sy = new Float64Array(25);
+        this.si = new Int32Array(25);
+        this.sj = new Int32Array(25);
+        this.d2 = new Float64Array(25);
+    }
+
+    hit(x, y, h) {
+        const c = this.cell, ci = Math.floor((x - this.ox) / c), cj = Math.floor((y - this.oy) / c);
+        let n = 0, best = 0;
+        for (let j = cj - 2; j <= cj + 2; ++j)
+            for (let i = ci - 2; i <= ci + 2; ++i) {
+                const jx = (hashUnit(i >>> 0, j >>> 0, this.seed) - 0.5) * this.jitter;
+                const jy = (hashUnit(i >>> 0, j >>> 0, this.seed + 7) - 0.5) * this.jitter;
+                const sx = this.ox + (i + 0.5 + jx) * c, sy = this.oy + (j + 0.5 + jy) * c;
+                this.sx[n] = sx;
+                this.sy[n] = sy;
+                this.si[n] = i;
+                this.sj[n] = j;
+                this.d2[n] = (sx - x) * (sx - x) + (sy - y) * (sy - y);
+                if (this.d2[n] < this.d2[best])
+                    best = n;
+                ++n;
+            }
+        let b1 = 1e18, b2 = 1e18, n1x = 0, n1y = -1, n2x = 0, n2y = -1;
+        for (let k = 0; k < n; ++k) {
+            if (k === best)
+                continue;
+            const dx = this.sx[k] - this.sx[best], dy = this.sy[k] - this.sy[best], len = Math.hypot(dx, dy);
+            if (len < 1e-9)
+                continue;
+            const dist = (this.d2[k] - this.d2[best]) / (2 * len);
+            if (dist < b1) {
+                b2 = b1; n2x = n1x; n2y = n1y;
+                b1 = dist; n1x = dx / len; n1y = dy / len;
+            } else if (dist < b2) {
+                b2 = dist; n2x = dx / len; n2y = dy / len;
+            }
+        }
+        let dist = b1, nx = n1x, ny = n1y;
+        if (this.round > 0 && b2 < 1e17) {
+            const e1 = Math.exp(-b1 / this.round), e2 = Math.exp(-b2 / this.round);
+            dist = -this.round * Math.log(e1 + e2);
+            const w1 = e1 / (e1 + e2), w2 = 1 - w1;
+            nx = n1x * w1 + n2x * w2;
+            ny = n1y * w1 + n2y * w2;
+            const len = Math.hypot(nx, ny);
+            if (len > 1e-9) {
+                nx /= len;
+                ny /= len;
+            } else {
+                nx = n1x;
+                ny = n1y;
+            }
+        }
+        h.key = p52Key(this.si[best], this.sj[best]);
+        h.cx = this.sx[best];
+        h.cy = this.sy[best];
+        h.dist = Math.max(0, dist);
+        h.nx = nx;
+        h.ny = ny;
+        h.shade = 0;
+        return true;
+    }
+}
+
+class P52FishScaleTiling {
+    constructor(r, ox, oy) {
+        Object.assign(this, { r: Math.max(2, r), ox, oy });
+    }
+
+    center(i, j) {
+        return [this.ox + 2 * this.r * i + (j & 1 ? this.r : 0), this.oy + this.r * j];
+    }
+
+    hit(x, y, h) {
+        const r = this.r, jc = Math.floor((y - this.oy) / r);
+        for (let j = jc - 1; j <= jc + 2; ++j) {
+            const off = j & 1 ? r : 0, ic = Math.floor((x - this.ox - off) / (2 * r));
+            for (let i = ic - 1; i <= ic + 1; ++i) {
+                const [cx, cy] = this.center(i, j);
+                const dc = Math.hypot(x - cx, y - cy);
+                if (dc > r)
+                    continue;
+                let dist = r - dc, nx = dc > 1e-9 ? (x - cx) / dc : 0, ny = dc > 1e-9 ? (y - cy) / dc : 1;
+                for (const [ox, oy] of [this.center(j & 1 ? i : i - 1, j - 1), this.center(j & 1 ? i + 1 : i, j - 1)]) {
+                    const d = Math.hypot(x - ox, y - oy) - r;
+                    if (d < dist && d > -1e-9) {
+                        dist = d;
+                        const len = Math.max(1e-9, Math.hypot(ox - x, oy - y));
+                        nx = (ox - x) / len;
+                        ny = (oy - y) / len;
+                    }
+                }
+                Object.assign(h, { key: p52Key(i, j), cx, cy: cy + r * 0.4, dist: Math.max(0, dist), nx, ny, shade: 0 });
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+class P52AmphitheaterTiling {
+    constructor(size, cx, cy, seed) {
+        Object.assign(this, { size: Math.max(2, size), cx, cy, seed });
+    }
+
+    hit(x, y, h) {
+        const size = this.size, dx = x - this.cx, dy = y - this.cy, r = Math.hypot(dx, dy);
+        const ring = Math.floor(r / size);
+        const nxr = r > 1e-9 ? dx / r : 0, nyr = r > 1e-9 ? dy / r : -1;
+        let dist = (ring + 1) * size - r, nx = nxr, ny = nyr, seg = 0, mid = 0;
+        if (ring > 0 && r - ring * size < dist) {
+            dist = r - ring * size;
+            nx = -nxr;
+            ny = -nyr;
+        }
+        if (ring > 0) {
+            const n = Math.max(3, lround(2 * Math.PI * (ring + 0.5)));
+            const step = (2 * Math.PI) / n, off = hashUnit(ring, 3, this.seed) * step;
+            let ang = Math.atan2(dy, dx) - off;
+            ang -= Math.floor(ang / (2 * Math.PI)) * 2 * Math.PI;
+            seg = Math.floor(ang / step) % n;
+            const a0 = ang - seg * step, a1 = (seg + 1) * step - ang;
+            const dseg = r * Math.sin(Math.min(Math.min(a0, a1), Math.PI / 2));
+            if (dseg < dist) {
+                dist = dseg;
+                const edgeAng = (a0 < a1 ? seg * step : (seg + 1) * step) + off;
+                const tx = -Math.sin(edgeAng), ty = Math.cos(edgeAng);
+                nx = a0 < a1 ? -tx : tx;
+                ny = a0 < a1 ? -ty : ty;
+            }
+            mid = (seg + 0.5) * step + off;
+        }
+        const rm = ring > 0 ? (ring + 0.5) * size : 0;
+        Object.assign(h, { key: p52Key(seg, ring), cx: this.cx + Math.cos(mid) * rm, cy: this.cy + Math.sin(mid) * rm,
+                           dist: Math.max(0, dist), nx, ny, shade: 0 });
+        return true;
+    }
+}
+
+// Las piezas de 4 o 5 casillas en todas sus orientaciones (la casilla de arriba a la izquierda, la primera).
+function p52PieceShapes(n) {
+    const base = n === 4
+        ? [[[0, 0], [1, 0], [2, 0], [3, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [2, 0], [1, 1]], [[0, 0], [1, 0], [1, 1], [2, 1]],
+           [[0, 0], [0, 1], [0, 2], [1, 2]]]
+        : [[[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]], [[0, 0], [0, 1], [0, 2], [0, 3], [1, 3]], [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]],
+           [[0, 0], [1, 0], [2, 0], [1, 1], [1, 2]], [[0, 0], [0, 1], [1, 1], [2, 1], [2, 2]], [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]],
+           [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]], [[0, 0], [0, 1], [1, 1], [1, 2], [2, 2]], [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1]],
+           [[0, 0], [1, 0], [1, 1], [2, 1], [3, 1]], [[1, 0], [0, 1], [1, 1], [1, 2], [2, 2]], [[0, 0], [1, 0], [2, 0], [3, 0], [1, 1]]];
+    const out = [], seen = new Set();
+    for (const b of base)
+        for (let t = 0; t < 8; ++t) {
+            const s = b.map(([px, py]) => {
+                let x = t & 4 ? -px : px, y = py;
+                for (let r = 0; r < (t & 3); ++r)
+                    [x, y] = [-y, x];
+                return [x, y];
+            });
+            s.sort((a, c) => (a[1] !== c[1] ? a[1] - c[1] : a[0] - c[0]));
+            const [ox, oy] = s[0];
+            const norm = s.map(([x, y]) => [x - ox, y - oy]);
+            const key = JSON.stringify(norm);
+            if (!seen.has(key)) {
+                seen.add(key);
+                out.push(norm);
+            }
+        }
+    return out;
+}
+
+class P52CellTiling {
+    constructor(area, cell, pieceSize, seed) {
+        this.cell = Math.max(2, cell);
+        this.x0 = Math.floor(area.left / this.cell) - 1;
+        this.y0 = Math.floor(area.top / this.cell) - 1;
+        this.nx = Math.ceil((area.left + area.width) / this.cell) - this.x0 + 2;
+        this.ny = Math.ceil((area.top + area.height) / this.cell) - this.y0 + 2;
+        this.ids = new Int32Array(this.nx * this.ny).fill(-1);
+        this.centers = [];
+        const all = p52PieceShapes(pieceSize);
+        const free = (x, y) => x >= 0 && y >= 0 && x < this.nx && y < this.ny && this.ids[y * this.nx + x] < 0;
+        for (let y = 0; y < this.ny; ++y)
+            for (let x = 0; x < this.nx; ++x) {
+                if (!free(x, y))
+                    continue;
+                const start = hash3((x + this.x0) >>> 0, (y + this.y0) >>> 0, seed) % all.length;
+                let chosen = null;
+                for (let k = 0; k < all.length && !chosen; ++k) {
+                    const s = all[(start + k) % all.length];
+                    if (s.every(([px, py]) => free(x + px, y + py)))
+                        chosen = s;
+                }
+                const piece = chosen ? chosen : free(x + 1, y) ? [[0, 0], [1, 0]] : [[0, 0]];
+                let sx = 0, sy = 0;
+                for (const [px, py] of piece) {
+                    this.ids[(y + py) * this.nx + x + px] = this.centers.length;
+                    sx += (x + px + this.x0 + 0.5) * this.cell;
+                    sy += (y + py + this.y0 + 0.5) * this.cell;
+                }
+                this.centers.push([sx / piece.length, sy / piece.length]);
+            }
+    }
+
+    hit(x, y, h) {
+        const cell = this.cell, gx = x / cell - this.x0, gy = y / cell - this.y0;
+        const cx = clamp(Math.floor(gx), 0, this.nx - 1), cy = clamp(Math.floor(gy), 0, this.ny - 1);
+        const id = this.ids[cy * this.nx + cx];
+        const other = (ix, iy) => ix < 0 || iy < 0 || ix >= this.nx || iy >= this.ny || this.ids[iy * this.nx + ix] !== id;
+        const fx = (gx - cx) * cell, fy = (gy - cy) * cell;
+        let dist = 1e18, nx = 0, ny = -1;
+        const take = (d, ax, ay) => {
+            if (d < dist) {
+                dist = d;
+                nx = ax;
+                ny = ay;
+            }
+        };
+        if (other(cx - 1, cy)) take(fx, -1, 0);
+        if (other(cx + 1, cy)) take(cell - fx, 1, 0);
+        if (other(cx, cy - 1)) take(fy, 0, -1);
+        if (other(cx, cy + 1)) take(cell - fy, 0, 1);
+        for (const [ox, oy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+            if (!other(cx + ox, cy + oy) || other(cx + ox, cy) || other(cx, cy + oy))
+                continue;
+            const px = ox < 0 ? 0 : cell, py = oy < 0 ? 0 : cell, d = Math.hypot(fx - px, fy - py);
+            if (d < dist && d > 1e-9) {
+                dist = d;
+                nx = (px - fx) / d;
+                ny = (py - fy) / d;
+            }
+        }
+        const c = this.centers[id] || [x, y];
+        Object.assign(h, { key: id, cx: c[0], cy: c[1], dist: Math.min(dist, cell), nx, ny, shade: 0 });
+        return true;
+    }
+}
+
+const p52Rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+
+function p52AddPeriodic(t, area, ox, oy, unit, u, v, protos) {
+    const det = u[0] * v[1] - u[1] * v[0];
+    if (Math.abs(det) < 1e-12)
+        return;
+    let imin = Infinity, imax = -Infinity, jmin = Infinity, jmax = -Infinity;
+    for (const [cx, cy] of [[area.left, area.top], [area.left + area.width, area.top], [area.left, area.top + area.height],
+                            [area.left + area.width, area.top + area.height]]) {
+        const px = (cx - ox) / unit, py = (cy - oy) / unit;
+        const i = (px * v[1] - py * v[0]) / det, j = (u[0] * py - u[1] * px) / det;
+        imin = Math.min(imin, i); imax = Math.max(imax, i); jmin = Math.min(jmin, j); jmax = Math.max(jmax, j);
+    }
+    for (let j = Math.floor(jmin) - 2; j <= Math.ceil(jmax) + 2; ++j)
+        for (let i = Math.floor(imin) - 2; i <= Math.ceil(imax) + 2; ++i) {
+            const bx = ox + (u[0] * i + v[0] * j) * unit, by = oy + (u[1] * i + v[1] * j) * unit;
+            for (const [proto, shade] of protos)
+                t.add(proto.map(([px, py]) => [bx + px * unit, by + py * unit]), shade);
+        }
+}
+
+function p52AddMondrian(t, area, ox, oy, size, seed) {
+    const block = size * 4;
+    const i0 = Math.floor((area.left - ox) / block) - 1, i1 = Math.ceil((area.left + area.width - ox) / block);
+    const j0 = Math.floor((area.top - oy) / block) - 1, j1 = Math.ceil((area.top + area.height - oy) / block);
+    const split = (x, y, w, h, depth, key) => {
+        const stop = hashUnit(key, depth, seed + 11);
+        if ((w < size * 1.6 && h < size * 1.6) || (depth > 1 && stop < 0.18) || depth > 8) {
+            t.add(p52Rect(x, y, w, h));
+            return;
+        }
+        const vertical = w > h * 1.3 || (h <= w * 1.3 && hashUnit(key, depth, seed + 12) < 0.5);
+        const pos = 0.3 + 0.4 * hashUnit(key, depth, seed + 13);
+        if (vertical && w >= size * 1.6) {
+            const cut = Math.round(w * pos);
+            split(x, y, cut, h, depth + 1, hash3(key, 1, seed));
+            split(x + cut, y, w - cut, h, depth + 1, hash3(key, 2, seed));
+        } else if (h >= size * 1.6) {
+            const cut = Math.round(h * pos);
+            split(x, y, w, cut, depth + 1, hash3(key, 3, seed));
+            split(x, y + cut, w, h - cut, depth + 1, hash3(key, 4, seed));
+        } else {
+            t.add(p52Rect(x, y, w, h));
+        }
+    };
+    for (let j = j0; j <= j1; ++j)
+        for (let i = i0; i <= i1; ++i)
+            split(ox + i * block, oy + j * block, block, block, 0, hash3(i >>> 0, j >>> 0, seed));
+}
+
+function p52AddAshlar(t, area, ox, oy, size, seed) {
+    const rowHeight = (j) => size * (0.6 + 0.8 * hashUnit(j >>> 0, 7, seed));
+    let y = oy, j = 0;
+    while (y > area.top - size * 2)
+        y -= rowHeight(--j);
+    for (; y < area.top + area.height + size * 2; ++j) {
+        const hgt = rowHeight(j);
+        let x = ox - size * (1 + 3 * hashUnit(j >>> 0, 9, seed));
+        while (x > area.left - size * 3)
+            x -= size * 3;
+        for (let k = 0; x < area.left + area.width + size * 3; ++k) {
+            const w = size * (0.8 + 1.7 * hashUnit(j >>> 0, k, seed + 21));
+            t.add(p52Rect(x, y, w, hgt));
+            x += w;
+        }
+        y += hgt;
+    }
+}
+
+// Penrose (rombos P3) por subdivisión de triángulos de Robinson desde una «rueda» de diez.
+function p52AddPenrose(t, area, cx, cy, edge) {
+    const phi = (1 + Math.sqrt(5)) / 2;
+    const reach = Math.hypot(Math.max(Math.abs(area.left - cx), Math.abs(area.left + area.width - cx)),
+                             Math.max(Math.abs(area.top - cy), Math.abs(area.top + area.height - cy)));
+    let radius = edge, steps = 0;
+    while (radius < reach * 1.2 && steps < 40) {
+        radius *= phi;
+        ++steps;
+    }
+    let tris = [];
+    for (let i = 0; i < 10; ++i) {
+        let b = [cx + Math.cos(((2 * i - 1) * Math.PI) / 10) * radius, cy + Math.sin(((2 * i - 1) * Math.PI) / 10) * radius];
+        let c = [cx + Math.cos(((2 * i + 1) * Math.PI) / 10) * radius, cy + Math.sin(((2 * i + 1) * Math.PI) / 10) * radius];
+        if (i % 2 === 0)
+            [b, c] = [c, b];
+        tris.push({ kind: 0, a: [cx, cy], b, c });
+    }
+    const touches = (tr) => {
+        const xs = [tr.a[0], tr.b[0], tr.c[0]], ys = [tr.a[1], tr.b[1], tr.c[1]];
+        return Math.max(...xs) >= area.left && Math.min(...xs) <= area.left + area.width && Math.max(...ys) >= area.top
+               && Math.min(...ys) <= area.top + area.height;
+    };
+    const lerp = (p, q, k) => [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
+    for (let s = 0; s < steps; ++s) {
+        const next = [];
+        for (const tr of tris) {
+            if (!touches(tr))
+                continue;
+            if (tr.kind === 0) {
+                const p = lerp(tr.a, tr.b, 1 / phi);
+                next.push({ kind: 0, a: tr.c, b: p, c: tr.b }, { kind: 1, a: p, b: tr.c, c: tr.a });
+            } else {
+                const q = lerp(tr.b, tr.a, 1 / phi), r = lerp(tr.b, tr.c, 1 / phi);
+                next.push({ kind: 1, a: r, b: tr.c, c: tr.a }, { kind: 1, a: q, b: r, c: tr.b }, { kind: 0, a: r, b: q, c: tr.a });
+            }
+        }
+        tris = next;
+    }
+    const keyOf = (p, q) => {
+        const k = (v) => `${Math.round(v[0] * 64)},${Math.round(v[1] * 64)}`;
+        const a = k(p), b = k(q);
+        return a < b ? a + "|" + b : b + "|" + a;
+    };
+    const open = new Map();
+    for (const tr of tris) {
+        if (!touches(tr))
+            continue;
+        const key = keyOf(tr.b, tr.c);
+        const o = open.get(key);
+        if (!o) {
+            open.set(key, tr);
+            continue;
+        }
+        t.add([tr.a, tr.b, o.a, tr.c], tr.kind === 0 ? -0.06 : 0.04);
+        open.delete(key);
+    }
+    for (const tr of open.values())
+        t.add([tr.a, tr.b, tr.c], tr.kind === 0 ? -0.06 : 0.04);
+}
+
+const P52_MOSAIC_SHAPES = ["Cuadrado", "Rombo", "Triángulo", "Hexágono", "Octágono y cuadrado", "El Cairo", "Cuadrado romo", "Ladrillo",
+                           "Espiga", "Trenzado", "Escamas de pez", "Anfiteatro", "Sillería", "Pitagórico", "Versalles", "Mondrian",
+                           "Tetrominó", "Pentominó", "Cubos en perspectiva", "Adoquines", "Penrose"];
+
+function p52MosaicTiling(shape, area, ox, oy, size, seed) {
+    const r3 = Math.sqrt(3);
+    const poly = (unit, u, v, protos) => {
+        const t = new P52PolygonTiling(area, size);
+        p52AddPeriodic(t, area, ox, oy, unit, u, v, protos);
+        return t;
+    };
+    switch (shape) {
+    case 1: return poly(size, [1, 0], [0.5, 0.5], [[[[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]], 0]]);
+    case 2: {
+        const hgt = r3 / 2;
+        return poly(size * 1.4, [1, 0], [0.5, hgt], [[[[0, 0], [1, 0], [0.5, hgt]], 0], [[[1, 0], [1.5, hgt], [0.5, hgt]], 0]]);
+    }
+    case 3: {
+        const hex = [];
+        for (let k = 0; k < 6; ++k)
+            hex.push([Math.cos(((30 + 60 * k) * Math.PI) / 180) / r3, Math.sin(((30 + 60 * k) * Math.PI) / 180) / r3]);
+        return poly(size, [1, 0], [0.5, r3 / 2], [[hex, 0]]);
+    }
+    case 4: {
+        const c = 1 / (2 + Math.SQRT2);
+        return poly(size * 1.2, [1, 0], [0, 1], [[[[c, 0], [1 - c, 0], [1, c], [1, 1 - c], [1 - c, 1], [c, 1], [0, 1 - c], [0, c]], 0],
+                                                  [[[1, 1 - c], [1 + c, 1], [1, 1 + c], [1 - c, 1]], 0]]);
+    }
+    case 5: {
+        const k = 0.3, p = [];
+        for (let j = 0; j < 2; ++j)
+            for (let i = 0; i < 2; ++i) {
+                if ((i + j) % 2 === 0) {
+                    p.push([[[i, j + 1], [i + 0.5 - k, j + 0.5], [i + 0.5 + k, j + 0.5], [i + 1, j + 1], [i + 0.5, j + 1.5 - k]], 0]);
+                    p.push([[[i, j], [i + 0.5, j - 0.5 + k], [i + 1, j], [i + 0.5 + k, j + 0.5], [i + 0.5 - k, j + 0.5]], 0]);
+                } else {
+                    p.push([[[i, j], [i + 0.5, j + 0.5 - k], [i + 0.5, j + 0.5 + k], [i, j + 1], [i - 0.5 + k, j + 0.5]], 0]);
+                    p.push([[[i + 1, j], [i + 1.5 - k, j + 0.5], [i + 1, j + 1], [i + 0.5, j + 0.5 + k], [i + 0.5, j + 0.5 - k]], 0]);
+                }
+            }
+        return poly(size * 1.4, [2, 0], [0, 2], p);
+    }
+    case 6: {
+        const s = 2 * Math.cos(Math.PI / 12), rho = Math.SQRT1_2;
+        const square = (cx, cy, start) => [0, 1, 2, 3].map((k) => [cx + Math.cos(((start + 90 * k) * Math.PI) / 180) * rho,
+                                                                   cy + Math.sin(((start + 90 * k) * Math.PI) / 180) * rho]);
+        const a = rho * Math.cos(Math.PI / 3), b = rho * Math.sin(Math.PI / 3), cc = s / 2 + a, d = s / 2 + b;
+        return poly(size * 0.75, [s, 0], [0, s], [[square(0, 0, 60), 0], [square(s / 2, s / 2, 30), 0], [[[a, b], [cc, a], [b, -a]], 0],
+                                                  [[[cc, a], [b, -a], [d, -b]], 0], [[[a, b], [b, d], [-a, cc]], 0], [[[a, b], [-a, cc], [-b, a]], 0]]);
+    }
+    case 7: return poly(size, [2, 0], [1, 1], [[p52Rect(0, 0, 2, 1), 0]]);
+    case 8: return poly(size * 0.6, [1, 1], [2, -2], [[p52Rect(0, 0, 2, 1), 0], [p52Rect(0, 1, 1, 2), 0]]);
+    case 9:
+        return poly(size * 0.5, [4, 0], [0, 4], [[p52Rect(0, 0, 2, 1), 0], [p52Rect(0, 1, 2, 1), 0], [p52Rect(2, 0, 1, 2), 0], [p52Rect(3, 0, 1, 2), 0],
+                                                  [p52Rect(0, 2, 1, 2), 0], [p52Rect(1, 2, 1, 2), 0], [p52Rect(2, 2, 2, 1), 0], [p52Rect(2, 3, 2, 1), 0]]);
+    case 10: return new P52FishScaleTiling(size * 0.6, ox, oy);
+    case 11: return new P52AmphitheaterTiling(size, ox, oy, seed);
+    case 12: {
+        const t = new P52PolygonTiling(area, size);
+        p52AddAshlar(t, area, ox, oy, size, seed);
+        return t;
+    }
+    case 13: return poly(size, [1, 0.5], [-0.5, 1], [[p52Rect(0, 0, 1, 1), 0], [p52Rect(1, 0, 0.5, 0.5), 0]]);
+    case 14: return poly(size * 0.5, [6, 0], [2, 6], [[p52Rect(0, 0, 4, 4), 0], [p52Rect(4, 0, 2, 4), 0], [p52Rect(2, 4, 4, 2), 0], [p52Rect(0, 4, 2, 2), 0]]);
+    case 15: {
+        const t = new P52PolygonTiling(area, size * 2);
+        p52AddMondrian(t, area, ox, oy, size, seed);
+        return t;
+    }
+    case 16:
+    case 17: return new P52CellTiling(area, size * 0.5, shape === 16 ? 4 : 5, seed);
+    case 18: {
+        const x = r3 / 2, C = [0, 0], T = [0, -1], UR = [x, -0.5], LR = [x, 0.5], B = [0, 1], LL = [-x, 0.5], UL = [-x, -0.5];
+        return poly(size * 0.7, [r3, 0], [r3 / 2, 1.5], [[[C, UL, T, UR], 0.18], [[C, B, LL, UL], 0], [[C, UR, LR, B], -0.22]]);
+    }
+    case 19: return new P52VoronoiTiling(size, 0.55, seed, size * 0.12, ox, oy);
+    case 20: {
+        const t = new P52PolygonTiling(area, size);
+        p52AddPenrose(t, area, ox, oy, size * 0.9);
+        return t;
+    }
+    default: return poly(size, [1, 0], [0, 1], [[p52Rect(0, 0, 1, 1), 0]]);
+    }
+}
+
+// La media de cada tesela (premultiplicada) o el color de su centro.
+function p52PrepareTiles(src, roi, tiling, st) {
+    const colors = new Map();
+    if (!st.centerColor) {
+        const sums = new Map(), h = {};
+        let lastKey = NaN, last = null;
+        for (let y = roi.top; y <= roi.bottom; ++y)
+            for (let x = roi.left; x <= roi.right; ++x) {
+                if (!tiling.hit(x + 0.5, y + 0.5, h))
+                    continue;
+                if (h.key !== lastKey || !last) {
+                    lastKey = h.key;
+                    last = sums.get(h.key);
+                    if (!last)
+                        sums.set(h.key, (last = [0, 0, 0, 0, 0]));
+                }
+                const p = src.px[y * src.w + x];
+                last[0] += qRed(p); last[1] += qGreen(p); last[2] += qBlue(p); last[3] += qAlpha(p); ++last[4];
+            }
+        for (const [k, s] of sums) {
+            const n = Math.max(1, s[4]);
+            colors.set(k, qUnpremultiply(qRgba(lround(s[0] / n), lround(s[1] / n), lround(s[2] / n), lround(s[3] / n))));
+        }
+    }
+    return { tiling, st, colors };
+}
+
+function p52RunTiles(a) {
+    const { tiling, st, colors } = a.state, src = a.src, d = a.dst.px, w = src.w;
+    const lx = Math.cos((st.light * Math.PI) / 180), ly = -Math.sin((st.light * Math.PI) / 180);
+    const halfGrout = st.grout / 2, h = {};
+    for (let y = a.y0; y <= a.y1; ++y) {
+        let lastKey = NaN, lastColor = 0;
+        for (let x = a.roi.left; x <= a.roi.right; ++x) {
+            if (!tiling.hit(x + 0.5, y + 0.5, h)) {
+                d[y * w + x] = qPremultiply(st.groutColor);
+                continue;
+            }
+            const kh = (h.key ^ Math.imul(Math.floor(h.key / 4294967296), 0x9e3779b9)) >>> 0;
+            if (h.key !== lastKey) {
+                lastKey = h.key;
+                lastColor = st.centerColor ? p52Straight(src, h.cx, h.cy) : colors.get(h.key) ?? p52Straight(src, h.cx, h.cy);
+                if (st.brightness > 0)
+                    lastColor = p52Shaded(lastColor, (hashUnit(kh, 17, st.seed) - 0.5) * st.brightness);
+                if (h.shade)
+                    lastColor = p52Shaded(lastColor, h.shade);
+            }
+            let dist = h.dist;
+            if (st.position > 0) {
+                const ox = (hashUnit(kh, 31, st.seed) - 0.5) * 2 * st.position * st.size * 0.12;
+                const oy = (hashUnit(kh, 37, st.seed) - 0.5) * 2 * st.position * st.size * 0.12;
+                dist = Math.max(0, dist + ox * h.nx + oy * h.ny);
+            }
+            const inner = dist - halfGrout;
+            let c = lastColor;
+            if (st.bevel > 0 && inner < st.bevel + 0.5) {
+                const facing = h.nx * lx + h.ny * ly;
+                const t = 1 - p52Clamp01(inner / st.bevel);
+                const profile = st.pillow ? t * Math.sqrt(t) : p52Clamp01(st.bevel - inner + 0.5);
+                c = p52Shaded(c, facing * profile * (facing > 0 ? st.strength : st.shadow));
+            }
+            const tileCov = st.grout > 0 ? p52Clamp01(inner + 0.5) : 1;
+            d[y * w + x] = qPremultiply(tileCov >= 1 ? c : p52Mix(st.groutColor, c, tileCov));
+        }
+    }
+}
+
+const p52Waves = (p) => ({ key: "pattern", values: p });
+
+const pdn52 = [
+    {
+        id: "spherize", name: "Esferizar", category: "distort",
+        params: [P.real("amount", "Cantidad", -100, 100, 50, 2), P.real("radius", "Radio", 0, 100, 100, 2), P.offset("offset", "Centrar"),
+                 edgeParam(pdnEdges, Edge.Clamp), qualityParam(2)],
+        run(a) {
+            // Como mirar a través de una bola de cristal (con cantidad negativa, hacia dentro).
+            const amount = clamp(a.values.amount / 100, -1, 1), k = Math.abs(amount);
+            const radius = Math.max(1e-3, (a.values.radius / 100) * defaultRadius(a.roi));
+            warp(a, { offset: a.values.offset, quality: Math.round(a.values.quality), edge: edgeValue(a.values, pdnEdges) }, (u, v) => {
+                const r = Math.hypot(u, v);
+                if (r >= radius || r <= 1e-9 || k === 0)
+                    return [u, v];
+                const dd = r / radius;
+                const bent = amount > 0 ? Math.asin(dd) / (Math.PI / 2) : Math.sin((dd * Math.PI) / 2);
+                const s = (dd * (1 - k) + bent * k) / dd;
+                return [u * s, v * s];
+            });
+        },
+    },
+    {
+        id: "waves", name: "Ondas", category: "distort",
+        params: [P.choice("pattern", "Patrón", ["Lineal", "Radial", "Compresión lineal", "Tangencial", "Anillos cuadrados", "Anillos de rombo",
+                                                 "Cruzado", "Angular", "Espiral", "Desde los bordes"], 0),
+                 P.choice("form", "Forma de onda", ["Senoidal", "Triangular", "Diente de sierra", "Cuadrada", "Semicírculo", "Armónicos",
+                                                     "Senoidal escalonada"], 0),
+                 P.real("amplitude", "Amplitud", -50, 50, 10, 2), P.real("wavelength", "Longitud de onda", 1, 40, 10, 2),
+                 withProps(P.int("lobes", "Lóbulos", 1, 50, 6), { readOnlyWhen: [p52Waves(P52_WAVES_LOBED)], readOnlyInverse: true }),
+                 withProps(P.real("damping", "Amortiguación", 0, 100, 0, 2), { readOnlyWhen: [p52Waves(P52_WAVES_DAMPED)], readOnlyInverse: true }),
+                 P.angle("angle", "Ángulo", -180, 180, 0), P.angle("phase", "Fase", -180, 180, 0),
+                 withProps(P.offset("offset", "Centrar"), { readOnlyWhen: [p52Waves(P52_WAVES_CENTERED)], readOnlyInverse: true }),
+                 edgeParam(pdnEdges, Edge.Reflect), qualityParam(2)],
+        run(a) {
+            // Amplitud y longitud de onda, en % del lado menor; el ángulo gira el patrón y la fase lo desplaza.
+            const v = a.values, pattern = Math.round(v.pattern), form = Math.round(v.form);
+            const minDim = Math.max(1, Math.min(a.roi.width, a.roi.height));
+            const amp = (v.amplitude / 100) * minDim, wl = Math.max(1, (v.wavelength / 100) * minDim);
+            const lobes = Math.max(1, Math.round(v.lobes)), damping = v.damping / 100;
+            const th = (v.angle * Math.PI) / 180, phase = v.phase / 360, c = Math.cos(th), s = Math.sin(th);
+            const hw = a.roi.width / 2, hh = a.roi.height / 2;
+            const att = (dd) => (damping > 0 ? Math.exp((-damping * 4 * dd) / (minDim / 2)) : 1);
+            const sign = (x) => (x < 0 ? -1 : 1);
+            const offset = P52_WAVES_CENTERED.includes(pattern) ? v.offset : { x: 0, y: 0 };
+            warp(a, { offset, quality: Math.round(v.quality), edge: edgeValue(v, pdnEdges) }, (u, w) => {
+                switch (pattern) {
+                case 2: {
+                    const q = amp * p52Wave(form, (u * c + w * s) / wl + phase);
+                    return [u + c * q, w + s * q];
+                }
+                case 1:
+                case 3: {
+                    const r = Math.hypot(u, w);
+                    if (r < 1e-9)
+                        return [u, w];
+                    const q = amp * p52Wave(form, r / wl + phase) * att(r) * Math.min(1, r / wl);
+                    const nx = u / r, ny = w / r;
+                    return pattern === 1 ? [u + nx * q, w + ny * q] : [u - ny * q, w + nx * q];
+                }
+                case 4:
+                case 5: {
+                    const p = u * c + w * s, q = -u * s + w * c;
+                    let m, gp, gq;
+                    if (pattern === 4) {
+                        if (Math.abs(p) >= Math.abs(q)) [m, gp, gq] = [Math.abs(p), sign(p), 0];
+                        else [m, gp, gq] = [Math.abs(q), 0, sign(q)];
+                    } else {
+                        [m, gp, gq] = [Math.abs(p) + Math.abs(q), sign(p) * Math.SQRT1_2, sign(q) * Math.SQRT1_2];
+                    }
+                    const k = amp * p52Wave(form, m / wl + phase) * att(m) * Math.min(1, m / wl);
+                    const dp = gp * k, dq = gq * k;
+                    return [u + dp * c - dq * s, w + dp * s + dq * c];
+                }
+                case 6: {
+                    const p = u * c + w * s, q = -u * s + w * c;
+                    const w1 = amp * p52Wave(form, p / wl + phase), w2 = amp * p52Wave(form, q / wl + phase);
+                    return [u + w2 * c - w1 * s, w + w2 * s + w1 * c];
+                }
+                case 7:
+                case 8: {
+                    const r = Math.hypot(u, w);
+                    if (r < 1e-9)
+                        return [u, w];
+                    const ang = Math.atan2(w, u) - th;
+                    const t = (lobes * ang) / (2 * Math.PI) + phase + (pattern === 8 ? r / wl : 0);
+                    const q = amp * p52Wave(form, t) * att(r) * Math.min(1, r / wl);
+                    return [u + (u / r) * q, w + (w / r) * q];
+                }
+                case 9: {
+                    const x = u + hw, y = w + hh;
+                    let m = x, nx = 1, ny = 0;
+                    if (2 * hw - x < m) [m, nx, ny] = [2 * hw - x, -1, 0];
+                    if (y < m) [m, nx, ny] = [y, 0, 1];
+                    if (2 * hh - y < m) [m, nx, ny] = [2 * hh - y, 0, -1];
+                    const q = amp * p52Wave(form, Math.max(0, m) / wl + phase) * att(Math.max(0, m));
+                    return [u + nx * q, w + ny * q];
+                }
+                default: {
+                    const q = amp * p52Wave(form, (u * c + w * s) / wl + phase);
+                    return [u - s * q, w + c * q];
+                }
+                }
+            });
+        },
+    },
+    {
+        id: "ordereddither", name: "Tramado ordenado", category: "color",
+        params: [P.choice("matrix", "Matriz", P52_DITHER_NAMES, 2), P.int("levels", "Niveles", 2, 32, 4), P.int("intensity", "Intensidad", 0, 100, 100),
+                 withProps(P.seed(), { readOnlyWhen: [{ key: "matrix", values: [0, 1, 2, 3, 4, 5, 6, 7] }] })],
+        prepare: (src, roi, v) => p52DitherMatrix(clamp(Math.round(v.matrix), 0, P52_DITHER_NAMES.length - 1), Math.round(v.seed) >>> 0),
+        run(a) {
+            // Cada canal, a 'levels' niveles; el umbral de la matriz decide hacia cuál se redondea.
+            const m = a.state, levels = Math.max(2, Math.round(a.values.levels)), intensity = a.values.intensity / 100;
+            const S = a.src.px, d = a.dst.px, w = a.src.w;
+            for (let y = a.y0; y <= a.y1; ++y) {
+                const row = (y % m.n) * m.n;
+                for (let x = a.roi.left, i = y * w + a.roi.left; x <= a.roi.right; ++x, ++i) {
+                    if (!qAlpha(S[i])) {
+                        d[i] = S[i];
+                        continue;
+                    }
+                    const c = qUnpremultiply(S[i]), off = (m.t[row + (x % m.n)] - 0.5) * intensity;
+                    const ch = (v) => clamp255(lround((clamp(Math.floor((v / 255) * (levels - 1) + 0.5 + off), 0, levels - 1) * 255) / (levels - 1)));
+                    d[i] = qPremultiply(qRgba(ch(qRed(c)), ch(qGreen(c)), ch(qBlue(c)), qAlpha(c)));
+                }
+            }
+        },
+    },
+    {
+        id: "halftone", name: "Semitono", category: "stylize",
+        params: [P.choice("pattern", "Patrón", ["Puntos", "Rombo", "Elipse", "Cuadrado", "Trama cruzada", "Líneas"], 0),
+                 P.bool("mono", "Monocromo", false), P.real("cell", "Tamaño de celda", 2, 200, 8, 2), P.angle("angle", "Ángulo", -180, 180, 0),
+                 P.int("black", "Generación de negro", 0, 100, 75), P.int("softness", "Suavizado", 0, 100, 0), P.int("quality", "Calidad", 1, 8, 4)],
+        prepare(src, roi, v) {
+            // La tinta de cada celda de cada trama girada (cian 15°, magenta 75°, amarillo 0° y negro 45°).
+            const mono = !!v.mono, cell = Math.max(1, v.cell), gcr = clamp(v.black / 100, 0, 1);
+            const inkOf = (c, channel) => {
+                if (mono)
+                    return 1 - intensityF(c);
+                const cc = 1 - qRed(c) / 255, mm = 1 - qGreen(c) / 255, yy = 1 - qBlue(c) / 255;
+                const k = Math.min(cc, mm, yy) * gcr;
+                if (channel === 3)
+                    return k;
+                const rest = 1 - k, val = channel === 0 ? cc : channel === 1 ? mm : yy;
+                return rest > 1e-6 ? p52Clamp01((val - k) / rest) : 0;
+            };
+            const inks = [];
+            [15, 75, 0, 45].forEach((deg, channel) => {
+                if (mono && channel !== 3)
+                    return;
+                const th = ((v.angle + deg) * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
+                let smin = Infinity, smax = -Infinity, tmin = Infinity, tmax = -Infinity;
+                for (const [px, py] of [[roi.left, roi.top], [roi.right + 1, roi.top], [roi.left, roi.bottom + 1], [roi.right + 1, roi.bottom + 1]]) {
+                    const ss = (px * c + py * s) / cell, tt = (-px * s + py * c) / cell;
+                    smin = Math.min(smin, ss); smax = Math.max(smax, ss); tmin = Math.min(tmin, tt); tmax = Math.max(tmax, tt);
+                }
+                const i0 = Math.floor(smin) - 1, j0 = Math.floor(tmin) - 1, ni = Math.floor(smax) - i0 + 2, nj = Math.floor(tmax) - j0 + 2;
+                const value = new Float32Array(ni * nj);
+                for (let j = 0; j < nj; ++j)
+                    for (let i = 0; i < ni; ++i) {
+                        const ss = (i0 + i + 0.5) * cell, tt = (j0 + j + 0.5) * cell;
+                        value[j * ni + i] = inkOf(p52CellColor(src, ss * c - tt * s, ss * s + tt * c, cell), channel);
+                    }
+                inks.push({ channel, c, s, i0, j0, ni, nj, value });
+            });
+            return inks;
+        },
+        run(a) {
+            const inks = a.state, pattern = Math.round(a.values.pattern), cell = Math.max(1, a.values.cell);
+            const soft = a.values.softness / 100, q = clamp(Math.round(a.values.quality), 1, 8);
+            const S = a.src.px, d = a.dst.px, w = a.src.w, cov = [0, 0, 0, 0];
+            for (let y = a.y0; y <= a.y1; ++y)
+                for (let x = a.roi.left, idx = y * w + a.roi.left; x <= a.roi.right; ++x, ++idx) {
+                    if (!qAlpha(S[idx])) {
+                        d[idx] = S[idx];
+                        continue;
+                    }
+                    let sr = 0, sg = 0, sb = 0;
+                    for (let sj = 0; sj < q; ++sj)
+                        for (let si = 0; si < q; ++si) {
+                            const px = x + (si + 0.5) / q, py = y + (sj + 0.5) / q;
+                            cov[0] = cov[1] = cov[2] = cov[3] = 0;
+                            for (const ink of inks) {
+                                const s = (px * ink.c + py * ink.s) / cell, t = (-px * ink.s + py * ink.c) / cell;
+                                const fs = Math.floor(s), ft = Math.floor(t);
+                                const i = clamp(fs - ink.i0, 0, ink.ni - 1), j = clamp(ft - ink.j0, 0, ink.nj - 1);
+                                const value = ink.value[j * ink.ni + i];
+                                const m = p52SpotMetric(pattern, s - fs - 0.5, t - ft - 0.5);
+                                const limit = value > 1e-4 ? p52SpotLimit(pattern, value) : -1;
+                                cov[ink.channel] = soft > 0 ? p52Clamp01((limit - m) / soft + 0.5) : m < limit ? 1 : 0;
+                            }
+                            const k = 1 - cov[3];
+                            sr += (1 - cov[0]) * k;
+                            sg += (1 - cov[1]) * k;
+                            sb += (1 - cov[2]) * k;
+                        }
+                    const n = q * q;
+                    d[idx] = qPremultiply(qRgba(clamp255(lround((sr / n) * 255)), clamp255(lround((sg / n) * 255)), clamp255(lround((sb / n) * 255)),
+                                                qAlpha(S[idx])));
+                }
+        },
+    },
+    {
+        id: "linocut", name: "Linograbado", category: "artistic",
+        params: [P.choice("mode", "Modo de línea", ["Paralelas", "Contorno", "Sombreado cruzado"], 0), P.angle("angle", "Ángulo", -180, 180, 45),
+                 P.real("spacing", "Espaciado de líneas", 2, 20, 8, 1), P.real("contrast", "Contraste", 0.1, 2.1, 1, 2),
+                 P.real("gamma", "Gamma", 0.1, 2.1, 1, 2), P.int("roughness", "Aspereza", 0, 100, 20), P.seed()]
+            .map((p) => ({ ...p, tab: "Linograbado" }))
+            .concat([{ ...P.color("ink", "Color de tinta", "black"), tab: "Colores", inline: true, alpha: false },
+                     { ...P.color("paper", "Color de papel", { r: 245, g: 242, b: 233, a: 255 }), tab: "Colores", inline: true, alpha: false }]),
+        prepare(src, roi, v) {
+            // El tono (0 papel, 1 tinta), algo suavizado; con Contorno, la distancia a los bordes de las zonas de tono.
+            const spacing = Math.max(1, v.spacing), gamma = Math.max(0.05, v.gamma);
+            const blurred = tentBlur(src, roi, Math.max(1, lround(spacing / 4)));
+            const w = roi.width, h = roi.height, dark = new Float32Array(w * h);
+            for (let i = 0; i < w * h; ++i) {
+                let l = p52Clamp01((intensityF(qUnpremultiply(blurred.px[i])) - 0.5) * v.contrast + 0.5);
+                l = Math.pow(l, 1 / gamma);
+                dark[i] = 1 - l;
+            }
+            let contour = null;
+            if (Math.round(v.mode) === 1) {
+                const soft = tentBlur(src, roi, Math.max(2, lround(spacing)));
+                const level = new Uint8Array(w * h), edge = new Uint8Array(w * h);
+                for (let i = 0; i < w * h; ++i)
+                    level[i] = Math.min(5, (intensityF(qUnpremultiply(soft.px[i])) * 6) | 0);
+                let any = false;
+                for (let y = 0; y < h; ++y)
+                    for (let x = 0; x < w; ++x) {
+                        const l = level[y * w + x];
+                        if ((x + 1 < w && level[y * w + x + 1] !== l) || (y + 1 < h && level[(y + 1) * w + x] !== l)) {
+                            edge[y * w + x] = 1;
+                            any = true;
+                        }
+                    }
+                if (any)
+                    contour = p52DistanceTransform(edge, w, h);
+            }
+            return { dark, contour };
+        },
+        run(a) {
+            const v = a.values, mode = Math.round(v.mode), th = (v.angle * Math.PI) / 180, spacing = Math.max(1, v.spacing);
+            const rough = v.roughness / 100, seed = Math.round(v.seed) >>> 0;
+            const ink = p52Packed(v.ink), paper = p52Packed(v.paper), { dark, contour } = a.state;
+            const c = Math.cos(th), s = Math.sin(th), roi = a.roi, rw = roi.width;
+            const lines = (u, frac) => {
+                const t = u / spacing - Math.floor(u / spacing), dist = Math.abs(t - 0.5) * spacing, half = (frac * spacing) / 2;
+                return p52Clamp01(Math.min(half, dist + 0.5) - Math.max(-half, dist - 0.5));
+            };
+            const S = a.src.px, d = a.dst.px, w = a.src.w;
+            for (let y = a.y0; y <= a.y1; ++y)
+                for (let x = roi.left, i = y * w + roi.left; x <= roi.right; ++x, ++i) {
+                    const li = (y - roi.top) * rw + (x - roi.left);
+                    let dk = dark[li];
+                    const px = x + 0.5, py = y + 0.5;
+                    let wobble = 0;
+                    if (rough > 0) {
+                        wobble = rough * spacing * 0.15 * p52ValueNoise(px / (spacing * 1.5), py / (spacing * 1.5), seed);
+                        dk = p52Clamp01(dk + rough * 0.2 * p52ValueNoise(px / (spacing * 0.3), py / (spacing * 0.3), seed + 101));
+                    }
+                    const across = px * s + py * c;
+                    let cov;
+                    if (mode === 2) {
+                        const frac = 1 - Math.sqrt(1 - dk), along = px * c - py * s;
+                        cov = 1 - (1 - lines(across + wobble, frac)) * (1 - lines(along + wobble, frac));
+                    } else if (mode === 1 && contour) {
+                        cov = lines(contour[li] + wobble, dk);
+                    } else {
+                        cov = lines(across + wobble, dk);
+                    }
+                    const o = p52Mix(paper, ink, cov);
+                    d[i] = qPremultiply(qRgba(qRed(o), qGreen(o), qBlue(o), ((qAlpha(o) * qAlpha(S[i])) / 255) | 0));
+                }
+        },
+    },
+    {
+        id: "mosaic", name: "Mosaico", category: "artistic",
+        params: [P.choice("shape", "Forma de tesela", P52_MOSAIC_SHAPES, 0), P.int("size", "Tamaño de tesela", 4, 200, 24),
+                 P.int("bevel", "Profundidad de bisel", 0, 100, 20), P.int("grout", "Ancho de lechada", 0, 40, 4),
+                 { ...P.color("groutcolor", "Color de lechada", { r: 128, g: 128, b: 128, a: 255 }), inline: true, alpha: false }]
+            .map((p) => ({ ...p, tab: "Mosaico" }))
+            .concat([P.choice("tilecolor", "Color de tesela", ["Promedio", "Píxel central"], 0), P.angle("light", "Ángulo de luz", -180, 180, 135),
+                     P.int("brightness", "Variación de luminosidad", 0, 100, 15), P.int("position", "Variación de posición", 0, 50, 10),
+                     P.offset("anchor", "Ancla")].map((p) => ({ ...p, tab: "Ajustes" })))
+            .concat([P.seed()]),
+        prepare(src, roi, v) {
+            const size = Math.max(2, Math.round(v.size));
+            // La lechada y el bisel, en % del tamaño de la tesela.
+            const st = { size, grout: (size * v.grout) / 100, groutColor: p52Packed(v.groutcolor), bevel: (size * 0.7 * v.bevel) / 100,
+                         strength: 0.45, shadow: 0.3, pillow: false, light: v.light, centerColor: Math.round(v.tilecolor) === 1,
+                         brightness: v.brightness / 100, position: v.position / 100, seed: Math.round(v.seed) >>> 0 };
+            const off = v.anchor || { x: 0, y: 0 };
+            const ox = roi.left + (roi.width * (1 + off.x)) / 2, oy = roi.top + (roi.height * (1 + off.y)) / 2;
+            const area = { left: roi.left - size * 3, top: roi.top - size * 3, width: roi.width + size * 6, height: roi.height + size * 6 };
+            return p52PrepareTiles(src, roi, p52MosaicTiling(Math.round(v.shape), area, ox, oy, size, st.seed), st);
+        },
+        run: p52RunTiles,
+    },
+    {
+        id: "pointillism", name: "Puntillismo", category: "artistic",
+        params: [P.int("cell", "Tamaño de celda", 2, 64, 12), P.int("fill", "% de relleno de celda", 10, 200, 141),
+                 P.int("tonal", "Respuesta tonal", 0, 100, 100), P.int("placement", "Variación de colocación", 0, 100, 100),
+                 P.int("colorvar", "Variación de color", 0, 100, 25),
+                 { ...P.color("background", "Color de fondo", "white"), inline: true, alpha: true }, P.seed()],
+        prepare(src, roi, v) {
+            // Un punto por celda, descolocado al azar, del color de la imagen allí y algo variado.
+            const cell = Math.max(2, Math.round(v.cell)), fill = v.fill / 100, tonal = v.tonal / 100, place = v.placement / 100;
+            const cvar = v.colorvar / 100, seed = Math.round(v.seed) >>> 0;
+            const i0 = Math.floor(roi.left / cell) - 2, j0 = Math.floor(roi.top / cell) - 2;
+            const ni = Math.floor((roi.right + 1) / cell) - i0 + 3, nj = Math.floor((roi.bottom + 1) / cell) - j0 + 3;
+            const dx = new Float32Array(ni * nj), dy = new Float32Array(ni * nj), dr = new Float32Array(ni * nj), dz = new Float32Array(ni * nj);
+            const dc = new Uint32Array(ni * nj);
+            for (let jj = 0; jj < nj; ++jj)
+                for (let ii = 0; ii < ni; ++ii) {
+                    const i = (i0 + ii) >>> 0, j = (j0 + jj) >>> 0, k = jj * ni + ii;
+                    const cx = (i0 + ii + 0.5 + (hashUnit(i, j, seed) - 0.5) * place) * cell;
+                    const cy = (j0 + jj + 0.5 + (hashUnit(i, j, seed + 1) - 0.5) * place) * cell;
+                    const c = p52CellColor(src, cx, cy, cell * 0.5), l = intensityF(c);
+                    const common = (hashUnit(i, j, seed + 6) - 0.5) * 2 * cvar * 55;
+                    const vary = (x, n) => clamp255(lround(x + common + (hashUnit(i, j, seed + n) - 0.5) * 2 * cvar * 18));
+                    dx[k] = cx;
+                    dy[k] = cy;
+                    dr[k] = Math.max(0.35, ((cell * fill) / 2) * (1 - tonal * 0.5 * l * l));
+                    dz[k] = hashUnit(i, j, seed + 5);
+                    dc[k] = qRgba(vary(qRed(c), 2), vary(qGreen(c), 3), vary(qBlue(c), 4), qAlpha(c));
+                }
+            return { cell, i0, j0, ni, nj, dx, dy, dr, dz, dc };
+        },
+        run(a) {
+            const { cell, i0, j0, ni, nj, dx, dy, dr, dz, dc } = a.state, bg = p52Packed(a.values.background);
+            const d = a.dst.px, w = a.src.w, hz = new Float32Array(25), hc = new Float32Array(25), hk = new Uint32Array(25);
+            for (let y = a.y0; y <= a.y1; ++y)
+                for (let x = a.roi.left; x <= a.roi.right; ++x) {
+                    const px = x + 0.5, py = y + 0.5, ci = Math.floor(px / cell) - i0, cj = Math.floor(py / cell) - j0;
+                    let n = 0;
+                    for (let jj = Math.max(0, cj - 2); jj <= Math.min(nj - 1, cj + 2); ++jj)
+                        for (let ii = Math.max(0, ci - 2); ii <= Math.min(ni - 1, ci + 2); ++ii) {
+                            const k = jj * ni + ii, cov = p52Clamp01(dr[k] - Math.hypot(px - dx[k], py - dy[k]) + 0.5);
+                            if (cov <= 0)
+                                continue;
+                            // En orden de profundidad (los de z mayor, encima).
+                            let at2 = n++;
+                            while (at2 > 0 && hz[at2 - 1] > dz[k]) {
+                                hz[at2] = hz[at2 - 1]; hc[at2] = hc[at2 - 1]; hk[at2] = hk[at2 - 1];
+                                --at2;
+                            }
+                            hz[at2] = dz[k]; hc[at2] = cov; hk[at2] = dc[k];
+                        }
+                    let o = bg;
+                    for (let k = 0; k < n; ++k) {
+                        const c = hk[k];
+                        o = p52OverStraight(o, qRgba(qRed(c), qGreen(c), qBlue(c), lround(qAlpha(c) * hc[k])));
+                    }
+                    d[y * w + x] = qPremultiply(o);
+                }
+        },
+    },
+    {
+        id: "stainedglass", name: "Vidriera", category: "artistic",
+        params: [P.int("cell", "Tamaño de celda", 2, 200, 20), P.choice("cellcolor", "Color de celda", ["Promedio", "Píxel central"], 0),
+                 P.int("border", "% de ancho de borde", 0, 100, 15), P.int("bevel", "Profundidad de bisel", 0, 100, 50),
+                 P.angle("light", "Ángulo de luz", -180, 180, 135), { ...P.color("lead", "Color del emplomado", "black"), inline: true, alpha: false },
+                 P.seed()],
+        prepare(src, roi, v) {
+            // El emplomado, algo más fino que el %; el cristal, con un chaflán casi blanco hacia la luz y gris al otro lado.
+            const size = Math.max(2, Math.round(v.cell));
+            const st = { size, grout: ((size * v.border) / 100) * 0.75, groutColor: p52Packed(v.lead), bevel: (size * 0.38 * v.bevel) / 100,
+                         strength: 1, shadow: 0.4, pillow: false, light: v.light, centerColor: Math.round(v.cellcolor) === 1, brightness: 0,
+                         position: 0, seed: Math.round(v.seed) >>> 0 };
+            return p52PrepareTiles(src, roi, new P52VoronoiTiling(size, 1, st.seed, size * 0.03, 0, 0), st);
+        },
+        run: p52RunTiles,
+    },
+];
+
 // --- Registro y ejecución -----------------------------------------------------------------
 
 const resolveColor = (c, info) => {
@@ -3124,7 +4451,7 @@ const mobileEffects = [
     },
 ];
 
-export const Effects = [...adjustments, ...artistic, ...blurs, ...color, ...distort, ...noise, ...object, ...photo, ...render, ...stylize, ...layer,
+export const Effects = [...adjustments, ...artistic, ...blurs, ...color, ...distort, ...noise, ...object, ...photo, ...render, ...stylize, ...layer, ...pdn52,
                         ...extraEffects, ...boltBaitEffects, ...boltBaitAliases, ...mobileEffects]
     .map((e) => ({
         ...e, builtin: true,

@@ -63,6 +63,10 @@ struct EffectParam {
     QString enableKey;
     QString tab;
     QList<QColor> gradient;
+    // Color: el editor completo dentro del diálogo (rueda, barras y valores, como en los efectos
+    // de Paint.NET 5.2) en vez del botón con la muestra; 'colorAlpha', con transparencia.
+    bool colorInline = false;
+    bool colorAlpha = true;
 
     static EffectParam integer(const QString& key, const QString& label, int min, int max, int def);
     static EffectParam real(const QString& key, const QString& label, double min, double max, double def, int decimals = 2);
@@ -77,6 +81,13 @@ struct EffectParam {
     static EffectParam rollBall(const QString& key, const QString& label, double maxTilt = 90);
     static EffectParam text(const QString& key, const QString& label, const QString& def, bool multiline = false);
     EffectParam linked(const QString& boolKey) const;
+    EffectParam inlineColor(bool alpha) const
+    {
+        EffectParam p = *this;
+        p.colorInline = true;
+        p.colorAlpha = alpha;
+        return p;
+    }
     bool isReadOnly(const ParamValues& values) const;
 };
 

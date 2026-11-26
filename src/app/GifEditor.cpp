@@ -1415,15 +1415,19 @@ protected:
                 return;
             }
         }
-        // Sobre un rombo, el doble clic solo lo elige (antes abría la duración del fotograma).
+        // Sobre un rombo, el doble clic solo lo elige.
         int keyFrame = -1;
         if (const int key = keyAt(e->position().toPoint(), &keyFrame); key >= 0) {
             m_editor->selectKey(keyFrame, key);
             return;
         }
-        const int index = clipAt(e->position().toPoint());
-        if (index >= 0 && e->position().x() >= headerX() + kHeaderWidth)
-            m_editor->editDelay(index);
+        // En un fotograma: un punto clave donde se hizo doble clic (como en los de audio). La
+        // duración se cambia con su clic derecho o en la barra de arriba.
+        const int index = clipAt(at);
+        if (index >= 0 && at.x() >= headerX() + kHeaderWidth) {
+            const int t = int(std::lround((timeForX(at.x()) - m_editor->frameStart(index)) / 10.0)) * 10;
+            m_editor->addGlobalKey(index, t);
+        }
     }
 
     void wheelEvent(QWheelEvent* e) override
@@ -2602,9 +2606,12 @@ void GifEditor::showPlayingFrame(int index)
 {
     // Solo lo que cambia: la imagen (si es otro fotograma), el cabezal y el tiempo. Sin tocar la
     // capa activa (eso movía el panel de capas, la ventana y el editor en cada fotograma).
-    if (index != m_playFrame || trackCount() > 1
+    // (También al entrar en el fotograma desde un hueco de delante, o al revés.)
+    const bool gap = inGap(index);
+    if (index != m_playFrame || gap != m_playGap || trackCount() > 1
         || (m_doc && index >= 0 && index < m_doc->layerCount() && m_doc->layer(index)->props.motion)) {
         m_playFrame = index;
+        m_playGap = gap;
         m_preview->setImage(shownImage());
     }
     if (index == selectedFrame())
@@ -2619,10 +2626,23 @@ int GifEditor::shownFrame() const
     return m_playing && m_playFrame >= 0 ? m_playFrame : selectedFrame();
 }
 
+bool GifEditor::inGap(int index) const
+{
+    return m_doc && index >= 0 && index < m_doc->layerCount() && frameAtTrack(trackOf(index), m_time) < 0;
+}
+
 QImage GifEditor::shownImage() const
 {
-    if (trackCount() <= 1)
-        return frameImage(shownFrame());
+    if (trackCount() <= 1) {
+        // En un hueco de la pista (el fotograma empieza más adelante), nada, como en Filmora.
+        const int frame = shownFrame();
+        if (inGap(frame)) {
+            QImage empty(m_doc->size(), QImage::Format_ARGB32_Premultiplied);
+            empty.fill(Qt::transparent);
+            return empty;
+        }
+        return frameImage(frame);
+    }
     // Las pistas, de la de abajo (la 1) a la de arriba, con lo que toca en el cabezal.
     QImage canvas(m_doc->size(), QImage::Format_ARGB32_Premultiplied);
     canvas.fill(Qt::transparent);
@@ -3064,6 +3084,24 @@ void GifEditor::selectKey(int index, int ms)
     selectKeyTime(ms);
 }
 
+void GifEditor::addGlobalKey(int index, int ms)
+{
+    if (!m_doc || index < 0 || index >= frameCount())
+        return;
+    stop();
+    if (index != selectedFrame())
+        selectFrame(index);
+    ms = std::clamp(ms, 0, frameDelay(index));
+    Motion::Clip clip = motion(index);
+    if (!clip.keyTimes().contains(ms)) {
+        // Todos los valores tal como están en ese momento.
+        for (Motion::Track& track : clip.tracks)
+            track.setKey(ms, track.value(ms));
+        setMotion(index, clip, tr("Punto clave global"));
+    }
+    selectKeyTime(ms);
+}
+
 bool GifEditor::hasKeyAtPlayhead() const
 {
     const int index = selectedFrame();
@@ -3192,7 +3230,8 @@ void GifEditor::bakeMotion(int index)
 void GifEditor::previewDragged(QPointF delta, bool finished)
 {
     const int index = selectedFrame();
-    if (!m_doc || index < 0)
+    // (En un hueco no se ve: no se mueve a ciegas.)
+    if (!m_doc || index < 0 || inGap(index))
         return;
     stop();
     if (!finished) {

@@ -39,6 +39,7 @@ QString name(Interpolation interpolation)
 {
     switch (interpolation) {
     case Interpolation::NearestNeighbor: return QObject::tr("Vecino más próximo");
+    case Interpolation::NearestNeighborAntialiased: return QObject::tr("Vecino más próximo (suavizado)");
     case Interpolation::Bilinear: return QObject::tr("Bilineal");
     case Interpolation::Bicubic: return QObject::tr("Bicúbico");
     case Interpolation::BilinearMultisample: return QObject::tr("Multimuestra bilineal");
@@ -49,7 +50,7 @@ QString name(Interpolation interpolation)
 
 const QList<Interpolation>& interpolations()
 {
-    static const QList<Interpolation> list{Interpolation::NearestNeighbor, Interpolation::Bilinear,
+    static const QList<Interpolation> list{Interpolation::NearestNeighbor, Interpolation::NearestNeighborAntialiased, Interpolation::Bilinear,
                                            Interpolation::BilinearMultisample, Interpolation::Anisotropic,
                                            Interpolation::Bicubic};
     return list;
@@ -563,7 +564,7 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
     }
     const bool multi = interpolation == Interpolation::BilinearMultisample || interpolation == Interpolation::Anisotropic;
 
-    if (gammaCorrect && interpolation != Interpolation::NearestNeighbor) {
+    if (gammaCorrect && !isNearest(interpolation)) {
         const LinearImage lin(src);
         const Pixels out(dst);
         const float weight = 1.f / float(nx * ny);
@@ -602,7 +603,7 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
             QRgb* d = out.row(y);
             for (int x = area.left(); x <= area.right(); ++x) {
                 const QPointF p = inv.map(QPointF(x + 0.5, y + 0.5));
-                const double cover = interpolation == Interpolation::NearestNeighbor ? 1.0 : coverage(p);
+                const double cover = isNearest(interpolation) ? 1.0 : coverage(p);
                 if (cover <= 0)
                     continue;
                 QRgb s;
@@ -610,6 +611,18 @@ void drawTransformed(QImage& dst, const QImage& source, const QTransform& transf
                 case Interpolation::NearestNeighbor:
                     s = pixelOrTransparent(in, int(std::floor(p.x())), int(std::floor(p.y())));
                     break;
+                case Interpolation::NearestNeighborAntialiased: {
+                    // 4 x 4 muestras, cada una el píxel más cercano (fuera, transparente), y su media.
+                    int acc[4] = {0, 0, 0, 0};
+                    for (int j = 0; j < 4; ++j)
+                        for (int i = 0; i < 4; ++i) {
+                            const QPointF q = inv.map(QPointF(x + (i + 0.5) / 4, y + (j + 0.5) / 4));
+                            const QRgb c = pixelOrTransparent(in, int(std::floor(q.x())), int(std::floor(q.y())));
+                            acc[0] += qRed(c), acc[1] += qGreen(c), acc[2] += qBlue(c), acc[3] += qAlpha(c);
+                        }
+                    s = qRgba((acc[0] + 8) / 16, (acc[1] + 8) / 16, (acc[2] + 8) / 16, (acc[3] + 8) / 16);
+                    break;
+                }
                 case Interpolation::Bilinear:
                     s = sampleBilinear(in, p.x(), p.y());
                     break;

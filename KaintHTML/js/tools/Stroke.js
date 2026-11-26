@@ -555,12 +555,14 @@ export class Stroke {
             if (!overwrite)
                 blendPixels(out, top, this.blend);
         } else if (this.mode === "erase") {
-            // La opacidad del color regula la fuerza de la goma.
+            // La opacidad del color regula la fuerza de la goma; con un patrón de relleno, solo borra
+            // donde lo marca el patrón.
             const k = (this.color?.a ?? 255) / 255;
             for (let y = 0; y < rect.h; ++y)
                 for (let x = 0; x < rect.w; ++x) {
                     const m = this.mask[(rect.y + y) * w + rect.x + x];
-                    if (m) o[(y * rect.w + x) * 4 + 3] *= 1 - (m / 255) * k;
+                    if (m && (!this.fill || patternBit(this.fill, rect.x + x, rect.y + y)))
+                        o[(y * rect.w + x) * 4 + 3] *= 1 - (m / 255) * k;
                 }
         } else if (this.mode === "clone") {
             // Lo de origen con la opacidad del color (Stroke::render de Kaint).

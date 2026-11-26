@@ -53,11 +53,11 @@ function normalize(entry) {
 // sección (el menú de formas de Paint.NET); su nombre sale al dejar el puntero encima.
 // 'beside' es la opción de la que sale un submenú: va a su derecha y, si ahí no cabe, a su
 // izquierda (como en Qt; antes se corría hacia dentro y tapaba el menú del que salía).
-export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false, grid = 0, beside = null } = {}) {
+export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above = false, grid = 0, beside = null, className = "" } = {}) {
     while (openMenus.length > level)
         openMenus.pop().remove();
     const menu = document.createElement("div");
-    menu.className = "popup-menu" + (grid ? " grid-menu" : "");
+    menu.className = "popup-menu" + (grid ? " grid-menu" : "") + (className ? ` ${className}` : "");
     if (minWidth)
         menu.style.minWidth = `${minWidth}px`;
     const items = [];
@@ -142,7 +142,7 @@ export function popupMenu(entries, x, y, { level = 0, onClose, minWidth, above =
             if (entry.submenu && entry.enabled !== false) {
                 submenuTimer = setTimeout(() => {
                     const r = item.getBoundingClientRect();
-                    popupMenu(entry.submenu(), r.right - 2, r.top - 4, { level: level + 1, beside: r });
+                    popupMenu(entry.submenu(), r.right - 2, r.top - 4, { level: level + 1, beside: r, className });
                 }, 120);
             } else {
                 submenuTimer = setTimeout(() => {
@@ -202,7 +202,7 @@ document.addEventListener("keydown", (e) => {
         select(current < 0 ? -1 : current - 1);
     } else if (e.key === "ArrowRight" && current >= 0 && items[current].entry.submenu) {
         const r = items[current].getBoundingClientRect();
-        const sub = popupMenu(items[current].entry.submenu(), r.right - 2, r.top - 4, { level: openMenus.length, beside: r });
+        const sub = popupMenu(items[current].entry.submenu(), r.right - 2, r.top - 4, { level: openMenus.length, beside: r, className: menu.classList.contains("effect-menu") ? "effect-menu" : "" });
         sub.items[0]?.classList.add("active");
     } else if (e.key === "ArrowLeft" && openMenus.length > 1) {
         openMenus.pop().remove();
@@ -267,7 +267,7 @@ export class MenuBar {
         this.element.classList.add("active");
         title.classList.add("open");
         const r = title.getBoundingClientRect();
-        popupMenu(m.entries(), r.left, r.bottom, { level: 0 });
+        popupMenu(m.entries(), r.left, r.bottom, { level: 0, className: m.className || "" });
     }
 
     // Alt + letra abre el menú con esa tecla de acceso.

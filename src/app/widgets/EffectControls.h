@@ -114,6 +114,41 @@ private:
     QColor m_color = Qt::black;
 };
 
+// Editor de color dentro del diálogo, como los de los efectos de Paint.NET 5.2 (Linograbado,
+// Mosaico...): la muestra, la rueda de tono y saturación, las barras de saturación y brillo (y de
+// transparencia si la admite), los valores R, V, A (y la transparencia) y el botón de restablecer.
+class ColorWheel;
+class ColorSlider;
+class InlineColorEditor : public QWidget {
+    Q_OBJECT
+public:
+    explicit InlineColorEditor(bool alpha, QWidget* parent = nullptr);
+    QColor color() const { return m_color; }
+    // Sin avisar (para fijar el valor desde fuera).
+    void setColor(const QColor& c);
+
+signals:
+    void colorChanged(const QColor& c);
+    void resetRequested();
+
+private:
+    // Cambia el color desde una parte (tono, saturación y brillo aparte: el tono de un gris o del
+    // negro no se pierde) y lo pasa a las demás.
+    void apply(double h, double s, double v, int alpha, bool notify);
+    void sync();
+
+    bool m_alpha;
+    QColor m_color = Qt::black;
+    double m_h = 0, m_s = 0, m_v = 0;
+    class QWidget* m_swatch = nullptr;
+    ColorWheel* m_wheel = nullptr;
+    ColorSlider* m_sat = nullptr;
+    ColorSlider* m_val = nullptr;
+    ColorSlider* m_alphaSlider = nullptr;
+    QSpinBox* m_spins[4] = {nullptr, nullptr, nullptr, nullptr};
+    bool m_updating = false;
+};
+
 // Histograma de los canales R, G y B.
 class HistogramView : public QWidget {
     Q_OBJECT

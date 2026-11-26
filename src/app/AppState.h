@@ -115,7 +115,7 @@ struct ToolSettings {
     RecolorSampling recolorSampling = RecolorSampling::SecondaryColor;
     Resample::Interpolation moveInterpolation = Resample::Interpolation::Bicubic;
     bool moveGamma = true;
-    // Mover píxeles seleccionados (funciones de PhotoCraft): las esquinas deforman en perspectiva.
+    // Mover píxeles (funciones de PhotoCraft): las esquinas deforman en perspectiva.
     bool moveWarp = false;
     // Snap al mover (funciones de PhotoCraft), con su botón del imán; apagado de fábrica.
     bool moveSnap = false;

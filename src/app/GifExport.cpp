@@ -1,5 +1,6 @@
 #include "app/GifExport.h"
 
+#include "app/VideoFrames.h"
 #include "core/Apng.h"
 #include "core/Document.h"
 #include "core/ImageIO.h"
@@ -257,9 +258,55 @@ QString videoPatterns()
     return QStringLiteral("*.mp4 *.webm *.mov *.mkv *.avi *.m4v *.ogv *.wmv *.mpg *.mpeg *.flv *.3gp");
 }
 
+namespace {
+
+int delayForFps(double fps)
+{
+    return std::max(Gif::kMinDelayMs, int(std::lround(1000.0 / fps / 10.0)) * 10);
+}
+
+// Sin FFmpeg: con los códecs del sistema (Media Foundation, en Windows), con los mismos límites.
+bool decodeWithSystem(const QString& path, QList<QImage>* frames, int* delayMs, QWidget* progressParent, QString* error)
+{
+    std::unique_ptr<QProgressDialog> progress;
+    if (progressParent) {
+        progress = std::make_unique<QProgressDialog>(QObject::tr("Leyendo el vídeo…"), QObject::tr("Cancelar"), 0, 0, progressParent);
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setMinimumDuration(400);
+        progress->setAutoClose(false);
+        progress->setAutoReset(false);
+    }
+    double fps = 25;
+    const bool ok = VideoFrames::decode(
+        path, 25, 1500, frames, &fps,
+        [&progress](int done, int total) {
+            if (progress) {
+                // (Sin el total, la barra va y viene.)
+                if (progress->maximum() != std::max(0, total))
+                    progress->setMaximum(std::max(0, total));
+                progress->setValue(total > 0 ? std::min(total, done) : 0);
+            }
+            QCoreApplication::processEvents();
+            return !(progress && progress->wasCanceled());
+        },
+        error);
+    if (!ok) {
+        if (error && !error->isEmpty())
+            *error = QObject::tr("Windows no pudo leer el vídeo: %1\nCon FFmpeg (https://ffmpeg.org) junto a Kaint se abren más formatos.")
+                         .arg(*error);
+        return false;
+    }
+    *delayMs = delayForFps(fps);
+    return true;
+}
+
+} // namespace
+
 bool decodeVideo(const QString& path, QList<QImage>* frames, int* delayMs, QWidget* progressParent, QString* error)
 {
     const QString ffmpeg = ffmpegPath();
+    if (ffmpeg.isEmpty() && VideoFrames::canDecode())
+        return decodeWithSystem(path, frames, delayMs, progressParent, error);
     if (ffmpeg.isEmpty()) {
         if (error)
             *error = QObject::tr("Para abrir vídeo hace falta FFmpeg (https://ffmpeg.org). Instálalo (en Linux, el paquete «ffmpeg») "
@@ -346,7 +393,7 @@ bool decodeVideo(const QString& path, QList<QImage>* frames, int* delayMs, QWidg
             *error = QObject::tr("FFmpeg no pudo leer el vídeo: %1").arg(QString::fromUtf8(process.readAllStandardError()).trimmed().left(600));
         return false;
     }
-    *delayMs = std::max(Gif::kMinDelayMs, int(std::lround(1000.0 / fps / 10.0)) * 10);
+    *delayMs = delayForFps(fps);
     return true;
 }
 

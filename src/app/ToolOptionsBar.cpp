@@ -89,7 +89,7 @@ QStringList ToolOptionsEditor::sectionNames()
     return {QObject::tr("Pincel y relleno"),
             QObject::tr("Forma y estilo"),
             QObject::tr("Selección"),
-            QObject::tr("Mover píxeles seleccionados"),
+            QObject::tr("Mover píxeles"),
             QObject::tr("Texto"),
             QObject::tr("Degradado"),
             QObject::tr("Varita mágica, cubo de pintura y volver a colorear"),
@@ -459,13 +459,13 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
                              int(AfterSelect::DoNotSwitch));
     m_afterSelect->addChoice(Icons::afterSelect(AfterSelect::MoveSelection), tr("Cambiar a Mover selección"),
                              int(AfterSelect::MoveSelection));
-    m_afterSelect->addChoice(Icons::afterSelect(AfterSelect::MovePixels), tr("Cambiar a Mover píxeles seleccionados"),
+    m_afterSelect->addChoice(Icons::afterSelect(AfterSelect::MovePixels), tr("Cambiar a Mover píxeles"),
                              int(AfterSelect::MovePixels));
     m_afterSelect->setShowText(true);
     m_afterSelect->onChosen = [update](int v) { update([v](ToolSettings& s) { s.afterSelect = AfterSelect(v); }); };
     add(QStringLiteral("afterSelect"), Tool::OptAfterSelect, Select, {label(tr("Después de seleccionar:")), m_afterSelect});
 
-    // --- Mover píxeles seleccionados --------------------------------------
+    // --- Mover píxeles --------------------------------------
     m_interpolation = new ChoiceButton(tr("Muestreo"), parent);
     for (Resample::Interpolation i : Resample::interpolations())
         m_interpolation->addChoice(QIcon(), Resample::name(i), int(i));
@@ -1011,7 +1011,7 @@ QStringList ToolOptionsBar::order(ToolId id)
     case ToolId::PaintBucket: return list("flood | fill | tolerance tolAlpha | sampling | aa accumulate blend selQuality");
     case ToolId::Gradient: return list("gradient.types | gradient.mode gradient.repeat | aa blend selQuality");
     case ToolId::Paintbrush: return list("size hardness spacing fill | smoothing pressure advanced aa blend selQuality");
-    case ToolId::Eraser: return list("size hardness spacing | smoothing pressure advanced aa selQuality");
+    case ToolId::Eraser: return list("size hardness spacing fill | smoothing pressure advanced aa selQuality");
     case ToolId::Pencil: return list("blend selQuality");
     case ToolId::ColorPicker: return list("picker.sampling | picker.after | selQuality");
     case ToolId::CloneStamp: return list("size hardness spacing | smoothing pressure advanced aa blend selQuality");

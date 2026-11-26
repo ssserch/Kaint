@@ -66,7 +66,7 @@ export const defaultTools = () => ({
     pickerSize: 1,
     pickerAfter: "stay",
     recolorSampling: "secondary",
-    // Mover selección: píxel a píxel por defecto. Mover píxeles seleccionados: muestreo y gamma.
+    // Mover selección: píxel a píxel por defecto. Mover píxeles: muestreo y gamma.
     moveSelectionAntialias: false,
     moveInterpolation: "bicubic",
     moveGamma: true,

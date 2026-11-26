@@ -662,7 +662,7 @@ static void testSaveOptions()
     CHECK(!small.isEmpty() && small.size() < big.size());
 }
 
-// Mover píxeles seleccionados, al escalar: un cuadrado opaco ampliado sigue con el borde nítido
+// Mover píxeles, al escalar: un cuadrado opaco ampliado sigue con el borde nítido
 // con cualquier interpolación (como en Paint.NET; antes salía semitransparente y desenfocado); con
 // un margen transparente sí se mezcla, y al girarlo el borde se suaviza sin salirse.
 static void testTransformedEdges()

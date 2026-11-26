@@ -1,4 +1,4 @@
-// Hilo de trabajo de "Configuración de guardado": codifica con las opciones elegidas y vuelve a
+// Hilo de trabajo de "Opciones de guardado": codifica con las opciones elegidas y vuelve a
 // leer el resultado para la vista previa (EncodedPreview de Kaint).
 import { decodeForPreview, encodeJob } from "./Encode.js";
 

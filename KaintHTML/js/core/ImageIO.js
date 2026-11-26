@@ -230,6 +230,7 @@ export async function openFile(file) {
         doc = Document.fromImage(image, name);
         doc.dpi = readResolution(bytes) || 96;
         doc.colorProfile = profile;
+        doc.pngText = await Codecs.readPngText(bytes);
     }
     doc.fileName = file.name;
     return doc;
@@ -422,7 +423,8 @@ export async function encode(doc, format, options = defaultSaveOptions(), frames
     else if (format.animation && options.animation && doc.layers.length > 1)
         bytes = encodeAnimation(animationFrames(doc, options.frameDelay, options.gifHiddenLayers), options);
     else
-        bytes = await encodeImage(prepare(flattenedImage(doc), format.ext, options), format.ext, options, { dpi: doc.dpi, icc: embeddedProfile(doc) });
+        bytes = await encodeImage(prepare(flattenedImage(doc), format.ext, options), format.ext, options,
+                                  { dpi: doc.dpi, icc: embeddedProfile(doc), text: doc.pngText || null });
     return new Blob([bytes], { type: format.mime });
 }
 

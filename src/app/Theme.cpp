@@ -1675,7 +1675,11 @@ FloatingPanel QAbstractItemView { background: %6; }
                .arg(css(hoverTab), css(hoverEdge));
     // Los campos de la barra de opciones (tipo y tamaño de letra, tamaño del pincel, radio...) con el
     // borde de Paint.NET 5: casi blanco en el tema oscuro y gris oscuro en el claro, recto, más claro
-    // bajo el puntero y azul mientras se escribe. Los menús desplegables sin campo, sin borde.
+    // bajo el puntero y azul mientras se escribe. Los menús desplegables sin campo, sin borde. La
+    // flecha de los que tienen campo, bajo el puntero, como en Windows 10 y Paint.NET 5: azul muy
+    // claro con el borde azul; al pulsarla y mientras la lista está abierta («:on»), algo más oscura
+    // (sin «:on», al abrirse la lista el puntero ya no está encima y volvía al blanco). «::drop-down»,
+    // justo después de QComboBox: Qt solo lo reconoce ahí (detrás de «:editable» pintaba todo el campo).
     const QColor field = s.dark ? QColor(0xf0, 0xf0, 0xf0) : QColor(0x7a, 0x7a, 0x7a);
     const QColor fieldHot = s.dark ? QColor(0xff, 0xff, 0xff) : QColor(0x33, 0x33, 0x33);
     qss += QStringLiteral(R"(
@@ -1685,6 +1689,9 @@ QToolBar#ToolOptionsBar QComboBox:editable:hover, QToolBar#ToolOptionsBar QAbstr
 QToolBar#ToolOptionsBar QLineEdit:hover { border-color: %2; }
 QToolBar#ToolOptionsBar QComboBox:editable:focus, QToolBar#ToolOptionsBar QAbstractSpinBox:focus,
 QToolBar#ToolOptionsBar QLineEdit:focus { border-color: %3; }
+QToolBar#ToolOptionsBar QComboBox::drop-down:editable:hover { background: #e5f1fb; border: 1px solid #0078d7; }
+QToolBar#ToolOptionsBar QComboBox::drop-down:editable:pressed,
+QToolBar#ToolOptionsBar QComboBox::drop-down:editable:on { background: #cce4f7; border: 1px solid #005499; }
 )")
                .arg(css(field), css(fieldHot), css(edge));
     // Tema oscuro: los desplegables con campo (tipo y tamaño de letra, tamaño del pincel...) como los

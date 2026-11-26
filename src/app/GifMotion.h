@@ -42,6 +42,8 @@ protected:
     void mousePressEvent(QMouseEvent* e) override;
     void mouseMoveEvent(QMouseEvent* e) override;
     void mouseReleaseEvent(QMouseEvent* e) override;
+    // Doble clic en un sitio de la gráfica: un punto clave ahí (en ese momento, con ese valor).
+    void mouseDoubleClickEvent(QMouseEvent* e) override;
 
 private:
     QRectF plotRect() const;

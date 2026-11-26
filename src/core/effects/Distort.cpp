@@ -384,7 +384,7 @@ void registerDistort(QList<const Effect*>& list)
           P::real("tension", QObject::tr("Turbulencia"), 0, 100, 10, 2), P::angle("angle", QObject::tr("Ángulo"), -180, 180, 0),
           qualityParam(2), P::seed()},
          renderDents});
-    add({"frostedglass", QObject::tr("Cristal congelado"), catDistort(), {}, {},
+    add({"frostedglass", QObject::tr("Cristal esmerilado"), catDistort(), {}, {},
          {P::real("max", QObject::tr("Radio de dispersión máximo"), 0, 200, 3, 2),
           P::real("min", QObject::tr("Radio de dispersión mínimo"), 0, 200, 0, 2),
           P::real("diffusion", QObject::tr("Difusión"), 0, 3, 1, 2),

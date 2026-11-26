@@ -473,7 +473,7 @@ export class ToolOptions {
         }
         case "interpolation":
             this.group(label(tr("Muestreo:")), choice(tr("Muestreo"), "moveInterpolation", [
-                ["nearest", null, tr("Vecino más próximo")], ["bilinear", null, tr("Bilineal")], ["multisample", null, tr("Multimuestra bilineal")],
+                ["nearest", null, tr("Vecino más próximo")], ["nearestaa", null, tr("Vecino más próximo (suavizado)")], ["bilinear", null, tr("Bilineal")], ["multisample", null, tr("Multimuestra bilineal")],
                 ["anisotropic", null, tr("Anisotrópico")], ["bicubic", null, tr("Bicúbico")]], { showText: true }));
             break;
         case "gamma":
@@ -512,7 +512,7 @@ export class ToolOptions {
             this.group(label(tr("Después de seleccionar:")), choice(tr("Después de seleccionar"), "afterSelect", [
                 ["none", "rectangleselect", tr("No cambiar de herramienta")],
                 ["moveselection", "moveselection", tr("Cambiar a Mover selección")],
-                ["moveselectedpixels", "moveselectedpixels", tr("Cambiar a Mover píxeles seleccionados")]], { showText: true }));
+                ["moveselectedpixels", "moveselectedpixels", tr("Cambiar a Mover píxeles")]], { showText: true }));
             break;
         // Las herramientas de PhotoCraft.
         case "magnetic":
@@ -695,7 +695,7 @@ const sections = () => [
     [tr("Pincel y relleno"), ["brushSize", "hardness", "spacing", "fill"]],
     [tr("Forma y estilo"), ["shape", "shapeStyle", "cornerRadius", "curve", "dash", "caps"]],
     [tr("Selección"), ["selectionMode", "rectMode", "afterSelect"]],
-    [tr("Mover píxeles seleccionados"), ["interpolation", "gamma"]],
+    [tr("Mover píxeles"), ["interpolation", "gamma"]],
     [tr("Texto"), ["text"]],
     [tr("Degradado"), ["gradient"]],
     [tr("Varita mágica, cubo de pintura y volver a colorear"), ["flood", "tolerance", "tolAlpha", "recolor"]],

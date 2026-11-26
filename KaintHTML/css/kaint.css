@@ -537,6 +537,18 @@ u {
     height: 36px;
 }
 
+/* La flecha de los campos con lista (tamaño del pincel, de la letra...), bajo el puntero, como en
+   Windows 10 y Paint.NET 5: azul muy claro con el borde azul; al pulsarla, algo más oscura. */
+.tool-options input[list]::-webkit-calendar-picker-indicator:hover {
+    background-color: #e5f1fb;
+    box-shadow: inset 0 0 0 1px #0078d7;
+}
+
+.tool-options input[list]::-webkit-calendar-picker-indicator:active {
+    background-color: #cce4f7;
+    box-shadow: inset 0 0 0 1px #005499;
+}
+
 /* Tema oscuro, como Paint.NET 5 (medido en una captura suya): el texto en un recuadro oscuro con 2 px
    de blanco alrededor y, en los desplegables, la flecha gris oscuro sobre una franja blanca. */
 :root.pdn.dark:not(.classic) .tool-options input[type="number"],
@@ -1058,6 +1070,43 @@ input[type="checkbox"] {
     height: 1px;
     background: var(--line);
     margin: 3px 6px;
+}
+
+/* Ajustes, Efectos y sus submenús, como los de Paint.NET: estrechos (tan anchos como pide lo que
+   tienen) y con una línea entre la columna de los iconos y el texto (menos en la fila resaltada). */
+.popup-menu.effect-menu {
+    min-width: 0;
+}
+
+.popup-menu.effect-menu .item {
+    position: relative;
+    padding-right: 6px;
+}
+
+.popup-menu.effect-menu .item::before {
+    content: "";
+    position: absolute;
+    left: 28px;
+    top: -1px;
+    bottom: -1px;
+    width: 1px;
+    background: color-mix(in srgb, var(--text) 19%, transparent);
+}
+
+.popup-menu.effect-menu .item.active:not(.disabled)::before {
+    display: none;
+}
+
+.popup-menu.effect-menu .item .shortcut:empty {
+    padding-left: 0;
+}
+
+.popup-menu.effect-menu .item > span:nth-child(2) {
+    padding-left: 3px;
+}
+
+.popup-menu.effect-menu .separator {
+    margin-left: 32px;
 }
 
 @keyframes kaint-fade-in {
@@ -2066,12 +2115,13 @@ body.busy, body.busy * {
     margin: 0;
 }
 
-/* Paint.NET: el riel blanco de 4px con borde gris claro que cruza el tirador azul por la mitad
+/* Paint.NET (también el zum de la barra de estado, como en Kaint): el riel blanco de 4px con borde
+   gris claro que cruza el tirador azul por la mitad
    (no por arriba: si no, el tirador se ve colgando por debajo), y el tirador con punta abajo
    (negro bajo el puntero y gris al arrastrarlo en el tema claro, como los de Windows 10). El riel
    ocupa lo mismo que el tirador y solo pinta la franja del medio: así los dos navegadores centran
    el tirador en la fila. */
-:root.pdn:not(.classic) .fx-slider input[type="range"] {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"] {
     appearance: none;
     -webkit-appearance: none;
     height: 22px;
@@ -2083,25 +2133,25 @@ body.busy, body.busy * {
     --thumb-down: #cccccc;
 }
 
-:root.pdn.dark:not(.classic) .fx-slider input[type="range"] {
+:root.pdn.dark:not(.classic) :is(.fx-slider, .status-bar) input[type="range"] {
     --track: #d6d6d6;
     --thumb-hot: color-mix(in srgb, var(--accent) 70%, #fff);
     --thumb-down: color-mix(in srgb, var(--accent) 80%, #fff);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]::-webkit-slider-runnable-track {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-runnable-track {
     height: 19px;
     background: linear-gradient(transparent 7px, var(--track) 7px, var(--track) 8px, var(--track-fill) 8px,
                                 var(--track-fill) 10px, var(--track) 10px, var(--track) 11px, transparent 11px);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]::-moz-range-track {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-track {
     height: 19px;
     background: linear-gradient(transparent 7px, var(--track) 7px, var(--track) 8px, var(--track-fill) 8px,
                                 var(--track-fill) 10px, var(--track) 10px, var(--track) 11px, transparent 11px);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]::-webkit-slider-thumb {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 11px;
     height: 19px;
@@ -2110,7 +2160,7 @@ body.busy, body.busy * {
     clip-path: polygon(0 0, 100% 0, 100% 14px, 50% 100%, 0 14px);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]::-moz-range-thumb {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]::-moz-range-thumb {
     width: 11px;
     height: 19px;
     border: none;
@@ -2119,27 +2169,27 @@ body.busy, body.busy * {
     clip-path: polygon(0 0, 100% 0, 100% 14px, 50% 100%, 0 14px);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]:hover::-webkit-slider-thumb {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:hover::-webkit-slider-thumb {
     background: var(--thumb-hot);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]:active::-webkit-slider-thumb {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:active::-webkit-slider-thumb {
     background: var(--thumb-down);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]:hover::-moz-range-thumb {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:hover::-moz-range-thumb {
     background: var(--thumb-hot);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]:active::-moz-range-thumb {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:active::-moz-range-thumb {
     background: var(--thumb-down);
 }
 
-:root.pdn:not(.classic) .fx-slider input[type="range"]:disabled {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:disabled {
     --track-fill: #f0f0f0;
 }
 
-:root.pdn.dark:not(.classic) .fx-slider input[type="range"]:disabled {
+:root.pdn.dark:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:disabled {
     --track-fill: #9a9a9a;
 }
 
@@ -2263,6 +2313,87 @@ body.busy, body.busy * {
     height: 100%;
     background: linear-gradient(var(--c), var(--c)),
                 repeating-conic-gradient(#bfbfbf 0% 25%, #8f8f8f 0% 50%) 0 0 / 10px 10px;
+}
+
+/* Editor de color dentro del diálogo (Paint.NET 5.2): muestra, rueda, barras y valores */
+.fx-inline-color {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 2px 0 2px 4px;
+}
+
+.fx-inline-swatch {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    padding: 2px;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    background: var(--button);
+}
+
+.fx-inline-swatch span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(var(--c), var(--c)),
+                repeating-conic-gradient(#bfbfbf 0% 25%, #8f8f8f 0% 50%) 0 0 / 8px 8px;
+}
+
+.fx-inline-color .wheel-box {
+    flex: none;
+    width: 100px;
+    height: 100px;
+}
+
+.fx-inline-color .wheel {
+    width: 100%;
+    height: 100%;
+}
+
+.fx-inline-sliders {
+    display: flex;
+    gap: 6px;
+}
+
+.fx-inline-color .channel-slider.vertical {
+    width: 16px;
+    height: 100px;
+}
+
+.fx-inline-spacer {
+    flex: 1;
+}
+
+.fx-inline-values {
+    display: grid;
+    grid-template-columns: auto 52px;
+    align-items: center;
+    gap: 3px 4px;
+    justify-items: end;
+}
+
+.fx-inline-values input {
+    width: 52px;
+    box-sizing: border-box;
+}
+
+.fx-inline-reset {
+    grid-column: 1 / span 2;
+    width: 68px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    background: var(--button);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.fx-inline-reset:hover {
+    background: var(--hover);
 }
 
 /* Pestañas (QTabWidget) */
@@ -2519,21 +2650,42 @@ fieldset.group > legend {
     box-sizing: border-box;
 }
 
-.anchor-grid {
+.canvas-options {
     display: grid;
-    grid-template-columns: repeat(3, 44px);
-    gap: 2px;
-    justify-content: center;
-    padding: 6px 0;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 6px 8px;
 }
 
+.anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 25px);
+    gap: 2px;
+    justify-content: center;
+    padding: 2px 0;
+}
+
+/* Las casillas, como los botones de Windows de Paint.NET (claras también con el tema oscuro). */
 .anchor-cell {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
+    width: 25px;
+    height: 25px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: #e1e1e1;
+    border: 1px solid #adadad;
+    border-radius: 0;
+}
+
+.anchor-cell:hover {
+    background: #e5f1fb;
+    border-color: #0078d7;
+}
+
+.anchor-cell:active, .anchor-cell.checked {
+    background: #cce4f7;
+    border-color: #005499;
 }
 
 .layer-props {
@@ -4058,7 +4210,7 @@ fieldset.group > legend {
 }
 
 /* Paint.NET: el deslizador con el foco lleva un recuadro punteado fino, no el anillo del navegador. */
-:root.pdn:not(.classic) .fx-slider input[type="range"]:focus-visible {
+:root.pdn:not(.classic) :is(.fx-slider, .status-bar) input[type="range"]:focus-visible {
     outline: 1px dotted color-mix(in srgb, var(--text) 70%, transparent);
     outline-offset: 0;
 }

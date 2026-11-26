@@ -254,7 +254,7 @@ void renderQuantize(const RenderArgs& a)
 void registerColor(QList<const Effect*>& list)
 {
     using P = EffectParam;
-    SimpleEffect::Def def{"quantize", QObject::tr("Cuantizar"), catColor(), "colorfx", {},
+    SimpleEffect::Def def{"quantize", QObject::tr("Cuantización / Dithering"), catColor(), "colorfx", {},
                           {P::choice("algorithm", QObject::tr("Algoritmo"),
                                      {QObject::tr("Corte a la mediana"), QObject::tr("Octree")}, 1),
                            P::integer("colors", QObject::tr("Colores"), 2, 256, 256),

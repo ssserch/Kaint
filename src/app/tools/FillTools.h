@@ -48,6 +48,8 @@ private:
     QPoint m_seed;
     bool m_secondary = false;
     bool m_shiftGlobal = false;
+    // Ctrl al rellenar: muestrear la imagen en vez de la capa (o al revés).
+    bool m_ctrlSample = false;
     bool m_dragging = false;
     bool m_moved = false;
     bool m_restoring = false;

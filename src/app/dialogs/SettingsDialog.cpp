@@ -2048,7 +2048,7 @@ QWidget* SettingsDialog::createToolsPage(ToolManager* tools)
         page.layout->addWidget(c);
     };
     check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), &AppSettings::hideMoveBox,
-          tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los "
+          tr("Con Mover píxeles solo queda el icono de mover; con Mover selección desaparecen los "
              "tiradores."));
     check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"),
           &AppSettings::replacePixels,

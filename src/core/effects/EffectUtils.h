@@ -366,6 +366,8 @@ void registerPhoto(QList<const Effect*>& list);
 void registerRender(QList<const Effect*>& list);
 void registerStylize(QList<const Effect*>& list);
 void registerLayerEffects(QList<const Effect*>& list);
+// Los efectos nuevos de Paint.NET 5.2 (Pdn52Effects.cpp).
+void registerPdn52(QList<const Effect*>& list);
 // Funciones de PhotoCraft (ExtraEffects*.cpp) y efectos que siguen complementos de BoltBait
 // (BoltBaitEffects.cpp).
 void registerPhotoCraft(QList<const Effect*>& list);

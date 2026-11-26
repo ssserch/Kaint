@@ -148,6 +148,14 @@ function pdnCornerIcon(name) {
     return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">${body}</svg>`)}`;
 }
 
+// El zum, con hasta dos decimales cuando no es un número entero (66.67 %), como Paint.NET 5.2.
+function zoomText(z) {
+    const pct = z * 100;
+    if (Math.abs(pct - Math.round(pct)) < 0.005)
+        return `${Math.round(pct)} %`;
+    return `${Number(pct.toFixed(2))} %`;
+}
+
 export class App extends EventTarget {
     constructor() {
         super();
@@ -1309,7 +1317,7 @@ export class App extends EventTarget {
         A("cut", tr("Cor&tar"), "edit-cut", "Ctrl+X", c(() => (this.inGifEditor() ? this.gifEditor.cutFrames() : this.cut())),
           () => this.inGifEditor() || sel());
         A("copy", tr("&Copiar"), "edit-copy", "Ctrl+C", c(() => (this.inGifEditor() ? this.gifEditor.copyFrames() : this.copy(false))), has);
-        A("copyMerged", tr("Copiar co&mbinado"), "edit-copy-merged", "Ctrl+Shift+C", c(() => this.copy(true)), has);
+        A("copyMerged", tr("Copiar ac&oplado"), "edit-copy-merged", "Ctrl+Shift+C", c(() => this.copy(true)), has);
         A("paste", tr("&Pegar"), "edit-paste", "Ctrl+V", c(() => (this.inGifEditor() ? this.gifEditor.pasteFrames() : this.pasteFromClipboard("layer"))));
         A("pasteLayer", tr("Pegar en capa &nueva"), "edit-paste-new-layer", "Ctrl+Shift+V",
           c(() => (this.inGifEditor() ? this.gifEditor.pasteFrames() : this.pasteFromClipboard("newLayer"))), has);
@@ -1441,8 +1449,8 @@ export class App extends EventTarget {
                                                     a("layerAbove"), a("layerBelow"), a("layerBottom"), "-", a("layerToTop"), a("layerUp"),
                                                     a("layerDown"), a("layerToBottom"), "-", a("layerProps")] },
             // Configuración > Personalización: efectos ocultos y movidos a otro menú o submenú.
-            { title: tr("A&justes"), entries: () => sorted(menuEffects().filter((e) => Customization.placement(e).adjustment)).map(effectEntry) },
-            { title: tr("Efe&ctos"), entries: () => {
+            { title: tr("A&justes"), className: "effect-menu", entries: () => sorted(menuEffects().filter((e) => Customization.placement(e).adjustment)).map(effectEntry) },
+            { title: tr("Efe&ctos"), className: "effect-menu", entries: () => {
                 // Como en Kaint: "Repetir" solo después de usar un efecto y "Complementos..." solo con
                 // algún complemento activado.
                 const out = [];
@@ -1763,7 +1771,7 @@ export class App extends EventTarget {
 
     updateZoomBox() {
         if (document.activeElement !== this.zoomBox)
-            this.zoomBox.value = `${Math.round(this.view.zoom * 100)} %`;
+            this.zoomBox.value = zoomText(this.view.zoom);
         // Como en Paint.NET: con la imagen como la deja «Zum a ventana», la imagen enmarcada.
         const atWindow = this.view.atWindowZoom();
         if (this.zoomFitButton && this.zoomFitButton.atWindow !== atWindow) {
@@ -2433,7 +2441,7 @@ export class App extends EventTarget {
 
     // Como MainWindow::pastePosition de Kaint: donde se copió, si lo que se pega es esa copia y ese
     // sitio se ve entero; si no, el sitio visible más cercano (o la esquina de lo visible para lo que
-    // viene de fuera), con Mover píxeles seleccionados.
+    // viene de fuera), con Mover píxeles.
     pastePosition(image) {
         const doc = this.doc, v = this.view.viewSize();
         const a = this.view.viewToImage(0, 0), b = this.view.viewToImage(v.w, v.h);
@@ -2621,20 +2629,22 @@ export class App extends EventTarget {
     async canvasSize() {
         const doc = this.doc, r = await canvasSizeDialog(doc.width, doc.height, doc.dpi);
         if (r && (r.width !== doc.width || r.height !== doc.height || Math.abs(r.dpi - doc.dpi) > 1e-9))
-            this.resizeCanvas(r.width, r.height, r.anchor, tr("Tamaño del lienzo"), r.dpi);
+            this.resizeCanvas(r.width, r.height, r.anchor, tr("Tamaño del lienzo"), r.dpi,
+                              r.fill === 0 ? null : r.fill === 1 ? AppState.primary : AppState.secondary);
     }
 
-    // El lienzo de otro tamaño; anchor [0..2, 0..2] dice dónde queda la imagen.
-    resizeCanvas(width, height, anchor, name, dpi = this.doc.dpi) {
+    // El lienzo de otro tamaño; anchor [0..2, 0..2] dice dónde queda la imagen. Lo nuevo de la capa
+    // de abajo, con 'background' (null: transparente; sin darlo, el color secundario, como en
+    // Paint.NET); las demás capas, transparentes.
+    resizeCanvas(width, height, anchor, name, dpi = this.doc.dpi, background = AppState.secondary) {
         const doc = this.doc, before = doc.snapshot();
         const offset = (n, old, a) => (a === 0 ? 0 : a === 2 ? n - old : Math.trunc((n - old) / 2));
         const dx = offset(width, doc.width, anchor[0]), dy = offset(height, doc.height, anchor[1]);
         doc.dpi = dpi;
         doc.layers.forEach((layer, i) => {
             const c = createCanvas(width, height), ctx = context(c);
-            // El fondo crece con el color secundario, como en Paint.NET.
-            if (i === 0) {
-                const s = AppState.secondary;
+            if (i === 0 && background) {
+                const s = background;
                 ctx.fillStyle = `rgba(${s.r},${s.g},${s.b},${s.a / 255})`;
                 ctx.fillRect(0, 0, width, height);
                 ctx.clearRect(dx, dy, doc.width, doc.height);

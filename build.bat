@@ -179,6 +179,7 @@ echo Qt:     %QT_DIR%
 echo MinGW:  %MINGW_BIN%
 set "PATH=%MINGW_BIN%;%CMAKE_BIN%;%NINJA_DIR%;%QT_DIR%\bin;%PATH%"
 call :find_ccache
+call :find_multimedia
 
 rem --- Compilación ------------------------------------------------------------
 if "%DO_CLEAN%"=="1" if exist "%BUILD_DIR%" (
@@ -192,6 +193,7 @@ cmake -S . -B "%BUILD_DIR%" -G Ninja -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_PRE
 set "STEP=compilar"
 if defined JOBS (echo Compilando con %JOBS% hilos...) else (echo Compilando con %NUMBER_OF_PROCESSORS% hilos...)
 cmake --build "%BUILD_DIR%" --parallel %JOBS% || exit /b 1
+call :deploy_build || exit /b 1
 
 if "%DO_TEST%"=="1" (
     set "STEP=las pruebas"
@@ -249,6 +251,42 @@ rem (Con barras normales: CMake toma las invertidas por secuencias de escape.)
 set "CCACHE=%CCACHE:\=/%"
 echo Caché:  %CCACHE%
 set CCACHE_CMAKE=-DCMAKE_C_COMPILER_LAUNCHER="%CCACHE%" -DCMAKE_CXX_COMPILER_LAUNCHER="%CCACHE%"
+exit /b 0
+
+rem --- Las DLL junto al ejecutable compilado ---------------------------------------
+rem Sin ellas, %BUILD_DIR%\kaint.exe solo se abría desde este script (con Qt y MinGW en el PATH):
+rem con doble clic, Windows no encontraba Qt6Core.dll ni las de MinGW. windeployqt pone las de Qt y
+rem sus complementos (plataformas, estilos, formatos de imagen, vídeo...) y solo copia lo que ha
+rem cambiado, así que recompilar no tarda más.
+:deploy_build
+set "STEP=copiar las DLL de Qt y MinGW junto a %BUILD_DIR%\kaint.exe"
+"%QT_DIR%\bin\windeployqt.exe" --verbose 0 --no-compiler-runtime "%BUILD_DIR%\kaint.exe" >nul || exit /b 1
+for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
+    if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%BUILD_DIR%\" >nul
+)
+exit /b 0
+
+rem --- Qt Multimedia (la intro y el audio del editor de GIF) ---------------------------
+rem Las herramientas descargadas con versiones anteriores de este script no lo traían: se añade a
+rem esa Qt (sin volver a descargarla). Sin él, Kaint se compila igual, sin intro ni audio.
+:find_multimedia
+if exist "%QT_DIR%\lib\cmake\Qt6Multimedia\Qt6MultimediaConfig.cmake" exit /b 0
+if /i not "%QT_DIR%"=="%TOOLCHAIN%\%QT_VERSION%\mingw_64" (
+    echo Aviso: esta Qt no tiene Qt Multimedia ^(sin él, no hay intro ni se oye el audio del editor de GIF^).
+    exit /b 0
+)
+echo.
+echo Falta Qt Multimedia: sin él no hay intro ni se oye el audio del editor de GIF.
+echo Se puede descargar ahora en %TOOLCHAIN% (unos 25 MB).
+if not "%ASSUME_YES%"=="1" (
+    choice /c SN /m "¿Descargarlo"
+    if errorlevel 2 exit /b 0
+)
+if not exist "%TOOLCHAIN%\aqt.exe" curl -L --fail -o "%TOOLCHAIN%\aqt.exe" "%AQT_URL%"
+if not exist "%TOOLCHAIN%\aqt.exe" exit /b 0
+pushd "%TOOLCHAIN%"
+"%TOOLCHAIN%\aqt.exe" install-qt windows desktop %QT_VERSION% win64_mingw -m qtmultimedia --noarchives --outputdir "%TOOLCHAIN%"
+popd
 exit /b 0
 
 rem --- Instalar ---------------------------------------------------------------
@@ -341,7 +379,7 @@ echo (15) tar.gz Linux x86_64 (con WSL)%WSL_NR%
 echo (16) tar.gz Linux musl (con WSL)%WSL_NR%
 echo (17) tar.gz Linux aarch64 (con WSL)%WSL_NR%
 echo (18) tar.gz FreeBSD x86_64 %NR%
-echo (19) tar.gz macOS arm64 %NR%
+echo (19) tar.gz macOS arm64 (con GitHub Actions)
 echo (0) Volver
 echo.
 :menu_format
@@ -370,7 +408,7 @@ if "%MENU_CHOICE%"=="18" (
     goto menu_format
 )
 if "%MENU_CHOICE%"=="19" (
-    echo El .tar.gz de macOS se crea en un Mac con: ./build.sh --tar
+    call :macos_actions
     goto menu_format
 )
 if not defined MENU_ARGS (
@@ -549,6 +587,30 @@ if exist "%SETUP%" del /q "%SETUP%"
 call :report "Instalador" "%SETUP%" "(Kaint se desinstala desde «Aplicaciones instaladas»)"
 exit /b 0
 
+rem --- macOS con GitHub Actions -------------------------------------------------
+rem macOS no se compila en Windows: lo compila GitHub Actions (.github\workflows\build.yml) en un Mac
+rem de GitHub, con el código subido a GitHub de esta rama (no los cambios sin subir). Con la
+rem herramienta gh (https://cli.github.com, después de «gh auth login») se lanza desde aquí.
+:macos_actions
+where gh >nul 2>&1
+if errorlevel 1 (
+    echo El .tar.gz de macOS lo compila GitHub Actions: en GitHub, Actions ^> «Compilar Kaint» ^> Run workflow.
+    echo Con gh ^(https://cli.github.com^) instalado y «gh auth login» hecho, esta opción lo lanza sola.
+    exit /b 0
+)
+set "GH_REF="
+for /f "delims=" %%B in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "GH_REF=%%B"
+set "GH_REF_ARG="
+if defined GH_REF if not "%GH_REF%"=="HEAD" set "GH_REF_ARG=--ref %GH_REF%"
+gh workflow run build.yml %GH_REF_ARG% -f windows=false -f linux=false -f macos=true -f web=false
+if errorlevel 1 (
+    echo %ESC%[31mNo se pudo lanzar.%ESC%[0m ¿Está hecho «gh auth login» y subidos a GitHub esta rama y .github\workflows\build.yml?
+    exit /b 0
+)
+echo %ESC%[32mLanzado:%ESC%[0m macOS se compila en GitHub con lo subido de %GH_REF% ^(unos 20-30 minutos^).
+echo Se descarga en GitHub, Actions ^> «Compilar Kaint» ^> la ejecución ^> Artifacts ^(o: gh run download^).
+exit /b 0
+
 rem --- Buscar NSIS (makensis.exe) ---------------------------------------------
 :find_nsis
 set "MAKENSIS="
@@ -631,7 +693,7 @@ if not exist "%TOOLCHAIN%\aqt.exe" (
 set "AQT=%TOOLCHAIN%\aqt.exe"
 pushd "%TOOLCHAIN%"
 echo Descargando Qt %QT_VERSION% (MinGW)...
-"%AQT%" install-qt windows desktop %QT_VERSION% win64_mingw -m qtimageformats --outputdir "%TOOLCHAIN%" || (popd & exit /b 1)
+"%AQT%" install-qt windows desktop %QT_VERSION% win64_mingw -m qtimageformats qtmultimedia --outputdir "%TOOLCHAIN%" || (popd & exit /b 1)
 echo Descargando MinGW, CMake y Ninja...
 "%AQT%" install-tool windows desktop tools_%MINGW_TOOL% qt.tools.win64_%MINGW_TOOL% --outputdir "%TOOLCHAIN%" || (popd & exit /b 1)
 "%AQT%" install-tool windows desktop tools_cmake qt.tools.cmake --outputdir "%TOOLCHAIN%" || (popd & exit /b 1)

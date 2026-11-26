@@ -53,6 +53,7 @@
 #include <QApplication>
 #include <QBuffer>
 #include <QElapsedTimer>
+#include <QTabWidget>
 #include <QCollator>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -1461,18 +1462,26 @@ private:
     bool m_watching = false;
 };
 
-// Menús de efectos (Ajustes, Efectos y sus submenús): los efectos de los complementos llevan a la
-// derecha el icono de los complementos, la pieza de puzle verde (se quita en Configuración >
-// Complementos). El menú se ensancha un poco para que el icono no tape el texto.
+// Menús de efectos (Ajustes, Efectos y sus submenús), como los de Paint.NET: estrechos (tan anchos
+// como pide lo que tienen), con filas de 24 px y una columna para los iconos separada del texto
+// por una línea. Los efectos de los complementos llevan a la derecha el icono de los complementos,
+// la pieza de puzle verde (se quita en Configuración > Complementos), en el margen derecho.
 class EffectMenu : public QMenu {
 public:
     explicit EffectMenu(const QString& title, QWidget* parent = nullptr)
         : QMenu(title, parent)
     {
+        // Sin ningún icono, Qt no deja la columna: el texto empieza después de la línea igualmente.
         connect(this, &QMenu::aboutToShow, this, [this] {
-            setMinimumWidth(0);
-            if (showPluginIcons() && hasPluginActions())
-                setMinimumWidth(sizeHint().width() + kIcon + 6);
+            const QList<QAction*> list = actions();
+            const bool icons = std::any_of(list.cbegin(), list.cend(),
+                                           [](const QAction* a) { return a->isVisible() && !a->icon().isNull(); });
+            const QString style = QStringLiteral("QMenu::item { padding: 3px %1px 3px %2px; } QMenu::separator { margin-left: %3px; }")
+                                      .arg(kRightPad)
+                                      .arg(icons ? kTextPad : kGutter + 8)
+                                      .arg(kGutter + 2);
+            if (styleSheet() != style)
+                setStyleSheet(style);
         });
     }
 
@@ -1488,12 +1497,22 @@ protected:
     void paintEvent(QPaintEvent* e) override
     {
         QMenu::paintEvent(e);
+        QPainter p(this);
+        // La línea entre la columna de los iconos y el texto (menos en la fila resaltada).
+        QColor line = palette().color(QPalette::WindowText);
+        line.setAlpha(48);
+        for (QAction* a : actions()) {
+            if (!a->isVisible() || (a == activeAction() && !a->isSeparator() && a->isEnabled()))
+                continue;
+            const QRect r = actionGeometry(a);
+            if (r.intersects(e->rect()))
+                p.fillRect(QRect(r.left() + kGutter, r.top(), 1, r.height()), line);
+        }
         if (!showPluginIcons())
             return;
         const QIcon icon = Icons::theme({"settings-plugins", "preferences-plugin", "application-x-addon"});
         if (icon.isNull())
             return;
-        QPainter p(this);
         for (QAction* a : actions()) {
             if (!a->isVisible() || !a->property("kaintPlugin").toBool())
                 continue;
@@ -1507,12 +1526,11 @@ protected:
 
 private:
     static constexpr int kIcon = 16;
-
-    bool hasPluginActions() const
-    {
-        const QList<QAction*> list = actions();
-        return std::any_of(list.cbegin(), list.cend(), [](const QAction* a) { return a->property("kaintPlugin").toBool(); });
-    }
+    // La columna de los iconos (hasta la línea), lo que deja Qt delante del icono y el margen
+    // derecho (la flecha de los submenús o la pieza de los complementos).
+    static constexpr int kGutter = 23;
+    static constexpr int kTextPad = 6;
+    static constexpr int kRightPad = 30;
 };
 
 // Flecha de la lista de imágenes: una franja de la altura de la tira con el chevrón arriba,
@@ -1555,8 +1573,16 @@ protected:
 
 QString zoomText(qreal z)
 {
+    // Con hasta dos decimales cuando no es un número entero (66,67 %), como Paint.NET 5.2.
     const qreal pct = z * 100;
-    return (pct < 10 ? QString::number(pct, 'f', 1) : QString::number(std::round(pct))) + QStringLiteral(" %");
+    if (std::abs(pct - std::round(pct)) < 0.005)
+        return QString::number(std::round(pct)) + QStringLiteral(" %");
+    QString text = QString::number(pct, 'f', 2);
+    while (text.endsWith(QLatin1Char('0')))
+        text.chop(1);
+    if (text.endsWith(QLatin1Char('.')))
+        text.chop(1);
+    return text + QStringLiteral(" %");
 }
 
 // La imagen de un archivo para agregarla como capa: también de los formatos con capas (.pdn, .ora,
@@ -1869,7 +1895,7 @@ void MainWindow::createActions()
     A["cut"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+X")), QKeySequence(QStringLiteral("Shift+Del"))});
     A["copy"] = makeAction(tr("&Copiar"), {"edit-copy"}, QKeySequence::Copy, [this] { copy(false); }, doc);
     A["copy"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+C")), QKeySequence(QStringLiteral("Ctrl+Ins"))});
-    A["copyMerged"] = makeAction(tr("Copiar co&mbinado"), {"edit-copy-merged", "edit-copy"}, QKeySequence(QStringLiteral("Ctrl+Shift+C")),
+    A["copyMerged"] = makeAction(tr("Copiar ac&oplado"), {"edit-copy-merged", "edit-copy"}, QKeySequence(QStringLiteral("Ctrl+Shift+C")),
                                  [this] { copy(true); }, doc);
     A["paste"] = makeAction(tr("&Pegar"), {"edit-paste"}, QKeySequence::Paste, [this] { paste(); });
     A["paste"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+V")), QKeySequence(QStringLiteral("Shift+Ins"))});
@@ -2791,8 +2817,12 @@ void MainWindow::rebuildRecentMenu()
     m_recentMenu->clear();
     const QStringList files = AppState::instance()->recentFiles();
     int n = 0;
+    // La carpeta de cada uno, a la derecha (como Paint.NET 5.2, que la pone debajo): sin pasar el
+    // puntero por encima ya se distinguen dos archivos con el mismo nombre.
+    const QFontMetrics metrics(m_recentMenu->font());
     for (const QString& f : files) {
-        QAction* a = m_recentMenu->addAction(QStringLiteral("&%1 %2").arg(++n % 10).arg(QFileInfo(f).fileName()), this,
+        const QString folder = metrics.elidedText(QDir::toNativeSeparators(QFileInfo(f).absolutePath()), Qt::ElideMiddle, 320);
+        QAction* a = m_recentMenu->addAction(QStringLiteral("&%1 %2\t%3").arg(++n % 10).arg(QFileInfo(f).fileName(), folder), this,
                                              [this, f] { openFiles({f}); });
         a->setToolTip(QDir::toNativeSeparators(f));
         a->setIcon(AppState::instance()->recentThumbnail(f));
@@ -3506,7 +3536,7 @@ void MainWindow::openFiles(const QStringList& paths)
     }
 }
 
-QString MainWindow::screenPreview(const QStringList& files, const QString& output, bool gifEditor)
+QString MainWindow::screenPreview(const QStringList& files, const QString& output, bool gifEditor, const QString& popup)
 {
     Document* first = nullptr;
     for (const QString& path : files) {
@@ -3531,7 +3561,44 @@ QString MainWindow::screenPreview(const QStringList& files, const QString& outpu
     wait.start();
     while (wait.elapsed() < 800)
         QApplication::processEvents(QEventLoop::AllEvents, 20);
-    const QImage shot = grab().toImage();
+    QImage shot;
+    if (popup.startsWith(QLatin1String("menu:"))) {
+        // El menú (o un submenú suyo, por su título sin «&»), abierto y pintado como en pantalla.
+        const QStringList path = popup.mid(5).split(QLatin1Char('/'));
+        QMenu* menu = path.first() == QLatin1String("adjustments") ? m_adjustmentsMenu : m_effectsMenu;
+        for (int i = 1; menu && i < path.size(); ++i) {
+            QMenu* found = nullptr;
+            for (QAction* a : menu->actions())
+                if (a->menu() && a->menu()->title().remove(QLatin1Char('&')) == path[i])
+                    found = a->menu();
+            menu = found;
+        }
+        if (!menu)
+            return tr("No existe el menú «%1».").arg(popup);
+        menu->popup(mapToGlobal(QPoint(40, 40)));
+        wait.restart();
+        while (wait.elapsed() < 300)
+            QApplication::processEvents(QEventLoop::AllEvents, 20);
+        shot = menu->grab().toImage();
+        menu->hide();
+    } else if (popup.startsWith(QLatin1String("effect:"))) {
+        // El diálogo del efecto con sus valores de fábrica («effect:id@1»: en su segunda pestaña).
+        const QStringList parts = popup.mid(7).split(QLatin1Char('@'));
+        const Effect* effect = Effects::find(parts.first());
+        if (!effect || !m_doc || !m_doc->activeLayer())
+            return tr("No existe el efecto «%1».").arg(popup);
+        EffectDialog dlg(*effect, Effects::defaults(*effect, effectContext()), m_doc->activeLayer()->image, m_doc->rect(), this);
+        if (parts.size() > 1)
+            if (auto* tabs = dlg.findChild<QTabWidget*>())
+                tabs->setCurrentIndex(parts[1].toInt());
+        dlg.show();
+        wait.restart();
+        while (wait.elapsed() < 400)
+            QApplication::processEvents(QEventLoop::AllEvents, 20);
+        shot = dlg.grab().toImage();
+    } else {
+        shot = grab().toImage();
+    }
     const QString suffix = QFileInfo(output).suffix().toLower();
     const bool jpeg = suffix == QLatin1String("jpg") || suffix == QLatin1String("jpeg");
     if (!shot.convertToFormat(jpeg ? QImage::Format_RGB32 : QImage::Format_ARGB32).save(output, nullptr, jpeg ? 95 : -1))
@@ -4621,17 +4688,23 @@ void MainWindow::resizeCanvas()
         return;
     if (dlg.canvasSize() == m_doc->size() && qFuzzyCompare(dlg.dpi(), m_doc->dpi()))
         return;
-    resizeCanvasTo(dlg.canvasSize(), dlg.anchor(), tr("Tamaño del lienzo"), dlg.dpi());
+    QColor fill = Qt::transparent;
+    if (dlg.fill() == CanvasSizeDialog::Fill::Primary)
+        fill = AppState::instance()->primary();
+    else if (dlg.fill() == CanvasSizeDialog::Fill::Secondary)
+        fill = AppState::instance()->secondary();
+    resizeCanvasTo(dlg.canvasSize(), dlg.anchor(), tr("Tamaño del lienzo"), dlg.dpi(), fill);
 }
 
-void MainWindow::resizeCanvasTo(QSize size, Qt::Alignment anchor, const QString& text, double dpi)
+void MainWindow::resizeCanvasTo(QSize size, Qt::Alignment anchor, const QString& text, double dpi, QColor background)
 {
     const QSize old = m_doc->size();
     const int dx = (anchor & Qt::AlignLeft) ? 0 : (anchor & Qt::AlignRight) ? size.width() - old.width()
                                                                             : (size.width() - old.width()) / 2;
     const int dy = (anchor & Qt::AlignTop) ? 0 : (anchor & Qt::AlignBottom) ? size.height() - old.height()
                                                                             : (size.height() - old.height()) / 2;
-    const QColor fill = AppState::instance()->secondary();
+    // Lo nuevo de la capa de abajo, con ese color (sin él, el secundario); las demás, transparentes.
+    const QColor fill = background.isValid() ? background : AppState::instance()->secondary();
     transformDocument(text, QStringLiteral("transform-crop-and-resize"), size, [&](const QImage& img, int index) {
         QImage out(size, kLayerFormat);
         if (index == 0)

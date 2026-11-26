@@ -681,6 +681,173 @@ void drawCollab(QPainter& p)
     person(QPointF(5.8, 6.2), 2.9, QRectF(0.8, 10.2, 10, 5.3), QColor(58, 132, 216));
 }
 
+void drawLock(QPainter& p)
+{
+    // Candado (bloquear la transparencia de la capa): el arco de metal y el cuerpo dorado con el
+    // ojo de la cerradura. Propio: en Windows no hay tema de iconos que lo traiga.
+    aa(p);
+    QPainterPath shackle;
+    shackle.moveTo(4.5, 8);
+    shackle.lineTo(4.5, 5);
+    shackle.arcTo(QRectF(4.5, 1.5, 7, 7), 180, -180);
+    shackle.lineTo(11.5, 8);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(0x4a, 0x50, 0x58), 2.8, Qt::SolidLine, Qt::FlatCap));
+    p.drawPath(shackle);
+    p.setPen(QPen(QColor(0xd2, 0xd7, 0xde), 1.2, Qt::SolidLine, Qt::FlatCap));
+    p.drawPath(shackle);
+    const QRectF body(2.5, 7.5, 11, 7.5);
+    QLinearGradient gold(0, body.top(), 0, body.bottom());
+    gold.setColorAt(0, QColor(0xff, 0xdb, 0x62));
+    gold.setColorAt(1, QColor(0xdc, 0x96, 0x14));
+    p.setPen(QPen(QColor(0x7a, 0x52, 0x08), 1));
+    p.setBrush(gold);
+    p.drawRoundedRect(body, 1.5, 1.5);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x5a, 0x3a, 0x04));
+    p.drawEllipse(QPointF(8, 10.3), 1.4, 1.4);
+    p.drawRect(QRectF(7.35, 10.5, 1.3, 2.7));
+}
+
+// Los efectos nuevos de Paint.NET 5.2 (Pdn52Effects.cpp), en la rejilla de 16 px.
+
+void drawSpherize(QPainter& p)
+{
+    // Una bola de cristal azul con su brillo y una rejilla curvada.
+    aa(p);
+    QRadialGradient ball(QPointF(6, 5.5), 8.5);
+    ball.setColorAt(0, QColor(0xd6, 0xec, 0xff));
+    ball.setColorAt(0.55, QColor(0x5d, 0x9e, 0xe0));
+    ball.setColorAt(1, QColor(0x1c, 0x4f, 0x96));
+    p.setPen(QPen(QColor(0x18, 0x3c, 0x70), 1));
+    p.setBrush(ball);
+    p.drawEllipse(QPointF(8, 8), 6.6, 6.6);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(255, 255, 255, 120), 0.8));
+    p.drawEllipse(QPointF(8, 8), 3.2, 6.4);
+    p.drawEllipse(QPointF(8, 8), 6.4, 3.0);
+}
+
+void drawWaves(QPainter& p)
+{
+    // Dos ondas azules.
+    aa(p);
+    for (int k = 0; k < 2; ++k) {
+        QPainterPath wave;
+        const double y = 5.5 + k * 5.5;
+        wave.moveTo(1, y);
+        wave.cubicTo(3.5, y - 4, 5.5, y - 4, 8, y);
+        wave.cubicTo(10.5, y + 4, 12.5, y + 4, 15, y);
+        p.setPen(QPen(QColor(255, 255, 255, 200), 3.4, Qt::SolidLine, Qt::RoundCap));
+        p.drawPath(wave);
+        p.setPen(QPen(k ? QColor(0x1f, 0x6f, 0xc6) : QColor(0x3f, 0xa6, 0xe8), 1.8, Qt::SolidLine, Qt::RoundCap));
+        p.drawPath(wave);
+    }
+}
+
+void drawOrderedDither(QPainter& p)
+{
+    // Un degradado de negro a blanco hecho con la trama de Bayer.
+    static const int bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    p.setPen(QPen(QColor(0x50, 0x50, 0x50), 1));
+    p.setBrush(Qt::white);
+    p.drawRect(QRectF(1.5, 1.5, 13, 13));
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x20, 0x20, 0x20));
+    for (int y = 0; y < 12; ++y)
+        for (int x = 0; x < 12; ++x)
+            if (bayer[y % 4][x % 4] < 16 - (x * 16) / 12)
+                p.drawRect(QRectF(2 + x, 2 + y, 1, 1));
+}
+
+void drawHalftone(QPainter& p)
+{
+    // Tres puntos de tinta que se solapan: cian, magenta y amarillo.
+    aa(p);
+    p.setCompositionMode(QPainter::CompositionMode_Multiply);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x00, 0xae, 0xef));
+    p.drawEllipse(QPointF(5.6, 6), 4.4, 4.4);
+    p.setBrush(QColor(0xec, 0x00, 0x8c));
+    p.drawEllipse(QPointF(10.4, 6), 4.4, 4.4);
+    p.setBrush(QColor(0xff, 0xf2, 0x00));
+    p.drawEllipse(QPointF(8, 10.4), 4.4, 4.4);
+    p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+}
+
+void drawLinocut(QPainter& p)
+{
+    // Papel con líneas de tinta en diagonal, más gruesas abajo.
+    aa(p);
+    p.setPen(QPen(QColor(0x60, 0x58, 0x4a), 1));
+    p.setBrush(QColor(0xf5, 0xf2, 0xe9));
+    p.drawRect(QRectF(1.5, 1.5, 13, 13));
+    p.save();
+    p.setClipRect(QRectF(2, 2, 12, 12));
+    for (int k = -3; k < 7; ++k) {
+        const double w = 0.6 + std::max(0, k) * 0.3;
+        p.setPen(QPen(QColor(0x1a, 0x1a, 0x1a), w, Qt::SolidLine, Qt::FlatCap));
+        p.drawLine(QPointF(0, 4 + k * 3), QPointF(16, -12 + k * 3));
+    }
+    p.restore();
+}
+
+void drawMosaic(QPainter& p)
+{
+    // Teselas de colores en rejilla con la junta gris.
+    static const QColor colors[9] = {QColor(0x4f, 0x8f, 0xd8), QColor(0xe8, 0x6a, 0x5a), QColor(0xf4, 0xc4, 0x4c),
+                                     QColor(0x6c, 0xc0, 0x6a), QColor(0xf4, 0xc4, 0x4c), QColor(0x4f, 0x8f, 0xd8),
+                                     QColor(0xe8, 0x6a, 0x5a), QColor(0x4f, 0x8f, 0xd8), QColor(0x6c, 0xc0, 0x6a)};
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x80, 0x80, 0x80));
+    p.drawRect(QRectF(1, 1, 14, 14));
+    for (int i = 0; i < 9; ++i) {
+        const QRectF r(1.5 + (i % 3) * 4.5, 1.5 + (i / 3) * 4.5, 4, 4);
+        p.setBrush(colors[i]);
+        p.drawRect(r);
+        p.setBrush(QColor(255, 255, 255, 90));
+        p.drawRect(QRectF(r.left(), r.top(), r.width(), 1));
+    }
+}
+
+void drawPointillism(QPainter& p)
+{
+    // Puntos de colores sueltos.
+    aa(p);
+    struct Dot {
+        double x, y, r;
+        QColor c;
+    };
+    static const Dot dots[] = {{4, 4, 2.2, QColor(0xe8, 0x5a, 0x4f)}, {10, 3.5, 2.0, QColor(0x3f, 0x8e, 0xdb)},
+                               {7.5, 8, 2.3, QColor(0xf2, 0xb8, 0x2e)}, {3.5, 11.5, 2.0, QColor(0x5c, 0xb5, 0x5a)},
+                               {12, 9.5, 2.1, QColor(0x9b, 0x59, 0xb6)}, {9, 13, 1.8, QColor(0xe8, 0x5a, 0x4f)}};
+    for (const Dot& d : dots) {
+        p.setPen(QPen(d.c.darker(140), 0.8));
+        p.setBrush(d.c);
+        p.drawEllipse(QPointF(d.x, d.y), d.r, d.r);
+    }
+}
+
+void drawStainedGlass(QPainter& p)
+{
+    // Cristales de colores con el emplomado negro.
+    aa(p);
+    const QPointF a(1.5, 1.5), b(14.5, 1.5), c(14.5, 14.5), d(1.5, 14.5), m(7, 6.5), n(10.5, 10), e(8, 1.5), f(1.5, 9), g(14.5, 7),
+        h(6, 14.5);
+    const std::pair<QPolygonF, QColor> cells[] = {{QPolygonF{a, e, m, f}, QColor(0x4f, 0x8f, 0xd8)},
+                                                  {QPolygonF{e, b, g, n, m}, QColor(0xf4, 0xc4, 0x4c)},
+                                                  {QPolygonF{f, m, n, h, d}, QColor(0xe8, 0x5a, 0x4f)},
+                                                  {QPolygonF{n, g, c, h}, QColor(0x5c, 0xb5, 0x5a)}};
+    for (const auto& [poly, color] : cells) {
+        QLinearGradient shine(poly.boundingRect().topLeft(), poly.boundingRect().bottomRight());
+        shine.setColorAt(0, color.lighter(140));
+        shine.setColorAt(1, color);
+        p.setPen(QPen(QColor(0x15, 0x15, 0x15), 1.3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(shine);
+        p.drawPolygon(poly);
+    }
+}
+
 // Las herramientas de PhotoCraft llevan la pieza de puzle verde de los complementos abajo a la
 // derecha: ocupa casi la mitad del icono (más pequeña apenas se veía), con sus dos salientes
 // (arriba y a la izquierda), un verde vivo con borde oscuro y un halo blanco que la separa del
@@ -1085,6 +1252,15 @@ const QHash<QString, Entry>& table()
         {QStringLiteral("toolbar-crop"), {BS, drawCrop, "menu_image_crop_icon"}},
         {QStringLiteral("toolbar-deselect"), {BS, drawDeselect, "menu_edit_deselect_icon"}},
         {QStringLiteral("collab"), {BS, drawCollab, ""}},
+        {QStringLiteral("object-locked"), {BS, drawLock, ""}},
+        {QStringLiteral("effect-spherize"), {BS, drawSpherize, ""}},
+        {QStringLiteral("effect-waves"), {BS, drawWaves, ""}},
+        {QStringLiteral("effect-ordereddither"), {BS, drawOrderedDither, ""}},
+        {QStringLiteral("effect-halftone"), {BS, drawHalftone, ""}},
+        {QStringLiteral("effect-linocut"), {BS, drawLinocut, ""}},
+        {QStringLiteral("effect-mosaic"), {BS, drawMosaic, ""}},
+        {QStringLiteral("effect-pointillism"), {BS, drawPointillism, ""}},
+        {QStringLiteral("effect-stainedglass"), {BS, drawStainedGlass, ""}},
         {QStringLiteral("settings-collab"), {BS, drawCollab, ""}},
         {QStringLiteral("corner-tools"), {TS, drawWinTools, ""}},
         {QStringLiteral("corner-history"), {TS, drawWinHistory, ""}},

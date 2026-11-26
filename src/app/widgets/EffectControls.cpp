@@ -1,5 +1,6 @@
 #include "app/widgets/EffectControls.h"
 
+#include "app/Icons.h"
 #include "app/widgets/ColorWidgets.h"
 
 #include <QCheckBox>
@@ -14,7 +15,9 @@
 #include <QPainterPath>
 #include <QFrame>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <array>
@@ -204,6 +207,158 @@ void ColorButton::mousePressEvent(QMouseEvent* e)
     const QColor c = QColorDialog::getColor(m_color, this, tr("Elegir color"), QColorDialog::ShowAlphaChannel);
     if (c.isValid())
         setColor(c);
+}
+
+// ---------------------------------------------------------------------------
+// Editor de color en línea
+
+namespace {
+
+// La muestra del color (con damero si es transparente).
+class Swatch : public QWidget {
+public:
+    using QWidget::QWidget;
+    QColor color;
+    QSize sizeHint() const override { return {26, 26}; }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        paintCheckerboard(p, r);
+        p.fillRect(r, color);
+        p.setPen(QPen(palette().color(QPalette::Light), 1));
+        p.drawRect(r);
+    }
+};
+
+} // namespace
+
+InlineColorEditor::InlineColorEditor(bool alpha, QWidget* parent)
+    : QWidget(parent)
+    , m_alpha(alpha)
+{
+    auto* swatch = new Swatch(this);
+    swatch->setFixedSize(26, 26);
+    m_swatch = swatch;
+    m_wheel = new ColorWheel(this);
+    m_wheel->setClockwise(true);
+    m_wheel->setFixedSize(100, 100);
+    m_sat = new ColorSlider(ColorSlider::Saturation, Qt::Vertical, this);
+    m_val = new ColorSlider(ColorSlider::Value, Qt::Vertical, this);
+    m_sat->setToolTip(tr("Saturación"));
+    m_val->setToolTip(tr("Brillo"));
+    for (ColorSlider* s : {m_sat, m_val})
+        s->setFixedSize(16, 100);
+    if (m_alpha) {
+        m_alphaSlider = new ColorSlider(ColorSlider::Alpha, Qt::Vertical, this);
+        m_alphaSlider->setToolTip(tr("Transparencia"));
+        m_alphaSlider->setFixedSize(16, 100);
+    }
+    auto* grid = new QGridLayout;
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setVerticalSpacing(3);
+    const QStringList labels{tr("R:"), tr("V:"), tr("A:"), tr("A:", "alfa")};
+    const QStringList tips{tr("Rojo"), tr("Verde"), tr("Azul"), tr("Transparencia (alfa)")};
+    const int count = m_alpha ? 4 : 3;
+    for (int i = 0; i < count; ++i) {
+        m_spins[i] = new QSpinBox(this);
+        m_spins[i]->setRange(0, 255);
+        m_spins[i]->setFixedWidth(52);
+        m_spins[i]->setToolTip(tips[i]);
+        auto* label = new QLabel(labels[i], this);
+        label->setToolTip(tips[i]);
+        grid->addWidget(label, i, 0, Qt::AlignRight);
+        grid->addWidget(m_spins[i], i, 1);
+        connect(m_spins[i], &QSpinBox::valueChanged, this, [this] {
+            if (m_updating)
+                return;
+            // Exactamente esos valores; un gris conserva el tono que tenía.
+            const QColor c(m_spins[0]->value(), m_spins[1]->value(), m_spins[2]->value(), m_spins[3] ? m_spins[3]->value() : 255);
+            m_h = c.hsvHueF() < 0 ? m_h : c.hsvHueF();
+            m_s = c.hsvSaturationF();
+            m_v = c.valueF();
+            m_color = c;
+            sync();
+            emit colorChanged(m_color);
+        });
+    }
+    // Un botón con recuadro bajo los valores, como el de Paint.NET.
+    auto* reset = new QPushButton(this);
+    reset->setIcon(Icons::theme({"edit-reset", "edit-undo", "view-refresh"}));
+    reset->setToolTip(tr("Restablecer"));
+    reset->setFixedWidth(52 + 16);
+    connect(reset, &QPushButton::clicked, this, &InlineColorEditor::resetRequested);
+    grid->addWidget(reset, count, 0, 1, 2, Qt::AlignRight);
+    grid->setRowStretch(count + 1, 1);
+
+    auto* row = new QHBoxLayout(this);
+    row->setContentsMargins(4, 2, 0, 2);
+    row->setSpacing(8);
+    row->addWidget(m_swatch, 0, Qt::AlignTop);
+    row->addWidget(m_wheel, 0, Qt::AlignTop);
+    auto* sliders = new QHBoxLayout;
+    sliders->setSpacing(6);
+    sliders->addWidget(m_sat, 0, Qt::AlignTop);
+    sliders->addWidget(m_val, 0, Qt::AlignTop);
+    if (m_alphaSlider)
+        sliders->addWidget(m_alphaSlider, 0, Qt::AlignTop);
+    row->addLayout(sliders);
+    row->addStretch(1);
+    row->addLayout(grid);
+
+    connect(m_wheel, &ColorWheel::colorPicked, this, [this](const QColor& c, Qt::MouseButton) {
+        apply(c.hsvHueF() < 0 ? m_h : c.hsvHueF(), c.hsvSaturationF(), c.valueF(), m_color.alpha(), true);
+    });
+    connect(m_sat, &ColorSlider::valueChanged, this, [this](int v) { apply(m_h, v / 100.0, m_v, m_color.alpha(), true); });
+    connect(m_val, &ColorSlider::valueChanged, this, [this](int v) { apply(m_h, m_s, v / 100.0, m_color.alpha(), true); });
+    if (m_alphaSlider)
+        connect(m_alphaSlider, &ColorSlider::valueChanged, this, [this](int v) { apply(m_h, m_s, m_v, v, true); });
+    apply(0, 0, 0, 255, false);
+}
+
+void InlineColorEditor::setColor(const QColor& c)
+{
+    const double h = c.hsvHueF() < 0 ? m_h : c.hsvHueF();
+    apply(h, c.hsvSaturationF(), c.valueF(), m_alpha ? c.alpha() : 255, false);
+    // Lo exacto (los valores RGB), no lo que sale de ida y vuelta por HSV.
+    m_color = QColor(c.red(), c.green(), c.blue(), m_alpha ? c.alpha() : 255);
+    sync();
+}
+
+void InlineColorEditor::apply(double h, double s, double v, int alpha, bool notify)
+{
+    m_h = std::clamp(h, 0.0, 1.0);
+    m_s = std::clamp(s, 0.0, 1.0);
+    m_v = std::clamp(v, 0.0, 1.0);
+    QColor c = QColor::fromHsvF(float(std::min(m_h, 0.9999)), float(m_s), float(m_v));
+    c.setAlpha(m_alpha ? std::clamp(alpha, 0, 255) : 255);
+    m_color = c;
+    sync();
+    if (notify)
+        emit colorChanged(m_color);
+}
+
+void InlineColorEditor::sync()
+{
+    m_updating = true;
+    static_cast<Swatch*>(m_swatch)->color = m_color;
+    m_swatch->update();
+    // La rueda y las barras con el tono que se recuerda (aunque el color sea gris o negro).
+    const QColor shown = QColor::fromHsvF(float(std::min(m_h, 0.9999)), float(m_s), float(m_v), m_color.alphaF());
+    m_wheel->setColor(shown);
+    m_sat->setColor(shown);
+    m_val->setColor(shown);
+    if (m_alphaSlider)
+        m_alphaSlider->setColor(m_color);
+    const int values[4] = {m_color.red(), m_color.green(), m_color.blue(), m_color.alpha()};
+    for (int i = 0; i < 4; ++i)
+        if (m_spins[i]) {
+            const QSignalBlocker b(m_spins[i]);
+            m_spins[i]->setValue(values[i]);
+        }
+    m_updating = false;
 }
 
 // ---------------------------------------------------------------------------

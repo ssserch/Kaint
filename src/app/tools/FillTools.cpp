@@ -34,6 +34,8 @@ struct BucketState : ToolStepState {
     QPoint seed;
     bool swapped = false;
     bool shiftGlobal = false;
+    // Con Ctrl, lo contrario de «Muestreo» (imagen o capa), como en Paint.NET 5.2.
+    bool ctrlSample = false;
     QImage sample;
 };
 
@@ -62,7 +64,8 @@ QString PaintBucketTool::hint() const
 {
     return m_edit.isActive()
              ? tr("Cambia la tolerancia o los colores, o arrastra el punto de origen. Intro: terminar.")
-             : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.");
+             : tr("Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global. "
+                  "Ctrl: muestrear la imagen en vez de la capa (o al revés).");
 }
 
 bool PaintBucketTool::insideSelection(QPoint pixel) const
@@ -92,7 +95,8 @@ void PaintBucketTool::mousePress(const ToolEvent& e)
     if (!doc->rect().contains(e.pixel()) || !insideSelection(e.pixel()))
         return;
     const ToolSettings& s = AppState::instance()->tools();
-    m_sample = s.sampleImage ? canvas()->composite().copy() : doc->activeLayer()->image;
+    m_ctrlSample = e.modifiers & Qt::ControlModifier;
+    m_sample = s.sampleImage != m_ctrlSample ? canvas()->composite().copy() : doc->activeLayer()->image;
     m_seed = e.pixel();
     m_secondary = e.button == Qt::RightButton;
     m_shiftGlobal = e.modifiers & Qt::ShiftModifier;
@@ -144,7 +148,7 @@ void PaintBucketTool::render()
     o.pattern = s.fill;
     o.primary = m_secondary ? app->secondary() : app->primary();
     o.secondary = m_secondary ? app->primary() : app->secondary();
-    o.sampleIsLayer = !s.sampleImage;
+    o.sampleIsLayer = s.sampleImage == m_ctrlSample;
     o.accumulate = s.fillAccumulate;
     m_edit.restorePrevious();
     const QRect r = FloodFill::paintBucket(m_edit.image(), m_edit.before(), m_sample, m_seed, o, document()->selection());
@@ -181,7 +185,8 @@ void PaintBucketTool::commitStep()
     st->seed = m_seed;
     st->swapped = m_secondary;
     st->shiftGlobal = m_shiftGlobal;
-    if (st->settings.sampleImage)
+    st->ctrlSample = m_ctrlSample;
+    if (st->settings.sampleImage != m_ctrlSample)
         st->sample = m_sample;
     m_steps.commit(m_edit, name(), tr("Editar cubo de pintura"), st);
 }
@@ -241,6 +246,7 @@ void PaintBucketTool::historyChanged()
     m_seed = st->seed;
     m_secondary = st->swapped;
     m_shiftGlobal = st->shiftGlobal;
+    m_ctrlSample = st->ctrlSample;
     m_sample = st->sample.isNull() ? m_edit.before() : st->sample;
     m_dragging = false;
     emit hintChanged(hint());

@@ -76,8 +76,8 @@ KeyGraph::KeyGraph(GifEditor* editor, QWidget* parent)
 {
     setMinimumHeight(110);
     setMouseTracking(true);
-    setToolTip(GifEditor::tr("Cómo cambia el valor a lo largo del fotograma. Arrastra un rombo para cambiar su valor o su "
-                             "momento; clic derecho para la forma de la curva."));
+    setToolTip(GifEditor::tr("Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; "
+                             "arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva."));
 }
 
 void KeyGraph::setProp(Motion::Prop prop)
@@ -199,7 +199,7 @@ void KeyGraph::paintEvent(QPaintEvent*)
     if (track.keys.isEmpty()) {
         p.setPen(pal.color(QPalette::PlaceholderText));
         p.drawText(r, Qt::AlignCenter | Qt::TextWordWrap,
-                   GifEditor::tr("Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal."));
+                   GifEditor::tr("Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal o haz doble clic aquí."));
     }
 }
 
@@ -289,6 +289,31 @@ void KeyGraph::mouseReleaseEvent(QMouseEvent*)
     m_editor->setMotion(frame, c, GifEditor::tr("Mover punto clave"));
     // El punto (y el cabezal) donde quedó.
     m_editor->selectKeyTime(t);
+}
+
+void KeyGraph::mouseDoubleClickEvent(QMouseEvent* e)
+{
+    const int frame = m_editor->selectedFrame();
+    const QRectF r = plotRect();
+    if (frame < 0 || e->button() != Qt::LeftButton || r.width() <= 0 || r.height() <= 0 || keyAt(e->position()) >= 0
+        || !r.adjusted(-6, -6, 6, 6).contains(e->position()))
+        return;
+    // Como al arrastrar un rombo: de 10 en 10 ms, con la escala que se ve.
+    const int duration = std::max(1, m_editor->frameDelay(frame));
+    const int t = std::clamp(int(std::round(duration * (e->position().x() - r.left()) / r.width() / 10.0)) * 10, 0, duration);
+    double lo, hi;
+    range(&lo, &hi);
+    double v = lo + (hi - lo) * (r.bottom() - e->position().y()) / r.height();
+    if (m_prop == Motion::Opacity)
+        v = std::clamp(v, 0.0, 100.0);
+    v = std::round(v * 10) / 10;
+    Motion::Clip c = m_editor->motion(frame);
+    c.tracks[m_prop].setKey(t, v);
+    if (c.lockScale && (m_prop == Motion::ScaleX || m_prop == Motion::ScaleY))
+        c.tracks[m_prop == Motion::ScaleX ? Motion::ScaleY : Motion::ScaleX].setKey(t, v);
+    m_editor->setMotion(frame, c, GifEditor::tr("Añadir punto clave"));
+    m_editor->selectKeyTime(t);
+    e->accept();
 }
 
 // ---------------------------------------------------------------------------

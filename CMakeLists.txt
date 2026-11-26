@@ -204,6 +204,7 @@ add_library(kaintcore STATIC
     src/core/effects/Render.cpp
     src/core/effects/RenderBlend.cpp
     src/core/effects/Stylize.cpp
+    src/core/effects/Pdn52Effects.cpp
     src/core/effects/ExtraEffects.cpp
     src/core/effects/GalleryEffects.cpp
     src/core/effects/BoltBaitEffects.cpp
@@ -331,19 +332,21 @@ add_library(kaintui STATIC
     src/app/tools/TextTool.cpp
 )
 target_link_libraries(kaintui PUBLIC kaintcore Qt6::Widgets Qt6::PrintSupport Qt6::Network)
-# Fondos de vídeo del lienzo: Media Foundation en Windows; Qt Multimedia (opcional) en los demás.
+# Fondos de vídeo del lienzo (y abrir vídeo sin FFmpeg): Media Foundation en Windows; Qt Multimedia
+# (opcional) en los demás. La intro y el audio del editor de GIF van con Qt Multimedia en todos.
 if(WIN32)
     # (mfplat y mfreadwrite se cargan al usarlos: las ediciones N de Windows no los traen.)
     target_link_libraries(kaintui PRIVATE mfuuid ole32 uuid)
+endif()
+find_package(Qt6 QUIET COMPONENTS Multimedia)
+if(Qt6Multimedia_FOUND)
+    target_link_libraries(kaintui PRIVATE Qt6::Multimedia)
+    target_compile_definitions(kaintui PRIVATE KAINT_HAVE_QTMULTIMEDIA)
+    message(STATUS "Kaint: con Qt Multimedia (intro y audio del editor de GIF)")
+elseif(WIN32)
+    message(STATUS "Kaint: sin Qt Multimedia; no hay intro ni se oye el audio del editor de GIF")
 else()
-    find_package(Qt6 QUIET COMPONENTS Multimedia)
-    if(Qt6Multimedia_FOUND)
-        target_link_libraries(kaintui PRIVATE Qt6::Multimedia)
-        target_compile_definitions(kaintui PRIVATE KAINT_HAVE_QTMULTIMEDIA)
-        message(STATUS "Kaint: fondos de vídeo con Qt Multimedia")
-    else()
-        message(STATUS "Kaint: sin Qt Multimedia; los fondos de vídeo no se reproducen")
-    endif()
+    message(STATUS "Kaint: sin Qt Multimedia; ni intro, ni audio en el editor de GIF, ni fondos de vídeo")
 endif()
 if(KAINT_DATACHANNEL)
     target_link_libraries(kaintui PRIVATE ${KAINT_DATACHANNEL})

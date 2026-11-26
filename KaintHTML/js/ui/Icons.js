@@ -1004,7 +1004,141 @@ function drawLock(ctx) {
     ctx.fillRect(7.4, 9.8, 1.2, 2.6);
 }
 
+// --- Los efectos nuevos de Paint.NET 5.2 (los de PdnIcons.cpp), en la rejilla de 16 px -------
+
+// QColor::lighter / darker: el brillo por 'factor' (al pasarse del máximo, menos saturación).
+function shadeHex(hex, factor) {
+    let r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let v = max * factor, s = max ? ((max - min) / max) * 255 : 0;
+    if (v > 255) {
+        s = Math.max(0, s - (v - 255));
+        v = 255;
+    }
+    if (max === min)
+        return rgb(Math.round(v), Math.round(v), Math.round(v));
+    const k = (c) => (c - min) / (max - min);
+    const lo = v * (1 - s / 255);
+    [r, g, b] = [r, g, b].map((c) => Math.round(lo + (v - lo) * k(c)));
+    return rgb(r, g, b);
+}
+
+function drawSpherize(ctx) {
+    // Una bola de cristal azul con su brillo y una rejilla curvada.
+    const ball = ctx.createRadialGradient(6, 5.5, 0, 6, 5.5, 8.5);
+    ball.addColorStop(0, "#d6ecff");
+    ball.addColorStop(0.55, "#5d9ee0");
+    ball.addColorStop(1, "#1c4f96");
+    ellipseAt(ctx, 8 - 6.6, 8 - 6.6, 13.2, 13.2);
+    fillStroke(ctx, ball, "#183c70", 1);
+    ctx.strokeStyle = rgb(255, 255, 255, 120 / 255);
+    ctx.lineWidth = 0.8;
+    ellipseAt(ctx, 8 - 3.2, 8 - 6.4, 6.4, 12.8);
+    ctx.stroke();
+    ellipseAt(ctx, 8 - 6.4, 5, 12.8, 6);
+    ctx.stroke();
+}
+
+function drawWaves(ctx) {
+    // Dos ondas azules.
+    for (let k = 0; k < 2; ++k) {
+        const y = 5.5 + k * 5.5;
+        ctx.beginPath();
+        ctx.moveTo(1, y);
+        ctx.bezierCurveTo(3.5, y - 4, 5.5, y - 4, 8, y);
+        ctx.bezierCurveTo(10.5, y + 4, 12.5, y + 4, 15, y);
+        stroke(ctx, rgb(255, 255, 255, 200 / 255), 3.4, "round");
+        stroke(ctx, k ? "#1f6fc6" : "#3fa6e8", 1.8, "round");
+    }
+}
+
+function drawOrderedDither(ctx) {
+    // Un degradado de negro a blanco hecho con la trama de Bayer.
+    const bayer = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(1.5, 1.5, 13, 13);
+    ctx.strokeStyle = "#505050";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1.5, 1.5, 13, 13);
+    ctx.fillStyle = "#202020";
+    for (let y = 0; y < 12; ++y)
+        for (let x = 0; x < 12; ++x)
+            if (bayer[y % 4][x % 4] < 16 - Math.floor((x * 16) / 12))
+                ctx.fillRect(2 + x, 2 + y, 1, 1);
+}
+
+function drawHalftone(ctx) {
+    // Tres puntos de tinta que se solapan: cian, magenta y amarillo.
+    ctx.save();
+    ctx.globalCompositeOperation = "multiply";
+    for (const [x, y, c] of [[5.6, 6, "#00aeef"], [10.4, 6, "#ec008c"], [8, 10.4, "#fff200"]]) {
+        ellipseAt(ctx, x - 4.4, y - 4.4, 8.8, 8.8);
+        ctx.fillStyle = c;
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function drawLinocut(ctx) {
+    // Papel con líneas de tinta en diagonal, más gruesas abajo.
+    ctx.fillStyle = "#f5f2e9";
+    ctx.fillRect(1.5, 1.5, 13, 13);
+    ctx.strokeStyle = "#60584a";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1.5, 1.5, 13, 13);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(2, 2, 12, 12);
+    ctx.clip();
+    for (let k = -3; k < 7; ++k) {
+        ctx.beginPath();
+        ctx.moveTo(0, 4 + k * 3);
+        ctx.lineTo(16, -12 + k * 3);
+        stroke(ctx, "#1a1a1a", 0.6 + Math.max(0, k) * 0.3);
+    }
+    ctx.restore();
+}
+
+function drawMosaic(ctx) {
+    // Teselas de colores en rejilla con la junta gris.
+    const colors = ["#4f8fd8", "#e86a5a", "#f4c44c", "#6cc06a", "#f4c44c", "#4f8fd8", "#e86a5a", "#4f8fd8", "#6cc06a"];
+    ctx.fillStyle = "#808080";
+    ctx.fillRect(1, 1, 14, 14);
+    colors.forEach((c, i) => {
+        const x = 1.5 + (i % 3) * 4.5, y = 1.5 + Math.floor(i / 3) * 4.5;
+        ctx.fillStyle = c;
+        ctx.fillRect(x, y, 4, 4);
+        ctx.fillStyle = rgb(255, 255, 255, 90 / 255);
+        ctx.fillRect(x, y, 4, 1);
+    });
+}
+
+function drawPointillism(ctx) {
+    // Puntos de colores sueltos.
+    for (const [x, y, r, c] of [[4, 4, 2.2, "#e85a4f"], [10, 3.5, 2.0, "#3f8edb"], [7.5, 8, 2.3, "#f2b82e"], [3.5, 11.5, 2.0, "#5cb55a"],
+                                [12, 9.5, 2.1, "#9b59b6"], [9, 13, 1.8, "#e85a4f"]]) {
+        ellipseAt(ctx, x - r, y - r, 2 * r, 2 * r);
+        fillStroke(ctx, c, shadeHex(c, 1 / 1.4), 0.8);
+    }
+}
+
+function drawStainedGlass(ctx) {
+    // Cristales de colores con el emplomado negro.
+    const a = [1.5, 1.5], b = [14.5, 1.5], c = [14.5, 14.5], d = [1.5, 14.5], m = [7, 6.5], n = [10.5, 10], e = [8, 1.5], f = [1.5, 9],
+        g = [14.5, 7], h = [6, 14.5];
+    for (const [pts, color] of [[[a, e, m, f], "#4f8fd8"], [[e, b, g, n, m], "#f4c44c"], [[f, m, n, h, d], "#e85a4f"], [[n, g, c, h], "#5cb55a"]]) {
+        const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+        poly(ctx, pts);
+        ctx.fillStyle = linear(ctx, Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), [[0, shadeHex(color, 1.4)], [1, color]]);
+        ctx.fill();
+        stroke(ctx, "#151515", 1.3, "round", "round");
+    }
+}
+
 const drawn = {
+    "effect-spherize": [16, drawSpherize], "effect-waves": [16, drawWaves], "effect-ordereddither": [16, drawOrderedDither],
+    "effect-halftone": [16, drawHalftone], "effect-linocut": [16, drawLinocut], "effect-mosaic": [16, drawMosaic],
+    "effect-pointillism": [16, drawPointillism], "effect-stainedglass": [16, drawStainedGlass],
     collab: [16, drawCollab],
     "object-locked": [16, drawLock],
     "eye-open": [16, (ctx) => drawEye(ctx, true)], "eye-closed": [16, (ctx) => drawEye(ctx, false)],

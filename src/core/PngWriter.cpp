@@ -126,6 +126,19 @@ QByteArray encode(const QImage& source, bool interlaced)
         phys.append(char(1));
         chunk(out, "pHYs", phys);
     }
+    // Los textos de la imagen (los de un PNG abierto, como los «prompts» de Stable Diffusion):
+    // tEXt si caben en Latin-1; si no, iTXt en UTF-8 (sin comprimir).
+    for (const QString& key : image.textKeys()) {
+        const QByteArray keyword = key.toLatin1().left(79);
+        if (keyword.isEmpty() || keyword.contains('\0'))
+            continue;
+        const QString value = image.text(key);
+        const QByteArray latin = value.toLatin1();
+        if (QString::fromLatin1(latin) == value)
+            chunk(out, "tEXt", keyword + QByteArray(1, '\0') + latin);
+        else
+            chunk(out, "iTXt", keyword + QByteArray(5, '\0') + value.toUtf8());
+    }
 
     // Filas filtradas, en las siete pasadas de Adam7 o de arriba abajo.
     static constexpr int x0[] = {0, 4, 0, 2, 0, 1, 0}, y0[] = {0, 0, 4, 0, 2, 0, 1};

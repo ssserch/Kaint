@@ -1414,6 +1414,34 @@
     background: #e04343;
 }
 
+/* La cruz blanca de Windows 8 (dos trazos), no la «x» de letra del estilo Windows 10. */
+:root.btn-win8:not(#k) .floating-panel > .title .close {
+    position: relative;
+}
+
+:root.btn-win8:not(#k) .floating-panel > .title .close::before,
+:root.btn-win8:not(#k) .floating-panel > .title .close::after {
+    content: "";
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 10px;
+    height: 1.5px;
+    margin: -0.75px 0 0 -5px;
+    background: #ffffff;
+    transform: rotate(45deg);
+}
+
+:root.btn-win8:not(#k) .floating-panel > .title .close::after {
+    transform: rotate(-45deg);
+}
+
+/* Maximizar (aquí, pantalla completa) con el borde de arriba grueso, como en Windows 8. */
+:root.win8:not(#k) .caption-button.max::before {
+    border-top-width: 2px;
+}
+
 /* --- Los escritorios de Linux: Ubuntu (Yaru), GNOME (Adwaita), Linux Mint (Mint-Y), elementary OS -- */
 /* Su letra, sus esquinas redondeadas y la barra de título (headerbar) con el título centrado y los
    botones redondos. */

@@ -185,7 +185,11 @@ export function scaleImage(image, w, h, method = "adaptive", gammaCorrect = fals
     return finish(separable(src, sw, sh, w, h, kernelWeights(sw, w, kernel, support, true), kernelWeights(sh, h, kernel, support, true), gammaCorrect), true);
 }
 
-// --- Transformaciones (Mover píxeles seleccionados) ---------------------------------------
+// El vecino más próximo y su variante suavizada (la de Paint.NET 5.2: cada muestra, el píxel más
+// cercano, pero varias por píxel; el interior sigue nítido y los bordes salen suavizados).
+export const isNearest = (interpolation) => interpolation === "nearest" || interpolation === "nearestaa";
+
+// --- Transformaciones (Mover píxeles) ---------------------------------------
 
 // Al reducir, antes se promedia por áreas (si no, sale pixelado), como Resample::prefiltered de
 // Kaint: si la matriz (DOMMatrix, de los píxeles de 'image' al destino) encoge un eje por debajo
@@ -266,7 +270,7 @@ export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect
     const coverage = coverageOf(matrix, sw, sh);
     // Fuera de la imagen, el píxel del borde más cercano.
     const cx = (x) => Math.min(sw - 1, Math.max(0, x)), cy = (y) => Math.min(sh - 1, Math.max(0, y));
-    if (gammaCorrect && interpolation !== "nearest") {
+    if (gammaCorrect && !isNearest(interpolation)) {
         const lin = linearImage(px, sw, sh), zero = [0, 0, 0, 0];
         const at = (x, y) => (cy(y) * sw + cx(x)) * 4;
         const c = new Float32Array(4);
@@ -313,13 +317,24 @@ export function drawTransformed(dst, source, matrix, interpolation, gammaCorrect
         for (let x = x0; x <= x1; ++x) {
             const X = x + 0.5, Y = y + 0.5;
             const sx = inv.a * X + inv.c * Y + inv.e, sy = inv.b * X + inv.d * Y + inv.f;
-            const cover = interpolation === "nearest" ? 1 : coverage(sx, sy);
+            const cover = isNearest(interpolation) ? 1 : coverage(sx, sy);
             if (cover <= 0)
                 continue;
             let s;
             if (interpolation === "nearest") {
                 const ix = Math.floor(sx), iy = Math.floor(sy);
                 s = outside(ix, iy) ? 0 : pixel(ix, iy);
+            } else if (interpolation === "nearestaa") {
+                // 4 × 4 muestras, cada una el píxel más cercano (fuera, transparente), y su media.
+                let r = 0, g = 0, b = 0, a = 0;
+                for (let j = 0; j < 4; ++j)
+                    for (let i = 0; i < 4; ++i) {
+                        const qx = x + (i + 0.5) / 4, qy = y + (j + 0.5) / 4;
+                        const ix = Math.floor(inv.a * qx + inv.c * qy + inv.e), iy = Math.floor(inv.b * qx + inv.d * qy + inv.f);
+                        const c = outside(ix, iy) ? 0 : pixel(ix, iy);
+                        r += qRed(c); g += qGreen(c); b += qBlue(c); a += qAlpha(c);
+                    }
+                s = qRgba((r + 8) >> 4, (g + 8) >> 4, (b + 8) >> 4, (a + 8) >> 4);
             } else if (interpolation === "bilinear") {
                 const fx = sx - 0.5, fy = sy - 0.5, ix = Math.floor(fx), iy = Math.floor(fy);
                 const tx = Math.trunc((fx - ix) * 256), ty = Math.trunc((fy - iy) * 256);

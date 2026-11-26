@@ -64,7 +64,9 @@ public:
     bool restartRequested() const { return m_restartRequested; }
     // Captura de muestra (--screenpreview): abre las imágenes (la primera queda como actual, las
     // demás en la barra de arriba) y guarda la ventana en 'output'. Devuelve el error, si lo hay.
-    QString screenPreview(const QStringList& files, const QString& output, bool gifEditor = false);
+    // 'popup': en vez de la ventana, un menú abierto ("menu:effects", "menu:effects/<submenú>",
+    // "menu:adjustments") o el diálogo de un efecto ("effect:<id>").
+    QString screenPreview(const QStringList& files, const QString& output, bool gifEditor = false, const QString& popup = QString());
 
 protected:
     void changeEvent(QEvent* e) override;
@@ -151,7 +153,8 @@ private:
     void cropToSelection();
     void resizeImage();
     void resizeCanvas();
-    void resizeCanvasTo(QSize size, Qt::Alignment anchor, const QString& text, double dpi = 0);
+    // 'background': con qué se rellena lo nuevo de la capa de abajo (inválido: el color secundario).
+    void resizeCanvasTo(QSize size, Qt::Alignment anchor, const QString& text, double dpi = 0, QColor background = QColor());
     void flipImage(bool horizontal);
     void rotateImage(int degrees);
     void colorProfile();

@@ -560,46 +560,87 @@ export async function resizeDialog(width, height, dpi = 96) {
     return r ? { width: size.value().w, height: size.value().h, method: method.value, gamma: gamma.input.checked, dpi: size.dpi() } : null;
 }
 
+// Una flecha negra hacia (dx, dy), como las del anclaje de Paint.NET (sobre sus casillas gris
+// claro): asta fina y punta triangular, en 15 px.
+function anchorArrow(dx, dy) {
+    const len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, px = -uy, py = ux, c = 7.5;
+    const tip = [c + ux * 6, c + uy * 6], tail = [c - ux * 6, c - uy * 6], base = [tip[0] - ux * 5, tip[1] - uy * 5];
+    const f = (v) => v.toFixed(2);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 15 15">`
+        + `<line x1="${f(tail[0])}" y1="${f(tail[1])}" x2="${f(base[0] + ux * 0.5)}" y2="${f(base[1] + uy * 0.5)}" stroke="#000" stroke-width="1.4"/>`
+        + `<polygon points="${f(tip[0])},${f(tip[1])} ${f(base[0] + px * 3.5)},${f(base[1] + py * 3.5)} ${f(base[0] - px * 3.5)},${f(base[1] - py * 3.5)}" fill="#000"/></svg>`;
+    return el("img", { src: `data:image/svg+xml,${encodeURIComponent(svg)}`, width: 15, height: 15, alt: "" });
+}
+
+// La casilla del ancla, como en Paint.NET: una imagen (marco gris, fondo blanco, una nube gris y
+// montañas azules) en 16 px.
+function anchorPicture() {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">`
+        + `<rect x="0.5" y="0.5" width="15" height="15" fill="#fff" stroke="#6d6e71"/>`
+        + `<g fill="#c4c6c8"><ellipse cx="4.6" cy="5" rx="1.7" ry="1.5"/><ellipse cx="6.6" cy="4.2" rx="2.1" ry="2"/>`
+        + `<rect x="3" y="4.6" width="5.8" height="2.2" rx="1"/></g>`
+        + `<polygon points="1.5,14.5 4,11 6.6,7.4 8.4,9.6 10.6,6.4 14.5,14.5" fill="#3e79b4"/></svg>`;
+    return el("img", { src: `data:image/svg+xml,${encodeURIComponent(svg)}`, width: 16, height: 16, alt: "" });
+}
+
+// fill: 0 transparente, 1 el color principal, 2 el secundario (lo nuevo de la capa de abajo).
 export async function canvasSizeDialog(width, height, dpi = 96) {
     const dlg = new Dialog(tr("Tamaño del lienzo"), { iconName: "transform-crop-and-resize" });
     const memory = el("span", { textContent: memoryText(width, height) });
     const size = sizeEditor({ w: width, h: height }, dpi, true, (s) => (memory.textContent = memoryText(s.w, s.h)));
     size.setKeepAspect(false);
-    // Anclaje: el ancla en la casilla elegida y flechas desde ella hacia donde crece el lienzo.
+    // Opciones, como en Paint.NET 5: el ancla en un desplegable y, debajo, la rejilla de casillas
+    // (botones de Windows: gris claro, la del ancla en azul) con flechas hacia donde crece el
+    // lienzo; y con qué se rellena lo nuevo.
+    const names = [tr("Arriba a la izquierda"), tr("Arriba"), tr("Arriba a la derecha"), tr("Izquierda"), tr("Centro"), tr("Derecha"),
+                   tr("Abajo a la izquierda"), tr("Abajo"), tr("Abajo a la derecha")];
+    const list = select(names.map((n, i) => [i, n]), 4);
     let anchor = [1, 1];
     const cells = [];
-    const arrows = [["↖", "↑", "↗"], ["←", "●", "→"], ["↙", "↓", "↘"]];
     const updateArrows = () => cells.forEach((b, i) => {
         const r = Math.floor(i / 3), c = i % 3, dr = r - anchor[1], dc = c - anchor[0];
         b.classList.toggle("checked", dr === 0 && dc === 0);
         b.replaceChildren();
         if (dr === 0 && dc === 0)
-            b.appendChild(icon("anchor", 24));
+            b.appendChild(anchorPicture());
         else if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1)
-            b.textContent = arrows[dr + 1][dc + 1];
+            b.appendChild(anchorArrow(dc, dr));
     });
+    const setAnchor = (i) => {
+        anchor = [i % 3, Math.floor(i / 3)];
+        list.value = String(i);
+        updateArrows();
+    };
     const grid = el("div", { className: "anchor-grid" });
-    for (let y = 0; y < 3; ++y)
-        for (let x = 0; x < 3; ++x) {
-            const b = el("button", { className: "tbutton anchor-cell", type: "button" });
-            b.addEventListener("click", () => {
-                anchor = [x, y];
-                updateArrows();
-            });
-            cells.push(b);
-            grid.appendChild(b);
-        }
+    for (let i = 0; i < 9; ++i) {
+        const b = el("button", { className: "anchor-cell", type: "button", title: names[i] });
+        b.addEventListener("click", () => setAnchor(i));
+        cells.push(b);
+        grid.appendChild(b);
+    }
+    list.addEventListener("change", () => setAnchor(Number(list.value)));
     updateArrows();
+    // Se recuerda el último; la primera vez, el de siempre (el color secundario).
+    const saved = remember("canvasFill");
+    const fill = select([[0, tr("Transparente")], [1, tr("Color principal")], [2, tr("Color secundario")]],
+                        Number.isInteger(saved) && saved >= 0 && saved <= 2 ? saved : 2);
+    fill.title = tr("Con qué se rellena lo que se añade al lienzo: con un color, solo en la capa de abajo (las demás quedan transparentes)");
+    fill.addEventListener("change", () => remember("canvasFill", Number(fill.value)));
+    const options = el("div", { className: "canvas-options" }, [
+        el("span", { textContent: tr("Ancla:") }), list,
+        el("span"), grid,
+        el("span", { textContent: tr("Relleno:") }), fill,
+    ]);
     dlg.body.appendChild(el("div", { className: "size-dialog" }, [
         el("div", { textContent: tr("Tamaño actual: %1 × %2 píxeles", width, height) }),
         size.element,
-        groupBox(tr("Anclaje"), [grid]),
+        groupBox(tr("Opciones"), [options]),
         el("div", { className: "row" }, [el("span", { textContent: tr("Memoria por capa:") }), memory]),
     ]));
     dlg.addButton(tr("Aceptar"), "ok", { isDefault: true });
     dlg.addButton(tr("Cancelar"), null);
     const r = await dlg.exec();
-    return r ? { width: size.value().w, height: size.value().h, anchor, dpi: size.dpi() } : null;
+    return r ? { width: size.value().w, height: size.value().h, anchor, dpi: size.dpi(), fill: Number(fill.value) } : null;
 }
 
 // Propiedades de la capa con vista previa al momento (onPreview recibe las propiedades). Como
@@ -1345,7 +1386,7 @@ export async function settingsDialog(app = null, startPage = "interface") {
                 el("label", {}, [tr("Herramienta predeterminada:"), start]),
                 heading(tr("Mover y pegar")),
                 check(tr("Ocultar el contorno y los tiradores mientras se arrastra"), "hideMoveBox",
-                      tr("Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.")),
+                      tr("Con Mover píxeles solo queda el icono de mover; con Mover selección desaparecen los tiradores.")),
                 check(tr("Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes"), "replacePixels",
                       tr("Como en Paint.NET: pegar una imagen con transparencia sobre otra en la misma capa deja ese rectángulo transparente. Desactivado, se mezclan con lo que hay debajo.")),
                 heading(tr("Pincel")),

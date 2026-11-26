@@ -288,16 +288,76 @@
         <translation>Tamanho da tela</translation>
     </message>
     <message>
-        <source>Anclaje</source>
-        <translation>Âncora</translation>
-    </message>
-    <message>
         <source>Tamaño actual: %1 × %2 píxeles</source>
         <translation>Tamanho atual: %1 × %2 pixels</translation>
     </message>
     <message>
         <source>Memoria por capa:</source>
         <translation>Memória por camada:</translation>
+    </message>
+    <message>
+        <source>Opciones</source>
+        <translation>Opções</translation>
+    </message>
+    <message>
+        <source>Ancla:</source>
+        <translation>Âncora:</translation>
+    </message>
+    <message>
+        <source>Relleno:</source>
+        <translation>Preenchimento:</translation>
+    </message>
+    <message>
+        <source>Arriba a la izquierda</source>
+        <translation>Superior esquerdo</translation>
+    </message>
+    <message>
+        <source>Arriba</source>
+        <translation>Superior</translation>
+    </message>
+    <message>
+        <source>Arriba a la derecha</source>
+        <translation>Superior direito</translation>
+    </message>
+    <message>
+        <source>Izquierda</source>
+        <translation>Esquerda</translation>
+    </message>
+    <message>
+        <source>Centro</source>
+        <translation>Centro</translation>
+    </message>
+    <message>
+        <source>Derecha</source>
+        <translation>Direita</translation>
+    </message>
+    <message>
+        <source>Abajo a la izquierda</source>
+        <translation>Inferior esquerdo</translation>
+    </message>
+    <message>
+        <source>Abajo</source>
+        <translation>Inferior</translation>
+    </message>
+    <message>
+        <source>Abajo a la derecha</source>
+        <translation>Inferior direito</translation>
+    </message>
+    <message>
+        <source>Transparente</source>
+        <translation>Transparente</translation>
+    </message>
+    <message>
+        <source>Color principal</source>
+        <translation>Cor primária</translation>
+    </message>
+    <message>
+        <source>Color secundario</source>
+        <translation>Cor secundária</translation>
+    </message>
+    <message>
+        <source>Con qué se rellena lo que se añade al lienzo: con un color, solo en la capa de abajo (las demás quedan transparentes)</source>
+        <translation>Com o que se preenche a área adicionada à tela: com uma cor, só na camada de baixo (as outras ficam transparentes)</translation>
     </message>
 </context>
 <context>
@@ -2134,12 +2194,12 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Sai deste ponto devagar</translation>
     </message>
     <message>
-        <source>Cómo cambia el valor a lo largo del fotograma. Arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.</source>
-        <translation>Como o valor muda ao longo do quadro. Arraste um losango para mudar seu valor ou seu momento; clique com o botão direito para a forma da curva.</translation>
+        <source>Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.</source>
+        <translation>Como o valor muda ao longo do quadro. Clique duas vezes para colocar um quadro-chave ali; arraste um losango para mudar seu valor ou seu momento; clique com o botão direito para a forma da curva.</translation>
     </message>
     <message>
-        <source>Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal.</source>
-        <translation>Sem quadros-chave: clique no losango de um valor para colocar um no cursor de reprodução.</translation>
+        <source>Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal o haz doble clic aquí.</source>
+        <translation>Sem quadros-chave: clique no losango de um valor para colocar um no cursor de reprodução ou clique duas vezes aqui.</translation>
     </message>
     <message>
         <source>Forma de la curva</source>
@@ -2655,6 +2715,58 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
     </message>
 </context>
 <context>
+    <name>InlineColorEditor</name>
+    <message>
+        <source>Saturación</source>
+        <translation>Saturação</translation>
+    </message>
+    <message>
+        <source>Brillo</source>
+        <translation>Brilho</translation>
+    </message>
+    <message>
+        <source>Transparencia</source>
+        <translation>Transparência</translation>
+    </message>
+    <message>
+        <source>R:</source>
+        <translation>R:</translation>
+    </message>
+    <message>
+        <source>V:</source>
+        <translation>G:</translation>
+    </message>
+    <message>
+        <source>A:</source>
+        <translation>B:</translation>
+    </message>
+    <message>
+        <source>Rojo</source>
+        <translation>Vermelho</translation>
+    </message>
+    <message>
+        <source>Verde</source>
+        <translation>Verde</translation>
+    </message>
+    <message>
+        <source>Azul</source>
+        <translation>Azul</translation>
+    </message>
+    <message>
+        <source>Transparencia (alfa)</source>
+        <translation>Transparência (alfa)</translation>
+    </message>
+    <message>
+        <source>Restablecer</source>
+        <translation>Redefinir</translation>
+    </message>
+    <message>
+        <source>A:</source>
+        <comment>alfa</comment>
+        <translation>A:</translation>
+    </message>
+</context>
+<context>
     <name>LanguageEditorDialog</name>
     <message>
         <source>Editar el idioma</source>
@@ -2970,8 +3082,8 @@ Opacidade: %2 · Mesclagem: %3</translation>
         <translation>&amp;Copiar</translation>
     </message>
     <message>
-        <source>Copiar co&amp;mbinado</source>
-        <translation>Copiar &amp;mesclado</translation>
+        <source>Copiar ac&amp;oplado</source>
+        <translation>Copiar &amp;achatado</translation>
     </message>
     <message>
         <source>&amp;Pegar</source>
@@ -4201,6 +4313,14 @@ Deseja substituí-los?</translation>
         <source>Abrir «%1»</source>
         <translation>Abrir “%1”</translation>
     </message>
+    <message>
+        <source>No existe el menú «%1».</source>
+        <translation>Não existe o menu “%1”.</translation>
+    </message>
+    <message>
+        <source>No existe el efecto «%1».</source>
+        <translation>Não existe o efeito “%1”.</translation>
+    </message>
 </context>
 <context>
     <name>MoveSelectedTool</name>
@@ -4217,8 +4337,8 @@ Deseja substituí-los?</translation>
         <translation>Ângulo: %1°</translation>
     </message>
     <message>
-        <source>Mover píxeles seleccionados</source>
-        <translation>Mover pixels selecionados</translation>
+        <source>Mover píxeles</source>
+        <translation>Mover pixels</translation>
     </message>
 </context>
 <context>
@@ -4293,8 +4413,8 @@ Deseja substituí-los?</translation>
         <translation>Altere a tolerância ou as cores, ou arraste o ponto de origem. Enter: concluir.</translation>
     </message>
     <message>
-        <source>Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global.</source>
-        <translation>Clique esquerdo: preencher com a cor primária · clique direito: com a cor secundária. Shift: modo global.</translation>
+        <source>Clic izquierdo: rellenar con el color principal · clic derecho: con el secundario. Mayús: modo global. Ctrl: muestrear la imagen en vez de la capa (o al revés).</source>
+        <translation>Clique esquerdo: preencher com a cor primária · clique direito: com a cor secundária. Shift: modo global. Ctrl: amostrar a imagem em vez da camada (ou o contrário).</translation>
     </message>
     <message>
         <source>Editar cubo de pintura</source>
@@ -5423,8 +5543,8 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>Seleção</translation>
     </message>
     <message>
-        <source>Mover píxeles seleccionados</source>
-        <translation>Mover pixels selecionados</translation>
+        <source>Mover píxeles</source>
+        <translation>Mover pixels</translation>
     </message>
     <message>
         <source>Texto</source>
@@ -6419,8 +6539,8 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>Foco</translation>
     </message>
     <message>
-        <source>Cuantizar</source>
-        <translation>Quantizar</translation>
+        <source>Cuantización / Dithering</source>
+        <translation>Quantização / Pontilhado</translation>
     </message>
     <message>
         <source>Algoritmo</source>
@@ -6483,7 +6603,7 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>Tensão</translation>
     </message>
     <message>
-        <source>Cristal congelado</source>
+        <source>Cristal esmerilado</source>
         <translation>Vidro fosco</translation>
     </message>
     <message>
@@ -6735,7 +6855,7 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <translation>Para obter melhores resultados, use primeiro as ferramentas de seleção para selecionar cada olho.</translation>
     </message>
     <message>
-        <source>Nítido</source>
+        <source>Enfocar</source>
         <translation>Nitidez</translation>
     </message>
     <message>
@@ -8249,6 +8369,388 @@ Clique esquerdo: espaço ativo · clique direito: espaço inativo</translation>
         <source>Kaint se compiló sin libwebpmux.</source>
         <translation>O Kaint foi compilado sem a libwebpmux.</translation>
     </message>
+    <message>
+        <source>Windows no pudo leer el vídeo: %1
+Con FFmpeg (https://ffmpeg.org) junto a Kaint se abren más formatos.</source>
+        <translation>O Windows não conseguiu ler o vídeo: %1
+Com o FFmpeg (https://ffmpeg.org) junto ao Kaint, abrem-se mais formatos.</translation>
+    </message>
+    <message>
+        <source>Bayer 2x2</source>
+        <translation>Bayer 2x2</translation>
+    </message>
+    <message>
+        <source>Bayer 4x4</source>
+        <translation>Bayer 4x4</translation>
+    </message>
+    <message>
+        <source>Bayer 8x8</source>
+        <translation>Bayer 8x8</translation>
+    </message>
+    <message>
+        <source>Bayer 16x16</source>
+        <translation>Bayer 16x16</translation>
+    </message>
+    <message>
+        <source>Espiral 4x4</source>
+        <translation>Espiral 4x4</translation>
+    </message>
+    <message>
+        <source>Espiral 8x8</source>
+        <translation>Espiral 8x8</translation>
+    </message>
+    <message>
+        <source>Espiral doble 4x4</source>
+        <translation>Espiral dupla 4x4</translation>
+    </message>
+    <message>
+        <source>Espiral doble 8x8</source>
+        <translation>Espiral dupla 8x8</translation>
+    </message>
+    <message>
+        <source>Ruido azul 16x16</source>
+        <translation>Ruído azul 16x16</translation>
+    </message>
+    <message>
+        <source>Ruido azul 32x32</source>
+        <translation>Ruído azul 32x32</translation>
+    </message>
+    <message>
+        <source>Ruido azul 64x64</source>
+        <translation>Ruído azul 64x64</translation>
+    </message>
+    <message>
+        <source>Ruido blanco 8x8</source>
+        <translation>Ruído branco 8x8</translation>
+    </message>
+    <message>
+        <source>Ruido blanco 16x16</source>
+        <translation>Ruído branco 16x16</translation>
+    </message>
+    <message>
+        <source>Ruido blanco 32x32</source>
+        <translation>Ruído branco 32x32</translation>
+    </message>
+    <message>
+        <source>Ruido blanco 64x64</source>
+        <translation>Ruído branco 64x64</translation>
+    </message>
+    <message>
+        <source>Octágono y cuadrado</source>
+        <translation>Octógono e quadrado</translation>
+    </message>
+    <message>
+        <source>El Cairo</source>
+        <translation>Cairo</translation>
+    </message>
+    <message>
+        <source>Cuadrado romo</source>
+        <translation>Quadrado romo</translation>
+    </message>
+    <message>
+        <source>Espiga</source>
+        <translation>Espinha de peixe</translation>
+    </message>
+    <message>
+        <source>Trenzado</source>
+        <translation>Trançado</translation>
+    </message>
+    <message>
+        <source>Escamas de pez</source>
+        <translation>Escamas de peixe</translation>
+    </message>
+    <message>
+        <source>Anfiteatro</source>
+        <translation>Anfiteatro</translation>
+    </message>
+    <message>
+        <source>Sillería</source>
+        <translation>Cantaria</translation>
+    </message>
+    <message>
+        <source>Pitagórico</source>
+        <translation>Pitagórico</translation>
+    </message>
+    <message>
+        <source>Versalles</source>
+        <translation>Versalhes</translation>
+    </message>
+    <message>
+        <source>Mondrian</source>
+        <translation>Mondrian</translation>
+    </message>
+    <message>
+        <source>Tetrominó</source>
+        <translation>Tetraminó</translation>
+    </message>
+    <message>
+        <source>Pentominó</source>
+        <translation>Pentaminó</translation>
+    </message>
+    <message>
+        <source>Cubos en perspectiva</source>
+        <translation>Cubos em perspectiva</translation>
+    </message>
+    <message>
+        <source>Adoquines</source>
+        <translation>Paralelepípedos</translation>
+    </message>
+    <message>
+        <source>Penrose</source>
+        <translation>Penrose</translation>
+    </message>
+    <message>
+        <source>Esferizar</source>
+        <translation>Esferizar</translation>
+    </message>
+    <message>
+        <source>Lóbulos</source>
+        <translation>Lóbulos</translation>
+    </message>
+    <message>
+        <source>Amortiguación</source>
+        <translation>Amortecimento</translation>
+    </message>
+    <message>
+        <source>Ondas</source>
+        <translation>Ondas</translation>
+    </message>
+    <message>
+        <source>Patrón</source>
+        <translation>Padrão</translation>
+    </message>
+    <message>
+        <source>Lineal</source>
+        <translation>Linear</translation>
+    </message>
+    <message>
+        <source>Radial</source>
+        <translation>Radial</translation>
+    </message>
+    <message>
+        <source>Compresión lineal</source>
+        <translation>Compressão linear</translation>
+    </message>
+    <message>
+        <source>Tangencial</source>
+        <translation>Tangencial</translation>
+    </message>
+    <message>
+        <source>Anillos cuadrados</source>
+        <translation>Anéis quadrados</translation>
+    </message>
+    <message>
+        <source>Anillos de rombo</source>
+        <translation>Anéis de losango</translation>
+    </message>
+    <message>
+        <source>Cruzado</source>
+        <translation>Cruzado</translation>
+    </message>
+    <message>
+        <source>Angular</source>
+        <translation>Angular</translation>
+    </message>
+    <message>
+        <source>Espiral</source>
+        <translation>Espiral</translation>
+    </message>
+    <message>
+        <source>Desde los bordes</source>
+        <translation>A partir das bordas</translation>
+    </message>
+    <message>
+        <source>Forma de onda</source>
+        <translation>Forma de onda</translation>
+    </message>
+    <message>
+        <source>Senoidal</source>
+        <translation>Senoidal</translation>
+    </message>
+    <message>
+        <source>Triangular</source>
+        <translation>Triangular</translation>
+    </message>
+    <message>
+        <source>Diente de sierra</source>
+        <translation>Dente de serra</translation>
+    </message>
+    <message>
+        <source>Cuadrada</source>
+        <translation>Quadrada</translation>
+    </message>
+    <message>
+        <source>Semicírculo</source>
+        <translation>Semicírculo</translation>
+    </message>
+    <message>
+        <source>Armónicos</source>
+        <translation>Harmônicos</translation>
+    </message>
+    <message>
+        <source>Senoidal escalonada</source>
+        <translation>Senoidal escalonada</translation>
+    </message>
+    <message>
+        <source>Amplitud</source>
+        <translation>Amplitude</translation>
+    </message>
+    <message>
+        <source>Longitud de onda</source>
+        <translation>Comprimento de onda</translation>
+    </message>
+    <message>
+        <source>Fase</source>
+        <translation>Fase</translation>
+    </message>
+    <message>
+        <source>Tramado ordenado</source>
+        <translation>Pontilhado ordenado</translation>
+    </message>
+    <message>
+        <source>Matriz</source>
+        <translation>Matriz</translation>
+    </message>
+    <message>
+        <source>Semitono</source>
+        <translation>Meio-tom</translation>
+    </message>
+    <message>
+        <source>Puntos</source>
+        <translation>Pontos</translation>
+    </message>
+    <message>
+        <source>Trama cruzada</source>
+        <translation>Hachura cruzada</translation>
+    </message>
+    <message>
+        <source>Líneas</source>
+        <translation>Linhas</translation>
+    </message>
+    <message>
+        <source>Generación de negro</source>
+        <translation>Geração de preto</translation>
+    </message>
+    <message>
+        <source>Linograbado</source>
+        <translation>Linogravura</translation>
+    </message>
+    <message>
+        <source>Modo de línea</source>
+        <translation>Modo de linha</translation>
+    </message>
+    <message>
+        <source>Paralelas</source>
+        <translation>Paralelas</translation>
+    </message>
+    <message>
+        <source>Espaciado de líneas</source>
+        <translation>Espaçamento das linhas</translation>
+    </message>
+    <message>
+        <source>Gamma</source>
+        <translation>Gama</translation>
+    </message>
+    <message>
+        <source>Color de tinta</source>
+        <translation>Cor da tinta</translation>
+    </message>
+    <message>
+        <source>Color de papel</source>
+        <translation>Cor do papel</translation>
+    </message>
+    <message>
+        <source>Mosaico</source>
+        <translation>Mosaico</translation>
+    </message>
+    <message>
+        <source>Ajustes</source>
+        <translation>Ajustes</translation>
+    </message>
+    <message>
+        <source>Color de lechada</source>
+        <translation>Cor do rejunte</translation>
+    </message>
+    <message>
+        <source>Forma de tesela</source>
+        <translation>Forma da pastilha</translation>
+    </message>
+    <message>
+        <source>Tamaño de tesela</source>
+        <translation>Tamanho da pastilha</translation>
+    </message>
+    <message>
+        <source>Profundidad de bisel</source>
+        <translation>Profundidade do bisel</translation>
+    </message>
+    <message>
+        <source>Ancho de lechada</source>
+        <translation>Largura do rejunte</translation>
+    </message>
+    <message>
+        <source>Color de tesela</source>
+        <translation>Cor da pastilha</translation>
+    </message>
+    <message>
+        <source>Píxel central</source>
+        <translation>Pixel central</translation>
+    </message>
+    <message>
+        <source>Ángulo de luz</source>
+        <translation>Ângulo da luz</translation>
+    </message>
+    <message>
+        <source>Variación de luminosidad</source>
+        <translation>Variação de luminosidade</translation>
+    </message>
+    <message>
+        <source>Variación de posición</source>
+        <translation>Variação de posição</translation>
+    </message>
+    <message>
+        <source>Color de fondo</source>
+        <translation>Cor de fundo</translation>
+    </message>
+    <message>
+        <source>Puntillismo</source>
+        <translation>Pontilhismo</translation>
+    </message>
+    <message>
+        <source>% de relleno de celda</source>
+        <translation>% de preenchimento da célula</translation>
+    </message>
+    <message>
+        <source>Respuesta tonal</source>
+        <translation>Resposta tonal</translation>
+    </message>
+    <message>
+        <source>Variación de colocación</source>
+        <translation>Variação de colocação</translation>
+    </message>
+    <message>
+        <source>Variación de color</source>
+        <translation>Variação de cor</translation>
+    </message>
+    <message>
+        <source>Color de celda</source>
+        <translation>Cor da célula</translation>
+    </message>
+    <message>
+        <source>% de ancho de borde</source>
+        <translation>% de largura da borda</translation>
+    </message>
+    <message>
+        <source>Color del emplomado</source>
+        <translation>Cor do chumbo</translation>
+    </message>
+    <message>
+        <source>Vecino más próximo (suavizado)</source>
+        <translation>Vizinho mais próximo (suavizado)</translation>
+    </message>
+    <message>
+        <source>En la captura, en vez de la ventana: un menú abierto (menu:effects, menu:adjustments, menu:effects/Artístico...) o el diálogo de un efecto (effect:linocut...).</source>
+        <translation>Na captura, em vez da janela: um menu aberto (menu:effects, menu:adjustments, menu:effects/Artístico...) ou a caixa de diálogo de um efeito (effect:linocut...).</translation>
+    </message>
 </context>
 <context>
     <name>QPrintPreviewDialog</name>
@@ -8531,8 +9033,8 @@ Deseja substituí-los?</translation>
 <context>
     <name>SaveConfigDialog</name>
     <message>
-        <source>Configuración de guardado: %1</source>
-        <translation>Configuração de salvamento: %1</translation>
+        <source>Opciones de guardado: %1</source>
+        <translation>Opções de salvamento: %1</translation>
     </message>
     <message>
         <source>Calidad:</source>
@@ -9656,8 +10158,8 @@ Deseja substituí-los?</translation>
         <translation>Ocultar o contorno e as alças durante o arraste</translation>
     </message>
     <message>
-        <source>Con Mover píxeles seleccionados solo queda el icono de mover; con Mover selección desaparecen los tiradores.</source>
-        <translation>Com Mover pixels selecionados, apenas o ícone de movimentação permanece; com Mover seleção, as alças desaparecem.</translation>
+        <source>Con Mover píxeles solo queda el icono de mover; con Mover selección desaparecen los tiradores.</source>
+        <translation>Com Mover pixels, apenas o ícone de movimentação permanece; com Mover seleção, as alças desaparecem.</translation>
     </message>
     <message>
         <source>Los píxeles pegados o movidos reemplazan a los de debajo, también los transparentes</source>
@@ -12324,8 +12826,8 @@ Deseja substituí-los?</translation>
         <translation>Mudar para Mover seleção</translation>
     </message>
     <message>
-        <source>Cambiar a Mover píxeles seleccionados</source>
-        <translation>Mudar para Mover pixels selecionados</translation>
+        <source>Cambiar a Mover píxeles</source>
+        <translation>Mudar para Mover pixels</translation>
     </message>
     <message>
         <source>Después de seleccionar:</source>
@@ -12905,6 +13407,14 @@ Deseja substituí-los?</translation>
     <message>
         <source>Esta compilación de Kaint no reproduce vídeos (falta Qt Multimedia).</source>
         <translation>Esta versão do Kaint não reproduz vídeos (falta o Qt Multimedia).</translation>
+    </message>
+    <message>
+        <source>El vídeo no tiene fotogramas.</source>
+        <translation>O vídeo não tem quadros.</translation>
+    </message>
+    <message>
+        <source>Para abrir vídeo hace falta FFmpeg.</source>
+        <translation>Para abrir vídeo é preciso o FFmpeg.</translation>
     </message>
 </context>
 <context>

@@ -3,7 +3,7 @@
 //   node tools/check-i18n.mjs
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const files = [];
@@ -49,7 +49,7 @@ for (const file of files) {
     }
 }
 texts.delete("");
-const en = (await import(join(root, "js/i18n/en.js"))).default;
+const en = (await import(pathToFileURL(join(root, "js/i18n/en.js")).href)).default;
 const i18n = readFileSync(join(root, "js/i18n.js"), "utf8");
 const extra = new Set([...i18n.matchAll(new RegExp(String.raw`^\s*` + str + ":", "gm"))].map((m) => unquote(m[1])));
 const missing = [...texts].filter((t) => !(t in en) && !extra.has(t) && /[a-záéíóúñ]/i.test(t)).sort();

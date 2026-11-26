@@ -1,14 +1,14 @@
-// Mover píxeles seleccionados y Mover selección (src/app/tools/MoveTools.cpp y TransformBox):
+// Mover píxeles y Mover selección (src/app/tools/MoveTools.cpp y TransformBox):
 // arrastrar mueve, los tiradores y el borde (con la mano) cambian el tamaño (Mayús: proporción),
 // el botón derecho o arrastrar justo fuera del borde gira alrededor del punto central (que se
 // puede mover) y el icono de abajo a la derecha mueve. Como en Kaint, cada arrastre es un paso
 // del historial y los píxeles siguen "flotando" mientras ese paso sea el último (moverlos otra vez
-// no los degrada). Sin selección, un clic con Mover píxeles seleccionados selecciona todo el lienzo.
+// no los degrada). Sin selección, un clic con Mover píxeles selecciona todo el lienzo.
 import { AppState } from "../AppState.js";
 import { Tool } from "./Tool.js";
 import { Selection } from "../core/Selection.js";
 import { clampRect, cloneCanvas, context, createCanvas, unionRect } from "../core/Raster.js";
-import { drawTransformed, prefiltered } from "../core/Resample.js";
+import { drawTransformed, isNearest, prefiltered } from "../core/Resample.js";
 import { handCursor, iconCursor, rotateCursor, toolPixelCursor } from "../ui/Icons.js";
 import { hollowHandles, ringHandle } from "./EditableSteps.js";
 import { Settings } from "../Settings.js";
@@ -614,7 +614,7 @@ export class MoveSelectedTool extends MoveToolBase {
     }
 
     get id() { return "moveselectedpixels"; }
-    get name() { return tr("Mover píxeles seleccionados"); }
+    get name() { return tr("Mover píxeles"); }
     get icon() { return "moveselectedpixels"; }
     get letter() { return "M"; }
 
@@ -741,14 +741,14 @@ export class MoveSelectedTool extends MoveToolBase {
         // Mientras se arrastra una zona grande, directamente con el navegador (también al reducir: el
         // promedio por áreas en JavaScript se recalculaba en cada paso y las imágenes grandes iban a
         // tirones). Al soltar queda el exacto.
-        const ours = interp === "nearest" ? exact : interp !== "bilinear" || gamma;
+        const ours = isNearest(interp) ? exact || interp === "nearestaa" : interp !== "bilinear" || gamma;
         const fw = s.floating.width, fh = s.floating.height;
         const corners = [[0, 0], [fw, 0], [0, fh], [fw, fh]].map(([x, y]) => ({ x: full.a * x + full.c * y + full.e, y: full.b * x + full.d * y + full.f }));
         const bx0 = Math.max(0, Math.floor(Math.min(...corners.map((q) => q.x))) - 2), by0 = Math.max(0, Math.floor(Math.min(...corners.map((q) => q.y))) - 2);
         const bx1 = Math.min(doc.width, Math.ceil(Math.max(...corners.map((q) => q.x))) + 2), by1 = Math.min(doc.height, Math.ceil(Math.max(...corners.map((q) => q.y))) + 2);
         if (!exact && !(ours && (bx1 - bx0) * (by1 - by0) <= 40000)) {
             p.setTransform(full);
-            p.imageSmoothingEnabled = interp !== "nearest";
+            p.imageSmoothingEnabled = !isNearest(interp);
             p.imageSmoothingQuality = interp === "bicubic" || interp === "anisotropic" ? "high" : interp === "multisample" ? "medium" : "low";
             p.drawImage(s.floating, 0, 0);
             return;
@@ -760,7 +760,7 @@ export class MoveSelectedTool extends MoveToolBase {
         }
         // El vecino más próximo no se promedia al reducir: como en Paint.NET, cada píxel es uno de la
         // imagen (promediado se veía suavizado, casi como el bicúbico).
-        const pre = interp === "nearest" ? { image: s.floatingData, matrix: full } : prefiltered(s.floatingData, full, gamma, s.prefilter);
+        const pre = isNearest(interp) ? { image: s.floatingData, matrix: full } : prefiltered(s.floatingData, full, gamma, s.prefilter);
         const m = pre.matrix, iw = pre.image.width, ih = pre.image.height;
         const xs = [0, iw, 0, iw].map((x, i) => m.a * x + m.c * [0, 0, ih, ih][i] + m.e);
         const ys = [0, iw, 0, iw].map((x, i) => m.b * x + m.d * [0, 0, ih, ih][i] + m.f);
@@ -790,7 +790,7 @@ export class MoveSelectedTool extends MoveToolBase {
             source = s.prefilter.canvas;
         }
         p.setTransform(m);
-        p.imageSmoothingEnabled = interp !== "nearest";
+        p.imageSmoothingEnabled = !isNearest(interp);
         p.imageSmoothingQuality = interp === "bicubic" || interp === "anisotropic" ? "high" : interp === "multisample" ? "medium" : "low";
         p.drawImage(source, 0, 0);
     }
@@ -856,7 +856,7 @@ export class MoveSelectedTool extends MoveToolBase {
 }
 
 export class MoveSelectionTool extends MoveToolBase {
-    // Como en Kaint, solo Mover selección tiñe de azul el interior; Mover píxeles seleccionados
+    // Como en Kaint, solo Mover selección tiñe de azul el interior; Mover píxeles
     // deja ver los píxeles tal cual.
     get highlightSelection() {
         return true;

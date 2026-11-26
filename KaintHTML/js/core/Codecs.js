@@ -150,6 +150,52 @@ function filterRow(row, prev, bpp, out) {
     out.bytes(bestData);
 }
 
+// Los textos de un PNG (tEXt, zTXt e iTXt, como los «prompts» de Stable Diffusion): { clave: texto }
+// o null si no tiene. Se vuelven a escribir al guardarlo como PNG (como en Paint.NET 5.2).
+export async function readPngText(bytes) {
+    if (bytes.length < 8 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47)
+        return null;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), latin1 = new TextDecoder("latin1"), utf8 = new TextDecoder();
+    const out = {};
+    let any = false;
+    for (let p = 8; p + 12 <= bytes.length;) {
+        const len = view.getUint32(p), type = String.fromCharCode(...bytes.subarray(p + 4, p + 8));
+        const data = bytes.subarray(p + 8, Math.min(bytes.length, p + 8 + len));
+        p += 12 + len;
+        if (type === "IEND")
+            break;
+        if (type !== "tEXt" && type !== "zTXt" && type !== "iTXt")
+            continue;
+        try {
+            const nul = data.indexOf(0);
+            if (nul <= 0)
+                continue;
+            const key = latin1.decode(data.subarray(0, nul));
+            let text;
+            if (type === "tEXt")
+                text = latin1.decode(data.subarray(nul + 1));
+            else if (type === "zTXt")
+                text = latin1.decode(await zlibDecompress(data.subarray(nul + 2)));
+            else {
+                // Clave, compresión (1 byte), método (1 byte), idioma, clave traducida y el texto en UTF-8.
+                const compressed = data[nul + 1] === 1;
+                const lang = data.indexOf(0, nul + 3), translated = lang < 0 ? -1 : data.indexOf(0, lang + 1);
+                if (translated < 0)
+                    continue;
+                const body = data.subarray(translated + 1);
+                text = utf8.decode(compressed ? await zlibDecompress(body) : body);
+            }
+            if (!(key in out)) {
+                out[key] = text;
+                any = true;
+            }
+        } catch {
+            // Un texto que no se entiende: se salta.
+        }
+    }
+    return any ? out : null;
+}
+
 // image: RGBA ({ data }) o indexada ({ indices, palette }). depth 32 (RGBA) o 24 (RGB).
 // extra: { dpi, iccProfile (bytes, ya comprimidos o no) }.
 export async function encodePng(image, { depth = 32, interlaced = false, dpi = 0, icc = null } = {}) {

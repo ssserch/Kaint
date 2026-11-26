@@ -4,7 +4,7 @@
 #include "app/tools/TransformBox.h"
 #include "core/Commands.h"
 
-// Mover píxeles seleccionados: arrastrar mueve, los tiradores escalan (Mayús = proporcional,
+// Mover píxeles: arrastrar mueve, los tiradores escalan (Mayús = proporcional,
 // Alt = desde el centro), fuera del cuadro o con el botón derecho se gira (Mayús = de 15 en
 // 15°), Ctrl mueve una copia y las flechas desplazan 1 px (Ctrl: 10 px).
 class MoveSelectedTool : public Tool {
@@ -12,7 +12,7 @@ class MoveSelectedTool : public Tool {
 public:
     explicit MoveSelectedTool(QObject* parent = nullptr);
     ToolId id() const override { return ToolId::MoveSelected; }
-    QString name() const override { return tr("Mover píxeles seleccionados"); }
+    QString name() const override { return tr("Mover píxeles"); }
     QIcon icon() const override;
     QString hint() const override;
     QKeySequence shortcut() const override { return QKeySequence(Qt::Key_M); }

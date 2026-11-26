@@ -11,19 +11,27 @@ on:
   workflow_dispatch:
     inputs:
       windows:
-        description: "Windows x64 (.zip portable e instalador)"
+        description: "Windows x64 (.zip e instalador) y arm64 (.zip)"
         type: boolean
         default: true
       linux:
-        description: "Linux x86_64 (AppImage y .deb)"
+        description: "Linux (AppImage x86_64, .deb x86_64 y arm64, Alpine musl)"
         type: boolean
         default: true
       macos:
-        description: "macOS arm64 (Kaint.app en .tar.gz)"
+        description: "macOS arm64 e Intel (Kaint.app en .tar.gz)"
+        type: boolean
+        default: true
+      freebsd:
+        description: "FreeBSD x86_64 (.tar.gz)"
         type: boolean
         default: true
       web:
         description: "Versión web (Kaint.HTML, .zip)"
+        type: boolean
+        default: false
+      draft_release:
+        description: "Al terminar, crear un borrador de release con los archivos (no se publica solo)"
         type: boolean
         default: false
       opend2d:
@@ -79,11 +87,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Qt, MinGW, CMake y Ninja (los descarga build.bat, unos 1,5 GB): se guardan entre ejecuciones.
       - name: Caché de las herramientas
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~\AppData\Local\Kaint\toolchain
           key: windows-toolchain-${{ hashFiles('build.bat') }}
@@ -94,12 +102,50 @@ jobs:
         run: build.bat --zip --setup --yes
 
       - name: Subir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Kaint-windows-x64
           path: |
             build-windows/Kaint-*.zip
             build-windows/*-setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-arm64:
+    name: Windows arm64
+    if: github.event_name != 'workflow_dispatch' || inputs.windows
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Caché de Qt (MSVC x64 y arm64)
+        uses: actions/cache@v5
+        with:
+          path: C:\Qt
+          key: windows-arm64-qt-6.10.3
+
+      - name: Qt para arm64 y para x64 (aqtinstall)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path C:\Qt\6.10.3\msvc2022_arm64)) {
+            pip install aqtinstall
+            aqt install-qt windows desktop 6.10.3 win64_msvc2022_64 -m qtimageformats --outputdir C:\Qt
+            aqt install-qt windows desktop 6.10.3 win64_msvc2022_arm64_cross_compiled -m qtimageformats --outputdir C:\Qt
+          }
+
+      - name: Compilar (.zip portable)
+        shell: cmd
+        env:
+          KAINT_QT_ARM64: C:\Qt\6.10.3\msvc2022_arm64
+          KAINT_QT_HOST: C:\Qt\6.10.3\msvc2022_64
+        run: build.bat --zip --arm64 --yes
+
+      - name: Subir
+        uses: actions/upload-artifact@v5
+        with:
+          name: Kaint-windows-arm64
+          path: build-windows*/Kaint-*arm64*.zip
           if-no-files-found: error
           retention-days: 30
 
@@ -109,12 +155,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # build.sh compila el AppImage en un contenedor de Ubuntu 22.04 (glibc 2.35: funciona también
       # en distribuciones antiguas) con Qt de aqtinstall; lo descargado queda en build-appimage-cache/.
       - name: Caché de Qt y Rust del contenedor
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build-appimage-cache
           key: appimage-cache-${{ hashFiles('build.sh') }}
@@ -124,7 +170,7 @@ jobs:
         run: ./build.sh --appimage --opend2d "$OPEND2D"
 
       - name: Subir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Kaint-linux-x86_64-AppImage
           path: |
@@ -134,9 +180,15 @@ jobs:
           retention-days: 30
 
   linux-deb:
-    name: Linux .deb (Debian 13 / Ubuntu 25.04 o más nuevo)
+    name: Linux .deb ${{ matrix.arch }} (Debian 13 / Ubuntu 25.04 o más nuevo)
     if: github.event_name != 'workflow_dispatch' || inputs.linux
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
     container: debian:trixie
     timeout-minutes: 120
     steps:
@@ -148,7 +200,7 @@ jobs:
             qt6-l10n-tools qt6-svg-plugins qt6-wayland zlib1g-dev libgl-dev libssl-dev breeze-icon-theme \
             qt6-image-formats-plugins qt6-translations-l10n qt6-multimedia-dev
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Compilar el .deb
         env:
@@ -158,20 +210,70 @@ jobs:
           ./build.sh --deb --opend2d off
 
       - name: Subir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: Kaint-linux-deb
+          name: Kaint-linux-deb-${{ matrix.arch }}
           path: build-deb/kaint_*.deb
           if-no-files-found: error
           retention-days: 30
 
-  macos:
-    name: macOS arm64
-    if: github.event_name != 'workflow_dispatch' || inputs.macos
-    runs-on: macos-14
+  linux-alpine:
+    name: Linux musl (Alpine)
+    if: github.event_name != 'workflow_dispatch' || inputs.linux
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      # build.sh --musl compila dentro de un contenedor de Alpine (podman o docker).
+      - name: Compilar el .tar.gz
+        run: ./build.sh --tar --musl
+
+      - name: Subir
+        uses: actions/upload-artifact@v5
+        with:
+          name: Kaint-linux-musl
+          path: build-tar*/Kaint-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  freebsd:
+    name: FreeBSD x86_64
+    if: github.event_name != 'workflow_dispatch' || inputs.freebsd
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+
+      # Una máquina virtual de FreeBSD: build.sh --tar ahí (lo creado vuelve a esta carpeta).
+      - name: Compilar en FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: pkg install -y bash git cmake ninja qt6-base qt6-tools qt6-svg
+          run: bash ./build.sh --tar --opend2d off
+
+      - name: Subir
+        uses: actions/upload-artifact@v5
+        with:
+          name: Kaint-freebsd-x86_64
+          path: build-tar/Kaint-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    if: github.event_name != 'workflow_dispatch' || inputs.macos
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64, runner: macos-15 }
+          - { arch: x86_64, runner: macos-15-intel }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
 
       - name: Qt, Ninja y Bash 5 (Homebrew; build.sh no va con el Bash 3 de macOS)
         run: brew install qt ninja bash
@@ -181,9 +283,9 @@ jobs:
         run: ./build.sh --tar --opend2d "$OPEND2D"
 
       - name: Subir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: Kaint-macos-arm64
+          name: Kaint-macos-${{ matrix.arch }}
           path: build-tar/Kaint-*.tar.gz
           if-no-files-found: error
           retention-days: 30
@@ -194,15 +296,56 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Crear el .zip
         run: ./build.sh --web
 
       - name: Subir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Kaint-web
           path: build-web/*.zip
           if-no-files-found: error
           retention-days: 30
+
+  # Opcional (solo a mano, con «draft_release»): todos los archivos en un BORRADOR de release
+  # (v<versión de version.json>), sin el .zip de GitHub alrededor de cada uno. No se publica: se
+  # revisa y se pulsa «Publish release» en GitHub. Si el borrador ya existe, se reemplazan los archivos.
+  release:
+    name: Borrador de release
+    needs: [windows, windows-arm64, linux-appimage, linux-deb, linux-alpine, freebsd, macos, web]
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.draft_release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Descargar lo compilado
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Crear o actualizar el borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' version.json)
+          files=$(find dist -type f | sort)
+          if [ -z "$files" ]; then
+            echo "No se compiló nada: no hay borrador." >&2
+            exit 1
+          fi
+          if gh release view "v$version" >/dev/null 2>&1; then
+            # Una release ya publicada no se toca.
+            if [ "$(gh release view "v$version" --json isDraft -q .isDraft)" != "true" ]; then
+              echo "La release v$version ya está publicada: no se cambia." >&2
+              exit 1
+            fi
+            gh release upload "v$version" $files --clobber
+          else
+            gh release create "v$version" $files --draft --target "$GITHUB_SHA" --title "Kaint $version" --generate-notes
+          fi
+          echo "Borrador listo: Releases > Kaint $version > Edit > Publish release."

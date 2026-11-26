@@ -1108,7 +1108,6 @@ if (( DO_TAR )); then
     suffix="${KAINT_TAR_SUFFIX:-}"
     (( DO_AVX2 )) && suffix="-avx2$suffix"
     is_musl && [[ "$suffix" != *-musl* ]] && suffix="$suffix-musl"
-    [[ "$OS_NAME" == macos ]] && arch=arm64
     name="Kaint-$VERSION-$OS_NAME-$arch$suffix"
     stage="$PWD/$BUILD_DIR/tar/$name"
     rm -rf "$PWD/$BUILD_DIR/tar"

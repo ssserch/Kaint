@@ -903,8 +903,10 @@ installing anything, and **macOS can be built from Windows or Linux**:
 - **On its own**: on every push to `main` and every pull request that changes the code (not the
   documentation), to check that it still builds everywhere.
 
-When it finishes, the files are in the run's page under **Artifacts** (kept for 30 days). The
-workflow never publishes anything: releases are uploaded by hand. The macOS app is not signed by
+When it finishes, the files are in the run's page under **Artifacts** (kept for 30 days; GitHub
+wraps each one in a .zip). Ticking **draft_release** when running it by hand also puts every file,
+as is, in a **draft release** (`v<version>`): nothing is public until you press *Publish release*,
+and a published release is never changed. The macOS app is not signed by
 Apple: the first time, right-click *Kaint.app* > *Open* (or run `xattr -dr com.apple.quarantine
 Kaint.app`).
 

@@ -66,7 +66,8 @@ public:
     // demás en la barra de arriba) y guarda la ventana en 'output'. Devuelve el error, si lo hay.
     // 'popup': en vez de la ventana, un menú abierto ("menu:effects", "menu:effects/<submenú>",
     // "menu:adjustments") o el diálogo de un efecto ("effect:<id>").
-    QString screenPreview(const QStringList& files, const QString& output, bool gifEditor = false, const QString& popup = QString());
+    // 'gifEditor': 0 el editor de imágenes, 1 el editor de GIF (estudio), 2 el clásico.
+    QString screenPreview(const QStringList& files, const QString& output, int gifEditor = 0, const QString& popup = QString());
 
 protected:
     void changeEvent(QEvent* e) override;
@@ -112,6 +113,11 @@ private:
     bool saveAs(Document* doc, const QString& suffix = {});
     // Archivo > Editor de GIF: la imagen actual pasa de una vista a otra.
     void toggleGifEditor();
+    // Archivo > Editor de GIF > Estudio o Clásico: abre ese (o vuelve al editor de imágenes si ya se
+    // estaba en él).
+    void openGifEditor(bool classic);
+    void exportAnimation(const QString& format);
+    bool inClassicGifEditor() const;
     // La imagen actual se ve en el editor de GIF.
     bool inGifEditor() const;
     void updateCentralView();
@@ -235,7 +241,11 @@ private:
     // (cada imagen recuerda en cuál está).
     class QStackedWidget* m_central = nullptr;
     class GifEditor* m_gifEditor = nullptr;
+    // El editor de GIF clásico (los fotogramas en tarjetas); las imágenes que se ven en él (también
+    // están en m_gifDocs).
+    class GifClassicEditor* m_gifClassic = nullptr;
     QSet<Document*> m_gifDocs;
+    QSet<Document*> m_classicDocs;
     bool m_optionsHiddenForGif = false;
     CollabController* m_collab = nullptr;
     ToolManager* m_tools = nullptr;
@@ -282,6 +292,8 @@ private:
     QLabel* m_posLabel = nullptr;
     QLabel* m_selLabel = nullptr;
     QComboBox* m_zoomBox = nullptr;
+    // Con la vista girada, cuántos grados (un clic la deja sin girar).
+    QToolButton* m_rotationButton = nullptr;
     QSlider* m_zoomSlider = nullptr;
     QToolButton* m_unitButton = nullptr;
     QProgressBar* m_progress = nullptr;

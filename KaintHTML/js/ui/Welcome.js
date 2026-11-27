@@ -255,14 +255,19 @@ export async function showWelcome(app) {
 
 // Kaint.APK: guarda la imagen actual en las recientes al salir de la app (pasa a segundo plano) o
 // al guardarla.
+// Guarda en las recientes las imágenes abiertas que tengan algo (al salir de la app y al volver a la
+// bienvenida desde el editor).
+export async function rememberOpen(app) {
+    if (!Recents.available())
+        return;
+    const docs = (app.docs || []).filter((doc) => doc.isModified() || doc.recentKey || doc.fileName);
+    await Promise.all(docs.map((doc) => Recents.remember(doc).catch(() => {})));
+}
+
 export function installRecents(app) {
     if (!Recents.available())
         return;
-    const keep = () => {
-        for (const doc of app.docs || [])
-            if (doc.isModified() || doc.recentKey || doc.fileName)
-                Recents.remember(doc);
-    };
+    const keep = () => rememberOpen(app);
     // (Al volver a la app, el lienzo se vuelve a dibujar por si Android lo dejó congelado: ver Canvas.js.)
     document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && keep());
     window.addEventListener("pagehide", keep);

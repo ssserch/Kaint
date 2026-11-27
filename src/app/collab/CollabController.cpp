@@ -510,7 +510,11 @@ void CollabController::refreshPointers()
             const Collab::Peer p = m_session->peer(it.key());
             if (p.name.isEmpty())
                 continue;
-            Canvas::RemotePointer r{it->pos, p.color, p.name, toolIcon(it->tool)};
+            Canvas::RemotePointer r;
+            r.pos = it->pos;
+            r.color = p.color;
+            r.name = p.name;
+            r.tool = toolIcon(it->tool);
             // Lo que está dibujando y, al soltar, un momento más (hasta que llega el cambio).
             const bool recent = it->down || (it->releasedAt > 0 && now - it->releasedAt < 1500);
             if (m_settings.liveStrokes && recent && !it->path.isEmpty()) {

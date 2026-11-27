@@ -688,7 +688,7 @@ Inspector::Inspector(GifEditor* editor, QWidget* parent)
     auto* bottom = new QHBoxLayout;
     bottom->addWidget(new QLabel(GifEditor::tr("Al exportar:"), this));
     m_fps = new QComboBox(this);
-    for (int fps : {10, 15, 20, 25, 30, 50})
+    for (int fps : {10, 12, 15, 20, 24, 25, 30, 50, 60})
         m_fps->addItem(GifEditor::tr("%1 fps").arg(fps), 1000 / fps);
     m_fps->setToolTip(GifEditor::tr("Cuántas imágenes por segundo tiene el GIF mientras este fotograma se mueve"));
     connect(m_fps, &QComboBox::activated, this, [this](int i) {
@@ -797,7 +797,7 @@ void Inspector::refresh()
     m_updating = true;
     m_lock->setChecked(clip.lockScale);
     const int fps = m_fps->findData(clip.stepMs);
-    m_fps->setCurrentIndex(fps >= 0 ? fps : 2);
+    m_fps->setCurrentIndex(fps >= 0 ? fps : std::max(0, m_fps->findData(50)));
     m_smooth->setChecked(clip.smooth);
     m_reset->setEnabled(has && !clip.isEmpty());
     m_bake->setEnabled(has && clip.animated());

@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QApplication>
 #include <QGraphicsOpacityEffect>
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -152,6 +153,10 @@ Intro::Intro(QWidget* window, bool skippable, const QString& video, std::functio
     setFocusPolicy(Qt::StrongFocus);
     setGeometry(window->rect());
     window->installEventFilter(this);
+    // Intro y Espacio se escuchan en toda la aplicación (filtro en qApp), tenga quien tenga el foco:
+    // al arrancar, la ventana aún no estaba activa al pedirlo y el lienzo se lo quedaba después, así
+    // que las teclas no llegaban hasta hacer varios clics.
+    qApp->installEventFilter(this);
     m_ticker.setInterval(16);
     connect(&m_ticker, &QTimer::timeout, this, &Intro::step);
 #ifndef KAINT_HAVE_QTMULTIMEDIA
@@ -190,6 +195,7 @@ Intro::Intro(QWidget* window, bool skippable, const QString& video, std::functio
 #endif
     show();
     raise();
+    window->activateWindow();
     setFocus();
     m_clock.start();
     m_ticker.start();
@@ -217,10 +223,34 @@ void Intro::resizeEvent(QResizeEvent* e)
     m_frames->target = (QSizeF(size()) * m_frames->dpr).toSize();
 }
 
+// Las teclas que saltan el vídeo (manteniéndolas pulsadas).
+static bool isSkipKey(const QKeyEvent* e)
+{
+    return e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter || e->key() == Qt::Key_Space;
+}
+
 bool Intro::eventFilter(QObject* watched, QEvent* e)
 {
     if (watched == parentWidget() && e->type() == QEvent::Resize)
         setGeometry(parentWidget()->rect());
+    // Al activarse la ventana (al arrancar, después de mostrarse), el foco vuelve al vídeo.
+    if (watched == parentWidget() && e->type() == QEvent::WindowActivate && !m_finishing)
+        setFocus();
+    // Intro y Espacio en cualquier widget de esta ventana mientras se ve el vídeo: lo saltan (y no
+    // llegan a los atajos de debajo).
+    const QEvent::Type type = e->type();
+    if ((type == QEvent::KeyPress || type == QEvent::KeyRelease || type == QEvent::ShortcutOverride) && !m_finishing && isVisible()) {
+        auto* target = qobject_cast<QWidget*>(watched);
+        auto* key = static_cast<QKeyEvent*>(e);
+        if (target && target->window() == window() && isSkipKey(key)) {
+            if (type == QEvent::KeyPress)
+                keyPressEvent(key);
+            else if (type == QEvent::KeyRelease)
+                keyReleaseEvent(key);
+            e->accept();
+            return true;
+        }
+    }
     return QWidget::eventFilter(watched, e);
 }
 
@@ -259,7 +289,7 @@ void Intro::paintEvent(QPaintEvent*)
 void Intro::keyPressEvent(QKeyEvent* e)
 {
     // Intro o Espacio, mantenidas, la saltan.
-    if (m_skippable && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter || e->key() == Qt::Key_Space)) {
+    if (m_skippable && isSkipKey(e)) {
         m_holding = true;
         e->accept();
         return;
@@ -269,7 +299,7 @@ void Intro::keyPressEvent(QKeyEvent* e)
 
 void Intro::keyReleaseEvent(QKeyEvent* e)
 {
-    if ((e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter || e->key() == Qt::Key_Space) && !e->isAutoRepeat())
+    if (isSkipKey(e) && !e->isAutoRepeat())
         m_holding = false;
     e->accept();
 }

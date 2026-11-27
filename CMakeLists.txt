@@ -272,6 +272,7 @@ add_library(kaintui STATIC
     src/app/SystemCursors.cpp
     src/app/UserFonts.cpp
     src/app/VideoFrames.cpp
+    src/app/GifClassicEditor.cpp
     src/app/GifEditor.cpp
     src/app/GifMotion.cpp
     src/app/GifExport.cpp
@@ -688,9 +689,10 @@ if(BUILD_TESTING)
     if(TARGET pdnhost5)
         set(PDN5_TEST_FILETYPE "${CMAKE_BINARY_DIR}/test-plugins/KaintTestFileType.dll")
         add_custom_command(OUTPUT "${PDN5_TEST_FILETYPE}"
-            COMMAND ${KAINT_DOTNET} build "${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnfiletype/KaintTestFileType.csproj" -c Release
-                    -m:1 -nodeReuse:false -v:q -clp:ErrorsOnly "-p:PdnHostDir=${PDN5_OUT}"
-                    "-p:BaseIntermediateOutputPath=${CMAKE_BINARY_DIR}/pdnfiletype-obj/" -o "${CMAKE_BINARY_DIR}/test-plugins"
+            # (msbuild y no build: «dotnet build» siempre imprime su resumen de avisos y errores.)
+            COMMAND ${KAINT_DOTNET} msbuild "${CMAKE_CURRENT_SOURCE_DIR}/tests/pdnfiletype/KaintTestFileType.csproj" -restore
+                    -nologo -p:Configuration=Release -m:1 -nodeReuse:false -v:q -clp:ErrorsOnly "-p:PdnHostDir=${PDN5_OUT}"
+                    "-p:BaseIntermediateOutputPath=${CMAKE_BINARY_DIR}/pdnfiletype-obj/" "-p:OutDir=${CMAKE_BINARY_DIR}/test-plugins/"
             DEPENDS tests/pdnfiletype/KaintTestFileType.cs tests/pdnfiletype/KaintTestFileType.csproj "${PDN5_OUT}/PdnBridge.dll"
             COMMENT "Compilando KaintTestFileType.dll" VERBATIM)
         add_custom_target(kaint_test_pdn_filetype DEPENDS "${PDN5_TEST_FILETYPE}")

@@ -28,6 +28,7 @@
 #include "app/dialogs/SaveAllDialog.h"
 #include "app/dialogs/SaveConfigDialog.h"
 #include "app/dialogs/SettingsDialog.h"
+#include "app/GifClassicEditor.h"
 #include "app/GifEditor.h"
 #include "core/Motion.h"
 #include "app/dialogs/TaskDialog.h"
@@ -2234,9 +2235,10 @@ int main(int argc, char** argv)
         CHECK(w.isVisible());
     }
 
-    // Pegar con transparencia, como en Paint.NET: dentro del rectángulo pegado, lo transparente
-    // también reemplaza a lo de debajo (configurable); al arrastrar con Mover píxeles solo queda
-    // el icono de mover; Cortar necesita una selección; el portapapeles lleva también un PNG.
+    // Pegar una imagen de otro programa con transparencia alrededor: se pega con la forma de lo que
+    // tiene píxeles y mezclada con lo de debajo (lo transparente ya no deja un hueco), con
+    // cualquier valor de «reemplazar píxeles»; al arrastrar con Mover píxeles solo queda el icono de
+    // mover; Cortar necesita una selección; el portapapeles lleva también un PNG.
     {
         auto* strip = w.findChild<QTabBar*>(QStringLiteral("ImageStrip"));
         const int first = strip ? strip->currentIndex() : -1;
@@ -2259,15 +2261,18 @@ int main(int argc, char** argv)
             QApplication::clipboard()->setImage(glass);
             findAction(&w, QStringLiteral("Pegar"))->trigger();
             settle();
+            // La selección es la mitad roja (la de la izquierda, transparente, no).
             const QPoint at = d->selection().bounds().topLeft();
-            CHECK(d->selection().bounds().size() == glass.size());
-            CHECK(QColor::fromRgba(d->activeLayer()->image.pixel(at + QPoint(90, 60))) == QColor(200, 30, 30));
-            const QRgb hole = d->activeLayer()->image.pixel(at + QPoint(20, 60));
-            CHECK(replace ? qAlpha(hole) == 0 : hole == qRgb(0, 0, 0));
-            // Moverlo también reemplaza (o mezcla) en el sitio nuevo.
+            const QImage& layer = d->activeLayer()->image;
+            CHECK(d->selection().bounds().size() == QSize(60, 120));
+            CHECK(QColor::fromRgba(layer.pixel(at + QPoint(30, 60))) == QColor(200, 30, 30));
+            CHECK(layer.pixel(at + QPoint(-20, 60)) == qRgb(0, 0, 0));
+            // Moverlo: lo rojo en el sitio nuevo, lo de debajo intacto alrededor y en el de antes.
             drag(canvas, {QPointF(at + QPoint(30, 30)), QPointF(at + QPoint(230, 30))});
-            const QRgb moved = d->activeLayer()->image.pixel(at + QPoint(220, 60));
-            CHECK(replace ? qAlpha(moved) == 0 : moved == qRgb(0, 0, 0));
+            const QImage& after = d->activeLayer()->image;
+            CHECK(QColor::fromRgba(after.pixel(at + QPoint(230, 60))) == QColor(200, 30, 30));
+            CHECK(after.pixel(at + QPoint(180, 60)) == qRgb(0, 0, 0));
+            CHECK(after.pixel(at + QPoint(30, 60)) == qRgb(0, 0, 0));
             tools->select(ToolId::RectSelect);
             findAction(&w, QStringLiteral("Anular la selección"))->trigger();
             settle();
@@ -2520,11 +2525,16 @@ int main(int argc, char** argv)
                 settle();
             }
         }
-        // Herramientas: dos columnas por defecto y Formas ocupa lo que queda de la última fila.
+        // Herramientas: dos columnas por defecto y Formas ocupa lo que queda de la última fila. (Las
+        // variantes agrupadas con otra, como el lazo magnético o el pincel corrector, están en el panel
+        // pero ocultas: se eligen desde la de su grupo.)
         auto* toolsGrid = w.findChild<ToolsPanel*>();
         CHECK(toolsGrid && toolsGrid->columns() == 2);
         if (toolsGrid) {
-            QList<QToolButton*> buttons = toolsGrid->findChildren<QToolButton*>();
+            QList<QToolButton*> buttons;
+            for (QToolButton* b : toolsGrid->findChildren<QToolButton*>())
+                if (b->isVisible())
+                    buttons << b;
             CHECK(buttons.size() == 19 && buttons.last()->width() > buttons.first()->width() * 3 / 2);
         }
     }
@@ -3346,10 +3356,11 @@ int main(int argc, char** argv)
         const QRectF v = canvas->imageToView(QRectF(10, 10, 50, 30));
         const int right = int(std::lround(v.right())), bottom = int(std::lround(v.bottom())), midY = int(v.center().y());
         const int midX = int(v.center().x());
-        // El interior, lavanda de Paint.NET sobre el rojo; el contorno, sus hormigas gris y casi blanca.
+        // El interior, lavanda de Paint.NET sobre el rojo; el contorno, sus hormigas blancas sobre la
+        // línea negra.
         auto ant = [&](int x, int y) {
             const QColor c(view.pixel(x, y));
-            return c == QColor(0x7f, 0x82, 0x89) || c == QColor(0xf3, 0xf4, 0xf8);
+            return c == QColor(Qt::black) || c == QColor(Qt::white);
         };
         auto tinted = [&](int x, int y) {
             const QColor c(view.pixel(x, y));
@@ -3662,10 +3673,10 @@ int main(int argc, char** argv)
         CHECK(mainBar && mainBar->isVisible() && mainBar->height() > 0);
     }
 
-    // Archivo > Editor de GIF: otra vista de la imagen (cada capa, un fotograma con su duración en el
-    // nombre); cada cambio es un paso del historial y se vuelve con la misma opción.
+    // Archivo > Editor de GIF > Estudio: otra vista de la imagen (cada capa, un fotograma con su
+    // duración en el nombre); cada cambio es un paso del historial y se vuelve con la misma opción.
     {
-        QAction* gifAction = findAction(&w, QStringLiteral("Editor de GIF"));
+        QAction* gifAction = findAction(&w, QStringLiteral("Estudio"));
         auto* gif = w.findChild<GifEditor*>();
         CHECK(gifAction && gif);
         if (gifAction && gif) {
@@ -3786,6 +3797,49 @@ int main(int argc, char** argv)
                 if (a->shortcut() == QKeySequence(Qt::Key_M))
                     toolKeyEnabled = toolKeyEnabled || a->isEnabled();
             CHECK(toolKeyEnabled);
+
+            // Un espacio vacío delante de un fotograma (en la línea de tiempo se elige con un clic y
+            // su «x» lo quita): quitarlo lo pone a 0 y el fotograma empieza donde acaba el anterior.
+            gifAction->trigger();
+            settle();
+            const int gapSteps = current->undoStack()->index();
+            gif->duplicateFrame(0);
+            gif->setFrameTimings({{1, {300, gif->frameDelay(1)}}}, false);
+            CHECK(gif->frameGap(1) == 300 && gif->frameStart(1) == gif->frameEnd(0) + 300);
+            gif->setFrameTimings({{1, {0, gif->frameDelay(1)}}}, false);
+            CHECK(gif->frameGap(1) == 0 && gif->frameStart(1) == gif->frameEnd(0));
+            // Nombre y altura propios de una pista.
+            gif->setTrackName(0, QStringLiteral("Fondo"));
+            gif->setTrackHeight(0, 120);
+            CHECK(gif->trackName(0) == QLatin1String("Fondo") && gif->trackHeight(0) == 120);
+            gif->setTrackName(0, QString());
+            gif->setTrackHeight(-1, 80);
+            while (current->undoStack()->index() > gapSteps)
+                current->undoStack()->undo();
+            gifAction->trigger();
+            settle();
+        }
+    }
+
+    // Archivo > Editor de GIF > Clásico: los fotogramas en tarjetas, a pantalla completa; Estudio
+    // pasa del uno al otro y la misma opción vuelve al editor de imágenes.
+    {
+        QAction* classicAction = findAction(&w, QStringLiteral("Clásico"));
+        QAction* studioAction = findAction(&w, QStringLiteral("Estudio"));
+        auto* classic = w.findChild<GifClassicEditor*>();
+        auto* studio = w.findChild<GifEditor*>();
+        CHECK(classicAction && studioAction && classic && studio);
+        if (classicAction && studioAction && classic && studio) {
+            classicAction->trigger();
+            settle();
+            CHECK(classic->isVisible() && classicAction->isChecked() && classic->document() == canvas->document());
+            CHECK(!studio->isVisible() && !studioAction->isChecked());
+            studioAction->trigger();
+            settle();
+            CHECK(studio->isVisible() && !classic->isVisible() && studioAction->isChecked() && !classicAction->isChecked());
+            studioAction->trigger();
+            settle();
+            CHECK(!studio->isVisible() && !classic->isVisible() && canvas->isVisible());
         }
     }
 
@@ -3794,6 +3848,9 @@ int main(int argc, char** argv)
     {
         canvas->setViewRotation(90);
         CHECK(std::abs(canvas->viewRotation() - 90) < 1e-9);
+        // La barra de estado dice cuántos grados (y sin girar, no se ve).
+        auto* rotation = w.findChild<QToolButton*>(QStringLiteral("RotationButton"));
+        CHECK(rotation && rotation->isVisible() && rotation->text() == QStringLiteral("90°"));
         const QPointF c = QRectF(canvas->viewport()->rect()).center();
         const QPointF right = canvas->toLogical(c + QPointF(50, 0));
         CHECK(std::abs(right.x() - c.x()) < 0.01 && std::abs(right.y() - (c.y() - 50)) < 0.01);
@@ -3803,6 +3860,7 @@ int main(int argc, char** argv)
         QApplication::sendEvent(canvas->viewport(), &wheel);
         CHECK(std::abs(canvas->viewRotation() - 75) < 1e-9);
         canvas->setViewRotation(0);
+        CHECK(rotation && !rotation->isVisible());
         CHECK(canvas->toLogical(QPointF(10, 20)) == QPointF(10, 20));
     }
 

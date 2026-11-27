@@ -277,6 +277,35 @@ QImage imageFromMimeData(const QMimeData* data)
     return data->hasImage() ? qvariant_cast<QImage>(data->imageData()) : QImage();
 }
 
+void setClipboardImage(QMimeData* data, const QImage& source)
+{
+    if (!data || source.isNull())
+        return;
+    const QImage image = source.convertToFormat(QImage::Format_ARGB32);
+#ifdef Q_OS_WIN
+    // El mapa de bits de Windows (CF_DIB) con los colores premultiplicados: Chromium (Discord, los
+    // navegadores, WhatsApp, Teams...) lee ese y solo respeta el alfa si ningún color pasa de su
+    // alfa; si no, lo toma por basura y pega la imagen opaca. Lo transparente de una capa es blanco
+    // con alfa 0, y en Discord salía con fondo blanco. (Qt escribe los bytes de un ARGB32 tal cual:
+    // se le dan los ya premultiplicados. Los programas que leen el PNG, como Kaint, no lo notan.)
+    const QImage premultiplied = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    data->setImageData(QImage(premultiplied.constBits(), premultiplied.width(), premultiplied.height(),
+                              premultiplied.bytesPerLine(), QImage::Format_ARGB32)
+                           .copy());
+#else
+    data->setImageData(image);
+#endif
+    // Además, un PNG (con su alfa tal cual): lo leen los programas de imagen y el pegado de Kaint.
+    QByteArray png;
+    QBuffer buffer(&png);
+    if (buffer.open(QIODevice::WriteOnly) && image.save(&buffer, "PNG")) {
+        data->setData(QStringLiteral("image/png"), png);
+#ifdef Q_OS_WIN
+        data->setData(QStringLiteral("application/x-qt-windows-mime;value=\"PNG\""), png);
+#endif
+    }
+}
+
 QStringList supportedReadSuffixes()
 {
     QStringList list{QStringLiteral("ora"), QStringLiteral("pdn"), QStringLiteral("psd"), QStringLiteral("psb"),
@@ -815,7 +844,7 @@ QList<Gif::Frame> trackFrames(const Document* doc, int defaultDelay, bool withHi
     QList<int> cuts{0};
     for (const LayerPtr& l : doc->layers()) {
         const int k = l->props.track;
-        const int delay = std::max(Gif::kMinDelayMs, Gif::delayFromName(l->props.name, defaultDelay));
+        const int delay = std::max(Gif::kMinEditDelayMs, Gif::delayFromName(l->props.name, defaultDelay));
         const int start = ends[k] + std::max(0, l->props.gap);
         const Span span{l.get(), start, start + delay};
         ends[k] = span.end;
@@ -882,7 +911,7 @@ QList<Gif::Frame> animationFrames(const Document* doc, int defaultDelay, bool wi
         // Un fotograma con puntos clave (editor de GIF): varios, uno cada poco, con la imagen movida.
         QList<std::pair<QImage, int>> parts;
         if (layer->props.motion && !layer->props.motion->isEmpty())
-            parts = Motion::expand(layer->image, *layer->props.motion, std::max(Gif::kMinDelayMs, delay));
+            parts = Motion::expand(layer->image, *layer->props.motion, std::max(Gif::kMinEditDelayMs, delay));
         else
             parts.append({layer->image, delay});
         for (const auto& [image, length] : std::as_const(parts)) {

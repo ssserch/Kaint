@@ -26,6 +26,10 @@ const extra = {
         "Keyframes of the selected frame (on its image): drag them to change when they arrive; right-click for the motion shape",
     "Configurar esta pantalla":
         "Set up this screen",
+    "Volver al menú":
+        "Back to menu",
+    "Cuánto se ve el fotograma elegido":
+        "How long the selected frame is shown",
     "Fondo con la última imagen editada":
         "Last edited image as background",
     "Importar del dispositivo…":

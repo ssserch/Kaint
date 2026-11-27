@@ -121,7 +121,7 @@ private:
     ChoiceButton* m_smoothing;
     ChoiceButton* m_shape;
     ChoiceButton* m_shapeStyle;
-    QSpinBox* m_cornerRadius;
+    QComboBox* m_cornerRadius;
     QButtonGroup* m_curves;
     ChoiceButton* m_startCap;
     ChoiceButton* m_endCap;

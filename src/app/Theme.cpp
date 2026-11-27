@@ -86,13 +86,6 @@ bool retroScheme(Scheme scheme)
         || scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark || int(scheme) >= int(Scheme::Windows8);
 }
 
-// Los temas con el estilo de Windows 7 (cristal o Basic).
-bool win7Scheme(Scheme scheme)
-{
-    return scheme == Scheme::Windows7 || scheme == Scheme::Windows7Dark || scheme == Scheme::Windows7Basic
-        || scheme == Scheme::Windows7BasicDark;
-}
-
 bool g_aeroTransparency = true;
 QColor g_win7Glass;
 QColor g_win8Color;

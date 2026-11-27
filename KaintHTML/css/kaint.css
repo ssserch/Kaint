@@ -4059,6 +4059,7 @@ fieldset.group > legend {
 :root.phone #main-toolbar .tbutton[data-action="open"],
 :root.phone #main-toolbar .tbutton[data-action="save"],
 :root.phone #main-toolbar .tbutton[data-action="print"],
+:root.phone #main-toolbar .tbutton.menu-arrow,
 :root.phone #main-toolbar .sep.desktop-only {
     display: none;
 }
@@ -4073,27 +4074,30 @@ fieldset.group > legend {
     display: none;
 }
 
+/* Sin la flecha: el botón ya abre todas las opciones de guardado y la flecha solo ocupaba sitio. */
 :root.touch:not(.phone) #main-toolbar .tbutton.touch-save {
     display: inline-flex;
     align-items: center;
-    gap: 1px;
-    width: auto;
-    padding: 0 3px;
+    justify-content: center;
 }
 
 :root.touch .tbutton.touch-save .arrow {
-    font-size: 9px;
+    display: none;
 }
 
+/* El disquete del teléfono, sin flecha: ya abre todo el menú Archivo (con las opciones de guardado)
+   y la flecha solo ocupaba sitio. */
 :root.phone .phone-file {
     display: inline-flex;
     align-items: center;
-    gap: 1px;
-    width: auto;
-    padding: 0 3px;
+    justify-content: center;
 }
 
-:root.phone .phone-file .arrow, :root.phone .phone-more .arrow, :root.phone .tool-options-toggle .arrow {
+:root.phone .phone-file .arrow {
+    display: none;
+}
+
+:root.phone .phone-more .arrow, :root.phone .tool-options-toggle .arrow {
     font-size: 9px;
 }
 

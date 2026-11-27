@@ -593,7 +593,8 @@ static void testShrinkTransform()
                 gray += qAbs(qGray(half.pixel(x, y)) - 128) < 40;
         CHECK(gray > 3000);
     }
-    CHECK(Resample::interpolations().size() == 5);
+    // Vecino más cercano (con y sin suavizado), bilineal, bilineal con supermuestreo, anisotrópico y bicúbico.
+    CHECK(Resample::interpolations().size() == 6);
 }
 
 static void testResample()

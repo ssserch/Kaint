@@ -21,6 +21,7 @@
 #include "app/dialogs/DialogExec.h"
 #include "app/dialogs/EffectDialog.h"
 #include "app/dialogs/GifFramesDialog.h"
+#include "app/GifClassicEditor.h"
 #include "app/GifEditor.h"
 #include "app/GifExport.h"
 #include "app/widgets/BrushAdvanced.h"
@@ -1724,22 +1725,9 @@ MainWindow::MainWindow()
     m_central->addWidget(m_workspace);
     m_gifEditor = new GifEditor(m_central);
     m_central->addWidget(m_gifEditor);
-    connect(m_gifEditor, &GifEditor::exportRequested, this, [this](const QString& format) {
-        if (format == QLatin1String("gif")) {
-            saveAs(m_doc, QStringLiteral("gif"));
-            return;
-        }
-        const GifExport::Format f = format == QLatin1String("apng")   ? GifExport::Format::Apng
-                                    : format == QLatin1String("webp") ? GifExport::Format::WebP
-                                    : format == QLatin1String("mp4")  ? GifExport::Format::Mp4
-                                                                      : GifExport::Format::WebM;
-        const QString path = GifExport::exportAnimation(this, m_doc, f, m_lastDir);
-        if (!path.isEmpty()) {
-            m_lastDir = QFileInfo(path).absolutePath();
-            statusBar()->showMessage(tr("Exportado: %1").arg(QDir::toNativeSeparators(path)), 5000);
-        }
-    });
+    connect(m_gifEditor, &GifEditor::exportRequested, this, &MainWindow::exportAnimation);
     connect(m_gifEditor, &GifEditor::imageEditorRequested, this, [this] { toggleGifEditor(); });
+    connect(m_gifEditor, &GifEditor::classicRequested, this, [this] { openGifEditor(true); });
     connect(m_gifEditor, &GifEditor::undoRequested, this, &MainWindow::undo);
     connect(m_gifEditor, &GifEditor::redoRequested, this, &MainWindow::redo);
     connect(m_gifEditor, &GifEditor::editFrameRequested, this, [this](int layer) {
@@ -1748,6 +1736,20 @@ MainWindow::MainWindow()
         finishTool();
         m_doc->setActiveIndex(layer);
         m_gifDocs.remove(m_doc);
+        updateCentralView();
+    });
+    // El clásico: lo mismo, con sus tarjetas.
+    m_gifClassic = new GifClassicEditor(m_central);
+    m_central->addWidget(m_gifClassic);
+    connect(m_gifClassic, &GifClassicEditor::exportRequested, this, &MainWindow::exportAnimation);
+    connect(m_gifClassic, &GifClassicEditor::imageEditorRequested, this, [this] { toggleGifEditor(); });
+    connect(m_gifClassic, &GifClassicEditor::studioRequested, this, [this] { openGifEditor(false); });
+    connect(m_gifClassic, &GifClassicEditor::editFrameRequested, this, [this](int layer) {
+        if (!m_doc)
+            return;
+        m_doc->setActiveIndex(layer);
+        m_gifDocs.remove(m_doc);
+        m_classicDocs.remove(m_doc);
         updateCentralView();
     });
     setCentralWidget(m_central);
@@ -1926,11 +1928,17 @@ void MainWindow::createActions()
     A["print"] = makeAction(tr("&Imprimir..."), {"document-print"}, QKeySequence::Print, [this] { print(); }, doc);
     // Editor de GIF: la imagen actual como una animación en una línea de tiempo (cada capa, un
     // fotograma), con una interfaz de editor de vídeo; se vuelve con la misma opción.
-    A["gifEditor"] = makeAction(tr("Editor de &GIF"), {"video-x-generic", "image-gif", "media-playback-start"}, {},
-                                [this] { toggleGifEditor(); }, doc);
+    // Dos: el estudio (la línea de tiempo) y el clásico (los fotogramas en tarjetas, como la
+    // configuración avanzada del GIF), en Archivo > Editor de GIF.
+    A["gifEditor"] = makeAction(tr("&Estudio"), {"video-x-generic", "image-gif", "media-playback-start"}, {},
+                                [this] { openGifEditor(false); }, doc);
     A["gifEditor"]->setCheckable(true);
     A["gifEditor"]->setToolTip(tr("Edita esta imagen como un GIF animado, con una línea de tiempo (vuelve a elegirlo para "
                                   "volver al editor de imágenes)"));
+    A["gifClassic"] = makeAction(tr("&Clásico"), {"image-gif", "view-list-icons"}, {}, [this] { openGifEditor(true); }, doc);
+    A["gifClassic"]->setCheckable(true);
+    A["gifClassic"]->setToolTip(tr("Edita esta imagen como un GIF animado fotograma a fotograma, en tarjetas (como la "
+                                   "configuración avanzada del GIF, a pantalla completa)"));
     // Colaboración: por P2P (la predeterminada) o en la red local, cada una con su configuración.
     A["collabHost"] = makeAction(tr("&Hospedar la imagen actual"), {"collab"}, {}, [this] { m_collab->host(m_doc, Collab::Mode::P2P); });
     A["collabJoin"] = makeAction(tr("&Unirse con un código..."), {"network-connect", "collab"}, {},
@@ -2244,7 +2252,8 @@ void MainWindow::createMenus()
     file->addSeparator();
     file->addActions({A["save"], A["saveAs"], A["saveAll"], A["saveAllAs"]});
     file->addSeparator();
-    file->addAction(A["gifEditor"]);
+    QMenu* gifMenu = file->addMenu(Icons::theme({"video-x-generic", "image-gif", "media-playback-start"}), tr("Editor de &GIF"));
+    gifMenu->addActions({A["gifEditor"], A["gifClassic"]});
     file->addSeparator();
     file->addAction(A["print"]);
     file->addSeparator();
@@ -2817,6 +2826,19 @@ void MainWindow::createStatusBar()
     m_unitButton->setMenu(unitMenu);
     bar->addPermanentWidget(m_unitButton);
 
+    // La vista girada (Alt + rueda): cuántos grados, junto al zum; solo se ve girada.
+    m_rotationButton = new QToolButton(bar);
+    m_rotationButton->setObjectName(QStringLiteral("RotationButton"));
+    m_rotationButton->setAutoRaise(true);
+    m_rotationButton->setFocusPolicy(Qt::NoFocus);
+    m_rotationButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_rotationButton->setIcon(Icons::theme({"object-rotate-right", "rotate-right", "transform-rotate"}));
+    m_rotationButton->setIconSize(QSize(16, 16));
+    m_rotationButton->setToolTip(tr("Giro de la vista (Alt + rueda). Clic: vista sin girar"));
+    m_rotationButton->hide();
+    connect(m_rotationButton, &QToolButton::clicked, this, [this] { m_canvas->setViewRotation(0); });
+    bar->addPermanentWidget(m_rotationButton);
+
     m_zoomBox = new QComboBox(bar);
     m_zoomBox->setObjectName(QStringLiteral("ZoomBox"));
     m_zoomBox->setEditable(true);
@@ -2870,6 +2892,12 @@ void MainWindow::createStatusBar()
         const QSignalBlocker b1(m_zoomSlider), b2(m_zoomBox);
         m_zoomSlider->setValue(zoomToSlider(z));
         m_zoomBox->setEditText(zoomText(z));
+    });
+    connect(m_canvas, &Canvas::viewChanged, this, [this] {
+        const qreal degrees = m_canvas->viewRotation();
+        // (En el editor de GIF la barra de estado solo lleva su nombre.)
+        m_rotationButton->setVisible(degrees != 0 && !inGifEditor() && !inClassicGifEditor());
+        m_rotationButton->setText(QStringLiteral("%1°").arg(QLocale().toString(degrees, 'f', std::round(degrees) == degrees ? 0 : 1)));
     });
     // Como en Paint.NET: con la imagen como la deja «Zum a ventana» (y centrada), el botón muestra la
     // imagen enmarcada en vez de las flechas.
@@ -3039,6 +3067,7 @@ bool MainWindow::closeDocument(Document* doc, bool ask)
     }
     m_thumbDirty.remove(doc);
     m_gifDocs.remove(doc);
+    m_classicDocs.remove(doc);
     if (doc == m_doc)
         m_doc = nullptr;
     setCurrentDocument(next, true);
@@ -3281,18 +3310,20 @@ void MainWindow::updateActions()
     // la imagen a escondidas (un pegado flotante que quedaba como una capa vieja al volver):
     // desactivado. Copiar, cortar y pegar trabajan con fotogramas (GifEditor).
     const bool gif = inGifEditor();
+    const bool classic = inClassicGifEditor();
     for (QAction* a : std::as_const(m_imageOnlyActions))
-        a->setEnabled(!gif);
-    if (gif) {
+        a->setEnabled(!gif && !classic);
+    if (gif || classic) {
         for (QAction* a : std::as_const(m_selActions))
             a->setEnabled(false);
         for (const char* name : {"selectAll", "deselect", "invertSel", "copySelection", "copyMerged", "pasteImage"})
             if (QAction* a = m_act.value(QLatin1String(name)))
                 a->setEnabled(false);
-        m_act["copy"]->setEnabled(true);
-        m_act["cut"]->setEnabled(true);
-        m_act["paste"]->setEnabled(true);
-        m_act["pasteLayer"]->setEnabled(true);
+        // (Copiar y pegar fotogramas, en el estudio; en el clásico, sus botones.)
+        m_act["copy"]->setEnabled(gif);
+        m_act["cut"]->setEnabled(gif);
+        m_act["paste"]->setEnabled(gif);
+        m_act["pasteLayer"]->setEnabled(gif);
     }
 }
 
@@ -3305,9 +3336,9 @@ void MainWindow::showToolHint(const QString& hint)
 void MainWindow::refreshHint()
 {
     // En el editor de GIF, solo su icono y su nombre (lo demás de la barra es del lienzo).
-    if (inGifEditor()) {
+    if (inGifEditor() || inClassicGifEditor()) {
         m_hintIcon->setPixmap(Icons::theme({"video-x-generic", "image-gif", "media-playback-start"}).pixmap(QSize(16, 16), devicePixelRatioF()));
-        m_hint->setText(tr("Editor de GIF"));
+        m_hint->setText(inClassicGifEditor() ? tr("Editor de GIF clásico") : tr("Editor de GIF"));
         return;
     }
     // Con una herramienta de selección en reposo y algo seleccionado, como Paint.NET: posición,
@@ -3628,7 +3659,7 @@ void MainWindow::openFiles(const QStringList& paths)
     }
 }
 
-QString MainWindow::screenPreview(const QStringList& files, const QString& output, bool gifEditor, const QString& popup)
+QString MainWindow::screenPreview(const QStringList& files, const QString& output, int gifEditor, const QString& popup)
 {
     Document* first = nullptr;
     for (const QString& path : files) {
@@ -3646,6 +3677,8 @@ QString MainWindow::screenPreview(const QStringList& files, const QString& outpu
         newDefaultDocument();
     if (gifEditor && m_doc) {
         m_gifDocs.insert(m_doc);
+        if (gifEditor == 2)
+            m_classicDocs.insert(m_doc);
         updateCentralView();
     }
     // La tira de imágenes (para el README): la primera, sin guardar (la estrella naranja); la
@@ -3781,16 +3814,58 @@ bool MainWindow::inGifEditor() const
     return m_doc && m_gifDocs.contains(m_doc) && m_central && m_central->currentWidget() == m_gifEditor;
 }
 
+bool MainWindow::inClassicGifEditor() const
+{
+    return m_doc && m_gifDocs.contains(m_doc) && m_central && m_central->currentWidget() == m_gifClassic;
+}
+
 void MainWindow::toggleGifEditor()
 {
     if (!m_doc)
         return;
     finishTool();
-    if (m_gifDocs.contains(m_doc))
+    if (m_gifDocs.contains(m_doc)) {
         m_gifDocs.remove(m_doc);
-    else
+        m_classicDocs.remove(m_doc);
+    } else {
         m_gifDocs.insert(m_doc);
+    }
     updateCentralView();
+}
+
+void MainWindow::openGifEditor(bool classic)
+{
+    if (!m_doc)
+        return;
+    // En ese mismo editor: se vuelve al de imágenes (como antes con Editor de GIF).
+    if (m_gifDocs.contains(m_doc) && m_classicDocs.contains(m_doc) == classic) {
+        toggleGifEditor();
+        return;
+    }
+    finishTool();
+    m_gifDocs.insert(m_doc);
+    if (classic)
+        m_classicDocs.insert(m_doc);
+    else
+        m_classicDocs.remove(m_doc);
+    updateCentralView();
+}
+
+void MainWindow::exportAnimation(const QString& format)
+{
+    if (format == QLatin1String("gif")) {
+        saveAs(m_doc, QStringLiteral("gif"));
+        return;
+    }
+    const GifExport::Format f = format == QLatin1String("apng")   ? GifExport::Format::Apng
+                                : format == QLatin1String("webp") ? GifExport::Format::WebP
+                                : format == QLatin1String("mp4")  ? GifExport::Format::Mp4
+                                                                  : GifExport::Format::WebM;
+    const QString path = GifExport::exportAnimation(this, m_doc, f, m_lastDir);
+    if (!path.isEmpty()) {
+        m_lastDir = QFileInfo(path).absolutePath();
+        statusBar()->showMessage(tr("Exportado: %1").arg(QDir::toNativeSeparators(path)), 5000);
+    }
 }
 
 void MainWindow::updateCentralView()
@@ -3798,12 +3873,18 @@ void MainWindow::updateCentralView()
     if (!m_central)
         return;
     const bool gif = m_doc && m_gifDocs.contains(m_doc);
+    const bool classic = gif && m_classicDocs.contains(m_doc);
     m_gifEditor->setOpenDocuments(m_docs);
-    m_gifEditor->setDocument(gif ? m_doc : nullptr);
-    m_central->setCurrentWidget(gif ? static_cast<QWidget*>(m_gifEditor) : m_workspace);
+    m_gifEditor->setDocument(gif && !classic ? m_doc : nullptr);
+    m_gifClassic->setDocument(classic ? m_doc : nullptr);
+    m_central->setCurrentWidget(classic ? static_cast<QWidget*>(m_gifClassic) : gif ? static_cast<QWidget*>(m_gifEditor) : m_workspace);
     if (QAction* a = m_act.value("gifEditor")) {
         const QSignalBlocker block(a);
-        a->setChecked(gif);
+        a->setChecked(gif && !classic);
+    }
+    if (QAction* a = m_act.value("gifClassic")) {
+        const QSignalBlocker block(a);
+        a->setChecked(classic);
     }
     // Las opciones de las herramientas no sirven en el editor de GIF: se esconden mientras tanto.
     if (m_options) {
@@ -3815,7 +3896,9 @@ void MainWindow::updateCentralView()
             m_optionsHiddenForGif = false;
         }
     }
-    if (gif)
+    if (classic)
+        m_gifClassic->setFocus();
+    else if (gif)
         m_gifEditor->setFocus();
     else
         m_canvas->setFocus();
@@ -4447,22 +4530,13 @@ void MainWindow::copy(bool merged)
     const QImage source = merged ? m_doc->flattened() : m_doc->activeLayer()->image;
     const Selection& selection = m_doc->selection();
     const QImage out = Raster::extractSelection(source, selection).convertToFormat(QImage::Format_ARGB32);
-    // Además de la imagen, un PNG: Discord, los navegadores y otros programas leen ese formato y
-    // conservan la transparencia (con el mapa de bits de Windows, CF_DIB, sale en blanco o negro).
-    // Paint.NET hace lo mismo.
+    // La imagen y un PNG, con la transparencia que entienden Discord, los navegadores y los
+    // programas de imagen (ImageIO::setClipboardImage).
     auto* data = new QMimeData;
-    data->setImageData(out);
+    ImageIO::setClipboardImage(data, out);
     if (!selection.isEmpty() && !selection.isRectangular())
         data->setData(kSelectionShapeMime,
                       encodeSelectionShape(selection.placed(-selection.bounds().topLeft(), out.size()), out.size()));
-    QByteArray png;
-    QBuffer buffer(&png);
-    if (buffer.open(QIODevice::WriteOnly) && out.save(&buffer, "PNG")) {
-        data->setData(QStringLiteral("image/png"), png);
-#ifdef Q_OS_WIN
-        data->setData(QStringLiteral("application/x-qt-windows-mime;value=\"PNG\""), png);
-#endif
-    }
     QApplication::clipboard()->setMimeData(data);
     m_copyOrigin = m_doc->selection().isEmpty() ? QPoint(0, 0) : m_doc->selection().bounds().topLeft();
     m_copySignature = imageSignature(out);

@@ -18,6 +18,9 @@ namespace ImageIO {
 // Discord...: conserva la transparencia) y, si no, la imagen de Qt (en Windows, el mapa de bits, sin
 // transparencia). Nula si no trae ninguna.
 QImage imageFromMimeData(const QMimeData* data);
+// Pone 'image' en 'data' para el portapapeles: la imagen (en Windows, el mapa de bits) y un PNG, con
+// la transparencia que entienden los demás programas.
+void setClipboardImage(QMimeData* data, const QImage& image);
 
 QString openFilter();
 QString saveFilter(QString* defaultFilter = nullptr);

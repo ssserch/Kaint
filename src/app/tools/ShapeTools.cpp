@@ -73,6 +73,20 @@ QPoint arrowDelta(QKeyEvent* e)
     return (e->modifiers() & Qt::ControlModifier) ? d * 10 : d;
 }
 
+// Con la calidad de selección pixelada, los puntos de la línea van píxel a píxel: en el centro de
+// un píxel con un grosor impar (la línea cubre píxeles enteros) y en una esquina con uno par.
+bool pixelated() { return !AppState::instance()->tools().selectionAntialias; }
+
+QPointF pixelPoint(const QPointF& p)
+{
+    if (!pixelated())
+        return p;
+    const bool odd = int(std::lround(std::max(1.0, AppState::instance()->tools().brushSize))) % 2 == 1;
+    if (odd)
+        return QPointF(std::floor(p.x()) + 0.5, std::floor(p.y()) + 0.5);
+    return QPointF(std::round(p.x()), std::round(p.y()));
+}
+
 // Pluma con el estilo de la barra (el ancho admite decimales).
 QPen strokePen(const QBrush& brush, Qt::PenCapStyle cap)
 {
@@ -167,7 +181,16 @@ QPainterPath shapeInBox(const ToolSettings& s, const QRectF& local, const QTrans
         box.adjust(dx, dy, -dx, -dy);
     }
     *width = w;
-    QPainterPath path = toolShapePath(s, box);
+    QPainterPath path;
+    if (s.shape == ShapeType::RoundedRect) {
+        // El radio, en píxeles del lienzo: el cuadro se estira con los tiradores (con escala en la
+        // transformación), y con el radio en el cuadro las esquinas crecían con él hasta que el
+        // rectángulo parecía un círculo.
+        const qreal radius = std::min<qreal>(s.cornerRadius, std::min(box.width() * sx, box.height() * sy) / 2.0);
+        path.addRoundedRect(box, radius / sx, radius / sy);
+    } else {
+        path = toolShapePath(s, box);
+    }
     // Lo que sobresale del rectángulo (curvas de la nube, formas personalizadas), dentro.
     const QRectF b = path.boundingRect();
     if (b.isValid() && b != box) {
@@ -402,8 +425,8 @@ void LineTool::mousePress(const ToolEvent& e)
     m_edit.begin(doc, doc->activeLayerPtr());
     m_steps.start(m_edit);
     m_secondary = e.button == Qt::RightButton;
-    m_anchor = e.pos;
-    setInitialNodes(e.pos, e.pos);
+    m_anchor = pixelPoint(e.pos);
+    setInitialNodes(m_anchor, m_anchor);
     m_drag = Drag::Create;
 }
 
@@ -429,19 +452,22 @@ void LineTool::mouseMove(const ToolEvent& e)
         canvas()->setToolCursor(Icons::handCursor(true));
     switch (m_drag) {
     case Drag::Create: {
-        QPointF end = (e.modifiers & Qt::ShiftModifier) ? snapAngle(m_anchor, e.pos) : e.pos;
+        const QPointF end = pixelPoint((e.modifiers & Qt::ShiftModifier) ? snapAngle(m_anchor, e.pos) : e.pos);
         const QPointF start = (e.modifiers & Qt::AltModifier) ? m_anchor * 2 - end : m_anchor;
         setInitialNodes(start, end);
         break;
     }
     case Drag::Point:
-        m_pts[size_t(m_dragIndex)] = e.pos;
+        m_pts[size_t(m_dragIndex)] = pixelPoint(e.pos);
         break;
     case Drag::Move: {
-        const QPointF d = e.pos - m_grab;
+        QPointF d = e.pos - m_grab;
+        // Pixelada: de píxel en píxel (lo que queda se guarda para el siguiente paso).
+        if (pixelated())
+            d = QPointF(std::round(d.x()), std::round(d.y()));
         for (QPointF& p : m_pts)
             p += d;
-        m_grab = e.pos;
+        m_grab += d;
         break;
     }
     case Drag::Rotate: {
@@ -741,7 +767,11 @@ void ShapesTool::mouseMove(const ToolEvent& e)
         return;
     }
     if (m_box.mode() != TransformBox::Mode::None) {
-        m_box.update(e.pos, e.modifiers);
+        const QTransform canvasMap = m_box.update(e.pos, e.modifiers);
+        // Con la calidad de selección pixelada, la forma se mueve y cambia de tamaño píxel a píxel
+        // (como Mover selección): sus bordes no quedan a medio píxel.
+        if (!AppState::instance()->tools().selectionAntialias && canvasMap.type() != QTransform::TxProject)
+            m_box.set(m_box.localRect(), TransformBox::snappedToPixels(canvasMap, m_box.localRect()));
         if (m_box.mode() == TransformBox::Mode::Rotate)
             canvas()->setToolCursor(Icons::rotateCursor(rotateAngle(m_box, canvas()->imageToViewTransform(), e.viewPos), true));
         render();

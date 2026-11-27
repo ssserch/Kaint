@@ -31,6 +31,7 @@
 #include <QImageReader>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
@@ -116,9 +117,10 @@ private:
 constexpr int kRulerHeight = 26;
 constexpr int kTrackTop = kRulerHeight + 6;
 // Cada pista: sus clips (con los rombos de los puntos clave sobre la imagen) y aire entre pistas.
-// (Se cambia arrastrando el borde de abajo de una pista en su cabecera o con su menú, y se recuerda.)
+// Cada una tiene su altura (se cambia arrastrando el borde de abajo de una pista en su cabecera o con
+// su menú); esta es la de las pistas nuevas (se recuerda).
 int kTrackHeight = 80;
-constexpr int kMinTrackHeight = 44, kMaxTrackHeight = 160;
+constexpr int kMinTrackHeight = 36, kMaxTrackHeight = 320;
 constexpr int kTrackGap = 8;
 // La cabecera de las pistas (su nombre y sus botones), a la izquierda.
 constexpr int kHeaderWidth = 132;
@@ -208,7 +210,7 @@ static Motion::Clip shiftedMotion(Motion::Clip clip, int shift)
 
 int delayOf(const Layer* layer)
 {
-    return layer ? std::max(Gif::kMinDelayMs, Gif::delayFromName(layer->props.name, kDefaultDelay)) : kDefaultDelay;
+    return layer ? std::max(Gif::kMinEditDelayMs, Gif::delayFromName(layer->props.name, kDefaultDelay)) : kDefaultDelay;
 }
 
 QImage fitted(const QImage& image, QSize canvas)
@@ -240,7 +242,7 @@ void framesOf(const Document* doc, QList<QImage>* frames, QList<int>* delays)
     if (animation && doc->layerCount() > 1) {
         for (const Gif::Frame& f : ImageIO::animationFrames(doc, kDefaultDelay)) {
             *frames << f.image;
-            *delays << std::max(Gif::kMinDelayMs, f.delayMs);
+            *delays << std::max(Gif::kMinEditDelayMs, f.delayMs);
         }
         return;
     }
@@ -333,7 +335,7 @@ public:
         : QWidget(parent)
         , m_editor(editor)
     {
-        setMinimumSize(200, 150);
+        setMinimumSize(160, 100);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         setMouseTracking(true);
         m_mode = Mode(std::clamp(QSettings().value(QStringLiteral("gifEditor/transformMode"), 0).toInt(), 0, 2));
@@ -710,6 +712,24 @@ private:
 // Línea de tiempo
 // ---------------------------------------------------------------------------
 
+// El campo de texto del nombre de una pista: Esc lo cancela.
+class NameEdit : public QLineEdit {
+public:
+    using QLineEdit::QLineEdit;
+    std::function<void()> onCancel;
+
+protected:
+    void keyPressEvent(QKeyEvent* e) override
+    {
+        if (e->key() == Qt::Key_Escape && onCancel) {
+            onCancel();
+            e->accept();
+            return;
+        }
+        QLineEdit::keyPressEvent(e);
+    }
+};
+
 class Timeline : public QWidget {
 public:
     Timeline(GifEditor* editor, QWidget* parent)
@@ -725,7 +745,7 @@ public:
 
     void setPixelsPerSecond(int pps)
     {
-        m_pps = std::clamp(pps, 40, 3000);
+        m_pps = std::clamp(pps, 20, 6000);
         updateGeometry();
         adjustSize();
         update();
@@ -734,29 +754,52 @@ public:
     // Al cambiar el zum con la rueda (para la barra del zum).
     std::function<void(int)> onZoom;
 
-    static int rowStep() { return kTrackHeight + kTrackGap; }
     int tracks() const { return std::max(1, m_editor->trackCount()); }
-    static int heightFor(int tracks) { return kTrackTop + tracks * rowStep() + 4; }
+    // Cada pista con su altura (se cambia una por una).
+    int trackHeight(int track) const { return m_editor->trackHeight(track); }
+    int rowStep(int track) const { return trackHeight(track) + kTrackGap; }
+    // Lo que ocupan todas las pistas de los fotogramas.
+    int tracksHeight() const
+    {
+        int h = 0;
+        for (int k = 0; k < tracks(); ++k)
+            h += rowStep(k);
+        return h;
+    }
+    // Con pistas de la altura de las nuevas (para el tamaño mínimo).
+    static int heightFor(int tracks) { return kTrackTop + tracks * (kTrackHeight + kTrackGap) + 4; }
     // Las pistas de número más alto, arriba (como en Filmora: se ven encima de las de abajo).
-    int trackTop(int track) const { return kTrackTop + (tracks() - 1 - track) * rowStep(); }
+    int trackTop(int track) const
+    {
+        int y = kTrackTop;
+        for (int k = tracks() - 1; k > track; --k)
+            y += rowStep(k);
+        return y;
+    }
     int trackAtY(int y) const
     {
         if (y < kTrackTop)
             return -1;
-        const int row = (y - kTrackTop) / rowStep();
-        return row >= tracks() ? -1 : tracks() - 1 - row;
+        int top = kTrackTop;
+        for (int k = tracks() - 1; k >= 0; --k) {
+            if (y < top + rowStep(k))
+                return k;
+            top += rowStep(k);
+        }
+        return -1;
     }
 
     QSize sizeHint() const override
     {
         const int w = kLeftMargin + int(std::ceil(m_editor->timelineEnd() * pxPerMs())) + 160;
-        return {std::max(w, parentWidget() ? parentWidget()->width() : 400), heightFor(tracks()) + kAudioGap + audioRows() * audioStep()};
+        return {std::max(w, parentWidget() ? parentWidget()->width() : 400),
+                kTrackTop + tracksHeight() + 4 + kAudioGap + audioRows() * audioStep()};
     }
 
     // --- Audio ---
     int audioRows() const { return std::max(1, m_editor->audioRows()); }
     static int audioStep() { return kAudioHeight + kTrackGap; }
-    int audioTop(int row) const { return kTrackTop + tracks() * rowStep() + kAudioGap + row * audioStep(); }
+    int audioTop(int row) const { return kTrackTop + tracksHeight() + kAudioGap + row * audioStep(); }
     int audioRowAt(int y) const
     {
         const int top = audioTop(0) - kTrackGap / 2;
@@ -765,10 +808,11 @@ public:
         const int row = (y - top) / audioStep();
         return row < audioRows() ? row : -1;
     }
-    // El clip tal como se ve (mientras se mueve o se recorta, con lo nuevo).
+    // El clip tal como se ve (mientras se recorta, con lo nuevo; mientras se mueve, se queda donde
+    // estaba y su sombra va donde caerá).
     Audio::Clip shownAudio(int i) const
     {
-        if (i == m_aEdit && m_aEditing)
+        if (i == m_aEdit && m_aEditing && m_aMode != 0)
             return m_aClip;
         return m_editor->audioClips().value(i);
     }
@@ -847,6 +891,29 @@ public:
             const QRect r = audioRect(i);
             if (r.intersects(exposed))
                 paintAudioClip(p, i, r);
+        }
+        // Moviendo un clip: dónde caerá, como el de los fotogramas (pegado a una unión al acercarse).
+        if (m_aEdit >= 0 && m_aEditing && m_aMode == 0) {
+            const int x0 = xForTime(m_aClip.start), x1 = xForTime(m_aClip.end());
+            const QRect ghost(x0, audioTop(m_aClip.row), std::max(6, x1 - x0) - 2, kAudioHeight);
+            QColor fill = pal.color(QPalette::Highlight);
+            fill.setAlpha(110);
+            p.save();
+            p.setRenderHint(QPainter::Antialiasing);
+            QPainterPath path;
+            path.addRoundedRect(QRectF(ghost).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6);
+            p.fillPath(path, fill);
+            p.setPen(QPen(pal.color(QPalette::Highlight), 2));
+            p.drawPath(path);
+            QFont f = font();
+            f.setPointSizeF(std::max(6.5, f.pointSizeF() * 0.85));
+            f.setBold(true);
+            p.setFont(f);
+            p.setPen(Look::text);
+            const QRect label = ghost.adjusted(6, 2, -6, 0);
+            p.drawText(label.left(), label.top(), label.width(), 16, Qt::AlignLeft | Qt::AlignVCenter,
+                       p.fontMetrics().elidedText(QStringLiteral("♪ ") + m_aClip.name, Qt::ElideRight, label.width()));
+            p.restore();
         }
     }
 
@@ -967,7 +1034,7 @@ public:
         m_resizePlan.clear();
         for (int i : resizeGroup()) {
             const int delay = m_editor->frameDelay(i);
-            const int next = std::max(Gif::kMinDelayMs, delay + delta);
+            const int next = std::max(Gif::kMinEditDelayMs, delay + delta);
             const int gap = m_editor->frameGap(i);
             m_resizePlan.insert(i, {m_resizeLeft ? std::max(0, gap - (next - delay)) : gap, next});
         }
@@ -995,16 +1062,99 @@ public:
     {
         const auto [start, end] = span(index);
         const int x0 = xForTime(start), x1 = xForTime(end);
-        return QRect(x0, trackTop(m_editor->trackOf(index)), std::max(6, x1 - x0) - 2, kTrackHeight);
+        const int track = m_editor->trackOf(index);
+        return QRect(x0, trackTop(track), std::max(6, x1 - x0) - 2, trackHeight(track));
     }
 
     void refresh()
     {
         adjustSize();
+        placeNameEdit();
         update();
     }
 
+    // El espacio vacío elegido (Supr o su «x» lo quitan): el de delante del fotograma 'm_gapFrame'.
+    bool gapValid() const
+    {
+        return m_gapFrame >= 0 && m_gapFrame < m_editor->frameCount() && m_editor->frameGap(m_gapFrame) > 0;
+    }
+    bool removeSelectedGap()
+    {
+        if (!gapValid())
+            return false;
+        const int frame = m_gapFrame;
+        m_gapFrame = -1;
+        QHash<int, std::pair<int, int>> plan;
+        plan.insert(frame, {0, m_editor->frameDelay(frame)});
+        m_editor->setFrameTimings(plan, false);
+        update();
+        return true;
+    }
+
 protected:
+    // (Al desplazarse, el campo del nombre sigue a la cabecera.)
+    void moveEvent(QMoveEvent* e) override
+    {
+        QWidget::moveEvent(e);
+        placeNameEdit();
+    }
+
+    // El espacio vacío de delante de un fotograma en su pista (entre el anterior y él).
+    QRect gapRect(int frame) const
+    {
+        const int track = m_editor->trackOf(frame);
+        const int x0 = xForTime(m_editor->frameStart(frame) - m_editor->frameGap(frame)), x1 = xForTime(m_editor->frameStart(frame));
+        return QRect(x0, trackTop(track), std::max(8, x1 - x0 - 2), trackHeight(track));
+    }
+    QRect gapCloseRect(int frame) const
+    {
+        const QRect g = gapRect(frame);
+        return QRect(g.right() - 19, g.top() + 4, 16, 16);
+    }
+    int gapAt(QPoint pos) const
+    {
+        const int track = trackAtY(pos.y());
+        if (track < 0 || pos.x() < headerX() + kHeaderWidth)
+            return -1;
+        for (int i : m_editor->framesOfTrack(track))
+            if (m_editor->frameGap(i) > 0 && gapRect(i).contains(pos))
+                return i;
+        return -1;
+    }
+
+    // Imán (el botón del imán, encendido de fábrica): las uniones a las que se pega lo que se
+    // arrastra: el principio, el cabezal y los bordes de los clips de fotogramas y de audio (sin los
+    // del que se mueve).
+    QList<int> junctions(int skipFrame = -1, int skipAudio = -1) const
+    {
+        QList<int> out{0, m_editor->playTime()};
+        for (int i = 0; i < m_editor->frameCount(); ++i)
+            if (i != skipFrame)
+                out << m_editor->frameStart(i) << m_editor->frameEnd(i);
+        const QList<Audio::Clip> clips = m_editor->audioClips();
+        for (int i = 0; i < clips.size(); ++i)
+            if (i != skipAudio)
+                out << clips[i].start << clips[i].end();
+        return out;
+    }
+    // 't' pegado a la unión más cerca (a menos de 'px' píxeles); sin el imán o sin ninguna cerca, tal cual.
+    int snapped(int t, const QList<int>& targets, int px = kSnap, bool* hit = nullptr) const
+    {
+        if (hit)
+            *hit = false;
+        if (!m_editor->magnetOn())
+            return t;
+        int best = px + 1, out = t;
+        for (int c : targets)
+            if (const int d = std::abs(xForTime(c) - xForTime(t)); d < best) {
+                best = d;
+                out = c;
+                if (hit)
+                    *hit = true;
+            }
+        return out;
+    }
+
     double pxPerMs() const { return m_pps / 1000.0; }
     // Dónde empieza lo que se ve (la cabecera de las pistas se queda ahí al desplazarse).
     int headerX() const { return std::max(0, -x()); }
@@ -1075,25 +1225,34 @@ protected:
     int rulerY() const { return std::max(0, -y()); }
     bool inRuler(QPoint pos) const { return pos.y() >= rulerY() && pos.y() < rulerY() + kRulerHeight; }
     // (Con las pistas bajas, a la derecha del nombre.)
+    static bool tallTrack(int height) { return height >= 64; }
     QRect eyeRect(int track) const
     {
-        return kTrackHeight >= 64 ? QRect(headerX() + 8, trackTop(track) + kTrackHeight - 30, 26, 26)
-                                  : QRect(headerX() + kHeaderWidth - 62, trackTop(track) + (kTrackHeight - 26) / 2, 26, 26);
+        const int h = trackHeight(track);
+        return tallTrack(h) ? QRect(headerX() + 8, trackTop(track) + h - 30, 26, 26)
+                            : QRect(headerX() + kHeaderWidth - 62, trackTop(track) + (h - 26) / 2, 26, 26);
     }
     QRect trashRect(int track) const { return eyeRect(track).translated(30, 0); }
-    // El borde de abajo de una pista en la cabecera (arrastrándolo cambia la altura de todas), o -1.
+    // El nombre de la pista en la cabecera: un clic lo cambia.
+    QRect nameRect(int track) const
+    {
+        return QRect(headerX() + 6, trackTop(track) + 3, tallTrack(trackHeight(track)) ? kHeaderWidth - 14 : kHeaderWidth - 72, 22);
+    }
+    QRect audioNameRect(int row) const { return QRect(headerX() + 6, audioTop(row) + (kAudioHeight - 22) / 2, kHeaderWidth - 72, 22); }
+    // El borde de abajo de una pista en la cabecera (arrastrándolo cambia la altura de esa pista), o -1.
     int heightEdgeAt(QPoint pos) const
     {
         if (pos.x() >= headerX() + kHeaderWidth || pos.x() < headerX())
             return -1;
         for (int k = 0; k < tracks(); ++k)
-            if (std::abs(pos.y() - (trackTop(k) + kTrackHeight + kTrackGap / 2)) <= 4)
+            if (std::abs(pos.y() - (trackTop(k) + trackHeight(k) + kTrackGap / 2)) <= 4)
                 return k;
         return -1;
     }
-    void setTrackHeight(int h)
+    // La altura de una pista ('track' -1: todas, y la de las nuevas).
+    void setTrackHeight(int track, int h)
     {
-        kTrackHeight = std::clamp(h, kMinTrackHeight, kMaxTrackHeight);
+        m_editor->setTrackHeight(track, std::clamp(h, kMinTrackHeight, kMaxTrackHeight));
         m_thumbs.clear();
         updateGeometry();
         adjustSize();
@@ -1109,7 +1268,7 @@ protected:
         // Las filas de las pistas; la elegida, marcada.
         const int active = m_editor->activeTrack();
         for (int k = 0; k < tracks(); ++k) {
-            const QRect row(0, trackTop(k) - kTrackGap / 2, width(), rowStep());
+            const QRect row(0, trackTop(k) - kTrackGap / 2, width(), rowStep(k));
             QColor c = k == active ? pal.color(QPalette::Highlight) : pal.color(QPalette::AlternateBase);
             c.setAlpha(k == active ? 28 : 255);
             p.fillRect(row, k == active ? c : (k % 2 ? pal.color(QPalette::Base) : c));
@@ -1195,11 +1354,27 @@ protected:
                 p.setBrush(Qt::NoBrush);
             }
         }
+        // El espacio vacío elegido (entre dos clips o delante del primero): un recuadro blanco con
+        // la «x» que lo quita (los de detrás se corren hacia delante).
+        if (gapValid()) {
+            const QRect g = gapRect(m_gapFrame);
+            p.fillRect(g, QColor(0x04, 0x16, 0x14));
+            p.setPen(QPen(Qt::white, 2));
+            p.drawRect(g.adjusted(1, 1, -1, -1));
+            const QRect x = gapCloseRect(m_gapFrame);
+            if (x.contains(m_hover))
+                p.fillRect(x, QColor(255, 255, 255, 50));
+            p.setPen(QPen(Qt::white, 1.6));
+            p.setRenderHint(QPainter::Antialiasing);
+            p.drawLine(x.topLeft() + QPointF(3.5, 3.5), x.bottomRight() + QPointF(-2.5, -2.5));
+            p.drawLine(QPointF(x.right() - 2.5, x.top() + 3.5), QPointF(x.left() + 3.5, x.bottom() - 2.5));
+            p.setRenderHint(QPainter::Antialiasing, false);
+        }
         // Una pista vacía: cómo llenarla.
         for (int k = 0; k < tracks(); ++k)
             if (m_editor->framesOfTrack(k).isEmpty()) {
                 p.setPen(pal.color(QPalette::PlaceholderText));
-                p.drawText(QRect(kLeftMargin, trackTop(k), std::max(300, width() - kLeftMargin - 20), kTrackHeight),
+                p.drawText(QRect(kLeftMargin, trackTop(k), std::max(300, width() - kLeftMargin - 20), trackHeight(k)),
                            Qt::AlignLeft | Qt::AlignVCenter,
                            GifEditor::tr("Arrastra aquí imágenes o GIF (de la biblioteca o de tus carpetas)"));
             }
@@ -1207,7 +1382,7 @@ protected:
         // El clip que se arrastra, siguiendo al puntero (pegado a una unión al acercarse).
         if (m_reordering && m_pressIndex >= 0 && m_dropTrack >= 0 && doc && m_pressIndex < m_editor->frameCount()) {
             const QRect from = clipRect(m_pressIndex);
-            const QRect ghost(m_ghostX, trackTop(m_dropTrack), from.width(), kTrackHeight);
+            const QRect ghost(m_ghostX, trackTop(m_dropTrack), from.width(), trackHeight(m_dropTrack));
             QColor fill = pal.color(QPalette::Highlight);
             fill.setAlpha(110);
             p.setRenderHint(QPainter::Antialiasing);
@@ -1228,7 +1403,7 @@ protected:
             const int x = frames.contains(m_dropAt) ? xForTime(m_editor->frameStart(m_dropAt)) - 1
                           : frames.isEmpty()        ? kLeftMargin
                                                     : xForTime(m_editor->frameEnd(frames.last()));
-            p.fillRect(QRect(x - 1, trackTop(m_dropTrack) - 4, 3, kTrackHeight + 8), pal.color(QPalette::Highlight));
+            p.fillRect(QRect(x - 1, trackTop(m_dropTrack) - 4, 3, trackHeight(m_dropTrack) + 8), pal.color(QPalette::Highlight));
         }
         // El rectángulo de elegir clips.
         if (m_marquee) {
@@ -1278,6 +1453,66 @@ protected:
         paintHeader(p, hx);
     }
 
+    // El nombre de una pista: con el puntero encima, un recuadro que avisa de que un clic lo cambia.
+    void paintName(QPainter& p, const QRect& r, const QString& name, bool editing)
+    {
+        // (Mientras se cambia, encima está el campo de texto.)
+        if (editing)
+            return;
+        const QPalette pal = palette();
+        if (r.contains(m_hover)) {
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setPen(pal.color(QPalette::Light));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
+            p.setRenderHint(QPainter::Antialiasing, false);
+        }
+        p.setPen(pal.color(QPalette::WindowText));
+        const QRect text = r.adjusted(4, 0, -4, 0);
+        p.drawText(text, Qt::AlignLeft | Qt::AlignVCenter, p.fontMetrics().elidedText(name, Qt::ElideRight, text.width()));
+    }
+
+    // Cambiar el nombre de una pista ('which': la pista o kAudioRename + la de audio) en un campo de
+    // texto sobre su nombre: Intro o un clic fuera lo guardan, Esc lo deja como estaba.
+    void startRename(int which)
+    {
+        finishRename(false);
+        m_renaming = which;
+        if (!m_nameEdit) {
+            m_nameEdit = new NameEdit(this);
+            connect(m_nameEdit, &QLineEdit::editingFinished, this, [this] { finishRename(true); });
+            m_nameEdit->onCancel = [this] { finishRename(false); };
+        }
+        m_nameEdit->setText(which >= kAudioRename ? m_editor->audioTrackName(which - kAudioRename) : m_editor->trackName(which));
+        placeNameEdit();
+        m_nameEdit->show();
+        m_nameEdit->setFocus();
+        m_nameEdit->selectAll();
+        update();
+    }
+    void placeNameEdit()
+    {
+        if (m_nameEdit && m_renaming >= 0)
+            m_nameEdit->setGeometry(m_renaming >= kAudioRename ? audioNameRect(m_renaming - kAudioRename) : nameRect(m_renaming));
+    }
+    void finishRename(bool save)
+    {
+        if (m_renaming < 0 || !m_nameEdit)
+            return;
+        const int which = m_renaming;
+        m_renaming = -1;
+        const QString text = m_nameEdit->text().trimmed();
+        m_nameEdit->hide();
+        if (save) {
+            if (which >= kAudioRename)
+                m_editor->setAudioTrackName(which - kAudioRename, text);
+            else
+                m_editor->setTrackName(which, text);
+        }
+        setFocus();
+        update();
+    }
+
     // A la izquierda, fija al desplazarse: el nombre de cada pista y sus botones (como Filmora).
     void paintHeader(QPainter& p, int hx)
     {
@@ -1311,7 +1546,7 @@ protected:
         button(addTrackRect(), Icons::theme({"list-add"}), GifEditor::tr("Añadir pista"));
         const int active = m_editor->activeTrack();
         for (int k = 0; k < tracks(); ++k) {
-            const QRect row(hx, trackTop(k), kHeaderWidth - 1, kTrackHeight);
+            const QRect row(hx, trackTop(k), kHeaderWidth - 1, trackHeight(k));
             if (k == active) {
                 QColor c = pal.color(QPalette::Highlight);
                 c.setAlpha(55);
@@ -1321,13 +1556,12 @@ protected:
             QFont bold = font();
             bold.setBold(true);
             p.setFont(bold);
-            p.setPen(pal.color(QPalette::WindowText));
-            p.drawText(row.adjusted(10, 6, -6, 0), Qt::AlignLeft | Qt::AlignTop, GifEditor::tr("Pista %1").arg(k + 1));
+            paintName(p, nameRect(k), m_editor->trackName(k), m_renaming == k);
             p.setFont(small);
             const QList<int> frames = m_editor->framesOfTrack(k);
             p.setPen(pal.color(QPalette::PlaceholderText));
-            if (kTrackHeight >= 64)
-                p.drawText(row.adjusted(10, 24, -6, 0), Qt::AlignLeft | Qt::AlignTop,
+            if (tallTrack(trackHeight(k)))
+                p.drawText(row.adjusted(10, 26, -6, 0), Qt::AlignLeft | Qt::AlignTop,
                        GifEditor::tr("%n fotograma(s)", nullptr, int(frames.size())));
             const bool hidden = m_editor->trackHidden(k);
             button(eyeRect(k), hidden ? Icons::theme({"view-hidden"}) : Icons::theme({"visibility", "view-visible"}), QString());
@@ -1341,10 +1575,8 @@ protected:
         p.drawText(QRect(hx + 10, audioTop(0) - kAudioGap, kHeaderWidth - 16, kAudioGap - kTrackGap / 2), Qt::AlignLeft | Qt::AlignVCenter,
                    GifEditor::tr("AUDIO"));
         for (int row = 0; row < audioRows(); ++row) {
-            const QRect head(hx, audioTop(row), kHeaderWidth - 1, kAudioHeight);
             p.setFont(bold);
-            p.setPen(pal.color(QPalette::WindowText));
-            p.drawText(head.adjusted(10, 0, -66, 0), Qt::AlignLeft | Qt::AlignVCenter, GifEditor::tr("Audio %1").arg(row + 1));
+            paintName(p, audioNameRect(row), m_editor->audioTrackName(row), m_renaming == kAudioRename + row);
             p.setFont(small);
             const QList<int> clips = audioOfRow(row);
             if (clips.isEmpty())
@@ -1372,16 +1604,35 @@ protected:
     {
         const QPoint pos = e->position().toPoint();
         if (pos.x() < headerX() + kHeaderWidth && e->button() == Qt::RightButton) {
-            // La altura de las pistas, como en Filmora.
+            // La altura de esta pista o de todas (como en Filmora) y su nombre.
             QMenu menu(this);
+            const int k = inRuler(pos) ? -1 : trackAtY(pos.y());
+            const int audioRow = k < 0 && !inRuler(pos) ? audioRowAt(pos.y()) : -1;
+            if (k >= 0 || audioRow >= 0)
+                menu.addAction(Icons::theme({"edit-rename", "document-edit"}), GifEditor::tr("Cambiar el nombre..."), this,
+                               [this, k, audioRow] { startRename(k >= 0 ? k : kAudioRename + audioRow); });
+            if (k >= 0) {
+                menu.addSeparator();
+                for (const auto& [text, h] : {std::pair{GifEditor::tr("Pequeña"), 48}, std::pair{GifEditor::tr("Mediana"), 80},
+                                              std::pair{GifEditor::tr("Grande"), 120}}) {
+                    QAction* a = menu.addAction(text, this, [this, k, height = h] { setTrackHeight(k, height); });
+                    a->setCheckable(true);
+                    a->setChecked(trackHeight(k) == h);
+                }
+            }
+            QMenu* all = k >= 0 ? menu.addMenu(GifEditor::tr("Todas las pistas")) : &menu;
             for (const auto& [text, h] : {std::pair{GifEditor::tr("Pistas pequeñas"), 48}, std::pair{GifEditor::tr("Pistas medianas"), 80},
                                           std::pair{GifEditor::tr("Pistas grandes"), 120}}) {
-                QAction* a = menu.addAction(text, this, [this, height = h] {
-                    setTrackHeight(height);
+                QAction* a = all->addAction(text, this, [this, height = h] {
+                    setTrackHeight(-1, height);
                     QSettings().setValue(QStringLiteral("gifEditor/trackHeight"), kTrackHeight);
                 });
+                // (Marcada si todas tienen esa altura.)
+                bool same = true;
+                for (int t = 0; t < tracks(); ++t)
+                    same = same && trackHeight(t) == h;
                 a->setCheckable(true);
-                a->setChecked(kTrackHeight == h);
+                a->setChecked(same);
             }
             menu.exec(e->globalPosition().toPoint());
             return true;
@@ -1390,9 +1641,9 @@ protected:
             return pos.x() < headerX() + kHeaderWidth;
         if (const int edge = heightEdgeAt(pos); edge >= 0) {
             m_heightDrag = true;
-            m_heightRow = tracks() - 1 - edge;
+            m_heightTrack = edge;
             m_heightStartY = pos.y();
-            m_heightStart = kTrackHeight;
+            m_heightStart = trackHeight(edge);
             return true;
         }
         if (addTrackRect().contains(pos)) {
@@ -1402,6 +1653,11 @@ protected:
         if (inRuler(pos))
             return true;
         if (const int row = audioRowAt(pos.y()); row >= 0) {
+            // Un clic en el nombre lo cambia.
+            if (audioNameRect(row).contains(pos)) {
+                startRename(kAudioRename + row);
+                return true;
+            }
             const QList<int> clips = audioOfRow(row);
             if (clips.isEmpty())
                 return true;
@@ -1418,6 +1674,7 @@ protected:
                 for (Audio::Clip& c : all)
                     if (c.row > row)
                         --c.row;
+                m_editor->removeAudioTrackName(row);
                 m_editor->selectAudio(-1);
                 m_editor->setAudioClips(all, GifEditor::tr("Quitar el audio"));
             }
@@ -1426,12 +1683,17 @@ protected:
         const int k = trackAtY(pos.y());
         if (k < 0)
             return true;
-        if (eyeRect(k).contains(pos))
+        if (eyeRect(k).contains(pos)) {
             m_editor->toggleTrackHidden(k);
-        else if (trashRect(k).contains(pos))
+        } else if (trashRect(k).contains(pos)) {
             m_editor->removeTrack(k);
-        else
+        } else if (nameRect(k).contains(pos)) {
+            // Un clic en el nombre: la pista pasa a ser la elegida y se cambia su nombre.
             m_editor->setActiveTrack(k);
+            startRename(k);
+        } else {
+            m_editor->setActiveTrack(k);
+        }
         return true;
     }
 
@@ -1440,6 +1702,27 @@ protected:
         const QPoint pos = e->position().toPoint();
         if (headerPress(e))
             return;
+        // El espacio vacío elegido: su «x» lo quita. Con el clic derecho en un espacio, su menú.
+        if (gapValid() && e->button() == Qt::LeftButton && gapCloseRect(m_gapFrame).contains(pos)) {
+            removeSelectedGap();
+            return;
+        }
+        if (e->button() == Qt::RightButton && clipAt(pos) < 0 && !inRuler(pos)) {
+            if (const int gap = gapAt(pos); gap >= 0) {
+                m_gapFrame = gap;
+                update();
+                QMenu menu(this);
+                menu.addAction(Icons::theme({"edit-delete", "list-remove"}), GifEditor::tr("Quitar el espacio"), this,
+                               [this] { removeSelectedGap(); });
+                menu.exec(e->globalPosition().toPoint());
+                return;
+            }
+        }
+        // (Cualquier otro clic deja de elegirlo; uno en un espacio lo elige al soltar.)
+        if (m_gapFrame >= 0) {
+            m_gapFrame = -1;
+            update();
+        }
         // El audio: sus puntos de volumen y sus clips.
         int audioClip = -1;
         if (const int key = audioKeyAt(pos, &audioClip); key >= 0) {
@@ -1570,13 +1853,17 @@ protected:
         }
         m_hover = pos;
         if (m_heightDrag) {
-            // Las filas de arriba crecen igual: el borde sigue al puntero.
-            setTrackHeight(m_heightStart + (pos.y() - m_heightStartY) / (m_heightRow + 1));
+            // Solo esa pista: su borde sigue al puntero.
+            setTrackHeight(m_heightTrack, m_heightStart + (pos.y() - m_heightStartY));
             return;
         }
         if (m_aKeyClip >= 0 && (e->buttons() & Qt::LeftButton)) {
             const Audio::Clip c = m_editor->audioClips().value(m_aKeyClip);
-            m_aKeyTo = std::clamp(int(std::lround((timeForX(pos.x()) - c.start) / 10.0)) * 10, 0, c.duration);
+            // Con el imán, a las uniones; si no, de 10 en 10 ms.
+            const int raw = timeForX(pos.x());
+            bool hit = false;
+            const int at = snapped(raw, junctions(), kSnap / 2, &hit);
+            m_aKeyTo = std::clamp(hit ? at - c.start : int(std::lround((raw - c.start) / 10.0)) * 10, 0, c.duration);
             m_aKeyValue = std::round(volumeForY(audioRect(m_aKeyClip), pos.y()));
             setToolTip(QStringLiteral("%1 % · %2").arg(m_aKeyValue).arg(timeText(c.start + m_aKeyTo)));
             update();
@@ -1589,34 +1876,29 @@ protected:
             const Audio::Clip orig = m_editor->audioClips().value(m_aEdit);
             Audio::Clip c = orig;
             const int dt = int(std::lround((pos.x() - m_aPressPos.x()) / pxPerMs()));
+            const QList<int> targets = junctions(-1, m_aEdit);
             if (m_aMode == 0) {
-                c.start = std::max(0, orig.start + dt);
-                // Imán: al cabezal, al principio y a los bordes de los fotogramas.
-                int best = kSnap + 1;
-                auto snap = [&](int t) {
-                    for (const int candidate : {t, t - c.duration})
-                        if (candidate >= 0 && std::abs(xForTime(candidate) - xForTime(c.start)) < best) {
-                            best = std::abs(xForTime(candidate) - xForTime(c.start));
-                            c.start = candidate;
-                        }
-                };
-                const int raw = c.start;
-                snap(0);
-                snap(m_editor->playTime());
-                for (int i = 0; i < m_editor->frameCount(); ++i) {
-                    snap(m_editor->frameStart(i));
-                    snap(m_editor->frameEnd(i));
-                }
-                if (best > kSnap)
-                    c.start = raw;
+                // Se queda donde está y una sombra va donde caerá (como los clips de los fotogramas).
+                // Imán: su principio o su final, a las uniones.
+                const int raw = std::max(0, orig.start + dt);
+                bool hitStart = false, hitEnd = false;
+                const int byStart = snapped(raw, targets, kSnap, &hitStart);
+                const int byEnd = snapped(raw + c.duration, targets, kSnap, &hitEnd) - c.duration;
+                c.start = raw;
+                if (hitStart && (!hitEnd || byEnd < 0 || std::abs(byStart - raw) <= std::abs(byEnd - raw)))
+                    c.start = byStart;
+                else if (hitEnd && byEnd >= 0)
+                    c.start = byEnd;
                 if (const int row = audioRowAt(pos.y()); row >= 0)
                     c.row = row;
                 setToolTip(timeText(c.start));
             } else if (m_aMode == 2) {
-                c.duration = std::clamp(orig.duration + dt, 100, std::max(100, orig.length - orig.offset));
+                const int end = snapped(orig.end() + dt, targets);
+                c.duration = std::clamp(end - orig.start, 20, std::max(20, orig.length - orig.offset));
                 setToolTip(timeText(c.duration));
             } else {
-                const int d = std::clamp(dt, std::max(-orig.offset, -orig.start), orig.duration - 100);
+                const int moved = snapped(orig.start + dt, targets) - orig.start;
+                const int d = std::clamp(moved, std::max(-orig.offset, -orig.start), orig.duration - 20);
                 c.start = orig.start + d;
                 c.offset = orig.offset + d;
                 c.duration = orig.duration - d;
@@ -1631,7 +1913,15 @@ protected:
         if (m_keyDrag >= 0) {
             // Más lejos un rombo del otro, más dura el movimiento entre ellos (de 10 en 10 ms). Más allá
             // del final, el fotograma dura más.
-            m_keyDragTo = std::max(0, int(std::round((timeForX(pos.x()) - m_editor->frameStart(m_keyFrame)) / 10.0)) * 10);
+            // Con el imán, se pegan a las uniones y a los otros puntos del fotograma.
+            const int start = m_editor->frameStart(m_keyFrame), raw = timeForX(pos.x());
+            QList<int> targets = junctions();
+            for (int t : m_editor->motion(m_keyFrame).keyTimes())
+                if (t != m_keyDrag)
+                    targets << start + t;
+            bool hit = false;
+            const int at = snapped(raw, targets, kSnap / 2, &hit);
+            m_keyDragTo = std::max(0, hit ? at - start : int(std::round((raw - start) / 10.0)) * 10);
             setToolTip(QStringLiteral("%1 ms").arg(m_keyDragTo));
             update();
             return;
@@ -1655,8 +1945,8 @@ protected:
             const int start = m_editor->frameStart(m_resizing), end = m_editor->frameEnd(m_resizing);
             const int prevEnd = start - m_editor->frameGap(m_resizing);
             int t = start + int(std::lround((pos.x() - m_resizePressX) / pxPerMs()));
-            // Imán: a la unión de delante, al cabezal y a las uniones de las otras pistas.
-            if (t >= 0) {
+            // Imán: a la unión de delante, al cabezal, a las uniones de las otras pistas y al audio.
+            if (t >= 0 && m_editor->magnetOn()) {
                 const int edge = xForTime(t);
                 int best = kSnap / 2 + 1, snapped = t;
                 auto snap = [&](int c) {
@@ -1672,10 +1962,14 @@ protected:
                         snap(m_editor->frameStart(i));
                         snap(m_editor->frameEnd(i));
                     }
+                for (const Audio::Clip& a : m_editor->audioClips()) {
+                    snap(a.start);
+                    snap(a.end());
+                }
                 t = snapped;
             }
             // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
-            t = std::min(int(std::round(t / 10.0)) * 10, end - Gif::kMinDelayMs);
+            t = std::min(int(std::round(t / 10.0)) * 10, end - Gif::kMinEditDelayMs);
             planResize((end - t) - (end - start));
             setToolTip({});
             return;
@@ -1691,15 +1985,21 @@ protected:
                     endTime = t;
                 }
             };
-            snap(m_editor->playTime());
-            for (int i = 0; i < m_editor->frameCount(); ++i)
-                if (m_editor->trackOf(i) != m_editor->trackOf(m_resizing)) {
-                    snap(m_editor->frameStart(i));
-                    snap(m_editor->frameEnd(i));
+            if (m_editor->magnetOn()) {
+                snap(m_editor->playTime());
+                for (int i = 0; i < m_editor->frameCount(); ++i)
+                    if (m_editor->trackOf(i) != m_editor->trackOf(m_resizing)) {
+                        snap(m_editor->frameStart(i));
+                        snap(m_editor->frameEnd(i));
+                    }
+                for (const Audio::Clip& a : m_editor->audioClips()) {
+                    snap(a.start);
+                    snap(a.end());
                 }
+            }
             const int raw = endTime - m_editor->frameStart(m_resizing);
             // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
-            const int delay = std::max(Gif::kMinDelayMs, int(std::round(raw / 10.0)) * 10);
+            const int delay = std::max(Gif::kMinEditDelayMs, int(std::round(raw / 10.0)) * 10);
             planResize(delay - m_editor->frameDelay(m_resizing));
             setToolTip({});
             return;
@@ -1727,13 +2027,9 @@ protected:
                         }
                     }
                 };
-                snap(0);
-                snap(m_editor->playTime());
-                for (int i = 0; i < m_editor->frameCount(); ++i)
-                    if (i != m_pressIndex) {
-                        snap(m_editor->frameStart(i));
-                        snap(m_editor->frameEnd(i));
-                    }
+                if (m_editor->magnetOn())
+                    for (int t : junctions(m_pressIndex))
+                        snap(t);
                 m_dropAt = -1;
                 setToolTip(timeText(timeForX(m_ghostX)));
                 setCursor(Qt::ClosedHandCursor);
@@ -1746,10 +2042,14 @@ protected:
         int keyFrame = -1, audioKey = -1;
         const int index = clipAt(pos);
         const int audio = audioAt(pos);
-        if (audioKeyAt(pos, &audioKey) >= 0) {
+        if (audioKeyAt(pos, &audioKey) >= 0 || (gapValid() && gapCloseRect(m_gapFrame).contains(pos))) {
             setCursor(Qt::PointingHandCursor);
+            if (gapValid())
+                update(gapRect(m_gapFrame));
             return;
         }
+        if (gapValid() && gapRect(m_gapFrame).adjusted(-24, -24, 24, 24).contains(pos))
+            update(gapRect(m_gapFrame));
         if (audio >= 0) {
             const QRect r = audioRect(audio);
             setCursor(pos.x() >= r.right() - kEdgeGrab || pos.x() <= r.left() + kEdgeGrab ? Qt::SizeHorCursor : Qt::OpenHandCursor);
@@ -1771,7 +2071,6 @@ protected:
     {
         if (m_heightDrag) {
             m_heightDrag = false;
-            QSettings().setValue(QStringLiteral("gifEditor/trackHeight"), kTrackHeight);
             return;
         }
         if (m_aKeyClip >= 0) {
@@ -1822,10 +2121,15 @@ protected:
             const QList<int> hits = m_marqueeHits;
             m_marqueePending = m_marquee = false;
             m_marqueeHits.clear();
-            if (dragged)
+            if (dragged) {
                 m_editor->selectFrames(hits, m_marqueeAdd);
-            else
+            } else {
                 m_editor->seek(timeForX(m_marqueeFrom.x()));
+                // Un clic en un espacio vacío entre clips lo elige (Supr o su «x» lo quitan).
+                m_gapFrame = gapAt(m_marqueeFrom);
+                if (m_gapFrame >= 0)
+                    setFocus();
+            }
             update();
             return;
         }
@@ -1936,9 +2240,25 @@ protected:
         return k >= 0 ? k : m_editor->activeTrack();
     }
 
+    // Los medios que se arrastran desde la biblioteca.
+    static QList<int> draggedMedia(const QMimeData* data)
+    {
+        QList<int> indexes;
+        if (data->hasFormat(QString::fromLatin1(MediaList::mimeType())))
+            for (const QByteArray& n : data->data(QString::fromLatin1(MediaList::mimeType())).split(' '))
+                indexes << n.toInt();
+        return indexes;
+    }
+    bool onlyAudio(const QList<int>& media) const
+    {
+        return !media.isEmpty()
+               && std::all_of(media.cbegin(), media.cend(), [this](int i) { return !m_editor->audioMediaPath(i).isEmpty(); });
+    }
+
     void dragMoveEvent(QDragMoveEvent* e) override
     {
-        if (audioRowAt(e->position().toPoint().y()) >= 0) {
+        // (Un audio de la biblioteca va al audio: sin la marca de dónde caería un fotograma.)
+        if (audioRowAt(e->position().toPoint().y()) >= 0 || onlyAudio(draggedMedia(e->mimeData()))) {
             m_dropAt = -1;
             m_dropTrack = -1;
             update();
@@ -1967,16 +2287,22 @@ protected:
         update();
         const QMimeData* data = e->mimeData();
         if (data->hasFormat(QString::fromLatin1(MediaList::mimeType()))) {
-            QList<int> indexes;
-            for (const QByteArray& n : data->data(QString::fromLatin1(MediaList::mimeType())).split(' '))
-                indexes << n.toInt();
-            // En el orden de la biblioteca, uno detrás de otro.
+            const QList<int> indexes = draggedMedia(data);
+            // En el orden de la biblioteca, uno detrás de otro. Los audios, al audio: donde se
+            // sueltan (en su pista de audio o en la primera libre).
             int offset = 0;
-            for (int i : std::as_const(indexes)) {
+            QStringList audio;
+            for (int i : indexes) {
+                if (const QString path = m_editor->audioMediaPath(i); !path.isEmpty()) {
+                    audio << path;
+                    continue;
+                }
                 const int before = m_editor->frameCount();
                 m_editor->insertMedia(i, at + offset, track);
                 offset += m_editor->frameCount() - before;
             }
+            if (!audio.isEmpty())
+                m_editor->addAudioFiles(audio, timeForX(e->position().toPoint().x()), audioRowAt(e->position().toPoint().y()));
             e->acceptProposedAction();
             return;
         }
@@ -2025,9 +2351,9 @@ private:
     // Arrastrando un clip: dónde se agarró y dónde se dibuja.
     int m_grabDx = 0;
     int m_ghostX = 0;
-    // Cambiando la altura de las pistas desde la cabecera.
+    // Cambiando la altura de una pista desde la cabecera.
     bool m_heightDrag = false;
-    int m_heightRow = 0;
+    int m_heightTrack = 0;
     int m_heightStartY = 0;
     int m_heightStart = 0;
     int m_keyFrame = -1;
@@ -2045,6 +2371,12 @@ private:
     int m_aKeyTo = 0;
     double m_aKeyValue = 100;
     QHash<QString, QImage> m_thumbs;
+    // El espacio vacío elegido (el de delante de este fotograma), o -1.
+    int m_gapFrame = -1;
+    // La pista cuyo nombre se cambia (kAudioRename + n: la de audio n), o -1, y su campo de texto.
+    static constexpr int kAudioRename = 1000;
+    int m_renaming = -1;
+    NameEdit* m_nameEdit = nullptr;
 };
 
 // A la derecha, con un clip de audio elegido: su volumen (con su punto clave en el cabezal), los
@@ -2245,32 +2577,38 @@ void GifEditor::buildUi()
 {
     // Más aire que el resto de Kaint: botones grandes con su texto, como un editor de vídeo.
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(10, 8, 10, 10);
-    root->setSpacing(8);
+    root->setContentsMargins(8, 4, 8, 8);
+    root->setSpacing(6);
 
     // Cabecera: el nombre y volver al editor de imágenes.
     auto* headBox = new QFrame(this);
     headBox->setObjectName(QStringLiteral("GifEditorHeader"));
     headBox->setProperty("gifPanel", true);
     headBox->setFrameShape(QFrame::StyledPanel);
+    // (Compacta: deja sitio a la vista previa y a la línea de tiempo.)
     auto* head = new QHBoxLayout(headBox);
-    head->setContentsMargins(10, 6, 8, 6);
-    head->setSpacing(8);
+    head->setContentsMargins(8, 2, 6, 2);
+    head->setSpacing(6);
     m_title = new QLabel(this);
     QFont titleFont = m_title->font();
     titleFont.setBold(true);
-    titleFont.setPointSizeF(titleFont.pointSizeF() * 1.3);
+    titleFont.setPointSizeF(titleFont.pointSizeF() * 1.1);
     m_title->setFont(titleFont);
     auto* back = new QPushButton(Icons::theme({"draw-brush", "applications-graphics"}), tr("Editor de imágenes"), this);
     back->setToolTip(tr("Vuelve a editar esta imagen con las herramientas (cada fotograma es una capa)."));
-    back->setIconSize(QSize(20, 20));
-    back->setMinimumHeight(34);
+    back->setIconSize(QSize(18, 18));
+    back->setMinimumHeight(28);
     connect(back, &QPushButton::clicked, this, &GifEditor::imageEditorRequested);
+    auto* classic = new QPushButton(Icons::theme({"image-gif", "view-list-icons"}), tr("Clásico"), this);
+    classic->setToolTip(tr("Pasa al editor de GIF clásico: los fotogramas uno por uno, en tarjetas."));
+    classic->setIconSize(QSize(18, 18));
+    classic->setMinimumHeight(28);
+    connect(classic, &QPushButton::clicked, this, &GifEditor::classicRequested);
     // Exportar: el GIF (con la configuración de siempre) o, en el menú de la flecha, otros formatos.
     auto* exportButton = new QToolButton(this);
     exportButton->setIcon(Icons::theme({"document-export", "document-save-as"}));
-    exportButton->setIconSize(QSize(20, 20));
-    exportButton->setMinimumHeight(34);
+    exportButton->setIconSize(QSize(18, 18));
+    exportButton->setMinimumHeight(28);
     exportButton->setText(tr("Exportar GIF..."));
     exportButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     exportButton->setPopupMode(QToolButton::MenuButtonPopup);
@@ -2292,21 +2630,25 @@ void GifEditor::buildUi()
     m_sizeTimer.setInterval(600);
     connect(&m_sizeTimer, &QTimer::timeout, this, &GifEditor::estimateSize);
     auto* icon = new QLabel(this);
-    icon->setPixmap(Icons::theme({"video-x-generic", "image-gif", "media-playback-start"}).pixmap(26, 26));
+    icon->setPixmap(Icons::theme({"video-x-generic", "image-gif", "media-playback-start"}).pixmap(20, 20));
     head->addWidget(icon);
     head->addWidget(m_title, 1);
     head->addWidget(m_sizeMeter);
     head->addSpacing(6);
+    head->addWidget(classic);
     head->addWidget(back);
     head->addWidget(exportButton);
     root->addWidget(headBox);
 
+    // Los paneles se agrandan o achican con las asas entre ellos (se recuerda cómo se dejan).
     auto* vertical = new QSplitter(Qt::Vertical, this);
     vertical->setChildrenCollapsible(false);
     vertical->setHandleWidth(8);
     auto* top = new QSplitter(Qt::Horizontal, vertical);
     top->setChildrenCollapsible(false);
     top->setHandleWidth(8);
+    m_verticalSplit = vertical;
+    m_topSplit = top;
 
     // A la izquierda, en pestañas: la biblioteca de medios y el historial del editor de GIF.
     m_leftTabs = new QTabWidget(top);
@@ -2320,8 +2662,9 @@ void GifEditor::buildUi()
     binLayout->setContentsMargins(0, 6, 0, 0);
     binLayout->setSpacing(6);
     m_mediaList = new MediaList(bin);
-    m_mediaList->setToolTip(tr("Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo "
-                               "(o haz doble clic para añadirlas al final de la pista elegida)."));
+    m_mediaList->setToolTip(tr("Las imágenes abiertas en Kaint y las imágenes, GIF, vídeos y audios que importes. Arrástralos a la "
+                               "línea de tiempo (o haz doble clic: las imágenes van al final de la pista elegida y los audios, al "
+                               "cabezal)."));
     connect(m_mediaList, &MediaList::filesDropped, this, &GifEditor::importFiles);
     connect(m_mediaList, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem* item) { insertMedia(item->data(Qt::UserRole).toInt(), -1, activeTrack()); });
@@ -2329,8 +2672,12 @@ void GifEditor::buildUi()
     auto* import = new QPushButton(Icons::theme({"document-import", "document-open"}), tr("Importar..."), bin);
     import->setMinimumHeight(32);
     connect(import, &QPushButton::clicked, this, [this] {
+        QStringList audio;
+        for (const QString& ext : Audio::fileExtensions())
+            audio << QStringLiteral("*.") + ext;
         const QStringList paths = QFileDialog::getOpenFileNames(this, tr("Importar imágenes o GIF"), QString(),
-                                                                ImageIO::openFilter() + QStringLiteral(";;") + tr("Vídeo (%1)").arg(GifExport::videoPatterns()));
+                                                                ImageIO::openFilter() + QStringLiteral(";;") + tr("Vídeo (%1)").arg(GifExport::videoPatterns())
+                                                                    + QStringLiteral(";;") + tr("Audio (%1)").arg(audio.join(QLatin1Char(' '))));
         importFiles(paths);
     });
     auto* add = new QPushButton(Icons::theme({"list-add"}), tr("Añadir"), bin);
@@ -2339,7 +2686,15 @@ void GifEditor::buildUi()
     connect(add, &QPushButton::clicked, this, [this] {
         const int track = activeTrack();
         int at = selectedFrame() >= 0 && trackOf(selectedFrame()) == track ? selectedFrame() + 1 : -1;
+        // Los audios, en el cabezal (en la primera pista de audio libre).
+        QStringList audio;
+        for (QListWidgetItem* item : m_mediaList->selectedItems())
+            if (const QString path = audioMediaPath(item->data(Qt::UserRole).toInt()); !path.isEmpty())
+                audio << path;
+        addAudioFiles(audio);
         for (QListWidgetItem* item : m_mediaList->selectedItems()) {
+            if (!audioMediaPath(item->data(Qt::UserRole).toInt()).isEmpty())
+                continue;
             const int before = frameCount();
             insertMedia(item->data(Qt::UserRole).toInt(), at, track);
             if (at >= 0)
@@ -2394,9 +2749,10 @@ void GifEditor::buildUi()
     m_loop = new QCheckBox(tr("Repetir"), player);
     m_loop->setChecked(true);
     m_speed = new QComboBox(player);
-    for (const auto& [label, factor] : {std::pair{"0.25×", 0.25}, {"0.5×", 0.5}, {"1×", 1.0}, {"1.5×", 1.5}, {"2×", 2.0}, {"4×", 4.0}})
+    for (const auto& [label, factor] :
+         {std::pair{"0.1×", 0.1}, {"0.25×", 0.25}, {"0.5×", 0.5}, {"1×", 1.0}, {"1.5×", 1.5}, {"2×", 2.0}, {"4×", 4.0}, {"8×", 8.0}})
         m_speed->addItem(QString::fromUtf8(label), factor);
-    m_speed->setCurrentIndex(2);
+    m_speed->setCurrentIndex(3);
     m_speed->setToolTip(tr("Velocidad de la vista previa (no cambia el GIF)"));
     transport->addWidget(m_loop);
     transport->addWidget(m_speed);
@@ -2410,7 +2766,7 @@ void GifEditor::buildUi()
     inspectorScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_inspector = new Inspector(this, inspectorScroll);
     inspectorScroll->setWidget(m_inspector);
-    inspectorScroll->setMinimumWidth(260);
+    inspectorScroll->setMinimumWidth(200);
     // Con un clip de audio elegido, en su lugar, lo del audio.
     m_rightStack = new QStackedWidget(top);
     m_rightStack->setProperty("gifPanel", true);
@@ -2498,11 +2854,14 @@ void GifEditor::buildUi()
     separator();
     auto* durationLabel = new QLabel(tr("Duración:"), timelineBox);
     m_delay = new QSpinBox(timelineBox);
-    m_delay->setRange(Gif::kMinDelayMs, 60000);
+    // Desde 10 ms (16 o 17 ms: 60 por segundo en los vídeos, el PNG animado y el WebP; el GIF sube lo
+    // de menos de 20 ms a 20 al guardarlo) hasta 10 minutos.
+    m_delay->setRange(Gif::kMinEditDelayMs, 600000);
     m_delay->setSingleStep(10);
     m_delay->setSuffix(tr(" ms"));
     m_delay->setMinimumHeight(30);
-    m_delay->setToolTip(tr("Cuánto se ve el fotograma elegido"));
+    m_delay->setToolTip(tr("Cuánto se ve el fotograma elegido (16 ms: 60 fotogramas por segundo; el GIF los guarda a 20 ms "
+                           "como mínimo, los vídeos y el PNG animado tal cual)"));
     m_frameButtons << m_delay;
     connect(m_delay, &QSpinBox::editingFinished, this, [this] {
         if (selectedFrame() >= 0 && m_delay->value() != frameDelay(selectedFrame()))
@@ -2525,10 +2884,19 @@ void GifEditor::buildUi()
                         tr("Añade un archivo de audio (MP3, WAV, OGG, FLAC...) para los vídeos exportados. También se puede "
                            "arrastrar a la línea de tiempo."),
                         [this] { chooseAudioFiles(); }, false));
+    separator();
+    // El imán: lo que se arrastra (clips, puntos clave, audio) se pega a las uniones al acercarse.
+    m_magnet = tool({}, {}, tr("Imán: al mover un clip, un punto clave o un audio, se pega a las uniones (los bordes de los "
+                               "clips, el cabezal y el principio) al acercarse"),
+                    [this] { QSettings().setValue(QStringLiteral("gifEditor/magnet"), m_magnet->isChecked()); }, false);
+    m_magnet->setIcon(Icons::magnet());
+    m_magnet->setCheckable(true);
+    m_magnet->setChecked(QSettings().value(QStringLiteral("gifEditor/magnet"), true).toBool());
+    bar->addWidget(m_magnet);
     bar->addStretch(1);
     bar->addWidget(new QLabel(tr("Zum:"), timelineBox));
     m_zoom = new QSlider(Qt::Horizontal, timelineBox);
-    m_zoom->setRange(40, 3000);
+    m_zoom->setRange(20, 6000);
     m_zoom->setValue(600);
     m_zoom->setFixedWidth(160);
     m_zoom->setToolTip(tr("Zum de la línea de tiempo (también con Ctrl y la rueda)"));
@@ -2542,8 +2910,8 @@ void GifEditor::buildUi()
     m_timelineScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_timeline = new Timeline(this, m_timelineScroll);
     m_timelineScroll->setWidget(m_timeline);
-    // Una pista de fotogramas y una de audio a la vista.
-    m_timelineScroll->setMinimumHeight(Timeline::heightFor(1) + kAudioGap + kAudioHeight + kTrackGap + 24);
+    // Al menos la regla y algo de una pista (se baja entre ellas con la barra de desplazamiento).
+    m_timelineScroll->setMinimumHeight(kTrackTop + 48);
     // La cabecera de las pistas se queda a la izquierda al desplazarse: se vuelve a dibujar ahí.
     connect(m_timelineScroll->horizontalScrollBar(), &QScrollBar::valueChanged, m_timeline, [this] { m_timeline->update(); });
     // Y la regla, arriba al bajar entre las pistas.
@@ -2560,6 +2928,14 @@ void GifEditor::buildUi()
     vertical->setStretchFactor(0, 3);
     vertical->setStretchFactor(1, 2);
     root->addWidget(vertical, 1);
+    // Cómo se dejaron los paneles la última vez.
+    QSettings settings;
+    top->restoreState(settings.value(QStringLiteral("gifEditor/panels")).toByteArray());
+    vertical->restoreState(settings.value(QStringLiteral("gifEditor/timelineSplit")).toByteArray());
+    connect(top, &QSplitter::splitterMoved, this,
+            [top] { QSettings().setValue(QStringLiteral("gifEditor/panels"), top->saveState()); });
+    connect(vertical, &QSplitter::splitterMoved, this,
+            [vertical] { QSettings().setValue(QStringLiteral("gifEditor/timelineSplit"), vertical->saveState()); });
 
     setFocusPolicy(Qt::StrongFocus);
     updateState();
@@ -2668,7 +3044,8 @@ void GifEditor::rebuildMedia()
         {
             QPainter p(&icon);
             const QRect r(QPoint((84 - m.thumbnail.width()) / 2, (64 - m.thumbnail.height()) / 2), m.thumbnail.size());
-            paintChecker(p, r);
+            if (m.audioPath.isEmpty())
+                paintChecker(p, r);
             p.drawImage(r, m.thumbnail);
         }
         QString label = m.name;
@@ -2684,6 +3061,11 @@ void GifEditor::rebuildMedia()
 
 bool GifEditor::loadFile(const QString& path, Media* media, QString* error) const
 {
+    return GifEdit::loadMedia(path, media, const_cast<GifEditor*>(this), error);
+}
+
+bool GifEdit::loadMedia(const QString& path, Media* media, QWidget* progressParent, QString* error)
+{
     media->name = QFileInfo(path).fileName();
     media->frames.clear();
     media->delays.clear();
@@ -2691,7 +3073,7 @@ bool GifEditor::loadFile(const QString& path, Media* media, QString* error) cons
         // Vídeo (con FFmpeg): sus fotogramas.
         int delay = 100;
         QList<QImage> frames;
-        if (GifExport::decodeVideo(path, &frames, &delay, const_cast<GifEditor*>(this), error))
+        if (GifExport::decodeVideo(path, &frames, &delay, progressParent, error))
             for (const QImage& f : std::as_const(frames)) {
                 media->frames << f.convertToFormat(kLayerFormat);
                 media->delays << delay;
@@ -2700,7 +3082,7 @@ bool GifEditor::loadFile(const QString& path, Media* media, QString* error) cons
         const Gif::Animation anim = Gif::read(path, error);
         for (const Gif::Frame& f : anim.frames) {
             media->frames << f.image;
-            media->delays << std::max(Gif::kMinDelayMs, f.delayMs);
+            media->delays << std::max(Gif::kMinEditDelayMs, f.delayMs);
         }
     } else {
         // WebP o APNG animados, con los lectores de Qt; el resto, una imagen.
@@ -2709,7 +3091,7 @@ bool GifEditor::loadFile(const QString& path, Media* media, QString* error) cons
             QImage frame;
             while (reader.read(&frame)) {
                 media->frames << frame.convertToFormat(kLayerFormat);
-                media->delays << std::max(Gif::kMinDelayMs, reader.nextImageDelay() > 0 ? reader.nextImageDelay() : 100);
+                media->delays << std::max(Gif::kMinEditDelayMs, reader.nextImageDelay() > 0 ? reader.nextImageDelay() : 100);
             }
         }
         if (media->frames.isEmpty()) {
@@ -2726,10 +3108,46 @@ bool GifEditor::loadFile(const QString& path, Media* media, QString* error) cons
     return true;
 }
 
+// La miniatura de un audio en la biblioteca: una nota sobre el verde azulado oscuro.
+static QImage audioThumbnail()
+{
+    QImage image(84, 64, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter p(&image);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(Look::accent, 1.5));
+    p.setBrush(Look::accentDark);
+    p.drawRoundedRect(QRectF(1.5, 1.5, 81, 61), 8, 8);
+    // Una onda, como la de los clips de audio.
+    p.setPen(QPen(Look::accent, 2, Qt::SolidLine, Qt::RoundCap));
+    static const int bars[] = {6, 14, 22, 12, 26, 18, 8, 20, 28, 16, 10, 22, 14, 6};
+    for (int i = 0; i < int(std::size(bars)); ++i) {
+        const qreal x = 10 + i * 5;
+        p.drawLine(QPointF(x, 36 - bars[i] / 2.0), QPointF(x, 36 + bars[i] / 2.0));
+    }
+    QFont f = p.font();
+    f.setPixelSize(18);
+    f.setBold(true);
+    p.setFont(f);
+    p.setPen(Look::text);
+    p.drawText(QRect(6, 2, 30, 22), Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("♪"));
+    p.end();
+    return image;
+}
+
 void GifEditor::importFiles(const QStringList& paths)
 {
     QStringList failed;
     for (const QString& path : paths) {
+        // Un audio va a la biblioteca tal cual (se lee al ponerlo en la línea de tiempo).
+        if (Audio::isAudioFile(path)) {
+            Media m;
+            m.name = QFileInfo(path).fileName();
+            m.audioPath = path;
+            m.thumbnail = audioThumbnail();
+            m_imported << m;
+            continue;
+        }
         Media m;
         QString error;
         if (loadFile(path, &m, &error))
@@ -2871,7 +3289,7 @@ void GifEditor::addTrack()
     if (!m_doc)
         return;
     const int count = trackCount();
-    if (count >= 16) {
+    if (count >= 64) {
         QApplication::beep();
         return;
     }
@@ -2913,6 +3331,14 @@ void GifEditor::removeTrack(int track)
             return;
     }
     m_doc->setProperty("kaintGifTracks", std::max(1, m_doc->property("kaintGifTracks").toInt() - 1));
+    // Las de encima bajan una con su nombre y su altura.
+    for (const char* key : {"kaintGifTrackNames", "kaintGifTrackHeights"}) {
+        QVariantList list = m_doc->property(key).toList();
+        if (track < list.size()) {
+            list.removeAt(track);
+            m_doc->setProperty(key, list);
+        }
+    }
     m_activeTrack = std::max(0, track - 1);
     if (removed == 0) {
         // Vacía: no cambia la imagen (ni el historial).
@@ -2947,6 +3373,95 @@ void GifEditor::toggleTrackHidden(int track)
                 show ? QStringLiteral("visibility") : QStringLiteral("view-hidden"));
 }
 
+int GifEditor::trackHeight(int track) const
+{
+    const QVariantList heights = m_doc ? m_doc->property("kaintGifTrackHeights").toList() : QVariantList();
+    const int h = track >= 0 && track < heights.size() ? heights[track].toInt() : 0;
+    return h > 0 ? std::clamp(h, kMinTrackHeight, kMaxTrackHeight) : kTrackHeight;
+}
+
+void GifEditor::setTrackHeight(int track, int height)
+{
+    height = std::clamp(height, kMinTrackHeight, kMaxTrackHeight);
+    if (track < 0) {
+        // Todas: la de las nuevas, sin alturas propias.
+        kTrackHeight = height;
+        if (m_doc)
+            m_doc->setProperty("kaintGifTrackHeights", QVariantList());
+        return;
+    }
+    if (!m_doc)
+        return;
+    QVariantList heights = m_doc->property("kaintGifTrackHeights").toList();
+    while (heights.size() <= track)
+        heights << 0;
+    heights[track] = height;
+    m_doc->setProperty("kaintGifTrackHeights", heights);
+}
+
+// Los nombres propios de las pistas (vacío: el de siempre, con su número).
+static QString customName(const Document* doc, const char* key, int index)
+{
+    return doc ? doc->property(key).toList().value(index).toString() : QString();
+}
+
+static void setCustomName(Document* doc, const char* key, int index, const QString& name)
+{
+    if (!doc || index < 0)
+        return;
+    QVariantList names = doc->property(key).toList();
+    while (names.size() <= index)
+        names << QString();
+    names[index] = name;
+    doc->setProperty(key, names);
+}
+
+QString GifEditor::trackName(int track) const
+{
+    const QString name = customName(m_doc, "kaintGifTrackNames", track);
+    return name.isEmpty() ? tr("Pista %1").arg(track + 1) : name;
+}
+
+void GifEditor::setTrackName(int track, const QString& name)
+{
+    // (El de siempre se guarda vacío: así sigue con su número al quitar otras pistas.)
+    setCustomName(m_doc, "kaintGifTrackNames", track, name == tr("Pista %1").arg(track + 1) ? QString() : name);
+    m_timeline->update();
+}
+
+QString GifEditor::audioTrackName(int row) const
+{
+    const QString name = customName(m_doc, "kaintGifAudioNames", row);
+    return name.isEmpty() ? tr("Audio %1").arg(row + 1) : name;
+}
+
+void GifEditor::setAudioTrackName(int row, const QString& name)
+{
+    setCustomName(m_doc, "kaintGifAudioNames", row, name == tr("Audio %1").arg(row + 1) ? QString() : name);
+    m_timeline->update();
+}
+
+void GifEditor::removeAudioTrackName(int row)
+{
+    if (!m_doc)
+        return;
+    QVariantList names = m_doc->property("kaintGifAudioNames").toList();
+    if (row >= 0 && row < names.size()) {
+        names.removeAt(row);
+        m_doc->setProperty("kaintGifAudioNames", names);
+    }
+}
+
+bool GifEditor::magnetOn() const
+{
+    return !m_magnet || m_magnet->isChecked();
+}
+
+QString GifEditor::audioMediaPath(int mediaIndex) const
+{
+    return mediaIndex >= 0 && mediaIndex < m_media.size() ? m_media[mediaIndex].audioPath : QString();
+}
+
 void GifEditor::invalidateStarts()
 {
     m_startsValid = false;
@@ -2977,7 +3492,9 @@ void GifEditor::seek(int ms)
         updateState();
         return;
     }
-    m_time = std::clamp(ms, 0, std::max(0, totalTime() - 1));
+    // (Hasta el final de la línea de tiempo: con un audio más largo, también lo de después del último
+    // fotograma.)
+    m_time = std::clamp(ms, 0, std::max(0, timelineEnd() - 1));
     const int index = frameAt(m_time);
     if (m_playing) {
         showPlayingFrame(index);
@@ -3014,7 +3531,7 @@ void GifEditor::togglePlay()
     }
     if (frameCount() == 0)
         return;
-    if (m_time >= totalTime() - 1)
+    if (m_time >= timelineEnd() - 1)
         m_time = 0;
     m_playing = true;
     m_playFrame = frameAt(m_time);
@@ -3046,7 +3563,9 @@ void GifEditor::stop()
 
 void GifEditor::tick()
 {
-    const int total = totalTime();
+    // El vídeo dura lo que la línea de tiempo: con un audio más largo que los fotogramas, hasta que
+    // acaba el audio (después del último fotograma no se ve nada, como en un hueco).
+    const int total = timelineEnd();
     if (!m_doc || frameCount() == 0 || total <= 0) {
         stop();
         return;
@@ -3066,7 +3585,7 @@ void GifEditor::tick()
     // Con una sola pista, los fotogramas ocultos no se ven (tampoco van en el GIF): se saltan. Con
     // varias, el tiempo sigue (las otras pistas pueden tener algo).
     int index = frameAt(m_time);
-    if (trackCount() == 1) {
+    if (trackCount() == 1 && m_time < totalTime()) {
         const QList<int> frames = framesOfTrack(0);
         const int count = int(frames.size());
         int at = int(frames.indexOf(index));
@@ -3282,7 +3801,7 @@ void GifEditor::estimateSize()
 void GifEditor::updateTimeLabel()
 {
     const int index = shownFrame();
-    QString text = QStringLiteral("%1 / %2").arg(timeText(m_time), timeText(totalTime()));
+    QString text = QStringLiteral("%1 / %2").arg(timeText(m_time), timeText(timelineEnd()));
     if (index >= 0)
         text += QStringLiteral("   ") + tr("Fotograma %1 de %2").arg(index + 1).arg(frameCount());
     m_timeLabel->setText(text);
@@ -3339,6 +3858,11 @@ void GifEditor::insertMedia(int mediaIndex, int at, int track)
     if (mediaIndex < 0 || mediaIndex >= m_media.size())
         return;
     const Media& m = m_media[mediaIndex];
+    // Un audio, en el cabezal (en la primera pista de audio libre).
+    if (!m.audioPath.isEmpty()) {
+        addAudioFiles({m.audioPath});
+        return;
+    }
     QList<QImage> frames = m.frames;
     QList<int> delays = m.delays;
     if (m.document)
@@ -3464,7 +3988,7 @@ void GifEditor::setFrameDelay(int index, int delayMs)
     QList<LayerProps> props;
     for (const LayerPtr& l : m_doc->layers())
         props << l->props;
-    props[index].name = Gif::nameWithDelay(props[index].name, std::max(Gif::kMinDelayMs, delayMs));
+    props[index].name = Gif::nameWithDelay(props[index].name, std::max(Gif::kMinEditDelayMs, delayMs));
     applyFrames(m_doc->layers(), props, index, tr("Duración del fotograma"), QStringLiteral("chronometer"));
 }
 
@@ -3485,7 +4009,7 @@ void GifEditor::setFrameTimings(const QHash<int, std::pair<int, int>>& timings, 
         const int index = it.key();
         if (index < 0 || index >= props.size())
             continue;
-        const int gap = std::max(0, it->first), delay = std::max(Gif::kMinDelayMs, it->second);
+        const int gap = std::max(0, it->first), delay = std::max(Gif::kMinEditDelayMs, it->second);
         if (gap == frameGap(index) && delay == frameDelay(index))
             continue;
         changed = true;
@@ -3541,7 +4065,7 @@ void GifEditor::setAllDelays(int delayMs)
     QList<LayerProps> props;
     for (const LayerPtr& l : m_doc->layers()) {
         LayerProps p = l->props;
-        p.name = Gif::nameWithDelay(p.name, std::max(Gif::kMinDelayMs, delayMs));
+        p.name = Gif::nameWithDelay(p.name, std::max(Gif::kMinEditDelayMs, delayMs));
         props << p;
     }
     applyFrames(m_doc->layers(), props, m_doc->activeIndex(), tr("Duración de todos los fotogramas"), QStringLiteral("chronometer"));
@@ -3970,12 +4494,7 @@ void GifEditor::copyFrames()
     }
     auto* data = new QMimeData;
     data->setData(QString::fromLatin1(clipboardMimeType()), bytes);
-    const QImage first = m_doc->layer(indexes.first())->image;
-    data->setImageData(first);
-    QByteArray png;
-    QBuffer buffer(&png);
-    if (buffer.open(QIODevice::WriteOnly) && first.save(&buffer, "PNG"))
-        data->setData(QStringLiteral("image/png"), png);
+    ImageIO::setClipboardImage(data, m_doc->layer(indexes.first())->image);
     QApplication::clipboard()->setMimeData(data);
 }
 
@@ -4112,7 +4631,7 @@ void GifEditor::editDelay(int index)
         return;
     bool ok = false;
     const int value = QInputDialog::getInt(this, tr("Duración del fotograma"), tr("Duración del fotograma %1 (ms):").arg(index + 1),
-                                           frameDelay(index), Gif::kMinDelayMs, 60000, 10, &ok);
+                                           frameDelay(index), Gif::kMinEditDelayMs, 600000, 10, &ok);
     if (ok)
         setFrameDelay(index, value);
 }
@@ -4195,7 +4714,10 @@ void GifEditor::keyPressEvent(QKeyEvent* e)
     case Qt::Key_Home: seek(0); break;
     case Qt::Key_K: toggleGlobalKey(); break;
     case Qt::Key_Delete:
-        // Con un audio elegido, se quita; con un punto clave elegido, ese; si no, los fotogramas elegidos.
+        // Con un espacio vacío elegido, se quita; con un audio, ese; con un punto clave elegido, ese; si
+        // no, los fotogramas elegidos.
+        if (m_timeline->removeSelectedGap())
+            break;
         if (m_selectedAudio >= 0)
             removeAudio(m_selectedAudio);
         else if (m_selectedKey >= 0)
@@ -4467,29 +4989,8 @@ void GifEditor::syncAudio()
 
 void GifEditor::applyPalettes()
 {
-    // Negro AMOLED: el fondo, la vista previa y la línea de tiempo negros, los paneles casi negros y el
-    // acento verde azulado en lo elegido. Después de la hoja de estilo (al aplicarla, Qt vuelve a pulir
-    // los widgets y perdían la paleta).
-    QPalette pal = palette();
-    for (QPalette::ColorGroup g : {QPalette::Active, QPalette::Inactive}) {
-        pal.setColor(g, QPalette::Window, Look::black);
-        pal.setColor(g, QPalette::WindowText, Look::text);
-        pal.setColor(g, QPalette::Base, Look::black);
-        pal.setColor(g, QPalette::AlternateBase, Look::panel);
-        pal.setColor(g, QPalette::Button, Look::raised);
-        pal.setColor(g, QPalette::ButtonText, Look::text);
-        pal.setColor(g, QPalette::Text, Look::text);
-        pal.setColor(g, QPalette::Highlight, Look::accent);
-        pal.setColor(g, QPalette::HighlightedText, QColor(0x00, 0x1a, 0x17));
-        pal.setColor(g, QPalette::Mid, Look::line);
-        pal.setColor(g, QPalette::Midlight, QColor(0x16, 0x17, 0x1a));
-        pal.setColor(g, QPalette::Light, QColor(0x3a, 0x3d, 0x44));
-        pal.setColor(g, QPalette::Dark, Look::black);
-        pal.setColor(g, QPalette::PlaceholderText, Look::dim);
-    }
-    pal.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x5b, 0x5e, 0x65));
-    pal.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x5b, 0x5e, 0x65));
-    pal.setColor(QPalette::Disabled, QPalette::Text, QColor(0x5b, 0x5e, 0x65));
+    // Después de la hoja de estilo (al aplicarla, Qt vuelve a pulir los widgets y perdían la paleta).
+    const QPalette pal = GifEdit::amoledPalette(palette());
     setPalette(pal);
     setAutoFillBackground(true);
     // Lo que se dibuja a mano (línea de tiempo, vista previa, gráfica, medidor, paneles) y las áreas
@@ -4509,45 +5010,83 @@ void GifEditor::applyPalettes()
 
 void GifEditor::applyLook()
 {
-    const QString accent = Look::accent.name(), dark = Look::accentDark.name(), line = Look::line.name(), panel = Look::panel.name(),
-                  raised = Look::raised.name(), hover = Look::hover.name(), text = Look::text.name(), dim = Look::dim.name();
-    setStyleSheet(QStringLiteral(R"(
-GifEditor QFrame[gifPanel="true"], GifEditor QStackedWidget[gifPanel="true"] { background: %4; border: 1px solid #1b1c20; border-radius: 12px; }
-GifEditor QLabel, GifEditor QCheckBox { color: %7; background: transparent; }
-GifEditor QPushButton, GifEditor QToolButton { background: %5; color: %7; border: 1px solid %3; border-radius: 8px; padding: 4px 10px; }
-GifEditor QToolButton[autoRaise="true"] { background: transparent; border-color: transparent; }
-GifEditor QPushButton:hover, GifEditor QToolButton:hover { background: %6; border-color: #3a3d44; }
-GifEditor QPushButton:pressed, GifEditor QToolButton:pressed, GifEditor QToolButton:checked { background: %2; border-color: %1; }
-GifEditor QPushButton:disabled, GifEditor QToolButton:disabled { color: #5b5e65; }
-GifEditor QToolButton::menu-button { border: none; border-left: 1px solid %3; width: 18px; }
-GifEditor QComboBox, GifEditor QSpinBox, GifEditor QDoubleSpinBox { background: #08090a; color: %7; border: 1px solid %3;
-    border-radius: 7px; padding: 3px 6px; selection-background-color: %1; selection-color: #001a17; }
-GifEditor QComboBox:hover, GifEditor QSpinBox:hover, GifEditor QDoubleSpinBox:hover { border-color: #3a3d44; }
-GifEditor QComboBox:focus, GifEditor QSpinBox:focus, GifEditor QDoubleSpinBox:focus { border-color: %1; }
-GifEditor QComboBox QAbstractItemView { background: %4; color: %7; border: 1px solid %3; selection-background-color: %1;
-    selection-color: #001a17; }
-GifEditor QListWidget, GifEditor QListView, GifEditor QTreeView { background: #000000; color: %7; border: 1px solid #1b1c20;
-    border-radius: 10px; }
-GifEditor QListView::item:selected, GifEditor QTreeView::item:selected { background: %2; color: #ffffff; border-radius: 6px; }
-GifEditor QListView::item:hover { background: %5; border-radius: 6px; }
-GifEditor QTabWidget::pane { border: none; }
-GifEditor QTabBar::tab { background: transparent; color: %8; padding: 6px 8px; border: none; border-bottom: 2px solid transparent; }
-GifEditor QTabBar QToolButton { background: %4; border: none; border-radius: 0px; padding: 0px; }
-GifEditor QTabBar::tab:selected { color: #ffffff; border-bottom-color: %1; }
-GifEditor QTabBar::tab:hover:!selected { color: %7; }
-GifEditor QScrollArea { background: transparent; border: none; }
-GifEditor QSplitter::handle { background: #000000; }
-GifEditor QScrollBar:horizontal { background: #000000; height: 10px; margin: 0; border: none; }
-GifEditor QScrollBar:vertical { background: #000000; width: 10px; margin: 0; border: none; }
-GifEditor QScrollBar::handle { background: %3; border-radius: 4px; min-width: 24px; min-height: 24px; margin: 2px; }
-GifEditor QScrollBar::handle:hover { background: #4a4d55; }
-GifEditor QScrollBar::add-line, GifEditor QScrollBar::sub-line { width: 0; height: 0; }
-GifEditor QScrollBar::add-page, GifEditor QScrollBar::sub-page { background: transparent; }
-GifEditor QSlider::groove:horizontal { height: 4px; background: %3; border-radius: 2px; }
-GifEditor QSlider::sub-page:horizontal { background: %1; border-radius: 2px; }
-GifEditor QSlider::handle:horizontal { background: #ffffff; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }
-GifEditor QFrame[frameShape="5"] { color: %3; }
-)")
-                      .arg(accent, dark, line, panel, raised, hover, text, dim));
+    setStyleSheet(GifEdit::amoledStyleSheet(QStringLiteral("GifEditor")));
     applyPalettes();
 }
+
+namespace GifEdit {
+
+QPalette amoledPalette(QPalette pal)
+{
+    // Negro AMOLED: el fondo, la vista previa y la línea de tiempo negros, los paneles casi negros y el
+    // acento verde azulado en lo elegido.
+    for (QPalette::ColorGroup g : {QPalette::Active, QPalette::Inactive}) {
+        pal.setColor(g, QPalette::Window, Look::black);
+        pal.setColor(g, QPalette::WindowText, Look::text);
+        pal.setColor(g, QPalette::Base, Look::black);
+        pal.setColor(g, QPalette::AlternateBase, Look::panel);
+        pal.setColor(g, QPalette::Button, Look::raised);
+        pal.setColor(g, QPalette::ButtonText, Look::text);
+        pal.setColor(g, QPalette::Text, Look::text);
+        pal.setColor(g, QPalette::Highlight, Look::accent);
+        pal.setColor(g, QPalette::HighlightedText, QColor(0x00, 0x1a, 0x17));
+        pal.setColor(g, QPalette::Mid, Look::line);
+        pal.setColor(g, QPalette::Midlight, QColor(0x16, 0x17, 0x1a));
+        pal.setColor(g, QPalette::Light, QColor(0x3a, 0x3d, 0x44));
+        pal.setColor(g, QPalette::Dark, Look::black);
+        pal.setColor(g, QPalette::PlaceholderText, Look::dim);
+    }
+    pal.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x5b, 0x5e, 0x65));
+    pal.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x5b, 0x5e, 0x65));
+    pal.setColor(QPalette::Disabled, QPalette::Text, QColor(0x5b, 0x5e, 0x65));
+    return pal;
+}
+
+QString amoledStyleSheet(const QString& selector)
+{
+    const QString accent = Look::accent.name(), dark = Look::accentDark.name(), line = Look::line.name(), panel = Look::panel.name(),
+                  raised = Look::raised.name(), hover = Look::hover.name(), text = Look::text.name(), dim = Look::dim.name();
+    QString sheet = QStringLiteral(R"(
+@ QFrame[gifPanel="true"], @ QStackedWidget[gifPanel="true"] { background: %4; border: 1px solid #1b1c20; border-radius: 12px; }
+@ QLabel, @ QCheckBox { color: %7; background: transparent; }
+@ QPushButton, @ QToolButton { background: %5; color: %7; border: 1px solid %3; border-radius: 8px; padding: 4px 10px; }
+@ QToolButton[autoRaise="true"] { background: transparent; border-color: transparent; }
+@ QPushButton:hover, @ QToolButton:hover { background: %6; border-color: #3a3d44; }
+@ QPushButton:pressed, @ QToolButton:pressed, @ QToolButton:checked { background: %2; border-color: %1; }
+@ QPushButton:disabled, @ QToolButton:disabled { color: #5b5e65; }
+@ QToolButton::menu-button { border: none; border-left: 1px solid %3; width: 18px; }
+@ QComboBox, @ QSpinBox, @ QDoubleSpinBox { background: #08090a; color: %7; border: 1px solid %3;
+    border-radius: 7px; padding: 3px 6px; selection-background-color: %1; selection-color: #001a17; }
+@ QComboBox:hover, @ QSpinBox:hover, @ QDoubleSpinBox:hover { border-color: #3a3d44; }
+@ QComboBox:focus, @ QSpinBox:focus, @ QDoubleSpinBox:focus { border-color: %1; }
+@ QComboBox QAbstractItemView { background: %4; color: %7; border: 1px solid %3; selection-background-color: %1;
+    selection-color: #001a17; }
+@ QListWidget, @ QListView, @ QTreeView { background: #000000; color: %7; border: 1px solid #1b1c20;
+    border-radius: 10px; }
+@ QListView::item:selected, @ QTreeView::item:selected { background: %2; color: #ffffff; border-radius: 6px; }
+@ QListView::item:hover { background: %5; border-radius: 6px; }
+@ QTabWidget::pane { border: none; }
+@ QTabBar::tab { background: transparent; color: %8; padding: 6px 8px; border: none; border-bottom: 2px solid transparent; }
+@ QTabBar QToolButton { background: %4; border: none; border-radius: 0px; padding: 0px; }
+@ QTabBar::tab:selected { color: #ffffff; border-bottom-color: %1; }
+@ QTabBar::tab:hover:!selected { color: %7; }
+@ QScrollArea { background: transparent; border: none; }
+@ QSplitter::handle { background: #101114; border-radius: 3px; margin: 2px; }
+@ QSplitter::handle:hover { background: %1; }
+@ QScrollBar:horizontal { background: #000000; height: 10px; margin: 0; border: none; }
+@ QScrollBar:vertical { background: #000000; width: 10px; margin: 0; border: none; }
+@ QScrollBar::handle { background: %3; border-radius: 4px; min-width: 24px; min-height: 24px; margin: 2px; }
+@ QScrollBar::handle:hover { background: #4a4d55; }
+@ QScrollBar::add-line, @ QScrollBar::sub-line { width: 0; height: 0; }
+@ QScrollBar::add-page, @ QScrollBar::sub-page { background: transparent; }
+@ QSlider::groove:horizontal { height: 4px; background: %3; border-radius: 2px; }
+@ QSlider::sub-page:horizontal { background: %1; border-radius: 2px; }
+@ QSlider::handle:horizontal { background: #ffffff; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }
+@ QFrame[frameShape="5"] { color: %3; }
+)")
+                        .arg(accent, dark, line, panel, raised, hover, text, dim);
+    sheet.replace(QLatin1Char('@'), selector);
+    return sheet;
+}
+
+} // namespace GifEdit

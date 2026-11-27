@@ -455,7 +455,9 @@ int main(int argc, char** argv)
         window.show();
         const QString gif = parser.value(QStringLiteral("preview-gif-editor")).toLower();
         const QString error = window.screenPreview(parser.positionalArguments(), parser.value(QStringLiteral("screenpreview")),
-                                                   gif == QLatin1String("yes") || gif == QLatin1String("sí") || gif == QLatin1String("si"),
+                                                   gif == QLatin1String("classic") ? 2
+                                                   : gif == QLatin1String("yes") || gif == QLatin1String("sí") || gif == QLatin1String("si") ? 1
+                                                                                                                                            : 0,
                                                    parser.value(QStringLiteral("preview-popup")));
         if (!error.isEmpty()) {
             std::fprintf(stderr, "%s\n", qPrintable(error));

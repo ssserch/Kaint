@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KaintTestFileType")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+744de3f9142d88659007d5c8dbdc8bb011e2ee63")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+22fc8dbf24f59619074c751f0a78792714c75032")]
 [assembly: System.Reflection.AssemblyProductAttribute("KaintTestFileType")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KaintTestFileType")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

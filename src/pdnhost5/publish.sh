@@ -15,8 +15,15 @@ dotnet="${DOTNET:-dotnet}"
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 
+# MSBUILDTERMINALLOGGER=off: con el registro «de terminal» (el de serie desde .NET 9), -clp:ErrorsOnly
+# no se respeta y salen cientos de avisos de C# de third_party/pdn5.
 export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-       MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
+       MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDTERMINALLOGGER=off
+
+nuget_dir="${NUGET_PACKAGES:-$HOME/.nuget/packages}"
+if [ ! -d "$nuget_dir/system.drawing.common" ]; then
+    echo "La primera vez se descargan los paquetes de .NET desde nuget.org: puede tardar unos minutos sin mostrar nada."
+fi
 
 # -m:1: con varios nodos, la restauración en paralelo falla sin decir por qué en algunos SDK de Arch.
 common="-c Release -m:1 -nodeReuse:false -p:UseSharedCompilation=false -v:q -clp:ErrorsOnly"

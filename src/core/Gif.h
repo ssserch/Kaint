@@ -65,6 +65,9 @@ int delayFromName(const QString& name, int fallback);
 QString nameWithDelay(const QString& name, int delayMs);
 // Duración mínima que respetan los navegadores (20 ms).
 constexpr int kMinDelayMs = 20;
+// La mínima en el editor de GIF (10 ms): por debajo de 20 ms el GIF la sube a 20 al guardarlo, pero
+// el PNG animado, el WebP y los vídeos la conservan (16 ms: 60 fotogramas por segundo).
+constexpr int kMinEditDelayMs = 10;
 
 } // namespace Gif
 

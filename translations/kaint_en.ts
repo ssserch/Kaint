@@ -1613,6 +1613,291 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     </message>
 </context>
 <context>
+    <name>GifClassicEditor</name>
+    <message>
+        <source>Estudio</source>
+        <translation>Studio</translation>
+    </message>
+    <message>
+        <source>Pasa al estudio: la línea de tiempo con pistas, puntos clave y audio.</source>
+        <translation>Switch to the studio: the timeline with tracks, keyframes and audio.</translation>
+    </message>
+    <message>
+        <source>Editor de imágenes</source>
+        <translation>Image editor</translation>
+    </message>
+    <message>
+        <source>Vuelve a editar esta imagen con las herramientas (cada fotograma es una capa).</source>
+        <translation>Go back to editing this image with the tools (each frame is a layer).</translation>
+    </message>
+    <message>
+        <source>Exportar GIF...</source>
+        <translation>Export GIF...</translation>
+    </message>
+    <message>
+        <source>Guarda la animación como GIF, con la configuración de siempre (paleta, cuantización, efectos...). En la flecha, otros formatos: PNG animado, WebP animado y vídeo MP4 o WebM.</source>
+        <translation>Saves the animation as a GIF with the usual settings (palette, quantization, effects...). The arrow has other formats: animated PNG, animated WebP and MP4 or WebM video.</translation>
+    </message>
+    <message>
+        <source>GIF...</source>
+        <translation>GIF...</translation>
+    </message>
+    <message>
+        <source>PNG animado (APNG)...</source>
+        <translation>Animated PNG (APNG)...</translation>
+    </message>
+    <message>
+        <source>WebP animado...</source>
+        <translation>Animated WebP...</translation>
+    </message>
+    <message>
+        <source>Vídeo MP4...</source>
+        <translation>MP4 video...</translation>
+    </message>
+    <message>
+        <source>Vídeo WebM...</source>
+        <translation>WebM video...</translation>
+    </message>
+    <message>
+        <source>Añadir fotogramas</source>
+        <translation>Add frames</translation>
+    </message>
+    <message>
+        <source>Desde archivos (imágenes, GIF o vídeo)...</source>
+        <translation>From files (images, GIF or video)...</translation>
+    </message>
+    <message>
+        <source>Fotograma vacío</source>
+        <translation>Empty frame</translation>
+    </message>
+    <message>
+        <source>Copia del último</source>
+        <translation>Copy of the last one</translation>
+    </message>
+    <message>
+        <source>Activar u omitir varios fotogramas</source>
+        <translation>Toggle a range of frames</translation>
+    </message>
+    <message>
+        <source>Omitir rango</source>
+        <translation>Skip range</translation>
+    </message>
+    <message>
+        <source>Activar rango</source>
+        <translation>Enable range</translation>
+    </message>
+    <message>
+        <source>Omitir cada N.º</source>
+        <translation>Skip every N-th</translation>
+    </message>
+    <message>
+        <source>Activar cada N.º</source>
+        <translation>Enable every N-th</translation>
+    </message>
+    <message>
+        <source>Desde:</source>
+        <translation>From:</translation>
+    </message>
+    <message>
+        <source>Hasta:</source>
+        <translation>To:</translation>
+    </message>
+    <message>
+        <source>Cada:</source>
+        <translation>Every:</translation>
+    </message>
+    <message>
+        <source>Orden y velocidad</source>
+        <translation>Order and speed</translation>
+    </message>
+    <message>
+        <source>Invertir el orden</source>
+        <translation>Reverse order</translation>
+    </message>
+    <message>
+        <source>El último fotograma pasa a ser el primero.</source>
+        <translation>The last frame becomes the first.</translation>
+    </message>
+    <message>
+        <source>Ida y vuelta</source>
+        <translation>Back and forth</translation>
+    </message>
+    <message>
+        <source>Añade los fotogramas al revés al final (sin repetir el último ni el primero): la animación va y vuelve, como un bumerán.</source>
+        <translation>Adds the frames in reverse at the end (without repeating the last or the first): the animation goes and comes back, like a boomerang.</translation>
+    </message>
+    <message>
+        <source>Más rápido (×2)</source>
+        <translation>Faster (×2)</translation>
+    </message>
+    <message>
+        <source>La mitad de duración en cada fotograma (cada uno conserva su proporción).</source>
+        <translation>Half the duration for each frame (each one keeps its proportion).</translation>
+    </message>
+    <message>
+        <source>Más lento (×½)</source>
+        <translation>Slower (×½)</translation>
+    </message>
+    <message>
+        <source>El doble de duración en cada fotograma.</source>
+        <translation>Twice the duration for each frame.</translation>
+    </message>
+    <message>
+        <source>Opciones del GIF</source>
+        <translation>GIF options</translation>
+    </message>
+    <message>
+        <source> ms</source>
+        <translation> ms</translation>
+    </message>
+    <message>
+        <source>Fotogramas por segundo...</source>
+        <translation>Frames per second...</translation>
+    </message>
+    <message>
+        <source>%1 fps</source>
+        <translation>%1 fps</translation>
+    </message>
+    <message>
+        <source>La misma duración para todos los fotogramas según los fotogramas por segundo. El GIF guarda como mucho 50 por segundo (20 ms); con más, los vídeos y el PNG animado los conservan.</source>
+        <translation>The same duration for every frame, from the frames per second. A GIF stores at most 50 per second (20 ms); videos and animated PNG keep higher rates.</translation>
+    </message>
+    <message>
+        <source>Duración de los fotogramas</source>
+        <translation>Frame durations</translation>
+    </message>
+    <message>
+        <source>Fotogramas por segundo</source>
+        <translation>Frames per Second</translation>
+    </message>
+    <message>
+        <source>(cambiarla pone esta duración a todos los fotogramas)</source>
+        <translation>(changing it sets this duration for all frames)</translation>
+    </message>
+    <message>
+        <source>Duración:</source>
+        <translation>Duration:</translation>
+    </message>
+    <message>
+        <source>(vacío: se repite sin fin)</source>
+        <translation>(empty: loops forever)</translation>
+    </message>
+    <message>
+        <source>Reproducciones:</source>
+        <translation>Plays:</translation>
+    </message>
+    <message>
+        <source>La paleta global, la cuantización y los efectos (fundido, no apilar) se eligen al exportar el GIF.</source>
+        <translation>The global palette, quantization and effects (crossfade, no stacking) are chosen when exporting the GIF.</translation>
+    </message>
+    <message>
+        <source>Editor de GIF clásico: %1</source>
+        <translation>Classic GIF editor: %1</translation>
+    </message>
+    <message>
+        <source>Editor de GIF clásico</source>
+        <translation>Classic GIF editor</translation>
+    </message>
+    <message>
+        <source>Editar el fotograma con las herramientas</source>
+        <translation>Edit the frame with the tools</translation>
+    </message>
+    <message>
+        <source>ms</source>
+        <translation>ms</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Repite este fotograma justo después</source>
+        <translation>Repeats this frame right after it</translation>
+    </message>
+    <message>
+        <source>Mover este fotograma antes</source>
+        <translation>Move this frame earlier</translation>
+    </message>
+    <message>
+        <source>Mover este fotograma después</source>
+        <translation>Move this frame later</translation>
+    </message>
+    <message>
+        <source>Quitar este fotograma</source>
+        <translation>Remove this frame</translation>
+    </message>
+    <message>
+        <source>Omitir el fotograma</source>
+        <translation>Skip frame</translation>
+    </message>
+    <message>
+        <source>Activar el fotograma</source>
+        <translation>Enable frame</translation>
+    </message>
+    <message>
+        <source>(%1 FPS)</source>
+        <translation>(%1 FPS)</translation>
+    </message>
+    <message>
+        <source>Se muestra: clic para ocultarlo</source>
+        <translation>Shown: click to hide it</translation>
+    </message>
+    <message>
+        <source>No se muestra: clic para mostrarlo</source>
+        <translation>Not shown: click to show it</translation>
+    </message>
+    <message>
+        <source>Omitido: no va en el GIF</source>
+        <translation>Skipped: not included in the GIF</translation>
+    </message>
+    <message>
+        <source>Omitir</source>
+        <translation>Skip</translation>
+    </message>
+    <message>
+        <source>Activar</source>
+        <translation>Enable</translation>
+    </message>
+    <message>
+        <source>Duración del fotograma</source>
+        <translation>Frame duration</translation>
+    </message>
+    <message>
+        <source>Copiar el fotograma</source>
+        <translation>Copy frame</translation>
+    </message>
+    <message>
+        <source>Quitar el fotograma</source>
+        <translation>Remove frame</translation>
+    </message>
+    <message>
+        <source>Mover el fotograma</source>
+        <translation>Move frame</translation>
+    </message>
+    <message>
+        <source>Fotograma %1</source>
+        <translation>Frame %1</translation>
+    </message>
+    <message>
+        <source>Vídeo (%1)</source>
+        <translation>Video (%1)</translation>
+    </message>
+    <message>
+        <source>no es una imagen</source>
+        <translation>not an image</translation>
+    </message>
+    <message>
+        <source>Añadir un fotograma</source>
+        <translation>Add a frame</translation>
+    </message>
+    <message>
+        <source>No se pudieron importar:
+%1</source>
+        <translation>Could not import:
+%1</translation>
+    </message>
+</context>
+<context>
     <name>GifEditor</name>
     <message>
         <source>Sin fotogramas: arrastra imágenes o GIF a la línea de tiempo</source>
@@ -1730,10 +2015,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>WebM video...</translation>
     </message>
     <message>
-        <source>Las imágenes abiertas en Kaint y las que importes. Arrástralas a la línea de tiempo (o haz doble clic para añadirlas al final de la pista elegida).</source>
-        <translation>The images open in Kaint and the ones you import. Drag them to the timeline (or double-click to add them at the end of the selected track).</translation>
-    </message>
-    <message>
         <source>Añade los medios elegidos a la pista elegida, detrás del fotograma elegido.</source>
         <translation>Adds the selected media to the selected track, after the selected frame.</translation>
     </message>
@@ -1784,10 +2065,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source> ms</source>
         <translation> ms</translation>
-    </message>
-    <message>
-        <source>Cuánto se ve el fotograma elegido</source>
-        <translation>How long the chosen frame is shown</translation>
     </message>
     <message>
         <source>A todos</source>
@@ -1862,6 +2139,26 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Small tracks</translation>
     </message>
     <message>
+        <source>Cambiar el nombre...</source>
+        <translation>Rename...</translation>
+    </message>
+    <message>
+        <source>Pequeña</source>
+        <translation>Small</translation>
+    </message>
+    <message>
+        <source>Mediana</source>
+        <translation>Medium</translation>
+    </message>
+    <message>
+        <source>Grande</source>
+        <translation>Large</translation>
+    </message>
+    <message>
+        <source>Todas las pistas</source>
+        <translation>All tracks</translation>
+    </message>
+    <message>
         <source>Pistas medianas</source>
         <translation>Medium tracks</translation>
     </message>
@@ -1880,6 +2177,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Quitar el audio</source>
         <translation>Remove audio</translation>
+    </message>
+    <message>
+        <source>Quitar el espacio</source>
+        <translation>Remove gap</translation>
     </message>
     <message>
         <source>Quitar el punto de volumen</source>
@@ -1938,8 +2239,24 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Change audio</translation>
     </message>
     <message>
+        <source>Clásico</source>
+        <translation>Classic</translation>
+    </message>
+    <message>
+        <source>Pasa al editor de GIF clásico: los fotogramas uno por uno, en tarjetas.</source>
+        <translation>Switch to the classic GIF editor: the frames one by one, on cards.</translation>
+    </message>
+    <message>
+        <source>Las imágenes abiertas en Kaint y las imágenes, GIF, vídeos y audios que importes. Arrástralos a la línea de tiempo (o haz doble clic: las imágenes van al final de la pista elegida y los audios, al cabezal).</source>
+        <translation>The images open in Kaint and the images, GIFs, videos and audio files you import. Drag them to the timeline (or double-click: images go to the end of the chosen track and audio goes to the playhead).</translation>
+    </message>
+    <message>
         <source>Vídeo (%1)</source>
         <translation>Video (%1)</translation>
+    </message>
+    <message>
+        <source>Cuánto se ve el fotograma elegido (16 ms: 60 fotogramas por segundo; el GIF los guarda a 20 ms como mínimo, los vídeos y el PNG animado tal cual)</source>
+        <translation>How long the chosen frame is shown (16 ms: 60 frames per second; a GIF stores at least 20 ms, videos and animated PNG keep it as is)</translation>
     </message>
     <message>
         <source>Añade los fotogramas de la pista elegida al revés al final: la animación va y vuelve</source>
@@ -1960,6 +2277,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Añade un archivo de audio (MP3, WAV, OGG, FLAC...) para los vídeos exportados. También se puede arrastrar a la línea de tiempo.</source>
         <translation>Adds an audio file (MP3, WAV, OGG, FLAC...) for exported videos. You can also drag it onto the timeline.</translation>
+    </message>
+    <message>
+        <source>Imán: al mover un clip, un punto clave o un audio, se pega a las uniones (los bordes de los clips, el cabezal y el principio) al acercarse</source>
+        <translation>Magnet: when moving a clip, a keyframe or an audio clip, it sticks to the joins (clip edges, the playhead and the start) as it gets close</translation>
     </message>
     <message>
         <source>Zum:</source>
@@ -3114,6 +3435,18 @@ Opacity: %2 · Blend: %3</translation>
         <translation>Edit this image as an animated GIF, on a timeline (choose it again to go back to the image editor)</translation>
     </message>
     <message>
+        <source>&amp;Estudio</source>
+        <translation>&amp;Studio</translation>
+    </message>
+    <message>
+        <source>&amp;Clásico</source>
+        <translation>&amp;Classic</translation>
+    </message>
+    <message>
+        <source>Edita esta imagen como un GIF animado fotograma a fotograma, en tarjetas (como la configuración avanzada del GIF, a pantalla completa)</source>
+        <translation>Edits this image as an animated GIF frame by frame, on cards (like the advanced GIF settings, full screen)</translation>
+    </message>
+    <message>
         <source>C&amp;hat de la sesión...</source>
         <translation>Session c&amp;hat...</translation>
     </message>
@@ -3446,8 +3779,16 @@ Opacity: %2 · Blend: %3</translation>
         <translation>Group %1</translation>
     </message>
     <message>
+        <source>Giro de la vista (Alt + rueda). Clic: vista sin girar</source>
+        <translation>View rotation (Alt + wheel). Click: unrotated view</translation>
+    </message>
+    <message>
         <source>Editor de GIF</source>
         <translation>GIF Editor</translation>
+    </message>
+    <message>
+        <source>Editor de GIF clásico</source>
+        <translation>Classic GIF editor</translation>
     </message>
     <message>
         <source>Vídeo (%1)</source>

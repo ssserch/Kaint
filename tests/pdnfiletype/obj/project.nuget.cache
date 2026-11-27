@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "Q1VJsEmkHNQ=",
+  "success": true,
+  "projectFilePath": "/home/serch/Escritorio/KAINT/Kaint/tests/pdnfiletype/KaintTestFileType.csproj",
+  "expectedPackageFiles": [
+    "/home/serch/.nuget/packages/microsoft.aspnetcore.app.ref/10.0.14/microsoft.aspnetcore.app.ref.10.0.14.nupkg.sha512"
+  ],
+  "logs": []
+}

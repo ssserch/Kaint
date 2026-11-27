@@ -17,6 +17,10 @@ export default {
         "Quadros-chave do quadro selecionado (sobre a sua imagem): arraste-os para mudar quando chegam; clique com o botão direito para a forma do movimento",
     "Configurar esta pantalla":
         "Configurar esta tela",
+    "Volver al menú":
+        "Voltar ao menu",
+    "Cuánto se ve el fotograma elegido":
+        "Tempo de exibição do quadro selecionado",
     "Fondo con la última imagen editada":
         "Fundo com a última imagem editada",
     "Importar del dispositivo…":

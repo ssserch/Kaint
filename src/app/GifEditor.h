@@ -5,6 +5,7 @@
 #include <QImage>
 #include <QList>
 #include <QListWidget>
+#include <QPalette>
 #include <QPointer>
 #include <QTimer>
 #include <QWidget>
@@ -35,14 +36,15 @@ using LayerPtr = std::shared_ptr<Layer>;
 // cada cambio es un paso del historial. Se pasa de una vista a otra en cada imagen.
 namespace GifEdit {
 
-// Un medio de la biblioteca: una imagen abierta (se lee al usarla) o un archivo importado (sus
-// fotogramas, uno si es una imagen fija).
+// Un medio de la biblioteca: una imagen abierta (se lee al usarla), un archivo importado (sus
+// fotogramas, uno si es una imagen fija) o un audio (su ruta; va a las pistas de audio).
 struct Media {
     QString name;
     QPointer<Document> document;
     QList<QImage> frames;
     QList<int> delays;
     QImage thumbnail;
+    QString audioPath;
 };
 
 // Los fotogramas de una imagen abierta: sus capas, si es una animación (alguna lleva la duración
@@ -52,6 +54,15 @@ void framesOf(const Document* doc, QList<QImage>* frames, QList<int>* delays);
 // alrededor).
 QImage fitted(const QImage& image, QSize canvas);
 int delayOf(const Layer* layer);
+// Los fotogramas de un archivo (imagen, GIF, PNG animado, WebP o vídeo); con 'progressParent', la
+// barra de progreso de los vídeos.
+bool loadMedia(const QString& path, Media* media, QWidget* progressParent, QString* error);
+
+// El aspecto de los editores de GIF (el estudio y el clásico): negro AMOLED con el acento verde
+// azulado, como los editores de vídeo. La hoja de estilo para los widgets de la clase 'selector' y la
+// paleta (se aplica después de la hoja de estilo: al aplicarla, Qt vuelve a pulir los widgets).
+QString amoledStyleSheet(const QString& selector);
+QPalette amoledPalette(QPalette base);
 
 class Preview;
 class Timeline;
@@ -120,6 +131,18 @@ public:
     void removeTrack(int track);
     bool trackHidden(int track) const;
     void toggleTrackHidden(int track);
+    // La altura de cada pista en la línea de tiempo ('track' -1: todas) y el nombre de las pistas de
+    // fotogramas y de audio (vacío: el de siempre, «Pista 1»...). Se recuerdan en la imagen.
+    int trackHeight(int track) const;
+    void setTrackHeight(int track, int height);
+    QString trackName(int track) const;
+    void setTrackName(int track, const QString& name);
+    QString audioTrackName(int row) const;
+    void setAudioTrackName(int row, const QString& name);
+    // Al quitar una pista de audio, las de debajo suben con su nombre.
+    void removeAudioTrackName(int row);
+    // El imán (encendido de fábrica): lo que se arrastra en la línea de tiempo se pega a las uniones.
+    bool magnetOn() const;
     // Inicio y final (ms) de un fotograma dentro de su pista; la duración total (la pista más larga).
     int frameStart(int index) const;
     int frameEnd(int index) const;
@@ -207,6 +230,8 @@ public:
     // Añade archivos de audio en 'startMs' (-1: el cabezal) y en la pista 'row' (-1: la primera libre).
     void addAudioFiles(const QStringList& paths, int startMs = -1, int row = -1);
     void chooseAudioFiles();
+    // La ruta de un medio de la biblioteca que es un audio (vacía si no lo es).
+    QString audioMediaPath(int mediaIndex) const;
     void removeAudio(int index);
     int selectedAudio() const { return m_selectedAudio; }
     void selectAudio(int index);
@@ -218,6 +243,8 @@ signals:
     // 'format': "gif" (la configuración de siempre), "apng", "webp", "mp4" o "webm".
     void exportRequested(const QString& format);
     void imageEditorRequested();
+    // Pasar al editor de GIF clásico (los fotogramas en tarjetas).
+    void classicRequested();
     void editFrameRequested(int layerIndex);
     // Deshacer y rehacer como los de la ventana (que avisan a la herramienta antes).
     void undoRequested();
@@ -296,6 +323,9 @@ private:
     QComboBox* m_speed = nullptr;
     QSpinBox* m_delay = nullptr;
     QSlider* m_zoom = nullptr;
+    QToolButton* m_magnet = nullptr;
+    class QSplitter* m_topSplit = nullptr;
+    class QSplitter* m_verticalSplit = nullptr;
     QList<QWidget*> m_frameButtons;
 
     QTimer m_ticker;

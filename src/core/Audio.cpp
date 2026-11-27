@@ -93,6 +93,18 @@ QByteArray peaksOf(const std::vector<float>& mono, int rate)
     return out;
 }
 
+// Enteros little-endian de la cabecera, byte a byte: con qFromLittleEndian sobre constData(), GCC
+// cree que puede ser el QByteArray vacío (1 byte) y avisa (-Warray-bounds) aunque el tamaño ya se miró.
+quint32 le16(const QByteArray& d, qsizetype i)
+{
+    return quint32(quint8(d.at(i))) | (quint32(quint8(d.at(i + 1))) << 8);
+}
+
+quint32 le32(const QByteArray& d, qsizetype i)
+{
+    return le16(d, i) | (le16(d, i + 2) << 16);
+}
+
 bool analyzeWav(const QByteArray& data, int* lengthMs, QByteArray* peaks)
 {
     if (data.size() < 44 || !data.startsWith("RIFF") || data.mid(8, 4) != "WAVE")
@@ -101,15 +113,15 @@ bool analyzeWav(const QByteArray& data, int* lengthMs, QByteArray* peaks)
     qsizetype at = 12;
     while (at + 8 <= data.size()) {
         const QByteArray id = data.mid(at, 4);
-        const quint32 size = qFromLittleEndian<quint32>(data.constData() + at + 4);
+        const quint32 size = le32(data, at + 4);
         const qsizetype body = at + 8;
         if (id == "fmt " && body + 16 <= data.size()) {
-            format = qFromLittleEndian<quint16>(data.constData() + body);
-            channels = qFromLittleEndian<quint16>(data.constData() + body + 2);
-            rate = int(qFromLittleEndian<quint32>(data.constData() + body + 4));
-            bits = qFromLittleEndian<quint16>(data.constData() + body + 14);
+            format = int(le16(data, body));
+            channels = int(le16(data, body + 2));
+            rate = int(le32(data, body + 4));
+            bits = int(le16(data, body + 14));
             if (format == 0xfffe && size >= 26)  // WAVE_FORMAT_EXTENSIBLE: el formato, en el subtipo
-                format = qFromLittleEndian<quint16>(data.constData() + body + 24);
+                format = int(le16(data, body + 24));
         } else if (id == "data" && channels > 0 && rate > 0 && (bits == 8 || bits == 16 || bits == 24 || bits == 32)) {
             const qsizetype end = std::min<qsizetype>(data.size(), body + qsizetype(size));
             const int bytes = bits / 8;

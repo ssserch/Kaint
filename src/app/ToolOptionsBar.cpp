@@ -344,15 +344,15 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
     m_shapeStyle->onChosen = [update](int v) { update([v](ToolSettings& s) { s.shapeStyle = ShapeStyle(v); }); };
     add(QStringLiteral("shapeStyle"), Tool::OptShapeStyle, Shape, {m_shapeStyle});
 
-    m_cornerRadius = new QSpinBox(parent);
-    m_cornerRadius->setRange(0, 1000);
-    m_cornerRadius->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    // Como el tamaño del pincel: un campo con su lista de radios (y se puede escribir otro).
+    static const QList<double> radiusPresets{0, 2, 4, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 75, 100, 150, 200, 300, 500};
+    m_cornerRadius = numberCombo(radiusPresets, 0, 1000, 0, [update](double v) { update([v](ToolSettings& s) { s.cornerRadius = int(v); }); });
     m_cornerRadius->setToolTip(tr("Radio de las esquinas del rectángulo redondeado"));
-    connect(m_cornerRadius, &QSpinBox::valueChanged, this,
-            [update](int v) { update([v](ToolSettings& s) { s.cornerRadius = v; }); });
     add(QStringLiteral("corner"), Tool::OptCornerRadius, Shape,
-        {label(tr("Radio:")),
-         steppers(m_cornerRadius, [this](int dir) { m_cornerRadius->setValue(m_cornerRadius->value() + dir); })});
+        {label(tr("Radio:")), steppers(m_cornerRadius, [this, update](int dir) {
+             const int v = int(stepPreset(m_model->tools().cornerRadius, dir, radiusPresets));
+             update([v](ToolSettings& s) { s.cornerRadius = v; });
+         })});
 
     // Tipo de curva: tres botones, como en Paint.NET.
     auto [curveBox, curveLayout] = buttonRow();
@@ -912,14 +912,13 @@ void ToolOptionsEditor::sync()
         c->setEditText(text);
     };
     setNumber(m_size, s.brushSize, 0);
+    setNumber(m_cornerRadius, s.cornerRadius, 0);
     setNumber(m_fontSize, s.fontSize, 1);
     {
-        const QSignalBlocker b1(m_hardness), b2(m_tolerance), b3(m_spacing), b4(m_cornerRadius), b5(m_fixedWidth),
-            b6(m_fixedHeight);
+        const QSignalBlocker b1(m_hardness), b2(m_tolerance), b3(m_spacing), b5(m_fixedWidth), b6(m_fixedHeight);
         m_hardness->setValue(s.hardness);
         m_spacing->setValue(s.spacing);
         m_tolerance->setValue(s.tolerance);
-        m_cornerRadius->setValue(s.cornerRadius);
         m_fixedWidth->setValue(s.fixedWidth);
         m_fixedHeight->setValue(s.fixedHeight);
     }

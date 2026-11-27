@@ -72,6 +72,17 @@ QImage prepared(const QImage& image, const VideoOptions& o, bool keepAlpha)
     return out;
 }
 
+// Hasta dónde llega el audio (el final del último clip, también de los silenciados: el vídeo dura lo
+// que la línea de tiempo del editor de GIF).
+qint64 videoEnd(const QList<Audio::Clip>& audio)
+{
+    qint64 end = 0;
+    for (const Audio::Clip& c : audio)
+        if (c.duration > 0)
+            end = std::max<qint64>(end, c.end());
+    return end;
+}
+
 // Con FFmpeg: los fotogramas como PNG en una carpeta temporal y una lista con la duración de cada
 // uno (vídeo de duración variable, sin redondear las duraciones del GIF).
 bool encodeWithFfmpeg(const QList<Gif::Frame>& frames, Format format, const QString& path, int loops, int webpQuality,
@@ -107,6 +118,27 @@ bool encodeWithFfmpeg(const QList<Gif::Frame>& frames, Format format, const QStr
             last = QStringLiteral("f%1.png").arg(i, 5, 10, QLatin1Char('0'));
             list += QStringLiteral("file '%1'\nduration %2\n").arg(last).arg(std::max(1, frames[i].delayMs) / 1000.0, 0, 'f', 3);
         }
+    // Con un audio más largo que la animación, el vídeo dura lo que el audio: después del último
+    // fotograma, nada (el fondo), como en la vista previa del editor de GIF.
+    qint64 videoMs = 0;
+    for (const Gif::Frame& f : frames)
+        videoMs += std::max(1, f.delayMs);
+    videoMs *= repeat;
+    if (format == Format::Mp4 || format == Format::WebM) {
+        const qint64 audioEnd = videoEnd(o.audio);
+        if (audioEnd > videoMs) {
+            QImage blank(frames.first().image.size(), QImage::Format_ARGB32_Premultiplied);
+            blank.fill(Qt::transparent);
+            last = QStringLiteral("pad.png");
+            if (!prepared(blank, o, alpha).save(dir.filePath(last), "PNG")) {
+                if (error)
+                    *error = QObject::tr("No se pudo escribir «%1».").arg(dir.filePath(last));
+                return false;
+            }
+            list += QStringLiteral("file '%1'\nduration %2\n").arg(last).arg((audioEnd - videoMs) / 1000.0, 0, 'f', 3);
+            videoMs = audioEnd;
+        }
+    }
     // (La duración del último solo cuenta si se repite su nombre al final.)
     list += QStringLiteral("file '%1'\n").arg(last);
     QFile listFile(dir.filePath(QStringLiteral("list.txt")));
@@ -126,10 +158,6 @@ bool encodeWithFfmpeg(const QList<Gif::Frame>& frames, Format format, const QStr
     const bool withAudio = (format == Format::Mp4 || format == Format::WebM)
                            && std::any_of(o.audio.cbegin(), o.audio.cend(), [](const Audio::Clip& c) { return !c.muted && c.duration > 0; });
     if (withAudio) {
-        qint64 videoMs = 0;
-        for (const Gif::Frame& f : frames)
-            videoMs += std::max(1, f.delayMs);
-        videoMs *= repeat;
         QStringList chains, labels;
         int input = 1;
         for (const Audio::Clip& c : o.audio) {
@@ -260,9 +288,10 @@ QString videoPatterns()
 
 namespace {
 
+// (Al milisegundo: a 60 por segundo, 17 ms; el GIF la redondea a centésimas al guardarlo.)
 int delayForFps(double fps)
 {
-    return std::max(Gif::kMinDelayMs, int(std::lround(1000.0 / fps / 10.0)) * 10);
+    return std::max(Gif::kMinEditDelayMs, int(std::lround(1000.0 / fps)));
 }
 
 // Sin FFmpeg: con los códecs del sistema (Media Foundation, en Windows), con los mismos límites.
@@ -278,7 +307,7 @@ bool decodeWithSystem(const QString& path, QList<QImage>* frames, int* delayMs, 
     }
     double fps = 25;
     const bool ok = VideoFrames::decode(
-        path, 25, 1500, frames, &fps,
+        path, 60, 1500, frames, &fps,
         [&progress](int done, int total) {
             if (progress) {
                 // (Sin el total, la barra va y viene.)
@@ -313,7 +342,7 @@ bool decodeVideo(const QString& path, QList<QImage>* frames, int* delayMs, QWidg
                                  "o pon ffmpeg junto a Kaint y vuelve a intentarlo.");
         return false;
     }
-    // Fotogramas por segundo y duración (ffprobe va con FFmpeg; sin él, 25 por segundo).
+    // Fotogramas por segundo (hasta 60) y duración (ffprobe va con FFmpeg; sin él, 25 por segundo).
     double fps = 25, duration = 0;
     const QString probe = QFileInfo(ffmpeg).absolutePath() + QStringLiteral("/ffprobe") + QFileInfo(ffmpeg).suffix().prepend(
                               QFileInfo(ffmpeg).suffix().isEmpty() ? QString() : QStringLiteral("."));
@@ -328,7 +357,7 @@ bool decodeVideo(const QString& path, QList<QImage>* frames, int* delayMs, QWidg
                 const QList<QByteArray> parts = line.mid(15).trimmed().split('/');
                 const double num = parts.value(0).toDouble(), den = parts.size() > 1 ? parts[1].toDouble() : 1;
                 if (num > 0 && den > 0)
-                    fps = std::min(25.0, num / den);
+                    fps = std::min(60.0, num / den);
             } else if (line.startsWith("duration=")) {
                 duration = line.mid(9).trimmed().toDouble();
             }
@@ -487,7 +516,10 @@ QString exportAnimation(QWidget* parent, Document* doc, Format format, const QSt
     repeat->setValue(std::clamp(int(std::ceil(5000.0 / std::max(1, total))), 1, 20));
     repeat->setSuffix(QObject::tr(" veces"));
     auto* durationLabel = new QLabel(&dlg);
-    auto syncDuration = [=] { durationLabel->setText(QObject::tr("%1 s").arg(total * repeat->value() / 1000.0, 0, 'f', 1)); };
+    const qint64 audioEnd = video ? videoEnd(doc->audioClips()) : 0;
+    auto syncDuration = [=] {
+        durationLabel->setText(QObject::tr("%1 s").arg(std::max<qint64>(qint64(total) * repeat->value(), audioEnd) / 1000.0, 0, 'f', 1));
+    };
     QObject::connect(repeat, &QSpinBox::valueChanged, &dlg, syncDuration);
     syncDuration();
     auto* scale = new QComboBox(&dlg);

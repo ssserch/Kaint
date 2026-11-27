@@ -1417,6 +1417,13 @@ export class App extends EventTarget {
         A("translucent", tr("Ventanas &translúcidas"), null, null, () => Settings.set("translucentPanels", !Settings.get("translucentPanels")),
           null, () => Settings.get("translucentPanels"));
         A("settings", tr("&Configuración..."), "configure", "Alt+X", () => settingsDialog(this));
+        // Kaint.APK: vuelve a la pantalla de bienvenida (las imágenes abiertas siguen ahí y pasan a
+        // las recientes).
+        A("backToMenu", tr("Volver al menú"), "application-exit", null, async () => {
+            const { rememberOpen, showWelcome } = await import("./Welcome.js");
+            await rememberOpen(this);
+            await showWelcome(this);
+        });
         A("docs", tr("&Documentación"), "help-docs", "F1", openUrl("https://www.getpaint.net/doc/latest/index.html"));
         A("website", tr("Sitio web de &Kaint"), "help-website", null, openUrl(REPOSITORY));
         A("donate", tr("&Donar"), "face-smile", null, openUrl("https://ko-fi.com/opposition"));
@@ -1637,7 +1644,9 @@ export class App extends EventTarget {
                         [icon("configure", 16), el("span", { className: "arrow", textContent: "▾" })]);
         more.addEventListener("click", () => {
             const r = more.getBoundingClientRect(), a = (id) => this.actions.get(id);
-            popupMenu([a("tools"), a("history"), a("layers"), a("colors"), "-", a("settings"), "-", { section: tr("Ayuda") },
+            // (En Kaint.APK, también volver a la pantalla de bienvenida.)
+            const menu = window.KaintAndroid ? [a("backToMenu"), "-"] : [];
+            popupMenu([...menu, a("tools"), a("history"), a("layers"), a("colors"), "-", a("settings"), "-", { section: tr("Ayuda") },
                        a("docs"), a("website"), "-", a("donate"), a("forum"), a("tutorials"), a("pluginsSite"), a("feedback"), "-", a("about")],
                       Math.max(0, r.right - 250), r.bottom + 1, { minWidth: 250 });
         });

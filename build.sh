@@ -713,8 +713,13 @@ for lib in libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libxcb-cursor0 libxcb-i
     libwayland-egl1 libpulse0 libpulse-mainloop-glib0 libasound2 libcups2 libgtk-3-0 libva2 libva-drm2 libva-x11-2 \
     libvdpau1 libdrm2 libgbm1 libxrandr2 libxcomposite1 libxdamage1 libxtst6 libxshmfence1 libgstreamer1.0-0 \
     libgstreamer-plugins-base1.0-0 libsm6 libice6 libx11-xcb1 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 \
-    libxcb-xinput0 libxcb-glx0 libxcb-util1 libxi6 libxrender1 libxext6 libegl1 libgl1 libopengl0; do
-    if apt-cache policy \$lib | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \$lib\"; else libs=\"\$libs \${lib}t64\"; fi
+    libxcb-xinput0 libxcb-glx0 libxcb-util1 libxi6 libxrender1 libxext6 libegl1 libgl1 libopengl0 \
+    libwebp7 libwebpdemux2 libwebpmux3 libtiff5 libtiff6 libmng2 libgstreamer-gl1.0-0 libgstreamer-plugins-bad1.0-0; do
+    # (El Qt de arm64 enlaza sus plugins de imagen con libwebp y libtiff del sistema, y el de
+    # multimedia con GStreamer: sin ellas, linuxdeploy-plugin-qt no resuelve libqwebp.so y compañía.
+    # Lo que no exista en esta versión de Ubuntu, se omite.)
+    if apt-cache policy \$lib | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \$lib\"
+    elif apt-cache policy \${lib}t64 | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \${lib}t64\"; fi
 done
 apt-get install -y -qq --no-install-recommends g++-$gcc_v gcc-$gcc_v cmake ninja-build git curl ca-certificates file python3-pip \
     libgl-dev libegl-dev libxkbcommon-dev libssl-dev zlib1g-dev mono-devel \$libs >/dev/null

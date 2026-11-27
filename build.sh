@@ -714,9 +714,11 @@ for lib in libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libxcb-cursor0 libxcb-i
     libvdpau1 libdrm2 libgbm1 libxrandr2 libxcomposite1 libxdamage1 libxtst6 libxshmfence1 libgstreamer1.0-0 \
     libgstreamer-plugins-base1.0-0 libsm6 libice6 libx11-xcb1 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 \
     libxcb-xinput0 libxcb-glx0 libxcb-util1 libxi6 libxrender1 libxext6 libegl1 libgl1 libopengl0 \
-    libwebp7 libwebpdemux2 libwebpmux3 libtiff5 libtiff6 libmng2 libgstreamer-gl1.0-0 libgstreamer-plugins-bad1.0-0; do
+    libwebp7 libwebpdemux2 libwebpmux3 libtiff5 libtiff6 libmng2 libgstreamer-gl1.0-0 libgstreamer-plugins-bad1.0-0 \
+    libgstreamer-plugins-good1.0-0; do
     # (El Qt de arm64 enlaza sus plugins de imagen con libwebp y libtiff del sistema, y el de
     # multimedia con GStreamer: sin ellas, linuxdeploy-plugin-qt no resuelve libqwebp.so y compañía.
+    # libgstphotography-1.0.so.0 está en plugins-bad en la 22.04 y en plugins-good en la 24.04.
     # Lo que no exista en esta versión de Ubuntu, se omite.)
     if apt-cache policy \$lib | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \$lib\"
     elif apt-cache policy \${lib}t64 | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \${lib}t64\"; fi

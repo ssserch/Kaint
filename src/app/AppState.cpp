@@ -169,6 +169,7 @@ ToolSettings AppState::toolDefaults() const
         std::clamp(num("moveResampling", int(t.moveInterpolation)), 0, int(Resample::Interpolation::NearestNeighborAntialiased)));
     t.moveGamma = num("moveGamma", t.moveGamma);
     t.moveWarp = num("moveWarp", t.moveWarp);
+    t.move3d = num("move3d", t.move3d) && !t.moveWarp;
     t.moveSnap = num("moveSnap", t.moveSnap);
     t.afterSelect = AfterSelect(std::clamp(num("afterSelect", int(t.afterSelect)), 0, 2));
     t.magneticWidth = std::clamp(num("magneticWidth", t.magneticWidth), 1, 256);
@@ -263,6 +264,7 @@ void AppState::setToolDefaults(const ToolSettings& t)
     s.remove(QStringLiteral("moveInterpolation"));
     s.setValue(QStringLiteral("moveGamma"), t.moveGamma);
     s.setValue(QStringLiteral("moveWarp"), t.moveWarp);
+    s.setValue(QStringLiteral("move3d"), t.move3d);
     s.setValue(QStringLiteral("moveSnap"), t.moveSnap);
     s.setValue(QStringLiteral("afterSelect"), int(t.afterSelect));
     s.setValue(QStringLiteral("magneticWidth"), t.magneticWidth);

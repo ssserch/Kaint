@@ -65,6 +65,8 @@ public:
     const QImage& composite() const { return m_composite; }
     bool pixelGrid() const { return m_pixelGrid; }
     void setPixelGrid(bool on);
+    // Con la vista girada, la imagen suavizada; si no (de fábrica), con sus píxeles nítidos.
+    void setSmoothRotation(bool on);
 
     void updateOverlay();
     // Rectángulo de la imagen dibujado como el contorno de una selección rectangular: tinte
@@ -260,6 +262,7 @@ private:
     int m_antsOffset = 0;
     bool m_overlayAnts = false;
     bool m_pixelGrid = false;
+    bool m_smoothRotation = false;
     QPixmap m_checker;
     qreal m_zoomBeforeFit = 0;
     QPointF m_centerBeforeFit;

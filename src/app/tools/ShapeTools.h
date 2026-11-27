@@ -47,6 +47,7 @@ private:
     QPainterPath curve() const;
     void render();
     QPointF moveIcon() const;
+    void hoverCursor(const ToolEvent& e);
     void setInitialNodes(const QPointF& a, const QPointF& b);
     void commitStep();
 

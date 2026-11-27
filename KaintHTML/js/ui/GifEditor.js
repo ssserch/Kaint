@@ -68,6 +68,7 @@ function interpEntries(key, setInterp, setEase) {
         { text: tr("Curva"), checked: current === Motion.Interp.Curve, run: () => setInterp(Motion.Interp.Curve) },
         { text: tr("Curva continua"), checked: current === Motion.Interp.Continuous, run: () => setInterp(Motion.Interp.Continuous) },
         { text: tr("Congelar"), checked: current === Motion.Interp.Freeze, run: () => setInterp(Motion.Interp.Freeze) },
+        { text: tr("Bézier (con asas)"), checked: current === Motion.Interp.Bezier, run: () => setInterp(Motion.Interp.Bezier) },
         "-",
         { text: tr("Entrada suave"), checked: !!key?.in, run: () => setEase("in", !key?.in) },
         { text: tr("Salida suave"), checked: !!key?.out, run: () => setEase("out", !key?.out) },
@@ -792,28 +793,87 @@ export class GifEditor {
         this.apply(layers, props, i, tr("Duración del fotograma"), "layer-properties");
     }
 
+    // Lo mismo para todos los del grupo que se estira: 'delta' ms más (o menos) de duración. Por la
+    // derecha, el principio se queda; por la izquierda, el final (lo que crece ocupa el espacio vacío
+    // de delante y, si no hay, empuja a los de detrás).
+    planResize(drag, delta) {
+        drag.plan = new Map();
+        for (const i of drag.group) {
+            const delay = this.delay(i), next = Math.max(MinDelay, delay + delta), gap = this.gapOf(i);
+            drag.plan.set(i, { gap: drag.left ? Math.max(0, gap - (next - delay)) : gap, delay: next });
+        }
+    }
+
+    // El espacio de delante y la duración nuevos de varios fotogramas, en un paso; 'shiftKeys': por la
+    // izquierda (los puntos clave siguen a la imagen).
+    setTimings(plan, shiftKeys) {
+        const { layers, props } = this.current();
+        let changed = false;
+        for (const [i, { gap, delay }] of plan) {
+            if (i < 0 || i >= props.length || (gap === this.gapOf(i) && delay === this.delay(i)))
+                continue;
+            changed = true;
+            let motion = props[i].motion || null;
+            if (shiftKeys && motion && delay !== this.delay(i)) {
+                motion = Motion.cloneClip(motion);
+                Motion.shiftKeys(motion, delay - this.delay(i));
+            }
+            props[i] = { ...props[i], gap: Math.max(0, gap), motion, name: nameWithDelay(props[i].name, Math.max(MinDelay, delay)) };
+        }
+        if (!changed)
+            return;
+        // (Los mismos siguen elegidos: así se pueden volver a estirar juntos.)
+        const extra = this.extra;
+        this.apply(layers, props, this.selected(), plan.size > 1 ? tr("Duración de los fotogramas") : tr("Duración del fotograma"), "layer-properties");
+        this.extra = extra.filter((i) => i < this.count());
+        this.update();
+    }
+
+    // Elige esos fotogramas (con el rectángulo); 'add': además de los elegidos.
+    selectFrames(frames, add) {
+        if (!this.doc)
+            return;
+        let list = add ? [...new Set([...frames, ...this.selectedFrames()])] : [...frames];
+        list = list.filter((i) => i >= 0 && i < this.count()).sort((a, b) => a - b);
+        // Siempre hay uno elegido (el fotograma activo): sin ninguno en el rectángulo, solo él.
+        if (!list.length) {
+            this.extra = [];
+            this.update();
+            return;
+        }
+        const active = list.includes(this.selected()) ? this.selected() : list[0];
+        if (active !== this.doc.active) {
+            this.activeTrack = this.trackOf(active);
+            this.doc.setActiveIndex(active);
+        }
+        this.extra = list.filter((i) => i !== active);
+        this.update();
+    }
+
+    // El rectángulo de elegir clips (en la línea de tiempo) y los clips que toca: basta con tocarlos.
+    showMarquee(drag, e) {
+        const lane = this.lane.getBoundingClientRect();
+        const x0 = Math.min(drag.startX, e.clientX), x1 = Math.max(drag.startX, e.clientX);
+        const y0 = Math.min(drag.startY, e.clientY), y1 = Math.max(drag.startY, e.clientY);
+        if (!this.marqueeEl) {
+            this.marqueeEl = el("div", { className: "gif-marquee" });
+            this.lane.append(this.marqueeEl);
+        }
+        Object.assign(this.marqueeEl.style, { left: `${x0 - lane.left}px`, top: `${y0 - lane.top}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
+        drag.hits = [];
+        for (const clip of this.track.querySelectorAll(".gif-clip")) {
+            const r = clip.getBoundingClientRect();
+            const hit = r.left < x1 && r.right > x0 && r.top < y1 && r.bottom > y0;
+            if (hit)
+                drag.hits.push(+clip.dataset.index);
+            clip.classList.toggle("marquee-hit", hit || (drag.add && this.isFrameSelected(+clip.dataset.index)));
+            clip.classList.toggle("marquee-off", !hit && !(drag.add && this.isFrameSelected(+clip.dataset.index)));
+        }
+    }
+
     // El espacio vacío (ms) delante de un fotograma en su pista.
     gapOf(i) {
         return Math.max(0, this.doc?.layers[i]?.gap || 0);
-    }
-
-    // Estirado o recortado por la izquierda: el espacio de delante y la duración nuevos, en un paso
-    // (los puntos clave siguen a la imagen).
-    trimStart(i, gap, ms) {
-        if (i < 0 || i >= this.count())
-            return;
-        gap = Math.max(0, Math.round(gap));
-        ms = Math.max(MinDelay, Math.round(ms));
-        if (gap === this.gapOf(i) && ms === this.delay(i))
-            return;
-        const { layers, props } = this.current();
-        let motion = props[i].motion || null;
-        if (motion && ms !== this.delay(i)) {
-            motion = Motion.cloneClip(motion);
-            Motion.shiftKeys(motion, ms - this.delay(i));
-        }
-        props[i] = { ...props[i], gap, motion, name: nameWithDelay(props[i].name, ms) };
-        this.apply(layers, props, i, tr("Duración del fotograma"), "layer-properties");
     }
 
     setAllDelays(ms) {
@@ -1067,6 +1127,9 @@ export class GifEditor {
         // tiempo y la vista previa lo siguen).
         if (this.graphDrag?.preview && i === this.selected())
             return this.graphDrag.preview;
+        // (Mientras se transforma en la vista previa, como va quedando.)
+        if (this.boxPreview && i === this.selected())
+            return this.boxPreview;
         return this.doc?.layers[i]?.motion || null;
     }
 
@@ -1150,7 +1213,9 @@ export class GifEditor {
     frameTransform(i) {
         const clip = this.motion(i), times = this.times();
         let t = clamp(this.time - times.start[i], 0, Math.max(0, times.end[i] - times.start[i] - 1));
-        if (Motion.isAnimated(clip)) {
+        // Al reproducir, a pasos de la animación, como en el GIF exportado. Parado, en el cabezal justo:
+        // ahí se ponen los puntos clave al arrastrar, y así la imagen y su cuadro siguen al puntero.
+        if (this.playing && Motion.isAnimated(clip)) {
             const step = Math.max(10, clip.step || 50);
             t = Math.floor(t / step) * step;
         }
@@ -1163,44 +1228,276 @@ export class GifEditor {
     }
 
     // Arrastrar la imagen de la vista previa la mueve (con puntos clave de posición, pone uno en el cabezal).
+    // --- La imagen elegida en la vista previa: su cuadro de transformación -------------------
+    // Como Preview de Kaint: un clic en la imagen la elige y sale su cuadro. Arrastrándola se mueve; con
+    // «Tamaño», sus tiradores cambian el tamaño (y por fuera se gira); con «Deformar», cada esquina va
+    // sola (en perspectiva); con «3D», arrastrándola se inclina como una lámina fina (con Mayús, se
+    // mueve). Con puntos clave, se pone uno en el cabezal.
+
+    // Las cuatro esquinas de la imagen elegida, como está ahora, en la vista previa.
+    previewQuad() {
+        const g = this.previewGeom, i = this.selected();
+        if (!g || i < 0 || !this.doc)
+            return null;
+        const w = this.doc.width, h = this.doc.height, m = Motion.matrix(w, h, this.frameTransform(i));
+        return [[0, 0], [w, 0], [w, h], [0, h]].map(([x, y]) => {
+            const [px, py] = Motion.applyMatrix(m, x, y);
+            return [g.x + px * g.scale, g.y + py * g.scale];
+        });
+    }
+
+    // Los tiradores: las esquinas (0-3) y, con «Tamaño», los centros de los lados (4-7).
+    previewHandles(quad) {
+        const list = quad.map((p) => [...p]);
+        if ((this.transformMode || 0) === 0)
+            for (let k = 0; k < 4; k++)
+                list.push([(quad[k][0] + quad[(k + 1) % 4][0]) / 2, (quad[k][1] + quad[(k + 1) % 4][1]) / 2]);
+        return list;
+    }
+
+    previewModeRect(k) {
+        return { x: 10 + k * 78, y: 10, w: 74, h: 24 };
+    }
+
+    drawTransformBox(ctx) {
+        if (!this.previewSelected || this.selected() < 0 || this.inGap(this.selected()))
+            return;
+        const quad = this.previewQuad();
+        if (!quad)
+            return;
+        const accent = "#1fd1b9", mode = this.transformMode || 0;
+        ctx.save();
+        ctx.beginPath();
+        quad.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash(mode === 0 ? [] : [5, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (const [hx, hy] of this.previewHandles(quad)) {
+            ctx.fillStyle = mode === 1 ? accent : "#fafafa";
+            ctx.strokeStyle = "#141414";
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            if (mode === 0)
+                ctx.rect(hx - 4, hy - 4, 8, 8);
+            else
+                ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
+        // Los botones del modo.
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        [tr("Tamaño"), tr("Deformar"), tr("3D")].forEach((name, k) => {
+            const r = this.previewModeRect(k), on = mode === k;
+            ctx.beginPath();
+            ctx.roundRect(r.x, r.y, r.w, r.h, 7);
+            ctx.fillStyle = on ? "#0d4a43" : "rgba(23, 24, 28, 0.9)";
+            ctx.fill();
+            ctx.strokeStyle = on ? accent : "#46484e";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = on ? "#ffffff" : "#c8cace";
+            ctx.fillText(name, r.x + r.w / 2, r.y + r.h / 2);
+        });
+        ctx.restore();
+    }
+
     installPreview() {
         let drag = null;
-        this.preview.addEventListener("pointerdown", (e) => {
-            // (En un hueco no se ve: no se mueve a ciegas.)
-            if (!this.doc || e.button !== 0 || this.selected() < 0 || this.inGap(this.selected()))
-                return;
-            this.stop();
-            if (!this.previewGeom)
-                return;
-            drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
-            this.preview.setPointerCapture(e.pointerId);
-        });
-        this.preview.addEventListener("pointermove", (e) => {
-            if (!drag || e.pointerId !== drag.id)
-                return;
-            const scale = this.previewGeom?.scale || 1;
-            this.dragOffset = { x: (e.clientX - drag.x) / scale, y: (e.clientY - drag.y) / scale };
-            this.drawPreview();
-        });
-        const end = (e) => {
-            if (!drag || e.pointerId !== drag.id)
-                return;
-            drag = null;
-            const offset = this.dragOffset;
-            this.dragOffset = null;
-            if (e.type === "pointercancel" || !offset || (Math.abs(offset.x) < 0.5 && Math.abs(offset.y) < 0.5)) {
-                this.drawPreview();
-                return;
+        this.transformMode = Math.max(0, Math.min(2, +(Settings.get("gifTransformMode") ?? 0) || 0));
+        const pos = (e) => {
+            const b = this.preview.getBoundingClientRect();
+            return [e.clientX - b.left, e.clientY - b.top];
+        };
+        const inside = (quad, [x, y]) => {
+            let hit = false;
+            for (let k = 0, j = 3; k < 4; j = k++) {
+                const [xi, yi] = quad[k], [xj, yj] = quad[j];
+                if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
+                    hit = !hit;
             }
-            const i = this.selected(), clip = Motion.cloneClip(this.motion(i)), t = this.localTime();
-            for (const [prop, d] of [["x", offset.x], ["y", offset.y]]) {
-                const track = Motion.editTrack(clip, prop), v = Math.round(Motion.trackValue(track, t, prop) + d);
+            return hit;
+        };
+        const nearOutline = (quad, [x, y]) => quad.some((p, k) => {
+            const q = quad[(k + 1) % 4], dx = q[0] - p[0], dy = q[1] - p[1], len2 = dx * dx + dy * dy;
+            const t = len2 ? clamp(((x - p[0]) * dx + (y - p[1]) * dy) / len2, 0, 1) : 0;
+            return Math.hypot(p[0] + dx * t - x, p[1] + dy * t - y) <= 26;
+        });
+        // La animación con lo que se arrastra: el valor en el cabezal (un punto clave si ese valor ya
+        // los tiene; si no, el de siempre).
+        const dragged = (d, [x, y], shift) => {
+            const clip = Motion.cloneClip(d.base), t = this.localTime(), g = this.previewGeom, w = this.doc.width, h = this.doc.height;
+            const set = (prop, v) => {
+                const track = Motion.editTrack(clip, prop);
+                v = Math.round(v * 10) / 10;
                 if (track.keys.length)
                     Motion.setKey(track, t, v);
                 else
                     track.base = v;
+            };
+            const tr0 = d.tr, toImage = ([px, py]) => [(px - g.x) / g.scale, (py - g.y) / g.scale];
+            const now = toImage([x, y]), from = toImage(d.start), cx = w / 2 + tr0.x, cy = h / 2 + tr0.y;
+            if (d.kind === "scale") {
+                // Alrededor del centro: lo que se aleja el tirador del centro (en los ejes de la imagen girada).
+                const r = (-tr0.rotation * Math.PI) / 180, un = ([px, py]) => [(px - cx) * Math.cos(r) - (py - cy) * Math.sin(r), (px - cx) * Math.sin(r) + (py - cy) * Math.cos(r)];
+                const a = un(from), b = un(now), corner = d.handle < 4, horizontal = d.handle === 5 || d.handle === 7;
+                let sx = Math.abs(a[0]) > 1 ? Math.abs(b[0] / a[0]) : 1, sy = Math.abs(a[1]) > 1 ? Math.abs(b[1] / a[1]) : 1;
+                if (!corner) {
+                    if (horizontal)
+                        sy = 1;
+                    else
+                        sx = 1;
+                }
+                // Proporcional con «Proporcional» del panel o con Mayús.
+                if (clip.lockScale !== false || shift) {
+                    const k = corner ? Math.max(sx, sy) : horizontal ? sx : sy;
+                    sx = sy = k;
+                }
+                set("scaleX", clamp(tr0.scaleX * sx, 1, 2000));
+                set("scaleY", clamp(tr0.scaleY * sy, 1, 2000));
+            } else if (d.kind === "rotate") {
+                let angle = tr0.rotation + ((Math.atan2(now[1] - cy, now[0] - cx) - Math.atan2(from[1] - cy, from[0] - cx)) * 180) / Math.PI;
+                if (shift)
+                    angle = Math.round(angle / 15) * 15;
+                set("rotation", angle);
+            } else if (d.kind === "corner") {
+                // La esquina, donde está el puntero, en las coordenadas de la imagen (antes de su giro 3D,
+                // escala, giro y posición: lo que se deforma es la imagen misma).
+                const back = Motion.invertMatrix(Motion.matrix(w, h, { ...tr0, warp: null }));
+                if (back) {
+                    const [lx, ly] = Motion.applyMatrix(back, now[0], now[1]), corners = [[0, 0], [w, 0], [w, h], [0, h]];
+                    const warp = Motion.hasWarp(clip.warp) ? [...clip.warp] : [0, 0, 0, 0, 0, 0, 0, 0];
+                    warp[d.handle * 2] = Math.round(lx - corners[d.handle][0]);
+                    warp[d.handle * 2 + 1] = Math.round(ly - corners[d.handle][1]);
+                    if (Motion.hasWarp(warp))
+                        clip.warp = warp;
+                    else
+                        delete clip.warp;
+                }
+            } else if (d.kind === "tilt") {
+                // Hacia donde va el puntero: a los lados alrededor del eje vertical y arriba y abajo, del
+                // horizontal (todo el ancho o el alto de la imagen, 180°). Con Mayús, solo en un eje.
+                const dx = now[0] - from[0], dy = now[1] - from[1];
+                let ay = (dx / Math.max(1, w)) * 180, ax = (-dy / Math.max(1, h)) * 180;
+                if (shift) {
+                    if (Math.abs(dx) > Math.abs(dy))
+                        ax = 0;
+                    else
+                        ay = 0;
+                }
+                set("rotX", clamp((tr0.rotX || 0) + ax, -89, 89));
+                set("rotY", clamp((tr0.rotY || 0) + ay, -89, 89));
             }
-            this.setMotion(i, clip, tr("Mover la imagen"));
+            return clip;
+        };
+        this.preview.addEventListener("pointerdown", (e) => {
+            if (!this.doc || e.button !== 0 || !this.previewGeom)
+                return;
+            const p = pos(e), mode = this.transformMode || 0;
+            // Los botones del modo (arriba a la izquierda).
+            if (this.previewSelected)
+                for (let k = 0; k < 3; k++) {
+                    const r = this.previewModeRect(k);
+                    if (p[0] >= r.x && p[0] <= r.x + r.w && p[1] >= r.y && p[1] <= r.y + r.h) {
+                        this.transformMode = k;
+                        Settings.set("gifTransformMode", k);
+                        this.drawPreview();
+                        return;
+                    }
+                }
+            // (En un hueco no se ve: no se transforma a ciegas.)
+            if (this.selected() < 0 || this.inGap(this.selected())) {
+                this.previewSelected = false;
+                this.drawPreview();
+                return;
+            }
+            this.stop();
+            const quad = this.previewQuad(), touch = e.pointerType !== "mouse";
+            const handles = this.previewSelected ? this.previewHandles(quad) : [];
+            const handle = handles.findIndex(([hx, hy]) => Math.hypot(hx - p[0], hy - p[1]) <= (touch ? 14 : 7));
+            let kind = null;
+            if (handle >= 0)
+                kind = mode === 1 ? "corner" : mode === 2 ? "tilt" : "scale";
+            else if (inside(quad, p))
+                kind = mode === 2 && !e.shiftKey ? "tilt" : "move";
+            else if (this.previewSelected && mode === 0 && nearOutline(quad, p))
+                kind = "rotate";
+            // Un clic en la imagen la elige (sale su cuadro); fuera, se quita.
+            this.previewSelected = !!kind;
+            if (!kind) {
+                this.drawPreview();
+                return;
+            }
+            const i = this.selected();
+            drag = { id: e.pointerId, kind, handle, start: p, x: e.clientX, y: e.clientY, base: this.motion(i), tr: this.frameTransform(i) };
+            this.preview.setPointerCapture(e.pointerId);
+            this.drawPreview();
+        });
+        this.preview.addEventListener("pointermove", (e) => {
+            if (!drag) {
+                if (e.pointerType === "mouse" && this.previewGeom && this.doc && this.selected() >= 0) {
+                    const quad = this.previewQuad(), p = pos(e), mode = this.transformMode || 0;
+                    const onHandle = this.previewSelected && quad && this.previewHandles(quad).some(([hx, hy]) => Math.hypot(hx - p[0], hy - p[1]) <= 7);
+                    this.preview.style.cursor = onHandle ? (mode === 0 ? "nwse-resize" : "move")
+                        : quad && inside(quad, p) ? (mode === 2 && !e.shiftKey ? "move" : "grab")
+                        : this.previewSelected && mode === 0 && quad && nearOutline(quad, p) ? "alias" : "";
+                }
+                return;
+            }
+            if (e.pointerId !== drag.id)
+                return;
+            if (drag.kind === "move") {
+                const scale = this.previewGeom?.scale || 1;
+                this.dragOffset = { x: (e.clientX - drag.x) / scale, y: (e.clientY - drag.y) / scale };
+                this.drawPreview();
+                return;
+            }
+            drag.preview = dragged(drag, pos(e), e.shiftKey);
+            this.boxPreview = drag.preview;
+            this.renderKeyLane();
+            this.refreshInspectorValues?.();
+            this.drawPreview();
+            this.drawGraph();
+        });
+        const end = (e) => {
+            if (!drag || e.pointerId !== drag.id)
+                return;
+            const d = drag;
+            drag = null;
+            this.boxPreview = null;
+            if (d.kind === "move") {
+                const offset = this.dragOffset;
+                this.dragOffset = null;
+                if (e.type === "pointercancel" || !offset || (Math.abs(offset.x) < 0.5 && Math.abs(offset.y) < 0.5)) {
+                    this.drawPreview();
+                    return;
+                }
+                const i = this.selected(), clip = Motion.cloneClip(this.motion(i)), t = this.localTime();
+                for (const [prop, dv] of [["x", offset.x], ["y", offset.y]]) {
+                    const track = Motion.editTrack(clip, prop), v = Math.round(Motion.trackValue(track, t, prop) + dv);
+                    if (track.keys.length)
+                        Motion.setKey(track, t, v);
+                    else
+                        track.base = v;
+                }
+                this.setMotion(i, clip, tr("Mover la imagen"));
+                return;
+            }
+            const clip = e.type === "pointerup" ? dragged(d, pos(e), e.shiftKey) : null;
+            if (!clip || JSON.stringify(clip) === JSON.stringify(d.base)) {
+                this.drawPreview();
+                this.drawGraph();
+                return;
+            }
+            this.setMotion(this.selected(), clip, d.kind === "scale" ? tr("Cambiar el tamaño") : d.kind === "rotate" ? tr("Girar la imagen")
+                                                 : d.kind === "corner" ? tr("Deformar la imagen") : tr("Girar en 3D"));
         };
         this.preview.addEventListener("pointerup", end);
         this.preview.addEventListener("pointercancel", end);
@@ -1242,12 +1539,19 @@ export class GifEditor {
         row("y", "Y", "px", -20000, 20000, 1);
         section(tr("Rotación"));
         row("rotation", "", "°", -3600, 3600, 1);
+        // La imagen como una lámina fina que se inclina, con perspectiva (en la vista previa, con el modo 3D).
+        section(tr("Giro 3D"));
+        row("rotX", "X", "°", -89, 89, 1);
+        row("rotY", "Y", "°", -89, 89, 1);
         section(tr("Opacidad"));
         row("opacity", "", "%", 0, 100, 1);
 
-        const names = { x: tr("Posición X"), y: tr("Posición Y"), scaleX: tr("Escala X"), scaleY: tr("Escala Y"), rotation: tr("Rotación"), opacity: tr("Opacidad") };
-        this.graphProp = el("select", { onchange: () => this.drawGraph() }, Motion.Props.map((p) => el("option", { value: p, textContent: names[p] })));
-        this.graph = el("canvas", { className: "gif-graph", title: tr("Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.") });
+        const names = { x: tr("Posición X"), y: tr("Posición Y"), scaleX: tr("Escala X"), scaleY: tr("Escala Y"), rotation: tr("Rotación"), opacity: tr("Opacidad"),
+                        rotX: tr("Giro 3D X"), rotY: tr("Giro 3D Y") };
+        // Primero (y elegida) X e Y juntas, como en Filmora.
+        this.graphProp = el("select", { onchange: () => this.drawGraph() },
+                            [el("option", { value: "xy", textContent: tr("Posición XY") }), ...Motion.Props.map((p) => el("option", { value: p, textContent: names[p] }))]);
+        this.graph = el("canvas", { className: "gif-graph", title: tr("Cómo cambia el valor a lo largo del fotograma. Doble clic: un punto clave ahí. Arrastra un rombo para cambiar su valor o su momento, y la línea entre dos para curvarla (con Alt, para moverla entera); las asas de una curva Bézier la ajustan. Clic derecho: la forma de la curva.") });
         this.installGraph();
 
         this.fps = el("select", { title: tr("Cuántas imágenes por segundo tiene el GIF mientras este fotograma se mueve") },
@@ -1256,6 +1560,17 @@ export class GifEditor {
             const i = this.selected(), clip = Motion.cloneClip(this.motion(i));
             clip.step = +this.fps.value;
             this.setMotion(i, clip, tr("Fotogramas por segundo"));
+        });
+        // Al girar, escalar, inclinar o deformar: suavizada o con sus píxeles nítidos (de fábrica, para el
+        // pixel art: suavizada se veía borrosa).
+        this.smooth = el("input", { type: "checkbox" });
+        this.smooth.addEventListener("change", () => {
+            const i = this.selected(), clip = Motion.cloneClip(this.motion(i));
+            if (this.smooth.checked)
+                clip.smooth = true;
+            else
+                delete clip.smooth;
+            this.setMotion(i, clip, tr("Suavizar"));
         });
         this.resetButton = button(tr("Restablecer"), tr("Quita la animación de este fotograma"), () => this.setMotion(this.selected(), null, tr("Quitar la animación")));
         this.resetButton.prepend(icon("edit-undo", 16));
@@ -1275,6 +1590,8 @@ export class GifEditor {
             el("div", { className: "gif-row" }, [el("label", { textContent: tr("Gráfica:") }), this.graphProp]),
             el("div", { className: "gif-graph-box" }, [this.graph]),
             el("div", { className: "gif-row" }, [el("label", { textContent: tr("Al exportar:") }), this.fps]),
+            el("label", { className: "gif-check", title: tr("Sin marcar, la imagen conserva sus píxeles nítidos al girarla o escalarla (para el pixel art).") },
+               [this.smooth, tr("Suavizar al girar o escalar")]),
             el("div", { className: "gif-row gif-wrap" }, [this.resetButton, this.bakeButton]),
             el("div", { className: "gif-hint", textContent: tr("El rombo pone o quita un punto clave en el cabezal. Con puntos, cambiar un valor pone uno ahí. En la línea de tiempo, separa los rombos para que el movimiento dure más.") }),
         ]);
@@ -1289,6 +1606,7 @@ export class GifEditor {
             c.disabled = !has;
         this.inspectorTitle.textContent = has ? tr("Animación del fotograma %1", i + 1) : tr("Animación");
         this.lockScale.checked = clip ? clip.lockScale !== false : true;
+        this.smooth.checked = !!clip?.smooth;
         const step = clip?.step || 50;
         this.fps.value = [...this.fps.options].some((o) => +o.value === step) ? step : 50;
         this.resetButton.disabled = !has || Motion.isEmpty(clip);
@@ -1424,18 +1742,39 @@ export class GifEditor {
     }
 
     // --- Gráfica de un valor a lo largo del fotograma ---------------------------------------
+    // Como KeyGraph de Kaint: «Posición XY» (X e Y juntas, como en Filmora: lo que se hace en un punto
+    // o en un tramo vale para las dos) o un valor. Se arrastran los rombos (momento y valor), la línea
+    // entre dos (curvarla; con Alt o si es plana, moverla entera) y las asas de las curvas Bézier.
+
+    graphProps() {
+        const v = this.graphProp.value;
+        return v === "xy" ? ["x", "y"] : [v];
+    }
 
     graphPlot() {
         const w = this.graph.clientWidth, h = this.graph.clientHeight;
         return { left: 34, top: 8, right: w - 10, bottom: h - 16, w, h };
     }
 
-    graphRange(clip, prop) {
-        const track = Motion.track(clip, prop);
-        let a = track.base ?? Motion.defaultValue(prop), b = a;
-        for (const k of track.keys || []) {
-            a = Math.min(a, k.v);
-            b = Math.max(b, k.v);
+    graphRange(clip) {
+        let a = Infinity, b = -Infinity;
+        for (const prop of this.graphProps()) {
+            const track = Motion.track(clip, prop), keys = track.keys || [];
+            const base = track.base ?? Motion.defaultValue(prop);
+            a = Math.min(a, base);
+            b = Math.max(b, base);
+            keys.forEach((k, i) => {
+                a = Math.min(a, k.v);
+                b = Math.max(b, k.v);
+                // (Y las asas de las curvas Bézier, que se ven.)
+                if ((k.i || 0) === Motion.Interp.Bezier && keys[i + 1]) {
+                    const bz = k.b || Motion.DefaultBezier, dv = keys[i + 1].v - k.v;
+                    for (const y of [bz[1], bz[3]]) {
+                        a = Math.min(a, k.v + y * dv);
+                        b = Math.max(b, k.v + y * dv);
+                    }
+                }
+            });
         }
         if (this.graphDrag) {
             a = Math.min(a, this.graphDrag.lo);
@@ -1450,33 +1789,58 @@ export class GifEditor {
         return [r.left + (r.right - r.left) * clamp(t / duration, 0, 1), r.bottom - ((r.bottom - r.top) * (v - lo)) / (hi - lo)];
     }
 
-    // La animación con el punto que se arrastra en la gráfica donde va.
-    graphClip() {
-        const clip = this.doc?.layers[this.selected()]?.motion || null, d = this.graphDrag;
-        if (!d)
-            return clip;
-        const c = Motion.cloneClip(clip), track = Motion.editTrack(c, d.prop);
-        const [k] = track.keys.splice(d.index, 1);
-        if (k) {
-            // Sobre otro punto, lo sustituye.
-            const existing = Motion.keyIndex(track, d.t);
-            if (existing >= 0)
-                track.keys.splice(existing, 1);
-            k.t = d.t;
-            k.v = d.v;
-            const at = track.keys.findIndex((x) => x.t > d.t);
-            track.keys.splice(at < 0 ? track.keys.length : at, 0, k);
-        }
-        return c;
+    graphTime(x, r = this.graphPlot()) {
+        const duration = Math.max(1, this.delay(this.selected()));
+        return clamp(Math.round((duration * (x - r.left)) / Math.max(1, r.right - r.left)), 0, duration);
     }
 
-    graphKeyAt(x, y) {
-        const prop = this.graphProp.value, track = Motion.track(this.motion(this.selected()), prop);
-        const [lo, hi] = this.graphRange(this.doc?.layers[this.selected()]?.motion || null, prop);
-        return (track.keys || []).findIndex((k) => {
-            const [px, py] = this.graphPoint(k.t, k.v, lo, hi);
-            return Math.hypot(px - x, py - y) <= 8;
-        });
+    graphValue(y, lo, hi, r = this.graphPlot()) {
+        return lo + ((hi - lo) * (r.bottom - y)) / Math.max(1, r.bottom - r.top);
+    }
+
+    graphHandle(keys, i, h, lo, hi) {
+        const a = keys[i], b = keys[i + 1], bz = a.b || Motion.DefaultBezier;
+        return this.graphPoint(a.t + bz[h * 2] * (b.t - a.t), a.v + bz[h * 2 + 1] * (b.v - a.v), lo, hi);
+    }
+
+    // La animación que se ve: mientras se arrastra, como va quedando.
+    graphClip() {
+        return this.graphDrag?.result ?? (this.doc?.layers[this.selected()]?.motion || null);
+    }
+
+    // Lo que hay bajo el puntero: un asa ({ kind: "handle", prop, key, handle }), un punto ("key") o la
+    // línea entre dos ("segment", el tramo que empieza en 'key'); null si nada.
+    graphHit(x, y) {
+        const i = this.selected();
+        if (i < 0)
+            return null;
+        const clip = this.motion(i), [lo, hi] = this.graphRange(clip);
+        for (const prop of this.graphProps()) {
+            const keys = Motion.track(clip, prop).keys || [];
+            for (let k = 0; k + 1 < keys.length; k++)
+                if ((keys[k].i || 0) === Motion.Interp.Bezier)
+                    for (const h of [0, 1]) {
+                        const [px, py] = this.graphHandle(keys, k, h, lo, hi);
+                        if (Math.hypot(px - x, py - y) <= 6)
+                            return { kind: "handle", prop, key: k, handle: h };
+                    }
+        }
+        for (const prop of this.graphProps()) {
+            const keys = Motion.track(clip, prop).keys || [];
+            for (let k = 0; k < keys.length; k++) {
+                const [px, py] = this.graphPoint(keys[k].t, keys[k].v, lo, hi);
+                if (Math.hypot(px - x, py - y) <= 8)
+                    return { kind: "key", prop, key: k };
+            }
+        }
+        const t = this.graphTime(x);
+        for (const prop of this.graphProps()) {
+            const track = Motion.track(clip, prop), keys = track.keys || [];
+            const k = keys.findIndex((kk, n) => keys[n + 1] && t >= kk.t && t <= keys[n + 1].t);
+            if (k >= 0 && Math.abs(this.graphPoint(t, Motion.trackValue(track, t, prop), lo, hi)[1] - y) <= 5)
+                return { kind: "segment", prop, key: k };
+        }
+        return null;
     }
 
     drawGraph() {
@@ -1493,8 +1857,8 @@ export class GifEditor {
         const i = this.selected();
         if (i < 0)
             return;
-        const prop = this.graphProp.value, clip = this.graphClip(), track = Motion.track(clip, prop);
-        const [lo, hi] = this.graphRange(clip, prop), text = style.color || "#000", accent = style.getPropertyValue("--accent").trim() || "#2e8def";
+        const clip = this.graphClip(), [lo, hi] = this.graphRange(this.graphDrag?.base ?? clip);
+        const text = style.color || "#000", accent = style.getPropertyValue("--accent").trim() || "#2e8def";
         // Cuadrícula y escala
         ctx.font = "10px sans-serif";
         ctx.textAlign = "right";
@@ -1514,20 +1878,50 @@ export class GifEditor {
             ctx.fillText((lo + ((hi - lo) * k) / 4).toFixed(decimals), r.left - 4, y);
             ctx.globalAlpha = 1;
         }
-        // La curva
-        const duration = Math.max(1, this.delay(i));
-        ctx.strokeStyle = "rgb(64, 200, 170)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let x = 0; x <= r.right - r.left; x++) {
-            const t = Math.round((duration * x) / (r.right - r.left));
-            const [px, py] = this.graphPoint(t, Motion.trackValue(track, t, prop), lo, hi, r);
-            if (x === 0)
-                ctx.moveTo(px, py);
-            else
-                ctx.lineTo(px, py);
-        }
-        ctx.stroke();
+        const duration = Math.max(1, this.delay(i)), shown = this.graphProps(), colors = ["rgb(64, 200, 170)", "rgb(240, 150, 60)"];
+        let anyKeys = false;
+        shown.forEach((prop, n) => {
+            const track = Motion.track(clip, prop), keys = track.keys || [];
+            anyKeys ||= keys.length > 0;
+            // La curva
+            ctx.strokeStyle = colors[n];
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let x = 0; x <= r.right - r.left; x++) {
+                const t = Math.round((duration * x) / (r.right - r.left));
+                const [px, py] = this.graphPoint(t, Motion.trackValue(track, t, prop), lo, hi, r);
+                if (x === 0)
+                    ctx.moveTo(px, py);
+                else
+                    ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            // Las asas de las curvas Bézier: una línea desde su punto y un círculo.
+            for (let k = 0; k + 1 < keys.length; k++) {
+                if ((keys[k].i || 0) !== Motion.Interp.Bezier)
+                    continue;
+                for (const h of [0, 1]) {
+                    const from = h === 0 ? this.graphPoint(keys[k].t, keys[k].v, lo, hi, r) : this.graphPoint(keys[k + 1].t, keys[k + 1].v, lo, hi, r);
+                    const [hx, hy] = this.graphHandle(keys, k, h, lo, hi);
+                    ctx.globalAlpha = 0.6;
+                    ctx.strokeStyle = colors[n];
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(from[0], from[1]);
+                    ctx.lineTo(hx, hy);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                    const d = this.graphDrag, active = d?.hit.kind === "handle" && d.hit.prop === prop && d.hit.key === k && d.hit.handle === h;
+                    ctx.fillStyle = active ? accent : "#fafafa";
+                    ctx.strokeStyle = colors[n];
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(hx, hy, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+        });
         // El cabezal
         const [hx] = this.graphPoint(this.localTime(), lo, lo, hi, r);
         ctx.strokeStyle = "#e63c3c";
@@ -1537,11 +1931,20 @@ export class GifEditor {
         ctx.lineTo(hx, r.bottom);
         ctx.stroke();
         // Los puntos
-        for (const k of track.keys || []) {
-            const [px, py] = this.graphPoint(k.t, k.v, lo, hi, r);
-            drawDiamond(ctx, px, py, 5.5, k.t === this.selectedKey, accent);
+        for (const prop of shown)
+            for (const k of Motion.track(clip, prop).keys || []) {
+                const [px, py] = this.graphPoint(k.t, k.v, lo, hi, r);
+                drawDiamond(ctx, px, py, 5.5, k.t === this.selectedKey, accent);
+            }
+        // En «Posición XY», qué curva es cuál.
+        if (shown.length > 1) {
+            ctx.textAlign = "left";
+            ctx.fillStyle = colors[0];
+            ctx.fillText("X", r.left + 6, r.top + 8);
+            ctx.fillStyle = colors[1];
+            ctx.fillText("Y", r.left + 18, r.top + 8);
         }
-        if (!(track.keys || []).length) {
+        if (!anyKeys) {
             ctx.globalAlpha = 0.65;
             ctx.fillStyle = text;
             ctx.textAlign = "center";
@@ -1555,59 +1958,175 @@ export class GifEditor {
             const b = g.getBoundingClientRect();
             return [e.clientX - b.left, e.clientY - b.top];
         };
+        // La curva Bézier que da (o que más se parece a) la forma de un tramo (como bezierOf de Kaint).
+        const bezierOf = (keys, k) => {
+            const a = keys[k], b = keys[k + 1];
+            switch (a.i || 0) {
+            case Motion.Interp.Bezier: return [...(a.b || Motion.DefaultBezier)];
+            case Motion.Interp.Curve: return [1 / 3, 0, 2 / 3, 1];
+            case Motion.Interp.Continuous: {
+                const dv = b.v - a.v;
+                if (Math.abs(dv) < 1e-9)
+                    break;
+                const slope = (n) => (n <= 0 || n + 1 >= keys.length ? 0 : (keys[n + 1].v - keys[n - 1].v) / Math.max(1e-9, keys[n + 1].t - keys[n - 1].t));
+                const span = Math.max(1, b.t - a.t);
+                return [1 / 3, (slope(k) * span) / 3 / dv, 2 / 3, 1 - (slope(k + 1) * span) / 3 / dv];
+            }
+            }
+            return [1 / 3, 1 / 3, 2 / 3, 2 / 3];
+        };
+        const setBezier = (keys, k, bz) => {
+            if (k < 0 || !keys[k + 1])
+                return;
+            keys[k].i = Motion.Interp.Bezier;
+            keys[k].b = [...bz];
+            delete keys[k].out;
+            delete keys[k + 1].in;
+        };
+        // En «Posición XY», el tramo de la otra con los mismos momentos.
+        const sameSegment = (keys, ta, tb) => {
+            const k = keys.findIndex((x) => x.t === ta);
+            return k >= 0 && keys[k + 1]?.t === tb ? k : -1;
+        };
         g.addEventListener("contextmenu", (e) => e.preventDefault());
         g.addEventListener("pointerdown", (e) => {
             const i = this.selected();
             if (i < 0)
                 return;
-            const [x, y] = pos(e), k = this.graphKeyAt(x, y), prop = this.graphProp.value;
-            if (k < 0) {
+            const [x, y] = pos(e), hit = this.graphHit(x, y);
+            if (!hit) {
                 // Clic en la gráfica: el cabezal va a ese momento.
-                const r = this.graphPlot();
-                if (e.button === 0 && r.right > r.left)
-                    this.seekLocal(this.delay(i) * clamp((x - r.left) / (r.right - r.left), 0, 1));
+                if (e.button === 0)
+                    this.seekLocal(this.graphTime(x));
                 return;
             }
-            const key = Motion.track(this.motion(i), prop).keys[k];
-            this.selectKeyTime(key.t);
+            const keys = Motion.track(this.motion(i), hit.prop).keys, time = keys[hit.key].t, shown = this.graphProps();
             if (e.button === 2) {
+                // La forma del tramo que empieza en ese punto (sobre la línea, la del punto donde empieza);
+                // en «Posición XY», en las dos.
+                this.selectKeyTime(time);
                 const change = (fn, text) => {
-                    const clip = Motion.cloneClip(this.motion(i)), track = Motion.editTrack(clip, prop);
-                    if (k < track.keys.length)
-                        fn(track, track.keys[k]);
+                    const clip = Motion.cloneClip(this.motion(i));
+                    for (const prop of shown) {
+                        const t = Motion.editTrack(clip, prop), k = t.keys.findIndex((x) => x.t === time);
+                        if (k >= 0)
+                            fn(t, k);
+                    }
                     this.setMotion(i, clip, text);
                 };
                 popupMenu([
-                    ...interpEntries(key, (kind) => change((_, kk) => { if (kind) kk.i = kind; else delete kk.i; }, tr("Forma de la curva")),
-                                     (which, on) => change((_, kk) => { if (on) kk[which] = true; else delete kk[which]; }, tr("Forma de la curva"))),
-                    "-",
-                    { text: tr("Quitar el punto"), icon: "edit-delete", run: () => change((track) => {
-                        if (track.keys.length === 1)
-                            track.base = track.keys[k].v;
-                        track.keys.splice(k, 1);
-                    }, tr("Quitar punto clave")) },
+                    ...interpEntries(keys[hit.key], (kind) => change((t, k) => {
+                        // A Bézier, con la forma que tenía (luego se ajusta con las asas).
+                        if (kind === Motion.Interp.Bezier && (t.keys[k].i || 0) !== kind && t.keys[k + 1])
+                            setBezier(t.keys, k, bezierOf(t.keys, k));
+                        if (kind)
+                            t.keys[k].i = kind;
+                        else
+                            delete t.keys[k].i;
+                    }, tr("Forma de la curva")),
+                    (which, on) => change((t, k) => { if (on) t.keys[k][which] = true; else delete t.keys[k][which]; }, tr("Forma de la curva"))),
+                    ...(hit.kind === "key" ? ["-", { text: tr("Quitar el punto"), icon: "edit-delete", run: () => change((t, k) => {
+                        if (t.keys.length === 1)
+                            t.base = t.keys[k].v;
+                        t.keys.splice(k, 1);
+                    }, tr("Quitar punto clave")) }] : []),
                 ], e.clientX, e.clientY);
                 return;
             }
             if (e.button !== 0)
                 return;
-            const [lo, hi] = this.graphRange(this.motion(i), prop);
-            this.graphDrag = { id: e.pointerId, prop, index: k, t: key.t, v: key.v, lo, hi };
+            if (hit.kind === "key")
+                this.selectKeyTime(time);
+            const base = this.motion(i), [lo, hi] = this.graphRange(base);
+            // Un tramo plano no se puede curvar (no avanza): se mueve entero. Con Alt, siempre.
+            const move = hit.kind === "segment" && (e.altKey || Math.abs(keys[hit.key + 1].v - keys[hit.key].v) < 1e-9);
+            this.graphDrag = { id: e.pointerId, hit, base, result: base, lo, hi, x, y, move,
+                               bend: hit.kind === "segment" ? bezierOf(keys, hit.key) : null, t: time };
             g.setPointerCapture(e.pointerId);
         });
         g.addEventListener("pointermove", (e) => {
-            const d = this.graphDrag;
-            if (!d || e.pointerId !== d.id)
+            const d = this.graphDrag, [x, y] = pos(e);
+            if (!d) {
+                const hit = e.pointerType === "mouse" ? this.graphHit(x, y) : null;
+                g.style.cursor = hit?.kind === "segment" ? (e.altKey ? "move" : "ns-resize") : hit ? "pointer" : "";
                 return;
-            const [x, y] = pos(e), r = this.graphPlot(), duration = Math.max(1, this.delay(this.selected()));
-            // De 10 en 10 ms y con la escala fija mientras se arrastra (si no, la gráfica se movía sola).
-            d.t = clamp(Math.round((duration * (x - r.left)) / (r.right - r.left) / 10) * 10, 0, duration);
-            d.v = d.lo + ((d.hi - d.lo) * (r.bottom - y)) / (r.bottom - r.top);
-            if (d.prop === "opacity")
-                d.v = clamp(d.v, 0, 100);
-            d.v = Math.round(d.v * 10) / 10;
-            d.preview = null;
-            d.preview = this.graphClip();
+            }
+            if (e.pointerId !== d.id)
+                return;
+            const duration = Math.max(1, this.delay(this.selected())), [lo, hi] = this.graphRange(d.base), shown = this.graphProps();
+            const clip = Motion.cloneClip(d.base), keys = Motion.editTrack(clip, d.hit.prop).keys;
+            if (d.hit.kind === "key") {
+                // El punto: su momento (de 10 en 10 ms) y su valor; en «Posición XY», el momento también el
+                // de la otra.
+                const from = keys[d.hit.key].t;
+                const t = clamp(Math.round(this.graphTime(x) / 10) * 10, 0, duration);
+                let v = this.graphValue(y, lo, hi);
+                if (d.hit.prop === "opacity")
+                    v = clamp(v, 0, 100);
+                v = Math.round(v * 10) / 10;
+                for (const prop of shown) {
+                    const list = Motion.editTrack(clip, prop).keys, k = list.findIndex((kk) => kk.t === from);
+                    if (k < 0)
+                        continue;
+                    const [key] = list.splice(k, 1);
+                    key.t = t;
+                    if (prop === d.hit.prop)
+                        key.v = v;
+                    const existing = list.findIndex((kk) => kk.t === t);
+                    if (existing >= 0)
+                        list.splice(existing, 1);
+                    const at = list.findIndex((kk) => kk.t > t);
+                    list.splice(at < 0 ? list.length : at, 0, key);
+                }
+                d.t = t;
+            } else if (d.hit.kind === "handle") {
+                // Un asa de la curva: dónde está en el tiempo del tramo (de 0 a 1) y cuánto avanza ahí.
+                const a = keys[d.hit.key], b = keys[d.hit.key + 1], bz = [...(a.b || Motion.DefaultBezier)], dv = b.v - a.v, h = d.hit.handle * 2;
+                bz[h] = clamp((this.graphTime(x) - a.t) / Math.max(1, b.t - a.t), 0, 1);
+                if (Math.abs(dv) > 1e-9)
+                    bz[h + 1] = clamp((this.graphValue(y, lo, hi) - a.v) / dv, -3, 4);
+                for (const prop of shown) {
+                    const list = Motion.editTrack(clip, prop).keys;
+                    setBezier(list, sameSegment(list, a.t, b.t), bz);
+                }
+            } else if (d.move) {
+                // Mover el tramo entero: sus dos puntos, arriba o abajo y en el tiempo (entre los de al lado).
+                const k = d.hit.key, ta = keys[k].t, tb = keys[k + 1].t;
+                const prevT = k > 0 ? keys[k - 1].t + 10 : 0, nextT = keys[k + 2] ? keys[k + 2].t - 10 : duration;
+                const dt = clamp(Math.round((this.graphTime(x) - this.graphTime(d.x)) / 10) * 10, prevT - ta, nextT - tb);
+                const dv = Math.round((this.graphValue(y, lo, hi) - this.graphValue(d.y, lo, hi)) * 10) / 10;
+                for (const j of [k, k + 1]) {
+                    keys[j].t += dt;
+                    keys[j].v += dv;
+                    if (d.hit.prop === "opacity")
+                        keys[j].v = clamp(keys[j].v, 0, 100);
+                }
+                for (const prop of shown) {
+                    if (prop === d.hit.prop)
+                        continue;
+                    const list = Motion.editTrack(clip, prop).keys, j = sameSegment(list, ta, tb);
+                    if (j >= 0) {
+                        list[j].t += dt;
+                        list[j + 1].t += dt;
+                    }
+                }
+            } else {
+                // Curvar el tramo: arriba o abajo cambia cuánto avanza donde se agarró (las dos asas, más la
+                // que está más cerca); a los lados, cuándo (las dos asas a la vez).
+                const a = keys[d.hit.key], b = keys[d.hit.key + 1], span = Math.max(1, b.t - a.t), dv = b.v - a.v;
+                const s = clamp((this.graphTime(d.x) - a.t) / span, 0.15, 0.85);
+                const dp = (this.graphValue(y, lo, hi) - this.graphValue(d.y, lo, hi)) / dv;
+                const kk = 1 / (3 * (1 - s) * s * ((1 - s) * (1 - s) + s * s));
+                const du = (this.graphTime(x) - this.graphTime(d.x)) / span;
+                const bz = [clamp(d.bend[0] + du, 0, 1), clamp(d.bend[1] + dp * kk * (1 - s), -3, 4),
+                            clamp(d.bend[2] + du, 0, 1), clamp(d.bend[3] + dp * kk * s, -3, 4)];
+                for (const prop of shown) {
+                    const list = Motion.editTrack(clip, prop).keys;
+                    setBezier(list, sameSegment(list, a.t, b.t), bz);
+                }
+            }
+            d.result = clip;
+            d.preview = clip;
             this.renderKeyLane();
             this.drawPreview();
             this.drawGraph();
@@ -1616,15 +2135,18 @@ export class GifEditor {
             const d = this.graphDrag;
             if (!d || e.pointerId !== d.id)
                 return;
-            const clip = e.type === "pointerup" ? this.graphClip() : null;
             this.graphDrag = null;
-            if (!clip) {
+            const changed = e.type === "pointerup" && JSON.stringify(d.result) !== JSON.stringify(d.base);
+            if (!changed) {
                 this.drawGraph();
+                this.drawPreview();
                 return;
             }
-            this.selectedKey = d.t;
-            this.setMotion(this.selected(), clip, tr("Mover punto clave"));
-            this.seekLocal(d.t);
+            if (d.hit.kind === "key")
+                this.selectedKey = d.t;
+            this.setMotion(this.selected(), d.result, d.hit.kind === "key" ? tr("Mover punto clave") : d.move ? tr("Mover el tramo") : tr("Forma de la curva"));
+            if (d.hit.kind === "key")
+                this.seekLocal(d.t);
         };
         g.addEventListener("pointerup", end);
         g.addEventListener("pointercancel", end);
@@ -1633,20 +2155,30 @@ export class GifEditor {
             if (!this.doc || i < 0 || e.button !== 0 || r.right <= r.left || r.bottom <= r.top)
                 return;
             const [x, y] = pos(e);
-            if (this.graphKeyAt(x, y) >= 0 || x < r.left - 6 || x > r.right + 6 || y < r.top - 6 || y > r.bottom + 6)
+            if (this.graphHit(x, y)?.kind === "key" || x < r.left - 6 || x > r.right + 6 || y < r.top - 6 || y > r.bottom + 6)
                 return;
             // Como al arrastrar un rombo: de 10 en 10 ms, con la escala que se ve.
-            const prop = this.graphProp.value, duration = Math.max(1, this.delay(i));
-            const t = clamp(Math.round((duration * (x - r.left)) / (r.right - r.left) / 10) * 10, 0, duration);
-            const [lo, hi] = this.graphRange(this.motion(i), prop);
-            let v = lo + ((hi - lo) * (r.bottom - y)) / (r.bottom - r.top);
-            if (prop === "opacity")
-                v = clamp(v, 0, 100);
-            v = Math.round(v * 10) / 10;
-            const clip = Motion.cloneClip(this.motion(i));
-            Motion.setKey(Motion.editTrack(clip, prop), t, v);
-            if (clip.lockScale !== false && (prop === "scaleX" || prop === "scaleY"))
-                Motion.setKey(Motion.editTrack(clip, prop === "scaleX" ? "scaleY" : "scaleX"), t, v);
+            const duration = Math.max(1, this.delay(i));
+            const t = clamp(Math.round(this.graphTime(x) / 10) * 10, 0, duration);
+            const clip = Motion.cloneClip(this.motion(i)), [lo, hi] = this.graphRange(this.motion(i)), shown = this.graphProps();
+            // En «Posición XY», el valor del ratón para la curva más cercana y la otra con el que ya tiene ahí.
+            let nearest = shown[0], best = Infinity;
+            for (const prop of shown) {
+                const dist = Math.abs(this.graphPoint(t, Motion.trackValue(Motion.track(clip, prop), t, prop), lo, hi)[1] - y);
+                if (dist < best) {
+                    best = dist;
+                    nearest = prop;
+                }
+            }
+            for (const prop of shown) {
+                let v = prop === nearest ? this.graphValue(y, lo, hi) : Motion.trackValue(Motion.track(clip, prop), t, prop);
+                if (prop === "opacity")
+                    v = clamp(v, 0, 100);
+                v = Math.round(v * 10) / 10;
+                Motion.setKey(Motion.editTrack(clip, prop), t, v);
+                if (clip.lockScale !== false && (prop === "scaleX" || prop === "scaleY"))
+                    Motion.setKey(Motion.editTrack(clip, prop === "scaleX" ? "scaleY" : "scaleX"), t, v);
+            }
             this.selectedKey = t;
             this.setMotion(i, clip, tr("Añadir punto clave"));
             this.selectKeyTime(t);
@@ -1918,6 +2450,11 @@ export class GifEditor {
                     this.setActiveTrack(k);
                 if (touch && e.target !== this.ruler) {
                     drag = { kind: "pan", id: e.pointerId, startX: e.clientX, scroll: this.scroller.scrollLeft };
+                } else if (e.button === 0 && e.target !== this.ruler) {
+                    // Arrastrando desde un hueco, un rectángulo elige los clips que toca (con Ctrl o
+                    // Mayús, se suman a los elegidos); un clic sin arrastrar lleva el cabezal ahí.
+                    drag = { kind: "marquee", id: e.pointerId, x, startX: e.clientX, startY: e.clientY, active: false,
+                             add: e.ctrlKey || e.metaKey || e.shiftKey, hits: [] };
                 } else if (e.button === 0) {
                     drag = { kind: "scrub", id: e.pointerId };
                     this.seek(this.msAt(x));
@@ -1937,10 +2474,13 @@ export class GifEditor {
             const left = !right && ((onEdge && e.target.classList.contains("left"))
                                     || (touch && handles && r.width > 60 && e.clientX <= r.left + 22));
             if (right || left) {
-                this.select(i);
+                // Con varios elegidos y este entre ellos, se estiran todos a la vez.
+                const many = this.isFrameSelected(i) && this.selectedFrames().length > 1;
+                if (!many)
+                    this.select(i);
                 const t = this.times();
                 drag = { kind: "resize", id: e.pointerId, index: i, left, x, start: t.start[i], end: t.end[i], delay: this.delay(i),
-                         gap: this.gapOf(i) };
+                         group: many ? this.selectedFrames() : [i], plan: new Map() };
                 return;
             }
             if (!touch) {
@@ -1953,14 +2493,17 @@ export class GifEditor {
                     this.selectFrameRange(i);
                     return;
                 }
-                // El clic derecho sobre uno de los elegidos conserva la selección (el menú es para todos).
-                if (!(e.button === 2 && this.isFrameSelected(i)))
+                // Sobre uno de los elegidos (con varios), la selección se queda: el clic derecho es para
+                // todos. Un clic izquierdo sin más lo deja solo a él al soltar.
+                const keep = this.isFrameSelected(i) && this.selectedFrames().length > 1;
+                if (!keep && !(e.button === 2 && this.isFrameSelected(i)))
                     this.select(i);
                 if (e.button === 0) {
                     // El cabezal va donde se hizo clic (no al principio del clip).
-                    const t = this.times();
-                    this.seek(clamp(this.msAt(x), t.start[i], Math.max(t.start[i], t.end[i] - 1)));
-                    drag = { kind: "press", id: e.pointerId, index: i, x, grabDx: x - this.x(t.start[i]) };
+                    const t = this.times(), at = clamp(this.msAt(x), t.start[i], Math.max(t.start[i], t.end[i] - 1));
+                    if (!keep)
+                        this.seek(at);
+                    drag = { kind: "press", id: e.pointerId, index: i, x, grabDx: x - this.x(t.start[i]), deferred: keep ? at : null };
                 }
                 return;
             }
@@ -2004,6 +2547,12 @@ export class GifEditor {
                 this.scroller.scrollLeft = drag.scroll - (e.clientX - drag.startX);
             } else if (drag.kind === "scrub") {
                 this.seek(this.msAt(x));
+            } else if (drag.kind === "marquee") {
+                if (!drag.active && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4)
+                    return;
+                drag.active = true;
+                this.showMarquee(drag, e);
+                this.autoScroll(e.clientX);
             } else if (drag.kind === "resize" && drag.left) {
                 // El principio sigue al dedo o al puntero y el final se queda. Más allá del clip de
                 // delante (o del principio), el clip empieza donde acaba ese y dura más: se corren los
@@ -2017,16 +2566,17 @@ export class GifEditor {
                             t = c;
                 // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
                 t = Math.min(Math.round(t / 10) * 10, drag.end - MinDelay);
-                drag.delay = drag.end - t;
-                drag.gap = Math.max(0, t - prevEnd);
+                this.planResize(drag, (drag.end - t) - drag.delay);
                 this.renderTimeline(drag);
                 this.autoScroll(e.clientX);
             } else if (drag.kind === "resize") {
                 // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
-                drag.delay = Math.max(MinDelay, Math.round((this.msAt(x) - drag.start) / 10) * 10);
+                const delay = Math.max(MinDelay, Math.round((this.msAt(x) - drag.start) / 10) * 10);
+                this.planResize(drag, delay - drag.delay);
                 this.renderTimeline(drag);
             } else if ((drag.kind === "press" && Math.abs(x - drag.x) > 4) || (drag.kind === "hold" && Math.abs(x - drag.x) > 6)) {
                 drag.kind = "reorder";
+                drag.deferred = null;
             }
             if (drag.kind === "reorder") {
                 // El clip va donde se suelte, en el tiempo (con espacio delante si se deja, como en
@@ -2105,10 +2655,20 @@ export class GifEditor {
                 setTimeout(() => document.removeEventListener("click", swallow, true), 450);
                 this.frameMenu(d.index, e.clientX, e.clientY);
             }
-            else if (d.kind === "resize" && d.left)
-                this.trimStart(d.index, d.gap, d.delay);
-            else if (d.kind === "resize")
-                this.setDelay(d.index, d.delay);
+            else if (d.kind === "resize" && d.plan.size)
+                this.setTimings(d.plan, d.left);
+            else if (d.kind === "marquee") {
+                this.marqueeEl?.remove();
+                this.marqueeEl = null;
+                if (d.active)
+                    this.selectFrames(d.hits, d.add);
+                else
+                    this.seek(this.msAt(d.x));
+            } else if (d.kind === "press" && d.deferred !== null && d.deferred !== undefined) {
+                // Un clic en uno de varios elegidos: queda solo él (y el cabezal, donde se hizo clic).
+                this.select(d.index);
+                this.seek(d.deferred);
+            }
             else if (d.kind === "reorder" && d.ghostX !== undefined)
                 this.place(d.index, d.toTrack ?? this.trackOf(d.index), this.msAt(d.ghostX));
             this.renderTimeline();
@@ -2273,19 +2833,16 @@ export class GifEditor {
         if (this.root.hidden)
             return;
         const times = this.times(), start = [...times.start], end = [...times.end];
-        // Mientras se estira un clip: su duración nueva (por la izquierda, también el espacio de
-        // delante) y los de detrás de su pista, corridos.
-        if (resize) {
-            const k = this.trackOf(resize.index), i0 = resize.index;
-            if (resize.left)
-                start[i0] = times.start[i0] - this.gapOf(i0) + resize.gap;
-            end[i0] = start[i0] + resize.delay;
-            const diff = end[i0] - times.end[i0];
-            for (let i = 0; i < start.length; i++)
-                if (i !== i0 && this.trackOf(i) === k && start[i] >= times.end[i0]) {
-                    start[i] += diff;
-                    end[i] += diff;
-                }
+        // Mientras se estiran clips: su espacio de delante y su duración nuevos, y los demás de cada
+        // pista, uno detrás de otro (como times()).
+        if (resize?.plan?.size) {
+            const ends = [];
+            (this.doc?.layers || []).forEach((layer, i) => {
+                const k = layer.track || 0, planned = resize.plan.get(i);
+                start[i] = (ends[k] || 0) + (planned ? planned.gap : Math.max(0, layer.gap || 0));
+                end[i] = start[i] + (planned ? planned.delay : this.delay(i));
+                ends[k] = end[i];
+            });
         }
         const total = Math.max(times.total, ...end, ...(this.doc?.audioClips || []).map((c) => c.start + c.duration));
         const tracks = this.trackCount();
@@ -2497,19 +3054,17 @@ export class GifEditor {
             ctx.beginPath();
             ctx.rect(x, y, dw, dh);
             ctx.clip();
-            ctx.imageSmoothingEnabled = scale < 1 || !Motion.isIdentity(t);
-            ctx.imageSmoothingQuality = "high";
             ctx.globalAlpha = (lay.opacity / 255) * (t.opacity / 100);
             ctx.translate(x, y);
             ctx.scale(dw / cw, dh / ch);
-            ctx.translate(cw / 2 + t.x, ch / 2 + t.y);
-            ctx.rotate((t.rotation * Math.PI) / 180);
-            ctx.scale(t.scaleX / 100, t.scaleY / 100);
-            ctx.drawImage(lay.canvas, -cw / 2, -ch / 2);
+            // (Con perspectiva si se inclina o se deforma; suavizada al reducir la vista o si se pide.)
+            Motion.drawTransformed(ctx, lay.canvas, t, scale < 1);
             ctx.restore();
         }
         if (index === this.selected() && shown.includes(index))
             this.drawMotionPath(ctx, index, x, y, dw / cw);
+        if (shown.includes(this.selected()))
+            this.drawTransformBox(ctx);
     }
 
     // La trayectoria del movimiento (punteada) con sus puntos clave, como «Path Curve» de Filmora.

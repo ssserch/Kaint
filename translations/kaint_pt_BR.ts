@@ -1691,10 +1691,6 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Excluir</translation>
     </message>
     <message>
-        <source>Arrastra la imagen para moverla (con puntos clave de posición, se pone uno en el cabezal)</source>
-        <translation>Arraste a imagem para movê-la (com quadros-chave de posição, um é colocado no cursor de reprodução)</translation>
-    </message>
-    <message>
         <source>Añadir pista</source>
         <translation>Adicionar faixa</translation>
     </message>
@@ -1812,6 +1808,38 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
     <message>
         <source>El último fotograma de la pista elegida pasa a ser el primero</source>
         <translation>O último quadro da faixa escolhida passa a ser o primeiro</translation>
+    </message>
+    <message>
+        <source>Haz clic en la imagen para transformarla: arrástrala para moverla y sus tiradores para cambiar su tamaño (o, con Deformar, cada esquina sola; con 3D, arrastrándola se inclina). Con puntos clave, se pone uno en el cabezal.</source>
+        <translation>Clique na imagem para transformá-la: arraste-a para movê-la e as alças para mudar o tamanho (ou, com Deformar, cada canto sozinho; com 3D, arrastar a inclina). Com quadros-chave, um é adicionado no cursor.</translation>
+    </message>
+    <message>
+        <source>Cambiar el tamaño</source>
+        <translation>Redimensionar</translation>
+    </message>
+    <message>
+        <source>Girar la imagen</source>
+        <translation>Girar a imagem</translation>
+    </message>
+    <message>
+        <source>Deformar la imagen</source>
+        <translation>Deformar a imagem</translation>
+    </message>
+    <message>
+        <source>Girar en 3D</source>
+        <translation>Girar em 3D</translation>
+    </message>
+    <message>
+        <source>Tamaño</source>
+        <translation>Tamanho</translation>
+    </message>
+    <message>
+        <source>Deformar</source>
+        <translation>Deformar</translation>
+    </message>
+    <message>
+        <source>3D</source>
+        <translation>3D</translation>
     </message>
     <message>
         <source>Arrastra aquí un audio (MP3, WAV, OGG...) para los vídeos exportados</source>
@@ -2030,6 +2058,10 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Duração do quadro</translation>
     </message>
     <message>
+        <source>Duración de los fotogramas</source>
+        <translation>Duração dos quadros</translation>
+    </message>
+    <message>
         <source>Duración de todos los fotogramas</source>
         <translation>Duração de todos os quadros</translation>
     </message>
@@ -2178,6 +2210,10 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Congelar</translation>
     </message>
     <message>
+        <source>Bézier (con asas)</source>
+        <translation>Bézier (com alças)</translation>
+    </message>
+    <message>
         <source>Entrada suave</source>
         <translation>Entrada suave</translation>
     </message>
@@ -2194,10 +2230,6 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Sai deste ponto devagar</translation>
     </message>
     <message>
-        <source>Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.</source>
-        <translation>Como o valor muda ao longo do quadro. Clique duas vezes para colocar um quadro-chave ali; arraste um losango para mudar seu valor ou seu momento; clique com o botão direito para a forma da curva.</translation>
-    </message>
-    <message>
         <source>Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal o haz doble clic aquí.</source>
         <translation>Sem quadros-chave: clique no losango de um valor para colocar um no cursor de reprodução ou clique duas vezes aqui.</translation>
     </message>
@@ -2208,6 +2240,10 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
     <message>
         <source>Quitar el punto</source>
         <translation>Remover o ponto</translation>
+    </message>
+    <message>
+        <source>Mover el tramo</source>
+        <translation>Mover o trecho</translation>
     </message>
     <message>
         <source>Pone un punto clave con todos los valores (posición, escala, rotación y opacidad) en el cabezal, o lo quita si ya hay uno ahí (K)</source>
@@ -2238,12 +2274,20 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Rotação</translation>
     </message>
     <message>
+        <source>Giro 3D</source>
+        <translation>Rotação 3D</translation>
+    </message>
+    <message>
         <source>Opacidad</source>
         <translation>Opacidade</translation>
     </message>
     <message>
         <source>Gráfica:</source>
         <translation>Gráfico:</translation>
+    </message>
+    <message>
+        <source>Posición XY</source>
+        <translation>Posição XY</translation>
     </message>
     <message>
         <source>Posición X</source>
@@ -2262,6 +2306,14 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
         <translation>Escala Y</translation>
     </message>
     <message>
+        <source>Giro 3D X</source>
+        <translation>Rotação 3D X</translation>
+    </message>
+    <message>
+        <source>Giro 3D Y</source>
+        <translation>Rotação 3D Y</translation>
+    </message>
+    <message>
         <source>Al exportar:</source>
         <translation>Ao exportar:</translation>
     </message>
@@ -2276,6 +2328,18 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
     <message>
         <source>Fotogramas por segundo</source>
         <translation>Quadros por segundo</translation>
+    </message>
+    <message>
+        <source>Suavizar al girar o escalar</source>
+        <translation>Suavizar ao girar ou dimensionar</translation>
+    </message>
+    <message>
+        <source>Sin marcar, la imagen conserva sus píxeles nítidos al girarla o escalarla (para el pixel art).</source>
+        <translation>Desmarcado, a imagem mantém os pixels nítidos ao girar ou dimensionar (para pixel art).</translation>
+    </message>
+    <message>
+        <source>Suavizar</source>
+        <translation>Suavizar</translation>
     </message>
     <message>
         <source>Restablecer</source>
@@ -2328,6 +2392,10 @@ Ctrl: somente matiz · Alt: somente saturação · Shift: divisões de 15°</tra
     <message>
         <source>Añadir punto clave</source>
         <translation>Adicionar quadro-chave</translation>
+    </message>
+    <message>
+        <source>Cómo cambia el valor a lo largo del fotograma. Doble clic: un punto clave ahí. Arrastra un rombo para cambiar su valor o su momento, y la línea entre dos para curvarla (con Alt, para moverla entera); las asas de una curva Bézier la ajustan. Clic derecho: la forma de la curva.</source>
+        <translation>Como o valor muda ao longo do quadro. Clique duplo: um quadro-chave ali. Arraste um losango para mudar seu valor ou seu momento, e a linha entre dois para curvá-la (com Alt, para movê-la inteira); as alças de uma curva Bézier a ajustam. Clique direito: a forma da curva.</translation>
     </message>
     <message>
         <source>Peso aproximado del GIF exportado: %1 MB, %2 fotogramas, %3 s.</source>
@@ -3188,6 +3256,10 @@ Opacidade: %2 · Mesclagem: %3</translation>
     <message>
         <source>Vista sin &amp;girar</source>
         <translation>Vista sem &amp;giro</translation>
+    </message>
+    <message>
+        <source>Suavizar la vista &amp;girada</source>
+        <translation>Suavizar a visualização &amp;girada</translation>
     </message>
     <message>
         <source>&amp;Tamaño real</source>
@@ -12860,6 +12932,14 @@ Deseja substituí-los?</translation>
     <message>
         <source>Cada esquina se mueve sola y pone lo seleccionado en perspectiva.</source>
         <translation>Cada canto se move sozinho e coloca a seleção em perspectiva.</translation>
+    </message>
+    <message>
+        <source>3D</source>
+        <translation>3D</translation>
+    </message>
+    <message>
+        <source>Lo seleccionado es una lámina fina: arrastrándolo se inclina hacia el puntero, con perspectiva (con Mayús, solo en un eje). Se mueve con el icono de mover y se gira por fuera, como siempre.</source>
+        <translation>A seleção é uma lâmina fina: arrastá-la a inclina na direção do ponteiro, com perspectiva (com Shift, em um só eixo). Ela é movida com o ícone de mover e girada por fora, como sempre.</translation>
     </message>
     <message>
         <source>Ajustar</source>

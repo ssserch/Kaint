@@ -33,8 +33,9 @@ class KeyGraph : public QWidget {
     Q_OBJECT
 public:
     KeyGraph(GifEditor* editor, QWidget* parent = nullptr);
-    void setProp(Motion::Prop prop);
-    Motion::Prop prop() const { return m_prop; }
+    // El valor que se ve; -1: «Posición XY» (X e Y juntas, como en Filmora: lo que se hace en un punto
+    // o en un tramo vale para las dos).
+    void setProp(int prop);
     QSize sizeHint() const override { return {260, 150}; }
 
 protected:
@@ -46,20 +47,38 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* e) override;
 
 private:
+    // Lo que hay bajo el puntero: un punto, un asa de una curva Bézier (0 la de salida, 1 la de
+    // llegada) o la línea entre dos puntos (el tramo que empieza en 'key').
+    struct Hit {
+        enum Kind { None, Key, Handle, Segment } kind = None;
+        Motion::Prop prop = Motion::PosX;
+        int key = -1;
+        int handle = 0;
+    };
+    QList<Motion::Prop> props() const;
     QRectF plotRect() const;
+    Motion::Clip shownClip() const;
     void range(double* lo, double* hi) const;
-    QPointF pointFor(int t, double v, double lo, double hi) const;
-    int keyAt(QPointF pos) const;
+    QPointF pointFor(double t, double v, double lo, double hi) const;
+    int timeAt(double x) const;
+    double valueAt(double y, double lo, double hi) const;
+    QPointF handlePoint(const Motion::Track& track, int i, int handle, double lo, double hi) const;
+    Hit hitAt(QPointF pos) const;
+    // La forma del tramo que empieza en 'time' (y quitar el punto), en esos valores.
+    void showMenu(int frame, int time, const QList<Motion::Prop>& on, bool removable, QPoint globalPos);
 
     GifEditor* m_editor;
-    Motion::Prop m_prop = Motion::PosX;
-    int m_drag = -1;  // índice del punto que se arrastra
+    int m_prop = -1;
+    // Lo que se arrastra: la animación de antes, cómo queda y la escala de la gráfica al pulsar.
+    Hit m_drag;
+    bool m_dragging = false;
+    bool m_moveSegment = false;
+    QPointF m_pressPos;
     int m_dragT = 0;
-    double m_dragV = 0;
-    double m_dragLo = 0, m_dragHi = 1;
-    // La animación de antes de arrastrar y cómo queda con el punto donde está el puntero.
+    std::array<double, 4> m_bendStart{};
     Motion::Clip m_dragBase;
-    Motion::Clip dragged() const;
+    Motion::Clip m_dragResult;
+    double m_dragLo = 0, m_dragHi = 1;
 };
 
 class Inspector : public QWidget {
@@ -90,6 +109,7 @@ private:
     std::array<Row, Motion::PropCount> m_rows;
     QCheckBox* m_lock = nullptr;
     QComboBox* m_fps = nullptr;
+    QCheckBox* m_smooth = nullptr;
     QComboBox* m_graphProp = nullptr;
     KeyGraph* m_graph = nullptr;
     QToolButton* m_reset = nullptr;

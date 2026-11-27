@@ -481,8 +481,16 @@ ToolOptionsEditor::ToolOptionsEditor(ToolSettingsModel* model, QWidget* parent)
                           tr("Una esquina cambia el tamaño de lo seleccionado, como en Paint.NET."));
     m_moveWarp->addChoice(Icons::theme({"transform-shear-left", "transform-scale"}), tr("Deformar"), 1,
                           tr("Cada esquina se mueve sola y pone lo seleccionado en perspectiva."));
+    m_moveWarp->addChoice(Icons::theme({"transform-rotate", "object-rotate-right"}), tr("3D"), 2,
+                          tr("Lo seleccionado es una lámina fina: arrastrándolo se inclina hacia el puntero, con perspectiva "
+                             "(con Mayús, solo en un eje). Se mueve con el icono de mover y se gira por fuera, como siempre."));
     m_moveWarp->setShowText(true);
-    m_moveWarp->onChosen = [update](int v) { update([v](ToolSettings& s) { s.moveWarp = v == 1; }); };
+    m_moveWarp->onChosen = [update](int v) {
+        update([v](ToolSettings& s) {
+            s.moveWarp = v == 1;
+            s.move3d = v == 2;
+        });
+    };
     add(QStringLiteral("movewarp"), Tool::OptInterpolation, Move, {m_moveWarp});
     // Snap (funciones de PhotoCraft): el imán, en las dos herramientas Mover; apagado de fábrica.
     m_moveSnap = new QToolButton(parent);
@@ -958,7 +966,7 @@ void ToolOptionsEditor::sync()
     m_pickerSize->setCurrent(s.pickerSize);
     m_pickerAfter->setCurrent(int(s.pickerAfter));
     m_interpolation->setCurrent(int(s.moveInterpolation));
-    m_moveWarp->setCurrent(s.moveWarp ? 1 : 0);
+    m_moveWarp->setCurrent(s.moveWarp ? 1 : s.move3d ? 2 : 0);
     {
         const QSignalBlocker block(m_moveSnap);
         m_moveSnap->setChecked(s.moveSnap);

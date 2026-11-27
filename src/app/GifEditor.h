@@ -93,6 +93,8 @@ public:
     // Lo que hacen los botones (también desde la línea de tiempo).
     int frameCount() const;
     int selectedFrame() const;
+    // El fotograma elegido cae en un hueco de su pista en el cabezal (no se ve: no se transforma a ciegas).
+    bool selectedInGap() const { return inGap(selectedFrame()); }
     void selectFrame(int index);
     int frameDelay(int index) const;
     bool frameHidden(int index) const;
@@ -125,14 +127,17 @@ public:
     void setFrameDelay(int index, int delayMs);
     // El espacio vacío (ms) delante de un fotograma en su pista.
     int frameGap(int index) const;
-    // Estirado o recortado por la izquierda: el espacio de delante y la duración nuevos, en un paso
-    // (los puntos clave siguen a la imagen).
-    void trimFrameStart(int index, int gapMs, int delayMs);
+    // El espacio de delante y la duración nuevos de varios fotogramas (índice -> {espacio, duración}),
+    // en un paso. 'shiftKeys': estirados o recortados por la izquierda (los puntos clave siguen a la
+    // imagen).
+    void setFrameTimings(const QHash<int, std::pair<int, int>>& timings, bool shiftKeys);
     void removeFrame(int index);
     void duplicateFrame(int index);
     // Selección de varios fotogramas (Ctrl+clic, Mayús+clic): el elegido (la capa activa) y los demás.
     QList<int> selectedFrames() const;
     bool isFrameSelected(int index) const;
+    // Elige esos fotogramas (con el rectángulo de la línea de tiempo); 'add': además de los elegidos.
+    void selectFrames(QList<int> frames, bool add);
     void toggleFrameSelection(int index);
     void selectFrameRange(int index);
     void selectAllFrames();
@@ -157,6 +162,9 @@ public:
     void clearMotionPreview();
     // Tiempo (ms) del cabezal dentro del fotograma elegido.
     int localTime() const;
+    // Cómo se ve ahora el fotograma 'index' (en el cabezal, a pasos de la animación y con lo que se
+    // arrastra): lo mismo con lo que se dibuja, para que su cuadro en la vista previa coincida.
+    Motion::Transform shownTransform(int index) const;
     void seekLocal(int ms);
     // El punto clave elegido (su tiempo dentro del fotograma; -1 ninguno): lleva el cabezal allí.
     int selectedKeyTime() const { return m_selectedKey; }
@@ -247,6 +255,7 @@ private:
     void invalidateStarts();
     QImage frameImage(int index) const;
     QImage frameImageAt(int index, int time) const;
+    Motion::Transform transformAt(int index, int time) const;
     // Lo que se ve en el cabezal: el fotograma o, con varias pistas, todas una encima de otra.
     QImage shownImage() const;
     // Si el cabezal está en un hueco de la pista del fotograma (sin nada: no se ve).

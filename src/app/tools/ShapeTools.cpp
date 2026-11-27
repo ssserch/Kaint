@@ -381,12 +381,14 @@ void LineTool::mousePress(const ToolEvent& e)
             if (Handles::hit(e.viewPos, canvas()->imageToView(m_pts[size_t(i)]))) {
                 m_drag = Drag::Point;
                 m_dragIndex = i;
+                canvas()->setToolCursor(Icons::handCursor(true));
                 return;
             }
         }
         if (e.button == Qt::LeftButton && Handles::hit(e.viewPos, moveIcon(), 11)) {
             m_drag = Drag::Move;
             m_grab = e.pos;
+            canvas()->setToolCursor(Icons::handCursor(true));
             return;
         }
         if (e.button == Qt::RightButton) {
@@ -405,10 +407,26 @@ void LineTool::mousePress(const ToolEvent& e)
     m_drag = Drag::Create;
 }
 
+void LineTool::hoverCursor(const ToolEvent& e)
+{
+    // Como en Paint.NET: la mano sobre los puntos de la curva (y sobre el icono de moverla).
+    bool onHandle = false;
+    if (m_edit.isActive()) {
+        for (int i = 0; i < 4 && !onHandle; ++i)
+            onHandle = Handles::hit(e.viewPos, canvas()->imageToView(m_pts[size_t(i)]));
+        onHandle = onHandle || Handles::hit(e.viewPos, moveIcon(), 11);
+    }
+    canvas()->setToolCursor(onHandle ? Icons::handCursor(false) : cursor());
+}
+
 void LineTool::mouseMove(const ToolEvent& e)
 {
-    if (!m_edit.isActive() || m_drag == Drag::None)
+    if (!m_edit.isActive() || m_drag == Drag::None) {
+        hoverCursor(e);
         return;
+    }
+    if (m_drag == Drag::Point || m_drag == Drag::Move)
+        canvas()->setToolCursor(Icons::handCursor(true));
     switch (m_drag) {
     case Drag::Create: {
         QPointF end = (e.modifiers & Qt::ShiftModifier) ? snapAngle(m_anchor, e.pos) : e.pos;
@@ -447,7 +465,7 @@ void LineTool::mouseMove(const ToolEvent& e)
     render();
 }
 
-void LineTool::mouseRelease(const ToolEvent&)
+void LineTool::mouseRelease(const ToolEvent& e)
 {
     if (m_drag == Drag::Create && m_pts[0] == m_pts[3]) {
         m_edit.cancel();
@@ -457,6 +475,7 @@ void LineTool::mouseRelease(const ToolEvent&)
         commitStep();
     }
     m_drag = Drag::None;
+    hoverCursor(e);
     emit hintChanged(hint());
     repaint();
 }

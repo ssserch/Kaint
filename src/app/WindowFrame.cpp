@@ -1351,7 +1351,9 @@ private:
                     p.setPen(color.darker(118));
                     p.drawRect(client.adjusted(-1, -1, 0, 0));
                 }
-            } else {
+            } else if (!isMaximized(m_window)) {
+                // El contorno fino, solo en modo ventana: maximizada o a pantalla completa (con el
+                // estilo de Paint.NET, oscuro o claro) quedaba una línea en los bordes de la pantalla.
                 p.setPen(borderColor());
                 p.drawRect(f.adjusted(0, 0, -1, -1));
             }

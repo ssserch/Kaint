@@ -21,6 +21,7 @@
 #include <QHash>
 #include <QImageReader>
 #include <QImageWriter>
+#include <QMimeData>
 #include <QObject>
 #include <QPainter>
 #include <QSaveFile>
@@ -261,6 +262,20 @@ bool writeFile(const QString& path, const QByteArray& data, QString* error)
 } // namespace
 
 namespace ImageIO {
+
+QImage imageFromMimeData(const QMimeData* data)
+{
+    if (!data)
+        return {};
+    for (const QString& format : {QStringLiteral("image/png"), QStringLiteral("application/x-qt-windows-mime;value=\"PNG\"")}) {
+        if (!data->hasFormat(format))
+            continue;
+        const QImage png = QImage::fromData(data->data(format), "PNG");
+        if (!png.isNull())
+            return png;
+    }
+    return data->hasImage() ? qvariant_cast<QImage>(data->imageData()) : QImage();
+}
 
 QStringList supportedReadSuffixes()
 {

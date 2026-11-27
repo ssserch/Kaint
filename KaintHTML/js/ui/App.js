@@ -374,6 +374,11 @@ export class App extends EventTarget {
             return;
         this.tools.finishCurrent();
         this.doc = doc;
+        // Al pasar a una imagen de dentro de un grupo contraído (desde la lista, Ctrl+Tab...), el grupo
+        // se expande para verla. (Al contraerlo estando en ella, no: se sigue en ella sin más.)
+        const g = doc?.group, i = doc ? this.docs.indexOf(doc) : -1;
+        if (g?.collapsed && i > 0 && this.docs[i - 1]?.group === g)
+            g.collapsed = false;
         this.view.setDocument(doc);
         this.dispatchEvent(new Event("document"));
         this.rebuildTabs();
@@ -858,10 +863,6 @@ export class App extends EventTarget {
         for (const d of docs)
             if (d.group && count.get(d.group) < 2)
                 d.group = null;
-        // La imagen actual dentro de un grupo contraído: se expande para verla.
-        const g0 = this.doc?.group;
-        if (g0?.collapsed && docs[docs.indexOf(this.doc) - 1]?.group === g0)
-            g0.collapsed = false;
         let range = null;
         if (this.stripRange) {
             const i = docs.indexOf(this.stripRange[0]), j = docs.indexOf(this.stripRange[1]);
@@ -904,9 +905,8 @@ export class App extends EventTarget {
                 chip.addEventListener("pointerdown", (e) => {
                     e.stopPropagation();
                     e.preventDefault();
+                    // (Contraído con la imagen actual dentro, se sigue en ella: solo deja de verse elegida.)
                     g.collapsed = !g.collapsed;
-                    if (g.collapsed && this.doc?.group === g && docs.find((x) => x.group === g) !== this.doc)
-                        this.setCurrent(docs.find((x) => x.group === g));
                     this.decorateGroups();
                 });
                 t.append(chip);
@@ -1350,6 +1350,12 @@ export class App extends EventTarget {
         A("rotateViewLeft", tr("Girar la vista a la iz&quierda"), "object-rotate-left", "Ctrl+Alt+ArrowLeft", () => turn(-15), has);
         A("rotateViewRight", tr("Girar la vista a la de&recha"), "object-rotate-right", "Ctrl+Alt+ArrowRight", () => turn(15), has);
         A("rotateViewReset", tr("Vista sin &girar"), "image-rotate-180", "Ctrl+Alt+ArrowUp", () => this.view.setRotation(0), () => has() && !!this.view.rotation);
+        // Con la vista girada, la imagen suavizada o con sus píxeles nítidos (de fábrica). Se recuerda.
+        A("smoothRotation", tr("Suavizar la vista &girada"), "transform-rotate", null, () => {
+            Settings.set("smoothRotation", Settings.get("smoothRotation") !== true);
+            this.view.update();
+            updateActions();
+        }, has, () => Settings.get("smoothRotation") === true);
         A("pixelGrid", tr("Cuadrícula de &píxeles"), "view-grid", "Ctrl+'", () => {
             this.view.pixelGrid = !this.view.pixelGrid;
             this.view.update();
@@ -1442,7 +1448,7 @@ export class App extends EventTarget {
                                                       "-", a("eraseSel"), a("fillSel"), a("invertSel"), a("selectAll"), a("deselect"), "-",
                                                       a("growSel"), a("shrinkSel"), a("featherSel"), a("selectionShape")] },
             { title: tr("&Ver"), entries: () => [a("zoomIn"), a("zoomOut"), a("zoomFit"), a("zoomSel"), a("actualSize"), "-", a("rotateViewLeft"), a("rotateViewRight"),
-                                                  a("rotateViewReset"), "-", a("pixelGrid"), a("rulers"), "-", a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
+                                                  a("rotateViewReset"), a("smoothRotation"), "-", a("pixelGrid"), a("rulers"), "-", a("unit0"), a("unit1"), a("unit2"), "-", a("fullscreen")] },
             { title: tr("&Imagen"), entries: () => [a("crop"), a("resize"), a("canvasSize"), "-", a("flipH"), a("flipV"), "-", a("rotCW"), a("rotCCW"),
                                                      a("rot180"), "-", a("colorProfile"), a("animation"), "-", a("flatten")] },
             { id: "layers", title: tr("&Capas"), entries: () => [a("addLayer"), a("deleteLayer"), a("duplicateLayer"), a("mergeDown"), a("toggleLayer"), a("alphaLock"), "-",

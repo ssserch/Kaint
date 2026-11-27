@@ -4,6 +4,7 @@
 
 #include <QJsonArray>
 #include <QPainter>
+#include <QPolygonF>
 #include <QTransform>
 
 #include <algorithm>
@@ -36,6 +37,39 @@ double slope(const QList<Key>& keys, int i)
 
 }  // namespace
 
+double bezierProgress(double u, const std::array<double, 4>& b)
+{
+    u = std::clamp(u, 0.0, 1.0);
+    const double x1 = std::clamp(b[0], 0.0, 1.0), y1 = b[1], x2 = std::clamp(b[2], 0.0, 1.0), y2 = b[3];
+    auto curve = [](double s, double p1, double p2) {
+        const double r = 1 - s;
+        return 3 * r * r * s * p1 + 3 * r * s * s * p2 + s * s * s;
+    };
+    // El parámetro s con x(s) = u: Newton y, si no converge, bisección (x es creciente: x1 y x2 están
+    // entre 0 y 1).
+    double s = u;
+    for (int i = 0; i < 8; ++i) {
+        const double x = curve(s, x1, x2) - u;
+        const double r = 1 - s;
+        const double dx = 3 * r * r * x1 + 6 * r * s * (x2 - x1) + 3 * s * s * (1 - x2);
+        if (std::abs(x) < 1e-7)
+            return curve(s, y1, y2);
+        if (std::abs(dx) < 1e-6)
+            break;
+        s = std::clamp(s - x / dx, 0.0, 1.0);
+    }
+    double lo = 0, hi = 1;
+    s = u;
+    for (int i = 0; i < 40; ++i) {
+        const double x = curve(s, x1, x2);
+        if (std::abs(x - u) < 1e-7)
+            break;
+        (x < u ? lo : hi) = s;
+        s = (lo + hi) / 2;
+    }
+    return curve(s, y1, y2);
+}
+
 double Track::value(int t) const
 {
     if (keys.isEmpty())
@@ -50,6 +84,8 @@ double Track::value(int t) const
     const Key& a = keys[i];
     const Key& b = keys[i + 1];
     const double span = std::max(1, b.t - a.t);
+    if (a.interp == Interp::Bezier)
+        return a.value + (b.value - a.value) * bezierProgress((t - a.t) / span, a.bezier);
     const double u = eased((t - a.t) / span, a.easeOut, b.easeIn);
     switch (a.interp) {
     case Interp::Freeze: return a.value;
@@ -62,6 +98,7 @@ double Track::value(int t) const
         const double u2 = u * u, u3 = u2 * u;
         return (2 * u3 - 3 * u2 + 1) * a.value + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * b.value + (u3 - u2) * m1;
     }
+    case Interp::Bezier: break;
     }
     return a.value;
 }
@@ -86,14 +123,49 @@ void Track::setKey(int t, double v)
     k.value = v;
     // Con la forma del punto anterior (la que se eligió para este tramo).
     auto it = std::lower_bound(keys.begin(), keys.end(), t, [](const Key& a, int time) { return a.t < time; });
-    if (it != keys.begin())
+    if (it != keys.begin()) {
         k.interp = (it - 1)->interp;
+        k.bezier = (it - 1)->bezier;
+    }
     keys.insert(it, k);
 }
 
 bool Transform::isIdentity() const
 {
-    return x == 0 && y == 0 && scaleX == 100 && scaleY == 100 && std::fmod(rotation, 360) == 0 && opacity >= 100;
+    return x == 0 && y == 0 && scaleX == 100 && scaleY == 100 && std::fmod(rotation, 360) == 0 && opacity >= 100
+        && rotX == 0 && rotY == 0 && std::all_of(warp.begin(), warp.end(), [](const QPointF& p) { return p.isNull(); });
+}
+
+QTransform tiltTransform(const QRectF& rect, double ax, double ay)
+{
+    if (ax == 0 && ay == 0)
+        return {};
+    const QPointF c = rect.center();
+    const double d = 1.5 * std::max({rect.width(), rect.height(), 1.0});
+    const double a = ax * M_PI / 180.0, b = ay * M_PI / 180.0;
+    const QTransform ry(std::cos(b), 0, -std::sin(b) / d, 0, 1, 0, 0, 0, 1);
+    const QTransform rx(1, 0, 0, 0, std::cos(a), -std::sin(a) / d, 0, 0, 1);
+    return QTransform::fromTranslate(-c.x(), -c.y()) * ry * rx * QTransform::fromTranslate(c.x(), c.y());
+}
+
+QTransform matrix(QSize size, const Transform& tr)
+{
+    const QRectF rect(QPointF(0, 0), QSizeF(size));
+    QTransform warp;
+    if (!std::all_of(tr.warp.begin(), tr.warp.end(), [](const QPointF& p) { return p.isNull(); })) {
+        const QPolygonF from{rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()};
+        const QPolygonF to{rect.topLeft() + tr.warp[0], rect.topRight() + tr.warp[1], rect.bottomRight() + tr.warp[2],
+                           rect.bottomLeft() + tr.warp[3]};
+        if (!QTransform::quadToQuad(from, to, warp))
+            warp = QTransform();
+    }
+    const QPointF center = rect.center();
+    QTransform m;
+    m.translate(center.x() + tr.x, center.y() + tr.y);
+    m.rotate(tr.rotation);
+    m.scale(tr.scaleX / 100.0, tr.scaleY / 100.0);
+    m.translate(-center.x(), -center.y());
+    return warp * tiltTransform(rect, tr.rotX, tr.rotY) * m;
 }
 
 double defaultValue(Prop p)
@@ -108,7 +180,7 @@ double defaultValue(Prop p)
 
 QString propName(Prop p)
 {
-    static const char* names[] = {"x", "y", "scaleX", "scaleY", "rotation", "opacity"};
+    static const char* names[] = {"x", "y", "scaleX", "scaleY", "rotation", "opacity", "rotX", "rotY"};
     return QString::fromLatin1(names[p]);
 }
 
@@ -123,7 +195,7 @@ bool Clip::isEmpty() const
     for (int p = 0; p < PropCount; ++p)
         if (tracks[p].animated() || tracks[p].base != defaultValue(Prop(p)))
             return false;
-    return true;
+    return std::all_of(warp.begin(), warp.end(), [](const QPointF& p) { return p.isNull(); });
 }
 
 bool Clip::animated() const
@@ -143,6 +215,10 @@ Transform Clip::sample(int t) const
     tr.scaleY = tracks[ScaleY].value(t);
     tr.rotation = tracks[Rotation].value(t);
     tr.opacity = std::clamp(tracks[Opacity].value(t), 0.0, 100.0);
+    tr.rotX = std::clamp(tracks[RotX].value(t), -89.0, 89.0);
+    tr.rotY = std::clamp(tracks[RotY].value(t), -89.0, 89.0);
+    tr.warp = warp;
+    tr.smooth = smooth;
     return tr;
 }
 
@@ -213,6 +289,14 @@ QJsonObject Clip::toJson() const
     QJsonObject o;
     o.insert(QStringLiteral("step"), stepMs);
     o.insert(QStringLiteral("lockScale"), lockScale);
+    if (smooth)
+        o.insert(QStringLiteral("smooth"), true);
+    if (!std::all_of(warp.begin(), warp.end(), [](const QPointF& p) { return p.isNull(); })) {
+        QJsonArray w;
+        for (const QPointF& p : warp)
+            w << p.x() << p.y();
+        o.insert(QStringLiteral("warp"), w);
+    }
     QJsonObject tracksJson;
     for (int p = 0; p < PropCount; ++p) {
         const Track& track = tracks[p];
@@ -229,6 +313,8 @@ QJsonObject Clip::toJson() const
                 kj.insert(QStringLiteral("in"), true);
             if (k.easeOut)
                 kj.insert(QStringLiteral("out"), true);
+            if (k.interp == Interp::Bezier)
+                kj.insert(QStringLiteral("b"), QJsonArray{k.bezier[0], k.bezier[1], k.bezier[2], k.bezier[3]});
             keys.append(kj);
         }
         if (!keys.isEmpty())
@@ -244,6 +330,10 @@ Clip Clip::fromJson(const QJsonObject& o)
     Clip c;
     c.stepMs = std::clamp(o.value(QStringLiteral("step")).toInt(50), 10, 1000);
     c.lockScale = o.value(QStringLiteral("lockScale")).toBool(true);
+    c.smooth = o.value(QStringLiteral("smooth")).toBool(false);
+    if (const QJsonArray w = o.value(QStringLiteral("warp")).toArray(); w.size() == 8)
+        for (int i = 0; i < 4; ++i)
+            c.warp[size_t(i)] = QPointF(w[2 * i].toDouble(), w[2 * i + 1].toDouble());
     const QJsonObject tracksJson = o.value(QStringLiteral("tracks")).toObject();
     for (int p = 0; p < PropCount; ++p) {
         const QJsonObject t = tracksJson.value(propName(Prop(p))).toObject();
@@ -256,9 +346,12 @@ Clip Clip::fromJson(const QJsonObject& o)
             Key k;
             k.t = std::max(0, kj.value(QStringLiteral("t")).toInt());
             k.value = kj.value(QStringLiteral("v")).toDouble();
-            k.interp = Interp(std::clamp(kj.value(QStringLiteral("i")).toInt(0), 0, 3));
+            k.interp = Interp(std::clamp(kj.value(QStringLiteral("i")).toInt(0), 0, 4));
             k.easeIn = kj.value(QStringLiteral("in")).toBool();
             k.easeOut = kj.value(QStringLiteral("out")).toBool();
+            if (const QJsonArray b = kj.value(QStringLiteral("b")).toArray(); b.size() == 4)
+                for (int j = 0; j < 4; ++j)
+                    k.bezier[size_t(j)] = j % 2 == 0 ? std::clamp(b[j].toDouble(), 0.0, 1.0) : std::clamp(b[j].toDouble(), -3.0, 4.0);
             if (track.keyAt(k.t) < 0)
                 track.keys << k;
         }
@@ -274,16 +367,11 @@ QImage render(const QImage& source, const Transform& tr)
     QImage out(source.size(), kPremulFormat);
     out.fill(Qt::transparent);
     QPainter p(&out);
-    p.setRenderHint(QPainter::SmoothPixmapTransform);
-    p.setRenderHint(QPainter::Antialiasing);
+    // (Suavizada solo si se pide: si no, al girar o escalar el pixel art se veía borroso.)
+    p.setRenderHint(QPainter::SmoothPixmapTransform, tr.smooth);
+    p.setRenderHint(QPainter::Antialiasing, tr.smooth);
     p.setOpacity(std::clamp(tr.opacity, 0.0, 100.0) / 100.0);
-    const QPointF center(source.width() / 2.0, source.height() / 2.0);
-    QTransform m;
-    m.translate(center.x() + tr.x, center.y() + tr.y);
-    m.rotate(tr.rotation);
-    m.scale(tr.scaleX / 100.0, tr.scaleY / 100.0);
-    m.translate(-center.x(), -center.y());
-    p.setTransform(m);
+    p.setTransform(matrix(source.size(), tr));
     p.drawImage(0, 0, source);
     p.end();
     QImage straight = out.convertToFormat(kLayerFormat);

@@ -10,7 +10,14 @@
 
 class Document;
 
+class QMimeData;
+
 namespace ImageIO {
+
+// La imagen de lo copiado o arrastrado: el PNG si lo trae (Kaint, Paint.NET, los navegadores,
+// Discord...: conserva la transparencia) y, si no, la imagen de Qt (en Windows, el mapa de bits, sin
+// transparencia). Nula si no trae ninguna.
+QImage imageFromMimeData(const QMimeData* data);
 
 QString openFilter();
 QString saveFilter(QString* defaultFilter = nullptr);

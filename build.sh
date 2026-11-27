@@ -704,13 +704,16 @@ if (( DO_APPIMAGE && APPIMAGE_COMPAT && ! DO_MUSL )) && [[ -z "${KAINT_IN_CONTAI
         fi
         setup="export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-# (Con el nombre que tenga en esta versión de Ubuntu: en la 24.04, libasound2t64, libcups2t64...)
+# Lo que necesitan Qt y sus complementos (linuxdeploy los copia en el AppImage; libSM y libICE, por
+# ejemplo, en la 24.04 ya no llegan con lo demás). Con el nombre que tenga en esta versión de Ubuntu:
+# en la 24.04, libasound2t64, libcups2t64...
 libs=
 for lib in libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
     libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libwayland-client0 libwayland-cursor0 \
     libwayland-egl1 libpulse0 libpulse-mainloop-glib0 libasound2 libcups2 libgtk-3-0 libva2 libva-drm2 libva-x11-2 \
     libvdpau1 libdrm2 libgbm1 libxrandr2 libxcomposite1 libxdamage1 libxtst6 libxshmfence1 libgstreamer1.0-0 \
-    libgstreamer-plugins-base1.0-0; do
+    libgstreamer-plugins-base1.0-0 libsm6 libice6 libx11-xcb1 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 \
+    libxcb-xinput0 libxcb-glx0 libxcb-util1 libxi6 libxrender1 libxext6 libegl1 libgl1 libopengl0; do
     if apt-cache policy \$lib | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \$lib\"; else libs=\"\$libs \${lib}t64\"; fi
 done
 apt-get install -y -qq --no-install-recommends g++-$gcc_v gcc-$gcc_v cmake ninja-build git curl ca-certificates file python3-pip \
@@ -807,6 +810,25 @@ check_packages() {
     fi
 }
 pacman_installed() { pacman -Qq "$1" >/dev/null 2>&1; }
+
+# FFmpeg: Kaint usa el programa ffmpeg para leer el audio que no es WAV en el editor de GIF (MP3, OGG,
+# FLAC...) y para exportar vídeo (MP4, WebM). No hace falta para compilar: si falta, se ofrece
+# instalarlo (con --yes, sin preguntar). $1: la orden para instalarlo; $2: la misma, sin preguntas.
+offer_ffmpeg() {
+    command -v ffmpeg >/dev/null 2>&1 && return 0
+    echo "${c_yellow}Falta FFmpeg:${c_reset} sin él, el editor de GIF solo lee audio WAV (no MP3, OGG, FLAC...) y no exporta vídeo (MP4, WebM)."
+    local answer=s
+    if (( ! ASSUME_YES )); then
+        if [[ ! -t 0 ]]; then
+            echo "  Instálalo con: $1 ffmpeg"
+            return 0
+        fi
+        read -r -p "¿Instalarlo ahora ($1 ffmpeg)? [S/n] " answer || answer=n
+    fi
+    [[ -z "$answer" || "$answer" == [sSyY]* ]] || return 0
+    # shellcheck disable=SC2086
+    $2 ffmpeg || echo "${c_yellow}No se pudo instalar FFmpeg: Kaint se compila igual, sin él.${c_reset}"
+}
 dpkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"; }
 
 if (( DO_FLATPAK )); then
@@ -818,9 +840,11 @@ elif [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
 elif command -v pacman >/dev/null 2>&1; then
     (( DO_DEB )) && ARCH_REQUIRED+=("${ARCH_DEB_TOOLS[@]}")
     check_packages pacman_installed "sudo pacman -S --needed" ARCH_REQUIRED ARCH_OPTIONAL
+    offer_ffmpeg "sudo pacman -S --needed" "sudo pacman -S --needed --noconfirm"
 elif command -v dpkg-query >/dev/null 2>&1; then
     (( DO_DEB )) && DEB_REQUIRED+=("${DEB_DEB_TOOLS[@]}")
     check_packages dpkg_installed "sudo apt install" DEB_REQUIRED DEB_OPTIONAL
+    offer_ffmpeg "sudo apt install" "sudo apt install -y"
 else
     echo "${c_yellow}No se encontró pacman ni apt; se omite la comprobación de dependencias.${c_reset}"
 fi

@@ -128,11 +128,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Caché de Qt (arm64)
+      # Qt y el FFmpeg para arm64 que build.bat pone junto a kaint.exe.
+      - name: Caché de Qt y FFmpeg (arm64)
         uses: actions/cache@v5
         with:
-          path: C:\Qt
-          key: windows-arm64-native-qt-6.10.3
+          path: |
+            C:\Qt
+            ~\AppData\Local\Kaint\toolchain\ffmpeg-arm64
+          key: windows-arm64-native-qt-6.10.3-ffmpeg
 
       # aqtinstall (el mismo que usa build.bat, de x64: Windows on Arm lo ejecuta emulado).
       - name: Qt para arm64 (aqtinstall)

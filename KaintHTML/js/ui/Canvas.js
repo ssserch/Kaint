@@ -809,7 +809,8 @@ export class CanvasView extends EventTarget {
         // Al alejar, desde la reducción más cercana que aún tenga al menos la resolución de la pantalla.
         const device = this.scale * this.dpr;
         const level = device < 1 ? Math.max(0, Math.floor(Math.log2(1 / device))) : 0;
-        ctx.imageSmoothingEnabled = this.zoom < 1;
+        // (Girada, suavizada solo si se pide en Ver, como en Kaint: si no, el pixel art se ve nítido.)
+        ctx.imageSmoothingEnabled = this.zoom < 1 || (!!this.rotation && Settings.get("smoothRotation") === true);
         ctx.imageSmoothingQuality = this.moving ? "low" : "high";
         ctx.drawImage(this.displayLevel(doc, level), x, y, w, h);
         ctx.restore();

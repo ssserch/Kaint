@@ -335,7 +335,11 @@ public:
     {
         setMinimumSize(200, 150);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        setToolTip(GifEditor::tr("Arrastra la imagen para moverla (con puntos clave de posición, se pone uno en el cabezal)"));
+        setMouseTracking(true);
+        m_mode = Mode(std::clamp(QSettings().value(QStringLiteral("gifEditor/transformMode"), 0).toInt(), 0, 2));
+        setToolTip(GifEditor::tr("Haz clic en la imagen para transformarla: arrástrala para moverla y sus tiradores para "
+                                 "cambiar su tamaño (o, con Deformar, cada esquina sola; con 3D, arrastrándola se inclina). "
+                                 "Con puntos clave, se pone uno en el cabezal."));
     }
     void setImage(const QImage& image)
     {
@@ -351,6 +355,11 @@ public:
     }
 
 protected:
+    // Cómo se transforma la imagen elegida con su cuadro: tamaño (y girar, por fuera), cada esquina
+    // sola (Deformar, en perspectiva) o inclinarla en 3D, como una lámina fina.
+    enum class Mode { Normal = 0, Warp = 1, Tilt3D = 2 };
+    enum class Drag { None, Move, Scale, Rotate, Corner, Tilt };
+
     void paintEvent(QPaintEvent*) override
     {
         QPainter p(this);
@@ -379,29 +388,97 @@ protected:
             for (const QPointF& pt : std::as_const(m_keys))
                 paintDiamond(p, map(pt), 5, false, true, palette());
         }
+        paintBox(p);
     }
+
     void mousePressEvent(QMouseEvent* e) override
     {
-        if (e->button() == Qt::LeftButton && !m_image.isNull() && targetRect().contains(e->position().toPoint())) {
-            m_dragging = true;
-            m_pressPos = e->position();
-            setCursor(Qt::ClosedHandCursor);
+        if (e->button() != Qt::LeftButton || m_image.isNull())
+            return;
+        const QPointF pos = e->position();
+        // Los botones del modo (arriba a la izquierda).
+        for (int i = 0; i < 3; ++i)
+            if (modeRect(i).contains(pos) && m_selected) {
+                m_mode = Mode(i);
+                QSettings().setValue(QStringLiteral("gifEditor/transformMode"), i);
+                update();
+                return;
+            }
+        if (!canTransform()) {
+            m_selected = false;
+            update();
+            return;
         }
+        const QPolygonF quad = widgetQuad();
+        const int handle = m_selected ? handleAt(pos) : -1;
+        const bool inside = quad.containsPoint(pos, Qt::OddEvenFill);
+        m_drag = Drag::None;
+        if (handle >= 0) {
+            m_drag = m_mode == Mode::Warp ? Drag::Corner : m_mode == Mode::Tilt3D ? Drag::Tilt : Drag::Scale;
+            m_handle = handle;
+        } else if (inside) {
+            m_drag = m_mode == Mode::Tilt3D && !(e->modifiers() & Qt::ShiftModifier) ? Drag::Tilt : Drag::Move;
+        } else if (m_selected && m_mode == Mode::Normal && nearOutline(quad, pos)) {
+            m_drag = Drag::Rotate;
+        }
+        // Un clic en la imagen la elige (sale su cuadro); fuera, se quita.
+        m_selected = inside || m_drag != Drag::None;
+        if (m_drag == Drag::None) {
+            update();
+            return;
+        }
+        m_editor->stop();
+        m_pressPos = pos;
+        m_base = m_editor->motion(m_editor->selectedFrame());
+        m_baseTr = m_base.sample(m_editor->localTime());
+        if (m_drag == Drag::Move)
+            setCursor(Qt::ClosedHandCursor);
+        update();
     }
+
     void mouseMoveEvent(QMouseEvent* e) override
     {
-        if (m_dragging)
-            m_editor->previewDragged(toImage(e->position() - m_pressPos), false);
-        else
-            setCursor(!m_image.isNull() && targetRect().contains(e->position().toPoint()) ? Qt::OpenHandCursor : Qt::ArrowCursor);
+        const QPointF pos = e->position();
+        if (m_drag == Drag::None) {
+            updateCursor(pos, e->modifiers());
+            return;
+        }
+        if (m_drag == Drag::Move) {
+            m_editor->previewDragged(toImage(pos - m_pressPos), false);
+            return;
+        }
+        m_editor->setMotionPreview(m_editor->selectedFrame(), dragged(pos, e->modifiers()));
+        update();
     }
+
     void mouseReleaseEvent(QMouseEvent* e) override
     {
-        if (!m_dragging)
+        const Drag drag = m_drag;
+        if (drag == Drag::None)
             return;
-        m_dragging = false;
-        setCursor(Qt::OpenHandCursor);
-        m_editor->previewDragged(toImage(e->position() - m_pressPos), true);
+        if (drag == Drag::Move) {
+            m_drag = Drag::None;
+            setCursor(Qt::OpenHandCursor);
+            m_editor->previewDragged(toImage(e->position() - m_pressPos), true);
+            return;
+        }
+        // (Antes de olvidar qué se arrastraba: dragged() lo mira. Si no, devolvía la animación de antes
+        // y lo estirado volvía a su estado original al soltar.)
+        const Motion::Clip c = dragged(e->position(), e->modifiers());
+        m_drag = Drag::None;
+        m_editor->clearMotionPreview();
+        if (c == m_base) {
+            m_editor->setMotionPreview(m_editor->selectedFrame(), m_base);
+            m_editor->clearMotionPreview();
+            update();
+            return;
+        }
+        m_editor->setMotion(m_editor->selectedFrame(), c,
+                            drag == Drag::Scale    ? GifEditor::tr("Cambiar el tamaño")
+                            : drag == Drag::Rotate ? GifEditor::tr("Girar la imagen")
+                            : drag == Drag::Corner ? GifEditor::tr("Deformar la imagen")
+                                                   : GifEditor::tr("Girar en 3D"));
+        update();
     }
 
 private:
@@ -416,13 +493,217 @@ private:
         const double k = t.width() > 0 ? double(m_image.width()) / t.width() : 1.0;
         return widgetDelta * k;
     }
+    // De las coordenadas de la imagen a las del widget, y al revés.
+    QTransform imageToWidget() const
+    {
+        const QRect t = targetRect();
+        const double k = m_image.width() > 0 ? double(t.width()) / m_image.width() : 1.0;
+        return QTransform::fromScale(k, k) * QTransform::fromTranslate(t.left(), t.top());
+    }
+    bool canTransform() const
+    {
+        const int frame = m_editor->selectedFrame();
+        return m_editor->document() && frame >= 0 && !m_editor->selectedInGap();
+    }
+    QSize frameSize() const { return m_editor->document() ? m_editor->document()->size() : m_image.size(); }
+    // La imagen elegida, como está ahora (con lo que se arrastra), en el widget: sus cuatro esquinas.
+    QPolygonF widgetQuad() const
+    {
+        // (Con lo mismo con lo que se dibuja la imagen: si no, el cuadro iba por delante de ella.)
+        const Motion::Transform tr = m_editor->shownTransform(m_editor->selectedFrame());
+        const QRectF r(QPointF(0, 0), QSizeF(frameSize()));
+        const QTransform m = Motion::matrix(frameSize(), tr) * imageToWidget();
+        return QPolygonF{m.map(r.topLeft()), m.map(r.topRight()), m.map(r.bottomRight()), m.map(r.bottomLeft())};
+    }
+    // Los tiradores: las cuatro esquinas (0-3) y, con el tamaño, los centros de los lados (4-7).
+    QList<QPointF> handles() const
+    {
+        const QPolygonF q = widgetQuad();
+        QList<QPointF> list{q[0], q[1], q[2], q[3]};
+        if (m_mode == Mode::Normal)
+            for (int i = 0; i < 4; ++i)
+                list << (q[i] + q[(i + 1) % 4]) / 2;
+        return list;
+    }
+    int handleAt(QPointF pos) const
+    {
+        const QList<QPointF> list = handles();
+        for (int i = 0; i < list.size(); ++i)
+            if (QLineF(list[i], pos).length() <= 7)
+                return i;
+        return -1;
+    }
+    static bool nearOutline(const QPolygonF& quad, QPointF pos)
+    {
+        for (int i = 0; i < 4; ++i) {
+            const QLineF edge(quad[i], quad[(i + 1) % 4]);
+            const QPointF d = edge.p2() - edge.p1();
+            const double len2 = QPointF::dotProduct(d, d);
+            const double t = len2 > 0 ? std::clamp(QPointF::dotProduct(pos - edge.p1(), d) / len2, 0.0, 1.0) : 0.0;
+            if (QLineF(edge.p1() + d * t, pos).length() <= 26)
+                return true;
+        }
+        return false;
+    }
+    QRectF modeRect(int i) const { return QRectF(10 + i * 78, 10, 74, 24); }
+
+    void updateCursor(QPointF pos, Qt::KeyboardModifiers mods)
+    {
+        if (m_image.isNull() || !canTransform()) {
+            setCursor(Qt::ArrowCursor);
+            return;
+        }
+        for (int i = 0; i < 3; ++i)
+            if (m_selected && modeRect(i).contains(pos)) {
+                setCursor(Qt::PointingHandCursor);
+                return;
+            }
+        const QPolygonF quad = widgetQuad();
+        if (m_selected && handleAt(pos) >= 0)
+            setCursor(m_mode == Mode::Normal ? Icons::handCursor(false) : QCursor(Qt::SizeAllCursor));
+        else if (quad.containsPoint(pos, Qt::OddEvenFill))
+            setCursor(m_mode == Mode::Tilt3D && !(mods & Qt::ShiftModifier) ? QCursor(Qt::SizeAllCursor) : QCursor(Qt::OpenHandCursor));
+        else if (m_selected && m_mode == Mode::Normal && nearOutline(quad, pos))
+            setCursor(Icons::rotateCursor(0));
+        else
+            setCursor(Qt::ArrowCursor);
+    }
+
+    // La animación con lo que se arrastra: el valor en el cabezal (un punto clave si ese valor ya
+    // los tiene; si no, el de siempre).
+    Motion::Clip dragged(QPointF pos, Qt::KeyboardModifiers mods) const
+    {
+        Motion::Clip c = m_base;
+        const int t = m_editor->localTime();
+        auto set = [&](Motion::Prop prop, double v) {
+            Motion::Track& track = c.tracks[prop];
+            v = std::round(v * 10) / 10;
+            if (track.animated())
+                track.setKey(t, v);
+            else
+                track.base = v;
+        };
+        const QSize size = frameSize();
+        const QPointF center(size.width() / 2.0 + m_baseTr.x, size.height() / 2.0 + m_baseTr.y);
+        bool ok = false;
+        const QTransform toImage = imageToWidget().inverted(&ok);
+        const QPointF now = toImage.map(pos), from = toImage.map(m_pressPos);
+        switch (m_drag) {
+        case Drag::Scale: {
+            // Alrededor del centro: lo que se aleja el tirador del centro (en los ejes de la imagen girada).
+            QTransform unrotate;
+            unrotate.rotate(-m_baseTr.rotation);
+            const QPointF a = unrotate.map(from - center), b = unrotate.map(now - center);
+            double sx = std::abs(a.x()) > 1 ? std::abs(b.x() / a.x()) : 1.0;
+            double sy = std::abs(a.y()) > 1 ? std::abs(b.y() / a.y()) : 1.0;
+            const bool corner = m_handle < 4;
+            const bool horizontal = m_handle == 5 || m_handle == 7;
+            if (!corner) {
+                if (horizontal)
+                    sy = 1;
+                else
+                    sx = 1;
+            }
+            // Proporcional con «Proporcional» del panel o con Mayús.
+            if (c.lockScale || (mods & Qt::ShiftModifier)) {
+                const double k = corner ? std::max(sx, sy) : horizontal ? sx : sy;
+                sx = sy = k;
+            }
+            set(Motion::ScaleX, std::clamp(m_baseTr.scaleX * sx, 1.0, 2000.0));
+            set(Motion::ScaleY, std::clamp(m_baseTr.scaleY * sy, 1.0, 2000.0));
+            break;
+        }
+        case Drag::Rotate: {
+            const QPointF a = from - center, b = now - center;
+            double delta = (std::atan2(b.y(), b.x()) - std::atan2(a.y(), a.x())) * 180.0 / M_PI;
+            double angle = m_baseTr.rotation + delta;
+            if (mods & Qt::ShiftModifier)
+                angle = std::round(angle / 15.0) * 15.0;
+            set(Motion::Rotation, angle);
+            break;
+        }
+        case Drag::Corner: {
+            // La esquina, donde está el puntero: en las coordenadas de la imagen antes de su giro 3D,
+            // escala, giro y posición (lo que se deforma es la imagen misma).
+            Motion::Transform plain = m_baseTr;
+            plain.warp = {};
+            bool inv = false;
+            const QTransform back = Motion::matrix(size, plain).inverted(&inv);
+            if (!inv)
+                break;
+            const QRectF r(QPointF(0, 0), QSizeF(size));
+            const QPointF corners[] = {r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft()};
+            QPointF offset = back.map(now) - corners[m_handle];
+            c.warp[size_t(m_handle)] = QPointF(std::round(offset.x()), std::round(offset.y()));
+            break;
+        }
+        case Drag::Tilt: {
+            // Hacia donde va el puntero: a los lados alrededor del eje vertical y arriba y abajo, del
+            // horizontal (todo el ancho o el alto de la imagen, 180°). Con Mayús, solo en un eje.
+            const QPointF d = now - from;
+            double ay = d.x() / std::max(1, size.width()) * 180.0, ax = -d.y() / std::max(1, size.height()) * 180.0;
+            if (mods & Qt::ShiftModifier)
+                (std::abs(d.x()) > std::abs(d.y()) ? ax : ay) = 0;
+            set(Motion::RotX, std::clamp(m_baseTr.rotX + ax, -89.0, 89.0));
+            set(Motion::RotY, std::clamp(m_baseTr.rotY + ay, -89.0, 89.0));
+            break;
+        }
+        default: break;
+        }
+        return c;
+    }
+
+    void paintBox(QPainter& p)
+    {
+        if (!m_selected || !canTransform())
+            return;
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor accent(31, 209, 185);
+        const QPolygonF quad = widgetQuad();
+        p.setPen(QPen(QColor(0, 0, 0, 140), 3));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolygon(quad);
+        p.setPen(QPen(accent, 1.5, m_mode == Mode::Normal ? Qt::SolidLine : Qt::DashLine));
+        p.drawPolygon(quad);
+        for (const QPointF& h : handles()) {
+            p.setPen(QPen(QColor(20, 20, 20), 1.2));
+            p.setBrush(m_mode == Mode::Warp ? accent : QColor(250, 250, 250));
+            if (m_mode == Mode::Normal)
+                p.drawRect(QRectF(h - QPointF(4, 4), QSizeF(8, 8)));
+            else
+                p.drawEllipse(h, 5, 5);
+        }
+        // Los botones del modo.
+        const QString names[] = {GifEditor::tr("Tamaño"), GifEditor::tr("Deformar"), GifEditor::tr("3D")};
+        QFont f = font();
+        f.setPointSizeF(std::max(6.5, f.pointSizeF() * 0.9));
+        p.setFont(f);
+        for (int i = 0; i < 3; ++i) {
+            const QRectF r = modeRect(i);
+            const bool on = int(m_mode) == i;
+            p.setPen(QPen(on ? accent : QColor(70, 72, 78), 1));
+            p.setBrush(on ? QColor(13, 74, 67) : QColor(23, 24, 28, 230));
+            p.drawRoundedRect(r, 7, 7);
+            p.setPen(on ? QColor(255, 255, 255) : QColor(200, 202, 206));
+            p.drawText(r, Qt::AlignCenter, names[i]);
+        }
+        p.restore();
+    }
 
     GifEditor* m_editor;
     QImage m_image;
     QList<QPointF> m_path;
     QList<QPointF> m_keys;
-    bool m_dragging = false;
+    // La imagen elegida (con su cuadro), el modo y lo que se arrastra: desde dónde, con qué tirador
+    // y la animación de antes.
+    bool m_selected = false;
+    Mode m_mode = Mode::Normal;
+    Drag m_drag = Drag::None;
+    int m_handle = -1;
     QPointF m_pressPos;
+    Motion::Clip m_base;
+    Motion::Transform m_baseTr;
 };
 
 // ---------------------------------------------------------------------------
@@ -646,20 +927,61 @@ public:
     // corridos en su pista).
     std::pair<int, int> span(int index) const
     {
-        int start = m_editor->frameStart(index), end = m_editor->frameEnd(index);
-        if (m_resizing >= 0 && m_editor->trackOf(index) == m_editor->trackOf(m_resizing)) {
-            // (Por la izquierda cambia también el espacio de delante; por la derecha, no.)
-            const int oldEnd = m_editor->frameEnd(m_resizing);
-            const int newStart = m_editor->frameStart(m_resizing) - m_editor->frameGap(m_resizing) + m_resizeGap;
-            const int diff = newStart + m_resizeDelay - oldEnd;
-            if (index == m_resizing)
-                return {newStart, newStart + m_resizeDelay};
-            if (start >= oldEnd) {
-                start += diff;
-                end += diff;
-            }
+        // Mientras se estira, con lo nuevo (los de detrás de cada pista, corridos).
+        if (m_resizing >= 0 && index >= 0 && index < m_planStart.size())
+            return {m_planStart[index], m_planEnd[index]};
+        return {m_editor->frameStart(index), m_editor->frameEnd(index)};
+    }
+
+    // Los inicios y finales de todos los clips con el plan de estirado (como GifEditor::computeTimes:
+    // cada pista, uno detrás de otro, con el espacio vacío de delante de cada uno).
+    void updatePlan()
+    {
+        const int n = m_editor->frameCount();
+        m_planStart.resize(n);
+        m_planEnd.resize(n);
+        QHash<int, int> ends;
+        for (int i = 0; i < n; ++i) {
+            const auto planned = m_resizePlan.constFind(i);
+            const int gap = planned != m_resizePlan.cend() ? planned->first : m_editor->frameGap(i);
+            const int delay = planned != m_resizePlan.cend() ? planned->second : m_editor->frameDelay(i);
+            const int k = m_editor->trackOf(i);
+            m_planStart[i] = ends.value(k) + gap;
+            m_planEnd[i] = m_planStart[i] + delay;
+            ends[k] = m_planEnd[i];
         }
-        return {start, end};
+        update();
+    }
+
+    // Los clips que se estiran: todos los elegidos si el agarrado es uno de ellos; si no, él solo.
+    QList<int> resizeGroup() const
+    {
+        return m_editor->isFrameSelected(m_resizing) ? m_editor->selectedFrames() : QList<int>{m_resizing};
+    }
+
+    // Lo mismo para todos los del grupo: 'delta' ms más (o menos) de duración. Por la derecha, el
+    // principio se queda; por la izquierda, el final se queda (lo que crece ocupa el espacio vacío de
+    // delante y, si no hay, empuja a los de detrás).
+    void planResize(int delta)
+    {
+        m_resizePlan.clear();
+        for (int i : resizeGroup()) {
+            const int delay = m_editor->frameDelay(i);
+            const int next = std::max(Gif::kMinDelayMs, delay + delta);
+            const int gap = m_editor->frameGap(i);
+            m_resizePlan.insert(i, {m_resizeLeft ? std::max(0, gap - (next - delay)) : gap, next});
+        }
+        updatePlan();
+    }
+
+    // Los clips que toca el rectángulo de elegir (basta con tocarlos).
+    QList<int> clipsIn(const QRect& area) const
+    {
+        QList<int> hits;
+        for (int i = 0; i < m_editor->frameCount(); ++i)
+            if (clipRect(i).intersects(area))
+                hits << i;
+        return hits;
     }
 
     // Los bordes de un clip con los que se estira: el derecho y, si cabe, el izquierdo.
@@ -806,7 +1128,9 @@ protected:
                 continue;
             const auto [start, end] = span(i);
             const bool hidden = m_editor->frameHidden(i);
-            const bool selected = m_editor->isFrameSelected(i);
+            // (Mientras se arrastra el rectángulo de elegir, los que toca.)
+            const bool selected = m_marquee ? m_marqueeHits.contains(i) || (m_marqueeAdd && m_editor->isFrameSelected(i))
+                                            : m_editor->isFrameSelected(i);
             QPainterPath path;
             path.addRoundedRect(QRectF(r).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6);
             // Elegido: verde azulado oscuro con el borde del acento (un bloque del acento entero
@@ -905,6 +1229,15 @@ protected:
                           : frames.isEmpty()        ? kLeftMargin
                                                     : xForTime(m_editor->frameEnd(frames.last()));
             p.fillRect(QRect(x - 1, trackTop(m_dropTrack) - 4, 3, kTrackHeight + 8), pal.color(QPalette::Highlight));
+        }
+        // El rectángulo de elegir clips.
+        if (m_marquee) {
+            const QRect area = QRect(m_marqueeFrom, m_marqueeTo).normalized();
+            QColor fill = pal.color(QPalette::Highlight);
+            fill.setAlpha(50);
+            p.fillRect(area, fill);
+            p.setPen(QPen(pal.color(QPalette::Highlight), 1, Qt::DashLine));
+            p.drawRect(area.adjusted(0, 0, -1, -1));
         }
         // Regla del tiempo: siempre a la vista arriba, también al bajar entre muchas pistas (encima de
         // los clips que pasan por debajo).
@@ -1166,11 +1499,21 @@ protected:
             return;
         }
         const int index = clipAt(pos);
-        if (inRuler(pos) || (e->button() == Qt::LeftButton && index < 0)) {
-            if (const int k = trackAtY(pos.y()); k >= 0 && k != m_editor->activeTrack())
-                m_editor->setActiveTrack(k);
+        if (inRuler(pos)) {
             m_scrubbing = e->button() == Qt::LeftButton;
             m_editor->seek(timeForX(pos.x()));
+            return;
+        }
+        // En un hueco: arrastrando, un rectángulo elige los clips que toca (con Ctrl, se suman a los
+        // elegidos); un clic sin arrastrar lleva el cabezal ahí, como antes.
+        if (e->button() == Qt::LeftButton && index < 0) {
+            if (const int k = trackAtY(pos.y()); k >= 0 && k != m_editor->activeTrack())
+                m_editor->setActiveTrack(k);
+            m_marqueePending = true;
+            m_marquee = false;
+            m_marqueeAdd = e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
+            m_marqueeFrom = m_marqueeTo = pos;
+            m_marqueeHits.clear();
             return;
         }
         if (index < 0)
@@ -1185,9 +1528,13 @@ protected:
             return;
         }
         m_editor->selectAudio(-1);
-        // El clic derecho sobre uno de los elegidos conserva la selección (el menú es para todos).
-        if (!(e->button() == Qt::RightButton && m_editor->isFrameSelected(index)))
+        // Sobre uno de los elegidos (con varios), la selección se queda: el clic derecho es para
+        // todos y arrastrar un borde los estira a todos. Un clic izquierdo sin más lo deja solo a él
+        // al soltar.
+        const bool keep = m_editor->isFrameSelected(index) && m_editor->selectedFrames().size() > 1;
+        if (!keep && !(e->button() == Qt::RightButton && m_editor->isFrameSelected(index)))
             m_editor->selectFrame(index);
+        m_deferredSelect = keep && e->button() == Qt::LeftButton ? index : -1;
         // El cabezal va donde se hizo clic (no al principio del clip).
         if (e->button() == Qt::LeftButton)
             m_editor->seek(std::clamp(timeForX(pos.x()), m_editor->frameStart(index),
@@ -1204,9 +1551,9 @@ protected:
         if (onRightEdge(r, pos) || onLeftEdge(r, pos)) {
             m_resizing = index;
             m_resizeLeft = onLeftEdge(r, pos);
-            m_resizeGap = m_editor->frameGap(index);
-            m_resizeDelay = m_editor->frameEnd(index) - m_editor->frameStart(index);
             m_resizePressX = pos.x();
+            m_deferredSelect = -1;
+            planResize(0);
             return;
         }
         m_pressIndex = index;
@@ -1293,6 +1640,15 @@ protected:
             m_editor->seek(timeForX(pos.x()));
             return;
         }
+        if (m_marqueePending && (e->buttons() & Qt::LeftButton)) {
+            if (!m_marquee && (pos - m_marqueeFrom).manhattanLength() < QApplication::startDragDistance())
+                return;
+            m_marquee = true;
+            m_marqueeTo = pos;
+            m_marqueeHits = clipsIn(QRect(m_marqueeFrom, m_marqueeTo).normalized());
+            update();
+            return;
+        }
         if (m_resizing >= 0 && m_resizeLeft) {
             // El principio sigue al puntero y el final se queda. Más allá del clip de delante (o
             // del principio), el clip empieza donde acaba ese y dura más: se corren los de detrás.
@@ -1320,9 +1676,7 @@ protected:
             }
             // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
             t = std::min(int(std::round(t / 10.0)) * 10, end - Gif::kMinDelayMs);
-            m_resizeDelay = end - t;
-            m_resizeGap = std::max(0, t - prevEnd);
-            update();
+            planResize((end - t) - (end - start));
             setToolTip({});
             return;
         }
@@ -1345,14 +1699,16 @@ protected:
                 }
             const int raw = endTime - m_editor->frameStart(m_resizing);
             // De 10 en 10 ms, como la duración de los GIF (centésimas de segundo).
-            m_resizeDelay = std::max(Gif::kMinDelayMs, int(std::round(raw / 10.0)) * 10);
-            update();
+            const int delay = std::max(Gif::kMinDelayMs, int(std::round(raw / 10.0)) * 10);
+            planResize(delay - m_editor->frameDelay(m_resizing));
             setToolTip({});
             return;
         }
         if (m_pressIndex >= 0 && (e->buttons() & Qt::LeftButton)) {
-            if (!m_reordering && (pos - m_pressPos).manhattanLength() >= QApplication::startDragDistance())
+            if (!m_reordering && (pos - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
                 m_reordering = true;
+                m_deferredSelect = -1;
+            }
             if (m_reordering) {
                 // El clip va donde se suelte, en el tiempo (con espacio delante si se deja, como en
                 // Filmora) y en la pista de esa fila. Como con un imán, se pega al cabezal y a los
@@ -1411,7 +1767,7 @@ protected:
         update(QRect(headerX(), 0, kHeaderWidth, height()));
     }
 
-    void mouseReleaseEvent(QMouseEvent* e) override
+    void mouseReleaseEvent(QMouseEvent*) override
     {
         if (m_heightDrag) {
             m_heightDrag = false;
@@ -1461,17 +1817,34 @@ protected:
             m_scrubbing = false;
             return;
         }
+        if (m_marqueePending) {
+            const bool dragged = m_marquee;
+            const QList<int> hits = m_marqueeHits;
+            m_marqueePending = m_marquee = false;
+            m_marqueeHits.clear();
+            if (dragged)
+                m_editor->selectFrames(hits, m_marqueeAdd);
+            else
+                m_editor->seek(timeForX(m_marqueeFrom.x()));
+            update();
+            return;
+        }
         if (m_resizing >= 0) {
-            const int index = m_resizing, delay = m_resizeDelay, gap = m_resizeGap;
+            const QHash<int, std::pair<int, int>> plan = m_resizePlan;
             const bool left = m_resizeLeft;
             m_resizing = -1;
             m_resizeLeft = false;
-            if (left)
-                m_editor->trimFrameStart(index, gap, delay);
-            else
-                m_editor->setFrameDelay(index, delay);
+            m_resizePlan.clear();
+            m_editor->setFrameTimings(plan, left);
             update();
             return;
+        }
+        if (m_deferredSelect >= 0 && m_pressIndex >= 0 && !m_reordering) {
+            // (El cabezal se queda donde se hizo clic.)
+            const int time = m_editor->playTime();
+            m_editor->selectFrame(m_deferredSelect);
+            m_editor->seek(time);
+            m_deferredSelect = -1;
         }
         if (m_reordering) {
             const int from = m_pressIndex;
@@ -1625,12 +1998,23 @@ protected:
 private:
     GifEditor* m_editor;
     int m_pps = 600;
+    // Estirando: el clip que se agarró, por qué borde y dónde se pulsó, y cómo queda cada uno de los
+    // que se estiran (con varios elegidos, todos a la vez): su espacio de delante y su duración. Con
+    // eso, los inicios y finales de todos (para pintarlos mientras tanto).
     int m_resizing = -1;
-    int m_resizeDelay = 0;
-    // Estirando por la izquierda: el espacio vacío que queda delante, y dónde se pulsó.
     bool m_resizeLeft = false;
-    int m_resizeGap = 0;
     int m_resizePressX = 0;
+    QHash<int, std::pair<int, int>> m_resizePlan;
+    QList<int> m_planStart, m_planEnd;
+    // Elegir clips con un rectángulo, arrastrando desde un hueco (como en una imagen): dónde
+    // empezó, dónde va, si ya se arrastra, si se suman a los elegidos (Ctrl) y los que toca.
+    bool m_marqueePending = false;
+    bool m_marquee = false;
+    bool m_marqueeAdd = false;
+    QPoint m_marqueeFrom, m_marqueeTo;
+    QList<int> m_marqueeHits;
+    // Un clic en uno de varios elegidos: al soltar sin arrastrar, queda solo él.
+    int m_deferredSelect = -1;
     int m_pressIndex = -1;
     QPoint m_pressPos;
     QPoint m_hover{-1, -1};
@@ -2755,6 +3139,30 @@ QImage GifEditor::frameImage(int index) const
     return frameImageAt(index, m_time);
 }
 
+Motion::Transform GifEditor::transformAt(int index, int time) const
+{
+    const Motion::Clip clip = motion(index);
+    const int duration = frameEnd(index) - frameStart(index);
+    int t = std::clamp(time - frameStart(index), 0, std::max(0, duration - 1));
+    // Al reproducir, a pasos de la animación, como en el GIF exportado. Parado, en el cabezal justo:
+    // ahí se ponen los puntos clave al arrastrar, y así la imagen y su cuadro siguen al puntero.
+    if (m_playing && clip.animated())
+        t = t / std::max(10, clip.stepMs) * std::max(10, clip.stepMs);
+    Motion::Transform tr = clip.sample(t);
+    if (index == selectedFrame()) {
+        tr.x += m_dragOffset.x();
+        tr.y += m_dragOffset.y();
+    }
+    return tr;
+}
+
+Motion::Transform GifEditor::shownTransform(int index) const
+{
+    if (!m_doc || index < 0 || index >= m_doc->layerCount())
+        return {};
+    return transformAt(index, m_time);
+}
+
 QImage GifEditor::frameImageAt(int index, int time) const
 {
     if (!m_doc || index < 0 || index >= m_doc->layerCount())
@@ -2763,17 +3171,12 @@ QImage GifEditor::frameImageAt(int index, int time) const
     // Con su animación (en el tiempo del cabezal), como en el GIF exportado.
     const Motion::Clip clip = motion(index);
     if (!clip.isEmpty() || (index == selectedFrame() && !m_dragOffset.isNull())) {
-        const int duration = frameEnd(index) - frameStart(index);
-        int t = std::clamp(time - frameStart(index), 0, std::max(0, duration - 1));
-        if (clip.animated())
-            t = t / std::max(10, clip.stepMs) * std::max(10, clip.stepMs);
-        Motion::Transform tr = clip.sample(t);
-        if (index == selectedFrame()) {
-            tr.x += m_dragOffset.x();
-            tr.y += m_dragOffset.y();
-        }
-        const QString key = QStringLiteral("%1:%2:%3:%4:%5:%6:%7").arg(layer->image.cacheKey()).arg(layer->props.opacity)
-                                .arg(tr.x).arg(tr.y).arg(tr.scaleX).arg(tr.scaleY).arg(tr.rotation) + QString::number(tr.opacity);
+        const Motion::Transform tr = transformAt(index, time);
+        QString key = QStringLiteral("%1:%2:%3:%4:%5:%6:%7").arg(layer->image.cacheKey()).arg(layer->props.opacity)
+                          .arg(tr.x).arg(tr.y).arg(tr.scaleX).arg(tr.scaleY).arg(tr.rotation) + QString::number(tr.opacity)
+                      + QStringLiteral(":%1:%2:%3").arg(tr.rotX).arg(tr.rotY).arg(tr.smooth);
+        for (const QPointF& w : tr.warp)
+            key += QStringLiteral(":%1,%2").arg(w.x()).arg(w.y());
         if (key == m_motionKey)
             return m_motionImage;
         QImage base = layer->image;
@@ -3070,24 +3473,65 @@ int GifEditor::frameGap(int index) const
     return m_doc && index >= 0 && index < m_doc->layerCount() ? std::max(0, m_doc->layer(index)->props.gap) : 0;
 }
 
-void GifEditor::trimFrameStart(int index, int gapMs, int delayMs)
+void GifEditor::setFrameTimings(const QHash<int, std::pair<int, int>>& timings, bool shiftKeys)
 {
-    if (!m_doc || index < 0 || index >= m_doc->layerCount())
-        return;
-    gapMs = std::max(0, gapMs);
-    delayMs = std::max(Gif::kMinDelayMs, delayMs);
-    if (gapMs == frameGap(index) && delayMs == frameDelay(index))
+    if (!m_doc || timings.isEmpty())
         return;
     QList<LayerProps> props;
     for (const LayerPtr& l : m_doc->layers())
         props << l->props;
-    props[index].gap = gapMs;
-    props[index].name = Gif::nameWithDelay(props[index].name, delayMs);
-    // Los puntos clave siguen a la imagen: con el principio antes, corridos hacia delante; con él
-    // después, lo de antes se recorta.
-    if (const int shift = delayMs - frameDelay(index); props[index].motion && shift != 0)
-        props[index].motion = std::make_shared<const Motion::Clip>(shiftedMotion(*props[index].motion, shift));
-    applyFrames(m_doc->layers(), props, index, tr("Duración del fotograma"), QStringLiteral("chronometer"));
+    bool changed = false;
+    for (auto it = timings.cbegin(); it != timings.cend(); ++it) {
+        const int index = it.key();
+        if (index < 0 || index >= props.size())
+            continue;
+        const int gap = std::max(0, it->first), delay = std::max(Gif::kMinDelayMs, it->second);
+        if (gap == frameGap(index) && delay == frameDelay(index))
+            continue;
+        changed = true;
+        props[index].gap = gap;
+        props[index].name = Gif::nameWithDelay(props[index].name, delay);
+        // Por la izquierda, los puntos clave siguen a la imagen: con el principio antes, corridos
+        // hacia delante; con él después, lo de antes se recorta.
+        if (const int shift = delay - frameDelay(index); shiftKeys && props[index].motion && shift != 0)
+            props[index].motion = std::make_shared<const Motion::Clip>(shiftedMotion(*props[index].motion, shift));
+    }
+    if (!changed)
+        return;
+    // (Los mismos fotogramas siguen elegidos: así se pueden volver a estirar juntos.)
+    const QList<int> extra = m_extraSelection;
+    applyFrames(m_doc->layers(), props, m_doc->activeIndex(),
+                timings.size() > 1 ? tr("Duración de los fotogramas") : tr("Duración del fotograma"), QStringLiteral("chronometer"));
+    m_extraSelection = extra;
+    updateState();
+}
+
+void GifEditor::selectFrames(QList<int> frames, bool add)
+{
+    if (!m_doc)
+        return;
+    if (add)
+        for (int i : selectedFrames())
+            if (!frames.contains(i))
+                frames << i;
+    frames.removeIf([this](int i) { return i < 0 || i >= frameCount(); });
+    std::sort(frames.begin(), frames.end());
+    m_extraSelection.clear();
+    // Siempre hay uno elegido (el fotograma activo): sin ninguno en el rectángulo, solo él.
+    if (frames.isEmpty()) {
+        updateState();
+        return;
+    }
+    const int active = frames.contains(selectedFrame()) ? selectedFrame() : frames.first();
+    for (int i : std::as_const(frames))
+        if (i != active)
+            m_extraSelection << i;
+    if (active != m_doc->activeIndex()) {
+        m_selectedKey = -1;
+        m_activeTrack = trackOf(active);
+        m_doc->setActiveIndex(active);
+    }
+    updateState();
 }
 
 void GifEditor::setAllDelays(int delayMs)
@@ -3587,7 +4031,7 @@ void GifEditor::pasteFrames()
         }
     } else if (data->hasImage()) {
         // Una imagen de otro programa (o de Kaint): un fotograma con la duración del elegido.
-        const QImage image = qvariant_cast<QImage>(data->imageData());
+        const QImage image = ImageIO::imageFromMimeData(data).convertToFormat(kLayerFormat);
         if (!image.isNull()) {
             const int delay = selected.isEmpty() ? kDefaultDelay : frameDelay(selected.last());
             const QString name = Gif::nameWithDelay(tr("Fotograma %1").arg(at + 1), delay);

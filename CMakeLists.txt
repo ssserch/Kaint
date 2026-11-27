@@ -96,10 +96,6 @@ if(KAINT_P2P)
         find_package(OpenSSL QUIET)
         if(NOT OPENSSL_FOUND OR KAINT_P2P_MBEDTLS)
             message(STATUS "Kaint: libdatachannel con Mbed TLS 3.6.4 (descargado)")
-            FetchContent_Declare(kaint_mbedtls
-                URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.4/mbedtls-3.6.4.tar.bz2
-                URL_HASH SHA256=ec35b18a6c593cf98c3e30db8b98ff93e8940a8c4e690e66b41dfc011d678110
-                DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
             set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
             set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
             set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
@@ -107,10 +103,19 @@ if(KAINT_P2P)
             set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
             set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
             set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
-            FetchContent_GetProperties(kaint_mbedtls)
-            if(NOT kaint_mbedtls_POPULATED)
-                FetchContent_Populate(kaint_mbedtls)
-                add_subdirectory("${kaint_mbedtls_SOURCE_DIR}" "${kaint_mbedtls_BINARY_DIR}" EXCLUDE_FROM_ALL)
+            # (Con todo en la llamada, como kaint_fetch_archive: FetchContent_Populate con solo el nombre
+            # está obsoleto desde CMake 3.30 y avisaba al configurar.)
+            if(NOT TARGET mbedtls)
+                FetchContent_Populate(kaint_mbedtls
+                    URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.4/mbedtls-3.6.4.tar.bz2
+                    URL_HASH SHA256=ec35b18a6c593cf98c3e30db8b98ff93e8940a8c4e690e66b41dfc011d678110
+                    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+                    SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/kaint_mbedtls-src"
+                    BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/kaint_mbedtls-build"
+                    SUBBUILD_DIR "${CMAKE_BINARY_DIR}/_deps/kaint_mbedtls-subbuild"
+                    QUIET)
+                add_subdirectory("${CMAKE_BINARY_DIR}/_deps/kaint_mbedtls-src" "${CMAKE_BINARY_DIR}/_deps/kaint_mbedtls-build"
+                                 EXCLUDE_FROM_ALL)
                 # libdatachannel usa DTLS-SRTP de Mbed TLS (no viene activado por defecto).
                 foreach(_kaint_mbed mbedtls mbedx509 mbedcrypto)
                     target_compile_definitions(${_kaint_mbed} PUBLIC MBEDTLS_SSL_DTLS_SRTP)
@@ -776,8 +781,9 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${KAINT_REPOSITORY}")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "qt6-svg-plugins")
+# (ffmpeg: el audio del editor de GIF, salvo WAV, y exportar vídeo.)
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
-    "breeze-icon-theme, qt6-wayland, qt6-image-formats-plugins, kimageformat6-plugins, qt6-translations-l10n")
+    "breeze-icon-theme, qt6-wayland, qt6-image-formats-plugins, kimageformat6-plugins, qt6-translations-l10n, ffmpeg")
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "mono-runtime, libmono-system-windows-forms4.0-cil, libgdiplus")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 include(CPack)

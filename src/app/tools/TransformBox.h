@@ -10,7 +10,8 @@ class QPainter;
 // en coordenadas locales más una transformación local -> lienzo.
 class TransformBox {
 public:
-    enum class Mode { None, Translate, Scale, Rotate, Pivot, ResetPivot };
+    // Tilt: en 3D, inclinar la lámina.
+    enum class Mode { None, Translate, Scale, Rotate, Pivot, ResetPivot, Tilt };
     static constexpr double kRotateBand = 30;
     // Franja junto al contorno (por dentro y por fuera) en la que se estira con la mano.
     static constexpr double kEdgeBand = 6;
@@ -63,6 +64,12 @@ public:
     const QList<SnapLine>& snapLines() const { return m_snapLines; }
     // Deformar (funciones de PhotoCraft): cada esquina se mueve sola y pone la imagen en perspectiva.
     void setWarp(bool on) { m_warp = on; }
+    // 3D: lo que se mueve es una lámina fina; arrastrándola (dentro o por sus tiradores) se inclina
+    // hacia el puntero, con perspectiva. El icono de mover la mueve y por fuera se gira, como siempre.
+    void set3D(bool on) { m_3d = on; }
+    // La inclinación de 'ax' grados (arriba y abajo) y 'ay' (a los lados) de 'rect', alrededor de su
+    // centro y con la cámara a 1,5 veces su tamaño (en las coordenadas de 'rect').
+    static QTransform tiltTransform(const QRectF& rect, double ax, double ay);
     bool setResetHot(bool hot)
     {
         if (m_resetHot == hot)
@@ -90,5 +97,6 @@ private:
     double m_snapTol = 0;
     QList<SnapLine> m_snapLines;
     bool m_warp = false;
+    bool m_3d = false;
     QPointF resetButtonView(const QTransform& imageToView) const;
 };

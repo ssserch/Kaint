@@ -19,6 +19,7 @@
 #include <QVBoxLayout>
 
 #include <cmath>
+#include <limits>
 
 namespace GifEdit {
 
@@ -48,6 +49,7 @@ void fillInterpMenu(QMenu* menu, Motion::Interp current, bool easeIn, bool easeO
         {Motion::Interp::Curve, GifEditor::tr("Curva")},
         {Motion::Interp::Continuous, GifEditor::tr("Curva continua")},
         {Motion::Interp::Freeze, GifEditor::tr("Congelar")},
+        {Motion::Interp::Bezier, GifEditor::tr("Bézier (con asas)")},
     };
     for (const auto& [kind, label] : kinds) {
         QAction* a = menu->addAction(label, menu, [setInterp, kind] { setInterp(kind); });
@@ -70,20 +72,92 @@ void fillInterpMenu(QMenu* menu, Motion::Interp current, bool easeIn, bool easeO
 // Gráfica de un valor a lo largo del fotograma
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// Los colores de las curvas: la de X (o la de un valor solo) y la de Y, en «Posición XY».
+const QColor kCurveColors[] = {QColor(64, 200, 170), QColor(240, 150, 60)};
+
+// El tramo de 'track' en el que cae 't' (el índice de su primer punto), o -1.
+int segmentAt(const Motion::Track& track, double t)
+{
+    for (int i = 0; i + 1 < track.keys.size(); ++i)
+        if (t >= track.keys[i].t && t <= track.keys[i + 1].t)
+            return i;
+    return -1;
+}
+
+// La curva Bézier que da (o que más se parece a) la forma de un tramo: así, al estirarlo, empieza
+// donde estaba.
+std::array<double, 4> bezierOf(const Motion::Track& track, int i)
+{
+    const Motion::Key& a = track.keys[i];
+    const Motion::Key& b = track.keys[i + 1];
+    switch (a.interp) {
+    case Motion::Interp::Bezier: return a.bezier;
+    case Motion::Interp::Curve: return {1.0 / 3, 0, 2.0 / 3, 1};
+    case Motion::Interp::Continuous: {
+        // La de Hermite con las pendientes de Catmull-Rom, exacta como Bézier.
+        const double dv = b.value - a.value;
+        if (std::abs(dv) < 1e-9)
+            break;
+        auto slope = [&](int k) {
+            if (k <= 0 || k + 1 >= track.keys.size())
+                return 0.0;
+            const double dt = track.keys[k + 1].t - track.keys[k - 1].t;
+            return dt <= 0 ? 0.0 : (track.keys[k + 1].value - track.keys[k - 1].value) / dt;
+        };
+        const double span = std::max(1, b.t - a.t);
+        return {1.0 / 3, slope(i) * span / 3 / dv, 2.0 / 3, 1 - slope(i + 1) * span / 3 / dv};
+    }
+    default: break;
+    }
+    return {1.0 / 3, 1.0 / 3, 2.0 / 3, 2.0 / 3};
+}
+
+// El tramo i de 'track' pasa a ser Bézier con la curva 'b' (sin la entrada y salida suaves, que ya
+// dice la curva).
+void setBezier(Motion::Track& track, int i, const std::array<double, 4>& b)
+{
+    if (i < 0 || i + 1 >= track.keys.size())
+        return;
+    track.keys[i].interp = Motion::Interp::Bezier;
+    track.keys[i].bezier = b;
+    track.keys[i].easeOut = false;
+    track.keys[i + 1].easeIn = false;
+}
+
+// En «Posición XY», lo que se cambia en un tramo de una se cambia igual en el de la otra, si tiene
+// sus puntos en los mismos momentos.
+int sameSegment(const Motion::Track& track, int ta, int tb)
+{
+    const int i = track.keyAt(ta);
+    return i >= 0 && i + 1 < track.keys.size() && track.keys[i + 1].t == tb ? i : -1;
+}
+
+} // namespace
+
 KeyGraph::KeyGraph(GifEditor* editor, QWidget* parent)
     : QWidget(parent)
     , m_editor(editor)
 {
     setMinimumHeight(110);
     setMouseTracking(true);
-    setToolTip(GifEditor::tr("Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; "
-                             "arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva."));
+    setToolTip(GifEditor::tr("Cómo cambia el valor a lo largo del fotograma. Doble clic: un punto clave ahí. Arrastra un rombo "
+                             "para cambiar su valor o su momento, y la línea entre dos para curvarla (con Alt, para "
+                             "moverla entera); las asas de una curva Bézier la ajustan. Clic derecho: la forma de la curva."));
 }
 
-void KeyGraph::setProp(Motion::Prop prop)
+void KeyGraph::setProp(int prop)
 {
     m_prop = prop;
     update();
+}
+
+QList<Motion::Prop> KeyGraph::props() const
+{
+    if (m_prop < 0)
+        return {Motion::PosX, Motion::PosY};
+    return {Motion::Prop(m_prop)};
 }
 
 QRectF KeyGraph::plotRect() const
@@ -91,34 +165,34 @@ QRectF KeyGraph::plotRect() const
     return QRectF(rect()).adjusted(34, 8, -10, -16);
 }
 
-Motion::Clip KeyGraph::dragged() const
+Motion::Clip KeyGraph::shownClip() const
 {
-    Motion::Clip clip = m_dragBase;
-    Motion::Track& track = clip.tracks[m_prop];
-    if (m_drag >= 0 && m_drag < track.keys.size()) {
-        Motion::Key k = track.keys.takeAt(m_drag);
-        k.t = m_dragT;
-        k.value = m_dragV;
-        if (const int existing = track.keyAt(k.t); existing >= 0)
-            track.keys.removeAt(existing);
-        auto it = std::lower_bound(track.keys.begin(), track.keys.end(), k.t,
-                                   [](const Motion::Key& a, int time) { return a.t < time; });
-        track.keys.insert(it, k);
-    }
-    return clip;
+    return m_dragging ? m_dragResult : m_editor->motion(m_editor->selectedFrame());
 }
 
 void KeyGraph::range(double* lo, double* hi) const
 {
     // (Mientras se arrastra, la de antes: la escala no se mueve sola.)
-    const Motion::Clip clip = m_drag >= 0 ? m_dragBase : m_editor->motion(m_editor->selectedFrame());
-    const Motion::Track& track = clip.tracks[m_prop];
-    double a = track.base, b = track.base;
-    for (const Motion::Key& k : track.keys) {
-        a = std::min(a, k.value);
-        b = std::max(b, k.value);
+    const Motion::Clip clip = m_dragging ? m_dragBase : m_editor->motion(m_editor->selectedFrame());
+    double a = std::numeric_limits<double>::max(), b = std::numeric_limits<double>::lowest();
+    for (Motion::Prop prop : props()) {
+        const Motion::Track& track = clip.tracks[prop];
+        a = std::min(a, track.base);
+        b = std::max(b, track.base);
+        for (int i = 0; i < track.keys.size(); ++i) {
+            a = std::min(a, track.keys[i].value);
+            b = std::max(b, track.keys[i].value);
+            // (Y las asas de las curvas Bézier, que se ven.)
+            if (track.keys[i].interp == Motion::Interp::Bezier && i + 1 < track.keys.size()) {
+                const double dv = track.keys[i + 1].value - track.keys[i].value;
+                for (double y : {track.keys[i].bezier[1], track.keys[i].bezier[3]}) {
+                    a = std::min(a, track.keys[i].value + y * dv);
+                    b = std::max(b, track.keys[i].value + y * dv);
+                }
+            }
+        }
     }
-    if (m_drag >= 0) {
+    if (m_dragging) {
         a = std::min(a, m_dragLo);
         b = std::max(b, m_dragHi);
     }
@@ -127,22 +201,66 @@ void KeyGraph::range(double* lo, double* hi) const
     *hi = b + pad;
 }
 
-QPointF KeyGraph::pointFor(int t, double v, double lo, double hi) const
+QPointF KeyGraph::pointFor(double t, double v, double lo, double hi) const
 {
     const QRectF r = plotRect();
     const int duration = std::max(1, m_editor->frameDelay(m_editor->selectedFrame()));
-    return {r.left() + r.width() * std::clamp(double(t) / duration, 0.0, 1.0), r.bottom() - r.height() * (v - lo) / (hi - lo)};
+    return {r.left() + r.width() * std::clamp(t / duration, 0.0, 1.0), r.bottom() - r.height() * (v - lo) / (hi - lo)};
 }
 
-int KeyGraph::keyAt(QPointF pos) const
+int KeyGraph::timeAt(double x) const
 {
-    const Motion::Track track = m_editor->motion(m_editor->selectedFrame()).tracks[m_prop];
+    const QRectF r = plotRect();
+    const int duration = std::max(1, m_editor->frameDelay(m_editor->selectedFrame()));
+    return std::clamp(int(std::round(duration * (x - r.left()) / std::max(1.0, r.width()))), 0, duration);
+}
+
+double KeyGraph::valueAt(double y, double lo, double hi) const
+{
+    const QRectF r = plotRect();
+    return lo + (hi - lo) * (r.bottom() - y) / std::max(1.0, r.height());
+}
+
+QPointF KeyGraph::handlePoint(const Motion::Track& track, int i, int handle, double lo, double hi) const
+{
+    const Motion::Key& a = track.keys[i];
+    const Motion::Key& b = track.keys[i + 1];
+    const double x = handle == 0 ? a.bezier[0] : a.bezier[2], y = handle == 0 ? a.bezier[1] : a.bezier[3];
+    return pointFor(a.t + x * (b.t - a.t), a.value + y * (b.value - a.value), lo, hi);
+}
+
+KeyGraph::Hit KeyGraph::hitAt(QPointF pos) const
+{
+    Hit hit;
+    const int frame = m_editor->selectedFrame();
+    if (frame < 0)
+        return hit;
+    const Motion::Clip clip = m_editor->motion(frame);
     double lo, hi;
     range(&lo, &hi);
-    for (int i = 0; i < track.keys.size(); ++i)
-        if (QLineF(pointFor(track.keys[i].t, track.keys[i].value, lo, hi), pos).length() <= 7)
-            return i;
-    return -1;
+    // Primero las asas, después los puntos y, al final, las líneas entre ellos.
+    for (Motion::Prop prop : props()) {
+        const Motion::Track& track = clip.tracks[prop];
+        for (int i = 0; i + 1 < track.keys.size(); ++i)
+            if (track.keys[i].interp == Motion::Interp::Bezier)
+                for (int h : {0, 1})
+                    if (QLineF(handlePoint(track, i, h, lo, hi), pos).length() <= 6)
+                        return {Hit::Handle, prop, i, h};
+    }
+    for (Motion::Prop prop : props()) {
+        const Motion::Track& track = clip.tracks[prop];
+        for (int i = 0; i < track.keys.size(); ++i)
+            if (QLineF(pointFor(track.keys[i].t, track.keys[i].value, lo, hi), pos).length() <= 7)
+                return {Hit::Key, prop, i, 0};
+    }
+    const int t = timeAt(pos.x());
+    for (Motion::Prop prop : props()) {
+        const Motion::Track& track = clip.tracks[prop];
+        const int i = segmentAt(track, t);
+        if (i >= 0 && std::abs(pointFor(t, track.value(t), lo, hi).y() - pos.y()) <= 5)
+            return {Hit::Segment, prop, i, 0};
+    }
+    return hit;
 }
 
 void KeyGraph::paintEvent(QPaintEvent*)
@@ -154,12 +272,10 @@ void KeyGraph::paintEvent(QPaintEvent*)
     const int frame = m_editor->selectedFrame();
     if (frame < 0)
         return;
-    const Motion::Clip clip = m_drag >= 0 ? dragged() : m_editor->motion(frame);
-    const Motion::Track& track = clip.tracks[m_prop];
+    const Motion::Clip clip = shownClip();
     double lo, hi;
     range(&lo, &hi);
     // Cuadrícula y escala
-    p.setPen(QPen(pal.color(QPalette::Mid), 1, Qt::DotLine));
     QFont small = font();
     small.setPointSizeF(std::max(6.5, small.pointSizeF() * 0.8));
     p.setFont(small);
@@ -172,35 +288,114 @@ void KeyGraph::paintEvent(QPaintEvent*)
         p.setPen(pal.color(QPalette::PlaceholderText));
         p.drawText(QRectF(0, y - 7, r.left() - 4, 14), Qt::AlignRight | Qt::AlignVCenter, QString::number(v, 'f', decimals));
     }
-    // La curva
+    const QList<Motion::Prop> shown = props();
     const int duration = std::max(1, m_editor->frameDelay(frame));
-    QPainterPath curve;
-    for (int x = 0; x <= int(r.width()); ++x) {
-        const int t = int(std::round(duration * x / r.width()));
-        const QPointF pt = pointFor(t, track.value(t), lo, hi);
-        if (x == 0)
-            curve.moveTo(pt);
-        else
-            curve.lineTo(pt);
-    }
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(QColor(64, 200, 170), 2));
-    p.drawPath(curve);
+    bool anyKeys = false;
+    for (int n = 0; n < shown.size(); ++n) {
+        const Motion::Track& track = clip.tracks[shown[n]];
+        anyKeys = anyKeys || !track.keys.isEmpty();
+        // La curva
+        QPainterPath curve;
+        for (int x = 0; x <= int(r.width()); ++x) {
+            const int t = int(std::round(duration * x / r.width()));
+            const QPointF pt = pointFor(t, track.value(t), lo, hi);
+            if (x == 0)
+                curve.moveTo(pt);
+            else
+                curve.lineTo(pt);
+        }
+        p.setPen(QPen(kCurveColors[n], 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(curve);
+        // Las asas de las curvas Bézier: una línea desde su punto y un círculo.
+        for (int i = 0; i + 1 < track.keys.size(); ++i) {
+            if (track.keys[i].interp != Motion::Interp::Bezier)
+                continue;
+            for (int h : {0, 1}) {
+                const QPointF from = h == 0 ? pointFor(track.keys[i].t, track.keys[i].value, lo, hi)
+                                            : pointFor(track.keys[i + 1].t, track.keys[i + 1].value, lo, hi);
+                const QPointF at = handlePoint(track, i, h, lo, hi);
+                QColor line = kCurveColors[n];
+                line.setAlpha(150);
+                p.setPen(QPen(line, 1));
+                p.drawLine(from, at);
+                const bool active = m_dragging && m_drag.kind == Hit::Handle && m_drag.prop == shown[n] && m_drag.key == i
+                                    && m_drag.handle == h;
+                p.setPen(QPen(kCurveColors[n].darker(140), 1.2));
+                p.setBrush(active ? pal.color(QPalette::Highlight) : QColor(250, 250, 250));
+                p.drawEllipse(at, 4, 4);
+            }
+        }
+    }
     // El cabezal
-    const int now = m_editor->localTime();
-    const double px = pointFor(now, lo, lo, hi).x();
+    const double px = pointFor(m_editor->localTime(), lo, lo, hi).x();
     p.setPen(QPen(QColor(230, 60, 60), 1.5));
     p.drawLine(QPointF(px, r.top()), QPointF(px, r.bottom()));
     // Los puntos
-    for (int i = 0; i < track.keys.size(); ++i) {
-        const Motion::Key& k = track.keys[i];
-        paintDiamond(p, pointFor(k.t, k.value, lo, hi), 5.5, k.t == m_editor->selectedKeyTime(), true, pal);
+    for (Motion::Prop prop : shown)
+        for (const Motion::Key& k : clip.tracks[prop].keys)
+            paintDiamond(p, pointFor(k.t, k.value, lo, hi), 5.5, k.t == m_editor->selectedKeyTime(), true, pal);
+    // En «Posición XY», qué curva es cuál.
+    if (shown.size() > 1) {
+        p.setFont(small);
+        double x = r.left() + 6;
+        for (int n = 0; n < shown.size(); ++n) {
+            p.setPen(kCurveColors[n]);
+            const QString label = n == 0 ? QStringLiteral("X") : QStringLiteral("Y");
+            p.drawText(QPointF(x, r.top() + 10), label);
+            x += p.fontMetrics().horizontalAdvance(label) + 8;
+        }
     }
-    if (track.keys.isEmpty()) {
+    if (!anyKeys) {
         p.setPen(pal.color(QPalette::PlaceholderText));
         p.drawText(r, Qt::AlignCenter | Qt::TextWordWrap,
                    GifEditor::tr("Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal o haz doble clic aquí."));
     }
+}
+
+void KeyGraph::showMenu(int frame, int time, const QList<Motion::Prop>& on, bool removable, QPoint globalPos)
+{
+    // La forma del tramo que empieza en 'time' (en «Posición XY», en las dos).
+    const Motion::Clip clip = m_editor->motion(frame);
+    const Motion::Track& first = clip.tracks[on.first()];
+    const int i = first.keyAt(time);
+    if (i < 0)
+        return;
+    const Motion::Key k = first.keys[i];
+    QMenu menu(this);
+    auto change = [this, frame, time, on](const std::function<void(Motion::Track&, int)>& fn, const QString& text) {
+        Motion::Clip c = m_editor->motion(frame);
+        for (Motion::Prop prop : on)
+            if (const int at = c.tracks[prop].keyAt(time); at >= 0)
+                fn(c.tracks[prop], at);
+        m_editor->setMotion(frame, c, text);
+    };
+    fillInterpMenu(
+        &menu, k.interp, k.easeIn, k.easeOut,
+        [change](Motion::Interp interp) {
+            change([interp](Motion::Track& track, int at) {
+                // A Bézier, con la forma que tenía (luego se ajusta con las asas).
+                if (interp == Motion::Interp::Bezier && at + 1 < track.keys.size() && track.keys[at].interp != interp)
+                    setBezier(track, at, bezierOf(track, at));
+                track.keys[at].interp = interp;
+            }, GifEditor::tr("Forma de la curva"));
+        },
+        [change](bool in, bool on) {
+            change([in, on](Motion::Track& track, int at) { (in ? track.keys[at].easeIn : track.keys[at].easeOut) = on; },
+                   GifEditor::tr("Forma de la curva"));
+        });
+    if (removable) {
+        menu.addSeparator();
+        menu.addAction(Icons::theme({"edit-delete"}), GifEditor::tr("Quitar el punto"), this, [change] {
+            change([](Motion::Track& track, int at) {
+                if (track.keys.size() == 1)
+                    track.base = track.keys[at].value;
+                track.keys.removeAt(at);
+            }, GifEditor::tr("Quitar punto clave"));
+        });
+    }
+    menu.exec(globalPos);
 }
 
 void KeyGraph::mousePressEvent(QMouseEvent* e)
@@ -208,109 +403,200 @@ void KeyGraph::mousePressEvent(QMouseEvent* e)
     const int frame = m_editor->selectedFrame();
     if (frame < 0)
         return;
-    const int i = keyAt(e->position());
+    const Hit hit = hitAt(e->position());
     const Motion::Clip clip = m_editor->motion(frame);
-    if (i < 0) {
+    if (hit.kind == Hit::None) {
         // Clic en la gráfica: el cabezal va a ese momento.
-        const QRectF r = plotRect();
-        if (e->button() == Qt::LeftButton && r.width() > 0)
-            m_editor->seekLocal(int(std::round(m_editor->frameDelay(frame) * std::clamp((e->position().x() - r.left()) / r.width(), 0.0, 1.0))));
+        if (e->button() == Qt::LeftButton)
+            m_editor->seekLocal(timeAt(e->position().x()));
         return;
     }
-    const Motion::Key k = clip.tracks[m_prop].keys[i];
-    m_editor->selectKeyTime(k.t);
+    const Motion::Track& track = clip.tracks[hit.prop];
+    // En «Posición XY», lo de un punto o un tramo vale para las dos.
+    const QList<Motion::Prop> linked = props();
     if (e->button() == Qt::RightButton) {
-        QMenu menu(this);
-        const Motion::Prop prop = m_prop;
-        fillInterpMenu(
-            &menu, k.interp, k.easeIn, k.easeOut,
-            [this, frame, prop, i](Motion::Interp interp) {
-                Motion::Clip c = m_editor->motion(frame);
-                if (i < c.tracks[prop].keys.size())
-                    c.tracks[prop].keys[i].interp = interp;
-                m_editor->setMotion(frame, c, GifEditor::tr("Forma de la curva"));
-            },
-            [this, frame, prop, i](bool in, bool on) {
-                Motion::Clip c = m_editor->motion(frame);
-                if (i < c.tracks[prop].keys.size())
-                    (in ? c.tracks[prop].keys[i].easeIn : c.tracks[prop].keys[i].easeOut) = on;
-                m_editor->setMotion(frame, c, GifEditor::tr("Forma de la curva"));
-            });
-        menu.addSeparator();
-        menu.addAction(Icons::theme({"edit-delete"}), GifEditor::tr("Quitar el punto"), this, [this, frame, prop, i] {
-            Motion::Clip c = m_editor->motion(frame);
-            if (i < c.tracks[prop].keys.size()) {
-                if (c.tracks[prop].keys.size() == 1)
-                    c.tracks[prop].base = c.tracks[prop].keys[i].value;
-                c.tracks[prop].keys.removeAt(i);
-            }
-            m_editor->setMotion(frame, c, GifEditor::tr("Quitar punto clave"));
-        });
-        menu.exec(e->globalPosition().toPoint());
+        const int time = track.keys[hit.key].t;
+        m_editor->selectKeyTime(time);
+        // (Sobre la línea entre dos, la forma del tramo: la del punto donde empieza.)
+        showMenu(frame, time, linked, hit.kind == Hit::Key, e->globalPosition().toPoint());
         return;
     }
     if (e->button() != Qt::LeftButton)
         return;
+    if (hit.kind == Hit::Key)
+        m_editor->selectKeyTime(track.keys[hit.key].t);
+    m_drag = hit;
+    m_dragging = true;
     m_dragBase = clip;
+    m_dragResult = clip;
+    m_pressPos = e->position();
     range(&m_dragLo, &m_dragHi);
-    m_drag = i;
-    m_dragT = k.t;
-    m_dragV = k.value;
+    // Un tramo plano no se puede curvar (no avanza): se mueve entero. Con Alt, siempre.
+    m_moveSegment = hit.kind == Hit::Segment
+                    && ((e->modifiers() & Qt::AltModifier)
+                        || std::abs(track.keys[hit.key + 1].value - track.keys[hit.key].value) < 1e-9);
+    if (hit.kind == Hit::Segment)
+        m_bendStart = bezierOf(track, hit.key);
 }
 
 void KeyGraph::mouseMoveEvent(QMouseEvent* e)
 {
-    if (m_drag < 0) {
-        setCursor(keyAt(e->position()) >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    if (!m_dragging) {
+        const Hit hit = hitAt(e->position());
+        setCursor(hit.kind == Hit::Key || hit.kind == Hit::Handle ? Qt::PointingHandCursor
+                  : hit.kind == Hit::Segment                      ? ((e->modifiers() & Qt::AltModifier) ? Qt::SizeAllCursor : Qt::SizeVerCursor)
+                                                                  : Qt::ArrowCursor);
         return;
     }
-    const QRectF r = plotRect();
-    const int duration = std::max(1, m_editor->frameDelay(m_editor->selectedFrame()));
-    // De 10 en 10 ms y con la escala fija mientras se arrastra (si no, la gráfica se movía sola).
-    m_dragT = std::clamp(int(std::round(duration * (e->position().x() - r.left()) / r.width() / 10.0)) * 10, 0, duration);
-    m_dragV = m_dragLo + (m_dragHi - m_dragLo) * (r.bottom() - e->position().y()) / r.height();
-    if (m_prop == Motion::Opacity)
-        m_dragV = std::clamp(m_dragV, 0.0, 100.0);
-    m_dragV = std::round(m_dragV * 10) / 10;
-    // La línea de tiempo, la vista previa y los valores siguen al punto mientras se arrastra.
-    m_editor->setMotionPreview(m_editor->selectedFrame(), dragged());
+    const int frame = m_editor->selectedFrame();
+    const int duration = std::max(1, m_editor->frameDelay(frame));
+    // (Con la escala de cuando se pulsó: la gráfica no se mueve sola mientras se arrastra.)
+    double lo, hi;
+    range(&lo, &hi);
+    Motion::Clip c = m_dragBase;
+    Motion::Track& track = c.tracks[m_drag.prop];
+    const QList<Motion::Prop> shown = props();
+    const QPointF pos = e->position();
+    if (m_drag.kind == Hit::Key) {
+        // El punto: su momento (de 10 en 10 ms) y su valor; en «Posición XY», el momento también el
+        // de la otra.
+        const int from = track.keys[m_drag.key].t;
+        const int t = std::clamp(int(std::round(timeAt(pos.x()) / 10.0)) * 10, 0, duration);
+        double v = valueAt(pos.y(), lo, hi);
+        if (m_drag.prop == Motion::Opacity)
+            v = std::clamp(v, 0.0, 100.0);
+        v = std::round(v * 10) / 10;
+        for (Motion::Prop prop : shown) {
+            Motion::Track& tr = c.tracks[prop];
+            const int i = tr.keyAt(from);
+            if (i < 0)
+                continue;
+            Motion::Key k = tr.keys.takeAt(i);
+            k.t = t;
+            if (prop == m_drag.prop)
+                k.value = v;
+            if (const int existing = tr.keyAt(t); existing >= 0)
+                tr.keys.removeAt(existing);
+            auto it = std::lower_bound(tr.keys.begin(), tr.keys.end(), t, [](const Motion::Key& a, int time) { return a.t < time; });
+            tr.keys.insert(it, k);
+        }
+        m_dragT = t;
+    } else if (m_drag.kind == Hit::Handle) {
+        // Un asa de la curva: dónde está en el tiempo del tramo (de 0 a 1) y cuánto avanza ahí.
+        const Motion::Key& a = track.keys[m_drag.key];
+        const Motion::Key& b = track.keys[m_drag.key + 1];
+        std::array<double, 4> bz = a.bezier;
+        const double x = std::clamp((timeAt(pos.x()) - a.t) / double(std::max(1, b.t - a.t)), 0.0, 1.0);
+        const double dv = b.value - a.value;
+        const int h = m_drag.handle * 2;
+        bz[size_t(h)] = x;
+        if (std::abs(dv) > 1e-9)
+            bz[size_t(h + 1)] = std::clamp((valueAt(pos.y(), lo, hi) - a.value) / dv, -3.0, 4.0);
+        const int ta = a.t, tb = b.t;
+        for (Motion::Prop prop : shown)
+            setBezier(c.tracks[prop], sameSegment(c.tracks[prop], ta, tb), bz);
+    } else if (m_drag.kind == Hit::Segment && m_moveSegment) {
+        // Mover el tramo entero: sus dos puntos, arriba o abajo y en el tiempo (entre los de al lado).
+        const int i = m_drag.key;
+        const int prevT = i > 0 ? track.keys[i - 1].t + 10 : 0;
+        const int nextT = i + 2 < track.keys.size() ? track.keys[i + 2].t - 10 : duration;
+        const int ta = track.keys[i].t, tb = track.keys[i + 1].t;
+        const int dt = std::clamp(int(std::round((timeAt(pos.x()) - timeAt(m_pressPos.x())) / 10.0)) * 10, prevT - ta, nextT - tb);
+        double dv = valueAt(pos.y(), lo, hi) - valueAt(m_pressPos.y(), lo, hi);
+        dv = std::round(dv * 10) / 10;
+        for (int j : {i, i + 1}) {
+            track.keys[j].t += dt;
+            track.keys[j].value += dv;
+            if (m_drag.prop == Motion::Opacity)
+                track.keys[j].value = std::clamp(track.keys[j].value, 0.0, 100.0);
+        }
+        // (En «Posición XY», los puntos de la otra en esos momentos se mueven en el tiempo con ellos.)
+        for (Motion::Prop prop : shown) {
+            if (prop == m_drag.prop)
+                continue;
+            if (const int j = sameSegment(c.tracks[prop], ta, tb); j >= 0) {
+                c.tracks[prop].keys[j].t += dt;
+                c.tracks[prop].keys[j + 1].t += dt;
+            }
+        }
+    } else if (m_drag.kind == Hit::Segment) {
+        // Curvar el tramo: arriba o abajo cambia cuánto avanza donde se agarró (las dos asas, más la
+        // que está más cerca); a los lados, cuándo (las dos asas a la vez).
+        const Motion::Key& a = track.keys[m_drag.key];
+        const Motion::Key& b = track.keys[m_drag.key + 1];
+        const double span = std::max(1, b.t - a.t), dv = b.value - a.value;
+        const double s = std::clamp((timeAt(m_pressPos.x()) - a.t) / span, 0.15, 0.85);
+        const double dp = (valueAt(pos.y(), lo, hi) - valueAt(m_pressPos.y(), lo, hi)) / dv;
+        const double k = 1.0 / (3 * (1 - s) * s * ((1 - s) * (1 - s) + s * s));
+        const double du = (timeAt(pos.x()) - timeAt(m_pressPos.x())) / span;
+        std::array<double, 4> bz = m_bendStart;
+        bz[0] = std::clamp(bz[0] + du, 0.0, 1.0);
+        bz[2] = std::clamp(bz[2] + du, 0.0, 1.0);
+        bz[1] = std::clamp(bz[1] + dp * k * (1 - s), -3.0, 4.0);
+        bz[3] = std::clamp(bz[3] + dp * k * s, -3.0, 4.0);
+        const int ta = a.t, tb = b.t;
+        for (Motion::Prop prop : shown)
+            setBezier(c.tracks[prop], sameSegment(c.tracks[prop], ta, tb), bz);
+    }
+    m_dragResult = c;
+    // La línea de tiempo, la vista previa y los valores siguen a lo que se arrastra.
+    m_editor->setMotionPreview(frame, c);
     update();
 }
 
 void KeyGraph::mouseReleaseEvent(QMouseEvent*)
 {
-    if (m_drag < 0)
+    if (!m_dragging)
         return;
     const int frame = m_editor->selectedFrame();
-    const Motion::Clip c = dragged();
-    const int t = m_dragT;
-    m_drag = -1;
+    const Motion::Clip c = m_dragResult;
+    const Hit drag = m_drag;
+    const bool changed = !(c == m_dragBase);
+    m_dragging = false;
     m_editor->clearMotionPreview();
-    m_editor->setMotion(frame, c, GifEditor::tr("Mover punto clave"));
+    if (!changed) {
+        update();
+        return;
+    }
+    m_editor->setMotion(frame, c, drag.kind == Hit::Key       ? GifEditor::tr("Mover punto clave")
+                                  : drag.kind == Hit::Segment && m_moveSegment ? GifEditor::tr("Mover el tramo")
+                                                                             : GifEditor::tr("Forma de la curva"));
     // El punto (y el cabezal) donde quedó.
-    m_editor->selectKeyTime(t);
+    if (drag.kind == Hit::Key)
+        m_editor->selectKeyTime(m_dragT);
 }
 
 void KeyGraph::mouseDoubleClickEvent(QMouseEvent* e)
 {
     const int frame = m_editor->selectedFrame();
     const QRectF r = plotRect();
-    if (frame < 0 || e->button() != Qt::LeftButton || r.width() <= 0 || r.height() <= 0 || keyAt(e->position()) >= 0
+    if (frame < 0 || e->button() != Qt::LeftButton || r.width() <= 0 || r.height() <= 0 || hitAt(e->position()).kind == Hit::Key
         || !r.adjusted(-6, -6, 6, 6).contains(e->position()))
         return;
     // Como al arrastrar un rombo: de 10 en 10 ms, con la escala que se ve.
-    const int duration = std::max(1, m_editor->frameDelay(frame));
-    const int t = std::clamp(int(std::round(duration * (e->position().x() - r.left()) / r.width() / 10.0)) * 10, 0, duration);
+    const int t = std::clamp(int(std::round(timeAt(e->position().x()) / 10.0)) * 10, 0, std::max(1, m_editor->frameDelay(frame)));
     double lo, hi;
     range(&lo, &hi);
-    double v = lo + (hi - lo) * (r.bottom() - e->position().y()) / r.height();
-    if (m_prop == Motion::Opacity)
-        v = std::clamp(v, 0.0, 100.0);
-    v = std::round(v * 10) / 10;
+    double v = valueAt(e->position().y(), lo, hi);
     Motion::Clip c = m_editor->motion(frame);
-    c.tracks[m_prop].setKey(t, v);
-    if (c.lockScale && (m_prop == Motion::ScaleX || m_prop == Motion::ScaleY))
-        c.tracks[m_prop == Motion::ScaleX ? Motion::ScaleY : Motion::ScaleX].setKey(t, v);
+    // En «Posición XY», el valor del ratón para la curva más cercana y la otra con el que ya tiene ahí.
+    const QList<Motion::Prop> shown = props();
+    Motion::Prop nearest = shown.first();
+    double best = std::numeric_limits<double>::max();
+    for (Motion::Prop prop : shown)
+        if (const double d = std::abs(pointFor(t, c.tracks[prop].value(t), lo, hi).y() - e->position().y()); d < best) {
+            best = d;
+            nearest = prop;
+        }
+    for (Motion::Prop prop : shown) {
+        double value = prop == nearest ? v : c.tracks[prop].value(t);
+        if (prop == Motion::Opacity)
+            value = std::clamp(value, 0.0, 100.0);
+        value = std::round(value * 10) / 10;
+        c.tracks[prop].setKey(t, value);
+        if (c.lockScale && (prop == Motion::ScaleX || prop == Motion::ScaleY))
+            c.tracks[prop == Motion::ScaleX ? Motion::ScaleY : Motion::ScaleX].setKey(t, value);
+    }
     m_editor->setMotion(frame, c, GifEditor::tr("Añadir punto clave"));
     m_editor->selectKeyTime(t);
     e->accept();
@@ -370,6 +656,10 @@ Inspector::Inspector(GifEditor* editor, QWidget* parent)
     addRow(grid, row++, Motion::PosY, QStringLiteral("Y"), QStringLiteral(" px"), -20000, 20000, 1);
     section(GifEditor::tr("Rotación"));
     addRow(grid, row++, Motion::Rotation, QString(), QStringLiteral("°"), -3600, 3600, 1);
+    // La imagen como una lámina fina que se inclina, con perspectiva (en la vista previa, con el modo 3D).
+    section(GifEditor::tr("Giro 3D"));
+    addRow(grid, row++, Motion::RotX, QStringLiteral("X"), QStringLiteral("°"), -89, 89, 1);
+    addRow(grid, row++, Motion::RotY, QStringLiteral("Y"), QStringLiteral("°"), -89, 89, 1);
     section(GifEditor::tr("Opacidad"));
     addRow(grid, row++, Motion::Opacity, QString(), QStringLiteral(" %"), 0, 100, 0);
     grid->setColumnStretch(1, 1);
@@ -378,10 +668,13 @@ Inspector::Inspector(GifEditor* editor, QWidget* parent)
     auto* graphRow = new QHBoxLayout;
     graphRow->addWidget(new QLabel(GifEditor::tr("Gráfica:"), this));
     m_graphProp = new QComboBox(this);
+    // Primero (y elegida) X e Y juntas, como en Filmora.
+    m_graphProp->addItem(GifEditor::tr("Posición XY"), -1);
     const std::pair<Motion::Prop, QString> props[] = {
         {Motion::PosX, GifEditor::tr("Posición X")}, {Motion::PosY, GifEditor::tr("Posición Y")},
         {Motion::ScaleX, GifEditor::tr("Escala X")},  {Motion::ScaleY, GifEditor::tr("Escala Y")},
         {Motion::Rotation, GifEditor::tr("Rotación")}, {Motion::Opacity, GifEditor::tr("Opacidad")},
+        {Motion::RotX, GifEditor::tr("Giro 3D X")},    {Motion::RotY, GifEditor::tr("Giro 3D Y")},
     };
     for (const auto& [p, label] : props)
         m_graphProp->addItem(label, int(p));
@@ -389,7 +682,7 @@ Inspector::Inspector(GifEditor* editor, QWidget* parent)
     root->addLayout(graphRow);
     m_graph = new KeyGraph(editor, this);
     connect(m_graphProp, &QComboBox::currentIndexChanged, this,
-            [this](int i) { m_graph->setProp(Motion::Prop(m_graphProp->itemData(i).toInt())); });
+            [this](int i) { m_graph->setProp(m_graphProp->itemData(i).toInt()); });
     root->addWidget(m_graph, 1);
 
     auto* bottom = new QHBoxLayout;
@@ -405,6 +698,18 @@ Inspector::Inspector(GifEditor* editor, QWidget* parent)
     });
     bottom->addWidget(m_fps, 1);
     root->addLayout(bottom);
+    // Al girar, escalar, inclinar o deformar: suavizada o con sus píxeles nítidos (de fábrica, para el
+    // pixel art: suavizada se veía borrosa).
+    m_smooth = new QCheckBox(GifEditor::tr("Suavizar al girar o escalar"), this);
+    m_smooth->setToolTip(GifEditor::tr("Sin marcar, la imagen conserva sus píxeles nítidos al girarla o escalarla (para el pixel art)."));
+    connect(m_smooth, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_updating)
+            return;
+        Motion::Clip c = m_editor->motion(m_editor->selectedFrame());
+        c.smooth = on;
+        m_editor->setMotion(m_editor->selectedFrame(), c, GifEditor::tr("Suavizar"));
+    });
+    root->addWidget(m_smooth);
 
     auto* actions = new QHBoxLayout;
     m_reset = new QToolButton(this);
@@ -493,6 +798,7 @@ void Inspector::refresh()
     m_lock->setChecked(clip.lockScale);
     const int fps = m_fps->findData(clip.stepMs);
     m_fps->setCurrentIndex(fps >= 0 ? fps : 2);
+    m_smooth->setChecked(clip.smooth);
     m_reset->setEnabled(has && !clip.isEmpty());
     m_bake->setEnabled(has && clip.animated());
     m_updating = false;

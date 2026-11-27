@@ -5,7 +5,7 @@ import { Tool } from "./Tool.js";
 import { StepRecorder, hollowHandles, ringHandle } from "./EditableSteps.js";
 import { AppState } from "../AppState.js";
 import { cloneCanvas, compositeTool, context, createCanvas, unionRect } from "../core/Raster.js";
-import { miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes, toolPixelCursor } from "../ui/Icons.js";
+import { handCursor, miniCursor, shapeFillRule, shapeName, shapePath, ShapeTypes, toolPixelCursor } from "../ui/Icons.js";
 import { CustomShapes } from "../core/CustomShapes.js";
 import { patternTile } from "../core/FillPattern.js";
 import { tr } from "../i18n.js";
@@ -372,6 +372,7 @@ export class LineTool extends EditableTool {
             const i = this.nearHandle(e, handles);
             if (i >= 0) {
                 this.drag = { index: this.pts.indexOf(handles[i]) };
+                this.view.setCursor(handCursor(true));
                 return;
             }
             this.finish();
@@ -383,9 +384,22 @@ export class LineTool extends EditableTool {
         this.begin();
     }
 
+    // Como en Paint.NET: la mano sobre los puntos de la curva.
+    hoverCursor(e) {
+        const onHandle = this.editing && this.nearHandle(e, this.handles()) >= 0;
+        this.view.setCursor(onHandle ? handCursor(false) : this.cursor());
+    }
+
+    onPointerUp(e) {
+        super.onPointerUp(e);
+        this.hoverCursor(e);
+    }
+
     onPointerMove(e) {
-        if (!this.drag)
+        if (!this.drag) {
+            this.hoverCursor(e);
             return;
+        }
         let p = { x: e.x, y: e.y };
         if (this.drag.creating) {
             const o = this.drag.origin;

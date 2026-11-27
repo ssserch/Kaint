@@ -5960,6 +5960,26 @@ html, body {
     background: linear-gradient(to right, transparent 3px, var(--line) 3px, var(--line) 5px, transparent 5px) no-repeat center / 100% 16px;
 }
 
+/* El rectángulo de elegir clips (arrastrando desde un hueco de la línea de tiempo) y, mientras
+   tanto, los clips que toca como elegidos. */
+.gif-marquee {
+    position: absolute;
+    z-index: 6;
+    pointer-events: none;
+    border: 1px dashed var(--accent, var(--selection-border));
+    background: color-mix(in srgb, var(--accent, var(--selection-border)) 18%, transparent);
+}
+
+#gif-editor .gif-clip.marquee-hit {
+    background: #0d4a43;
+    border-color: var(--accent);
+}
+
+#gif-editor .gif-clip.marquee-off {
+    background: #17181c;
+    border-color: #2a2c32;
+}
+
 /* La de la izquierda: también se estira por el principio. */
 .gif-clip-edge.left {
     right: auto;

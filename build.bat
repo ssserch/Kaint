@@ -58,6 +58,7 @@ set "DO_ZIP=0"
 set "DO_SETUP=0"
 set "DO_AVX2=0"
 set "DO_ARM64=0"
+set "DO_FFMPEG=1"
 set "DO_WEB=0"
 set "DO_APK="
 set "USE_CCACHE=1"
@@ -95,6 +96,7 @@ if /i "%~1"=="--web"       (set "DO_WEB=1" & shift & goto args)
 if /i "%~1"=="--apk"       (set "DO_APK=apk" & shift & goto args)
 if /i "%~1"=="--aab"       (set "DO_APK=aab" & shift & goto args)
 if /i "%~1"=="--no-ccache" (set "USE_CCACHE=0" & shift & goto args)
+if /i "%~1"=="--no-ffmpeg" (set "DO_FFMPEG=0" & shift & goto args)
 if /i "%~1"=="-r"          (set "DO_RUN=1" & shift & goto args)
 if /i "%~1"=="--run"       (set "DO_RUN=1" & shift & goto args)
 if /i "%~1"=="-y"          (set "ASSUME_YES=1" & shift & goto args)
@@ -180,6 +182,7 @@ echo MinGW:  %MINGW_BIN%
 set "PATH=%MINGW_BIN%;%CMAKE_BIN%;%NINJA_DIR%;%QT_DIR%\bin;%PATH%"
 call :find_ccache
 call :find_multimedia
+call :find_ffmpeg x64
 
 rem --- Compilación ------------------------------------------------------------
 if "%DO_CLEAN%"=="1" if exist "%BUILD_DIR%" (
@@ -264,6 +267,7 @@ set "STEP=copiar las DLL de Qt y MinGW junto a %BUILD_DIR%\kaint.exe"
 for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
     if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%BUILD_DIR%\" >nul
 )
+call :copy_ffmpeg "%BUILD_DIR%"
 exit /b 0
 
 rem --- Qt Multimedia (la intro y el audio del editor de GIF) ---------------------------
@@ -289,6 +293,42 @@ pushd "%TOOLCHAIN%"
 popd
 exit /b 0
 
+rem --- FFmpeg (el audio y el vídeo del editor de GIF) --------------------------------
+rem Kaint usa el programa ffmpeg (junto a kaint.exe o en el PATH) para leer el audio que no es WAV
+rem (MP3, OGG, FLAC...) y para exportar vídeo (MP4, WebM); sin él, el editor de GIF no añadía un MP3.
+rem Si falta, se descarga en %TOOLCHAIN%\ffmpeg-ARQ (packaging\windows\get-ffmpeg.ps1: la compilación de
+rem BtbN de GitHub, comprobada con su SHA-256) y va junto a kaint.exe, en el .zip y en el instalador.
+rem (%1: x64 o arm64.) Sin él (o con --no-ffmpeg), Kaint se compila igual.
+:find_ffmpeg
+set "FFMPEG_EXE="
+if "%DO_FFMPEG%"=="0" exit /b 0
+set "FFMPEG_DIR=%TOOLCHAIN%\ffmpeg-%~1"
+if exist "%FFMPEG_DIR%\ffmpeg.exe" goto ffmpeg_found
+echo.
+echo Falta FFmpeg: sin él, el editor de GIF solo lee audio WAV ^(no MP3, OGG, FLAC...^) y no exporta vídeo ^(MP4, WebM^).
+echo Se puede descargar ahora en %TOOLCHAIN% ^(unos 200 MB; junto a kaint.exe ocupa unos 170 MB^).
+if not "%ASSUME_YES%"=="1" (
+    choice /c SN /m "¿Descargarlo"
+    if errorlevel 2 exit /b 0
+)
+if not exist "%TOOLCHAIN%" mkdir "%TOOLCHAIN%"
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\get-ffmpeg.ps1 -Arch %~1 -Dest "%FFMPEG_DIR%"
+if exist "%FFMPEG_DIR%\ffmpeg.exe" goto ffmpeg_found
+echo %ESC%[33mNo se pudo descargar FFmpeg: Kaint se compila igual, sin él.%ESC%[0m
+exit /b 0
+:ffmpeg_found
+set "FFMPEG_EXE=%FFMPEG_DIR%\ffmpeg.exe"
+echo FFmpeg: %FFMPEG_EXE%
+exit /b 0
+
+rem Copia ffmpeg.exe (y su licencia) a la carpeta %1 si hace falta (xcopy /d: solo si es más nuevo).
+:copy_ffmpeg
+if not defined FFMPEG_EXE exit /b 0
+if not exist "%~1" mkdir "%~1"
+xcopy /d /y /q "%FFMPEG_EXE%" "%~1\" >nul
+if exist "%FFMPEG_DIR%\ffmpeg-LICENSE.txt" xcopy /d /y /q "%FFMPEG_DIR%\ffmpeg-LICENSE.txt" "%~1\" >nul
+exit /b 0
+
 rem --- Instalar ---------------------------------------------------------------
 :install
 set "STEP=instalar en %PREFIX%"
@@ -297,6 +337,7 @@ cmake --install "%BUILD_DIR%" || exit /b 1
 for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
     if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%PREFIX%\bin\" >nul
 )
+call :copy_ffmpeg "%PREFIX%\bin"
 copy /y "%SCRIPT%" "%PREFIX%\build.bat" >nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$s = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Programs') + '\Kaint.lnk');" ^
@@ -500,6 +541,7 @@ set "PATH=%CMAKE_BIN%;%NINJA_DIR%;%PATH%"
 set "VCARCH=x64_arm64"
 if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "VCARCH=arm64"
 call "%VCVARS%" %VCARCH% >nul || exit /b 1
+call :find_ffmpeg arm64
 set "BUILD_DIR=build-windows-arm64"
 if "%BUILD_TYPE%"=="Debug" set "BUILD_DIR=build-windows-arm64-debug"
 set "ARCH_NAME=arm64"
@@ -511,6 +553,7 @@ set "PACKAGE=%CD%\%BUILD_DIR%\package\Kaint"
 set "ZIP=%CD%\%BUILD_DIR%\Kaint-%KAINT_VERSION%-windows-arm64.zip"
 if exist "%PACKAGE%" rmdir /s /q "%PACKAGE%"
 cmake --install "%BUILD_DIR%" --prefix "%PACKAGE%" || exit /b 1
+call :copy_ffmpeg "%PACKAGE%\bin"
 if exist "%PACKAGE%\Uninstall.exe" del /q "%PACKAGE%\Uninstall.exe"
 if exist "%ZIP%" del /q "%ZIP%"
 powershell -NoProfile -Command "Compress-Archive -Path '%PACKAGE%' -DestinationPath '%ZIP%'" || exit /b 1
@@ -539,6 +582,7 @@ cmake --install "%BUILD_DIR%" --prefix "%~1" || exit /b 1
 for %%D in (libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll) do (
     if exist "%MINGW_BIN%\%%D" copy /y "%MINGW_BIN%\%%D" "%~1\bin\" >nul
 )
+call :copy_ffmpeg "%~1\bin"
 exit /b 0
 
 rem --- Paquete portable (.zip) ------------------------------------------------
@@ -735,12 +779,15 @@ echo       --keystore RUTA  (con --apk o --aab) la llave (.jks o .keystore) con 
 echo       --alias NOMBRE   (con --apk o --aab) el usuario (alias) de esa llave
 echo       --wsl FORMATO    Linux con build.sh en WSL: build (el ejecutable, en build/), deb, pkg, appimage, appimage-avx2, tar, tar-musl o tar-arm64
 echo       --no-ccache      no usa ccache ni sccache aunque estén instalados
+echo       --no-ffmpeg      sin FFmpeg junto a kaint.exe (el editor de GIF solo leerá audio WAV y no exportará vídeo)
 echo   -r, --run            ejecuta Kaint al terminar
 echo   -y, --yes            descarga las herramientas que falten sin preguntar
 echo   -h, --help           muestra esta ayuda
 echo.
 echo Sin opciones, un menú pregunta qué compilar (en rojo, lo que Windows no crea bien).
 echo Si faltan Qt, MinGW, CMake o Ninja (o NSIS para --setup), se descargan en %%LOCALAPPDATA%%\Kaint\toolchain.
+echo También FFmpeg, que va junto a kaint.exe, en el .zip y en el instalador: con él, el editor de GIF lee
+echo audio MP3, OGG, FLAC... y exporta vídeo MP4 y WebM.
 echo Con ccache o sccache instalados, se usan solos: volver a compilar tarda mucho menos.
 echo Para usar un Qt propio para MinGW: set KAINT_QT=C:\Qt\6.10.3\mingw_64
 echo Versión móvil: busca un JDK del 17 al 25 (si no lo hay, ofrece descargar Temurin 21), el SDK de

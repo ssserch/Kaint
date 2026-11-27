@@ -1008,19 +1008,32 @@ protected:
     }
     void applyGroupVisibility()
     {
-        QHash<int, bool> seen;
-        for (int i = 0; i < count(); ++i) {
-            const int id = groupOf(i);
-            bool visible = true;
-            if (id > 0 && m_groups.contains(id)) {
-                visible = !m_groups[id].collapsed || !seen.value(id);
-                seen.insert(id, true);
-            } else if (id > 0) {
-                setGroupOf(i, 0);
+        // Al contraer un grupo con la imagen actual dentro (sin ser la primera), se sigue en ella: Qt
+        // pasaba a otra pestaña (y Kaint a otra imagen). Simplemente no se ve elegida en la tira.
+        const int current = currentIndex();
+        {
+            const QSignalBlocker block(this);
+            QHash<int, bool> seen;
+            for (int i = 0; i < count(); ++i) {
+                const int id = groupOf(i);
+                bool visible = true;
+                if (id > 0 && m_groups.contains(id)) {
+                    visible = !m_groups[id].collapsed || !seen.value(id);
+                    seen.insert(id, true);
+                } else if (id > 0) {
+                    setGroupOf(i, 0);
+                }
+                if (isTabVisible(i) != visible)
+                    setTabVisible(i, visible);
             }
-            if (isTabVisible(i) != visible)
-                setTabVisible(i, visible);
+            if (current >= 0 && current < count() && currentIndex() != current)
+                setCurrentIndex(current);
         }
+        // QTabBar::setTabVisible no avisa de que cambia lo que ocupa la tira: con una imagen abierta
+        // mientras el grupo estaba contraído, al expandirlo la tira se quedaba del ancho de antes
+        // (las miniaturas cortadas y las flechas de desplazar).
+        updateGeometry();
+        resetCloseButtons();
         update();
     }
     // Una imagen que se lleva entre dos del mismo grupo entra en él; una que sale de su grupo
@@ -2017,6 +2030,16 @@ void MainWindow::createActions()
                                       [this] { m_canvas->setViewRotation(m_canvas->viewRotation() + 15); }, doc);
     A["rotateViewReset"] = makeAction(tr("Vista sin &girar"), {"transform-rotate", "view-refresh"},
                                       QKeySequence(QStringLiteral("Ctrl+Alt+Up")), [this] { m_canvas->setViewRotation(0); }, doc);
+    // Con la vista girada, la imagen suavizada (borrosa) o con sus píxeles nítidos (de fábrica, para
+    // el pixel art). Se recuerda.
+    A["smoothRotation"] = makeAction(tr("Suavizar la vista &girada"), {"transform-rotate"}, QKeySequence(), [] {});
+    A["smoothRotation"]->setCheckable(true);
+    A["smoothRotation"]->setChecked(QSettings().value(QStringLiteral("view/smoothRotation"), false).toBool());
+    m_canvas->setSmoothRotation(A["smoothRotation"]->isChecked());
+    connect(A["smoothRotation"], &QAction::toggled, this, [this](bool on) {
+        QSettings().setValue(QStringLiteral("view/smoothRotation"), on);
+        m_canvas->setSmoothRotation(on);
+    });
     A["actualSize"] = makeAction(tr("&Tamaño real"), {"zoom-original"}, QKeySequence(QStringLiteral("Ctrl+0")),
                                  [this] { m_canvas->actualSize(); }, doc);
     A["actualSize"]->setShortcuts({QKeySequence(QStringLiteral("Ctrl+0")), QKeySequence(QStringLiteral("Ctrl+Shift+A"))});
@@ -2264,7 +2287,7 @@ void MainWindow::createMenus()
     QMenu* view = bar->addMenu(tr("&Ver"));
     view->addActions({A["zoomIn"], A["zoomOut"], A["zoomFit"], A["zoomSel"], A["actualSize"]});
     view->addSeparator();
-    view->addActions({A["rotateViewLeft"], A["rotateViewRight"], A["rotateViewReset"]});
+    view->addActions({A["rotateViewLeft"], A["rotateViewRight"], A["rotateViewReset"], A["smoothRotation"]});
     view->addSeparator();
     view->addActions({A["pixelGrid"], A["rulers"]});
     view->addSeparator();
@@ -3354,7 +3377,7 @@ void MainWindow::newImage()
     QSize initial(800, 600);
     if (m_doc)
         initial = m_doc->size();
-    const QImage clip = QApplication::clipboard()->image();
+    const QImage clip = ImageIO::imageFromMimeData(QApplication::clipboard()->mimeData());
     if (!clip.isNull())
         initial = clip.size();
     NewImageDialog dlg(initial, m_doc ? m_doc->dpi() : 96.0, this);
@@ -4211,7 +4234,7 @@ void MainWindow::dropEvent(QDropEvent* e)
     }
     QImage image;
     if (files.isEmpty() && e->mimeData()->hasImage())
-        image = qvariant_cast<QImage>(e->mimeData()->imageData());
+        image = ImageIO::imageFromMimeData(e->mimeData());
     e->acceptProposedAction();
     // La pregunta se hace después de terminar el arrastre: con un diálogo modal dentro de dropEvent,
     // la aplicación de origen se quedaría esperando.
@@ -4518,11 +4541,10 @@ QImage MainWindow::clipboardImage() const
     const QMimeData* md = QApplication::clipboard()->mimeData();
     if (!md)
         return {};
-    if (md->hasImage()) {
-        const QImage img = qvariant_cast<QImage>(md->imageData());
-        if (!img.isNull())
-            return img.convertToFormat(kLayerFormat);
-    }
+    // Con el PNG si lo trae: con la imagen de Qt (en Windows, el mapa de bits) lo transparente se
+    // pegaba con fondo blanco o negro.
+    if (const QImage img = ImageIO::imageFromMimeData(md); !img.isNull())
+        return img.convertToFormat(kLayerFormat);
     for (const QUrl& url : md->urls()) {
         if (!url.isLocalFile())
             continue;

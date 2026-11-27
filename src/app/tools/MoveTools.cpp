@@ -106,6 +106,7 @@ QCursor transformCursor(TransformBox::Mode mode, const QCursor& translate, qreal
     case TransformBox::Mode::Pivot:
     case TransformBox::Mode::ResetPivot: return Qt::ArrowCursor;
     case TransformBox::Mode::Rotate: return Icons::rotateCursor(angle);
+    case TransformBox::Mode::Tilt: return Qt::SizeAllCursor;
     default: return translate;
     }
 }
@@ -231,6 +232,9 @@ void MoveSelectedTool::syncBox()
 {
     Document* doc = document();
     boxForCurrentState(m_box);
+    // (Con el modo de las esquinas de la barra: también al pasar el puntero, para su cursor.)
+    m_box.setWarp(Effects::extrasEnabled() && AppState::instance()->tools().moveWarp);
+    m_box.set3D(Effects::extrasEnabled() && AppState::instance()->tools().move3d);
     if (doc->selection() != m_pivotFor) {
         m_box.resetPivot();
         m_pivotFor = doc->selection();
@@ -293,6 +297,7 @@ void MoveSelectedTool::mousePress(const ToolEvent& e)
     m_box.set(QRectF(m_float->pixels.rect()), m_float->pixelsToCanvas(m_startTransform));
     // Deformar (solo Mover píxeles, con las funciones de PhotoCraft) y Snap al mover.
     m_box.setWarp(Effects::extrasEnabled() && AppState::instance()->tools().moveWarp);
+    m_box.set3D(Effects::extrasEnabled() && AppState::instance()->tools().move3d);
     if (mode == TransformBox::Mode::Translate)
         prepareSnap(m_box, doc, canvas(), m_float ? m_float->layer.get() : doc->activeLayer());
     else

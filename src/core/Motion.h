@@ -3,6 +3,9 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
+#include <QPointF>
+#include <QRectF>
+#include <QTransform>
 #include <QSize>
 #include <QString>
 
@@ -20,9 +23,19 @@ enum class Interp {
     Curve = 1,       // curva suave en cada tramo (se detiene un instante en cada punto)
     Continuous = 2,  // curva continua que pasa por todos los puntos sin detenerse
     Freeze = 3,      // se queda en el valor hasta el siguiente punto
+    Bezier = 4,      // con su propia curva: las dos asas del tramo (Key::bezier), como cubic-bezier()
 };
 
-enum Prop { PosX = 0, PosY, ScaleX, ScaleY, Rotation, Opacity, PropCount };
+// La curva de un tramo Bézier por defecto (entrada y salida suaves, como «ease-in-out»).
+constexpr std::array<double, 4> kDefaultBezier{0.42, 0.0, 0.58, 1.0};
+
+// Lo que avanza (0 al principio del tramo, 1 al final; puede pasarse) a la fracción 'u' del tiempo
+// del tramo, con la curva cúbica de asas (x1, y1) y (x2, y2), como cubic-bezier() de CSS.
+double bezierProgress(double u, const std::array<double, 4>& b);
+
+// RotX y RotY: el giro en 3D (la imagen como una lámina fina, con perspectiva), arriba y abajo y a los
+// lados. (Al final: así no cambian los números de los de antes.)
+enum Prop { PosX = 0, PosY, ScaleX, ScaleY, Rotation, Opacity, RotX, RotY, PropCount };
 
 struct Key {
     int t = 0;  // ms desde el principio del fotograma
@@ -30,6 +43,9 @@ struct Key {
     Interp interp = Interp::Linear;
     bool easeIn = false;   // llega al punto despacio
     bool easeOut = false;  // sale del punto despacio
+    // Con Interp::Bezier, las dos asas del tramo que empieza aquí: x (fracción del tiempo del tramo,
+    // de 0 a 1) e y (lo que avanza: 0 el valor de este punto, 1 el del siguiente).
+    std::array<double, 4> bezier = kDefaultBezier;
 
     bool operator==(const Key&) const = default;
 };
@@ -52,13 +68,30 @@ struct Transform {
     double scaleX = 100, scaleY = 100;  // %
     double rotation = 0;            // grados, alrededor del centro de la imagen
     double opacity = 100;           // %
+    double rotX = 0, rotY = 0;      // giro en 3D, grados
+    // Deformar: lo que se mueve cada esquina (arriba izquierda, arriba derecha, abajo derecha,
+    // abajo izquierda), en píxeles de la imagen; la imagen queda en perspectiva.
+    std::array<QPointF, 4> warp{};
+    // Al girar o escalar, suavizada; si no, con sus píxeles nítidos (para el pixel art).
+    bool smooth = false;
     bool isIdentity() const;
 };
+
+// La inclinación en 3D de 'ax' grados (arriba y abajo) y 'ay' (a los lados) de 'rect', alrededor de
+// su centro y con la cámara a 1,5 veces su tamaño (como QTransform::rotate con Qt::XAxis y
+// Qt::YAxis).
+QTransform tiltTransform(const QRectF& rect, double ax, double ay);
+// Todo lo que se le hace a una imagen de tamaño 'size': deformar, el giro en 3D, escalar, girar y
+// mover (de sus coordenadas a las del lienzo).
+QTransform matrix(QSize size, const Transform& transform);
 
 struct Clip {
     std::array<Track, PropCount> tracks;
     int stepMs = 50;  // cada cuánto se calcula un fotograma al exportar (20 por segundo)
     bool lockScale = true;
+    // Deformar (lo que se mueve cada esquina; no cambia a lo largo del fotograma) y suavizar.
+    std::array<QPointF, 4> warp{};
+    bool smooth = false;
 
     Clip();
     // Sin puntos clave y con los valores de siempre: no hace nada.

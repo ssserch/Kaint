@@ -625,6 +625,12 @@ void Canvas::setPixelGrid(bool on)
     viewport()->update();
 }
 
+void Canvas::setSmoothRotation(bool on)
+{
+    m_smoothRotation = on;
+    viewport()->update();
+}
+
 void Canvas::updateOverlay()
 {
     viewport()->update();
@@ -798,7 +804,7 @@ void Canvas::paintEvent(QPaintEvent* e)
         p.translate(c);
         p.rotate(m_rotation);
         p.translate(-c);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, m_smoothRotation);
         exposed = p.transform().inverted().mapRect(QRectF(viewport()->rect())).toAlignedRect();
     }
     const QRectF imgView = imageToView(QRectF(m_doc->rect()));
@@ -825,7 +831,8 @@ void Canvas::paintEvent(QPaintEvent* e)
         // o escalas fraccionarias el fondo de alrededor parecía moverse un píxel.
         p.save();
         p.setClipRect(visible, Qt::IntersectClip);
-        p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1.0 || m_rotation != 0);
+        // (Girada, suavizada solo si se pide en Ver: si no, el pixel art se veía borroso.)
+        p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1.0 || (m_rotation != 0 && m_smoothRotation));
         p.drawImage(imgView, m_composite);
         p.restore();
         if (m_pixelGrid && m_zoom >= 2)

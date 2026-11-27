@@ -1,5 +1,7 @@
 #include "app/tools/TransformBox.h"
 
+#include "core/Motion.h"
+
 #include "app/tools/Handles.h"
 
 #include <QLineF>
@@ -135,13 +137,19 @@ TransformBox::Mode TransformBox::hit(const QPointF& viewPos, const QTransform& i
         if (Handles::hit(viewPos, toView.map(Handles::boxHandle(m_rect, i)))) {
             if (handle)
                 *handle = i;
-            return Mode::Scale;
+            return m_3d ? Mode::Tilt : Mode::Scale;
         }
     }
     // El icono de mover (abajo a la derecha, fuera del cuadro) mueve, como en Paint.NET: así se
     // puede arrastrar una selección muy pequeña.
     if (Handles::hit(viewPos, Handles::moveIconPos(poly.boundingRect()), 10))
         return Mode::Translate;
+    // En 3D, lo de dentro (y cerca del borde) inclina la lámina.
+    if (m_3d) {
+        if (in || edgeHandle(poly, viewPos) >= 0)
+            return Mode::Tilt;
+        return distanceToOutline(poly, viewPos) <= kRotateBand ? Mode::Rotate : Mode::None;
+    }
     // Cerca del borde, por dentro o por fuera, la mano estira hacia ese lado, como en Paint.NET: los
     // lados de arriba y abajo en vertical, los laterales en horizontal y cerca de una esquina en
     // los dos ejes. Por dentro solo si el cuadro es lo bastante grande para poder moverlo aún.
@@ -164,6 +172,12 @@ void TransformBox::begin(Mode mode, int handle, const QPointF& canvasPos)
     m_start = m_transform;
     m_startPos = canvasPos;
     m_pivot = m_transform.map(m_localPivot);
+}
+
+QTransform TransformBox::tiltTransform(const QRectF& rect, double ax, double ay)
+{
+    // (La misma que el giro 3D del editor de GIF.)
+    return Motion::tiltTransform(rect, ax, ay);
 }
 
 double TransformBox::rotationDegrees() const
@@ -221,6 +235,18 @@ QTransform TransformBox::update(const QPointF& pos, Qt::KeyboardModifiers mods)
             lines(m_snapY, false);
         }
         m_transform = m_start * QTransform::fromTranslate(d.x(), d.y());
+        break;
+    }
+    case Mode::Tilt: {
+        // Hacia donde va el puntero: a los lados gira alrededor del eje vertical y arriba y abajo,
+        // del horizontal (todo el ancho o el alto del cuadro, 180°). Con Mayús, solo en un eje.
+        const QRectF bounds = m_start.mapRect(m_rect);
+        const QPointF d = pos - m_startPos;
+        double ay = std::clamp(d.x() / std::max(1.0, bounds.width()) * 180.0, -85.0, 85.0);
+        double ax = std::clamp(-d.y() / std::max(1.0, bounds.height()) * 180.0, -85.0, 85.0);
+        if (mods & Qt::ShiftModifier)
+            (std::abs(d.x()) > std::abs(d.y()) ? ax : ay) = 0;
+        m_transform = tiltTransform(m_rect, ax, ay) * m_start;
         break;
     }
     case Mode::Rotate: {

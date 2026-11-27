@@ -1691,10 +1691,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Delete</translation>
     </message>
     <message>
-        <source>Arrastra la imagen para moverla (con puntos clave de posición, se pone uno en el cabezal)</source>
-        <translation>Drag the image to move it (with position keyframes, one is set at the playhead)</translation>
-    </message>
-    <message>
         <source>Añadir pista</source>
         <translation>Add track</translation>
     </message>
@@ -1812,6 +1808,38 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>El último fotograma de la pista elegida pasa a ser el primero</source>
         <translation>The last frame of the selected track becomes the first</translation>
+    </message>
+    <message>
+        <source>Haz clic en la imagen para transformarla: arrástrala para moverla y sus tiradores para cambiar su tamaño (o, con Deformar, cada esquina sola; con 3D, arrastrándola se inclina). Con puntos clave, se pone uno en el cabezal.</source>
+        <translation>Click the image to transform it: drag it to move it and drag its handles to resize it (or, with Warp, each corner on its own; with 3D, dragging tilts it). With keyframes, one is added at the playhead.</translation>
+    </message>
+    <message>
+        <source>Cambiar el tamaño</source>
+        <translation>Resize</translation>
+    </message>
+    <message>
+        <source>Girar la imagen</source>
+        <translation>Rotate the image</translation>
+    </message>
+    <message>
+        <source>Deformar la imagen</source>
+        <translation>Warp the image</translation>
+    </message>
+    <message>
+        <source>Girar en 3D</source>
+        <translation>Rotate in 3D</translation>
+    </message>
+    <message>
+        <source>Tamaño</source>
+        <translation>Size</translation>
+    </message>
+    <message>
+        <source>Deformar</source>
+        <translation>Warp</translation>
+    </message>
+    <message>
+        <source>3D</source>
+        <translation>3D</translation>
     </message>
     <message>
         <source>Arrastra aquí un audio (MP3, WAV, OGG...) para los vídeos exportados</source>
@@ -2030,6 +2058,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Frame duration</translation>
     </message>
     <message>
+        <source>Duración de los fotogramas</source>
+        <translation>Frame durations</translation>
+    </message>
+    <message>
         <source>Duración de todos los fotogramas</source>
         <translation>Duration of all frames</translation>
     </message>
@@ -2178,6 +2210,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Freeze</translation>
     </message>
     <message>
+        <source>Bézier (con asas)</source>
+        <translation>Bézier (with handles)</translation>
+    </message>
+    <message>
         <source>Entrada suave</source>
         <translation>Ease In</translation>
     </message>
@@ -2194,10 +2230,6 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Leaves this point slowly</translation>
     </message>
     <message>
-        <source>Cómo cambia el valor a lo largo del fotograma. Doble clic para poner un punto clave ahí; arrastra un rombo para cambiar su valor o su momento; clic derecho para la forma de la curva.</source>
-        <translation>How the value changes over the frame. Double-click to put a keyframe there; drag a diamond to change its value or its time; right-click for the shape of the curve.</translation>
-    </message>
-    <message>
         <source>Sin puntos clave: pulsa el rombo de un valor para poner uno en el cabezal o haz doble clic aquí.</source>
         <translation>No keyframes: click a value&apos;s diamond to set one at the playhead, or double-click here.</translation>
     </message>
@@ -2208,6 +2240,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Quitar el punto</source>
         <translation>Remove the point</translation>
+    </message>
+    <message>
+        <source>Mover el tramo</source>
+        <translation>Move the segment</translation>
     </message>
     <message>
         <source>Pone un punto clave con todos los valores (posición, escala, rotación y opacidad) en el cabezal, o lo quita si ya hay uno ahí (K)</source>
@@ -2238,12 +2274,20 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Rotation</translation>
     </message>
     <message>
+        <source>Giro 3D</source>
+        <translation>3D rotation</translation>
+    </message>
+    <message>
         <source>Opacidad</source>
         <translation>Opacity</translation>
     </message>
     <message>
         <source>Gráfica:</source>
         <translation>Graph:</translation>
+    </message>
+    <message>
+        <source>Posición XY</source>
+        <translation>Position XY</translation>
     </message>
     <message>
         <source>Posición X</source>
@@ -2262,6 +2306,14 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
         <translation>Scale Y</translation>
     </message>
     <message>
+        <source>Giro 3D X</source>
+        <translation>3D rotation X</translation>
+    </message>
+    <message>
+        <source>Giro 3D Y</source>
+        <translation>3D rotation Y</translation>
+    </message>
+    <message>
         <source>Al exportar:</source>
         <translation>When exporting:</translation>
     </message>
@@ -2276,6 +2328,18 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Fotogramas por segundo</source>
         <translation>Frames per Second</translation>
+    </message>
+    <message>
+        <source>Suavizar al girar o escalar</source>
+        <translation>Smooth when rotating or scaling</translation>
+    </message>
+    <message>
+        <source>Sin marcar, la imagen conserva sus píxeles nítidos al girarla o escalarla (para el pixel art).</source>
+        <translation>Unchecked, the image keeps its crisp pixels when rotated or scaled (for pixel art).</translation>
+    </message>
+    <message>
+        <source>Suavizar</source>
+        <translation>Smooth</translation>
     </message>
     <message>
         <source>Restablecer</source>
@@ -2328,6 +2392,10 @@ Ctrl: hue only · Alt: saturation only · Shift: 15° spokes</translation>
     <message>
         <source>Añadir punto clave</source>
         <translation>Add Keyframe</translation>
+    </message>
+    <message>
+        <source>Cómo cambia el valor a lo largo del fotograma. Doble clic: un punto clave ahí. Arrastra un rombo para cambiar su valor o su momento, y la línea entre dos para curvarla (con Alt, para moverla entera); las asas de una curva Bézier la ajustan. Clic derecho: la forma de la curva.</source>
+        <translation>How the value changes over the frame. Double-click: a keyframe there. Drag a diamond to change its value or its time, and the line between two to bend it (with Alt, to move it whole); the handles of a Bézier curve adjust it. Right-click: the curve&apos;s shape.</translation>
     </message>
     <message>
         <source>Peso aproximado del GIF exportado: %1 MB, %2 fotogramas, %3 s.</source>
@@ -3188,6 +3256,10 @@ Opacity: %2 · Blend: %3</translation>
     <message>
         <source>Vista sin &amp;girar</source>
         <translation>Reset &amp;View Rotation</translation>
+    </message>
+    <message>
+        <source>Suavizar la vista &amp;girada</source>
+        <translation>Smooth the rotated &amp;view</translation>
     </message>
     <message>
         <source>&amp;Tamaño real</source>
@@ -12860,6 +12932,14 @@ Do you want to replace them?</translation>
     <message>
         <source>Cada esquina se mueve sola y pone lo seleccionado en perspectiva.</source>
         <translation>Each corner moves on its own and puts the selection in perspective.</translation>
+    </message>
+    <message>
+        <source>3D</source>
+        <translation>3D</translation>
+    </message>
+    <message>
+        <source>Lo seleccionado es una lámina fina: arrastrándolo se inclina hacia el puntero, con perspectiva (con Mayús, solo en un eje). Se mueve con el icono de mover y se gira por fuera, como siempre.</source>
+        <translation>The selection is a thin sheet: dragging it tilts it toward the pointer, with perspective (with Shift, on one axis only). Move it with the move icon and rotate it from outside, as always.</translation>
     </message>
     <message>
         <source>Ajustar</source>

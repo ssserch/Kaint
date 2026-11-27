@@ -117,6 +117,8 @@ struct ToolSettings {
     bool moveGamma = true;
     // Mover píxeles (funciones de PhotoCraft): las esquinas deforman en perspectiva.
     bool moveWarp = false;
+    // O en 3D: lo seleccionado como una lámina fina que se inclina con perspectiva (al arrastrarlo).
+    bool move3d = false;
     // Snap al mover (funciones de PhotoCraft), con su botón del imán; apagado de fábrica.
     bool moveSnap = false;
     AfterSelect afterSelect = AfterSelect::DoNotSwitch;

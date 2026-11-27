@@ -470,8 +470,11 @@ color you choose for the glass of the windows (**Settings → User interface**).
       Object Finder highlights, or <b>Select Subject</b>), <b>Remove</b> (paint over or around
       something and it is filled from its surroundings), <b>Patch</b> (drag a selection to repair it
       with another area, normal or content-aware), <b>Healing Brush</b> and <b>Spot Healing Brush</b>
-      (content-aware, create texture or proximity match). The long calculations run in the background
-      and Esc cancels them. They work the same in the web version, and in the menus and the Tools
+      (content-aware, create texture or proximity match). <b>Move Selected Pixels</b> also gets
+      <b>Corners</b>: <b>Resize</b>, <b>Warp</b> (each corner on its own, in perspective) or <b>3D</b>
+      (the selection is a thin card that tilts toward the pointer). The long calculations run in the
+      background and Esc cancels them. They work the same in the web version (except Warp and 3D in
+      Move Selected Pixels), and in the menus and the Tools
       window they carry the plugins' puzzle piece. Their algorithms are
       PhotoCraft's, by the ArtCraft Team and the PhotoCraft
       contributors (MIT, see <code>data/licenses/PhotoCraft-LICENSE.txt</code>).
@@ -565,10 +568,12 @@ heavy the GIF will be and how long it lasts, turning yellow and red as it gets c
 - **Media**: the images open in Kaint and the ones you import or drag in from your folders
   (still images and animated GIFs).
 - **Player**: play and pause, frame by frame, loop and preview speed.
-- **Timeline**: drop media or files on it, drag clips to reorder them, stretch a clip's edge to
-  change its duration, duplicate, hide, delete, reverse, back and forth, the same duration for all,
-  and edit any frame with the tools. Ctrl+click and Shift+click pick several frames; Ctrl+C, Ctrl+X,
-  Ctrl+V and Ctrl+D copy, cut, paste and duplicate them.
+- **Timeline**: drop media or files on it, drag clips to reorder them, stretch a clip by either edge
+  to change its duration (the left one takes the empty space in front or pushes the clips behind, as
+  in Filmora or CapCut), duplicate, hide, delete, reverse, back and forth, the same duration for all,
+  and edit any frame with the tools. Drag a box from an empty spot to pick every clip it touches (or
+  Ctrl+click and Shift+click), and stretching one of the picked clips stretches them all; Ctrl+C,
+  Ctrl+X, Ctrl+V and Ctrl+D copy, cut, paste and duplicate them.
 - **Tracks**: each track is its own row of frames, and the upper tracks show on top of the lower
   ones.
 - **Audio tracks** (for MP4 and WebM videos; a GIF has no sound): add MP3, WAV, OGG, FLAC... files
@@ -576,12 +581,19 @@ heavy the GIF will be and how long it lasts, turning yellow and red as it gets c
   their **volume** and **fade in and out**, and double-click a clip to add **volume keyframes** that you
   drag up, down and sideways. They play with the preview and are saved inside the `.ora`.
 - **Keyframes**: the panel on the right sets the **scale** (proportional or not),
-  **position**, **rotation** and **opacity** of the selected frame. The diamond next to each value
-  adds a keyframe at the playhead, and the diamonds appear under the clip on the timeline (white, or
-  in your accent color when selected): drag them apart and the motion lasts longer, right-click for
-  **Linear, Curve, Continuous Curve, Freeze, Ease In or Ease Out**. The graph shows how the value
-  changes and its points can be dragged too; drag the image in the preview to move it, along its
-  dotted motion path. **Convert to frames** turns the motion into ordinary frames.
+  **position**, **rotation**, **3D rotation** (the image tilts like a thin card, with perspective)
+  and **opacity** of the selected frame. The diamond next to each value adds a keyframe at the
+  playhead, and the diamonds appear under the clip on the timeline (white, or in your accent color
+  when selected): drag them apart and the motion lasts longer, right-click for **Linear, Curve,
+  Continuous Curve, Freeze, Bézier, Ease In or Ease Out**. The graph (**Position XY** by default, X
+  and Y together, as in Filmora) shows how the value changes: drag its points, drag the line between
+  two to bend it (Alt moves it whole) and drag the two handles of a Bézier curve to shape the easing
+  exactly. **Smooth when rotating or scaling** is off by default, so pixel art stays crisp.
+- **Transforming in the preview**: click the image to get its box. Drag it to move it along its
+  dotted motion path; with **Size**, its handles resize it and dragging just outside rotates it; with
+  **Warp**, each corner moves on its own (in perspective); with **3D**, dragging tilts it. With
+  keyframes, the change becomes a keyframe at the playhead. **Convert to frames** turns the motion
+  into ordinary frames.
 
 <div align="center">
   <img src="img/other/gifeditor-audio.png" alt="GIF editor with two audio tracks, one of them muted, and volume keyframes" width="900">
@@ -912,6 +924,10 @@ The arm64 builds run on GitHub's arm64 machines, without emulation.
 - **On its own**: on every push to `main` and every pull request that changes the code (not the
   documentation), to check that it still builds everywhere.
 
+The Windows packages carry FFmpeg next to `kaint.exe` (`build.bat` downloads it once, checked with its
+SHA-256; `--no-ffmpeg` leaves it out): with it, the GIF editor reads MP3, OGG, FLAC... audio and
+exports MP4 and WebM. On Linux, `build.sh` offers to install the `ffmpeg` package if it's missing.
+
 When it finishes, the files are in the run's page under **Artifacts** (kept for 30 days; GitHub
 wraps each one in a .zip). Ticking **draft_release** when running it by hand also puts every file,
 as is, in a **draft release** (`v<version>`): nothing is public until you press *Publish release*,
@@ -942,8 +958,10 @@ jxrlib (BSD), and HEIC, JPEG XL, AVIF, OpenEXR, JPEG 2000 and other formats (whe
 **Browse Plugins** are the work of their authors, credited next to each one. Some features were
 inspired by [paint.rs](https://github.com/daijro/paint.rs) by daijro, such as having PhotoCraft's
 tools in Kaint. (`third_party/pdn5/`, GPL-3.0). WebP, AVIF, JPEG XL and HEIC use libwebp (BSD), libavif
-(BSD), libjxl (BSD) and libheif (LGPL-3.0), and video export runs [FFmpeg](https://ffmpeg.org) when it
-is installed.
+(BSD), libjxl (BSD) and libheif (LGPL-3.0). The GIF editor runs [FFmpeg](https://ffmpeg.org) to read
+audio other than WAV and to export video: the Windows packages include `ffmpeg.exe` (the GPL build by
+[BtbN](https://github.com/BtbN/FFmpeg-Builds), with its license as `ffmpeg-LICENSE.txt`); on Linux and
+macOS it uses the system's.
 
 ## Disclaimer
 

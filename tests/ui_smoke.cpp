@@ -697,7 +697,8 @@ static void testTheme()
 
 int main(int argc, char** argv)
 {
-    qputenv("QT_QPA_PLATFORM", qgetenv("QT_QPA_PLATFORM").isEmpty() ? "offscreen" : qgetenv("QT_QPA_PLATFORM"));
+    // (Con los dos lados QByteArray: con MSVC, «"offscreen" : QByteArray» es ambiguo.)
+    qputenv("QT_QPA_PLATFORM", qgetenv("QT_QPA_PLATFORM").isEmpty() ? QByteArray("offscreen") : qgetenv("QT_QPA_PLATFORM"));
     QApplication app(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("KaintSmokeTest"));
     QApplication::setApplicationName(QStringLiteral("KaintSmokeTest"));

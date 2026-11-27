@@ -679,10 +679,15 @@ if (( DO_APPIMAGE && APPIMAGE_COMPAT && ! DO_MUSL )) && [[ -z "${KAINT_IN_CONTAI
         echo "nuevas. Instala podman o docker para compilarlo en un contenedor de Ubuntu 22.04 (o usa --appimage-native).${c_reset}"
     else
         QT_COMPAT=6.8.3
+        # El Qt oficial para arm64 está compilado en Ubuntu 24.04 (sus programas piden GLIBCXX_3.4.32,
+        # que Ubuntu 22.04 no tiene): para arm64, el contenedor es Ubuntu 24.04 (glibc 2.39) y el
+        # AppImage funciona en Ubuntu 24.04, Debian 13 o más nuevos.
         if [[ "$HOST_ARCH" == aarch64 ]]; then
             qt_host=linux_arm64 qt_arch=linux_gcc_arm64 qt_dir=gcc_arm64 platform=linux/arm64
+            distro="Ubuntu 24.04" image=docker.io/library/ubuntu:24.04 glibc=2.39 gcc_v=13
         else
             qt_host=linux qt_arch=linux_gcc_64 qt_dir=gcc_64 platform=linux/amd64
+            distro="Ubuntu 22.04" image=docker.io/library/ubuntu:22.04 glibc=2.35 gcc_v=12
         fi
         # (Lo descargado, aparte para cada arquitectura: Qt y Rust no sirven de una a otra.)
         cache="$PWD/build-appimage-cache"
@@ -699,19 +704,24 @@ if (( DO_APPIMAGE && APPIMAGE_COMPAT && ! DO_MUSL )) && [[ -z "${KAINT_IN_CONTAI
         fi
         setup="export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends g++-12 gcc-12 cmake ninja-build git curl ca-certificates file python3-pip \
-    libgl-dev libegl-dev libxkbcommon-dev libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libssl-dev zlib1g-dev mono-devel \
-    libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
-    libxcb-xinerama0 libxcb-xkb1 libwayland-client0 libwayland-cursor0 libwayland-egl1 libpulse0 libpulse-mainloop-glib0 \
-    libasound2 libcups2 libgtk-3-0 libva2 libva-drm2 libva-x11-2 libvdpau1 libdrm2 libgbm1 libxrandr2 libxcomposite1 \
-    libxdamage1 libxtst6 libxshmfence1 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 >/dev/null
-update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 --slave /usr/bin/g++ g++ /usr/bin/g++-12 >/dev/null
+# (Con el nombre que tenga en esta versión de Ubuntu: en la 24.04, libasound2t64, libcups2t64...)
+libs=
+for lib in libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+    libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libwayland-client0 libwayland-cursor0 \
+    libwayland-egl1 libpulse0 libpulse-mainloop-glib0 libasound2 libcups2 libgtk-3-0 libva2 libva-drm2 libva-x11-2 \
+    libvdpau1 libdrm2 libgbm1 libxrandr2 libxcomposite1 libxdamage1 libxtst6 libxshmfence1 libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0; do
+    if apt-cache policy \$lib | grep -q 'Candidate: [0-9]'; then libs=\"\$libs \$lib\"; else libs=\"\$libs \${lib}t64\"; fi
+done
+apt-get install -y -qq --no-install-recommends g++-$gcc_v gcc-$gcc_v cmake ninja-build git curl ca-certificates file python3-pip \
+    libgl-dev libegl-dev libxkbcommon-dev libssl-dev zlib1g-dev mono-devel \$libs >/dev/null
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-$gcc_v 100 --slave /usr/bin/g++ g++ /usr/bin/g++-$gcc_v >/dev/null
 # (cargo enlaza con cc.)
-ln -sf /usr/bin/gcc-12 /usr/bin/cc
-ln -sf /usr/bin/g++-12 /usr/bin/c++
+ln -sf /usr/bin/gcc-$gcc_v /usr/bin/cc
+ln -sf /usr/bin/g++-$gcc_v /usr/bin/c++
 export HOME=/cache PATH=/cache/.cargo/bin:/cache/.local/bin:\$PATH
 if [ ! -x /cache/qt/$QT_COMPAT/$qt_dir/bin/qmake ]; then
-    pip3 install -q --user aqtinstall
+    PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install -q --user aqtinstall
     aqt install-qt -O /cache/qt $qt_host desktop $QT_COMPAT $qt_arch -m qtimageformats qtmultimedia
 fi
 qtdir=/cache/qt/$QT_COMPAT/$qt_dir
@@ -723,14 +733,14 @@ fi
 git config --global --add safe.directory '*'
 export CMAKE_PREFIX_PATH=\$qtdir
 ./build.sh ${inner[*]}"
-        echo "${c_bold}Compilando el AppImage en un contenedor de Ubuntu 22.04 (glibc 2.35, $tool)...${c_reset}"
+        echo "${c_bold}Compilando el AppImage en un contenedor de $distro (glibc $glibc, $tool)...${c_reset}"
         echo "La primera vez descarga Qt $QT_COMPAT y Rust (en $(basename "$cache")/): tarda un rato."
         STEP="compilar el AppImage en el contenedor"
         "$tool" run --rm --platform "$platform" -v "$PWD:/src" -v "$cache:/cache" -w /src -e KAINT_IN_CONTAINER=1 \
-            -e KAINT_BUILD_SUFFIX=-compat docker.io/library/ubuntu:22.04 bash -c "$setup"
+            -e KAINT_BUILD_SUFFIX=-compat "$image" bash -c "$setup"
         STEP=""
         built=$(ls -t build-appimage*-compat/Kaint-*.AppImage 2>/dev/null | head -n1 || true)
-        [[ -n "$built" ]] && report "AppImage (Ubuntu 22.04 o más nuevo)" "$built"
+        [[ -n "$built" ]] && report "AppImage ($distro o más nuevo)" "$built"
         exit 0
     fi
 fi
@@ -738,7 +748,7 @@ fi
 # --- musl o arm64 en un contenedor ----------------------------------------------
 # Lo que este equipo no compila de forma nativa: el mismo build.sh dentro de un contenedor de
 # Alpine (musl) o de Debian (glibc), de la arquitectura pedida (arm64 con qemu-user-static).
-if [[ -z "${KAINT_IN_CONTAINER:-}" ]] && { (( DO_MUSL )) && ! is_musl || (( DO_ARM64 )) && [[ "$HOST_ARCH" != aarch64 ]]; }; then
+if [[ -z "${KAINT_IN_CONTAINER:-}" ]] && { { (( DO_MUSL )) && ! is_musl; } || { (( DO_ARM64 )) && [[ "$HOST_ARCH" != aarch64 ]]; }; }; then
     tool=$(container_tool)
     if [[ -z "$tool" ]]; then
         echo "${c_red}Hace falta podman o docker para compilar para musl o arm64 en este equipo.${c_reset}" >&2

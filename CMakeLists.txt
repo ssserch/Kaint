@@ -152,7 +152,9 @@ add_library(kaintquickjs STATIC third_party/quickjs-ng/quickjs-amalgam.c)
 target_include_directories(kaintquickjs PUBLIC third_party/quickjs-ng)
 set_target_properties(kaintquickjs PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS ON POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
-    target_compile_options(kaintquickjs PRIVATE /W0 $<$<CONFIG:Debug>:/O2>)
+    # QuickJS-ng usa <stdatomic.h>: MSVC solo lo admite con /experimental:c11atomics (si no, «C
+    # atomic support is not enabled»).
+    target_compile_options(kaintquickjs PRIVATE /W0 /experimental:c11atomics $<$<CONFIG:Debug>:/O2>)
 else()
     target_compile_options(kaintquickjs PRIVATE -w $<$<CONFIG:Debug>:-O2>)
 endif()
